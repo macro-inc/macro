@@ -8,14 +8,13 @@ import {
   type BlockName,
   type BlockAlias,
 } from '@core/block';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
+import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
@@ -26,6 +25,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { Button } from '@ui/components/Button';
 import { getDestinationFromOptions } from './NewMessage';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
@@ -277,20 +277,42 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   return (
     <Show when={isAuthenticated()}>
-      <div class="grow-1 shrink-0 p-2 min-h-11">
-        <RecipientSelector<'user' | 'contact' | 'channel'>
-          placeholder="To: Email Or Group"
-          setSelectedOptions={setSelectedOptions}
-          selectedOptions={selectedOptions()}
-          triedToSubmit={triedToSubmit}
-          options={destinationOptions}
-          triggerMode="input"
-          noBrackets
-          hideBorder
-          noPadding
-          focusOnMount
-        />
+      {/* Row 1: Recipient input + ShareOptions */}
+      <div class="flex items-center">
+        <div class="flex-1 px-1 py-2 min-h-11">
+          <RecipientSelector<'user' | 'contact' | 'channel'>
+            placeholder="To: Email or group"
+            setSelectedOptions={setSelectedOptions}
+            selectedOptions={selectedOptions()}
+            triedToSubmit={triedToSubmit}
+            options={destinationOptions}
+            triggerMode="input"
+            noBrackets
+            hideBorder
+            noPadding
+            focusOnMount
+          />
+        </div>
+        <Show
+          when={
+            props.submitPermissionInfo?.userPermissions === Permissions.OWNER &&
+            !props.hideAccessLevelSelector
+          }
+        >
+          <div class="shrink-0 pr-2">
+            <ShareOptions
+              setPermissions={(accessLevel) =>
+                setSubmitAccessLevel(accessLevel)
+              }
+              permissions={submitAccessLevel()}
+              label="Permission"
+              hideNoAccess
+            />
+          </div>
+        </Show>
       </div>
+
+      {/* Row 2: Optional message */}
       <div class="grow-1 shrink-1 min-h-0 flex flex-col w-full border-t-1 border-edge-muted/50">
         <div class="relative grow-1 shrink-1 min-h-0 flex flex-col">
           <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
@@ -300,16 +322,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             ref={setMdScrollRef}
           >
             <MarkdownArea
-              placeholder="Optional: Message"
+              placeholder="Optional message"
               onEnter={(e: KeyboardEvent) => {
                 handleSubmit();
                 e.preventDefault();
                 return true;
               }}
               initialValue={markdownState()}
-              onTab={() => {
-                return true;
-              }}
+              onTab={() => true}
               useBlockBoundary={false}
               portalScope="local"
               dontFocusOnMount
@@ -317,6 +337,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           </div>
         </div>
 
+        {/* Row 3: Send As Group (optional) + Cancel + Send */}
         <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
           <Show when={canSendAsGroup()}>
             <label
@@ -359,37 +380,28 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             </label>
           </Show>
 
-          <div class="flex flex-auto min-w-0 gap-3">
-            <div class="flex-auto min-w-0" />
-
-            <DeprecatedTextButton
+          <div class="flex flex-auto items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => props.onSubmit?.()}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={selectedOptions().length > 0 ? 'accent' : 'secondary'}
+              class="h-[22px] py-2 pl-2 pr-2 rounded-xs flex items-center gap-1"
+              disabled={selectedOptions().length === 0}
               onClick={() => {
                 const options = selectedOptions();
                 if (options && options.length > 0) {
                   handleSubmit();
                 }
               }}
-              theme={selectedOptions().length > 0 ? 'accent' : 'disabled'}
-              icon={PaperPlaneRight}
-              height="h-[22px]"
-              text="Share"
-            />
-
-            <Show
-              when={
-                props.submitPermissionInfo?.userPermissions ===
-                  Permissions.OWNER && !props.hideAccessLevelSelector
-              }
             >
-              <ShareOptions
-                setPermissions={(accessLevel) => {
-                  setSubmitAccessLevel(accessLevel);
-                }}
-                permissions={submitAccessLevel()}
-                label="Permission"
-                hideNoAccess
-              />
-            </Show>
+              <PaperPlane class="size-4" />
+              Share
+            </Button>
           </div>
         </div>
       </div>
