@@ -296,7 +296,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     activateClosestDOMScope();
   };
 
-  const debounceResetHotkeysState = debounce(resetHotkeysState, 1500);
+  const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
 
   const handleCommandPaletteClick = () => {
     if (!CommandState.isOpen()) {
@@ -578,7 +578,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
             {props.label}
           </span>
 
-          <Show when={isHovering()}>
+          <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
               <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-[0.625rem]">
                 <Show when={!props.standaloneHotkey}>
