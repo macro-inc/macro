@@ -155,9 +155,7 @@ export const registerSidebarHotkeys = ({
   });
 
   const registeredGoToKeys = new Set<ValidHotkey>([
-    ...SIDEBAR_LINKS.filter((link) => !link.standaloneHotkey).map(
-      (link) => link.hotkey
-    ),
+    ...SIDEBAR_LINKS.map((link) => link.hotkey),
   ]);
 
   // When the go to command scope is active, we want to prevent
