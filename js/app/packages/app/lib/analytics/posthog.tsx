@@ -69,7 +69,7 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
   });
 
   return (
-    <Show when={flag().enabled} keyed fallback={props.fallback}>
+    <Show when={flag().enabled} fallback={props.fallback}>
       {props.children}
     </Show>
   );
