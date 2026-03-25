@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use item_filters::DocumentFilters;
-use models_properties::api::EntityPropertyWithDefinitionResponse;
+use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -67,7 +67,7 @@ pub struct DocumentSearchResponseItemWithMetadata {
     /// Entity properties (assignees, status, priority, etc.) for markdown documents.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
-    pub properties: Option<Vec<EntityPropertyWithDefinitionResponse>>,
+    pub properties: Option<Vec<SoupProperty>>,
     #[serde(flatten)]
     pub extra: DocumentSearchResponseItem,
 }
