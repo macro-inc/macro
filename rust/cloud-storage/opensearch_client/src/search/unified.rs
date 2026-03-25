@@ -71,6 +71,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             collapse: args.collapse,
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
+            sub_types: args.document_search_args.sub_types,
         }
     }
 }
@@ -145,6 +146,7 @@ pub struct UnifiedDocumentSearchArgs {
     pub terms: Vec<String>,
     pub document_ids: Vec<String>,
     pub ids_only: bool,
+    pub sub_types: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]

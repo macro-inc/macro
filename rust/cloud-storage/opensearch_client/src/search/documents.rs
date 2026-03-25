@@ -4,7 +4,7 @@ use crate::{
 };
 
 use models_opensearch::SearchEntityType;
-use opensearch_query_builder::BoolQueryBuilder;
+use opensearch_query_builder::{BoolQueryBuilder, QueryType};
 
 #[derive(Clone)]
 pub(crate) struct DocumentSearchConfig;
@@ -17,12 +17,14 @@ impl SearchQueryConfig for DocumentSearchConfig {
 
 pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
+    sub_types: Vec<String>,
 }
 
 impl DocumentQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
+            sub_types: Vec::new(),
         }
     }
 
@@ -37,8 +39,22 @@ impl DocumentQueryBuilder {
         fn ids_only(ids_only: bool) -> Self;
     }
 
+    pub fn sub_types(mut self, sub_types: Vec<String>) -> Self {
+        self.sub_types = sub_types;
+        self
+    }
+
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        self.inner.build_content_bool_query()
+        let mut query = self.inner.build_content_bool_query()?;
+
+        if !self.sub_types.is_empty() {
+            query.filter(QueryType::terms(
+                "sub_type".to_string(),
+                self.sub_types.clone(),
+            ));
+        }
+
+        Ok(query)
     }
 }
 
@@ -63,6 +79,7 @@ pub struct DocumentSearchArgs {
     pub match_type: String,
     pub collapse: bool,
     pub ids_only: bool,
+    pub sub_types: Vec<String>,
 }
 
 impl From<DocumentSearchArgs> for DocumentQueryBuilder {
@@ -75,6 +92,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .ids(args.document_ids)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
+            .sub_types(args.sub_types)
     }
 }
 
