@@ -194,7 +194,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         />
       </Show>
 
-      <Show when={showDeleteGroup() && (showTopGroup() || showMiddleGroup())}>
+      <Show when={showDeleteGroup() && showMiddleGroup()}>
         <Divider />
       </Show>
 
