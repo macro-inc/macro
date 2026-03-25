@@ -6463,7 +6463,6 @@ dependencies = [
  "document_sub_type",
  "item_filters",
  "models_opensearch",
- "models_properties",
  "models_soup",
  "opensearch_client",
  "schemars",

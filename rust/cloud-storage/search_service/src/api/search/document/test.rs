@@ -1,4 +1,8 @@
 use macro_db_client::document::get_document_history::DocumentHistoryInfo;
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_value::PropertyValue;
+use models_properties::{DataType, shared::PropertyOwner};
+use models_soup::SoupProperty;
 use opensearch_client::search::model::Highlight;
 
 use super::*;
@@ -623,4 +627,91 @@ fn test_sort_stability() {
         ],
         "Results should preserve original search result order"
     );
+}
+
+fn make_test_soup_property(name: &str) -> SoupProperty {
+    SoupProperty {
+        definition: PropertyDefinition {
+            id: Uuid::new_v4(),
+            owner: PropertyOwner::System,
+            display_name: name.to_string(),
+            data_type: DataType::Entity,
+            is_multi_select: true,
+            specific_entity_type: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            is_system: true,
+            is_metadata: false,
+        },
+        value: Some(PropertyValue::EntityRef(vec![])),
+    }
+}
+
+#[test]
+fn test_properties_enrichment_with_properties() {
+    let doc_id = "11111111-1111-1111-1111-111111111111";
+    let input = vec![create_test_document_response(doc_id, "node_1", None)];
+
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    document_histories.insert(
+        doc_id.to_string(),
+        DocumentHistoryInfo {
+            item_id: doc_id.to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            file_type: Some("md".to_string()),
+            file_name: "Test Task".to_string(),
+            owner: "user1".to_string(),
+            deleted_at: None,
+            sub_type: Some(document_sub_type::DocumentSubType::Task),
+        },
+    );
+
+    let mut properties_map = HashMap::new();
+    properties_map.insert(
+        doc_id.to_string(),
+        vec![make_test_soup_property("Assignees")],
+    );
+
+    let result = construct_search_result(input, document_histories, properties_map).unwrap();
+
+    assert_eq!(result.len(), 1);
+    let props = result[0]
+        .properties
+        .as_ref()
+        .expect("properties should be Some");
+    assert_eq!(props.len(), 1);
+    assert_eq!(props[0].definition.display_name, "Assignees");
+}
+
+#[test]
+fn test_properties_enrichment_empty_map() {
+    let doc_id = "11111111-1111-1111-1111-111111111111";
+    let input = vec![create_test_document_response(doc_id, "node_1", None)];
+
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    document_histories.insert(
+        doc_id.to_string(),
+        DocumentHistoryInfo {
+            item_id: doc_id.to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            file_type: Some("md".to_string()),
+            file_name: "Test Task".to_string(),
+            owner: "user1".to_string(),
+            deleted_at: None,
+            sub_type: Some(document_sub_type::DocumentSubType::Task),
+        },
+    );
+
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert!(result[0].properties.is_none());
 }

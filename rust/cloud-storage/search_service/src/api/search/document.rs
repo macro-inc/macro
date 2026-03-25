@@ -59,7 +59,8 @@ pub(in crate::api::search) async fn enrich_documents(
             &md_entity_refs,
         )
         .await
-        .map_err(|e| SearchError::InternalError(e.into()))?
+        .inspect_err(|e| tracing::error!(error=?e, "failed to fetch entity properties"))
+        .unwrap_or_default()
         .into_iter()
         .map(|(id, props)| {
             (
