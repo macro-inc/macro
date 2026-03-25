@@ -7,7 +7,6 @@ import {
   createSignal,
   type JSX,
   onCleanup,
-  onMount,
   type ParentProps,
   type Setter,
   useContext,
@@ -460,14 +459,11 @@ export function EntityRow(
 
   const rowState = createMemo(() => ctx.stateFor(props.entityId));
 
-  onMount(() => {
-    if (props.onSwipeLeft || props.onSwipeRight) {
-      ctx.registerRowHandler(props.entityId, {
-        onSwipeLeft: props.onSwipeLeft,
-        onSwipeRight: props.onSwipeRight,
-      });
-      onCleanup(() => ctx.unregisterRowHandler(props.entityId));
-    }
+  createEffect(() => {
+    const { onSwipeLeft, onSwipeRight, entityId } = props;
+    if (!onSwipeLeft && !onSwipeRight) return;
+    ctx.registerRowHandler(entityId, { onSwipeLeft, onSwipeRight });
+    onCleanup(() => ctx.unregisterRowHandler(entityId));
   });
 
   onCleanup(() => {
