@@ -11,9 +11,11 @@ import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { consumeNonce } from '../nonce';
 import {
+  getTargetMessageState,
   insertMessageIntoTargetCaches,
   removeMessageFromTargetCaches,
   replaceTargetAttachments,
+  replaceTargetMessageState,
   replaceTargetReactions,
   softInvalidateTargetCaches,
   resolveMessageTarget,
@@ -85,8 +87,27 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
             })
           );
         } else {
-          const threadId = payload.thread_id;
-          if (threadId) {
+          const target = resolveMessageTarget({
+            channelId: payload.channel_id,
+            messageId: payload.id,
+            threadId: payload.thread_id ?? undefined,
+          });
+
+          // If the message already exists, update its state in place
+          // (handles edits from other users). Otherwise insert as new.
+          const existingState = getTargetMessageState(
+            payload.channel_id,
+            target
+          );
+
+          if (existingState) {
+            replaceTargetMessageState(payload.channel_id, target, {
+              content: payload.content,
+              editedAt: payload.edited_at,
+              updatedAt: payload.updated_at,
+              attachments: existingState.attachments,
+            });
+          } else if (target.kind === 'thread_reply') {
             const reply: ApiThreadReply = {
               id: payload.id,
               sender_id: payload.sender_id,
@@ -97,40 +118,25 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
               attachments: [],
               reactions: [],
             };
-            insertMessageIntoTargetCaches(
-              payload.channel_id,
-              resolveMessageTarget({
-                channelId: payload.channel_id,
-                messageId: payload.id,
-                threadId,
-              }),
-              reply
-            );
+            insertMessageIntoTargetCaches(payload.channel_id, target, reply);
           } else {
-            insertMessageIntoTargetCaches(
-              payload.channel_id,
-              resolveMessageTarget({
-                channelId: payload.channel_id,
-                messageId: payload.id,
-              }),
-              {
-                id: payload.id,
-                channel_id: payload.channel_id,
-                sender_id: payload.sender_id,
-                content: payload.content,
-                created_at: payload.created_at,
-                updated_at: payload.updated_at,
-                deleted_at: payload.deleted_at,
-                edited_at: payload.edited_at,
-                attachments: [],
-                reactions: [],
-                thread: {
-                  preview: [],
-                  reply_count: 0,
-                  latest_reply_at: null,
-                },
-              }
-            );
+            insertMessageIntoTargetCaches(payload.channel_id, target, {
+              id: payload.id,
+              channel_id: payload.channel_id,
+              sender_id: payload.sender_id,
+              content: payload.content,
+              created_at: payload.created_at,
+              updated_at: payload.updated_at,
+              deleted_at: payload.deleted_at,
+              edited_at: payload.edited_at,
+              attachments: [],
+              reactions: [],
+              thread: {
+                preview: [],
+                reply_count: 0,
+                latest_reply_at: null,
+              },
+            });
           }
         }
       }
