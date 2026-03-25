@@ -233,7 +233,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               owners: [ctx.userId],
             },
           },
-          clientFilters: { and: ['task', 'assigned-to', 'task-not-completed'] },
+          clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
         };
       },
       'created-by-me': (ctx) => {
@@ -246,7 +246,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               owners: [ctx.userId],
             },
           },
-          clientFilters: { and: ['task', 'task-not-completed'] },
+          clientFilters: { and: ['task', 'active-task'] },
         };
       },
       all: () => ({
