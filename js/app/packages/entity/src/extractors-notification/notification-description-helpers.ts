@@ -54,9 +54,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('replied_to_document_comment_thread', () =>
       count === 1 ? 'reply' : 'replies'
     )
-    .with('commented_on_document', () =>
-      count === 1 ? 'comment' : 'comments'
-    )
+    .with('commented_on_document', () => (count === 1 ? 'comment' : 'comments'))
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
     .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))

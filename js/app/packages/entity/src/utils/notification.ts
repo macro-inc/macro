@@ -82,7 +82,10 @@ export function extractMessageContent(notification: Notification): string {
     )
     .with({ tag: 'document_mention' }, (m) => m.content.documentName || '')
     .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text || '')
-    .with({ tag: 'replied_to_document_comment_thread' }, (m) => m.content.text || '')
+    .with(
+      { tag: 'replied_to_document_comment_thread' },
+      (m) => m.content.text || ''
+    )
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
     .with({ tag: 'new_email' }, (m) => m.content.subject || '')
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')

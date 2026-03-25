@@ -35,10 +35,7 @@ export function getNotificationTargetName(
       { tag: 'replied_to_document_comment_thread' },
       (m) => m.content.documentName
     )
-    .with(
-      { tag: 'commented_on_document' },
-      (m) => m.content.documentName
-    )
+    .with({ tag: 'commented_on_document' }, (m) => m.content.documentName)
     .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
     .with({ tag: 'channel_mention' }, () => undefined)

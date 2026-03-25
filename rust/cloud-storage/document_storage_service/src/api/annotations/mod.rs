@@ -125,6 +125,96 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
     }
 }
 
+/// Computes the recipient sets for each notification type, ensuring no user
+/// receives more than one notification per comment.
+///
+/// Priority: mention > thread reply > document owner.
+pub(crate) fn compute_notification_recipients(
+    sender_id: Option<&MacroUserIdStr<'_>>,
+    mentioned_user_ids: &[String],
+    thread_comment_owners: &[String],
+    document_owner: &MacroUserIdStr<'_>,
+    is_reply: bool,
+) -> NotificationRecipients {
+    let mut notified: HashSet<String> = HashSet::new();
+
+    // 1. Mention recipients — normalize to MacroUserIdStr format for consistent comparison
+    let mention_recipients: Vec<String> = mentioned_user_ids
+        .iter()
+        .filter_map(|id| {
+            MacroUserIdStr::parse_from_str(id)
+                .ok()
+                .map(|parsed| parsed.as_ref().to_string())
+        })
+        .collect();
+    notified.extend(mention_recipients.iter().cloned());
+
+    // 2. Thread reply recipients — only if this is a reply (>1 comments in thread)
+    let mut thread_reply_recipients: Vec<String> = Vec::new();
+    if is_reply {
+        for owner_str in thread_comment_owners {
+            if let Ok(parsed) = MacroUserIdStr::parse_from_str(owner_str) {
+                let normalized = parsed.as_ref().to_string();
+                let is_sender = sender_id.map_or(false, |s| s.as_ref() == normalized);
+                if !is_sender && !notified.contains(&normalized) {
+                    notified.insert(normalized.clone());
+                    thread_reply_recipients.push(normalized);
+                }
+            }
+        }
+    }
+
+    // 3. Document owner — only if not sender and not already notified
+    let owner_normalized = document_owner.as_ref().to_string();
+    let owner_is_sender = sender_id.map_or(false, |s| s.as_ref() == owner_normalized);
+    let doc_owner_recipient = if !owner_is_sender && !notified.contains(&owner_normalized) {
+        Some(owner_normalized)
+    } else {
+        None
+    };
+
+    NotificationRecipients {
+        mention_recipients,
+        thread_reply_recipients,
+        doc_owner_recipient,
+    }
+}
+
+pub(crate) struct NotificationRecipients {
+    /// Users who should get a mention notification.
+    pub mention_recipients: Vec<String>,
+    /// Users who should get a thread reply notification.
+    pub thread_reply_recipients: Vec<String>,
+    /// The document owner, if they should get a "commented on your document" notification.
+    pub doc_owner_recipient: Option<String>,
+}
+
+impl NotificationRecipients {
+    /// Returns all recipient IDs across all notification types.
+    #[cfg(test)]
+    pub fn all_recipients(&self) -> HashSet<&str> {
+        let mut all = HashSet::new();
+        for r in &self.mention_recipients {
+            all.insert(r.as_str());
+        }
+        for r in &self.thread_reply_recipients {
+            all.insert(r.as_str());
+        }
+        if let Some(r) = &self.doc_owner_recipient {
+            all.insert(r.as_str());
+        }
+        all
+    }
+
+    /// Total number of recipients across all notification types.
+    #[cfg(test)]
+    pub fn total_count(&self) -> usize {
+        self.mention_recipients.len()
+            + self.thread_reply_recipients.len()
+            + self.doc_owner_recipient.iter().count()
+    }
+}
+
 #[expect(clippy::too_many_arguments)]
 fn build_mention_notif<'a>(
     text: String,
@@ -226,25 +316,4 @@ fn build_document_comment_notif(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
-        let m = MentionedInDocumentCommentMetadata {
-            document_name: "test".to_string(),
-            owner: MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
-            file_type: None,
-            mention_id: "xxx".to_string(),
-            thread_id: 42,
-            comment_id: 99,
-            text: "yy".to_string(),
-            sender_profile_picture_url: None,
-        };
-        let res = serde_json::to_string(&m).unwrap();
-        assert!(res.contains(r#"mentionId":"xxx""#));
-        assert!(res.contains(r#"threadId":42"#));
-        assert!(res.contains(r#"commentId":99"#));
-        Ok(())
-    }
-}
+mod test;

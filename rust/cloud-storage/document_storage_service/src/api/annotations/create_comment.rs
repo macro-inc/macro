@@ -2,7 +2,10 @@ use std::{collections::HashSet, sync::Arc};
 
 use crate::{
     api::{
-        annotations::{build_document_comment_notif, build_mention_notif, build_thread_reply_notif},
+        annotations::{
+            build_document_comment_notif, build_mention_notif, build_thread_reply_notif,
+            compute_notification_recipients,
+        },
         context::ApiContext,
     },
     service::conn_gateway::update_live_comment_state,
@@ -73,8 +76,7 @@ pub async fn create_comment_handler(
     match create_document_comment(&db, &document_id, &user_id, &req).await {
         Ok(res) => {
             if let Some(comment) = res.comment_thread.comments.last() {
-                let sender_id: Option<MacroUserIdStr<'static>> =
-                    user_id.clone().try_into().ok();
+                let sender_id: Option<MacroUserIdStr<'static>> = user_id.clone().try_into().ok();
                 let sender_profile_picture_url =
                     macro_db_client::user::update_profile_picture::get_profile_pictures(
                         &db,
@@ -84,11 +86,32 @@ pub async fn create_comment_handler(
                     .ok()
                     .and_then(|pics| pics.pictures.into_iter().next().map(|p| p.url));
 
-                let mut notified_users: HashSet<String> = HashSet::new();
                 let thread_id = res.comment_thread.thread.thread_id;
+                let is_reply = res.comment_thread.comments.len() > 1;
+                let mentioned_user_ids = req
+                    .mentions
+                    .as_ref()
+                    .map(|m| m.users.as_slice())
+                    .unwrap_or_default();
+                let thread_comment_owners: Vec<String> = res
+                    .comment_thread
+                    .comments
+                    .iter()
+                    .map(|c| c.owner.clone())
+                    .collect();
+
+                let recipients = compute_notification_recipients(
+                    sender_id.as_ref(),
+                    mentioned_user_ids,
+                    &thread_comment_owners,
+                    &document_context.owner,
+                    is_reply,
+                );
 
                 // 1. Mention notifications (highest priority)
-                if let Some(Mentions { users, mention_id }) = &req.mentions {
+                if let Some(Mentions { users, mention_id }) = &req.mentions
+                    && !recipients.mention_recipients.is_empty()
+                {
                     let request = build_mention_notif(
                         req.text.clone(),
                         comment,
@@ -110,78 +133,59 @@ pub async fn create_comment_handler(
                         .send_notification(request)
                         .await
                         .inspect_err(|e| tracing::error!(error =? e, "couldn't send document mention notification"));
-
-                    notified_users.extend(users.iter().cloned());
                 }
 
-                // 2. Thread reply notifications (if this is a reply to an existing thread)
-                if res.comment_thread.comments.len() > 1 {
-                    let thread_participant_ids: HashSet<MacroUserIdStr<'_>> = res
-                        .comment_thread
-                        .comments
+                // 2. Thread reply notifications
+                if !recipients.thread_reply_recipients.is_empty() {
+                    let participant_ids: HashSet<MacroUserIdStr<'_>> = recipients
+                        .thread_reply_recipients
                         .iter()
-                        .filter_map(|c| MacroUserIdStr::parse_from_str(&c.owner).ok())
-                        .filter(|p| {
-                            let p_str = p.as_ref();
-                            !notified_users.contains(p_str)
-                                && sender_id.as_ref().map_or(true, |s| p != s)
-                        })
+                        .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
                         .collect();
 
-                    if !thread_participant_ids.is_empty() {
-                        notified_users
-                            .extend(thread_participant_ids.iter().map(|p| p.as_ref().to_string()));
+                    let request = build_thread_reply_notif(
+                        req.text.clone(),
+                        comment,
+                        thread_id,
+                        participant_ids,
+                        document_context.document_name.clone(),
+                        document_context.owner.clone(),
+                        document_context.file_type.clone(),
+                        sender_id.clone(),
+                        document_id.to_string(),
+                        sender_profile_picture_url.clone(),
+                    )
+                    .into_request()
+                    .with_apns()
+                    .with_conn_gateway();
 
-                        let request = build_thread_reply_notif(
-                            req.text.clone(),
-                            comment,
-                            thread_id,
-                            thread_participant_ids,
-                            document_context.document_name.clone(),
-                            document_context.owner.clone(),
-                            document_context.file_type.clone(),
-                            sender_id.clone(),
-                            document_id.to_string(),
-                            sender_profile_picture_url.clone(),
-                        )
-                        .into_request()
-                        .with_apns()
-                        .with_conn_gateway();
-
-                        _ = notification_ingress_service
-                            .send_notification(request)
-                            .await
-                            .inspect_err(|e| tracing::error!(error =? e, "couldn't send thread reply notification"));
-                    }
+                    _ = notification_ingress_service
+                        .send_notification(request)
+                        .await
+                        .inspect_err(|e| tracing::error!(error =? e, "couldn't send thread reply notification"));
                 }
 
                 // 3. Document owner notification (lowest priority)
-                {
-                    let owner_str = document_context.owner.as_ref().to_string();
-                    let is_sender = sender_id
-                        .as_ref()
-                        .map_or(false, |s| s.as_ref() == document_context.owner.as_ref());
-                    if !is_sender && !notified_users.contains(&owner_str) {
-                        let request = build_document_comment_notif(
-                            req.text.clone(),
-                            comment,
-                            thread_id,
-                            document_context.owner.clone(),
-                            document_context.document_name.clone(),
-                            document_context.file_type.clone(),
-                            sender_id.clone(),
-                            document_id.to_string(),
-                            sender_profile_picture_url.clone(),
-                        )
-                        .into_request()
-                        .with_apns()
-                        .with_conn_gateway();
+                if recipients.doc_owner_recipient.is_some() {
+                    let request = build_document_comment_notif(
+                        req.text.clone(),
+                        comment,
+                        thread_id,
+                        document_context.owner.clone(),
+                        document_context.document_name.clone(),
+                        document_context.file_type.clone(),
+                        sender_id.clone(),
+                        document_id.to_string(),
+                        sender_profile_picture_url.clone(),
+                    )
+                    .into_request()
+                    .with_apns()
+                    .with_conn_gateway();
 
-                        _ = notification_ingress_service
-                            .send_notification(request)
-                            .await
-                            .inspect_err(|e| tracing::error!(error =? e, "couldn't send document comment notification"));
-                    }
+                    _ = notification_ingress_service
+                        .send_notification(request)
+                        .await
+                        .inspect_err(|e| tracing::error!(error =? e, "couldn't send document comment notification"));
                 }
             }
             update_live_comment_state(
