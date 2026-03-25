@@ -7,12 +7,12 @@ import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedSlidersHorizontalIcon } from '@macro-icons/wide/animating/sliders-horizontal';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import {
-  Accessor,
+  type Accessor,
   type Component,
   createSignal,
   For,
   type JSX,
-  Setter,
+  type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Popover } from '@kobalte/core/popover';
