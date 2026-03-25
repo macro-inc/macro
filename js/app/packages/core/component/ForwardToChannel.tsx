@@ -26,6 +26,7 @@ import {
   Show,
 } from 'solid-js';
 import { Button } from '@ui/components/Button';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { getDestinationFromOptions } from './NewMessage';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
@@ -279,7 +280,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     <Show when={isAuthenticated()}>
       {/* Row 1: Recipient input + ShareOptions */}
       <div class="flex items-center">
-        <div class="flex-1 px-1 py-2 min-h-11">
+        <div class="min-w-0 flex-1 px-1 py-2 min-h-11">
           <RecipientSelector<'user' | 'contact' | 'channel'>
             placeholder="To: Email or group"
             setSelectedOptions={setSelectedOptions}
@@ -316,8 +317,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       <div class="grow-1 shrink-1 min-h-0 flex flex-col w-full border-t-1 border-edge-muted/50">
         <div class="relative grow-1 shrink-1 min-h-0 flex flex-col">
           <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
+          <CustomScrollbar scrollContainer={mdScrollRef} />
           <div
-            class="grow-1 shrink-1 min-h-20 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
+            class="grow-1 shrink-1 min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
             onClick={() => focusMarkdownArea()}
             ref={setMdScrollRef}
           >

@@ -74,6 +74,7 @@ import { match } from 'ts-pattern';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { ClippedPanel } from '../ClippedPanel';
+import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
@@ -605,21 +606,22 @@ export function ShareModal(props: ShareModalProps) {
             {/* Card 2: Recipients — plain border */}
             <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
               <ClippedPanel cornerRadius="4px">
-                <div class="text-ink flex flex-col max-h-[40vh]">
+                <div class="text-ink flex flex-col">
                   <div class="shrink-0 h-[40px] flex items-center px-3 border-b border-edge-muted text-sm font-medium">
                     People with access to this{' '}
                     {props.itemType === 'email'
                       ? 'email thread'
                       : props.itemType}
                   </div>
-                  <div class="relative overflow-hidden">
+                  <div class="relative">
                     <ScrollIndicators
                       scrollRef={recipientScrollRef}
                       noBorderStart
                       noBorderEnd
                     />
+                    <CustomScrollbar scrollContainer={recipientScrollRef} />
                     <div
-                      class="overflow-y-auto scrollbar-hidden"
+                      class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
                       ref={setRecipientScrollRef}
                     >
                       <div class="grid gap-3 text-ink text-sm select-none py-3 px-3">
@@ -757,6 +759,7 @@ export function ShareModal(props: ShareModalProps) {
                     </div>
                     <MiniToggleSwitch
                       size="Base"
+                      label="Enable public link"
                       checked={publicAccessLevel() != null}
                       onChange={(on) =>
                         setPublicPermissions(on ? 'view' : null)
@@ -997,7 +1000,10 @@ export function ShareOptions(props: {
     return accessLevelText(value as AccessLevel);
   });
 
+  const [isOpen, setIsOpen] = createSignal(false);
+
   const handleChange = (value: string) => {
+    setIsOpen(false);
     if (value === 'none') {
       props.setPermissions(null);
     } else {
@@ -1006,7 +1012,7 @@ export function ShareOptions(props: {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen()} onOpenChange={setIsOpen}>
       <DropdownMenu.Trigger disabled={props.disabled}>
         <Button
           disabled={props.disabled}
