@@ -17,6 +17,7 @@
     "docs": "typedoc --entryPoints src/main.ts"
   },
   "devDependencies": {
+    "@types/wicg-file-system-access": "^2020.9.5",
     "typedoc": "^0.22.18"
   },
   "dependencies": {
