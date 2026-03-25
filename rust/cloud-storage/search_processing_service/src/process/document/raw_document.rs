@@ -392,4 +392,41 @@ mod tests {
         assert_eq!(upserts.len(), 2);
         assert_eq!(upserts[0].sub_type, None);
     }
+
+    #[tokio::test]
+    async fn test_generate_upsert_with_sub_type() {
+        use document_sub_type::DocumentSubType;
+
+        let document_info = DocumentMetadata {
+            document_id: "BBB".to_string(),
+            document_version_id: 0,
+            owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
+            document_name: "test_task".to_string(),
+            file_type: Some("md".to_string()),
+            sha: None,
+            project_id: None,
+            project_name: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            document_bom: None,
+            modification_data: None,
+            created_at: None,
+            updated_at: None,
+            sub_type: Some(DocumentSubType::Task),
+            deleted_at: None,
+        };
+
+        let markdown_result = vec![MarkdownParseResult {
+            node_id: "node1".to_string(),
+            raw_content: "# Task content".to_string(),
+            content: "Task content".to_string(),
+        }];
+
+        let upserts =
+            generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
+
+        assert_eq!(upserts.len(), 1);
+        assert_eq!(upserts[0].sub_type, Some("task".to_string()));
+    }
 }
