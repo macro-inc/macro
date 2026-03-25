@@ -268,6 +268,10 @@ function UserInfo(props: { userId: string }) {
 function ImageCoverStrip(props: { documentId: string; class?: string }) {
   const query = useBinaryDocumentQuery(() => props.documentId);
 
+  // Captured once at mount: true means the spinner was shown and we should fade in.
+  // Reading .isLoading (not .data) avoids triggering Suspense here.
+  const shouldFadeIn = query.isLoading;
+
   return (
     <div
       class={`w-full overflow-hidden relative bg-edge-muted ${props.class ?? 'h-32'}`}
@@ -283,13 +287,17 @@ function ImageCoverStrip(props: { documentId: string; class?: string }) {
           {(url) => (
             <img
               src={url()}
-              class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
-              onLoad={(e) => {
-                const img = e.target as HTMLImageElement;
-                requestAnimationFrame(() => {
-                  img.style.opacity = '1';
-                });
-              }}
+              class={`absolute inset-0 w-full h-full object-cover ${shouldFadeIn ? 'opacity-0 transition-opacity duration-300' : ''}`}
+              onLoad={
+                shouldFadeIn
+                  ? (e) => {
+                      const img = e.target as HTMLImageElement;
+                      requestAnimationFrame(() => {
+                        img.style.opacity = '1';
+                      });
+                    }
+                  : undefined
+              }
               alt=""
             />
           )}
