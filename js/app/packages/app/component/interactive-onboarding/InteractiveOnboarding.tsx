@@ -24,6 +24,7 @@ import { clearCompletedLessons, saveCompletedLesson } from './persistence';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useHasPaidAccess } from '@core/auth/license';
 
 export default function InteractiveOnboarding() {
   const analytics = useAnalytics();
@@ -32,6 +33,11 @@ export default function InteractiveOnboarding() {
   const completeTutorial = useCompleteTutorialMutation();
   const tutorialCompleted = useTutorialCompleted();
   const location = useLocation();
+
+  const hasPaid = useHasPaidAccess();
+  const lessons = hasPaid()
+    ? LESSONS.filter((l) => l.id !== 'choose-plan')
+    : LESSONS;
 
   const testMode = new URLSearchParams(location.search).has('test');
   if (testMode) {
@@ -43,7 +49,7 @@ export default function InteractiveOnboarding() {
   const slideIndex =
     slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
 
-  const sortedLessons = [...LESSONS].sort(
+  const sortedLessons = [...lessons].sort(
     (a, b) => (a.order ?? 0) - (b.order ?? 0)
   );
   const debugCompleted =
@@ -52,7 +58,7 @@ export default function InteractiveOnboarding() {
       : undefined;
 
   const state = createOnboardingState({
-    definitions: LESSONS,
+    definitions: lessons,
     initialCompleted: debugCompleted ?? new Set(),
   });
 
