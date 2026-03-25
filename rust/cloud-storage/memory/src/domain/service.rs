@@ -140,9 +140,17 @@ where
         &self,
         user: macro_user_id::user_id::MacroUserIdStr<'static>,
     ) -> super::Result<Memory> {
+        // append user data + datetimeto prompt
+        let system_prompt = format!(
+            "{}\n<user_id>{:?}</user_id>\n<datetime>{}</datetime>",
+            self.tools.prompt,
+            user,
+            Utc::now().to_rfc2822()
+        );
+
         let request = RequestBuilder::new()
             .model(GENERATION_MODEL)
-            .system_prompt(self.tools.prompt)
+            .system_prompt(system_prompt)
             .user_message(GENERATE_MEMORY_PROMPT)
             .build();
 
