@@ -123,7 +123,6 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
               content: payload.content,
               created_at: payload.created_at,
               updated_at: payload.updated_at,
-              deleted_at: payload.deleted_at,
               edited_at: payload.edited_at,
               attachments: [],
               reactions: [],
