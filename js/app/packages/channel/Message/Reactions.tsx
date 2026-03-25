@@ -37,6 +37,7 @@ export function Reactions(props: ReactionsProps) {
               <ReactionChip
                 emoji={reaction.emoji}
                 count={reaction.users.length}
+                users={reaction.users}
                 selected={didCurrentUserReact()}
                 interactive={canReact()}
                 onClick={(event) => {
