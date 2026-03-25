@@ -10,6 +10,23 @@ import * as path from 'node:path';
 import { $, write } from 'bun';
 import { type Service, services } from './services';
 
+const MAX_CONCURRENCY = 6;
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const i = index++;
+      results[i] = await fn(items[i]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
 // Map service names to Rust crate names
 const serviceToCrate: Record<string, string> = {
   'cloud-storage': 'document_storage_service',
@@ -172,10 +189,10 @@ async function main() {
   // Phase 1: Build all binaries in a single cargo invocation (parallelized by cargo)
   await buildOpenApiBinaries(crateNames);
 
-  // Phase 2: Run binaries and generate TypeScript in parallel
-  console.log('Generating TypeScript clients in parallel...\n');
-  const results = await Promise.all(
-    servicesToProcess.map(service => processService(service, { serviceClientsDir }))
+  // Phase 2: Run binaries and generate TypeScript (max 6 at a time)
+  console.log(`Generating TypeScript clients (max ${MAX_CONCURRENCY} concurrent)...\n`);
+  const results = await mapWithConcurrency(servicesToProcess, MAX_CONCURRENCY, service =>
+    processService(service, { serviceClientsDir })
   );
 
   // Summary report
