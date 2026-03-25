@@ -6,7 +6,7 @@ import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedSlidersHorizontalIcon } from '@macro-icons/wide/animating/sliders-horizontal';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
-import { type Component, createSignal, For, type JSX } from 'solid-js';
+import { Accessor, type Component, createSignal, For, type JSX, Setter } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Popover } from '@kobalte/core/popover';
 import { cn } from '@ui/utils/classname';
@@ -73,14 +73,15 @@ function MorePopover(props: {
   active: boolean;
   isActive: (id: ListView) => boolean;
   onNavigate: (id: ListView) => void;
+  open: Accessor<boolean>;
+  setOpen: Setter<boolean>;
 }) {
   const { toggleSettings } = useSettingsState();
-  const [open, setOpen] = createSignal(false);
   const [anchorRef, setAnchorRef] = createSignal<HTMLElement>();
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 
   const handleTouchMove = (e: TouchEvent) => {
-    if (!open()) return;
+    if (!props.open()) return;
     const touch = e.touches[0];
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
     const button = el?.closest('[data-more-item]') as HTMLElement | null;
@@ -96,13 +97,13 @@ function MorePopover(props: {
     setHoveredId(null);
     if (id === 'settings') {
       toggleSettings();
-      setOpen(false);
+      props.setOpen(false);
     } else if (id === 'create') {
       setCreateMenuOpen(true);
-      setOpen(false);
+      props.setOpen(false);
     } else if (isListViewID(id)) {
       props.onNavigate(id);
-      setOpen(false);
+      props.setOpen(false);
     }
   };
 
@@ -112,7 +113,7 @@ function MorePopover(props: {
         icon={ChevronUpIcon}
         label="More"
         active={props.active}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => props.setOpen((prev) => !prev)}
         ref={setAnchorRef}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -122,9 +123,9 @@ function MorePopover(props: {
         )}
       />
       <Popover
-        open={open()}
+        open={props.open()}
         onOpenChange={(isOpen) => {
-          setOpen(isOpen);
+          props.setOpen(isOpen);
           if (!isOpen) setHoveredId(null);
         }}
         placement="top"
@@ -142,7 +143,7 @@ function MorePopover(props: {
             onClick={() => {
               impactFeedback('light');
               toggleSettings();
-              setOpen(false);
+              props.setOpen(false);
             }}
           >
             <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
@@ -162,7 +163,7 @@ function MorePopover(props: {
             onClick={() => {
               impactFeedback('light');
               setCreateMenuOpen(true);
-              setOpen(false);
+              props.setOpen(false);
             }}
           >
             <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
@@ -183,7 +184,7 @@ function MorePopover(props: {
                 onClick={() => {
                   impactFeedback('light');
                   props.onNavigate(item.id);
-                  setOpen(false);
+                  props.setOpen(false);
                 }}
               >
                 <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
@@ -205,6 +206,7 @@ function MorePopover(props: {
 export function MobileDock() {
   const { openWithSplit } = useSplitLayout();
   const location = useLocation();
+  const [moreOpen, setMoreOpen] = createSignal(false);
 
   const isActive = (id: ListView) => {
     const activeContent = globalSplitManager()?.activeSplit()?.content();
@@ -228,29 +230,41 @@ export function MobileDock() {
         icon={AnimatedInboxIcon}
         label="Inbox"
         active={isActive('inbox')}
-        onClick={() => navigate('inbox')}
+        onClick={() => {
+          setMoreOpen(false);
+          navigate('inbox');
+        }}
       />
       <MobileDockButton
         icon={AnimatedChannelIcon}
         label="Channels"
         active={isActive('channels')}
-        onClick={() => navigate('channels')}
+        onClick={() => {
+          setMoreOpen(false);
+          navigate('channels');
+        }}
       />
       <MobileDockButton
         icon={AnimatedEmailIcon}
         label="Email"
         active={isActive('mail')}
-        onClick={() => navigate('mail')}
+        onClick={() => {
+          setMoreOpen(false);
+          navigate('mail');
+        }}
       />
       <MorePopover
         active={isMoreActive()}
         isActive={isActive}
         onNavigate={navigate}
+        open={moreOpen}
+        setOpen={setMoreOpen}
       />
       <MobileDockButton
         icon={AnimatedSearchIcon}
         label="Search"
         onClick={() => {
+          setMoreOpen(false);
           SearchState.maybeResetState();
           SearchState.open();
         }}
