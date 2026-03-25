@@ -200,7 +200,7 @@ export const useSearchResponseItemMapper = () => {
             results: result.document_search_results,
           });
         }
-        const properties = result.properties;
+        const properties = result.properties ?? undefined;
         return {
           type: 'document',
           subType: result.sub_type === 'task' ? { type: 'task' } : null,

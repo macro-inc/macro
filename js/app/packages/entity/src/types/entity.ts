@@ -53,6 +53,7 @@ export type BaseDocumentEntity = EntityBase & {
   fileType?: string;
   projectId?: string;
   subType?: SubType;
+  properties?: SoupProperty[];
 };
 
 export type TaskEntity = EntityBase & {
