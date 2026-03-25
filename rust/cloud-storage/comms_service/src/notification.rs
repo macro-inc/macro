@@ -435,6 +435,9 @@ fn set_sender_profile_picture(event: &mut NotifEvent, url: Option<String>) {
         NotifEvent::ChannelMention(m) => m.sender_profile_picture_url = url,
         NotifEvent::ChannelMessageReply(m) => m.sender_profile_picture_url = url,
         NotifEvent::DocumentMention(m) => m.sender_profile_picture_url = url,
+        NotifEvent::MentionedInDocumentComment(m) => m.sender_profile_picture_url = url,
+        NotifEvent::RepliedToDocumentCommentThread(m) => m.sender_profile_picture_url = url,
+        NotifEvent::CommentedOnDocument(m) => m.sender_profile_picture_url = url,
         _ => {}
     }
 }

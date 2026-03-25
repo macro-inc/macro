@@ -17,7 +17,7 @@ use axum::{
 };
 use macro_db_client::annotations::CommentError;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::{annotations::Comment, response::ErrorResponse};
+use model::response::ErrorResponse;
 use model_entity::EntityType;
 use model_notifications::{
     CommentedOnDocumentMetadata, MentionedInDocumentCommentMetadata,
@@ -139,26 +139,22 @@ pub(crate) fn compute_notification_recipients(
     let mut notified: HashSet<String> = HashSet::new();
 
     // 1. Mention recipients — normalize to MacroUserIdStr format for consistent comparison
-    let mention_recipients: Vec<String> = mentioned_user_ids
+    let mention_recipients: HashSet<MacroUserIdStr<'static>> = mentioned_user_ids
         .iter()
-        .filter_map(|id| {
-            MacroUserIdStr::parse_from_str(id)
-                .ok()
-                .map(|parsed| parsed.as_ref().to_string())
-        })
+        .filter_map(|id| MacroUserIdStr::try_from(id.clone()).ok())
         .collect();
-    notified.extend(mention_recipients.iter().cloned());
+    notified.extend(mention_recipients.iter().map(|id| id.as_ref().to_string()));
 
     // 2. Thread reply recipients — only if this is a reply (>1 comments in thread)
-    let mut thread_reply_recipients: Vec<String> = Vec::new();
+    let mut thread_reply_recipients: HashSet<MacroUserIdStr<'static>> = HashSet::new();
     if is_reply {
         for owner_str in thread_comment_owners {
-            if let Ok(parsed) = MacroUserIdStr::parse_from_str(owner_str) {
+            if let Ok(parsed) = MacroUserIdStr::try_from(owner_str.clone()) {
                 let normalized = parsed.as_ref().to_string();
-                let is_sender = sender_id.map_or(false, |s| s.as_ref() == normalized);
+                let is_sender = sender_id.is_some_and(|s| s.as_ref() == normalized);
                 if !is_sender && !notified.contains(&normalized) {
-                    notified.insert(normalized.clone());
-                    thread_reply_recipients.push(normalized);
+                    notified.insert(normalized);
+                    thread_reply_recipients.insert(parsed);
                 }
             }
         }
@@ -166,7 +162,7 @@ pub(crate) fn compute_notification_recipients(
 
     // 3. Document owner — only if not sender and not already notified
     let owner_normalized = document_owner.as_ref().to_string();
-    let owner_is_sender = sender_id.map_or(false, |s| s.as_ref() == owner_normalized);
+    let owner_is_sender = sender_id.is_some_and(|s| s.as_ref() == owner_normalized);
     let doc_owner_recipient = if !owner_is_sender && !notified.contains(&owner_normalized) {
         Some(owner_normalized)
     } else {
@@ -181,10 +177,10 @@ pub(crate) fn compute_notification_recipients(
 }
 
 pub(crate) struct NotificationRecipients {
-    /// Users who should get a mention notification.
-    pub mention_recipients: Vec<String>,
-    /// Users who should get a thread reply notification.
-    pub thread_reply_recipients: Vec<String>,
+    /// Users who should get a mention notification (already parsed and owned).
+    pub mention_recipients: HashSet<MacroUserIdStr<'static>>,
+    /// Users who should get a thread reply notification (already parsed and owned).
+    pub thread_reply_recipients: HashSet<MacroUserIdStr<'static>>,
     /// The document owner, if they should get a "commented on your document" notification.
     pub doc_owner_recipient: Option<String>,
 }
@@ -192,16 +188,16 @@ pub(crate) struct NotificationRecipients {
 impl NotificationRecipients {
     /// Returns all recipient IDs across all notification types.
     #[cfg(test)]
-    pub fn all_recipients(&self) -> HashSet<&str> {
+    pub fn all_recipients(&self) -> HashSet<String> {
         let mut all = HashSet::new();
         for r in &self.mention_recipients {
-            all.insert(r.as_str());
+            all.insert(r.as_ref().to_string());
         }
         for r in &self.thread_reply_recipients {
-            all.insert(r.as_str());
+            all.insert(r.as_ref().to_string());
         }
         if let Some(r) = &self.doc_owner_recipient {
-            all.insert(r.as_str());
+            all.insert(r.clone());
         }
         all
     }
@@ -215,103 +211,87 @@ impl NotificationRecipients {
     }
 }
 
-#[expect(clippy::too_many_arguments)]
-fn build_mention_notif<'a>(
-    text: String,
-    comment: &Comment,
-    thread_id: i64,
-    mentions: &'a [String],
-    document_name: String,
-    owner: MacroUserIdStr<'static>,
-    file_type: Option<String>,
-    sender_id: Option<MacroUserIdStr<'static>>,
-    document_id: String,
-    mention_id: &str,
-    sender_profile_picture_url: Option<String>,
-) -> SendNotificationRequestBuilder<'a, MentionedInDocumentCommentMetadata> {
-    let notification = MentionedInDocumentCommentMetadata {
-        document_name,
-        owner,
-        file_type,
-        mention_id: mention_id.to_string(),
-        comment_id: comment.comment_id,
-        thread_id,
-        text,
-        sender_profile_picture_url,
-    };
-
-    let recipient_ids: HashSet<MacroUserIdStr<'a>> = mentions
-        .iter()
-        .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
-        .collect();
-
-    SendNotificationRequestBuilder {
-        notification_entity: EntityType::Document.with_entity_string(document_id),
-        notification,
-        sender_id,
-        recipient_ids,
-    }
+pub(crate) struct CommentNotifContext {
+    pub text: String,
+    pub comment_id: i64,
+    pub thread_id: i64,
+    pub document_name: String,
+    pub document_id: String,
+    pub owner: MacroUserIdStr<'static>,
+    pub file_type: Option<String>,
+    pub sender_id: Option<MacroUserIdStr<'static>>,
+    pub sender_profile_picture_url: Option<String>,
 }
 
-fn build_thread_reply_notif<'a>(
-    text: String,
-    comment: &Comment,
-    thread_id: i64,
-    participant_ids: HashSet<MacroUserIdStr<'a>>,
-    document_name: String,
-    owner: MacroUserIdStr<'static>,
-    file_type: Option<String>,
-    sender_id: Option<MacroUserIdStr<'static>>,
-    document_id: String,
-    sender_profile_picture_url: Option<String>,
-) -> SendNotificationRequestBuilder<'a, RepliedToDocumentCommentThreadMetadata> {
-    let notification = RepliedToDocumentCommentThreadMetadata {
-        document_name,
-        owner,
-        file_type,
-        comment_id: comment.comment_id,
-        thread_id,
-        text,
-        sender_profile_picture_url,
-    };
+impl CommentNotifContext {
+    pub fn build_mention_notif(
+        &self,
+        recipient_ids: HashSet<MacroUserIdStr<'static>>,
+        mention_id: &str,
+    ) -> SendNotificationRequestBuilder<'static, MentionedInDocumentCommentMetadata> {
+        let notification = MentionedInDocumentCommentMetadata {
+            document_name: self.document_name.clone(),
+            owner: self.owner.clone(),
+            file_type: self.file_type.clone(),
+            mention_id: mention_id.to_string(),
+            comment_id: self.comment_id,
+            thread_id: self.thread_id,
+            text: self.text.clone(),
+            sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+        };
 
-    SendNotificationRequestBuilder {
-        notification_entity: EntityType::Document.with_entity_string(document_id),
-        notification,
-        sender_id,
-        recipient_ids: participant_ids,
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
+            notification,
+            sender_id: self.sender_id.clone(),
+            recipient_ids,
+        }
     }
-}
 
-fn build_document_comment_notif(
-    text: String,
-    comment: &Comment,
-    thread_id: i64,
-    document_owner: MacroUserIdStr<'static>,
-    document_name: String,
-    file_type: Option<String>,
-    sender_id: Option<MacroUserIdStr<'static>>,
-    document_id: String,
-    sender_profile_picture_url: Option<String>,
-) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
-    let notification = CommentedOnDocumentMetadata {
-        document_name,
-        owner: document_owner.clone(),
-        file_type,
-        comment_id: comment.comment_id,
-        thread_id,
-        text,
-        sender_profile_picture_url,
-    };
+    pub fn build_thread_reply_notif(
+        &self,
+        participant_ids: HashSet<MacroUserIdStr<'static>>,
+    ) -> SendNotificationRequestBuilder<'static, RepliedToDocumentCommentThreadMetadata> {
+        let notification = RepliedToDocumentCommentThreadMetadata {
+            document_name: self.document_name.clone(),
+            owner: self.owner.clone(),
+            file_type: self.file_type.clone(),
+            comment_id: self.comment_id,
+            thread_id: self.thread_id,
+            text: self.text.clone(),
+            sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+        };
 
-    let mut recipient_ids = HashSet::new();
-    recipient_ids.insert(document_owner);
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
+            notification,
+            sender_id: self.sender_id.clone(),
+            recipient_ids: participant_ids,
+        }
+    }
 
-    SendNotificationRequestBuilder {
-        notification_entity: EntityType::Document.with_entity_string(document_id),
-        notification,
-        sender_id,
-        recipient_ids,
+    pub fn build_document_comment_notif(
+        &self,
+    ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
+        let notification = CommentedOnDocumentMetadata {
+            document_name: self.document_name.clone(),
+            owner: self.owner.clone(),
+            file_type: self.file_type.clone(),
+            comment_id: self.comment_id,
+            thread_id: self.thread_id,
+            text: self.text.clone(),
+            sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+        };
+
+        let mut recipient_ids = HashSet::new();
+        recipient_ids.insert(self.owner.clone());
+
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
+            notification,
+            sender_id: self.sender_id.clone(),
+            recipient_ids,
+        }
     }
 }
 

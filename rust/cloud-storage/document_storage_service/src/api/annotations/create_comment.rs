@@ -1,11 +1,8 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     api::{
-        annotations::{
-            build_document_comment_notif, build_mention_notif, build_thread_reply_notif,
-            compute_notification_recipients,
-        },
+        annotations::{CommentNotifContext, compute_notification_recipients},
         context::ApiContext,
     },
     service::conn_gateway::update_live_comment_state,
@@ -108,26 +105,27 @@ pub async fn create_comment_handler(
                     is_reply,
                 );
 
+                let notif_ctx = CommentNotifContext {
+                    text: req.text.clone(),
+                    comment_id: comment.comment_id,
+                    thread_id,
+                    document_name: document_context.document_name.clone(),
+                    document_id: document_id.to_string(),
+                    owner: document_context.owner.clone(),
+                    file_type: document_context.file_type.clone(),
+                    sender_id: sender_id.clone(),
+                    sender_profile_picture_url,
+                };
+
                 // 1. Mention notifications (highest priority)
-                if let Some(Mentions { users, mention_id }) = &req.mentions
+                if let Some(Mentions { mention_id, .. }) = &req.mentions
                     && !recipients.mention_recipients.is_empty()
                 {
-                    let request = build_mention_notif(
-                        req.text.clone(),
-                        comment,
-                        thread_id,
-                        users,
-                        document_context.document_name.clone(),
-                        document_context.owner.clone(),
-                        document_context.file_type.clone(),
-                        sender_id.clone(),
-                        document_id.to_string(),
-                        mention_id,
-                        sender_profile_picture_url.clone(),
-                    )
-                    .into_request()
-                    .with_apns()
-                    .with_conn_gateway();
+                    let request = notif_ctx
+                        .build_mention_notif(recipients.mention_recipients, mention_id)
+                        .into_request()
+                        .with_apns()
+                        .with_conn_gateway();
 
                     _ = notification_ingress_service
                         .send_notification(request)
@@ -137,27 +135,11 @@ pub async fn create_comment_handler(
 
                 // 2. Thread reply notifications
                 if !recipients.thread_reply_recipients.is_empty() {
-                    let participant_ids: HashSet<MacroUserIdStr<'_>> = recipients
-                        .thread_reply_recipients
-                        .iter()
-                        .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
-                        .collect();
-
-                    let request = build_thread_reply_notif(
-                        req.text.clone(),
-                        comment,
-                        thread_id,
-                        participant_ids,
-                        document_context.document_name.clone(),
-                        document_context.owner.clone(),
-                        document_context.file_type.clone(),
-                        sender_id.clone(),
-                        document_id.to_string(),
-                        sender_profile_picture_url.clone(),
-                    )
-                    .into_request()
-                    .with_apns()
-                    .with_conn_gateway();
+                    let request = notif_ctx
+                        .build_thread_reply_notif(recipients.thread_reply_recipients)
+                        .into_request()
+                        .with_apns()
+                        .with_conn_gateway();
 
                     _ = notification_ingress_service
                         .send_notification(request)
@@ -167,20 +149,11 @@ pub async fn create_comment_handler(
 
                 // 3. Document owner notification (lowest priority)
                 if recipients.doc_owner_recipient.is_some() {
-                    let request = build_document_comment_notif(
-                        req.text.clone(),
-                        comment,
-                        thread_id,
-                        document_context.owner.clone(),
-                        document_context.document_name.clone(),
-                        document_context.file_type.clone(),
-                        sender_id.clone(),
-                        document_id.to_string(),
-                        sender_profile_picture_url.clone(),
-                    )
-                    .into_request()
-                    .with_apns()
-                    .with_conn_gateway();
+                    let request = notif_ctx
+                        .build_document_comment_notif()
+                        .into_request()
+                        .with_apns()
+                        .with_conn_gateway();
 
                     _ = notification_ingress_service
                         .send_notification(request)

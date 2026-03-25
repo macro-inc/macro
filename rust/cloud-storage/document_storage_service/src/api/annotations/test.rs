@@ -41,11 +41,11 @@ fn mentioned_user_who_is_also_thread_participant_gets_only_mention() {
     );
 
     assert!(
-        result.mention_recipients.contains(&bob.to_string()),
+        result.mention_recipients.contains(&user_id(bob)),
         "bob should be in mention recipients"
     );
     assert!(
-        !result.thread_reply_recipients.contains(&bob.to_string()),
+        !result.thread_reply_recipients.contains(&user_id(bob)),
         "bob should NOT be in thread reply recipients"
     );
     assert_eq!(
@@ -69,9 +69,7 @@ fn mentioned_user_who_is_also_doc_owner_gets_only_mention() {
     );
 
     assert!(
-        result
-            .mention_recipients
-            .contains(&owner.as_ref().to_string()),
+        result.mention_recipients.contains(&owner),
         "owner should be in mention recipients"
     );
     assert!(
@@ -94,9 +92,7 @@ fn thread_participant_who_is_also_doc_owner_gets_only_thread_reply() {
     );
 
     assert!(
-        result
-            .thread_reply_recipients
-            .contains(&owner.as_ref().to_string()),
+        result.thread_reply_recipients.contains(&owner),
         "owner should be in thread reply recipients"
     );
     assert!(
@@ -118,16 +114,8 @@ fn user_who_is_mentioned_and_thread_participant_and_doc_owner_gets_only_mention(
         true,
     );
 
-    assert!(
-        result
-            .mention_recipients
-            .contains(&owner.as_ref().to_string()),
-    );
-    assert!(
-        !result
-            .thread_reply_recipients
-            .contains(&owner.as_ref().to_string())
-    );
+    assert!(result.mention_recipients.contains(&owner),);
+    assert!(!result.thread_reply_recipients.contains(&owner));
     assert!(result.doc_owner_recipient.is_none());
     assert_eq!(result.all_recipients().len(), result.total_count());
 }
@@ -246,7 +234,7 @@ fn reply_notifies_thread_participants_and_doc_owner() {
     );
 
     assert!(result.mention_recipients.is_empty());
-    assert!(result.thread_reply_recipients.contains(&alice.to_string()));
+    assert!(result.thread_reply_recipients.contains(&user_id(alice)));
     assert_eq!(result.doc_owner_recipient.as_deref(), Some(owner.as_ref()));
 }
 

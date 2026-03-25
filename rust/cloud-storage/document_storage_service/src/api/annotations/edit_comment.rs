@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::annotations::build_mention_notif, service::conn_gateway::update_live_comment_state,
+    api::annotations::CommentNotifContext, service::conn_gateway::update_live_comment_state,
 };
 use axum::{
     Json,
@@ -11,6 +11,7 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_db_client::annotations::edit_comment::edit_document_comment;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     annotations::{
         AnnotationIncrementalUpdate, Mentions,
@@ -65,22 +66,30 @@ pub async fn edit_comment_handler(
                     .ok()
                     .and_then(|pics| pics.pictures.into_iter().next().map(|p| p.url));
 
-                let request = build_mention_notif(
-                    req.text.clone().unwrap_or_else(|| "".to_string()),
-                    &res.comment,
-                    req.thread_id,
-                    &users,
-                    res.document_name.clone(),
-                    res.document_owner.clone(),
-                    res.file_type.clone(),
-                    user_id.clone().try_into().ok(),
-                    res.document_id.to_string(),
-                    &mention_id,
+                // Only mention notifications on edit — no thread-reply or document-owner
+                // notifications, since edits shouldn't re-notify participants.
+                let notif_ctx = CommentNotifContext {
+                    text: req.text.clone().unwrap_or_default(),
+                    comment_id: res.comment.comment_id,
+                    thread_id: req.thread_id,
+                    document_name: res.document_name.clone(),
+                    document_id: res.document_id.to_string(),
+                    owner: res.document_owner.clone(),
+                    file_type: res.file_type.clone(),
+                    sender_id: user_id.clone().try_into().ok(),
                     sender_profile_picture_url,
-                )
-                .into_request()
-                .with_apns()
-                .with_conn_gateway();
+                };
+
+                let recipient_ids = users
+                    .iter()
+                    .filter_map(|id| MacroUserIdStr::try_from(id.clone()).ok())
+                    .collect();
+
+                let request = notif_ctx
+                    .build_mention_notif(recipient_ids, &mention_id)
+                    .into_request()
+                    .with_apns()
+                    .with_conn_gateway();
 
                 _ = notification_ingress_service
                     .send_notification(request)

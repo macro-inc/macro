@@ -358,16 +358,12 @@ impl NotificationTitle for MentionedInDocumentCommentMetadata {
     ) -> Result<String, rootcause::Report> {
         let sender =
             sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let file_type_str = self
-            .file_type
-            .as_ref()
-            .ok_or_else(|| report!("Expected the file type to exist"))?;
         let email = sender.0.email_part();
         let sender = email.email_str();
-        let title = format!(
-            "{sender} mentioned you in {}.{}",
-            self.document_name, file_type_str
-        );
+        let title = match &self.file_type {
+            Some(ft) => format!("{sender} mentioned you in {}.{ft}", self.document_name),
+            None => format!("{sender} mentioned you in {}", self.document_name),
+        };
         Ok(title)
     }
 
@@ -793,16 +789,13 @@ impl NotificationTitle for RepliedToDocumentCommentThreadMetadata {
     ) -> Result<String, rootcause::Report> {
         let sender =
             sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let file_type_str = self
-            .file_type
-            .as_ref()
-            .ok_or_else(|| report!("Expected the file type to exist"))?;
         let email = sender.0.email_part();
         let sender = email.email_str();
-        Ok(format!(
-            "{sender} replied in {}.{}",
-            self.document_name, file_type_str
-        ))
+        let title = match &self.file_type {
+            Some(ft) => format!("{sender} replied in {}.{ft}", self.document_name),
+            None => format!("{sender} replied in {}", self.document_name),
+        };
+        Ok(title)
     }
 
     fn format_body(
@@ -864,16 +857,13 @@ impl NotificationTitle for CommentedOnDocumentMetadata {
     ) -> Result<String, rootcause::Report> {
         let sender =
             sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let file_type_str = self
-            .file_type
-            .as_ref()
-            .ok_or_else(|| report!("Expected the file type to exist"))?;
         let email = sender.0.email_part();
         let sender = email.email_str();
-        Ok(format!(
-            "{sender} commented on {}.{}",
-            self.document_name, file_type_str
-        ))
+        let title = match &self.file_type {
+            Some(ft) => format!("{sender} commented on {}.{ft}", self.document_name),
+            None => format!("{sender} commented on {}", self.document_name),
+        };
+        Ok(title)
     }
 
     fn format_body(
