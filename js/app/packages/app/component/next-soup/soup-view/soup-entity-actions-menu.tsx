@@ -116,10 +116,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       </Show>
 
       <Show when={canOpenInSplit()}>
-        <MenuItem
-          text="Open in new split"
-          onClick={openInNewSplit}
-        />
+        <MenuItem text="Open in new split" onClick={openInNewSplit} />
       </Show>
 
       <Divider />
