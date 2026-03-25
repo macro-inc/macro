@@ -231,11 +231,8 @@ function MetadataInfo(props: {
     <div
       class={`${props.align === 'right' ? 'justify-right' : 'justify-left'} mt-2 ${props.align === 'left' ? 'w-fit max-w-[66%]' : ''} text-ink-muted ${props.align === 'left' ? 'overflow-hidden whitespace-nowrap text-ellipsis' : ''}`}
     >
-      <span class="relative text-[0.8em] text-ink-muted max-w-full">
-        <Dynamic
-          component={props.icon}
-          class="relative top-[-0.125em] size-4 inline-flex items-center mr-1"
-        />
+      <span class="relative text-[0.8em] text-ink-muted max-w-full flex items-center">
+        <Dynamic component={props.icon} class="relative size-3 mx-1" />
         {props.children}
       </span>
     </div>
@@ -592,13 +589,8 @@ export function PopupPreview(props: {
                   {/* Header: icon + filename + action buttons */}
                   <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
                     <div class="flex items-center gap-2 min-w-0">
-                      <div class="size-8 shrink-0">
-                        <ItemEntityIcon size="md" />
-                      </div>
+                      <ItemEntityIcon size="sm" />
                       <div class="text-sm font-semibold select-text min-w-0">
-                        <div class="line-clamp-2 break-words">
-                          {props.documentInfo.name || accessibleItem().name}
-                        </div>
                         <Show when={accessories()}>
                           {(acc) => (
                             <div class="text-[0.8em] text-ink-muted mt-1 select-none">
@@ -612,6 +604,10 @@ export function PopupPreview(props: {
                     <div class="flex shrink-0">{renderActionButtons()}</div>
                   </div>
 
+                  <div class="line-clamp-2 break-words px-2 mb-2">
+                    {props.documentInfo.name || accessibleItem().name}
+                  </div>
+
                   {/* Visual preview for images */}
                   <Show when={props.documentInfo.type === 'image'}>
                     <ImageCoverStrip
@@ -621,7 +617,7 @@ export function PopupPreview(props: {
                   </Show>
 
                   {/* Footer: message context + owner/timestamp */}
-                  <div class="px-3 pb-3 pt-2 border-t border-edge-muted">
+                  <div class="px-2 py-2 border-t border-edge-muted">
                     <Show when={messageContext()}>
                       {(context) => (
                         <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
@@ -654,7 +650,9 @@ export function PopupPreview(props: {
                           <Show when={accessibleItem().updatedAt}>
                             {(time) => (
                               <MetadataInfo icon={ClockIcon} align="right">
-                                {formatDate(time())}
+                                <span class="text-xxs font-mono uppercase">
+                                  {formatDate(time())}
+                                </span>
                               </MetadataInfo>
                             )}
                           </Show>
@@ -672,8 +670,8 @@ export function PopupPreview(props: {
                       {(snapshot) => (
                         <div class="mt-2 pt-2 border-t border-edge">
                           <div class="flex items-center gap-1.5 text-ink-muted">
-                            <ClockIcon class="size-4" />
-                            <span class="text-xs font-medium">
+                            <ClockIcon class="size-3" />
+                            <span class="text-xxs font-medium font-mono uppercase">
                               Snapshot from{' '}
                               {formatDate(new Date(snapshot().date), {
                                 showTime: true,
