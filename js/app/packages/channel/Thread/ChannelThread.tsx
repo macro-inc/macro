@@ -197,7 +197,7 @@ export function ChannelThread(props: ThreadProps) {
                   />
 
                   <Show when={props.isReplying()}>
-                    <div ref={attachReplyInputRef}>
+                    <div ref={attachReplyInputRef} class="ph-no-capture">
                       <Show when={!hasReplies()}>
                         <Thread.ReplyAuthor
                           userId={replyUserId()}

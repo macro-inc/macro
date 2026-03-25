@@ -98,13 +98,16 @@ function RegularMessageLayout(props: {
         <Message.EditedIndicator />
         <Message.Timestamp class="ml-auto" />
       </Message.Slot>
-      <Message.Slot placement="content" class="mt-0.5">
+      <Message.Slot placement="content" class="ph-no-capture mt-0.5">
         <MessageContentSlot
           channelId={props.channelId}
           messageEditor={props.messageEditor}
         />
       </Message.Slot>
-      <Message.Slot placement="footer" class="flex flex-col min-w-0">
+      <Message.Slot
+        placement="footer"
+        class="ph-no-capture flex flex-col min-w-0"
+      >
         <MessageFooter messageEditor={props.messageEditor} />
       </Message.Slot>
       <Message.Slot placement="actions">
@@ -128,7 +131,7 @@ function GroupedMessageLayout(props: {
       </Message.Slot>
       <Message.Slot placement="content">
         <div
-          class="flex gap-3 min-w-0"
+          class="ph-no-capture flex gap-3 min-w-0"
           classList={{
             'items-center': !isEditing(),
             'items-start': isEditing(),
@@ -142,7 +145,10 @@ function GroupedMessageLayout(props: {
           <GroupedMeta messageEditor={props.messageEditor} />
         </div>
       </Message.Slot>
-      <Message.Slot placement="footer" class="flex flex-col min-w-0">
+      <Message.Slot
+        placement="footer"
+        class="ph-no-capture flex flex-col min-w-0"
+      >
         <MessageFooter messageEditor={props.messageEditor} />
       </Message.Slot>
       <Message.Slot placement="actions">
