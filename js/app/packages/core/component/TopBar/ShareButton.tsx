@@ -35,7 +35,7 @@ import {
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import IconLink from '@icon/regular/link.svg';
-import User from '@icon/regular/user.svg';
+import UserCircle from '@macro-icons/wide/user-circle.svg';
 import IconUsers from '@icon/regular/users.svg';
 import IconX from '@icon/bold/x-bold.svg';
 import IconShared from '@macro-icons/wide/share.svg';
@@ -657,7 +657,7 @@ export function ShareModal(props: ShareModalProps) {
                                       recipient.channel_id
                                     )}
                                   >
-                                    <User class="flex-shrink-0 w-4 h-4" />
+                                    <UserCircle class="flex-shrink-0 w-4 h-4" />
                                   </Match>
                                   <Match when={true}>
                                     <IconUsers class="flex-shrink-0 w-4 h-4" />
