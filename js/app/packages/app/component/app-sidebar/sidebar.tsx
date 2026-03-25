@@ -32,7 +32,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { debounce, Scheduled } from '@solid-primitives/scheduled';
+import { debounce, type Scheduled } from '@solid-primitives/scheduled';
 import { Hotkey } from '@core/component/Hotkey';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
