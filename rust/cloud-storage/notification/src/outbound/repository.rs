@@ -5,7 +5,7 @@ mod test;
 
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::{
-    DeviceEndpoint, NotificationIdAndCollapseKey, NotificationTypePreference,
+    DeviceEndpoint, DisabledNotificationType, NotificationIdAndCollapseKey,
     SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::NotificationRepository;
@@ -168,18 +168,24 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
-    /// Get all notification type preferences for a user.
-    fn get_notification_type_preferences(
+    /// Get all disabled notification types for a user.
+    fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
-    ) -> impl std::future::Future<Output = Result<Vec<NotificationTypePreference>, Report>> + Send;
+    ) -> impl std::future::Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send;
 
-    /// Set a user's preference for a notification type (upsert).
-    fn set_notification_type_preference(
+    /// Disable a notification type for a user (insert).
+    fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
-        enabled: bool,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Re-enable a notification type for a user (delete).
+    fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 }
 
@@ -789,7 +795,7 @@ impl NotificationDbOps for PgPool {
         let disabled: Vec<String> = sqlx::query_scalar!(
             r#"
             SELECT user_id FROM user_notification_type_preference
-            WHERE notification_event_type = $1 AND enabled = false AND user_id = ANY($2)
+            WHERE notification_event_type = $1 AND user_id = ANY($2)
             "#,
             notification_event_type,
             &ids
@@ -810,13 +816,13 @@ impl NotificationDbOps for PgPool {
         Ok(result)
     }
 
-    async fn get_notification_type_preferences(
+    async fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
-    ) -> Result<Vec<NotificationTypePreference>, Report> {
+    ) -> Result<Vec<DisabledNotificationType>, Report> {
         let rows = sqlx::query!(
             r#"
-            SELECT user_id, notification_event_type, enabled
+            SELECT user_id, notification_event_type
             FROM user_notification_type_preference
             WHERE user_id = $1
             "#,
@@ -832,31 +838,46 @@ impl NotificationDbOps for PgPool {
                     .map(CowLike::into_owned)
                     .ok()?
                     .into_owned();
-                Some(NotificationTypePreference {
+                Some(DisabledNotificationType {
                     user_id,
                     notification_event_type: row.notification_event_type,
-                    enabled: row.enabled,
                 })
             })
             .collect())
     }
 
-    async fn set_notification_type_preference(
+    async fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
-        enabled: bool,
     ) -> Result<(), Report> {
         sqlx::query!(
             r#"
-            INSERT INTO user_notification_type_preference (user_id, notification_event_type, enabled)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id, notification_event_type)
-            DO UPDATE SET enabled = $3
+            INSERT INTO user_notification_type_preference (user_id, notification_event_type)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id, notification_event_type) DO NOTHING
             "#,
             user_id.as_ref(),
-            notification_event_type,
-            enabled
+            notification_event_type
+        )
+        .execute(self)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            DELETE FROM user_notification_type_preference
+            WHERE user_id = $1 AND notification_event_type = $2
+            "#,
+            user_id.as_ref(),
+            notification_event_type
         )
         .execute(self)
         .await?;
@@ -1032,21 +1053,30 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
             .await
     }
 
-    async fn get_notification_type_preferences(
+    async fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
-    ) -> Result<Vec<NotificationTypePreference>, Report> {
-        self.db.get_notification_type_preferences(user_id).await
+    ) -> Result<Vec<DisabledNotificationType>, Report> {
+        self.db.get_disabled_notification_types(user_id).await
     }
 
-    async fn set_notification_type_preference(
+    async fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
-        enabled: bool,
     ) -> Result<(), Report> {
         self.db
-            .set_notification_type_preference(user_id, notification_event_type, enabled)
+            .disable_notification_type(user_id, notification_event_type)
+            .await
+    }
+
+    async fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> Result<(), Report> {
+        self.db
+            .enable_notification_type(user_id, notification_event_type)
             .await
     }
 }

@@ -17,7 +17,7 @@ use crate::domain::models::request::{
     SendNotificationRequest, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationResult, NotificationTypePreference,
+    DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
     NotificationTypeName, UserNotificationRow,
 };
 use crate::domain::ports::{
@@ -118,18 +118,24 @@ pub trait NotificationReader: Send + Sync + 'static {
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Get all notification type preferences for a user.
-    fn get_notification_type_preferences(
+    /// Get all disabled notification types for a user.
+    fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Vec<NotificationTypePreference>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send;
 
-    /// Set a user's preference for a specific notification type.
-    fn set_notification_type_preference(
+    /// Disable a notification type for a user.
+    fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
-        enabled: bool,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Re-enable a notification type for a user.
+    fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -728,24 +734,34 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_notification_type_preferences(
+    async fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
-    ) -> Result<Vec<NotificationTypePreference>, Report> {
+    ) -> Result<Vec<DisabledNotificationType>, Report> {
         self.repository
-            .get_notification_type_preferences(user_id)
+            .get_disabled_notification_types(user_id)
             .await
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn set_notification_type_preference(
+    async fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
-        enabled: bool,
     ) -> Result<(), Report> {
         self.repository
-            .set_notification_type_preference(user_id, notification_event_type, enabled)
+            .disable_notification_type(user_id, notification_event_type)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> Result<(), Report> {
+        self.repository
+            .enable_notification_type(user_id, notification_event_type)
             .await
     }
 }

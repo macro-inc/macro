@@ -1,11 +1,10 @@
 -- User notification type preferences
--- Allows users to opt out of specific notification types (e.g. channel_message_send)
--- Missing rows default to enabled; only rows with enabled = false suppress notifications.
+-- A row means the user has disabled that notification type.
+-- Absence of a row means the user receives that notification type (default).
 
 CREATE TABLE user_notification_type_preference (
   user_id TEXT NOT NULL,
   notification_event_type VARCHAR(255) NOT NULL,
-  enabled BOOLEAN NOT NULL DEFAULT TRUE,
   PRIMARY KEY (user_id, notification_event_type)
 );
 

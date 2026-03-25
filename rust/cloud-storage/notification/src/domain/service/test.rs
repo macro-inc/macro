@@ -348,18 +348,25 @@ impl NotificationRepository for MockRepository {
         Ok(HashSet::new())
     }
 
-    async fn get_notification_type_preferences(
+    async fn get_disabled_notification_types(
         &self,
         _user_id: MacroUserIdStr<'_>,
-    ) -> Result<Vec<crate::domain::models::NotificationTypePreference>, Report> {
+    ) -> Result<Vec<crate::domain::models::DisabledNotificationType>, Report> {
         Ok(vec![])
     }
 
-    async fn set_notification_type_preference(
+    async fn disable_notification_type(
         &self,
         _user_id: MacroUserIdStr<'_>,
         _notification_event_type: &str,
-        _enabled: bool,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn enable_notification_type(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_event_type: &str,
     ) -> Result<(), Report> {
         Ok(())
     }
@@ -536,21 +543,30 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
             .await
     }
 
-    async fn get_notification_type_preferences(
+    async fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
-    ) -> Result<Vec<crate::domain::models::NotificationTypePreference>, Report> {
-        (**self).get_notification_type_preferences(user_id).await
+    ) -> Result<Vec<crate::domain::models::DisabledNotificationType>, Report> {
+        (**self).get_disabled_notification_types(user_id).await
     }
 
-    async fn set_notification_type_preference(
+    async fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
-        enabled: bool,
     ) -> Result<(), Report> {
         (**self)
-            .set_notification_type_preference(user_id, notification_event_type, enabled)
+            .disable_notification_type(user_id, notification_event_type)
+            .await
+    }
+
+    async fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> Result<(), Report> {
+        (**self)
+            .enable_notification_type(user_id, notification_event_type)
             .await
     }
 }

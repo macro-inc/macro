@@ -245,15 +245,15 @@ impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
     }
 }
 
-/// A user's preference for a specific notification type.
+/// A notification type that a user has disabled.
+///
+/// Presence of a row means the user has opted out of this type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NotificationTypePreference {
-    /// The user who owns this preference.
+pub struct DisabledNotificationType {
+    /// The user who disabled this type.
     pub user_id: MacroUserIdStr<'static>,
     /// The notification event type (e.g. "channel_message_send").
     pub notification_event_type: String,
-    /// Whether this notification type is enabled.
-    pub enabled: bool,
 }
 
 /// Trait that all notification types must implement.

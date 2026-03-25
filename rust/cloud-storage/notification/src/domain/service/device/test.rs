@@ -201,17 +201,23 @@ impl NotificationRepository for MockNotifRepo {
     {
         unimplemented!()
     }
-    async fn get_notification_type_preferences(
+    async fn get_disabled_notification_types(
         &self,
         _: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Vec<crate::domain::models::NotificationTypePreference>, Report> {
+    ) -> Result<Vec<crate::domain::models::DisabledNotificationType>, Report> {
         unimplemented!()
     }
-    async fn set_notification_type_preference(
+    async fn disable_notification_type(
         &self,
         _: macro_user_id::user_id::MacroUserIdStr<'_>,
         _: &str,
-        _: bool,
+    ) -> Result<(), Report> {
+        unimplemented!()
+    }
+    async fn enable_notification_type(
+        &self,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: &str,
     ) -> Result<(), Report> {
         unimplemented!()
     }
