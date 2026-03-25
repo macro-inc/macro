@@ -155,7 +155,7 @@ export const QUERY_FILTERS = {
     chat_filters: { chat_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
     document_filters: {
-      file_types: ['md', 'canvas', ...getFileAssociations('soup')],
+      file_types: ['md', 'canvas', 'docx', ...getFileAssociations('soup')],
     },
   },
 

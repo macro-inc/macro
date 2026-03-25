@@ -270,6 +270,11 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
       },
       {
+        id: 'file-docx',
+        label: 'DOCX',
+        icon: () => <EntityIcon targetType="write" size="xs" />,
+      },
+      {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
