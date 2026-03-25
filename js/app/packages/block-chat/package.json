@@ -3,11 +3,6 @@
   "private": true,
   "scripts": {},
   "dependencies": {
-    "core": "workspace:*",
-    "@floating-ui/dom": "^1.6.12",
-    "@kobalte/core": "^0.13.7",
-    "remark-math": "^6.0.0",
-    "rehype-katex": "^7.0.0",
-    "katex": "^0.16.9"
+    "core": "workspace:*"
   }
 }

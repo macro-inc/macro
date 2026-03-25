@@ -7,8 +7,6 @@
     "dev": "vite",
     "test": "vitest"
   },
-  "dependencies": {
-    "remark-gfm": "^4.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {}
 }
