@@ -1,4 +1,4 @@
-use super::constant::MAX_RECURSIONS;
+use super::MAX_RECURSIONS;
 use crate::openai_toolset::OpenAIToolSetExt;
 use crate::tool::types::{
     AsyncToolSet, PartialToolCall, RequestContext, StreamPart, ToolCall, ToolResult,
@@ -16,7 +16,7 @@ use async_openai::types::{
 };
 use async_stream::stream;
 use futures::stream::StreamExt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 struct ProcessedStream {
@@ -32,10 +32,10 @@ where
     client: I,
     toolset: Arc<AsyncToolSet<T>>,
     request: CreateChatCompletionRequest,
-    messages: Vec<ChatCompletionRequestMessage>,
+    pub(crate) messages: Vec<ChatCompletionRequestMessage>,
     context: T,
-    initial_message_count: usize,
-    tool_call_id_name_mapping: HashMap<String, String>, // tool_call_id -> tool_name
+    pub(crate) initial_message_count: usize,
+    pub(crate) tool_call_id_name_mapping: HashMap<String, String>, // tool_call_id -> tool_name
     user_id: String,
 }
 
@@ -82,7 +82,13 @@ where
             .into();
         messages.0
     }
+}
 
+impl<I, T> Chat<I, T>
+where
+    I: ExtendedClient + Send + Sync,
+    T: Clone + Send + Sync,
+{
     #[tracing::instrument(err, skip_all)]
     async fn make_chat_completion_stream(
         &mut self,
@@ -384,7 +390,7 @@ where
     async fn make_openai_chat_completion_stream(
         &mut self,
     ) -> Result<ExtendedOpenAIStream<I::ResponseExtension>> {
-        self.request.messages = self.messages.clone();
+        self.request.messages = correct_message_chain(self.messages.clone());
         self.request.tools = Some(self.toolset.openai_chatcompletion_toolset());
         self.request.stream = Some(true);
         self.request.stream_options = Some(ChatCompletionStreamOptions {
@@ -395,240 +401,67 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::noop::NoOpClient;
-    use crate::types::{AssistantMessagePart, ChatMessageContent, Role};
-    use async_openai::types::{
-        ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
-        ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
-        ChatCompletionRequestToolMessage, ChatCompletionRequestToolMessageContent,
-        ChatCompletionToolType, FunctionCall,
-    };
-    use serde_json::json;
+// anthropic sometimes doesn't return responses for their servier tools. this causes 400's
+#[tracing::instrument(skip_all)]
+fn correct_message_chain(
+    messages: Vec<ChatCompletionRequestMessage>,
+) -> Vec<ChatCompletionRequestMessage> {
+    let mut corrected = vec![];
+    let mut pending_tool_calls: Option<Vec<ChatCompletionMessageToolCall>> = None;
+    let mut i = 0;
 
-    fn create_mock_chat() -> Chat<NoOpClient, String> {
-        let client = NoOpClient;
-        let toolset = Arc::new(AsyncToolSet::new());
-        Chat::new(client, toolset, "test_context".to_string())
+    while i < messages.len() {
+        let msg = &messages[i];
+
+        if let Some(expected) = pending_tool_calls.take() {
+            // Consume as many matching tool responses as we can
+            let mut responded: HashSet<String> = HashSet::new();
+            while i < messages.len() {
+                if let ChatCompletionRequestMessage::Tool(tool_msg) = &messages[i] {
+                    responded.insert(tool_msg.tool_call_id.clone());
+                    corrected.push(messages[i].clone());
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            // Backfill any missing tool responses
+            for call in &expected {
+                if !responded.contains(&call.id) {
+                    tracing::warn!(call_id=?call.id, "missing tool response");
+                    corrected.push(ChatCompletionRequestMessage::Tool(
+                        ChatCompletionRequestToolMessage {
+                            tool_call_id: call.id.clone(),
+                            content:
+                                async_openai::types::ChatCompletionRequestToolMessageContent::Text(
+                                    "No response from server".into(),
+                                ),
+                        },
+                    ));
+                }
+            }
+        } else {
+            if let ChatCompletionRequestMessage::Assistant(assistant) = msg {
+                pending_tool_calls = assistant.tool_calls.clone();
+            }
+            corrected.push(messages[i].clone());
+            i += 1;
+        }
     }
 
-    #[test]
-    fn test_get_new_conversation_messages_empty() {
-        let chat = create_mock_chat();
-        let messages = chat.get_new_conversation_messages();
-        assert!(messages.is_empty());
-    }
-
-    #[test]
-    fn test_get_new_conversation_messages_skips_initial() {
-        let mut chat = create_mock_chat();
-
-        // Add some initial messages
-        chat.messages = vec![
-            ChatCompletionRequestMessage::System(
-                async_openai::types::ChatCompletionRequestSystemMessage {
-                    content: async_openai::types::ChatCompletionRequestSystemMessageContent::Text(
-                        "System message".to_string(),
+    // Handle trailing assistant with tool_calls but no responses at end of messages
+    if let Some(expected) = pending_tool_calls {
+        for call in &expected {
+            tracing::warn!(call_id=?call.id, "missing tool response");
+            corrected.push(ChatCompletionRequestMessage::Tool(
+                ChatCompletionRequestToolMessage {
+                    tool_call_id: call.id.clone(),
+                    content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
+                        "No response from server".into(),
                     ),
-                    ..Default::default()
                 },
-            ),
-            ChatCompletionRequestMessage::User(
-                async_openai::types::ChatCompletionRequestUserMessage {
-                    content: async_openai::types::ChatCompletionRequestUserMessageContent::Text(
-                        "User message".to_string(),
-                    ),
-                    ..Default::default()
-                },
-            ),
-        ];
-        chat.initial_message_count = 2;
-
-        // Add new messages
-        chat.messages.push(ChatCompletionRequestMessage::Assistant(
-            ChatCompletionRequestAssistantMessage {
-                content: Some(ChatCompletionRequestAssistantMessageContent::Text(
-                    "New assistant response".to_string(),
-                )),
-                ..Default::default()
-            },
-        ));
-
-        let new_messages = chat.get_new_conversation_messages();
-
-        assert_eq!(new_messages.len(), 1);
-        assert_eq!(new_messages[0].role, Role::Assistant);
-        if let ChatMessageContent::Text(text) = &new_messages[0].content {
-            assert_eq!(text, "New assistant response");
-        } else {
-            panic!("Expected text content");
+            ));
         }
     }
-
-    #[test]
-    fn test_get_new_conversation_messages_with_tool_calls() {
-        let mut chat = create_mock_chat();
-        chat.initial_message_count = 0;
-
-        let tool_call_id = "call_123".to_string();
-        let tool_name = "test_tool".to_string();
-
-        // Add tool call mapping
-        chat.tool_call_id_name_mapping
-            .insert(tool_call_id.clone(), tool_name.clone());
-
-        // Add messages with tool calls
-        chat.messages = vec![
-            ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
-                content: Some(ChatCompletionRequestAssistantMessageContent::Text(
-                    "I'll help you with that.".to_string(),
-                )),
-                tool_calls: Some(vec![ChatCompletionMessageToolCall {
-                    id: tool_call_id.clone(),
-                    function: FunctionCall {
-                        name: tool_name.clone(),
-                        arguments: json!({"param": "value"}).to_string(),
-                    },
-                    r#type: ChatCompletionToolType::Function,
-                }]),
-                ..Default::default()
-            }),
-            ChatCompletionRequestMessage::Tool(ChatCompletionRequestToolMessage {
-                tool_call_id: tool_call_id.clone(),
-                content: ChatCompletionRequestToolMessageContent::Text(
-                    json!({"result": "success"}).to_string(),
-                ),
-            }),
-        ];
-
-        let new_messages = chat.get_new_conversation_messages();
-
-        // The ChatMessages conversion merges adjacent assistant messages into one
-        assert_eq!(new_messages.len(), 1);
-
-        // The message should be assistant with merged parts (text + tool call + tool response)
-        assert_eq!(new_messages[0].role, Role::Assistant);
-        if let ChatMessageContent::AssistantMessageParts(parts) = &new_messages[0].content {
-            assert_eq!(parts.len(), 3);
-
-            // Should have text part
-            if let AssistantMessagePart::Text { text } = &parts[0] {
-                assert_eq!(text, "I'll help you with that.");
-            } else {
-                panic!("Expected text part at index 0");
-            }
-
-            // Should have tool call part with correct name from mapping
-            if let AssistantMessagePart::ToolCall { name, id, json } = &parts[1] {
-                assert_eq!(name, &tool_name);
-                assert_eq!(id, &tool_call_id);
-                assert_eq!(json["param"], "value");
-            } else {
-                panic!("Expected tool call part at index 1");
-            }
-
-            // Should have tool response part
-            if let AssistantMessagePart::ToolCallResponseJson { name, id, json } = &parts[2] {
-                assert_eq!(name, &tool_name);
-                assert_eq!(id, &tool_call_id);
-                assert_eq!(json["result"], "success");
-            } else {
-                panic!("Expected tool response part at index 2");
-            }
-        } else {
-            panic!("Expected assistant message parts");
-        }
-    }
-
-    #[test]
-    fn test_get_new_conversation_messages_preserves_tool_mapping() {
-        let mut chat = create_mock_chat();
-        chat.initial_message_count = 0;
-
-        let tool_call_id = "call_456".to_string();
-        let tool_name = "search_documents".to_string();
-
-        // Add tool call mapping
-        chat.tool_call_id_name_mapping
-            .insert(tool_call_id.clone(), tool_name.clone());
-
-        // Add tool response message
-        chat.messages = vec![ChatCompletionRequestMessage::Tool(
-            ChatCompletionRequestToolMessage {
-                tool_call_id: tool_call_id.clone(),
-                content: ChatCompletionRequestToolMessageContent::Text(
-                    json!({"documents": ["doc1", "doc2"]}).to_string(),
-                ),
-            },
-        )];
-
-        let new_messages = chat.get_new_conversation_messages();
-
-        assert_eq!(new_messages.len(), 1);
-        assert_eq!(new_messages[0].role, Role::Assistant);
-
-        if let ChatMessageContent::AssistantMessageParts(parts) = &new_messages[0].content {
-            assert_eq!(parts.len(), 1);
-
-            if let AssistantMessagePart::ToolCallResponseJson { name, id, json } = &parts[0] {
-                assert_eq!(name, &tool_name); // Verify tool name is preserved from mapping
-                assert_eq!(id, &tool_call_id);
-                assert_eq!(json["documents"][0], "doc1");
-                assert_eq!(json["documents"][1], "doc2");
-            } else {
-                panic!("Expected tool response part");
-            }
-        } else {
-            panic!("Expected assistant message parts");
-        }
-    }
-
-    #[test]
-    fn test_get_new_conversation_messages_with_error_response() {
-        let mut chat = create_mock_chat();
-        chat.initial_message_count = 0;
-
-        let tool_call_id = "call_error".to_string();
-        let tool_name = "failing_tool".to_string();
-
-        // Add tool call mapping
-        chat.tool_call_id_name_mapping
-            .insert(tool_call_id.clone(), tool_name.clone());
-
-        // Add tool error response message
-        chat.messages = vec![ChatCompletionRequestMessage::Tool(
-            ChatCompletionRequestToolMessage {
-                tool_call_id: tool_call_id.clone(),
-                content: ChatCompletionRequestToolMessageContent::Text(
-                    json!({"type": "error", "description": "Tool execution failed"}).to_string(),
-                ),
-            },
-        )];
-
-        let new_messages = chat.get_new_conversation_messages();
-
-        assert_eq!(new_messages.len(), 1);
-        assert_eq!(new_messages[0].role, Role::Assistant);
-
-        if let ChatMessageContent::AssistantMessageParts(parts) = &new_messages[0].content {
-            assert_eq!(parts.len(), 1);
-
-            if let AssistantMessagePart::ToolCallErr {
-                name,
-                id,
-                description,
-            } = &parts[0]
-            {
-                assert_eq!(name, &tool_name);
-                assert_eq!(id, &tool_call_id);
-                assert_eq!(description, "Tool execution failed");
-            } else {
-                panic!("Expected tool error part");
-            }
-        } else {
-            panic!("Expected assistant message parts");
-        }
-    }
+    corrected
 }
