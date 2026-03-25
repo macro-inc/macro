@@ -324,7 +324,7 @@ impl<U, N, O, B> StateMachineDriverA<U, N, O, B> {
             online_checker,
             digest_batcher,
             block_list,
-            digest_window: std::time::Duration::from_mins(30),
+            digest_window: std::time::Duration::from_hours(24),
             online_duration_threshold: std::time::Duration::from_mins(60),
         }
     }
