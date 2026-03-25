@@ -68,6 +68,7 @@ import {
 } from '../../block-theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
+import { Signup } from './auth/Signup';
 import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
@@ -208,7 +209,7 @@ function NotFound() {
   return '';
 }
 
-const { EmailSignUp, EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
+const { EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
   callbackPath: '/email-signup-callback',
   successPath: '/',
 });
@@ -252,7 +253,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/signup',
-    component: EmailSignUp,
+    component: () => <Signup />,
   },
   {
     path: CALLBACK_PATH,

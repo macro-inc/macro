@@ -33,7 +33,7 @@ function LoginOption(props: {
         e.preventDefault();
         props.onClick();
       }}
-      class="grid items-center justify-center p-4 border-b border-edge-muted [transition:color_var(--transition)] hover:bg-hover/60 hover:text-accent hover:transition-none cursor-pointer"
+      class="grid items-center justify-center p-4 border-b border-edge-muted [transition:color_var(--transition)] hover:bg-hover/60 hover:text-accent hover:transition-none"
     >
       <div class="flex gap-2.5 items-center justify-center">
         {props.icon}

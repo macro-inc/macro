@@ -1,7 +1,11 @@
-import { onMount, For } from 'solid-js';
+import { onMount, For, createSignal } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
+import { stripeServiceClient } from '@service-stripe/client';
+import { useAnalytics } from '@app/component/analytics-context';
+import { toast } from '@core/component/Toast/Toast';
 
 const PLANS: {
+  tier: string;
   name: string;
   price: number;
   description: string;
@@ -9,12 +13,14 @@ const PLANS: {
   popular?: boolean;
 }[] = [
   {
+    tier: 'haiku',
     name: 'Haiku',
     price: 20,
     description: "Access to Anthropic's fast, lightweight model",
     calls: '1,000',
   },
   {
+    tier: 'sonnet',
     name: 'Sonnet',
     price: 60,
     description: "Access to Anthropic's balanced frontier model",
@@ -22,6 +28,7 @@ const PLANS: {
     popular: true,
   },
   {
+    tier: 'opus',
     name: 'Opus',
     price: 120,
     description: "Access to Anthropic's most capable model",
@@ -40,6 +47,27 @@ function ChoosePlanContent(props: LessonContentProps) {
 }
 
 function ChoosePlanDemo() {
+  const analytics = useAnalytics();
+  const [loading, setLoading] = createSignal<string | null>(null);
+
+  const handleCheckout = async (tier: string) => {
+    if (loading()) return;
+    setLoading(tier);
+    try {
+      const url = await stripeServiceClient.createCheckoutSession(
+        '',
+        undefined,
+        tier
+      );
+      analytics.track('subscription_start', { type: tier });
+      window.location.href = url;
+    } catch (error) {
+      console.error('Checkout error:', error);
+      toast.failure('Failed to start checkout. Please try again.');
+      setLoading(null);
+    }
+  };
+
   return (
     <div class="h-full w-full flex items-center justify-center px-8">
       <div class="flex gap-4 w-full max-w-2xl items-start">
@@ -84,13 +112,21 @@ function ChoosePlanDemo() {
                   <div class="mt-auto pt-2">
                     <button
                       type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCheckout(plan.tier);
+                      }}
+                      disabled={loading() !== null}
                       class="w-full py-2 rounded-xs text-base font-semibold"
                       classList={{
                         'bg-accent text-panel': !!plan.popular,
                         'bg-ink/8 text-ink hover:bg-ink/12': !plan.popular,
+                        'opacity-60': loading() !== null,
                       }}
                     >
-                      Get {plan.name}
+                      {loading() === plan.tier
+                        ? 'Loading...'
+                        : `Get ${plan.name}`}
                     </button>
                   </div>
                 </div>

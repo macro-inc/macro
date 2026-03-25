@@ -408,6 +408,7 @@ export const authServiceClient = {
     cancelUrl: string;
     discount?: string | null;
     gaClientId?: string | null;
+    tier?: string;
   }) {
     return mapOk(
       await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/checkout`, {
@@ -417,6 +418,7 @@ export const authServiceClient = {
           cancelUrl: args.cancelUrl,
           discount: args.discount ?? undefined,
           gaClientId: args.gaClientId ?? undefined,
+          tier: args.tier ?? undefined,
         }),
       }),
       (result) => result.url
