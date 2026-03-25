@@ -42,6 +42,7 @@ interface ForwardToChannelProps {
     userPermissions: Permissions;
   };
   onSubmit?: () => void;
+  onCancel?: () => void;
   refetch?: () => void;
   projectId?: string;
   name: string;
@@ -386,7 +387,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => props.onSubmit?.()}
+              onClick={() => props.onCancel?.()}
             >
               Cancel
             </Button>

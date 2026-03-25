@@ -591,6 +591,7 @@ export function ShareModal(props: ShareModalProps) {
                     channelSharePermissions: recipients(),
                   }}
                   onSubmit={() => props.setIsSharePermOpen(false)}
+                  onCancel={() => props.setIsSharePermOpen(false)}
                   refetch={refetch}
                   name={props.name}
                   hideAccessLevelSelector={props.itemType === 'email'}
@@ -653,16 +654,17 @@ export function ShareModal(props: ShareModalProps) {
                                   navigateToChannel(recipient.channel_id)
                                 }
                               >
-                                <Switch>
+                                <Switch
+                                  fallback={
+                                    <IconUsers class="flex-shrink-0 w-4 h-4" />
+                                  }
+                                >
                                   <Match
                                     when={channelNameMap().get(
                                       recipient.channel_id
                                     )}
                                   >
                                     <UserCircle class="flex-shrink-0 w-4 h-4" />
-                                  </Match>
-                                  <Match when={true}>
-                                    <IconUsers class="flex-shrink-0 w-4 h-4" />
                                   </Match>
                                 </Switch>
                                 <div class="font-medium truncate">
