@@ -1,13 +1,11 @@
 import { useChatContext } from '@core/component/AI/context';
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
-import { toast } from '@core/component/Toast/Toast';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import { PulsingStar } from '@entity/components/PulsingStar';
-import type { ChatMessageStream } from '@service-connection/stream';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import type { Accessor, JSXElement, Setter } from 'solid-js';
+import type { Accessor, JSXElement } from 'solid-js';
 import {
   createEffect,
   createMemo,
@@ -15,7 +13,6 @@ import {
   createSignal,
   For,
   Match,
-  on,
   onMount,
   Show,
   Switch,
@@ -54,62 +51,11 @@ function messageContentIsEmpty(message: ChatMessageWithAttachments) {
 
 export function ChatMessages(props: ChatMessagesProps) {
   const chat = useChatContext();
-  const [messages, setMessages] = [chat.messages, chat.setMessages];
-  const streamTuple: [
-    Accessor<ChatMessageStream | undefined>,
-    Setter<ChatMessageStream | undefined>,
-  ] = [chat.stream, chat.setStream];
-  // const chatId = chat.chatId;
-  // const additionalInstructions = useAdditionalInstructions();
-
-  // const makeEdit = async (data: ChatSendInput) => {
-  // 	const setStream = streamTuple?.[1];
-  // 	if (!setStream) return;
-
-  // 	setMessages((p) => {
-  // 		const last = p.at(-1);
-  // 		if (!last) return p;
-  // 		if (last.role === "user") {
-  // 			return p.slice(0, -1);
-  // 		} else {
-  // 			return p.slice(0, -2);
-  // 		}
-  // 	});
-  // 	setMessages((p) => [
-  // 		...p,
-  // 		{
-  // 			attachments: data.attachments ?? [],
-  // 			content: data.content,
-  // 			role: "user",
-  // 			model: data.model,
-  // 			id: "todo",
-  // 		},
-  // 	]);
-
-  // 	const token = await getMacroApiToken();
-  // 	const modelInstructions = data.model ? `\nYou are ${data.model}` : "";
-  // 	const additional = `${additionalInstructions()}${modelInstructions}`;
-  // 	const editStream = cognitionWebsocketServiceClient.streamEditMessage({
-  // 		chat_id: chatId()!,
-  // 		content: data.content,
-  // 		model: data.model ?? DEFAULT_MODEL,
-  // 		attachments: data.attachments ?? [],
-  // 		token,
-  // 		additional_instructions: additional,
-  // 		toolset: data.toolset,
-  // 	});
-
-  // 	setStream({
-  // 		data: editStream.data,
-  // 		isDone: editStream.isDone,
-  //      id: () => ({
-
-  //      })
-  // 	});
-  // };
+  const messages = chat.messages;
+  const stream = chat.stream;
 
   const extendedStream = createMemo(() => {
-    const s = streamTuple?.[0]?.();
+    const s = stream();
     if (!s) return;
     return timeStream(idStream(s));
   });
@@ -117,12 +63,11 @@ export function ChatMessages(props: ChatMessagesProps) {
   const [messageTimingMap, setTiming] = createStore<Record<string, number>>({});
 
   createEffect(() => {
-    const stream = extendedStream();
-    if (!stream) return;
-    const ttft = stream.timeToFirstMessageMs();
-    const id = stream.messageId();
+    const s = extendedStream();
+    if (!s) return;
+    const ttft = s.timeToFirstMessageMs();
+    const id = s.messageId();
     if (id && ttft) {
-      console.log('ID TTFT', id, ttft);
       setTiming(id, ttft);
     }
   });
@@ -130,12 +75,10 @@ export function ChatMessages(props: ChatMessagesProps) {
   let messagesRef: HTMLDivElement | undefined;
 
   const generatingMessage = () => {
-    const streamAccessor = streamTuple?.[0];
-    if (!streamAccessor) return;
-    const stream = streamAccessor();
-    if (!stream) return;
-    if (stream.isDone()) return;
-    const parts = stream.data();
+    const s = stream();
+    if (!s) return;
+    if (s.isDone()) return;
+    const parts = s.data();
     const message = asChatMessage(parts);
     if (!message) return;
     if (messageContentIsEmpty(message)) return;
@@ -143,91 +86,11 @@ export function ChatMessages(props: ChatMessagesProps) {
   };
 
   const isStream = () => {
-    const streamSignal = streamTuple?.[0];
-    if (!streamSignal) return false;
-    const stream = streamSignal();
-    if (!stream) return false;
-    return !stream.isDone();
+    const s = stream();
+    console.log('isStream', Boolean(s));
+    if (!s) return false;
+    return !s.isDone();
   };
-
-  // const streamRequestAttachments = () => {
-  // 	const streamable = streamTuple?.[0];
-  // 	if (!streamable) return [];
-  // 	const stream = streamable();
-  // 	if (!stream) return [];
-  // 	return stream.attachments ?? [];
-  // };
-
-  const streamData = () => {
-    const stream = streamTuple?.[0]?.();
-    if (!stream) return [];
-    return stream.data();
-  };
-  // handle stream error
-  createEffect(
-    on(streamData, (data) => {
-      const latest = data.at(-1);
-      if (!latest) return;
-      if (latest.type !== 'error') return;
-
-      const error = 'stream_error' in latest ? latest.stream_error : undefined;
-      if (error === 'model_context_overflow') {
-        toast.failure(
-          'Too much context. Remove attachments or start a new chat'
-        );
-      } else {
-        toast.failure('Failed to respond to message');
-      }
-
-      // Clear stream so the isGenerating effect in Chat.tsx resets
-      chat.setStream(undefined);
-    })
-  );
-  // when a user message arrives via stream, update optimistic ID or append
-  createEffect(
-    on(streamData, (data) => {
-      const latest = data.at(-1);
-      if (!latest) return;
-      if (latest.type !== 'chat_user_message') return;
-      setMessages((p) => {
-        const last = p.at(-1);
-        if (last?.role === 'user' && last?.content === latest.content) {
-          // Patch the optimistic message with the real server ID
-          if (last.id !== latest.message_id) {
-            const updated = p.slice();
-            updated[updated.length - 1] = { ...last, id: latest.message_id };
-            return updated;
-          }
-          return p;
-        }
-        return [
-          ...p,
-          {
-            id: latest.message_id,
-            content: latest.content,
-            role: 'user' as const,
-            attachments: latest.attachments,
-          },
-        ];
-      });
-    })
-  );
-
-  // when messages finish streaming, append and scroll
-  createEffect(() => {
-    if (!streamTuple?.[0]) return;
-    const s = streamTuple?.[0]();
-    if (!s) return;
-    if (s.isDone()) {
-      const message = asChatMessage(s.data());
-      if (message) {
-        setMessages((p) => {
-          if (p.find((m) => m.id === message.id)) return p;
-          return [...p, message];
-        });
-      }
-    }
-  });
 
   const [parentHeight, setParentHeight] = createSignal(0);
 
@@ -356,7 +219,7 @@ export function ChatMessages(props: ChatMessagesProps) {
           )}
         </For>
 
-        <Show when={isStream() || chat.waitingForStream() || lastPair()}>
+        <Show when={isStream() || chat.isWaiting() || lastPair()}>
           <div
             class="shrink-0"
             style={{
@@ -399,7 +262,7 @@ export function ChatMessages(props: ChatMessagesProps) {
                 );
               }}
             </Show>
-            <Show when={isStream() || chat.waitingForStream()}>
+            <Show when={isStream() || chat.isWaiting()}>
               <OnMount
                 onShow={() =>
                   scrollToBottom(isNearBottom() ? 'instant' : 'smooth')
