@@ -10,7 +10,7 @@ const S3_BUCKET = process.env.S3_BUCKET;
 const DRY_RUN = process.env.DRY_RUN === "true";
 const PREFIX = process.env.PREFIX ?? "macro|";
 const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? "20", 10);
-const PAGE_SIZE = parseInt(process.env.PAGE_SIZE ?? "1000", 10);
+const PAGE_SIZE = parseInt(process.env.PAGE_SIZE ?? "50", 10);
 const LIMIT = process.env.LIMIT ? parseInt(process.env.LIMIT, 10) : undefined;
 const USER = process.env.USER_PREFIX;
 const DOCUMENT_ID = process.env.DOCUMENT_ID;
