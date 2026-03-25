@@ -44,13 +44,7 @@ const config: KnipConfig = {
       project: ['**/*.{ts,tsx}'],
     },
     'packages/ui': {
-      entry: [
-        'index.ts',
-        '.storybook/main.ts',
-        '.storybook/preview.tsx',
-        '.storybook/vitest.config.ts',
-        '.storybook/vitest.setup.ts',
-      ],
+      entry: ['index.ts'],
       project: ['**/*.{ts,tsx}'],
     },
 

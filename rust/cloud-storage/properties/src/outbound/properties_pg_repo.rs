@@ -5,7 +5,11 @@ use models_properties::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use super::{entity_property_queries, property_definition_queries, task_property_queries};
+use super::{
+    entity_properties_get_query, entity_property_queries, property_definition_queries,
+    task_property_queries,
+};
+use crate::domain::model::EntityPropertyInfo;
 use crate::domain::ports::PropertiesRepo;
 use models_properties::service::property_definition::PropertyDefinition;
 
@@ -96,6 +100,15 @@ impl PropertiesRepo for PropertiesPgRepo {
     #[tracing::instrument(skip(self))]
     async fn link_subtasks(&self, task_id: Uuid, subtask_ids: Vec<Uuid>) -> Result<(), Self::Err> {
         task_property_queries::link_subtasks(&self.pool, task_id, subtask_ids).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_entity_properties(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityPropertyInfo>, Self::Err> {
+        entity_properties_get_query::get_entity_properties(&self.pool, entity_id, entity_type).await
     }
 
     #[tracing::instrument(skip(self))]

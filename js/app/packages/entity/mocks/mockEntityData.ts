@@ -267,7 +267,7 @@ export const MOCK_CHANNEL_PUBLIC: ChannelEntity = {
   id: 'channel_public_1',
   name: 'general',
   ownerId: MOCK_USER_IDS.owner,
-  channelType: 'public',
+  channelType: 'private',
   createdAt: MOCK_TIMESTAMPS.lastYear,
   updatedAt: MOCK_TIMESTAMPS.today,
   interactedAt: MOCK_TIMESTAMPS.today,

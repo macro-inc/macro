@@ -25,6 +25,7 @@ import {
   HOTKEY_PRIORITY_DEFAULT,
   type HotkeyCommand,
   type HotkeyGroup,
+  type HotkeyInterceptorContext,
   type HotkeyRegistrationOptions,
   isBaseKeyboardValue,
   type KeypressContext,
@@ -531,6 +532,8 @@ export function useHotKeyRoot() {
   }
 
   let onKeypress: ((context: KeypressContext) => void)[] = [];
+  let onHotkeyInterceptor: ((context: HotkeyInterceptorContext) => boolean)[] =
+    [];
 
   const handleKeyDown = (e: KeyboardEvent) => {
     document.documentElement.dataset.modality = 'keyboard';
@@ -622,6 +625,25 @@ export function useHotKeyRoot() {
     }
 
     const pressedKeysString = getKeyString(currentPressedKeys);
+
+    // Call hotkey interceptor handlers before command lookup
+    // If any handler returns true, capture the event and skip normal processing
+    const hotkeyInterceptorContext: HotkeyInterceptorContext = {
+      pressedKeysString,
+      pressedKeys: currentPressedKeys,
+      event: e,
+      activeScopeId: currentScopeId,
+      isEditableFocused: isEditableFocused ?? false,
+      eventType: e.type as 'keydown' | 'keyup',
+    };
+
+    for (const callback of onHotkeyInterceptor) {
+      if (callback(hotkeyInterceptorContext)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
 
     let scopeNode = scopeTree.get(currentScopeId);
     let commandCaptured: HotkeyCommand | undefined;
@@ -740,6 +762,35 @@ export function useHotKeyRoot() {
       onKeypress.push(callback);
       return () => {
         onKeypress = onKeypress.filter((c) => c !== callback);
+      };
+    },
+
+    /**
+     * Subscribe to hotkey interceptor events BEFORE command lookup.
+     * Return true from the callback to capture the event and prevent
+     * normal hotkey command lookup and propagation.
+     *
+     * @param callback - Function called before hotkey command lookup.
+     *   Return true to capture the event and skip normal processing.
+     * @returns A cleanup function to unsubscribe.
+     *
+     * @example
+     * ```ts
+     * addHotkeyInterceptor((context) => {
+     *   // Capture unregistered keys in a specific scope
+     *   if (context.activeScopeId === 'my-command-scope') {
+     *     return true; // Capture and prevent propagation
+     *   }
+     *   return false; // Let normal processing continue
+     * });
+     * ```
+     */
+    addHotkeyInterceptor: (
+      callback: (context: HotkeyInterceptorContext) => boolean
+    ) => {
+      onHotkeyInterceptor.push(callback);
+      return () => {
+        onHotkeyInterceptor = onHotkeyInterceptor.filter((c) => c !== callback);
       };
     },
   };

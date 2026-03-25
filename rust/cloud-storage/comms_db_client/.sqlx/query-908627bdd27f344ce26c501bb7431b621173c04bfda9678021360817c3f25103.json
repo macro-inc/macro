@@ -24,7 +24,8 @@
                 "public",
                 "organization",
                 "private",
-                "direct_message"
+                "direct_message",
+                "team"
               ]
             }
           }

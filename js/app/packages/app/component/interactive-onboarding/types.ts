@@ -12,6 +12,8 @@ export interface LessonDefinition {
   order?: number;
   /** Whether the user can skip this lesson. Defaults to false. */
   skippable?: boolean;
+  /** Hide the continue/skip buttons entirely — the lesson drives its own advancement. */
+  hideContinue?: boolean;
 }
 
 export interface LessonContentProps {

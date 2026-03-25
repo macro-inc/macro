@@ -1,0 +1,4 @@
+node_modules/
+*.log
+cursor-*.txt
+copied-keys-*.txt

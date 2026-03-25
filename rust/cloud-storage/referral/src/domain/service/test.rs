@@ -48,6 +48,8 @@ fn mock_repo() -> MockReferralRepo {
     repo.expect_get_referral_code_for_user().returning(|_| {
         Box::pin(async { Ok(referral_invitation::ReferralCode("TESTCODE".to_string())) })
     });
+    repo.expect_get_sender_info()
+        .returning(|_| Box::pin(async { Ok((None, None)) }));
     repo
 }
 

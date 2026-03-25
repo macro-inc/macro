@@ -256,6 +256,22 @@
 
 :root {
   --color-focus: var(--color-accent);
+
+  /* Cursor variables — override these to use custom cursors */
+  --cursor-auto: auto;
+  --cursor-default: default;
+  --cursor-pointer: default;
+  --cursor-text: text;
+  --cursor-move: move;
+  --cursor-grab: grab;
+  --cursor-grabbing: grabbing;
+  --cursor-not-allowed: not-allowed;
+  --cursor-col-resize: col-resize;
+  --cursor-row-resize: row-resize;
+  --cursor-ew-resize: ew-resize;
+  --cursor-ns-resize: ns-resize;
+  --cursor-nwse-resize: nwse-resize;
+  --cursor-nesw-resize: nesw-resize;
 }
 
 .bg-accent {
@@ -593,6 +609,14 @@
 
 @custom-variant drop-valid (&[data-drop-valid]);
 @custom-variant drop-invalid (&[data-drop-invalid]);
+
+/* Hide Kobalte's popper positioner until floating-UI has computed the position.
+   Without this, the card briefly appears at top:0 left:0 on first open. */
+[data-popper-positioner]:not([style*='translate']) {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    will-change: transform, opacity;
+}
 
 @layer base {
     html {

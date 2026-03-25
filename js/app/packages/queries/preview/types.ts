@@ -91,6 +91,15 @@ export const isAccessiblePreviewItem = (
   return !item.loading && item.access === 'access';
 };
 
+export const isPreviewItemNoAccess = (
+  item: PreviewItem
+): item is PreviewItemNoAccess => {
+  return (
+    !item.loading &&
+    (item.access === 'no_access' || item.access === 'does_not_exist')
+  );
+};
+
 export const isChannelPreviewItem = (
   item: PreviewItem
 ): item is PreviewChannelAccess => {

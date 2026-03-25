@@ -6,6 +6,7 @@
  */
 import type { ChannelType } from './channelType';
 import type { CreateChannelRequestName } from './createChannelRequestName';
+import type { CreateChannelRequestTeamId } from './createChannelRequestTeamId';
 
 export interface CreateChannelRequest {
   /** The type of channel */
@@ -14,4 +15,6 @@ export interface CreateChannelRequest {
   name?: CreateChannelRequestName;
   /** list of participants not including the owner */
   participants: string[];
+  /** If the channel_type is team, provide the id of the team you are creating the channel for */
+  team_id?: CreateChannelRequestTeamId;
 }

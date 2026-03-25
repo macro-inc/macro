@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;
+use document_storage_service_client::DocumentStorageServiceClient;
 use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
@@ -14,14 +15,15 @@ struct DocumentKeyParts {
     pub user_id: String,
     pub document_id: String,
     pub document_version_id: String,
-    pub file_type: String,
+    pub file_type: Option<String>,
 }
 
 impl TryFrom<String> for DocumentKeyParts {
     type Error = anyhow::Error;
 
     /// Tries to convert the document key into it's parts
-    /// The document key is in the format of `user_id/document_id/document_version_id.file_type`
+    /// Supports both extensionless keys (`user_id/document_id/version_id`)
+    /// and legacy keys with extension (`user_id/document_id/version_id.file_type`)
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let parts: Vec<&str> = value.split('/').collect();
 
@@ -31,23 +33,26 @@ impl TryFrom<String> for DocumentKeyParts {
 
         let file: Vec<&str> = parts[2].split('.').collect::<Vec<&str>>();
 
-        if file.len() != 2 {
-            anyhow::bail!("expected 2 file parts, got {}", file.len());
-        }
+        let (document_version_id, file_type) = if file.len() == 2 {
+            (file[0].to_string(), Some(file[1].to_string()))
+        } else {
+            (parts[2].to_string(), None)
+        };
 
         Ok(Self {
             user_id: parts[0].to_string(),
             document_id: parts[1].to_string(),
-            document_version_id: file[0].to_string(),
-            file_type: file[1].to_string(),
+            document_version_id,
+            file_type,
         })
     }
 }
 
 /// Handles the Eventbridge event
-#[tracing::instrument(skip(sqs_client))]
+#[tracing::instrument(skip(sqs_client, dss_client), err)]
 pub async fn handler(
     sqs_client: &sqs_client::SQS,
+    dss_client: &DocumentStorageServiceClient,
     event: LambdaEvent<EventBridgeEvent>,
 ) -> Result<(), Error> {
     tracing::trace!("processing event");
@@ -85,8 +90,21 @@ pub async fn handler(
 
     tracing::trace!(document_key_parts=?document_key_parts, "processing document key");
 
-    let file_type = FileType::from_str(document_key_parts.file_type.as_str())
-        .context("unable to parse file type")?;
+    // Resolve file type: use key extension if available (legacy), fall back to DSS lookup (extensionless)
+    let file_type = match &document_key_parts.file_type {
+        Some(ft) => FileType::from_str(ft).context("unable to parse file type")?,
+        None => {
+            let document_basic = dss_client
+                .get_document_basic(&document_key_parts.document_id)
+                .await
+                .context("Failed to fetch document basic info")?
+                .ok_or_else(|| anyhow::anyhow!("document not found"))?;
+
+            document_basic
+                .try_file_type()
+                .ok_or_else(|| anyhow::anyhow!("file type not found"))?
+        }
+    };
 
     let search_extractor_message = SearchExtractorMessage {
         user_id: document_key_parts.user_id,

@@ -66,7 +66,7 @@ export function channelMessagesQueryOptions(
         async () =>
           await commsServiceClient.getChannelMessages({
             channel_id: channelId,
-            limit: 100,
+            limit: pageParam ? 100 : 50,
             next_cursor: pageParam?.next_cursor ?? null,
             previous_cursor: pageParam?.previous_cursor ?? null,
             load_around_message_id: !pageParam ? loadAroundMessageId : null,

@@ -11,9 +11,11 @@
 //! - `outbound` - Outbound adapters (e.g., PostgreSQL implementation)
 
 pub mod domain;
+pub mod inbound;
 pub mod outbound;
 
 pub use domain::error::PropertiesErr;
+pub use domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 pub use domain::ports::{NotificationService, PermissionService, PropertiesRepo};
 pub use domain::service::PropertiesService;
 pub use domain::service_impl::PropertiesServiceImpl;

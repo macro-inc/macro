@@ -12,6 +12,10 @@ import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
 import { listEntitiesHandler } from './ListEntities';
+import {
+  getEntityPropertiesHandler,
+  setEntityPropertyHandler,
+} from './Properties';
 import { readThreadHandler } from './ReadThread';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
@@ -22,6 +26,7 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  GetEntityProperties: getEntityPropertiesHandler,
   ListEntities: listEntitiesHandler,
   bash_code_execution: bashCodeExecutionHandler,
   ContentSearch: contentSearchHandler,
@@ -30,6 +35,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadThread: readThreadHandler,
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
+  SetEntityProperty: setEntityPropertyHandler,
   text_editor_code_execution: textEditorCodeExecutionHandler,
   web_fetch: webFetchHandler,
   web_search: webSearchHandler,

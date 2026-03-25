@@ -58,6 +58,8 @@ pub struct Channel {
     pub channel_type: ChannelType,
     #[cfg_attr(feature = "schema", schema(value_type = Option<u32>))]
     pub org_id: Option<OrganizationId>,
+    #[cfg_attr(feature = "schema", schema(value_type = Option<uuid::Uuid>))]
+    pub team_id: Option<uuid::Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[cfg_attr(feature = "schema", schema(value_type = String))]
@@ -73,6 +75,7 @@ pub enum ChannelType {
     Organization,
     Private,
     DirectMessage,
+    Team,
 }
 
 #[derive(Debug, Doppleganger, Serialize, Deserialize)]

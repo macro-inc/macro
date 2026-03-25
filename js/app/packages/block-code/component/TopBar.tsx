@@ -34,7 +34,7 @@ import {
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download-simple.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';

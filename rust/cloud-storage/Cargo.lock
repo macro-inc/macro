@@ -108,12 +108,15 @@ dependencies = [
  "lazy_static",
  "macro_db_client",
  "model",
+ "model_notifications",
  "models_dcs",
  "models_email",
  "models_pagination",
  "models_permissions",
  "models_properties",
  "models_search",
+ "notification",
+ "properties",
  "rand 0.9.0",
  "schemars",
  "scribe",
@@ -2914,6 +2917,7 @@ dependencies = [
  "macro_share_permissions",
  "macro_user_id",
  "macro_uuid",
+ "memory",
  "model",
  "model-entity",
  "model_notifications",
@@ -2921,6 +2925,7 @@ dependencies = [
  "models_opensearch",
  "models_permissions",
  "notification",
+ "properties",
  "redis",
  "regex",
  "reqwest",
@@ -6076,6 +6081,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
+name = "memory"
+version = "0.1.0"
+dependencies = [
+ "ai",
+ "ai_tools",
+ "ai_toolset",
+ "anyhow",
+ "axum",
+ "chrono",
+ "comms",
+ "comms_service_client",
+ "document_cognition_service_client",
+ "document_storage_service_client",
+ "documents",
+ "email",
+ "email_service_client",
+ "entity_access",
+ "frecency",
+ "futures",
+ "lexical_client",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "properties",
+ "scribe",
+ "search_service_client",
+ "serde",
+ "serde_json",
+ "soup",
+ "sqlx",
+ "static_file_service_client",
+ "sync_service_client",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "utoipa",
+]
+
+[[package]]
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
@@ -7561,7 +7608,10 @@ dependencies = [
 name = "properties"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "anyhow",
+ "async-trait",
+ "chrono",
  "email_db_client",
  "futures",
  "macro_db_client",
@@ -7575,6 +7625,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "notification",
+ "schemars",
  "serde",
  "serde_json",
  "sqlx",
@@ -8791,6 +8842,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "aws_lambda_events",
+ "document_storage_service_client",
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
@@ -9706,6 +9758,7 @@ dependencies = [
  "chrono",
  "email",
  "futures",
+ "macro_user_id",
  "model",
  "models_email",
  "models_opensearch",

@@ -141,6 +141,7 @@ const getRecipientDisplayName = (item: EmailRecipient): string => {
 };
 
 // Shared constants for recipient display - used in both measurement and rendering
+const MAX_VISIBLE_RECIPIENTS = 3;
 const RECIPIENT_SEPARATOR = ',\u00A0'; // comma + non-breaking space
 const MORE_SUFFIX_TEMPLATE = '+99 more'; // worst-case for measurement
 
@@ -267,7 +268,8 @@ function TruncatedRecipientList(props: {
     let usedWidth = 0;
     let count = 0;
 
-    for (let i = 0; i < recipients.length; i++) {
+    const maxRecipients = Math.min(recipients.length, MAX_VISIBLE_RECIPIENTS);
+    for (let i = 0; i < maxRecipients; i++) {
       const { recipient, prefix } = recipients[i];
       const displayName = getRecipientDisplayName(recipient);
       // Show separator if not the last recipient OR if there will be hidden recipients

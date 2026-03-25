@@ -90,16 +90,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hide: true,
   }).withGroup(group);
 
-  // g g - Jump to top of list (vim-style, uses global GO_TO command scope)
-  registerHotkey({
-    hotkey: GO_TO_LEADER_KEY,
-    scopeId,
-    description: 'Go to top of list',
-    keyDownHandler: () => false,
-    activateCommandScopeId: GO_TO_COMMAND_SCOPE,
-    hide: true,
-  }).withGroup(group);
-
   // Register 'g' in the global GO_TO command scope for g+g (jump to top)
   // Uses condition to only run for the soup-view that was focused when 'g' was pressed
   registerHotkey({

@@ -66,7 +66,7 @@ where
             })?;
         let content_type = parsed_file_type.mime_type();
 
-        let user_id: MacroUserIdStr<'static> = (*request_context.user_id).clone();
+        let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
         let file_bytes = self.file_content.as_bytes();
 

@@ -1,22 +1,10 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { createMemo, type Accessor } from 'solid-js';
 import { useUserInfoQuery, type UserInfoData } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
-import { hasLoginCookie } from '@core/util/cookies';
 import { createAssertedContextProvider } from './createContext';
+import { shouldQueryUserInfo, enableUserInfoQuery } from './user-info-gate';
 
-// Signal to track if we should enable the user info query.
-// Initially based on login cookie, can be enabled after authentication.
-const [shouldQueryUserInfo, setShouldQueryUserInfo] = createSignal(
-  hasLoginCookie()
-);
-
-/**
- * Enable the user info query. Call this after authentication completes
- * to trigger fetching user info.
- */
-export function enableUserInfoQuery() {
-  setShouldQueryUserInfo(true);
-}
+export { enableUserInfoQuery };
 
 type UserContextValue = {
   userInfo: Accessor<UserInfoData | undefined>;

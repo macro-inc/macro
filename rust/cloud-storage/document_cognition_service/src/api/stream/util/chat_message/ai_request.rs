@@ -17,6 +17,7 @@ pub async fn build_chat_completion_request(
     incoming_message: &SendChatMessagePayload,
     static_system_prompt: &str,
     jwt: &str,
+    user_memory: Option<&str>,
 ) -> Result<ChatCompletionRequest> {
     let attachments = fetch::fetchium(
         ctx.scribe.clone(),
@@ -48,7 +49,13 @@ pub async fn build_chat_completion_request(
         .as_deref()
         .unwrap_or_default();
 
-    let system_prompt = format!("{}\n{}", static_system_prompt, additional_instructions);
+    let mut system_prompt = format!("{}\n{}", static_system_prompt, additional_instructions);
+
+    if let Some(memory) = user_memory {
+        system_prompt.push_str("\n\n<user_memory>\n");
+        system_prompt.push_str(memory);
+        system_prompt.push_str("\n</user_memory>");
+    }
 
     Ok(RequestBuilder::new()
         .attachments(attachments)

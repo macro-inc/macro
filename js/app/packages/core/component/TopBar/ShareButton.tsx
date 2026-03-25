@@ -33,10 +33,8 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconEyeSlash from '@icon/regular/eye-slash.svg';
-import IconGlobe from '@icon/regular/globe.svg';
 import IconLink from '@icon/regular/link.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import User from '@icon/regular/user.svg';
 import IconUsers from '@icon/regular/users.svg';
 import CloseIcon from '@icon/regular/x.svg';
@@ -814,17 +812,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
             }
           }}
         >
-          <Switch fallback={<IconShared class="size-4" />}>
-            <Match when={shareAccessLevelText() === 'Public'}>
-              <IconGlobe class="size-4" />
-            </Match>
-            <Match when={shareAccessLevelText() === 'Shared'}>
-              <IconUsers class="size-4" />
-            </Match>
-            <Match when={shareAccessLevelText() === 'Just me'}>
-              <IconEyeSlash class="size-4" />
-            </Match>
-          </Switch>
+          <IconShared class="size-3.5" />
           Share
         </button>
       </Tooltip>

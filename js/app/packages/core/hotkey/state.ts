@@ -34,6 +34,10 @@ export const [pressedKeys, setPressedKeys] = createSignal<Set<string>>(
   new Set()
 );
 
+export const clearPressedKeys = () => {
+  setPressedKeys(new Set<string>());
+};
+
 export const [executedTokens, setExecutedTokens] = makePersisted(
   createSignal<string[]>([]),
   {

@@ -4,8 +4,19 @@ name = "properties"
 publish = false
 version = "0.1.0"
 
+[features]
+ai_tools = [
+  "dep:ai",
+  "dep:async-trait",
+  "dep:chrono",
+  "dep:schemars",
+]
+
 [dependencies]
+ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
 futures = { workspace = true }
 email_db_client = { path = "../email_db_client" }
 macro_db_client = { path = "../macro_db_client" }
@@ -17,6 +28,7 @@ model_notifications = { path = "../model_notifications" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -26,8 +38,10 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+ai = { path = "../ai" }
 mockall = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [package.metadata.sqlx]

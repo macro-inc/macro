@@ -6,7 +6,7 @@ mod test;
 use std::{collections::HashSet, ops::Deref};
 
 use macro_user_id::{
-    email::EmailStr,
+    email::{EmailStr, ReadEmailParts},
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
@@ -106,9 +106,23 @@ impl<
     ) -> Result<(), ReferralError> {
         let referral_code = self.get_referral_code_for_user(&sending_user.0).await?;
 
+        let (sender_profile_picture_url, sender_name) = self
+            .repo
+            .get_sender_info(&sending_user.0)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!(error=?e, "failed to fetch sender info");
+                (None, None)
+            });
+
+        let sender_email = Some(sending_user.email_part().email_str().to_string());
+
         let notification = InviteToMacro {
             recipient_email: recipient.clone(),
             referral_code,
+            sender_profile_picture_url,
+            sender_name,
+            sender_email,
         };
 
         let _res = self

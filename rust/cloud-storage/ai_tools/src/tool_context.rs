@@ -12,6 +12,7 @@ use documents::{
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use properties::inbound::toolset::PropertiesToolContext;
 use scribe::{
     ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
     email::EmailClient, static_file::StaticFileClient,
@@ -95,6 +96,35 @@ pub type ToolDocumentToolContext =
 pub type ToolSoupService =
     SoupImpl<PgSoupRepo, ToolFrecencyService, ToolEmailService, ToolCommsService>;
 
+/// No-op notification service for properties (tools don't send assignment notifications)
+#[derive(Clone)]
+pub struct NoOpNotificationService;
+
+impl properties::NotificationService for NoOpNotificationService {
+    type Err = anyhow::Error;
+
+    async fn send_notification<'a>(
+        &self,
+        _message: notification::domain::models::SendNotificationRequest<
+            'a,
+            model_notifications::TaskAssignedMetadata,
+            notification::domain::models::apple::PushNotificationData,
+        >,
+    ) -> Result<uuid::Uuid, Self::Err> {
+        Ok(uuid::Uuid::nil())
+    }
+}
+
+/// Type alias for the properties service implementation used by AI tools
+pub type ToolPropertiesService = properties::PropertiesServiceImpl<
+    properties::PropertiesPgRepo,
+    properties::PermissionServiceImpl,
+    NoOpNotificationService,
+>;
+
+/// Type alias for the properties tool context
+pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService>;
+
 /// The full service context containing all API clients.
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
@@ -104,6 +134,7 @@ pub struct ToolServiceContext {
     pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
     pub document_tool_context: ToolDocumentToolContext,
+    pub properties_tool_context: ToolPropertiesToolContext,
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {

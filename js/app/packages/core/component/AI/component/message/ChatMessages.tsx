@@ -1,6 +1,7 @@
 import { useChatContext } from '@core/component/AI/context';
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
+import { toast } from '@core/component/Toast/Toast';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import { PulsingStar } from '@entity/components/PulsingStar';
@@ -162,6 +163,26 @@ export function ChatMessages(props: ChatMessagesProps) {
     if (!stream) return [];
     return stream.data();
   };
+  // handle stream error
+  createEffect(
+    on(streamData, (data) => {
+      const latest = data.at(-1);
+      if (!latest) return;
+      if (latest.type !== 'error') return;
+
+      const error = 'stream_error' in latest ? latest.stream_error : undefined;
+      if (error === 'model_context_overflow') {
+        toast.failure(
+          'Too much context. Remove attachments or start a new chat'
+        );
+      } else {
+        toast.failure('Failed to respond to message');
+      }
+
+      // Clear stream so the isGenerating effect in Chat.tsx resets
+      chat.setStream(undefined);
+    })
+  );
   // when a user message arrives via stream, update optimistic ID or append
   createEffect(
     on(streamData, (data) => {

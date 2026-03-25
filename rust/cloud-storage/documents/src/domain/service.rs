@@ -23,7 +23,8 @@ use model::document::response::{
 };
 use model::document::{
     CONVERTED_DOCUMENT_FILE_NAME, ContentType, DocumentBasic, FileType, FileTypeExt,
-    build_cloud_storage_bucket_document_key,
+    build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
+    build_extensionless_document_key,
 };
 use model::response::PresignedUrl;
 use tracing;
@@ -118,12 +119,23 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
                 .0
         };
 
-        let document_key = build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-            Some(file_type),
-        );
+        // Try extensionless key first, fall back to legacy key with extension
+        let extensionless_key =
+            build_extensionless_document_key(owner, document_id, document_version_id);
+        let document_key = if self
+            .upload_url_service
+            .document_key_exists(&extensionless_key)
+            .await?
+        {
+            build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
+        } else {
+            build_cloud_storage_bucket_document_key(
+                &url_encoded_owner,
+                document_id,
+                document_version_id,
+                Some(file_type),
+            )
+        };
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -142,13 +154,24 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .await
             .map_err(Into::into)?;
 
+        // Try extensionless key first, fall back to legacy key with extension
+        let extensionless_key =
+            build_extensionless_document_key(owner, document_id, document_version_id);
         let file_type_str = file_type.as_ref().map(|s| s.as_str());
-        let document_key = build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-            file_type_str,
-        );
+        let document_key = if self
+            .upload_url_service
+            .document_key_exists(&extensionless_key)
+            .await?
+        {
+            build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
+        } else {
+            build_cloud_storage_bucket_document_key(
+                &url_encoded_owner,
+                document_id,
+                document_version_id,
+                file_type_str,
+            )
+        };
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -508,14 +531,6 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             )));
         }
 
-        // Build the S3 key for upload
-        let key = build_cloud_storage_bucket_document_key(
-            document_metadata.owner.as_ref(),
-            &document_id,
-            document_metadata.document_version_id,
-            file_type.as_ref().map(|s| s.as_str()),
-        );
-
         let content_type = match file_type {
             Some(FileType::Docx) => ContentType::Docx,
             _ => file_type.into(),
@@ -524,18 +539,32 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         let mime_type = content_type.mime_type().to_string();
 
         // Generate presigned upload URL
+        // DOCX files go to the staging bucket with .docx extension (required by docx_unzip_handler)
+        // All other files use extensionless keys in the document storage bucket
         let presigned_url = match file_type {
-            Some(FileType::Docx) => self
-                .upload_url_service
-                .put_docx_upload_presigned_url(&key, &sha, content_type)
-                .await,
-            _ => self
-                .upload_url_service
-                .put_document_storage_presigned_url(&key, &sha, content_type)
-                .await,
+            Some(FileType::Docx) => {
+                let docx_key = build_docx_staging_bucket_document_key(
+                    document_metadata.owner.as_ref(),
+                    &document_id,
+                    document_metadata.document_version_id,
+                );
+                self.upload_url_service
+                    .put_docx_upload_presigned_url(&docx_key, &sha, content_type)
+                    .await
+            }
+            _ => {
+                let key = build_extensionless_document_key(
+                    document_metadata.owner.as_ref(),
+                    &document_id,
+                    document_metadata.document_version_id,
+                );
+                self.upload_url_service
+                    .put_document_storage_presigned_url(&key, &sha, content_type)
+                    .await
+            }
         }
         .map_err(|e| {
-            tracing::error!(error=?e, key=?key, document_id=?document_id, "unable to generate presigned url");
+            tracing::error!(error=?e, document_id=?document_id, "unable to generate presigned url");
             DocumentError::Internal(anyhow!("unable to generate presigned url"))
         })?;
 
