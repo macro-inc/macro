@@ -162,7 +162,8 @@ export function signalFilter(entity: EntityData): boolean {
  * Returns the opposite of signal filter.
  */
 export function noiseFilter(entity: EntityData): boolean {
-  if (entity.type === 'email' && !ENABLE_CLIENT_EMAIL_SIGNAL_FILTER) return true;
+  if (entity.type === 'email' && !ENABLE_CLIENT_EMAIL_SIGNAL_FILTER)
+    return true;
   return !signalFilter(entity);
 }
 

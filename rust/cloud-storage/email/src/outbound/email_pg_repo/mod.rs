@@ -280,9 +280,9 @@ impl EmailRepo for EmailPgRepo {
             )
             .await
         } else {
-            Err(sqlx::Error::Protocol(
-                "UpsertEmailFilterInput must have either email_address or email_domain".into(),
-            ))
+            unreachable!(
+                "UpsertEmailFilterInput must have either email_address or email_domain; validated by service layer"
+            )
         }
     }
 

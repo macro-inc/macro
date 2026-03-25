@@ -22,7 +22,11 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { Show } from 'solid-js';
 import { useSoupView } from './soup-view-context';
 
-const SIGNAL_TABS = new Set<string | undefined>([undefined, 'signal', 'important']);
+const SIGNAL_TABS = new Set<string | undefined>([
+  undefined,
+  'signal',
+  'important',
+]);
 const NOISE_TABS = new Set(['noise']);
 
 interface SoupEntityActionsMenuProps {
@@ -202,14 +206,24 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         <Divider />
       </Show>
 
-      <Show when={NOISE_TABS.has(activeTab() ?? '') && canExecuteAll(markSenderSignalAction.canExecute)}>
+      <Show
+        when={
+          NOISE_TABS.has(activeTab() ?? '') &&
+          canExecuteAll(markSenderSignalAction.canExecute)
+        }
+      >
         <MenuItem
           text="Sender → Signal"
           onClick={() => handleAction(markSenderSignalAction.executeWithSoup)}
         />
       </Show>
 
-      <Show when={SIGNAL_TABS.has(activeTab()) && canExecuteAll(markSenderNoiseAction.canExecute)}>
+      <Show
+        when={
+          SIGNAL_TABS.has(activeTab()) &&
+          canExecuteAll(markSenderNoiseAction.canExecute)
+        }
+      >
         <MenuItem
           text="Sender → Noise"
           onClick={() => handleAction(markSenderNoiseAction.executeWithSoup)}
@@ -223,8 +237,9 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         />
       </Show>
 
-      <Show when={showDeleteGroup() && (showSenderGroup() || showMiddleGroup())}>
-
+      <Show
+        when={showDeleteGroup() && (showSenderGroup() || showMiddleGroup())}
+      >
         <Divider />
       </Show>
 

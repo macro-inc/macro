@@ -412,25 +412,27 @@ export async function blockSenderWithToast(senderEmail: string) {
   );
 }
 
-/**
- * Marks a sender as signal via email filter and shows appropriate toasts with undo support.
- */
-export async function markSenderSignalWithToast(senderEmail: string) {
+async function upsertSenderFilterWithToast(
+  senderEmail: string,
+  isImportant: boolean
+) {
+  const label = isImportant ? 'Signal' : 'Noise';
+
   const result = await emailClient.upsertEmailFilter({
     email_address: senderEmail,
-    is_important: true,
+    is_important: isImportant,
   });
 
   if (isErr(result)) {
-    toast.failure('Failed to mark sender as signal', senderEmail);
+    toast.failure(`Failed to mark sender as ${label}`, senderEmail);
     return;
   }
 
   const filterId = result[1].filter.id;
 
   toast.success(
-    'Sender marked as signal',
-    `Messages from ${senderEmail} will appear in Signal`,
+    `Sender marked as ${label}`,
+    `Messages from ${senderEmail} will appear in ${label}`,
     {
       text: 'Undo',
       onClick: async () => {
@@ -447,37 +449,8 @@ export async function markSenderSignalWithToast(senderEmail: string) {
   );
 }
 
-/**
- * Marks a sender as noise via email filter and shows appropriate toasts with undo support.
- */
-export async function markSenderNoiseWithToast(senderEmail: string) {
-  const result = await emailClient.upsertEmailFilter({
-    email_address: senderEmail,
-    is_important: false,
-  });
+export const markSenderSignalWithToast = (senderEmail: string) =>
+  upsertSenderFilterWithToast(senderEmail, true);
 
-  if (isErr(result)) {
-    toast.failure('Failed to mark sender as noise', senderEmail);
-    return;
-  }
-
-  const filterId = result[1].filter.id;
-
-  toast.success(
-    'Sender marked as noise',
-    `Messages from ${senderEmail} will appear in Noise`,
-    {
-      text: 'Undo',
-      onClick: async () => {
-        const undoResult = await emailClient.deleteEmailFilter({
-          id: filterId,
-        });
-        if (isErr(undoResult)) {
-          toast.failure('Failed to undo', senderEmail);
-        } else {
-          toast.success('Sender filter removed');
-        }
-      },
-    }
-  );
-}
+export const markSenderNoiseWithToast = (senderEmail: string) =>
+  upsertSenderFilterWithToast(senderEmail, false);
