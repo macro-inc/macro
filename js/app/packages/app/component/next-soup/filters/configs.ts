@@ -421,7 +421,7 @@ export const createSoupFilters = (
  */
 export const SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
   { id: 'focus', allowMultiple: false },
-  { id: 'entity-type', allowMultiple: false },
+  { id: 'entity-type', allowMultiple: true },
 ];
 
 type SoupFilter = ReturnType<typeof createSoupFilters>[number];
