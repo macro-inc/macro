@@ -8,7 +8,7 @@ use crate::domain::model::{
     CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
     ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
     RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-    TeamMember, TeamRole, TeamWithMembers,
+    TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -47,6 +47,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        team_user_tier: &TeamUserTier,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Invites users to a team.

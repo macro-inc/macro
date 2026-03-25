@@ -20,7 +20,8 @@ use crate::domain::{
         CreateSubscriptionArgs, CreateTeamError, CustomerError, DeleteTeamError,
         InviteUsersToTeamError, JoinTeamError, PatchTeamRequest, ReinviteError,
         RemoveTeamInviteError, RemoveUserFromTeamError, RevokePermissionsForTeamMembersError, Team,
-        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamWithMembers,
+        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier,
+        TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
 };
@@ -151,7 +152,18 @@ where
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
     ) -> Result<Team, CreateTeamError> {
-        self.team_repository.create_team(user_id, team_name).await
+        let user_roles = self
+            .user_roles_and_permissions_service
+            .get_user_roles(user_id)
+            .await
+            .map_err(|e| CreateTeamError::StorageLayerError(e.into()))?;
+
+        let team_user_tier =
+            TeamUserTier::try_from_roles(user_roles).map_err(CreateTeamError::StorageLayerError)?;
+
+        self.team_repository
+            .create_team(user_id, team_name, &team_user_tier)
+            .await
     }
 
     async fn invite_users_to_team(

@@ -76,7 +76,9 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
-    let result = team_repo.create_team(&user_id, "team1").await?;
+    let result = team_repo
+        .create_team(&user_id, "team1", &TeamUserTier::Sonnet)
+        .await?;
 
     assert!(!result.id.to_string().is_empty());
     assert_eq!(result.name, "team1");
@@ -84,7 +86,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // Create team with too large a name
     let err = team_repo
-        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000")
+        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", &TeamUserTier::Sonnet)
         .await
         .err()
         .unwrap();

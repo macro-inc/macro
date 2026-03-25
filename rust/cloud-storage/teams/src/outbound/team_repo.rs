@@ -3,7 +3,7 @@ use crate::domain::{
     model::{
         CreateTeamError, InviteUsersToTeamError, PatchTeamRequest, RemoveTeamInviteError,
         RemoveUserFromTeamError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
-        TeamRole, TeamWithMembers,
+        TeamRole, TeamUserTier, TeamWithMembers,
     },
     team_repo::TeamRepository,
 };
@@ -55,6 +55,7 @@ impl TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        team_user_tier: &TeamUserTier,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -76,11 +77,12 @@ impl TeamRepositoryImpl {
 
         sqlx::query!(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role)
-            VALUES ($1, $2, 'owner')
+            INSERT INTO team_user (team_id, user_id, team_role, tier)
+            VALUES ($1, $2, 'owner', $3)
             "#,
             &team.id,
             user_id.as_ref(),
+            team_user_tier as _,
         )
         .execute(&mut *transaction)
         .await?;
@@ -186,12 +188,13 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        team_user_tier: &TeamUserTier,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name)
+        self.create_team_inner(user_id, team_name, team_user_tier)
             .await
             .map_err(|e| e.into())
     }
