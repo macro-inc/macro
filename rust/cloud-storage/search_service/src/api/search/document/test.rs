@@ -5,7 +5,7 @@ use super::*;
 
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new());
+    let result = construct_search_result(vec![], HashMap::new(), HashMap::new());
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -50,7 +50,8 @@ fn test_construct_search_result_single_document() {
         },
     );
 
-    let result = construct_search_result(search_results, document_histories).unwrap();
+    let result =
+        construct_search_result(search_results, document_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -140,7 +141,8 @@ fn test_construct_search_result_multiple_nodes_same_document() {
         },
     );
 
-    let result = construct_search_result(search_results, document_histories).unwrap();
+    let result =
+        construct_search_result(search_results, document_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -216,7 +218,7 @@ fn test_document_history_timestamps() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied from the document history
     assert_eq!(result.len(), 1);
@@ -250,7 +252,7 @@ fn test_document_history_missing_entry() {
     document_histories.insert("22222222-2222-2222-2222-222222222222".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // Documents without history info should not return
     assert_eq!(result.len(), 0);
@@ -281,7 +283,7 @@ fn test_document_history_null_viewed_at() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
@@ -333,7 +335,7 @@ fn test_document_history_multiple_documents() {
     document_histories.insert("22222222-2222-2222-2222-222222222222".to_string(), history2);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied correctly for both documents
     assert_eq!(result.len(), 2);
@@ -391,7 +393,7 @@ fn test_document_history_partial_missing_entries() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // We should have 2 results - one with real data, one not found
     assert_eq!(result.len(), 1);
@@ -436,7 +438,8 @@ fn test_document_history_deleted() {
         },
     );
 
-    let result = construct_search_result(input_deleted, document_histories).unwrap();
+    let result =
+        construct_search_result(input_deleted, document_histories, HashMap::new()).unwrap();
 
     // Deleted document should be returned with metadata including deleted_at
     assert_eq!(result.len(), 1);
@@ -454,8 +457,12 @@ fn test_document_history_deleted() {
 
     let document_histories_not_found = HashMap::new(); // No entry = not found
 
-    let result_not_found =
-        construct_search_result(input_not_found, document_histories_not_found).unwrap();
+    let result_not_found = construct_search_result(
+        input_not_found,
+        document_histories_not_found,
+        HashMap::new(),
+    )
+    .unwrap();
 
     // Document not in DB should not be returned
     assert_eq!(result_not_found.len(), 0);
@@ -587,9 +594,12 @@ fn test_sort_stability() {
         );
     }
 
-    let result1 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
-    let result2 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
-    let result3 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
+    let result1 =
+        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
+    let result2 =
+        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
+    let result3 =
+        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);

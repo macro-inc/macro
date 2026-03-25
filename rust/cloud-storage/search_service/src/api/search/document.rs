@@ -1,6 +1,7 @@
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use models_opensearch::SearchEntityType;
+use models_properties::{EntityReference, EntityType, api::EntityPropertyWithDefinitionResponse};
 use models_search::document::{
     DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata, DocumentSearchResult,
 };
@@ -17,6 +18,7 @@ pub(in crate::api::search) async fn enrich_documents(
     user_id: &str,
     results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<DocumentSearchResponseItemWithMetadata>, SearchError> {
+    tracing::info!("enrich_documents");
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
         .filter(|r| r.entity_type == SearchEntityType::Documents)
@@ -38,9 +40,48 @@ pub(in crate::api::search) async fn enrich_documents(
         .await
         .map_err(SearchError::InternalError)?;
 
+    // Fetch properties for markdown documents (tasks, etc.)
+    let md_entity_refs: Vec<EntityReference> = document_histories
+        .iter()
+        .filter(|(_, info)| info.file_type.as_deref() == Some("md"))
+        .map(|(id, info)| {
+            let entity_type = match info.sub_type {
+                Some(document_sub_type::DocumentSubType::Task) => EntityType::Task,
+                _ => EntityType::Document,
+            };
+            EntityReference::new(id.clone(), entity_type)
+        })
+        .collect();
+
+    tracing::info!(md_entity_refs = ?md_entity_refs, "md_entity_refs");
+
+    let properties_map = if !md_entity_refs.is_empty() {
+        properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
+            &ctx.db,
+            &md_entity_refs,
+        )
+        .await
+        .map_err(|e| SearchError::InternalError(e.into()))?
+        .into_iter()
+        .map(|(id, props)| {
+            (
+                id,
+                props
+                    .into_iter()
+                    .map(EntityPropertyWithDefinitionResponse::from)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<HashMap<_, _>>()
+    } else {
+        HashMap::new()
+    };
+
+    tracing::info!(properties_map = ?properties_map, "properties_map");
+
     // Construct enriched results
-    let enriched_results =
-        construct_search_result(results, document_histories).map_err(SearchError::InternalError)?;
+    let enriched_results = construct_search_result(results, document_histories, properties_map)
+        .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -51,6 +92,7 @@ pub fn construct_search_result(
         String,
         macro_db_client::document::get_document_history::DocumentHistoryInfo,
     >,
+    properties_map: HashMap<String, Vec<EntityPropertyWithDefinitionResponse>>,
 ) -> anyhow::Result<Vec<DocumentSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<Uuid, Vec<DocumentSearchResult>> = search_results
@@ -92,8 +134,13 @@ pub fn construct_search_result(
                     project_id: info.project_id.clone(),
                     deleted_at: info.deleted_at,
                 };
+                let properties = properties_map
+                    .get(&entity_id.to_string())
+                    .cloned()
+                    .filter(|p| !p.is_empty());
                 Some(DocumentSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
+                    properties,
                     extra: DocumentSearchResponseItem {
                         id: entity_id,
                         name: info.file_name.clone(),
