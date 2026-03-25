@@ -106,6 +106,18 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     }
   };
 
+  const showTopGroup = () =>
+    canExecuteAny(markDone.canExecute) || canOpenInSplit();
+
+  const showMiddleGroup = () =>
+    canExecuteAll(renameAction.canExecute) ||
+    canExecuteAny(moveToProjectAction.canExecute) ||
+    canExecuteAny(copyAction.canExecute) ||
+    props.entities.length === 1 ||
+    canExecuteAll(blockSenderAction.canExecute);
+
+  const showDeleteGroup = () => canExecuteAll(deleteAction.canExecute);
+
   return (
     <>
       <Show when={canExecuteAny(markDone.canExecute)}>
@@ -119,7 +131,9 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         <MenuItem text="Open in new split" onClick={openInNewSplit} />
       </Show>
 
-      <Divider />
+      <Show when={showTopGroup() && (showMiddleGroup() || showDeleteGroup())}>
+        <Divider />
+      </Show>
 
       <Show when={canExecuteAll(renameAction.canExecute)}>
         <MenuItem
@@ -180,9 +194,15 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         />
       </Show>
 
-      <Divider />
+      <Show
+        when={
+          showDeleteGroup() && (showTopGroup() || showMiddleGroup())
+        }
+      >
+        <Divider />
+      </Show>
 
-      <Show when={canExecuteAll(deleteAction.canExecute)}>
+      <Show when={showDeleteGroup()}>
         <div class="text-failure-ink w-full">
           <MenuItem
             text="Delete"
