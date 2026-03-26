@@ -1,51 +1,51 @@
-import { SERVER_HOSTS } from '@core/constant/servers';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { toast } from '@core/component/Toast/Toast';
+import { useEmailLinks } from '@core/email-link';
 import { useUserInfo } from '@queries/auth';
-import { Navigate, useLocation } from '@solidjs/router';
+import { useNavigate } from '@solidjs/router';
 import { onMount, Show } from 'solid-js';
 import { useAnalytics } from '@app/component/analytics-context';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
-import type { RedirectLocation } from '@core/util/authRedirect';
-import IconGoogle from '@macro-icons/macro-google.svg';
 import LogoIcon from '@macro-icons/macro-logo.svg';
+import { LoginOptions } from './LoginOptions';
+import type { Stage } from './Shared';
+
+function PostSignupRedirect() {
+  const userInfo = useUserInfo();
+  const navigate = useNavigate();
+  const { initEmailLink } = useEmailLinks();
+
+  onMount(async () => {
+    await initEmailLink().match(
+      () => {},
+      (err) => {
+        if (err.tag !== 'AlreadyInitialized') {
+          toast.alert(
+            'Failed to connect email',
+            'Select email permissions on sign-in to enable'
+          );
+        }
+      }
+    );
+    navigate(userInfo()?.tutorialComplete ? '/' : '/welcome', {
+      replace: true,
+    });
+  });
+
+  return <LoadingBlock />;
+}
 
 export function Signup() {
   const userInfo = useUserInfo();
   const analytics = useAnalytics();
-  const location = useLocation<RedirectLocation>();
 
   onMount(() => {
     analytics.pageView('signup');
   });
 
-  const startGoogleLogin = () => {
-    const authUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
-    authUrl.searchParams.set('idp_name', 'google');
-
-    const referral_code =
-      new URL(window.location.href).searchParams.get('referral_code') ??
-      new URLSearchParams(location.state?.originalLocation?.search).get(
-        'referral_code'
-      );
-
-    if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
-
-    authUrl.searchParams.set(
-      'original_url',
-      `${window.location.origin}${ROUTER_BASE_CONCAT}welcome`
-    );
-
-    window.location.href = authUrl.toString();
-  };
-
   return (
-    <Show
-      when={!userInfo()?.authenticated}
-      fallback={
-        <Navigate href={userInfo()?.tutorialComplete ? '/' : '/welcome'} />
-      }
-    >
+    <Show when={!userInfo()?.authenticated} fallback={<PostSignupRedirect />}>
       <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
         <style>
           {
@@ -94,43 +94,11 @@ export function Signup() {
                 Welcome to Macro
               </div>
               <div class="px-8 pb-4 pt-2 text-center text-sm text-ink/60 leading-relaxed">
-                Sign in with Google to sync your inbox and set up your
+                Sign up with Google to sync your inbox and set up your
                 workspace.
               </div>
               <div class="w-full">
-                <div class="grid select-none border-t border-edge-muted">
-                  <div
-                    onClick={startGoogleLogin}
-                    class="grid items-center justify-center p-4 border-b border-edge-muted [transition:color_var(--transition)] hover:bg-hover/60 hover:text-accent hover:transition-none"
-                  >
-                    <div class="flex gap-2.5 items-center justify-center">
-                      <IconGoogle />
-                      <div class="whitespace-nowrap">Sign up with Google</div>
-                    </div>
-                  </div>
-
-                  <div class="p-4 text-center text-xs text-ink/50">
-                    <a
-                      class="underline hover:text-ink/70"
-                      href={`${ROUTER_BASE_CONCAT}login`}
-                    >
-                      Existing user? Log in
-                    </a>
-                  </div>
-
-                  <div class="p-4 pt-0 text-center text-xs text-ink/50">
-                    By signing up, you agree to our
-                    <br />
-                    <a class="underline hover:text-ink/70" href="/terms">
-                      terms
-                    </a>{' '}
-                    and{' '}
-                    <a class="underline hover:text-ink/70" href="/privacy">
-                      privacy policy
-                    </a>
-                    .
-                  </div>
-                </div>
+                <LoginOptions signupMode setStage={(_stage: Stage) => {}} />
               </div>
             </div>
           </ClippedPanel>

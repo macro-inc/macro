@@ -20,7 +20,11 @@ import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton, SkipButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import { clearCompletedLessons, saveCompletedLesson } from './persistence';
+import {
+  clearCompletedLessons,
+  loadCompletedLessons,
+  saveCompletedLesson,
+} from './persistence';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
@@ -59,7 +63,7 @@ export default function InteractiveOnboarding() {
 
   const state = createOnboardingState({
     definitions: lessons,
-    initialCompleted: debugCompleted ?? new Set(),
+    initialCompleted: debugCompleted ?? loadCompletedLessons(),
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
@@ -75,9 +79,12 @@ export default function InteractiveOnboarding() {
   };
 
   // Redirect away if the backend already marks the tutorial as complete
+  // before the user starts. We set tutorialComplete early (after the invite
+  // step) so we track whether the flow has started to avoid a mid-flow redirect.
+  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
   const navigate = useNavigate();
   createEffect(() => {
-    if (tutorialCompleted() && !testMode) {
+    if (tutorialCompleted() && !onboardingStarted() && !testMode) {
       if (splitPanel) {
         navigateAway();
       } else {
@@ -104,6 +111,7 @@ export default function InteractiveOnboarding() {
       state: 'completed',
     });
 
+    setOnboardingStarted(true);
     state.completeLesson(current.definition.id);
     if (!testMode) {
       saveCompletedLesson(current.definition.id);
@@ -124,7 +132,11 @@ export default function InteractiveOnboarding() {
       state: 'skipped',
     });
 
+    setOnboardingStarted(true);
     state.skipLesson(current.definition.id);
+    if (!testMode) {
+      saveCompletedLesson(current.definition.id);
+    }
 
     setReadyToContinue(false);
     setContinueLabel(undefined);
@@ -220,13 +232,23 @@ export default function InteractiveOnboarding() {
     })
   );
 
+  // Mark tutorial complete on the backend once the email-invite lesson is
+  // completed or skipped — before the paywall step.
+  createEffect(() => {
+    const invite = state
+      .lessons()
+      .find((l) => l.definition.id === 'email-invite');
+    if (invite && (invite.completed || invite.skipped) && !testMode) {
+      completeTutorial.mutate(undefined);
+    }
+  });
+
   createEffect(
     on(
       () => state.isFinished(),
       (finished) => {
         if (finished && !testMode) {
           analytics.track('onboarding_completed');
-          completeTutorial.mutate(undefined);
           navigateAway();
         }
       }
