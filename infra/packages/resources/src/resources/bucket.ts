@@ -23,8 +23,6 @@ export function createBucket({
   exposeHeaders?: string[];
 }): Bucket {
   // Document Storage S3 Bucket
-  // The bucket policy for this bucket is not stored in code as then it could be manipulated by any user
-  // with pulumi access. The policy is manually created and maintained.
   return new aws.s3.Bucket(id, {
     bucket: bucketName,
     forceDestroy: stack !== 'prod',
