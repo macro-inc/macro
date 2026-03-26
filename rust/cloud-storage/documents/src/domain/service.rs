@@ -21,11 +21,12 @@ use model::document::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadata,
     GetDocumentResponseData, LocationResponseData, LocationResponseV3,
 };
-use model::document::{
-    ContentType, DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key,
-    build_docx_staging_bucket_document_key, build_docx_to_pdf_converted_document_key,
-};
+use model::document::{ContentType, DocumentBasic, FileType, FileTypeExt};
 use model::response::PresignedUrl;
+use s3_key::{
+    build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
+    build_docx_to_pdf_converted_document_key,
+};
 use tracing;
 
 use super::models::{

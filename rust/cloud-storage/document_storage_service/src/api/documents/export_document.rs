@@ -12,12 +12,12 @@ use axum::{
 };
 use futures::StreamExt;
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
-use model::document::build_temp_docx_key;
 use model::{
     document::{DocumentBasic, FileType, response::LocationResponseData},
     response::{ErrorResponse, GenericErrorResponse},
     user::UserContext,
 };
+use s3_key::build_temp_docx_key;
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use serde::{Deserialize, Serialize};

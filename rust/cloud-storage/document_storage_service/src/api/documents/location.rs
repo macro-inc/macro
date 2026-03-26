@@ -20,13 +20,11 @@ use axum::{
 };
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use model::{
-    document::{
-        DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key,
-        build_docx_to_pdf_converted_document_key, response::LocationResponseData,
-    },
+    document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseData},
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
     user::UserContext,
 };
+use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
 
 #[derive(serde::Deserialize)]
 pub struct Params {

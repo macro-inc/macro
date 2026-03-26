@@ -21,7 +21,6 @@ models_bulk_upload = { path = "../models_bulk_upload" }
 models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
-s3_key = { path = "../s3_key" }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }

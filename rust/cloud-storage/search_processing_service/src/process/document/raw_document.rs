@@ -2,14 +2,15 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use chrono::Utc;
-use model::document::{
-    CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
-    build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key,
-};
+use model::document::{DocumentMetadata, FileType};
 use model_file_type::FileAssociation;
 use models_search::document::MarkdownParseResult;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
+};
+use s3_key::{
+    CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
+    build_docx_to_pdf_converted_document_key,
 };
 
 use crate::{

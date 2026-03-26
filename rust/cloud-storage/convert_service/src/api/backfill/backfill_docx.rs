@@ -13,16 +13,13 @@ use axum::{
 use futures::StreamExt;
 use model::{
     convert::ConvertQueueMessage,
-    document::{
-        BomPart, BomPartWithContent, DocumentMetadata, build_docx_to_pdf_converted_document_key,
-    },
+    document::{BomPart, BomPartWithContent, DocumentMetadata},
     request::pagination::{Pagination, PaginationQueryParams},
     response::ErrorResponse,
 };
+use s3_key::{build_docx_to_pdf_converted_document_key, build_temp_docx_key};
 
 use crate::api::context::ApiContext;
-
-use model::document::build_temp_docx_key;
 
 /// Backfill docx all
 #[utoipa::path(

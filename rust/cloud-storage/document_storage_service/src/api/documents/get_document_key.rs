@@ -5,12 +5,11 @@ use crate::model::response::documents::get::{GetDocumentKeyResponse, GetDocument
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
-use model::document::{
-    FileType, build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key,
-};
+use model::document::FileType;
 use model::response::GenericErrorResponse;
 use model::{document::DocumentBasic, response::GenericResponse, user::UserContext};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
+use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
 
 #[derive(serde::Deserialize)]
 pub struct Params {

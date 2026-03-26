@@ -7,13 +7,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
 use model::{
-    document::{
-        BomPart, DocumentMetadata, FileType, build_cloud_storage_bucket_document_key,
-        build_docx_to_pdf_converted_document_key,
-    },
+    document::{BomPart, DocumentMetadata, FileType},
     response::GenericResponse,
 };
 use models_permissions::share_permission::SharePermissionV2;
+use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
 use system_properties::SystemPropertiesService;
 
 #[tracing::instrument(skip(ctx))]
