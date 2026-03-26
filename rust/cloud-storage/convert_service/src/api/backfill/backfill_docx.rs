@@ -22,8 +22,7 @@ use model::{
 
 use crate::api::context::ApiContext;
 
-/// All files in temp_files automatically get removed from document storage bucket after 1 day
-static BULK_DOCX_CONVERT_PREFIX: &str = "temp_files";
+use model::document::build_temp_docx_key;
 
 /// Backfill docx all
 #[utoipa::path(
@@ -171,7 +170,7 @@ async fn process_docx(
 
             let zipped_docx = zip_bom_parts(bom_parts_with_content).await?;
 
-            let from_key = format!("{}/{}.docx", BULK_DOCX_CONVERT_PREFIX, document.document_id);
+            let from_key = build_temp_docx_key(&document.document_id);
             let to_key = build_docx_to_pdf_converted_document_key(
                 document.owner.as_ref(),
                 &document.document_id,
