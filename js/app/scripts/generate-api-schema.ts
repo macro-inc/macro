@@ -10,8 +10,6 @@ import * as path from 'node:path';
 import { $, write } from 'bun';
 import { type Service, services } from './services';
 
-const MAX_CONCURRENCY = 6;
-
 const elapsed = (start: number) => `${((performance.now() - start) / 1000).toFixed(1)}s`;
 
 // Map service names to Rust crate names
@@ -35,29 +33,21 @@ const getServiceClientsDir = () => path.resolve(import.meta.dirname, '../package
 // Parse arguments
 const getTargetServices = () => process.argv.slice(2).filter(arg => arg !== '--check');
 
-// Build OpenAPI binaries. In CI (--check), batches to MAX_CONCURRENCY to limit resource usage.
-async function buildOpenApiBinaries(crateNames: string[], { checkMode = false, rustCloudStorageDir = getRustCloudStorageDir() } = {}): Promise<void> {
+// Build all OpenAPI binaries in a single cargo invocation (cargo parallelizes internally).
+async function buildOpenApiBinaries(crateNames: string[], { rustCloudStorageDir = getRustCloudStorageDir() } = {}): Promise<void> {
   if (crateNames.length === 0) return;
 
-  const batchSize = checkMode ? MAX_CONCURRENCY : crateNames.length;
+  const binArgs = crateNames.flatMap(crate => ['--bin', `${crate}_openapi`]);
 
-  for (let i = 0; i < crateNames.length; i += batchSize) {
-    const batch = crateNames.slice(i, i + batchSize);
-    const binArgs = batch.flatMap(crate => ['--bin', `${crate}_openapi`]);
-
-    // Also build the DCS models binary if document_cognition_service is included
-    if (batch.includes('document_cognition_service')) {
-      binArgs.push('--bin', 'document_cognition_service_models');
-    }
-
-    if (batchSize < crateNames.length) {
-      console.log(`Building batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(crateNames.length / batchSize)} (${batch.length} crates)...`);
-    } else {
-      console.log(`Building ${crateNames.length} OpenAPI binaries in parallel...`);
-    }
-    console.log(`cargo build args: ${binArgs.join(' ')}`);
-    await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build ${binArgs}`;
+  // Also build the DCS models + tools binaries if document_cognition_service is included
+  if (crateNames.includes('document_cognition_service')) {
+    binArgs.push('--bin', 'document_cognition_service_models');
+    binArgs.push('--bin', 'gen_tool_schemas');
   }
+
+  console.log(`Building ${crateNames.length} OpenAPI binaries...`);
+  console.log(`cargo build args: ${binArgs.join(' ')}`);
+  await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build ${binArgs}`;
   console.log('Build complete.\n');
 }
 
@@ -191,22 +181,14 @@ async function main() {
 
   // Phase 1: Build all binaries in a single cargo invocation (parallelized by cargo)
   const buildStart = performance.now();
-  await buildOpenApiBinaries(crateNames, { checkMode });
+  await buildOpenApiBinaries(crateNames);
   console.log(`Phase 1 (cargo build) total: ${elapsed(buildStart)}`);
 
-  // Phase 2: Run binaries and generate TypeScript in batches
-  const results: Awaited<ReturnType<typeof processService>>[] = [];
-
-  for (let i = 0; i < servicesToProcess.length; i += MAX_CONCURRENCY) {
-    const batch = servicesToProcess.slice(i, i + MAX_CONCURRENCY);
-    const batchNum = Math.floor(i / MAX_CONCURRENCY) + 1;
-    const totalBatches = Math.ceil(servicesToProcess.length / MAX_CONCURRENCY);
-    console.log(`\nGenerating TypeScript clients batch ${batchNum}/${totalBatches} (${batch.map(s => s.name).join(', ')})...\n`);
-    const batchResults = await Promise.all(
-      batch.map(service => processService(service, { serviceClientsDir }))
-    );
-    results.push(...batchResults);
-  }
+  // Phase 2: Run binaries and generate TypeScript in parallel
+  console.log('\nGenerating TypeScript clients...\n');
+  const results = await Promise.all(
+    servicesToProcess.map(service => processService(service, { serviceClientsDir }))
+  );
 
   // Summary report
   console.log('\nProcessing Summary:');
