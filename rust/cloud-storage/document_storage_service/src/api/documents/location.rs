@@ -109,16 +109,18 @@ pub async fn get_location_handler(
 }
 
 /// Signs a document key and returns a CloudFront presigned URL.
-/// Optionally verifies the key exists in S3 when the `location_check` feature is enabled.
+/// `check_key` is the non-URL-encoded key for S3 existence verification.
+/// `signed_key` is the URL-encoded key for the CloudFront signed URL.
 #[tracing::instrument(skip(state))]
 async fn sign_document_key(
     state: &ApiContext,
-    document_key: &str,
+    #[allow(unused_variables)] check_key: &str,
+    signed_key: &str,
 ) -> anyhow::Result<LocationResponseData> {
     #[cfg(feature = "location_check")]
     {
-        tracing::trace!("checking if file exists in s3, key: {}", document_key);
-        let exists = verify_file_exists(&state.s3_client, document_key).await?;
+        tracing::trace!("checking if file exists in s3, key: {}", check_key);
+        let exists = verify_file_exists(&state.s3_client, check_key).await?;
         if !exists {
             anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
@@ -143,7 +145,7 @@ async fn sign_document_key(
             .config
             .vars
             .document_storage_service_cloudfront_distribution_url,
-        document_key,
+        signed_key,
         &signed_options,
     )?;
 
@@ -177,14 +179,16 @@ pub(in crate::api::documents) async fn get_versioned_url(
         }
     };
 
+    let check_key =
+        build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
     let url_encoded_owner = urlencoding::encode(owner);
-    let key = build_cloud_storage_bucket_document_key(
+    let signed_key = build_cloud_storage_bucket_document_key(
         &url_encoded_owner,
         document_id,
         document_version_id,
     );
 
-    sign_document_key(state, &key).await
+    sign_document_key(state, &check_key, &signed_key).await
 }
 
 /// Gets the presigned url for the converted docx file
@@ -194,10 +198,11 @@ async fn get_converted_docx_url(
     owner: &str,
     document_id: &str,
 ) -> anyhow::Result<LocationResponseData> {
+    let check_key = build_docx_to_pdf_converted_document_key(owner, document_id);
     let url_encoded_owner = urlencoding::encode(owner);
-    let key = build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
+    let signed_key = build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
 
-    sign_document_key(state, &key).await
+    sign_document_key(state, &check_key, &signed_key).await
 }
 
 #[tracing::instrument(skip(state))]
