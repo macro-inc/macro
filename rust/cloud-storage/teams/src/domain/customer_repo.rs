@@ -30,7 +30,6 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
     fn increase_subscription_quantity(
         &self,
         subscription_id: &stripe::SubscriptionId,
-        increase_amount: u64,
         tier: TeamUserTier,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
@@ -38,7 +37,6 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
     fn decrease_subscription_quantity(
         &self,
         subscription_id: &stripe::SubscriptionId,
-        decrease_amount: u64,
         team_user_tier: TeamUserTier,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 

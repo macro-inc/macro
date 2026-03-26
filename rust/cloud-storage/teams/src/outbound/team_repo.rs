@@ -11,7 +11,7 @@ use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
 use sqlx::PgPool;
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
 /// utility fn for queries to create a sqlx err
 fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
@@ -570,7 +570,7 @@ impl TeamRepository for TeamRepositoryImpl {
         let team_member: Option<()> = sqlx::query!(
             r#"
             SELECT team_id FROM team_user
-            WHERE user_id = $1 AND team_role NOT IN ('owner')
+            WHERE user_id = $1
             "#,
             user_id.as_ref(),
         )
@@ -579,6 +579,27 @@ impl TeamRepository for TeamRepositoryImpl {
         .await?;
 
         Ok(team_member.is_some())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_remaining_tiers(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        exclude_team_id: &uuid::Uuid,
+    ) -> Result<HashSet<TeamUserTier>, TeamError> {
+        let tiers = sqlx::query!(
+            r#"
+            SELECT tier as "tier!: TeamUserTier"
+            FROM team_user
+            WHERE user_id = $1 AND team_id != $2
+            "#,
+            user_id.as_ref(),
+            exclude_team_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(tiers.into_iter().map(|row| row.tier).collect())
     }
 
     #[tracing::instrument(skip(self), err)]

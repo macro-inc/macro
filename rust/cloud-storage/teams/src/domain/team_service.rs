@@ -273,12 +273,22 @@ where
 
             // Decrement the quantity of the subscription
             self.customer_repository
-                .decrease_subscription_quantity(&subscription_id, 1, tier)
+                .decrease_subscription_quantity(&subscription_id, tier)
                 .await?;
 
-            if !self.team_repository.is_user_member_of_team(user_id).await? {
-                let roles = vec![RoleId::TeamSubscriber, RoleId::from(tier)];
-                let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
+            let remaining_tiers = self
+                .team_repository
+                .get_user_remaining_tiers(user_id, team_id)
+                .await?;
+
+            let mut roles_to_remove = vec![];
+            if remaining_tiers.is_empty() {
+                roles_to_remove.push(RoleId::TeamSubscriber);
+            }
+            if !remaining_tiers.contains(&tier) {
+                roles_to_remove.push(RoleId::from(tier));
+            }
+            if let Ok(roles) = non_empty::NonEmpty::new(roles_to_remove.as_slice()) {
                 self.user_roles_and_permissions_service
                     .dangerous_remove_roles_from_user(user_id, &roles)
                     .await
@@ -400,7 +410,7 @@ where
 
         // Increment the quantity of the subscription by the number of emails
         self.customer_repository
-            .increase_subscription_quantity(&subscription_id, 1, team_member.tier)
+            .increase_subscription_quantity(&subscription_id, team_member.tier)
             .await?;
 
         Ok(team_member)
@@ -417,39 +427,26 @@ where
             return Ok(());
         }
 
-        // Ignore the current team
-        let ignore_team_ids = vec![*team_id];
+        // For each member, check remaining tiers and remove roles accordingly
+        for member in members {
+            let remaining_tiers = self
+                .team_repository
+                .get_user_remaining_tiers(&member.user_id, team_id)
+                .await?;
 
-        let members_of_team = self
-            .team_repository
-            .bulk_is_member_of_other_team(
-                non_empty::NonEmpty::new(ignore_team_ids.as_slice()).unwrap(),
-                non_empty::NonEmpty::new(
-                    members
-                        .iter()
-                        .map(|m| m.user_id.clone())
-                        .collect::<Vec<MacroUserIdStr<'_>>>()
-                        .as_slice(),
-                )
-                .unwrap(),
-            )
-            .await?;
-
-        let members_of_team: HashSet<&str> = members_of_team.iter().map(|m| m.as_ref()).collect();
-        // Get all members that are not in the other team
-        let members_to_revoke: Vec<_> = members
-            .into_iter()
-            .filter(|m| !members_of_team.contains(m.user_id.as_ref()))
-            .collect();
-
-        // Revoke permissions for all members
-        for member in members_to_revoke {
-            let roles = vec![RoleId::TeamSubscriber, RoleId::from(member.tier)];
-            let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
-            self.user_roles_and_permissions_service
-                .dangerous_remove_roles_from_user(&member.user_id, &roles)
-                .await
-                .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
+            let mut roles_to_remove = vec![];
+            if remaining_tiers.is_empty() {
+                roles_to_remove.push(RoleId::TeamSubscriber);
+            }
+            if !remaining_tiers.contains(&member.tier) {
+                roles_to_remove.push(RoleId::from(member.tier));
+            }
+            if let Ok(roles) = non_empty::NonEmpty::new(roles_to_remove.as_slice()) {
+                self.user_roles_and_permissions_service
+                    .dangerous_remove_roles_from_user(&member.user_id, &roles)
+                    .await
+                    .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
+            }
         }
 
         Ok(())

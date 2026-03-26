@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use roles_and_permissions::domain::model::{RoleId, UserRolesAndPermissionsError};
 
-#[derive(Eq, PartialEq, Debug, Clone, PartialOrd, Copy, std::cmp::Ord, serde::Serialize)]
+#[derive(Eq, PartialEq, Debug, Clone, Hash, PartialOrd, Copy, std::cmp::Ord, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(

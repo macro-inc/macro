@@ -385,17 +385,20 @@ async fn test_accept_team_invite_uses_invite_tier(pool: Pool<Postgres>) -> anyho
 async fn test_is_user_member_of_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
+    // user@user.com is an owner on team1 and team3
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
-
     let is_member = team_repo.is_user_member_of_team(&user_id).await?;
-
-    assert!(!is_member);
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
-
-    let is_member = team_repo.is_user_member_of_team(&user_id).await?;
-
     assert!(is_member);
+
+    // user2@user.com is a member of team1 and team2
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
+    let is_member = team_repo.is_user_member_of_team(&user_id).await?;
+    assert!(is_member);
+
+    // user3@user.com is not in any team
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let is_member = team_repo.is_user_member_of_team(&user_id).await?;
+    assert!(!is_member);
 
     Ok(())
 }
@@ -468,44 +471,113 @@ async fn test_bump_seat_count_negative(pool: Pool<Postgres>) -> anyhow::Result<(
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("teams"))
+    fixtures(path = "../../../fixtures", scripts("teams_remaining_tiers"))
 )]
-async fn test_bulk_is_member_of_other_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn test_get_user_remaining_tiers_multi_team_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
-    let ignore_team_ids = vec![macro_uuid::string_to_uuid(
-        "11111111-1111-1111-1111-111111111111",
-    )?];
+    let user_id = MacroUserIdStr::parse_from_str("macro|multi@test.com")?;
+    let team_a = macro_uuid::string_to_uuid("aaaa1111-1111-1111-1111-111111111111")?;
+    let team_b = macro_uuid::string_to_uuid("bbbb2222-2222-2222-2222-222222222222")?;
+    let team_c = macro_uuid::string_to_uuid("cccc3333-3333-3333-3333-333333333333")?;
 
-    let users = vec![
-        MacroUserIdStr::parse_from_str("macro|user@user.com")?,
-        MacroUserIdStr::parse_from_str("macro|user2@user.com")?,
-    ];
+    // Excluding Team A (haiku): should still have Sonnet and Opus from B and C
+    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_a).await?;
+    assert!(tiers.contains(&TeamUserTier::Sonnet));
+    assert!(tiers.contains(&TeamUserTier::Opus));
+    assert!(!tiers.contains(&TeamUserTier::Haiku));
 
-    let ignore_team_ids = non_empty::NonEmpty::new(ignore_team_ids.as_slice())?;
-    let users = non_empty::NonEmpty::new(users.as_slice())?;
+    // Excluding Team B (sonnet): should still have Haiku and Opus from A and C
+    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_b).await?;
+    assert!(tiers.contains(&TeamUserTier::Haiku));
+    assert!(tiers.contains(&TeamUserTier::Opus));
+    assert!(!tiers.contains(&TeamUserTier::Sonnet));
 
-    let result = team_repo
-        .bulk_is_member_of_other_team(ignore_team_ids, users)
-        .await?;
+    // Excluding Team C (opus): should still have Haiku and Sonnet from A and B
+    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_c).await?;
+    assert!(tiers.contains(&TeamUserTier::Haiku));
+    assert!(tiers.contains(&TeamUserTier::Sonnet));
+    assert!(!tiers.contains(&TeamUserTier::Opus));
 
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].as_ref(), "macro|user2@user.com");
+    Ok(())
+}
 
-    let ignore_team_ids = vec![macro_uuid::string_to_uuid(
-        "33333333-3333-3333-3333-333333333333",
-    )?];
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams_remaining_tiers"))
+)]
+async fn test_get_user_remaining_tiers_single_team_user(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
 
-    let users = vec![MacroUserIdStr::parse_from_str("macro|user4@user.com")?];
+    let user_id = MacroUserIdStr::parse_from_str("macro|single@test.com")?;
+    let team_a = macro_uuid::string_to_uuid("aaaa1111-1111-1111-1111-111111111111")?;
 
-    let ignore_team_ids = non_empty::NonEmpty::new(ignore_team_ids.as_slice())?;
-    let users = non_empty::NonEmpty::new(users.as_slice())?;
+    // single@test.com is only in Team A; excluding it should return empty
+    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_a).await?;
+    assert!(tiers.is_empty());
 
-    let result = team_repo
-        .bulk_is_member_of_other_team(ignore_team_ids, users)
-        .await?;
+    Ok(())
+}
 
-    assert!(result.is_empty());
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams_remaining_tiers"))
+)]
+async fn test_get_user_remaining_tiers_user_not_in_any_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|notinteam@test.com")?;
+    let team_a = macro_uuid::string_to_uuid("aaaa1111-1111-1111-1111-111111111111")?;
+
+    // User not in any team should return empty
+    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_a).await?;
+    assert!(tiers.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams_remaining_tiers"))
+)]
+async fn test_get_user_remaining_tiers_includes_owner_role(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    // owner@test.com is owner on all 3 teams — their tiers are included
+    let user_id = MacroUserIdStr::parse_from_str("macro|owner@test.com")?;
+    let team_a = macro_uuid::string_to_uuid("aaaa1111-1111-1111-1111-111111111111")?;
+
+    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_a).await?;
+    assert!(tiers.contains(&TeamUserTier::Sonnet));
+    assert!(tiers.contains(&TeamUserTier::Opus));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams_remaining_tiers"))
+)]
+async fn test_get_user_remaining_tiers_excluding_nonexistent_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|multi@test.com")?;
+    let fake_team = macro_uuid::string_to_uuid("deadbeef-dead-beef-dead-beefdeadbeef")?;
+
+    // Excluding a team the user isn't in should return all their tiers
+    let tiers = team_repo.get_user_remaining_tiers(&user_id, &fake_team).await?;
+    assert!(tiers.contains(&TeamUserTier::Haiku));
+    assert!(tiers.contains(&TeamUserTier::Sonnet));
+    assert!(tiers.contains(&TeamUserTier::Opus));
+    assert_eq!(tiers.len(), 3);
 
     Ok(())
 }

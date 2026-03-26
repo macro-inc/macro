@@ -77,7 +77,6 @@ impl CustomerRepository for CustomerRepositoryImpl {
     async fn increase_subscription_quantity(
         &self,
         subscription_id: &stripe::SubscriptionId,
-        increase_amount: u64,
         team_user_tier: TeamUserTier,
     ) -> Result<(), CustomerError> {
         // Get existing subscription quantity
@@ -141,7 +140,6 @@ impl CustomerRepository for CustomerRepositoryImpl {
     async fn decrease_subscription_quantity(
         &self,
         subscription_id: &stripe::SubscriptionId,
-        decrease_amount: u64,
         team_user_tier: TeamUserTier,
     ) -> Result<(), CustomerError> {
         let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
