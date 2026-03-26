@@ -345,6 +345,7 @@ if (LOCAL_ONLY) {
     'quick-access-list',
     lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
   );
+}
 
 if (DEV_MODE_ENV) {
   // NOTE (seamus) : putting pixel icons on dev/staging for aidan

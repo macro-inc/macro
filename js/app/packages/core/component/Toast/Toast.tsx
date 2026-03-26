@@ -1,4 +1,3 @@
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import CheckIcon from '@icon/regular/check.svg';
 import ExclamationIcon from '@icon/regular/exclamation-mark.svg';
 import Spinner from '@icon/regular/spinner.svg';
