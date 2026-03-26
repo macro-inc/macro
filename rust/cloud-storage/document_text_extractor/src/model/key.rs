@@ -1,5 +1,6 @@
 use anyhow::Context;
 use lambda_runtime::tracing;
+use model::document::build_cloud_storage_bucket_document_key;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct DocumentKeyParts {
@@ -28,9 +29,10 @@ impl DocumentKeyParts {
     }
 
     pub fn to_key(&self) -> String {
-        format!(
-            "{}/{}/{}",
-            self.user_id, self.document_id, self.document_version_id
+        build_cloud_storage_bucket_document_key(
+            &self.user_id,
+            &self.document_id,
+            &self.document_version_id,
         )
     }
 }
