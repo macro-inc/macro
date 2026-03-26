@@ -1,6 +1,7 @@
 import { fileSelector } from '@core/directive/fileSelector';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
   MACRO_EMAIL_SIGNATURE,
   MAX_ATTACHMENTS_BYTES_SIZE,
@@ -1019,18 +1020,17 @@ export function BaseInput(props: {
 
     // If not already in To or CC, add user to CC
     if (!isInTo && !isInCc) {
-      // Find the user in recipient options
-      const userOption = ctx.recipientOptions().find((recipient) => {
-        const email = recipient.data.email;
-        if (!email) return false;
-        return email === mentionEmail;
-      });
+      // Find the user in recipient options, or construct from mention data
+      const userOption =
+        ctx.recipientOptions().find((recipient) => {
+          const email = recipient.data.email;
+          if (!email) return false;
+          return email === mentionEmail;
+        }) ?? convertContactInfoToEmailRecipient({ email: mentionEmail });
 
-      if (userOption) {
-        // Add to CC recipients
-        form().setRecipients('cc', [...form().recipients().cc, userOption]);
-        toast.success(`${mentionEmail} added to CC`);
-      }
+      // Add to CC recipients
+      form().setRecipients('cc', [...form().recipients().cc, userOption]);
+      toast.success(`${mentionEmail} added to CC`);
     }
   };
 
