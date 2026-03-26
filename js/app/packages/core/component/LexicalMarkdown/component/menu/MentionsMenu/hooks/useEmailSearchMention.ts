@@ -2,7 +2,7 @@ import type { Accessor } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { EntityItem } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
-import { EXCLUDE } from '@app/component/next-soup/filters/query-filters';
+import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import {
   type SearchSoupQueryArgs,
   useSearchSoupQuery,
@@ -37,10 +37,8 @@ export function useEmailSearchMention(
         search_on: 'name',
         query: searchTerm(),
         filters: {
-          channel_filters: { channel_ids: EXCLUDE },
-          chat_filters: { chat_ids: EXCLUDE },
-          document_filters: { document_ids: EXCLUDE },
-          project_filters: { project_ids: EXCLUDE },
+          ...QUERY_FILTERS_BASE,
+          email_filters: undefined,
         },
       },
     };
