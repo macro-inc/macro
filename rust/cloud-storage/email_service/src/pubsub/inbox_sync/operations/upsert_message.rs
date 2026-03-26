@@ -385,7 +385,7 @@ async fn fetch_and_insert_thread(
 
     let thread_resource = ctx
         .gmail_client
-        .get_thread(gmail_access_token, &provider_thread_id)
+        .get_thread(gmail_access_token, provider_thread_id)
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
