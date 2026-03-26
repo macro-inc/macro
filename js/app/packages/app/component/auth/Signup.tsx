@@ -1,12 +1,40 @@
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { toast } from '@core/component/Toast/Toast';
+import { useEmailLinks } from '@core/email-link';
 import { useUserInfo } from '@queries/auth';
-import { Navigate } from '@solidjs/router';
+import { useNavigate } from '@solidjs/router';
 import { onMount, Show } from 'solid-js';
 import { useAnalytics } from '@app/component/analytics-context';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import { LoginOptions } from './LoginOptions';
 import type { Stage } from './Shared';
+
+function PostSignupRedirect() {
+  const userInfo = useUserInfo();
+  const navigate = useNavigate();
+  const { initEmailLink } = useEmailLinks();
+
+  onMount(async () => {
+    await initEmailLink().match(
+      () => {},
+      (err) => {
+        if (err.tag !== 'AlreadyInitialized') {
+          toast.alert(
+            'Failed to connect email',
+            'Select email permissions on sign-in to enable'
+          );
+        }
+      }
+    );
+    navigate(userInfo()?.tutorialComplete ? '/' : '/welcome', {
+      replace: true,
+    });
+  });
+
+  return <LoadingBlock />;
+}
 
 export function Signup() {
   const userInfo = useUserInfo();
@@ -17,12 +45,7 @@ export function Signup() {
   });
 
   return (
-    <Show
-      when={!userInfo()?.authenticated}
-      fallback={
-        <Navigate href={userInfo()?.tutorialComplete ? '/' : '/welcome'} />
-      }
-    >
+    <Show when={!userInfo()?.authenticated} fallback={<PostSignupRedirect />}>
       <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
         <style>
           {
