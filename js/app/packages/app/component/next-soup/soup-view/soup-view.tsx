@@ -95,6 +95,7 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import {
   invalidateSoupEntity,
@@ -148,7 +149,7 @@ type PersistedSoupViewState = {
   activeTab: string | undefined;
   filters: { and: string[]; or: string[] };
   queryFilters: SoupItemsQueryFilters;
-  sort: string[];
+  sort: SystemSortOption[];
   previewEntity: string | undefined;
   assigneeFilter: string[];
 };
@@ -330,7 +331,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     source,
     rows,
     searchText,
-    setSearchText,
     setQueryFilters,
     queryFilters,
     featuredIds,
