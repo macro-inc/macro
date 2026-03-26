@@ -57,7 +57,7 @@ pub fn build_docx_to_pdf_converted_document_key(user_id: &str, document_id: &str
 }
 
 /// Builds the S3 key for a DOCX document's staging bucket.
-/// Format: `{user_id}/{document_id}/staging/{document_version_id}.docx`
+/// Format: `{user_id}/{document_id}/{document_version_id}.docx`
 pub fn build_docx_staging_bucket_document_key(
     user_id: &str,
     document_id: &str,
