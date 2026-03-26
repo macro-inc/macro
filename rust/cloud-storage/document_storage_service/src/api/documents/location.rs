@@ -111,7 +111,7 @@ pub async fn get_location_handler(
 /// Signs a document key and returns a CloudFront presigned URL.
 /// `check_key` is the non-URL-encoded key for S3 existence verification.
 /// `signed_key` is the URL-encoded key for the CloudFront signed URL.
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state), err)]
 async fn sign_document_key(
     state: &ApiContext,
     #[allow(unused_variables)] check_key: &str,
@@ -322,7 +322,7 @@ pub(in crate::api::documents) async fn get_presigned_url_by_type(
 }
 
 /// Makes a cloudfront presigned url for the provided key
-#[tracing::instrument(skip(options))]
+#[tracing::instrument(skip(options), err)]
 pub(in crate::api::documents) fn get_presigned_url(
     cloudfront_distribution_url: &str,
     key: &str,
