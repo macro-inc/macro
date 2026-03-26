@@ -1,6 +1,7 @@
 use crate::pubsub::gmail_ops::process::{check_gmail_rate_limit, fetch_gmail_token};
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use anyhow::Context;
+use models_email::gmail::error::GmailError;
 use models_email::gmail::gmail_ops::ModifyMessageLabelsPayload;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service;
@@ -9,7 +10,7 @@ use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingErro
 use std::result;
 
 /// Modifies labels for a single message in Gmail. Reverts DB changes on permanent failure.
-/// Transient errors (5xx, timeouts) are retried; permanent errors (4xx) trigger revert.
+/// Transient errors (5xx, network) are retried; permanent errors (4xx) trigger revert.
 #[tracing::instrument(skip(ctx, link))]
 pub async fn modify_message_labels(
     ctx: &GmailOpsContext,
@@ -38,23 +39,19 @@ pub async fn modify_message_labels(
 
     match result {
         Ok(()) => Ok(()),
+        Err(e @ (GmailError::ServerError(..) | GmailError::HttpRequest(_))) => {
+            tracing::warn!(
+                error = ?e,
+                db_message_id = %payload.db_message_id,
+                provider_message_id = %payload.provider_message_id,
+                "Transient Gmail error modifying labels, will retry"
+            );
+            Err(ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::GmailApiFailed,
+                source: anyhow::anyhow!("{}", e),
+            }))
+        }
         Err(e) => {
-            let error_str = e.to_string();
-            let is_transient = is_transient_error(&error_str);
-
-            if is_transient {
-                tracing::warn!(
-                    error = ?e,
-                    db_message_id = %payload.db_message_id,
-                    provider_message_id = %payload.provider_message_id,
-                    "Transient Gmail error modifying labels, will retry"
-                );
-                return Err(ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::GmailApiFailed,
-                    source: anyhow::anyhow!("Transient Gmail error: {}", e),
-                }));
-            }
-
             tracing::error!(
                 error = ?e,
                 db_message_id = %payload.db_message_id,
@@ -66,35 +63,14 @@ pub async fn modify_message_labels(
 
             Err(ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: anyhow::anyhow!("Failed to modify message labels in Gmail: {}", e),
+                source: anyhow::anyhow!("{}", e),
             }))
         }
     }
 }
 
-/// Returns true if the error looks transient (5xx, timeout, connection error).
-fn is_transient_error(error_str: &str) -> bool {
-    // Gmail API 5xx errors
-    if error_str.contains("500")
-        || error_str.contains("502")
-        || error_str.contains("503")
-        || error_str.contains("429")
-    {
-        return true;
-    }
-    // Network-level errors
-    if error_str.contains("timeout")
-        || error_str.contains("connection")
-        || error_str.contains("Failed to send request")
-    {
-        return true;
-    }
-    false
-}
-
 /// Reverts the optimistic DB changes for a single message that failed in Gmail.
-/// Fetches the necessary context (fusionauth_user_id, which labels were modified) from the
-/// link and payload rather than storing it in the SQS message.
+/// Derives revert context from the link and payload.
 async fn revert_db_changes(
     ctx: &GmailOpsContext,
     link: &Link,
@@ -109,18 +85,13 @@ async fn revert_db_changes(
     };
 
     let failed_ids = vec![payload.db_message_id];
-
-    // Determine if labels were being added or removed based on payload
     let is_adding = !payload.labels_to_add.is_empty();
 
-    // The provider_label_id is the label being modified — use the first from whichever list is populated
-    let provider_label_id = if is_adding {
+    let Some(provider_label_id) = (if is_adding {
         payload.labels_to_add.first()
     } else {
         payload.labels_to_remove.first()
-    };
-
-    let Some(provider_label_id) = provider_label_id else {
+    }) else {
         tracing::error!("No label IDs in payload, cannot revert");
         return;
     };

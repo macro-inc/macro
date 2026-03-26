@@ -31,6 +31,6 @@ impl GmailLabelModifier for GmailClientLabelModifier {
                 label_ids_to_remove,
             )
             .await
-            .map_err(EmailErr::ProviderErr)
+            .map_err(|e| EmailErr::ProviderErr(e.into()))
     }
 }

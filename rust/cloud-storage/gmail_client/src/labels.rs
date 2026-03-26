@@ -19,7 +19,7 @@ pub async fn modify_message_labels(
     provider_message_id: &str,
     label_ids_to_add: &[String],
     label_ids_to_remove: &[String],
-) -> anyhow::Result<()> {
+) -> Result<(), GmailError> {
     let url = format!(
         "{}/users/me/messages/{}/modify",
         client.base_url, provider_message_id
@@ -38,7 +38,7 @@ pub async fn modify_message_labels(
         .json(&payload)
         .send()
         .await
-        .context("Failed to send request to Gmail API (modify message labels)")?;
+        .map_err(|e| GmailError::HttpRequest(e.to_string()))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -46,12 +46,18 @@ pub async fn modify_message_labels(
             .text()
             .await
             .unwrap_or_else(|_| "Failed to read error body".to_string());
-        anyhow::bail!(
-            "Gmail API error {} (modify message labels) for provider_message_id: {}: {}",
-            status,
-            provider_message_id,
-            error_body
-        );
+
+        return Err(match status.as_u16() {
+            401 => GmailError::Unauthorized,
+            403 => GmailError::Forbidden,
+            404 => GmailError::NotFound(error_body),
+            429 => GmailError::RateLimitExceeded,
+            s if s >= 500 => GmailError::ServerError(s, error_body),
+            _ => GmailError::ApiError(format!(
+                "Gmail API error {} (modify message labels): {}",
+                status, error_body
+            )),
+        });
     }
 
     Ok(())

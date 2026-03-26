@@ -174,7 +174,7 @@ impl GmailClient {
         provider_message_id: &str,
         label_ids_to_add: &[String],
         label_ids_to_remove: &[String],
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), GmailError> {
         labels::modify_message_labels(
             self,
             access_token,
