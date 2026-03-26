@@ -262,7 +262,8 @@ export function MessageList(props: MessageListProps) {
       `[data-message-body-id="${messageId}"]`
     );
     if (!targetEl) return false;
-    scrollElementIntoView(targetEl, align);
+    targetEl.scrollIntoView({ block: align });
+    // scrollElementIntoView(targetEl, align);
     if (focus) targetEl.focus();
     return true;
   };
