@@ -122,21 +122,17 @@ pub async fn update_search_with_raw_document(
             .as_str(),
     )?;
 
-    // This is a check to see if the document version id in the message matches the document version
-    if let Some(search_message_document_version_id) =
-        search_extractor_message.document_version_id.as_ref()
-        && !search_message_document_version_id.eq(&document_version_id)
+    // Skip if the message has a stale version id (unless it's a converted document)
+    if let Some(msg_version_id) = search_extractor_message.document_version_id.as_ref()
+        && msg_version_id != &document_version_id
+        && msg_version_id != CONVERTED_DOCUMENT_FILE_NAME
     {
-        if search_message_document_version_id.eq(CONVERTED_DOCUMENT_FILE_NAME) {
-            tracing::debug!("document is a convert document, continue");
-        } else {
-            tracing::debug!(
-                search_message_document_version_id = search_message_document_version_id,
-                document_version_id = document_version_id,
-                "document version is not latest, skipping"
-            );
-            return Ok(());
-        }
+        tracing::debug!(
+            msg_version_id,
+            document_version_id,
+            "document version is not latest, skipping"
+        );
+        return Ok(());
     }
 
     // document_version_id will be "converted" or document version id
