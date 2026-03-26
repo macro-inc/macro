@@ -99,6 +99,8 @@ pub async fn update_search_with_raw_document(
     let document_name = document_info.document_name;
     let sub_type = document_info.sub_type.map(|st| st.to_string());
 
+    // TODO: this is hacky, update the search event message to use the correctly serialized
+    // document key parts from the s3_key crate
     let document_version_id = match search_extractor_message.file_type {
         // For static/converted files, we want to use the version from the search extractor message since
         // that is what is in s3 and document saves don't change the actual file in s3.
