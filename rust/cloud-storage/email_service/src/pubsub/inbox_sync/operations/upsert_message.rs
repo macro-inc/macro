@@ -388,7 +388,9 @@ async fn fetch_and_insert_thread(
         .get_thread(gmail_access_token, provider_thread_id)
         .await
         .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
+            // retryable because a failure here is likely a transient Gmail API error,
+            // matching the get_message error handling above
+            ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
                 source: e.context("Failed to get thread from gmail api".to_string()),
             })
