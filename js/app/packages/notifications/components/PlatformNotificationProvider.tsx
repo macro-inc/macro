@@ -14,6 +14,7 @@ import type {
   PlatformNotificationData,
   PlatformNotificationHandle,
 } from '../notification-platform';
+import { BrowserNotificationModal } from './BrowserNotificationModal';
 
 type NotGranted = 'not-granted';
 
@@ -225,6 +226,7 @@ export function PlatformNotificationProvider(props: {
         manuallyDisabled={manuallyDisabled}
         setManuallyDisabled={setManuallyDisabled}
       >
+        <BrowserNotificationModal />
         {props.children}
       </PlatformNotificationState>
     </NotificationInterfaceContext.Provider>
