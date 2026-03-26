@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type HashMapOneOfFourAllOfType = typeof HashMapOneOfFourAllOfType[keyof typeof HashMapOneOfFourAllOfType];
-
+export type HashMapOneOfFourAllOfType =
+  (typeof HashMapOneOfFourAllOfType)[keyof typeof HashMapOneOfFourAllOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const HashMapOneOfFourAllOfType = {

@@ -4,9 +4,10 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
-import type { TypingAction } from './typingAction';
+
 import type { PostTypingRequestNonce } from './postTypingRequestNonce';
 import type { PostTypingRequestThreadId } from './postTypingRequestThreadId';
+import type { TypingAction } from './typingAction';
 
 export interface PostTypingRequest {
   action: TypingAction;

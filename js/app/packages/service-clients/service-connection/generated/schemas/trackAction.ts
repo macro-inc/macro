@@ -8,8 +8,7 @@
 /**
  * The type of action that can occur on an [Entity]
  */
-export type TrackAction = typeof TrackAction[keyof typeof TrackAction];
-
+export type TrackAction = (typeof TrackAction)[keyof typeof TrackAction];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TrackAction = {

@@ -4,12 +4,13 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { HighlightType } from './highlightType';
 import type { PdfHighlightAnchorCreatedAt } from './pdfHighlightAnchorCreatedAt';
 import type { PdfHighlightAnchorDeletedAt } from './pdfHighlightAnchorDeletedAt';
-import type { PdfHighlightRect } from './pdfHighlightRect';
-import type { HighlightType } from './highlightType';
 import type { PdfHighlightAnchorThreadId } from './pdfHighlightAnchorThreadId';
 import type { PdfHighlightAnchorUpdatedAt } from './pdfHighlightAnchorUpdatedAt';
+import type { PdfHighlightRect } from './pdfHighlightRect';
 
 export interface PdfHighlightAnchor {
   alpha: number;

@@ -4,7 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PdfPlaceableCommentAnchor } from './pdfPlaceableCommentAnchor';
+
 import type { PdfAnchorOneOfAllOf } from './pdfAnchorOneOfAllOf';
+import type { PdfPlaceableCommentAnchor } from './pdfPlaceableCommentAnchor';
 
 export type PdfAnchorOneOf = PdfPlaceableCommentAnchor & PdfAnchorOneOfAllOf;

@@ -4,7 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { WithChatId } from './withChatId';
+
 import type { ChatPreviewOneOfSevenAllOf } from './chatPreviewOneOfSevenAllOf';
+import type { WithChatId } from './withChatId';
 
 export type ChatPreviewOneOfSeven = WithChatId & ChatPreviewOneOfSevenAllOf;

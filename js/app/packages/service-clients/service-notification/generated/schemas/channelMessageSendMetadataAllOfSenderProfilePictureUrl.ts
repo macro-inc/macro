@@ -5,4 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelMessageSendMetadataAllOfSenderProfilePictureUrl = string | null;
+export type ChannelMessageSendMetadataAllOfSenderProfilePictureUrl =
+  | string
+  | null;

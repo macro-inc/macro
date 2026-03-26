@@ -4,8 +4,9 @@
  * connection_gateway
  * OpenAPI spec version: 0.1.0
  */
-import type { StreamId } from './streamId';
+
 import type { StreamEventOneOfFourAllOf } from './streamEventOneOfFourAllOf';
+import type { StreamId } from './streamId';
 
 /**
  * A stream was closed.

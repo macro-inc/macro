@@ -6,8 +6,8 @@
  */
 
 export type CopyDocumentHandlerParams = {
-/**
- * The version id of the document to copy. Defaults to copying the latest version of the document.
- */
-version_id?: number;
+  /**
+   * The version id of the document to copy. Defaults to copying the latest version of the document.
+   */
+  version_id?: number;
 };

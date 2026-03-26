@@ -8,4 +8,6 @@
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
-export interface EmptyResponse { [key: string]: unknown }
+export interface EmptyResponse {
+  [key: string]: unknown;
+}

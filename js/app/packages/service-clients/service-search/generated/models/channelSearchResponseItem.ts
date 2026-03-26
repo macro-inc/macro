@@ -4,8 +4,9 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelSearchResult } from './channelSearchResult';
+
 import type { ChannelSearchResponseItemOwnerId } from './channelSearchResponseItemOwnerId';
+import type { ChannelSearchResult } from './channelSearchResult';
 
 /**
  * A single response item, part of the ChannelSearchResponse object

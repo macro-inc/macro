@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type DocumentCognitionServiceApiVersion = typeof DocumentCognitionServiceApiVersion[keyof typeof DocumentCognitionServiceApiVersion];
-
+export type DocumentCognitionServiceApiVersion =
+  (typeof DocumentCognitionServiceApiVersion)[keyof typeof DocumentCognitionServiceApiVersion];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DocumentCognitionServiceApiVersion = {

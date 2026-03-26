@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type EntityReferenceOneOfFourAllOfReferenceType = typeof EntityReferenceOneOfFourAllOfReferenceType[keyof typeof EntityReferenceOneOfFourAllOfReferenceType];
-
+export type EntityReferenceOneOfFourAllOfReferenceType =
+  (typeof EntityReferenceOneOfFourAllOfReferenceType)[keyof typeof EntityReferenceOneOfFourAllOfReferenceType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EntityReferenceOneOfFourAllOfReferenceType = {

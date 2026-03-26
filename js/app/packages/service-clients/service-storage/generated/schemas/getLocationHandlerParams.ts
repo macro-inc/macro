@@ -6,12 +6,12 @@
  */
 
 export type GetLocationHandlerParams = {
-/**
- * A specific document version id to get the location for.
- */
-document_version_id: number;
-/**
- * If true, this will return the converted docx url.
- */
-get_converted_docx_url: boolean;
+  /**
+   * A specific document version id to get the location for.
+   */
+  document_version_id: number;
+  /**
+   * If true, this will return the converted docx url.
+   */
+  get_converted_docx_url: boolean;
 };

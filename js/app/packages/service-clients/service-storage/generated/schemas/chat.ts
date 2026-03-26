@@ -9,8 +9,8 @@ import type { ChatDeletedAt } from './chatDeletedAt';
 import type { ChatModel } from './chatModel';
 import type { ChatProjectId } from './chatProjectId';
 import type { ChatTokenCount } from './chatTokenCount';
-import type { ChatUpdatedAt } from './chatUpdatedAt';
 import type { ChatType } from './chatType';
+import type { ChatUpdatedAt } from './chatUpdatedAt';
 
 export interface Chat {
   /** The time the chat was created */

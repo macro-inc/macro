@@ -5,18 +5,32 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ChatStreamOneOf } from './chatStreamOneOf';
-import type { ChatStreamOneOfFour } from './chatStreamOneOfFour';
-import type { ChatStreamOneOfSix } from './chatStreamOneOfSix';
 import type { ChatStreamOneOfEight } from './chatStreamOneOfEight';
-import type { ChatStreamOneOfOnezero } from './chatStreamOneOfOnezero';
-import type { ChatStreamOneOfOnetwo } from './chatStreamOneOfOnetwo';
+import type { ChatStreamOneOfFour } from './chatStreamOneOfFour';
 import type { ChatStreamOneOfOnefour } from './chatStreamOneOfOnefour';
-import type { ChatStreamOneOfOneseven } from './chatStreamOneOfOneseven';
 import type { ChatStreamOneOfOnenine } from './chatStreamOneOfOnenine';
-import type { ChatStreamOneOfTwoone } from './chatStreamOneOfTwoone';
-import type { ChatStreamOneOfTwothree } from './chatStreamOneOfTwothree';
+import type { ChatStreamOneOfOneseven } from './chatStreamOneOfOneseven';
+import type { ChatStreamOneOfOnetwo } from './chatStreamOneOfOnetwo';
+import type { ChatStreamOneOfOnezero } from './chatStreamOneOfOnezero';
+import type { ChatStreamOneOfSix } from './chatStreamOneOfSix';
 import type { ChatStreamOneOfTwofive } from './chatStreamOneOfTwofive';
-import type { ChatStreamOneOfTwoseven } from './chatStreamOneOfTwoseven';
 import type { ChatStreamOneOfTwonine } from './chatStreamOneOfTwonine';
+import type { ChatStreamOneOfTwoone } from './chatStreamOneOfTwoone';
+import type { ChatStreamOneOfTwoseven } from './chatStreamOneOfTwoseven';
+import type { ChatStreamOneOfTwothree } from './chatStreamOneOfTwothree';
 
-export type ChatStream = ChatStreamOneOf | ChatStreamOneOfFour | ChatStreamOneOfSix | ChatStreamOneOfEight | ChatStreamOneOfOnezero | ChatStreamOneOfOnetwo | ChatStreamOneOfOnefour | ChatStreamOneOfOneseven | ChatStreamOneOfOnenine | ChatStreamOneOfTwoone | ChatStreamOneOfTwothree | ChatStreamOneOfTwofive | ChatStreamOneOfTwoseven | ChatStreamOneOfTwonine;
+export type ChatStream =
+  | ChatStreamOneOf
+  | ChatStreamOneOfFour
+  | ChatStreamOneOfSix
+  | ChatStreamOneOfEight
+  | ChatStreamOneOfOnezero
+  | ChatStreamOneOfOnetwo
+  | ChatStreamOneOfOnefour
+  | ChatStreamOneOfOneseven
+  | ChatStreamOneOfOnenine
+  | ChatStreamOneOfTwoone
+  | ChatStreamOneOfTwothree
+  | ChatStreamOneOfTwofive
+  | ChatStreamOneOfTwoseven
+  | ChatStreamOneOfTwonine;

@@ -4,8 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupProject } from './soupProject';
+
 import type { SoupItemOneOfFiveTag } from './soupItemOneOfFiveTag';
+import type { SoupProject } from './soupProject';
 
 export type SoupItemOneOfFive = {
   data: SoupProject;

@@ -4,10 +4,11 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PropertyDefinition } from './propertyDefinition';
-import type { EntityPropertyWithDefinitionOptions } from './entityPropertyWithDefinitionOptions';
+
 import type { EntityProperty } from './entityProperty';
+import type { EntityPropertyWithDefinitionOptions } from './entityPropertyWithDefinitionOptions';
 import type { EntityPropertyWithDefinitionValue } from './entityPropertyWithDefinitionValue';
+import type { PropertyDefinition } from './propertyDefinition';
 
 /**
  * Entity property with its definition, value, and options (service representation).

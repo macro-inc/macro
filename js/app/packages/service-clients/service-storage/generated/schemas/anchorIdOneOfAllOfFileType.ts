@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type AnchorIdOneOfAllOfFileType = typeof AnchorIdOneOfAllOfFileType[keyof typeof AnchorIdOneOfAllOfFileType];
-
+export type AnchorIdOneOfAllOfFileType =
+  (typeof AnchorIdOneOfAllOfFileType)[keyof typeof AnchorIdOneOfAllOfFileType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AnchorIdOneOfAllOfFileType = {

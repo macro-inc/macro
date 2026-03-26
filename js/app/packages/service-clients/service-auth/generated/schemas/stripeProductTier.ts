@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type StripeProductTier = typeof StripeProductTier[keyof typeof StripeProductTier];
-
+export type StripeProductTier =
+  (typeof StripeProductTier)[keyof typeof StripeProductTier];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const StripeProductTier = {

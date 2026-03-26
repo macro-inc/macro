@@ -7,21 +7,21 @@
 import type { SoupApiSort } from './soupApiSort';
 
 export type GetItemsSoupParams = {
-/**
- * Whether to expand projects. Defaults to true.
- */
-expand?: boolean;
-/**
- * Limit the number of items returned. Defaults to 20. Max 500.
- * @minimum 0
- */
-limit?: number;
-/**
- * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
- */
-sort_method?: SoupApiSort;
-/**
- * Base64 encoded cursor value.
- */
-cursor?: string;
+  /**
+   * Whether to expand projects. Defaults to true.
+   */
+  expand?: boolean;
+  /**
+   * Limit the number of items returned. Defaults to 20. Max 500.
+   * @minimum 0
+   */
+  limit?: number;
+  /**
+   * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
+   */
+  sort_method?: SoupApiSort;
+  /**
+   * Base64 encoded cursor value.
+   */
+  cursor?: string;
 };

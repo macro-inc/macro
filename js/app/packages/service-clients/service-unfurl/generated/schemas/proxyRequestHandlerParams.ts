@@ -6,8 +6,8 @@
  */
 
 export type ProxyRequestHandlerParams = {
-/**
- * The url to proxy from
- */
-url: string;
+  /**
+   * The url to proxy from
+   */
+  url: string;
 };

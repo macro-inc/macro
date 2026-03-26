@@ -8,4 +8,7 @@ import type { ChatPreviewOneOf } from './chatPreviewOneOf';
 import type { ChatPreviewOneOfFour } from './chatPreviewOneOfFour';
 import type { ChatPreviewOneOfSeven } from './chatPreviewOneOfSeven';
 
-export type ChatPreview = ChatPreviewOneOf | ChatPreviewOneOfFour | ChatPreviewOneOfSeven;
+export type ChatPreview =
+  | ChatPreviewOneOf
+  | ChatPreviewOneOfFour
+  | ChatPreviewOneOfSeven;

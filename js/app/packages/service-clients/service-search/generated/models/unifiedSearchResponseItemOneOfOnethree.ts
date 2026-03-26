@@ -7,4 +7,6 @@
 import type { ProjectSearchResponseItemWithMetadata } from './projectSearchResponseItemWithMetadata';
 import type { UnifiedSearchResponseItemOneOfOnethreeAllOf } from './unifiedSearchResponseItemOneOfOnethreeAllOf';
 
-export type UnifiedSearchResponseItemOneOfOnethree = ProjectSearchResponseItemWithMetadata & UnifiedSearchResponseItemOneOfOnethreeAllOf;
+export type UnifiedSearchResponseItemOneOfOnethree =
+  ProjectSearchResponseItemWithMetadata &
+    UnifiedSearchResponseItemOneOfOnethreeAllOf;

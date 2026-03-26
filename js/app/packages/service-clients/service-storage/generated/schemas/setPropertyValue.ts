@@ -5,17 +5,27 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SetPropertyValueOneOf } from './setPropertyValueOneOf';
-import type { SetPropertyValueOneOfThree } from './setPropertyValueOneOfThree';
 import type { SetPropertyValueOneOfFive } from './setPropertyValueOneOfFive';
-import type { SetPropertyValueOneOfSeven } from './setPropertyValueOneOfSeven';
 import type { SetPropertyValueOneOfNine } from './setPropertyValueOneOfNine';
-import type { SetPropertyValueOneOfOneone } from './setPropertyValueOneOfOneone';
-import type { SetPropertyValueOneOfOnethree } from './setPropertyValueOneOfOnethree';
 import type { SetPropertyValueOneOfOnefive } from './setPropertyValueOneOfOnefive';
-import type { SetPropertyValueOneOfOneseven } from './setPropertyValueOneOfOneseven';
 import type { SetPropertyValueOneOfOnenine } from './setPropertyValueOneOfOnenine';
+import type { SetPropertyValueOneOfOneone } from './setPropertyValueOneOfOneone';
+import type { SetPropertyValueOneOfOneseven } from './setPropertyValueOneOfOneseven';
+import type { SetPropertyValueOneOfOnethree } from './setPropertyValueOneOfOnethree';
+import type { SetPropertyValueOneOfSeven } from './setPropertyValueOneOfSeven';
+import type { SetPropertyValueOneOfThree } from './setPropertyValueOneOfThree';
 
 /**
  * Type-safe enum for setting entity property values - provides compile-time validation.
  */
-export type SetPropertyValue = SetPropertyValueOneOf | SetPropertyValueOneOfThree | SetPropertyValueOneOfFive | SetPropertyValueOneOfSeven | SetPropertyValueOneOfNine | SetPropertyValueOneOfOneone | SetPropertyValueOneOfOnethree | SetPropertyValueOneOfOnefive | SetPropertyValueOneOfOneseven | SetPropertyValueOneOfOnenine;
+export type SetPropertyValue =
+  | SetPropertyValueOneOf
+  | SetPropertyValueOneOfThree
+  | SetPropertyValueOneOfFive
+  | SetPropertyValueOneOfSeven
+  | SetPropertyValueOneOfNine
+  | SetPropertyValueOneOfOneone
+  | SetPropertyValueOneOfOnethree
+  | SetPropertyValueOneOfOnefive
+  | SetPropertyValueOneOfOneseven
+  | SetPropertyValueOneOfOnenine;

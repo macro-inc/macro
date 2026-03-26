@@ -12,9 +12,7 @@
   "paths": {
     "/email/fusionauth/verify/{verification_id}": {
       "get": {
-        "tags": [
-          "email::verify_fusionauth_user_email"
-        ],
+        "tags": ["email::verify_fusionauth_user_email"],
         "summary": "Verifies the user's primary email for FusionAuth",
         "operationId": "verify_fusionauth_user_email",
         "parameters": [
@@ -54,9 +52,7 @@
     },
     "/email/fusionauth_resend": {
       "post": {
-        "tags": [
-          "email::resend_fusionauth_verify_user_email"
-        ],
+        "tags": ["email::resend_fusionauth_verify_user_email"],
         "summary": "Resend the user's primary email verification for FusionAuth",
         "operationId": "resend_fusionauth_verify_user_email",
         "requestBody": {
@@ -95,9 +91,7 @@
     },
     "/email/generate/link": {
       "post": {
-        "tags": [
-          "email::generate_email_link"
-        ],
+        "tags": ["email::generate_email_link"],
         "summary": "Generates an email link for the user to verify their email address.",
         "operationId": "generate_email_link",
         "requestBody": {
@@ -146,9 +140,7 @@
     },
     "/email/verify/{verification_id}": {
       "get": {
-        "tags": [
-          "email::verify_email_link"
-        ],
+        "tags": ["email::verify_email_link"],
         "summary": "Verifies the user's email for a user profile",
         "operationId": "verify_email_link",
         "parameters": [
@@ -188,9 +180,7 @@
     },
     "/health": {
       "get": {
-        "tags": [
-          "health"
-        ],
+        "tags": ["health"],
         "summary": "Health check",
         "operationId": "health_handler",
         "responses": {
@@ -209,9 +199,7 @@
     },
     "/jwt/macro_api_token": {
       "get": {
-        "tags": [
-          "jwt::macro_api_token"
-        ],
+        "tags": ["jwt::macro_api_token"],
         "summary": "Generates a macro-api-token using the user's macro-access-token\nYou can either have your access token in the cookies or in the request\nheaders\nAuthorization: Bearer <access_token>\nThis returns a new macro-api-token",
         "operationId": "macro_api_token",
         "parameters": [
@@ -261,9 +249,7 @@
     },
     "/jwt/refresh": {
       "post": {
-        "tags": [
-          "jwt::refresh"
-        ],
+        "tags": ["jwt::refresh"],
         "summary": "Refreshes a JWT token\nYou can either have your access token and refresh token in the cookies or in the request\nheaders\nAuthorization: Bearer <access_token>\nx-macro-refresh-token: <refresh_token>\nThis returns the cookies with the new access and refresh token",
         "operationId": "refresh",
         "responses": {
@@ -322,9 +308,7 @@
     },
     "/link": {
       "post": {
-        "tags": [
-          "link::create_in_progress_link"
-        ],
+        "tags": ["link::create_in_progress_link"],
         "summary": "Initiates a link for a user",
         "operationId": "create_in_progress_link",
         "responses": {
@@ -383,9 +367,7 @@
     },
     "/link/github": {
       "post": {
-        "tags": [
-          "link::github"
-        ],
+        "tags": ["link::github"],
         "summary": "Initiates a link for a user",
         "operationId": "init_github_link",
         "responses": {
@@ -444,9 +426,7 @@
     },
     "/login/apple": {
       "post": {
-        "tags": [
-          "login::apple"
-        ],
+        "tags": ["login::apple"],
         "summary": "Completes the apple login flow",
         "operationId": "apple_login",
         "requestBody": {
@@ -505,9 +485,7 @@
     },
     "/login/password": {
       "post": {
-        "tags": [
-          "login::password"
-        ],
+        "tags": ["login::password"],
         "summary": "Performs a password login",
         "operationId": "password_login",
         "requestBody": {
@@ -566,9 +544,7 @@
     },
     "/login/passwordless": {
       "post": {
-        "tags": [
-          "login::passwordless"
-        ],
+        "tags": ["login::passwordless"],
         "summary": "Initiates a passwordless login",
         "operationId": "passwordless_login",
         "requestBody": {
@@ -637,9 +613,7 @@
     },
     "/login/sso": {
       "get": {
-        "tags": [
-          "login::sso"
-        ],
+        "tags": ["login::sso"],
         "summary": "Initiates an SSO login",
         "operationId": "sso_login",
         "parameters": [
@@ -727,9 +701,7 @@
     },
     "/logout": {
       "post": {
-        "tags": [
-          "logout"
-        ],
+        "tags": ["logout"],
         "summary": "Initiates a passwordless login",
         "operationId": "logout",
         "responses": {
@@ -748,9 +720,7 @@
     },
     "/merge": {
       "post": {
-        "tags": [
-          "merge::create_merge_request"
-        ],
+        "tags": ["merge::create_merge_request"],
         "summary": "Creates a merge request used to verify the user's email address in order to merge their\naccounts.\nThis is different than generate_email_link which is used to verify a new email address to add a\nnew profile to a user's account.",
         "operationId": "create_merge_request",
         "requestBody": {
@@ -819,9 +789,7 @@
     },
     "/merge/verify/{code}": {
       "get": {
-        "tags": [
-          "merge::verify_merge_request"
-        ],
+        "tags": ["merge::verify_merge_request"],
         "summary": "Verifies the merge request",
         "operationId": "verify_merge_request",
         "parameters": [
@@ -871,9 +839,7 @@
     },
     "/oauth/passwordless/{code}": {
       "get": {
-        "tags": [
-          "oauth::passwordless_callback"
-        ],
+        "tags": ["oauth::passwordless_callback"],
         "summary": "Handles oauth redirect",
         "operationId": "passwordless_callback",
         "parameters": [
@@ -942,9 +908,7 @@
     },
     "/oauth/redirect": {
       "get": {
-        "tags": [
-          "oauth::oauth_redirect"
-        ],
+        "tags": ["oauth::oauth_redirect"],
         "summary": "Handles oauth redirect",
         "operationId": "oauth_redirect",
         "responses": {
@@ -986,9 +950,7 @@
     },
     "/oauth2/{provider}/callback": {
       "get": {
-        "tags": [
-          "oauth2"
-        ],
+        "tags": ["oauth2"],
         "summary": "Custom OAuth2 callback",
         "operationId": "oauth2_callback",
         "parameters": [
@@ -1054,9 +1016,7 @@
     },
     "/permissions": {
       "get": {
-        "tags": [
-          "permissions::get_permissions"
-        ],
+        "tags": ["permissions::get_permissions"],
         "summary": "Gets all permissions",
         "operationId": "get_permissions",
         "responses": {
@@ -1098,9 +1058,7 @@
     },
     "/permissions/me": {
       "get": {
-        "tags": [
-          "permissions::get_user_permissions"
-        ],
+        "tags": ["permissions::get_user_permissions"],
         "summary": "Gets a list of the users permissions",
         "operationId": "get_user_permissions",
         "responses": {
@@ -1142,9 +1100,7 @@
     },
     "/referral/code": {
       "get": {
-        "tags": [
-          "referral"
-        ],
+        "tags": ["referral"],
         "summary": "Handler for `GET /referral-code`.",
         "description": "Returns the authenticated user's referral code.",
         "operationId": "get_referral_code",
@@ -1184,9 +1140,7 @@
     },
     "/referral/send": {
       "post": {
-        "tags": [
-          "referral"
-        ],
+        "tags": ["referral"],
         "summary": "Handler for `POST /referral/send`.",
         "description": "Sends a referral code via email to a user",
         "operationId": "send_referral_code",
@@ -1229,9 +1183,7 @@
     },
     "/session": {
       "post": {
-        "tags": [
-          "session::session_creation"
-        ],
+        "tags": ["session::session_creation"],
         "summary": "Refreshes a JWT token",
         "operationId": "session_creation",
         "responses": {
@@ -1270,9 +1222,7 @@
     },
     "/session/login/{session_code}": {
       "get": {
-        "tags": [
-          "session::session_login"
-        ],
+        "tags": ["session::session_login"],
         "summary": "Performs a login via session code",
         "operationId": "session_login",
         "parameters": [
@@ -1332,9 +1282,7 @@
     },
     "/team": {
       "post": {
-        "tags": [
-          "teams::inbound::axum_router::create_team"
-        ],
+        "tags": ["teams::inbound::axum_router::create_team"],
         "summary": "Creates a new team.",
         "operationId": "create_team",
         "requestBody": {
@@ -1383,9 +1331,7 @@
     },
     "/team/join/{team_invite_id}": {
       "get": {
-        "tags": [
-          "teams::inbound::axum_router::join_team"
-        ],
+        "tags": ["teams::inbound::axum_router::join_team"],
         "summary": "Joins a team by accepting an invite.",
         "operationId": "join_team",
         "parameters": [
@@ -1436,9 +1382,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "teams::inbound::axum_router::reject_invitation"
-        ],
+        "tags": ["teams::inbound::axum_router::reject_invitation"],
         "summary": "Rejects an invitation to join a team.",
         "operationId": "reject_invitation",
         "parameters": [
@@ -1491,9 +1435,7 @@
     },
     "/team/user": {
       "get": {
-        "tags": [
-          "teams::inbound::axum_router::get_user_teams"
-        ],
+        "tags": ["teams::inbound::axum_router::get_user_teams"],
         "summary": "Gets all teams for the authenticated user.",
         "operationId": "get_user_teams",
         "responses": {
@@ -1545,9 +1487,7 @@
     },
     "/team/user/invites": {
       "get": {
-        "tags": [
-          "teams::inbound::axum_router::get_user_invites"
-        ],
+        "tags": ["teams::inbound::axum_router::get_user_invites"],
         "summary": "Gets all of a user's invitations.",
         "operationId": "get_user_invites",
         "responses": {
@@ -1596,9 +1536,7 @@
     },
     "/team/{team_id}": {
       "get": {
-        "tags": [
-          "teams::inbound::axum_router::get_team"
-        ],
+        "tags": ["teams::inbound::axum_router::get_team"],
         "summary": "Gets a team by ID.",
         "operationId": "get_team",
         "parameters": [
@@ -1666,9 +1604,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "teams::inbound::axum_router::delete_team"
-        ],
+        "tags": ["teams::inbound::axum_router::delete_team"],
         "summary": "Deletes a team.\nThis will update all team members roles and cancel your subscription for the team.\nThis action is **irreversible** and you will not be able to recover the team afterwards.",
         "operationId": "delete_team",
         "parameters": [
@@ -1719,9 +1655,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "teams::inbound::axum_router::patch_team"
-        ],
+        "tags": ["teams::inbound::axum_router::patch_team"],
         "summary": "Updates a team.",
         "operationId": "patch_team",
         "parameters": [
@@ -1794,9 +1728,7 @@
     },
     "/team/{team_id}/invite": {
       "post": {
-        "tags": [
-          "teams::inbound::axum_router::invite_to_team"
-        ],
+        "tags": ["teams::inbound::axum_router::invite_to_team"],
         "summary": "Invites a user to a team.",
         "operationId": "invite_to_team",
         "parameters": [
@@ -1872,9 +1804,7 @@
     },
     "/team/{team_id}/invite/{team_invite_id}": {
       "delete": {
-        "tags": [
-          "teams::inbound::axum_router::delete_team_invite"
-        ],
+        "tags": ["teams::inbound::axum_router::delete_team_invite"],
         "summary": "Deletes a team invite from a team.",
         "operationId": "delete_team_invite_handler",
         "parameters": [
@@ -1946,9 +1876,7 @@
     },
     "/team/{team_id}/invites": {
       "get": {
-        "tags": [
-          "teams::inbound::axum_router::get_team_invites"
-        ],
+        "tags": ["teams::inbound::axum_router::get_team_invites"],
         "summary": "Gets all invites for a team.",
         "operationId": "get_team_invites",
         "parameters": [
@@ -2008,9 +1936,7 @@
     },
     "/team/{team_id}/reinvite/{team_invite_id}": {
       "post": {
-        "tags": [
-          "teams::inbound::axum_router::reinvite_to_team"
-        ],
+        "tags": ["teams::inbound::axum_router::reinvite_to_team"],
         "summary": "Regenerates a team invite notifying the user again.",
         "operationId": "reinvite_to_team",
         "parameters": [
@@ -2082,9 +2008,7 @@
     },
     "/team/{team_id}/remove/{remove_user_id}": {
       "delete": {
-        "tags": [
-          "teams::inbound::axum_router::remove_user_from_team"
-        ],
+        "tags": ["teams::inbound::axum_router::remove_user_from_team"],
         "summary": "Removes a user from a team.",
         "operationId": "remove_user_from_team",
         "parameters": [
@@ -2146,9 +2070,7 @@
     },
     "/user": {
       "post": {
-        "tags": [
-          "user::create_user"
-        ],
+        "tags": ["user::create_user"],
         "summary": "Creates a new user.",
         "operationId": "create_user",
         "requestBody": {
@@ -2197,9 +2119,7 @@
     },
     "/user/get_names": {
       "post": {
-        "tags": [
-          "user::post_get_names"
-        ],
+        "tags": ["user::post_get_names"],
         "summary": "Retrieves user names in bulk",
         "operationId": "get_user_names",
         "requestBody": {
@@ -2248,9 +2168,7 @@
     },
     "/user/get_names_with_email": {
       "post": {
-        "tags": [
-          "user::post_get_names_with_email"
-        ],
+        "tags": ["user::post_get_names_with_email"],
         "summary": "Gets names for passed user profile ids, falling back to the requesting user's email contact names",
         "operationId": "get_user_names_with_email",
         "requestBody": {
@@ -2309,9 +2227,7 @@
     },
     "/user/group": {
       "patch": {
-        "tags": [
-          "user::patch_user_group"
-        ],
+        "tags": ["user::patch_user_group"],
         "summary": "Updates the user's group.",
         "operationId": "patch_user_group",
         "requestBody": {
@@ -2370,9 +2286,7 @@
     },
     "/user/legacy_user_permissions": {
       "get": {
-        "tags": [
-          "user::get_legacy_user_permissions"
-        ],
+        "tags": ["user::get_legacy_user_permissions"],
         "summary": "Gets the calling user's info which matches what was given in the **deprecated**\ngetUserPermissions query in our graphql api.\nThis will eventually be removed and optimized to use smaller calls that grab\nwhat is needed for various parts of the UI.",
         "operationId": "get_legacy_user_permissions",
         "responses": {
@@ -2411,9 +2325,7 @@
     },
     "/user/link_exists": {
       "get": {
-        "tags": [
-          "user::get_user_link_exists"
-        ],
+        "tags": ["user::get_user_link_exists"],
         "summary": "Returns whether or not a given idp link exists for a user",
         "operationId": "get_user_link_exists",
         "parameters": [
@@ -2482,9 +2394,7 @@
     },
     "/user/me": {
       "get": {
-        "tags": [
-          "user::get_user_info"
-        ],
+        "tags": ["user::get_user_info"],
         "summary": "Gets the calling user's info",
         "operationId": "get_user_info",
         "responses": {
@@ -2521,9 +2431,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "user::delete_user"
-        ],
+        "tags": ["user::delete_user"],
         "summary": "Deletes the user who calls this endpoint",
         "operationId": "delete_user",
         "responses": {
@@ -2562,9 +2470,7 @@
     },
     "/user/name": {
       "get": {
-        "tags": [
-          "user::get_name"
-        ],
+        "tags": ["user::get_name"],
         "summary": "Retrieves the name of a particular user.",
         "operationId": "get_user_name",
         "responses": {
@@ -2601,9 +2507,7 @@
         }
       },
       "put": {
-        "tags": [
-          "user::put_name"
-        ],
+        "tags": ["user::put_name"],
         "summary": "Sets the name of a particular user",
         "operationId": "put_user_name",
         "parameters": [
@@ -2613,10 +2517,7 @@
             "description": "First Name of user",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           },
           {
@@ -2625,10 +2526,7 @@
             "description": "Last Name of user",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           }
         ],
@@ -2668,9 +2566,7 @@
     },
     "/user/onboarding": {
       "patch": {
-        "tags": [
-          "user::patch_user_onboarding"
-        ],
+        "tags": ["user::patch_user_onboarding"],
         "summary": "Updates the user's onboarding.",
         "operationId": "patch_user_onboarding",
         "requestBody": {
@@ -2729,9 +2625,7 @@
     },
     "/user/organization": {
       "get": {
-        "tags": [
-          "user::get_user_organization"
-        ],
+        "tags": ["user::get_user_organization"],
         "summary": "Retrieves the users organization if present.\nReturns NO_CONTENT if the user is a not part of an organization.",
         "operationId": "get_user_organization",
         "responses": {
@@ -2773,9 +2667,7 @@
     },
     "/user/profile_picture": {
       "put": {
-        "tags": [
-          "user::put_profile_picture"
-        ],
+        "tags": ["user::put_profile_picture"],
         "summary": "Sets the profile picture URL for a particular user",
         "operationId": "put_profile_picture",
         "parameters": [
@@ -2825,9 +2717,7 @@
     },
     "/user/profile_pictures": {
       "post": {
-        "tags": [
-          "user::post_profile_pictures"
-        ],
+        "tags": ["user::post_profile_pictures"],
         "summary": "Retrieves profile picture URLs for a list of users",
         "operationId": "post_profile_pictures",
         "requestBody": {
@@ -2876,9 +2766,7 @@
     },
     "/user/quota": {
       "get": {
-        "tags": [
-          "user::get_user_quota"
-        ],
+        "tags": ["user::get_user_quota"],
         "summary": "Retrieves the users quota.\nReturns NO_CONTENT if the user is a premium user with no quota.",
         "operationId": "get_user_quota",
         "responses": {
@@ -2920,9 +2808,7 @@
     },
     "/user/stripe/checkout": {
       "post": {
-        "tags": [
-          "user::stripe"
-        ],
+        "tags": ["user::stripe"],
         "summary": "Creates a Stripe checkout session for the user to subscribe.",
         "operationId": "create_checkout_session",
         "requestBody": {
@@ -2991,9 +2877,7 @@
     },
     "/user/stripe/portal": {
       "post": {
-        "tags": [
-          "user::stripe"
-        ],
+        "tags": ["user::stripe"],
         "summary": "Creates a Stripe billing portal session.",
         "operationId": "create_portal_session",
         "requestBody": {
@@ -3042,9 +2926,7 @@
     },
     "/user/tutorial": {
       "patch": {
-        "tags": [
-          "user::patch_tutorial"
-        ],
+        "tags": ["user::patch_tutorial"],
         "summary": "Updates the user's tutorialComplete flag.",
         "operationId": "patch_user_tutorial",
         "requestBody": {
@@ -3106,17 +2988,11 @@
     "schemas": {
       "ABGroup": {
         "type": "string",
-        "enum": [
-          "A",
-          "B"
-        ]
+        "enum": ["A", "B"]
       },
       "AppleLoginRequest": {
         "type": "object",
-        "required": [
-          "id_token",
-          "code"
-        ],
+        "required": ["id_token", "code"],
         "properties": {
           "code": {
             "type": "string"
@@ -3128,9 +3004,7 @@
       },
       "CreateAccountMergeRequest": {
         "type": "object",
-        "required": [
-          "email"
-        ],
+        "required": ["email"],
         "properties": {
           "email": {
             "type": "string",
@@ -3141,27 +3015,18 @@
       "CreateCheckoutSessionRequest": {
         "type": "object",
         "description": "Request body for creating a Stripe checkout session",
-        "required": [
-          "successUrl",
-          "cancelUrl"
-        ],
+        "required": ["successUrl", "cancelUrl"],
         "properties": {
           "cancelUrl": {
             "type": "string",
             "description": "The URL to redirect to if checkout is cancelled"
           },
           "discount": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional discount/promo code to apply"
           },
           "gaClientId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Google Analytics client ID for conversion tracking"
           },
           "successUrl": {
@@ -3176,9 +3041,7 @@
       },
       "CreateInProgressLinkResponse": {
         "type": "object",
-        "required": [
-          "link_id"
-        ],
+        "required": ["link_id"],
         "properties": {
           "link_id": {
             "type": "string",
@@ -3189,9 +3052,7 @@
       "CreatePortalSessionRequest": {
         "type": "object",
         "description": "Request body for creating a Stripe portal session",
-        "required": [
-          "returnUrl"
-        ],
+        "required": ["returnUrl"],
         "properties": {
           "returnUrl": {
             "type": "string",
@@ -3202,9 +3063,7 @@
       "CreateTeamRequest": {
         "type": "object",
         "description": "The request body to create a new team",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -3215,11 +3074,7 @@
       "CreateUserRequest": {
         "type": "object",
         "description": "The request body to create a new user in fusionauth\nNOTE: Never derive debug here as we don't want to accidentally log the password",
-        "required": [
-          "username",
-          "email",
-          "password"
-        ],
+        "required": ["username", "email", "password"],
         "properties": {
           "email": {
             "type": "string",
@@ -3242,9 +3097,7 @@
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "properties": {
           "message": {
             "type": "string",
@@ -3254,9 +3107,7 @@
       },
       "GenerateEmailLinkRequest": {
         "type": "object",
-        "required": [
-          "email"
-        ],
+        "required": ["email"],
         "properties": {
           "email": {
             "type": "string",
@@ -3266,9 +3117,7 @@
       },
       "GenericSuccessResponse": {
         "type": "object",
-        "required": [
-          "success"
-        ],
+        "required": ["success"],
         "properties": {
           "success": {
             "type": "boolean",
@@ -3322,10 +3171,7 @@
             "description": "The user's license status"
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The user's name"
           },
           "permissions": {
@@ -3351,9 +3197,7 @@
       },
       "GetNamesWithEmailRequestBody": {
         "type": "object",
-        "required": [
-          "user_ids"
-        ],
+        "required": ["user_ids"],
         "properties": {
           "user_ids": {
             "type": "array",
@@ -3365,9 +3209,7 @@
       },
       "GetProfilePicturesRequestBody": {
         "type": "object",
-        "required": [
-          "user_id_list"
-        ],
+        "required": ["user_id_list"],
         "properties": {
           "user_id_list": {
             "type": "array",
@@ -3379,16 +3221,10 @@
       },
       "GetUserInfo": {
         "type": "object",
-        "required": [
-          "user_id",
-          "permissions"
-        ],
+        "required": ["user_id", "permissions"],
         "properties": {
           "organization_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int32",
             "description": "The user's organization id if there is one associated with the user"
           },
@@ -3407,10 +3243,7 @@
       },
       "InitGithubLinkResponse": {
         "type": "object",
-        "required": [
-          "authorization_url",
-          "link_id"
-        ],
+        "required": ["authorization_url", "link_id"],
         "properties": {
           "authorization_url": {
             "type": "string",
@@ -3426,9 +3259,7 @@
       "InviteToTeamRequest": {
         "type": "object",
         "description": "The request body to invite a user to a team",
-        "required": [
-          "emails"
-        ],
+        "required": ["emails"],
         "properties": {
           "emails": {
             "type": "array",
@@ -3441,9 +3272,7 @@
       },
       "MacroApiTokenResponse": {
         "type": "object",
-        "required": [
-          "macro_api_token"
-        ],
+        "required": ["macro_api_token"],
         "properties": {
           "macro_api_token": {
             "type": "string",
@@ -3453,10 +3282,7 @@
       },
       "PasswordRequest": {
         "type": "object",
-        "required": [
-          "email",
-          "password"
-        ],
+        "required": ["email", "password"],
         "properties": {
           "email": {
             "type": "string",
@@ -3469,10 +3295,7 @@
       },
       "PasswordlessRequest": {
         "type": "object",
-        "required": [
-          "email",
-          "redirect_uri"
-        ],
+        "required": ["email", "redirect_uri"],
         "properties": {
           "email": {
             "type": "string",
@@ -3483,10 +3306,7 @@
             "description": "The redirect uri to redirect to after login"
           },
           "referral_code": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The referral code"
           }
         }
@@ -3496,19 +3316,14 @@
         "description": "Request to update a team",
         "properties": {
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The new name for the team"
           }
         }
       },
       "PatchUserGroupRequest": {
         "type": "object",
-        "required": [
-          "group"
-        ],
+        "required": ["group"],
         "properties": {
           "group": {
             "type": "string",
@@ -3518,12 +3333,7 @@
       },
       "PatchUserOnboardingRequest": {
         "type": "object",
-        "required": [
-          "firstName",
-          "lastName",
-          "title",
-          "industry"
-        ],
+        "required": ["firstName", "lastName", "title", "industry"],
         "properties": {
           "firstName": {
             "type": "string",
@@ -3545,9 +3355,7 @@
       },
       "PatchUserTutorialRequest": {
         "type": "object",
-        "required": [
-          "tutorialComplete"
-        ],
+        "required": ["tutorialComplete"],
         "properties": {
           "tutorialComplete": {
             "type": "boolean",
@@ -3557,10 +3365,7 @@
       },
       "Permission": {
         "type": "object",
-        "required": [
-          "id",
-          "description"
-        ],
+        "required": ["id", "description"],
         "properties": {
           "description": {
             "type": "string",
@@ -3574,9 +3379,7 @@
       },
       "PostGetNamesRequestBody": {
         "type": "object",
-        "required": [
-          "user_ids"
-        ],
+        "required": ["user_ids"],
         "properties": {
           "user_ids": {
             "type": "array",
@@ -3588,9 +3391,7 @@
       },
       "ProfilePictureQueryParams": {
         "type": "object",
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "properties": {
           "url": {
             "type": "string"
@@ -3599,9 +3400,7 @@
       },
       "ProfilePictures": {
         "type": "object",
-        "required": [
-          "pictures"
-        ],
+        "required": ["pictures"],
         "properties": {
           "pictures": {
             "type": "array",
@@ -3615,26 +3414,18 @@
         "type": "object",
         "properties": {
           "first_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "First Name of user"
           },
           "last_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Last Name of user"
           }
         }
       },
       "ResendFusionauthVerifyUserEmailRequest": {
         "type": "object",
-        "required": [
-          "email"
-        ],
+        "required": ["email"],
         "properties": {
           "email": {
             "type": "string",
@@ -3645,9 +3436,7 @@
       "SendInviteBody": {
         "type": "object",
         "description": "The body which is used to describe the recipient email",
-        "required": [
-          "recipient"
-        ],
+        "required": ["recipient"],
         "properties": {
           "recipient": {
             "type": "string",
@@ -3657,9 +3446,7 @@
       },
       "SsoRequiredResponse": {
         "type": "object",
-        "required": [
-          "idp_id"
-        ],
+        "required": ["idp_id"],
         "properties": {
           "idp_id": {
             "type": "string",
@@ -3669,18 +3456,12 @@
       },
       "StripeProductTier": {
         "type": "string",
-        "enum": [
-          "haiku",
-          "sonnet",
-          "opus"
-        ]
+        "enum": ["haiku", "sonnet", "opus"]
       },
       "StripeSessionResponse": {
         "type": "object",
         "description": "Response containing the Stripe session URL",
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "properties": {
           "url": {
             "type": "string",
@@ -3691,11 +3472,7 @@
       "Team": {
         "type": "object",
         "description": "The Team struct",
-        "required": [
-          "id",
-          "name",
-          "owner_id"
-        ],
+        "required": ["id", "name", "owner_id"],
         "properties": {
           "id": {
             "type": "string",
@@ -3759,9 +3536,7 @@
       "TeamInvitesResponse": {
         "type": "object",
         "description": "Response containing a list of team invites",
-        "required": [
-          "invites"
-        ],
+        "required": ["invites"],
         "properties": {
           "invites": {
             "type": "array",
@@ -3775,12 +3550,7 @@
       "TeamMember": {
         "type": "object",
         "description": "The team member struct",
-        "required": [
-          "team_id",
-          "user_id",
-          "role",
-          "tier"
-        ],
+        "required": ["team_id", "user_id", "role", "tier"],
         "properties": {
           "role": {
             "$ref": "#/components/schemas/TeamRole",
@@ -3804,19 +3574,12 @@
       "TeamRole": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
-        "enum": [
-          "Member",
-          "Admin",
-          "Owner"
-        ]
+        "enum": ["Member", "Admin", "Owner"]
       },
       "TeamWithMembers": {
         "type": "object",
         "description": "A team with its members",
-        "required": [
-          "team",
-          "members"
-        ],
+        "required": ["team", "members"],
         "properties": {
           "members": {
             "type": "array",
@@ -3833,9 +3596,7 @@
       },
       "UserLinkResponse": {
         "type": "object",
-        "required": [
-          "link_exists"
-        ],
+        "required": ["link_exists"],
         "properties": {
           "link_exists": {
             "type": "boolean",
@@ -3845,32 +3606,22 @@
       },
       "UserName": {
         "type": "object",
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "properties": {
           "first_name": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "id": {
             "type": "string"
           },
           "last_name": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
       "UserNames": {
         "type": "object",
-        "required": [
-          "names"
-        ],
+        "required": ["names"],
         "properties": {
           "names": {
             "type": "array",
@@ -3882,10 +3633,7 @@
       },
       "UserOrganizationResponse": {
         "type": "object",
-        "required": [
-          "organizationId",
-          "organizationName"
-        ],
+        "required": ["organizationId", "organizationName"],
         "properties": {
           "organizationId": {
             "type": "integer",
@@ -3900,16 +3648,10 @@
       },
       "UserProfilePicture": {
         "type": "object",
-        "required": [
-          "id",
-          "url"
-        ],
+        "required": ["id", "url"],
         "properties": {
           "checksum": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "id": {
             "type": "string"
@@ -3955,10 +3697,7 @@
       },
       "UserTokensResponse": {
         "type": "object",
-        "required": [
-          "access_token",
-          "refresh_token"
-        ],
+        "required": ["access_token", "refresh_token"],
         "properties": {
           "access_token": {
             "type": "string",

@@ -7,4 +7,5 @@
 import type { DocumentPreviewData } from './documentPreviewData';
 import type { DocumentPreviewOneOfAllOf } from './documentPreviewOneOfAllOf';
 
-export type DocumentPreviewOneOf = DocumentPreviewData & DocumentPreviewOneOfAllOf;
+export type DocumentPreviewOneOf = DocumentPreviewData &
+  DocumentPreviewOneOfAllOf;

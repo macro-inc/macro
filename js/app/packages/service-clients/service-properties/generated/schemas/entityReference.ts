@@ -4,8 +4,9 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { EntityType } from './entityType';
+
 import type { EntityReferenceSpecificMessageId } from './entityReferenceSpecificMessageId';
+import type { EntityType } from './entityType';
 
 /**
  * Entity reference for entity-type property values.

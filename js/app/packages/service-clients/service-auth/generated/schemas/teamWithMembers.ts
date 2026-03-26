@@ -4,8 +4,9 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-import type { TeamMember } from './teamMember';
+
 import type { Team } from './team';
+import type { TeamMember } from './teamMember';
 
 /**
  * A team with its members

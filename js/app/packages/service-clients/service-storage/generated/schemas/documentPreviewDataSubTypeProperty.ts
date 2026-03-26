@@ -6,4 +6,5 @@
  */
 import type { DocumentPreviewDataSubType } from './documentPreviewDataSubType';
 
-export type DocumentPreviewDataSubTypeProperty = null | DocumentPreviewDataSubType;
+export type DocumentPreviewDataSubTypeProperty =
+  null | DocumentPreviewDataSubType;

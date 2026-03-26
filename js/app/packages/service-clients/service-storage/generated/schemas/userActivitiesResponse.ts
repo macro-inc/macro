@@ -4,8 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { UserActivitiesResponseNextOffset } from './userActivitiesResponseNextOffset';
+
 import type { Activity } from './activity';
+import type { UserActivitiesResponseNextOffset } from './userActivitiesResponseNextOffset';
 
 /**
  * @deprecated

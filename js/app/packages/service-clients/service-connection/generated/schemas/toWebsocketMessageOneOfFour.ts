@@ -7,4 +7,5 @@
 import type { StreamEvents } from './streamEvents';
 import type { ToWebsocketMessageOneOfFourAllOf } from './toWebsocketMessageOneOfFourAllOf';
 
-export type ToWebsocketMessageOneOfFour = StreamEvents & ToWebsocketMessageOneOfFourAllOf;
+export type ToWebsocketMessageOneOfFour = StreamEvents &
+  ToWebsocketMessageOneOfFourAllOf;

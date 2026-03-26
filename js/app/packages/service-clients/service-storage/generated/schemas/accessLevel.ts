@@ -8,8 +8,7 @@
 /**
  * Ordered from least to most access top -> bottom
  */
-export type AccessLevel = typeof AccessLevel[keyof typeof AccessLevel];
-
+export type AccessLevel = (typeof AccessLevel)[keyof typeof AccessLevel];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AccessLevel = {

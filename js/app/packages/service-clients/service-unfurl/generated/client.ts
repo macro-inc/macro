@@ -9,169 +9,185 @@ import type {
   GetUnfurlBulkResponse,
   GetUnfurlParams,
   GetUnfurlResponse,
-  ProxyRequestHandlerParams
+  ProxyRequestHandlerParams,
 } from './schemas';
 
 export type proxyRequestHandlerResponseDefault = {
-  data: unknown
-  status: number
-}
-    
-;
-export type proxyRequestHandlerResponseError = (proxyRequestHandlerResponseDefault) & {
-  headers: Headers;
+  data: unknown;
+  status: number;
 };
+export type proxyRequestHandlerResponseError =
+  proxyRequestHandlerResponseDefault & {
+    headers: Headers;
+  };
 
-export type proxyRequestHandlerResponse = (proxyRequestHandlerResponseError)
+export type proxyRequestHandlerResponse = proxyRequestHandlerResponseError;
 
-export const getProxyRequestHandlerUrl = (params: ProxyRequestHandlerParams,) => {
+export const getProxyRequestHandlerUrl = (
+  params: ProxyRequestHandlerParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/proxy?${stringifiedParams}` : `/proxy`
-}
+  return stringifiedParams.length > 0
+    ? `/proxy?${stringifiedParams}`
+    : `/proxy`;
+};
 
-export const proxyRequestHandler = async (params: ProxyRequestHandlerParams, options?: RequestInit): Promise<proxyRequestHandlerResponse> => {
-  
-  const res = await fetch(getProxyRequestHandlerUrl(params),
-  {      
+export const proxyRequestHandler = async (
+  params: ProxyRequestHandlerParams,
+  options?: RequestInit
+): Promise<proxyRequestHandlerResponse> => {
+  const res = await fetch(getProxyRequestHandlerUrl(params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: proxyRequestHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as proxyRequestHandlerResponse
-}
 
-
+  const data: proxyRequestHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as proxyRequestHandlerResponse;
+};
 
 export type getUnfurlResponse200 = {
-  data: GetUnfurlResponse
-  status: 200
-}
+  data: GetUnfurlResponse;
+  status: 200;
+};
 
 export type getUnfurlResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUnfurlResponse404 = {
-  data: string
-  status: 404
-}
+  data: string;
+  status: 404;
+};
 
 export type getUnfurlResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type getUnfurlResponseSuccess = (getUnfurlResponse200) & {
+  data: string;
+  status: 500;
+};
+
+export type getUnfurlResponseSuccess = getUnfurlResponse200 & {
   headers: Headers;
 };
-export type getUnfurlResponseError = (getUnfurlResponse401 | getUnfurlResponse404 | getUnfurlResponse500) & {
+export type getUnfurlResponseError = (
+  | getUnfurlResponse401
+  | getUnfurlResponse404
+  | getUnfurlResponse500
+) & {
   headers: Headers;
 };
 
-export type getUnfurlResponse = (getUnfurlResponseSuccess | getUnfurlResponseError)
+export type getUnfurlResponse =
+  | getUnfurlResponseSuccess
+  | getUnfurlResponseError;
 
-export const getGetUnfurlUrl = (params: GetUnfurlParams,) => {
+export const getGetUnfurlUrl = (params: GetUnfurlParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/unfurl?${stringifiedParams}` : `/unfurl`
-}
+  return stringifiedParams.length > 0
+    ? `/unfurl?${stringifiedParams}`
+    : `/unfurl`;
+};
 
-export const getUnfurl = async (params: GetUnfurlParams, options?: RequestInit): Promise<getUnfurlResponse> => {
-  
-  const res = await fetch(getGetUnfurlUrl(params),
-  {      
+export const getUnfurl = async (
+  params: GetUnfurlParams,
+  options?: RequestInit
+): Promise<getUnfurlResponse> => {
+  const res = await fetch(getGetUnfurlUrl(params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUnfurlResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUnfurlResponse
-}
 
-
+  const data: getUnfurlResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUnfurlResponse;
+};
 
 export type getUnfurlBulkResponse200 = {
-  data: GetUnfurlBulkResponse
-  status: 200
-}
+  data: GetUnfurlBulkResponse;
+  status: 200;
+};
 
 export type getUnfurlBulkResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUnfurlBulkResponse404 = {
-  data: string
-  status: 404
-}
+  data: string;
+  status: 404;
+};
 
 export type getUnfurlBulkResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type getUnfurlBulkResponseSuccess = (getUnfurlBulkResponse200) & {
+  data: string;
+  status: 500;
+};
+
+export type getUnfurlBulkResponseSuccess = getUnfurlBulkResponse200 & {
   headers: Headers;
 };
-export type getUnfurlBulkResponseError = (getUnfurlBulkResponse401 | getUnfurlBulkResponse404 | getUnfurlBulkResponse500) & {
+export type getUnfurlBulkResponseError = (
+  | getUnfurlBulkResponse401
+  | getUnfurlBulkResponse404
+  | getUnfurlBulkResponse500
+) & {
   headers: Headers;
 };
 
-export type getUnfurlBulkResponse = (getUnfurlBulkResponseSuccess | getUnfurlBulkResponseError)
+export type getUnfurlBulkResponse =
+  | getUnfurlBulkResponseSuccess
+  | getUnfurlBulkResponseError;
 
 export const getGetUnfurlBulkUrl = () => {
+  return `/unfurl/bulk`;
+};
 
-
-  
-
-  return `/unfurl/bulk`
-}
-
-export const getUnfurlBulk = async (getUnfurlBulkBody: GetUnfurlBulkBody, options?: RequestInit): Promise<getUnfurlBulkResponse> => {
-  
-  const res = await fetch(getGetUnfurlBulkUrl(),
-  {      
+export const getUnfurlBulk = async (
+  getUnfurlBulkBody: GetUnfurlBulkBody,
+  options?: RequestInit
+): Promise<getUnfurlBulkResponse> => {
+  const res = await fetch(getGetUnfurlBulkUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      getUnfurlBulkBody,)
-  }
-)
+    body: JSON.stringify(getUnfurlBulkBody),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUnfurlBulkResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUnfurlBulkResponse
-}
+
+  const data: getUnfurlBulkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUnfurlBulkResponse;
+};

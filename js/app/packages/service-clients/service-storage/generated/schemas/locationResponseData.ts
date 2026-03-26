@@ -7,4 +7,6 @@
 import type { LocationResponseDataOneOf } from './locationResponseDataOneOf';
 import type { LocationResponseDataOneOfTwo } from './locationResponseDataOneOfTwo';
 
-export type LocationResponseData = LocationResponseDataOneOf | LocationResponseDataOneOfTwo;
+export type LocationResponseData =
+  | LocationResponseDataOneOf
+  | LocationResponseDataOneOfTwo;

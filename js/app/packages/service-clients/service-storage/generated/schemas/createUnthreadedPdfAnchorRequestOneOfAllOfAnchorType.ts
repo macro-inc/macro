@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CreateUnthreadedPdfAnchorRequestOneOfAllOfAnchorType = typeof CreateUnthreadedPdfAnchorRequestOneOfAllOfAnchorType[keyof typeof CreateUnthreadedPdfAnchorRequestOneOfAllOfAnchorType];
-
+export type CreateUnthreadedPdfAnchorRequestOneOfAllOfAnchorType =
+  (typeof CreateUnthreadedPdfAnchorRequestOneOfAllOfAnchorType)[keyof typeof CreateUnthreadedPdfAnchorRequestOneOfAllOfAnchorType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CreateUnthreadedPdfAnchorRequestOneOfAllOfAnchorType = {

@@ -4,7 +4,9 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
-import type { WithChannelId } from './withChannelId';
-import type { ChannelPreviewOneOfFourAllOf } from './channelPreviewOneOfFourAllOf';
 
-export type ChannelPreviewOneOfFour = WithChannelId & ChannelPreviewOneOfFourAllOf;
+import type { ChannelPreviewOneOfFourAllOf } from './channelPreviewOneOfFourAllOf';
+import type { WithChannelId } from './withChannelId';
+
+export type ChannelPreviewOneOfFour = WithChannelId &
+  ChannelPreviewOneOfFourAllOf;

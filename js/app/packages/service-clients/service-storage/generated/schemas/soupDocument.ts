@@ -10,10 +10,10 @@ import type { SoupDocumentDeletedAt } from './soupDocumentDeletedAt';
 import type { SoupDocumentDocumentFamilyId } from './soupDocumentDocumentFamilyId';
 import type { SoupDocumentFileType } from './soupDocumentFileType';
 import type { SoupDocumentProjectId } from './soupDocumentProjectId';
-import type { SoupProperty } from './soupProperty';
 import type { SoupDocumentSha } from './soupDocumentSha';
 import type { SoupDocumentSubTypeProperty } from './soupDocumentSubTypeProperty';
 import type { SoupDocumentViewedAt } from './soupDocumentViewedAt';
+import type { SoupProperty } from './soupProperty';
 
 export interface SoupDocument {
   /** The id of the document this document branched from */

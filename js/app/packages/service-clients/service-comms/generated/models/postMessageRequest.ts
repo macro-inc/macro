@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NewAttachment } from './newAttachment';
-import type { SimpleMention } from './simpleMention';
 import type { PostMessageRequestNonce } from './postMessageRequestNonce';
 import type { PostMessageRequestThreadId } from './postMessageRequestThreadId';
+import type { SimpleMention } from './simpleMention';
 
 export interface PostMessageRequest {
   attachments: NewAttachment[];

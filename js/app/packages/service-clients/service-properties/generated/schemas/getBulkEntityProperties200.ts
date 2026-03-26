@@ -6,4 +6,6 @@
  */
 import type { EntityPropertiesResponse } from './entityPropertiesResponse';
 
-export type GetBulkEntityProperties200 = {[key: string]: EntityPropertiesResponse};
+export type GetBulkEntityProperties200 = {
+  [key: string]: EntityPropertiesResponse;
+};

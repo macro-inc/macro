@@ -5,8 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UploadFolderStatusUpdateOneOf } from './uploadFolderStatusUpdateOneOf';
-import type { UploadFolderStatusUpdateOneOfThree } from './uploadFolderStatusUpdateOneOfThree';
 import type { UploadFolderStatusUpdateOneOfFive } from './uploadFolderStatusUpdateOneOfFive';
 import type { UploadFolderStatusUpdateOneOfSeven } from './uploadFolderStatusUpdateOneOfSeven';
+import type { UploadFolderStatusUpdateOneOfThree } from './uploadFolderStatusUpdateOneOfThree';
 
-export type UploadFolderStatusUpdate = UploadFolderStatusUpdateOneOf | UploadFolderStatusUpdateOneOfThree | UploadFolderStatusUpdateOneOfFive | UploadFolderStatusUpdateOneOfSeven;
+export type UploadFolderStatusUpdate =
+  | UploadFolderStatusUpdateOneOf
+  | UploadFolderStatusUpdateOneOfThree
+  | UploadFolderStatusUpdateOneOfFive
+  | UploadFolderStatusUpdateOneOfSeven;

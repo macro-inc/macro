@@ -7,4 +7,5 @@
 import type { EmailSearchRequestAllOf } from './emailSearchRequestAllOf';
 import type { EmailSearchRequestAllOfTwo } from './emailSearchRequestAllOfTwo';
 
-export type EmailSearchRequest = EmailSearchRequestAllOf & EmailSearchRequestAllOfTwo;
+export type EmailSearchRequest = EmailSearchRequestAllOf &
+  EmailSearchRequestAllOfTwo;

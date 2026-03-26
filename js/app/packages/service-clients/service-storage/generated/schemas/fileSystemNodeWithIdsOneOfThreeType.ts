@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type FileSystemNodeWithIdsOneOfThreeType = typeof FileSystemNodeWithIdsOneOfThreeType[keyof typeof FileSystemNodeWithIdsOneOfThreeType];
-
+export type FileSystemNodeWithIdsOneOfThreeType =
+  (typeof FileSystemNodeWithIdsOneOfThreeType)[keyof typeof FileSystemNodeWithIdsOneOfThreeType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FileSystemNodeWithIdsOneOfThreeType = {

@@ -6,4 +6,5 @@
  */
 import type { DeleteUnthreadedPdfAnchorRequestOneOf } from './deleteUnthreadedPdfAnchorRequestOneOf';
 
-export type DeleteUnthreadedPdfAnchorRequest = DeleteUnthreadedPdfAnchorRequestOneOf;
+export type DeleteUnthreadedPdfAnchorRequest =
+  DeleteUnthreadedPdfAnchorRequestOneOf;

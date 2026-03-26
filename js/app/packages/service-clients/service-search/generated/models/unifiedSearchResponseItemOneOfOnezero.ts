@@ -7,4 +7,6 @@
 import type { ChannelSearchResponseItemWithMetadata } from './channelSearchResponseItemWithMetadata';
 import type { UnifiedSearchResponseItemOneOfOnezeroAllOf } from './unifiedSearchResponseItemOneOfOnezeroAllOf';
 
-export type UnifiedSearchResponseItemOneOfOnezero = ChannelSearchResponseItemWithMetadata & UnifiedSearchResponseItemOneOfOnezeroAllOf;
+export type UnifiedSearchResponseItemOneOfOnezero =
+  ChannelSearchResponseItemWithMetadata &
+    UnifiedSearchResponseItemOneOfOnezeroAllOf;

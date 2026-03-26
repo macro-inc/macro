@@ -8,8 +8,8 @@
 /**
  * Participant role in a channel.
  */
-export type ApiParticipantRole = typeof ApiParticipantRole[keyof typeof ApiParticipantRole];
-
+export type ApiParticipantRole =
+  (typeof ApiParticipantRole)[keyof typeof ApiParticipantRole];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ApiParticipantRole = {

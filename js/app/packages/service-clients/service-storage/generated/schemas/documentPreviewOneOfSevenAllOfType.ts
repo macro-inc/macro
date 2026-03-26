@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DocumentPreviewOneOfSevenAllOfType = typeof DocumentPreviewOneOfSevenAllOfType[keyof typeof DocumentPreviewOneOfSevenAllOfType];
-
+export type DocumentPreviewOneOfSevenAllOfType =
+  (typeof DocumentPreviewOneOfSevenAllOfType)[keyof typeof DocumentPreviewOneOfSevenAllOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DocumentPreviewOneOfSevenAllOfType = {

@@ -5,15 +5,23 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PropertyDataTypeOneOf } from './propertyDataTypeOneOf';
-import type { PropertyDataTypeOneOfThree } from './propertyDataTypeOneOfThree';
 import type { PropertyDataTypeOneOfFive } from './propertyDataTypeOneOfFive';
-import type { PropertyDataTypeOneOfSeven } from './propertyDataTypeOneOfSeven';
 import type { PropertyDataTypeOneOfNine } from './propertyDataTypeOneOfNine';
 import type { PropertyDataTypeOneOfOneone } from './propertyDataTypeOneOfOneone';
-import type { PropertyDataTypeOneOfOnethree } from './propertyDataTypeOneOfOnethree';
 import type { PropertyDataTypeOneOfOnesix } from './propertyDataTypeOneOfOnesix';
+import type { PropertyDataTypeOneOfOnethree } from './propertyDataTypeOneOfOnethree';
+import type { PropertyDataTypeOneOfSeven } from './propertyDataTypeOneOfSeven';
+import type { PropertyDataTypeOneOfThree } from './propertyDataTypeOneOfThree';
 
 /**
  * Data type with embedded options for requests - provides compile-time validation.
  */
-export type PropertyDataType = PropertyDataTypeOneOf | PropertyDataTypeOneOfThree | PropertyDataTypeOneOfFive | PropertyDataTypeOneOfSeven | PropertyDataTypeOneOfNine | PropertyDataTypeOneOfOneone | PropertyDataTypeOneOfOnethree | PropertyDataTypeOneOfOnesix;
+export type PropertyDataType =
+  | PropertyDataTypeOneOf
+  | PropertyDataTypeOneOfThree
+  | PropertyDataTypeOneOfFive
+  | PropertyDataTypeOneOfSeven
+  | PropertyDataTypeOneOfNine
+  | PropertyDataTypeOneOfOneone
+  | PropertyDataTypeOneOfOnethree
+  | PropertyDataTypeOneOfOnesix;

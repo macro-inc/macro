@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ToolSetOneOfThreeType = typeof ToolSetOneOfThreeType[keyof typeof ToolSetOneOfThreeType];
-
+export type ToolSetOneOfThreeType =
+  (typeof ToolSetOneOfThreeType)[keyof typeof ToolSetOneOfThreeType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ToolSetOneOfThreeType = {

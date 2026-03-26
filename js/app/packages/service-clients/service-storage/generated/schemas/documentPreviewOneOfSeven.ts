@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { WithDocumentId } from './withDocumentId';
-import type { DocumentPreviewOneOfSevenAllOf } from './documentPreviewOneOfSevenAllOf';
 
-export type DocumentPreviewOneOfSeven = WithDocumentId & DocumentPreviewOneOfSevenAllOf;
+import type { DocumentPreviewOneOfSevenAllOf } from './documentPreviewOneOfSevenAllOf';
+import type { WithDocumentId } from './withDocumentId';
+
+export type DocumentPreviewOneOfSeven = WithDocumentId &
+  DocumentPreviewOneOfSevenAllOf;

@@ -4,9 +4,10 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { DocumentSearchResult } from './documentSearchResult';
+
 import type { DocumentSearchResponseItemFileType } from './documentSearchResponseItemFileType';
 import type { DocumentSearchResponseItemSubType } from './documentSearchResponseItemSubType';
+import type { DocumentSearchResult } from './documentSearchResult';
 
 /**
  * A single response item, part of the DocumentSearchResponse object

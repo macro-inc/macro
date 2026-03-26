@@ -12,9 +12,7 @@
   "paths": {
     "/contacts": {
       "get": {
-        "tags": [
-          "contacts"
-        ],
+        "tags": ["contacts"],
         "operationId": "get_contacts",
         "responses": {
           "200": {
@@ -65,9 +63,7 @@
     "schemas": {
       "GetContactsResponse": {
         "type": "object",
-        "required": [
-          "contacts"
-        ],
+        "required": ["contacts"],
         "properties": {
           "contacts": {
             "type": "array",

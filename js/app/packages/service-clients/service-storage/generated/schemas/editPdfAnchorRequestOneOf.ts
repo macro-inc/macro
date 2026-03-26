@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { EditPdfPlaceableCommentAnchorRequest } from './editPdfPlaceableCommentAnchorRequest';
-import type { EditPdfAnchorRequestOneOfAllOf } from './editPdfAnchorRequestOneOfAllOf';
 
-export type EditPdfAnchorRequestOneOf = EditPdfPlaceableCommentAnchorRequest & EditPdfAnchorRequestOneOfAllOf;
+import type { EditPdfAnchorRequestOneOfAllOf } from './editPdfAnchorRequestOneOfAllOf';
+import type { EditPdfPlaceableCommentAnchorRequest } from './editPdfPlaceableCommentAnchorRequest';
+
+export type EditPdfAnchorRequestOneOf = EditPdfPlaceableCommentAnchorRequest &
+  EditPdfAnchorRequestOneOfAllOf;

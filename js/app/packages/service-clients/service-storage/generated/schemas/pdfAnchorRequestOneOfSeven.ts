@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { UnthreadedPdfUuidRequest } from './unthreadedPdfUuidRequest';
-import type { PdfAnchorRequestOneOfSevenAllOf } from './pdfAnchorRequestOneOfSevenAllOf';
 
-export type PdfAnchorRequestOneOfSeven = UnthreadedPdfUuidRequest & PdfAnchorRequestOneOfSevenAllOf;
+import type { PdfAnchorRequestOneOfSevenAllOf } from './pdfAnchorRequestOneOfSevenAllOf';
+import type { UnthreadedPdfUuidRequest } from './unthreadedPdfUuidRequest';
+
+export type PdfAnchorRequestOneOfSeven = UnthreadedPdfUuidRequest &
+  PdfAnchorRequestOneOfSevenAllOf;

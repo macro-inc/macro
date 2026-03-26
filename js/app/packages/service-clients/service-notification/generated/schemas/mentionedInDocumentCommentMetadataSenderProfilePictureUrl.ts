@@ -5,4 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type MentionedInDocumentCommentMetadataSenderProfilePictureUrl = string | null;
+export type MentionedInDocumentCommentMetadataSenderProfilePictureUrl =
+  | string
+  | null;

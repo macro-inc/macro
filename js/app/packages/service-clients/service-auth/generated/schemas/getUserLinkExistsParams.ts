@@ -6,12 +6,12 @@
  */
 
 export type GetUserLinkExistsParams = {
-/**
- * The idp name to lookup. If not provided, the idp_id must be provided.
- */
-idp_name: string;
-/**
- * The idp id to lookup. If not provided, the idp_name must be provided.
- */
-idp_id: string;
+  /**
+   * The idp name to lookup. If not provided, the idp_id must be provided.
+   */
+  idp_name: string;
+  /**
+   * The idp id to lookup. If not provided, the idp_name must be provided.
+   */
+  idp_id: string;
 };

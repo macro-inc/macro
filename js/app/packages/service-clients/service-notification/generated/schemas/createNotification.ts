@@ -4,7 +4,8 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { Entity } from './entity';
+
 import type { CreateNotificationAllOf } from './createNotificationAllOf';
+import type { Entity } from './entity';
 
 export type CreateNotification = Entity & CreateNotificationAllOf;

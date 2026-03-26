@@ -4,7 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PresignedUrl } from './presignedUrl';
+
 import type { HashMapOneOfAllOf } from './hashMapOneOfAllOf';
+import type { PresignedUrl } from './presignedUrl';
 
 export type HashMapOneOf = PresignedUrl & HashMapOneOfAllOf;

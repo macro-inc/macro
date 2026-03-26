@@ -5,10 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFourAllOfType = typeof SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFourAllOfType[keyof typeof SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFourAllOfType];
-
+export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFourAllOfType =
+  (typeof SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFourAllOfType)[keyof typeof SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFourAllOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFourAllOfType = {
-  chat: 'chat',
-} as const;
+export const SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFourAllOfType =
+  {
+    chat: 'chat',
+  } as const;

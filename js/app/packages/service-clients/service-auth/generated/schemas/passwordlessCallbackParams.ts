@@ -6,8 +6,8 @@
  */
 
 export type PasswordlessCallbackParams = {
-/**
- * Email
- */
-email: string;
+  /**
+   * Email
+   */
+  email: string;
 };

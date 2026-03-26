@@ -6,8 +6,8 @@
  */
 
 export type GetEntityPropertiesParams = {
-/**
- * Whether to include property metadata (default: false)
- */
-include_metadata?: boolean;
+  /**
+   * Whether to include property metadata (default: false)
+   */
+  include_metadata?: boolean;
 };

@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { TaskAssignedMetadata } from './taskAssignedMetadata';
+
 import type { NotifEventOneOfTwooneTag } from './notifEventOneOfTwooneTag';
+import type { TaskAssignedMetadata } from './taskAssignedMetadata';
 
 /**
  * A user was assigned to a task.

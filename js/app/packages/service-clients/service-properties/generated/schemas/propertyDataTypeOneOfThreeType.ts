@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type PropertyDataTypeOneOfThreeType = typeof PropertyDataTypeOneOfThreeType[keyof typeof PropertyDataTypeOneOfThreeType];
-
+export type PropertyDataTypeOneOfThreeType =
+  (typeof PropertyDataTypeOneOfThreeType)[keyof typeof PropertyDataTypeOneOfThreeType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyDataTypeOneOfThreeType = {

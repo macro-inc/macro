@@ -8,4 +8,6 @@
 /**
  * The time the email was sent
  */
-export type SimpleEmailSearchResponseBaseItemHumanReadableTimestampSentAt = null | string;
+export type SimpleEmailSearchResponseBaseItemHumanReadableTimestampSentAt =
+  | null
+  | string;

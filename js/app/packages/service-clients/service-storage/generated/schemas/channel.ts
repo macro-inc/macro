@@ -4,10 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelType } from './channelType';
+
 import type { ChannelName } from './channelName';
 import type { ChannelOrgId } from './channelOrgId';
 import type { ChannelTeamId } from './channelTeamId';
+import type { ChannelType } from './channelType';
 
 export interface Channel {
   channel_type: ChannelType;

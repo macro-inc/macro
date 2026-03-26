@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DocumentStorageServiceApiVersion = typeof DocumentStorageServiceApiVersion[keyof typeof DocumentStorageServiceApiVersion];
-
+export type DocumentStorageServiceApiVersion =
+  (typeof DocumentStorageServiceApiVersion)[keyof typeof DocumentStorageServiceApiVersion];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DocumentStorageServiceApiVersion = {

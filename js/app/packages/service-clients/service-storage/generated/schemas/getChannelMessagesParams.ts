@@ -6,21 +6,21 @@
  */
 
 export type GetChannelMessagesParams = {
-/**
- * Page size (1-100, default 50)
- * @minimum 0
- */
-limit?: number;
-/**
- * Base64 encoded cursor value for older messages
- */
-cursor?: string;
-/**
- * Base64 encoded cursor value for newer messages
- */
-previous_cursor?: string;
-/**
- * Return a centered window around this message ID
- */
-load_around_message_id?: string;
+  /**
+   * Page size (1-100, default 50)
+   * @minimum 0
+   */
+  limit?: number;
+  /**
+   * Base64 encoded cursor value for older messages
+   */
+  cursor?: string;
+  /**
+   * Base64 encoded cursor value for newer messages
+   */
+  previous_cursor?: string;
+  /**
+   * Return a centered window around this message ID
+   */
+  load_around_message_id?: string;
 };

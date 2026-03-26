@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ExtractionStatusEnumOneOfThreeType = typeof ExtractionStatusEnumOneOfThreeType[keyof typeof ExtractionStatusEnumOneOfThreeType];
-
+export type ExtractionStatusEnumOneOfThreeType =
+  (typeof ExtractionStatusEnumOneOfThreeType)[keyof typeof ExtractionStatusEnumOneOfThreeType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ExtractionStatusEnumOneOfThreeType = {

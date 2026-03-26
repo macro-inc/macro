@@ -6,8 +6,8 @@
  */
 import type { SoupChatDeletedAt } from './soupChatDeletedAt';
 import type { SoupChatProjectId } from './soupChatProjectId';
-import type { SoupProperty } from './soupProperty';
 import type { SoupChatViewedAt } from './soupChatViewedAt';
+import type { SoupProperty } from './soupProperty';
 
 export interface SoupChat {
   /** The time the chat was created */

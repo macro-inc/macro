@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type AnnotationIncrementalUpdateOneOfFourUpdateType = typeof AnnotationIncrementalUpdateOneOfFourUpdateType[keyof typeof AnnotationIncrementalUpdateOneOfFourUpdateType];
-
+export type AnnotationIncrementalUpdateOneOfFourUpdateType =
+  (typeof AnnotationIncrementalUpdateOneOfFourUpdateType)[keyof typeof AnnotationIncrementalUpdateOneOfFourUpdateType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AnnotationIncrementalUpdateOneOfFourUpdateType = {

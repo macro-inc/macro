@@ -245,29 +245,21 @@ export class Svc<
 type ZodShapeToType<T extends z.ZodRawShape | undefined> =
   T extends z.ZodRawShape ? z.infer<z.ZodObject<T>> : undefined;
 
-type ClientFunctionArgs<T> = T extends FunctionDefinition<
-  any,
-  infer Args,
-  any,
-  any
->
-  ? ZodShapeToType<Args>
-  : never;
+type ClientFunctionArgs<T> =
+  T extends FunctionDefinition<any, infer Args, any, any>
+    ? ZodShapeToType<Args>
+    : never;
 
-type ClientFunctionResult<T> = T extends FunctionDefinition<
-  any,
-  any,
-  infer Result,
-  infer Throws
->
-  ? Result extends z.ZodRawShape
-    ? Throws extends string[]
-      ? MaybeResult<Throws[number], ZodShapeToType<Result>>
-      : ZodShapeToType<Result>
-    : Throws extends string[]
-      ? MaybeError<Throws[number]>
-      : void
-  : never;
+type ClientFunctionResult<T> =
+  T extends FunctionDefinition<any, any, infer Result, infer Throws>
+    ? Result extends z.ZodRawShape
+      ? Throws extends string[]
+        ? MaybeResult<Throws[number], ZodShapeToType<Result>>
+        : ZodShapeToType<Result>
+      : Throws extends string[]
+        ? MaybeError<Throws[number]>
+        : void
+    : never;
 
 export type ClientFunction<T extends FunctionDefinition<any, any, any, any>> =
   ClientFunctionArgs<T> extends undefined
@@ -287,13 +279,10 @@ type OmitEmptyObjects<T> = {
   [K in keyof T as T[K] extends Record<string, never> ? never : K]: T[K];
 };
 
-export type ServiceClient<T extends Svc<any, any, any>> = T extends Svc<
-  any,
-  infer F,
-  infer S
->
-  ? FlattenObject<ClientFunctions<F> & OmitEmptyObjects<ClientServices<S>>>
-  : never;
+export type ServiceClient<T extends Svc<any, any, any>> =
+  T extends Svc<any, infer F, infer S>
+    ? FlattenObject<ClientFunctions<F> & OmitEmptyObjects<ClientServices<S>>>
+    : never;
 
 /**
  * Defines common fetch errors that can occur during API requests.
@@ -328,7 +317,6 @@ export function withFetchErrors<const T extends string>(
 
 type NonNullableShape<T extends z.ZodTypeAny> = T extends
   | z.ZodOptional<infer U>
-  // biome-ignore lint/suspicious/noRedeclare: type reduction
   | z.ZodNullable<infer U>
   ? NonNullableShape<U>
   : T extends z.ZodObject<infer Shape>

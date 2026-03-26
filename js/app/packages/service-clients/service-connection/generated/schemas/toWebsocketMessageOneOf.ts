@@ -4,7 +4,9 @@
  * connection_gateway
  * OpenAPI spec version: 0.1.0
  */
-import type { TrackEntityMessage } from './trackEntityMessage';
-import type { ToWebsocketMessageOneOfAllOf } from './toWebsocketMessageOneOfAllOf';
 
-export type ToWebsocketMessageOneOf = TrackEntityMessage & ToWebsocketMessageOneOfAllOf;
+import type { ToWebsocketMessageOneOfAllOf } from './toWebsocketMessageOneOfAllOf';
+import type { TrackEntityMessage } from './trackEntityMessage';
+
+export type ToWebsocketMessageOneOf = TrackEntityMessage &
+  ToWebsocketMessageOneOfAllOf;

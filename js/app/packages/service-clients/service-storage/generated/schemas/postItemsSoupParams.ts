@@ -6,8 +6,8 @@
  */
 
 export type PostItemsSoupParams = {
-/**
- * Base64 encoded cursor value.
- */
-cursor?: string;
+  /**
+   * Base64 encoded cursor value.
+   */
+  cursor?: string;
 };

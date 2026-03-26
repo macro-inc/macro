@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntityPropertyResponseCreatedAt } from './entityPropertyResponseCreatedAt';
-import type { EntityType } from './entityType';
 import type { EntityPropertyResponseUpdatedAt } from './entityPropertyResponseUpdatedAt';
+import type { EntityType } from './entityType';
 
 /**
  * Entity property response (API representation).

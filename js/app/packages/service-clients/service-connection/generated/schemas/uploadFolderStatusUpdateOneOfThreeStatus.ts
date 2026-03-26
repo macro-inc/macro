@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UploadFolderStatusUpdateOneOfThreeStatus = typeof UploadFolderStatusUpdateOneOfThreeStatus[keyof typeof UploadFolderStatusUpdateOneOfThreeStatus];
-
+export type UploadFolderStatusUpdateOneOfThreeStatus =
+  (typeof UploadFolderStatusUpdateOneOfThreeStatus)[keyof typeof UploadFolderStatusUpdateOneOfThreeStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UploadFolderStatusUpdateOneOfThreeStatus = {

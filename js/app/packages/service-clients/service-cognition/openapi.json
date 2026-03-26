@@ -13,9 +13,7 @@
   "paths": {
     "/attachments/{attachment_id}/chats": {
       "get": {
-        "tags": [
-          "get_chats_for_attachment"
-        ],
+        "tags": ["get_chats_for_attachment"],
         "operationId": "get_chats_for_attachment_handler",
         "parameters": [
           {
@@ -74,9 +72,7 @@
     },
     "/chat/{chat_id}": {
       "delete": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Soft-delete a chat.",
         "operationId": "delete_chat",
         "parameters": [
@@ -117,9 +113,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Patch a chat's name, project, or share permissions.",
         "operationId": "patch_chat",
         "parameters": [
@@ -172,9 +166,7 @@
     },
     "/chat/{chat_id}/permanent": {
       "delete": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Permanently delete a chat and all associated data.",
         "operationId": "permanently_delete_chat",
         "parameters": [
@@ -217,9 +209,7 @@
     },
     "/chats": {
       "post": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Create a new chat.",
         "operationId": "create_chat",
         "requestBody": {
@@ -268,9 +258,7 @@
     },
     "/chats/history/{chat_id}": {
       "get": {
-        "tags": [
-          "chat_history"
-        ],
+        "tags": ["chat_history"],
         "summary": "Retrieves chat history for a specific chat ID",
         "operationId": "get_chat_history_handler",
         "parameters": [
@@ -320,9 +308,7 @@
     },
     "/chats/history_batch_messages": {
       "post": {
-        "tags": [
-          "chat_history_batch_messages"
-        ],
+        "tags": ["chat_history_batch_messages"],
         "summary": "Retrieves chat history for multiple message IDs",
         "operationId": "get_chat_history_batch_messages_handler",
         "requestBody": {
@@ -381,9 +367,7 @@
     },
     "/chats/{chat_id}": {
       "get": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Get a chat by ID with messages and web citations.",
         "operationId": "get_chat",
         "parameters": [
@@ -443,9 +427,7 @@
     },
     "/chats/{chat_id}/copy": {
       "post": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Copy a chat and its messages into a new chat.",
         "operationId": "copy_chat",
         "parameters": [
@@ -505,9 +487,7 @@
     },
     "/chats/{chat_id}/permissions": {
       "get": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Get the share permissions for a chat.",
         "operationId": "get_chat_permissions",
         "parameters": [
@@ -557,9 +537,7 @@
     },
     "/chats/{chat_id}/revert_delete": {
       "put": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Revert a soft-deleted chat.",
         "operationId": "revert_delete_chat",
         "parameters": [
@@ -602,9 +580,7 @@
     },
     "/citations/{id}": {
       "get": {
-        "tags": [
-          "citations"
-        ],
+        "tags": ["citations"],
         "operationId": "get_citation_handler",
         "parameters": [
           {
@@ -653,9 +629,7 @@
     },
     "/health": {
       "get": {
-        "tags": [
-          "health"
-        ],
+        "tags": ["health"],
         "summary": "Health check",
         "operationId": "health_handler",
         "responses": {
@@ -674,9 +648,7 @@
     },
     "/memory": {
       "get": {
-        "tags": [
-          "memory"
-        ],
+        "tags": ["memory"],
         "summary": "Get the authenticated user's latest memory.",
         "description": "Returns the current memory if one exists. If the memory is stale or missing,\na background generation is triggered and the endpoint returns the stale\nmemory (200) or 404 if none exists yet.",
         "operationId": "get_memory_handler",
@@ -709,9 +681,7 @@
     },
     "/models": {
       "get": {
-        "tags": [
-          "get_models"
-        ],
+        "tags": ["get_models"],
         "summary": "Gets all available models",
         "operationId": "get_models_handler",
         "responses": {
@@ -730,9 +700,7 @@
     },
     "/preview": {
       "post": {
-        "tags": [
-          "get_batch_preview"
-        ],
+        "tags": ["get_batch_preview"],
         "operationId": "get_batch_preview",
         "requestBody": {
           "content": {
@@ -780,9 +748,7 @@
     },
     "/stream/chat/message": {
       "post": {
-        "tags": [
-          "chat_message"
-        ],
+        "tags": ["chat_message"],
         "summary": "Send a new chat message and stream the AI response.",
         "description": "This endpoint initiates a chat message and streams the response via the stream service.\nThe client should subscribe to the returned stream_id via connection_gateway to receive chunks.",
         "operationId": "send_chat_message",
@@ -831,11 +797,7 @@
     "schemas": {
       "AIModel": {
         "type": "object",
-        "required": [
-          "name",
-          "provider",
-          "metadata"
-        ],
+        "required": ["name", "provider", "metadata"],
         "properties": {
           "metadata": {
             "$ref": "#/components/schemas/ModelMetadata"
@@ -851,41 +813,26 @@
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
-        "enum": [
-          "view",
-          "comment",
-          "edit",
-          "owner"
-        ]
+        "enum": ["view", "comment", "edit", "owner"]
       },
       "AssistantMessagePart": {
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "text",
-              "type"
-            ],
+            "required": ["text", "type"],
             "properties": {
               "text": {
                 "type": "string"
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "text"
-                ]
+                "enum": ["text"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "name",
-              "json",
-              "id",
-              "type"
-            ],
+            "required": ["name", "json", "id", "type"],
             "properties": {
               "id": {
                 "type": "string"
@@ -896,20 +843,13 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "toolCall"
-                ]
+                "enum": ["toolCall"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "name",
-              "json",
-              "id",
-              "type"
-            ],
+            "required": ["name", "json", "id", "type"],
             "properties": {
               "id": {
                 "type": "string"
@@ -920,20 +860,13 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "toolCallResponseJson"
-                ]
+                "enum": ["toolCallResponseJson"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "name",
-              "description",
-              "id",
-              "type"
-            ],
+            "required": ["name", "description", "id", "type"],
             "properties": {
               "description": {
                 "type": "string"
@@ -946,9 +879,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "toolCallErr"
-                ]
+                "enum": ["toolCallErr"]
               }
             }
           }
@@ -958,11 +889,7 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "document_type",
-              "document_name",
-              "type"
-            ],
+            "required": ["document_type", "document_name", "type"],
             "properties": {
               "document_name": {
                 "type": "string",
@@ -974,37 +901,26 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "document"
-                ]
+                "enum": ["document"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "project_name",
-              "type"
-            ],
+            "required": ["project_name", "type"],
             "properties": {
               "project_name": {
                 "type": "string"
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "project"
-                ]
+                "enum": ["project"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "image_extension",
-              "image_name",
-              "type"
-            ],
+            "required": ["image_extension", "image_name", "type"],
             "properties": {
               "image_extension": {
                 "$ref": "#/components/schemas/FileType",
@@ -1016,19 +932,13 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "image"
-                ]
+                "enum": ["image"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "channel_name",
-              "channel_type",
-              "type"
-            ],
+            "required": ["channel_name", "channel_type", "type"],
             "properties": {
               "channel_name": {
                 "type": "string"
@@ -1038,28 +948,21 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "channel"
-                ]
+                "enum": ["channel"]
               }
             }
           },
           {
             "type": "object",
             "description": "an email thread",
-            "required": [
-              "email_subject",
-              "type"
-            ],
+            "required": ["email_subject", "type"],
             "properties": {
               "email_subject": {
                 "type": "string"
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "email"
-                ]
+                "enum": ["email"]
               }
             }
           }
@@ -1067,21 +970,12 @@
       },
       "AttachmentType": {
         "type": "string",
-        "enum": [
-          "document",
-          "image",
-          "channel",
-          "email",
-          "project"
-        ]
+        "enum": ["document", "image", "channel", "email", "project"]
       },
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
-        "required": [
-          "channel_id",
-          "access_level"
-        ],
+        "required": ["channel_id", "access_level"],
         "properties": {
           "access_level": {
             "$ref": "#/components/schemas/AccessLevel",
@@ -1095,36 +989,19 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": [
-          "public",
-          "organization",
-          "private",
-          "direct_message",
-          "team"
-        ]
+        "enum": ["public", "organization", "private", "direct_message", "team"]
       },
       "Chat": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "isPersistent"
-        ],
+        "required": ["id", "name", "userId", "isPersistent"],
         "properties": {
           "createdAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was deleted"
           },
@@ -1136,10 +1013,7 @@
             "type": "boolean"
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The model used to generate the chat"
           },
           "name": {
@@ -1147,24 +1021,15 @@
             "description": "The name of the chat"
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The project id of the chat"
           },
           "tokenCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64"
           },
           "updatedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was last updated"
           },
@@ -1176,11 +1041,7 @@
       },
       "ChatAttachment": {
         "type": "object",
-        "required": [
-          "id",
-          "attachment_type",
-          "attachment_id"
-        ],
+        "required": ["id", "attachment_type", "attachment_id"],
         "properties": {
           "attachment_id": {
             "type": "string",
@@ -1191,10 +1052,7 @@
             "description": "The type of attachment"
           },
           "chat_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The id of the chat if the attachment is a chat"
           },
           "id": {
@@ -1202,21 +1060,14 @@
             "description": "db attachment id - unused"
           },
           "message_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The id of the message if the attachment is a message"
           }
         }
       },
       "ChatAttachmentWithName": {
         "type": "object",
-        "required": [
-          "attachmentType",
-          "attachmentId",
-          "id"
-        ],
+        "required": ["attachmentType", "attachmentId", "id"],
         "properties": {
           "attachmentId": {
             "type": "string",
@@ -1245,9 +1096,7 @@
       },
       "ChatHistory": {
         "type": "object",
-        "required": [
-          "conversation"
-        ],
+        "required": ["conversation"],
         "properties": {
           "conversation": {
             "type": "array",
@@ -1259,9 +1108,7 @@
       },
       "ChatHistoryBatchMessagesRequest": {
         "type": "object",
-        "required": [
-          "message_ids"
-        ],
+        "required": ["message_ids"],
         "properties": {
           "message_ids": {
             "type": "array",
@@ -1273,11 +1120,7 @@
       },
       "ChatMessage": {
         "type": "object",
-        "required": [
-          "id",
-          "content",
-          "role"
-        ],
+        "required": ["id", "content", "role"],
         "properties": {
           "content": {
             "$ref": "#/components/schemas/ChatMessageContent",
@@ -1288,10 +1131,7 @@
             "description": "The chat message id"
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "the model used to generate the message"
           },
           "role": {
@@ -1316,29 +1156,19 @@
       "ChatMessageError": {
         "type": "object",
         "description": "Error response for chat message endpoints",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "error": {
             "type": "string"
           },
           "stream_id": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
       "ChatMessageWithAttachments": {
         "type": "object",
-        "required": [
-          "id",
-          "content",
-          "role",
-          "attachments"
-        ],
+        "required": ["id", "content", "role", "attachments"],
         "properties": {
           "attachments": {
             "type": "array",
@@ -1356,10 +1186,7 @@
             "description": "The chat message id"
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The model used to generate the message"
           },
           "role": {
@@ -1377,15 +1204,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "access"
-                    ]
+                    "enum": ["access"]
                   }
                 }
               }
@@ -1398,15 +1221,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "no_access"
-                    ]
+                    "enum": ["no_access"]
                   }
                 }
               }
@@ -1419,15 +1238,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "does_not_exist"
-                    ]
+                    "enum": ["does_not_exist"]
                   }
                 }
               }
@@ -1437,11 +1252,7 @@
       },
       "ChatPreviewData": {
         "type": "object",
-        "required": [
-          "chat_id",
-          "chat_name",
-          "owner"
-        ],
+        "required": ["chat_id", "chat_name", "owner"],
         "properties": {
           "chat_id": {
             "type": "string"
@@ -1453,10 +1264,7 @@
             "type": "string"
           },
           "updated_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -1491,10 +1299,7 @@
             "description": "Available models for the chat."
           },
           "createdAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was created."
           },
@@ -1529,25 +1334,16 @@
             "description": "The name of the chat."
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The project id the chat belongs to."
           },
           "tokenCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64",
             "description": "Current number of tokens in the chat."
           },
           "updatedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was last updated."
           },
@@ -1569,30 +1365,18 @@
                   "items": {
                     "type": "object",
                     "description": "A web citation associated with a chat message.",
-                    "required": [
-                      "url",
-                      "title"
-                    ],
+                    "required": ["url", "title"],
                     "properties": {
                       "description": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "A description of the cited page."
                       },
                       "favicon_url": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "The URL of the page's favicon."
                       },
                       "image_url": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "The URL of the page's image."
                       },
                       "title": {
@@ -1622,15 +1406,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "error"
-                    ]
+                    "enum": ["error"]
                   }
                 }
               }
@@ -1640,11 +1420,7 @@
           {
             "type": "object",
             "description": "Acknowledges that a message has been received for processing",
-            "required": [
-              "message_id",
-              "chat_id",
-              "type"
-            ],
+            "required": ["message_id", "chat_id", "type"],
             "properties": {
               "chat_id": {
                 "type": "string"
@@ -1654,9 +1430,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "chat_message_ack"
-                ]
+                "enum": ["chat_message_ack"]
               }
             }
           },
@@ -1692,9 +1466,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "chat_user_message"
-                ]
+                "enum": ["chat_user_message"]
               }
             }
           },
@@ -1723,21 +1495,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "chat_message_response"
-                ]
+                "enum": ["chat_message_response"]
               }
             }
           },
           {
             "type": "object",
             "description": "Indicates that a message has been finished",
-            "required": [
-              "message_id",
-              "chat_id",
-              "user_message_id",
-              "type"
-            ],
+            "required": ["message_id", "chat_id", "user_message_id", "type"],
             "properties": {
               "chat_id": {
                 "type": "string"
@@ -1747,9 +1512,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "chat_message_finished"
-                ]
+                "enum": ["chat_message_finished"]
               },
               "user_message_id": {
                 "type": "string"
@@ -1759,12 +1522,7 @@
           {
             "type": "object",
             "description": "Indicates that a chat has been renamed",
-            "required": [
-              "stream_id",
-              "chat_id",
-              "name",
-              "type"
-            ],
+            "required": ["stream_id", "chat_id", "name", "type"],
             "properties": {
               "chat_id": {
                 "type": "string"
@@ -1777,20 +1535,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "chat_renamed"
-                ]
+                "enum": ["chat_renamed"]
               }
             }
           },
           {
             "type": "object",
             "description": "Notifies the client that the available models have changed",
-            "required": [
-              "chat_id",
-              "available_models",
-              "type"
-            ],
+            "required": ["chat_id", "available_models", "type"],
             "properties": {
               "available_models": {
                 "type": "array",
@@ -1813,19 +1565,13 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "model_selection_changed"
-                ]
+                "enum": ["model_selection_changed"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "chat_id",
-              "token_count",
-              "type"
-            ],
+            "required": ["chat_id", "token_count", "type"],
             "properties": {
               "chat_id": {
                 "type": "string"
@@ -1836,21 +1582,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "token_count_changed"
-                ]
+                "enum": ["token_count_changed"]
               }
             }
           },
           {
             "type": "object",
             "description": "Status update",
-            "required": [
-              "chat_id",
-              "message_id",
-              "message",
-              "type"
-            ],
+            "required": ["chat_id", "message_id", "message", "type"],
             "properties": {
               "chat_id": {
                 "type": "string"
@@ -1863,20 +1602,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "chat_message_status_update"
-                ]
+                "enum": ["chat_message_status_update"]
               }
             }
           },
           {
             "type": "object",
             "description": "Acknowledges the request to get extraction status\nif the `status` field is 'incomplete', we need to await the extraction status updates\nif the `status` field is 'empty', extraction is complete but text content is empty\nif the `status` field is 'complete', the extraction is already complete",
-            "required": [
-              "attachment_id",
-              "status",
-              "type"
-            ],
+            "required": ["attachment_id", "status", "type"],
             "properties": {
               "attachment_id": {
                 "type": "string"
@@ -1886,20 +1619,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "extraction_status_ack"
-                ]
+                "enum": ["extraction_status_ack"]
               }
             }
           },
           {
             "type": "object",
             "description": "Status update for the extraction status",
-            "required": [
-              "attachment_id",
-              "status",
-              "type"
-            ],
+            "required": ["attachment_id", "status", "type"],
             "properties": {
               "attachment_id": {
                 "type": "string"
@@ -1909,21 +1636,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "extraction_status_update"
-                ]
+                "enum": ["extraction_status_update"]
               }
             }
           },
           {
             "type": "object",
             "description": "pdf completion",
-            "required": [
-              "completion_id",
-              "content",
-              "done",
-              "type"
-            ],
+            "required": ["completion_id", "content", "done", "type"],
             "properties": {
               "completion_id": {
                 "type": "string"
@@ -1936,20 +1656,13 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "completion_response"
-                ]
+                "enum": ["completion_response"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "completion_id",
-              "content",
-              "done",
-              "type"
-            ],
+            "required": ["completion_id", "content", "done", "type"],
             "properties": {
               "completion_id": {
                 "type": "string"
@@ -1962,27 +1675,20 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "completion_stream_chunk"
-                ]
+                "enum": ["completion_stream_chunk"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "type"
-            ],
+            "required": ["stream_id", "type"],
             "properties": {
               "stream_id": {
                 "type": "string"
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "stream_end"
-                ]
+                "enum": ["stream_end"]
               }
             }
           }
@@ -1990,11 +1696,7 @@
       },
       "ConversationRecord": {
         "type": "object",
-        "required": [
-          "chat_id",
-          "title",
-          "messages"
-        ],
+        "required": ["chat_id", "title", "messages"],
         "properties": {
           "chat_id": {
             "type": "string"
@@ -2015,27 +1717,18 @@
         "description": "Request body for creating a chat.",
         "properties": {
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional name for the chat."
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional project to associate the chat with."
           }
         }
       },
       "DocumentCognitionServiceApiVersion": {
         "type": "string",
-        "enum": [
-          "v1",
-          "v2"
-        ]
+        "enum": ["v1", "v2"]
       },
       "DocumentReference": {
         "oneOf": [
@@ -2046,15 +1739,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "kind"
-                ],
+                "required": ["kind"],
                 "properties": {
                   "kind": {
                     "type": "string",
-                    "enum": [
-                      "pdf"
-                    ]
+                    "enum": ["pdf"]
                   }
                 }
               }
@@ -2064,11 +1753,7 @@
       },
       "DocumentTextPart": {
         "type": "object",
-        "required": [
-          "id",
-          "document_id",
-          "reference"
-        ],
+        "required": ["id", "document_id", "reference"],
         "properties": {
           "document_id": {
             "type": "string"
@@ -2085,57 +1770,41 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "incomplete"
-                ]
+                "enum": ["incomplete"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "empty"
-                ]
+                "enum": ["empty"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "insufficient"
-                ]
+                "enum": ["insufficient"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "complete"
-                ]
+                "enum": ["complete"]
               }
             }
           }
@@ -2571,10 +2240,7 @@
       },
       "GenericErrorResponse": {
         "type": "object",
-        "required": [
-          "error",
-          "message"
-        ],
+        "required": ["error", "message"],
         "properties": {
           "error": {
             "type": "boolean",
@@ -2588,9 +2254,7 @@
       },
       "GetBatchPreviewRequest": {
         "type": "object",
-        "required": [
-          "chat_ids"
-        ],
+        "required": ["chat_ids"],
         "properties": {
           "chat_ids": {
             "type": "array",
@@ -2602,9 +2266,7 @@
       },
       "GetBatchPreviewResponse": {
         "type": "object",
-        "required": [
-          "previews"
-        ],
+        "required": ["previews"],
         "properties": {
           "previews": {
             "type": "array",
@@ -2617,9 +2279,7 @@
       "GetChatPermissionsResponse": {
         "type": "object",
         "description": "Response body for get chat permissions.",
-        "required": [
-          "permissions"
-        ],
+        "required": ["permissions"],
         "properties": {
           "permissions": {
             "$ref": "#/components/schemas/SharePermissionV2",
@@ -2630,10 +2290,7 @@
       "GetChatResponse": {
         "type": "object",
         "description": "Wrapper response for get_chat, matching the DCS API response shape.",
-        "required": [
-          "chat",
-          "userAccessLevel"
-        ],
+        "required": ["chat", "userAccessLevel"],
         "properties": {
           "chat": {
             "$ref": "#/components/schemas/ChatResponse",
@@ -2647,9 +2304,7 @@
       },
       "GetChatsForAttachmentResponse": {
         "type": "object",
-        "required": [
-          "all_chats"
-        ],
+        "required": ["all_chats"],
         "properties": {
           "all_chats": {
             "type": "array",
@@ -2671,9 +2326,7 @@
       },
       "GetModelsResponse": {
         "type": "object",
-        "required": [
-          "models"
-        ],
+        "required": ["models"],
         "properties": {
           "models": {
             "type": "array",
@@ -2686,33 +2339,21 @@
       "HttpSendChatMessageRequest": {
         "type": "object",
         "description": "HTTP request payload for sending a chat message.\nUnlike the WebSocket payload, this does not include stream_id as it's generated server-side.",
-        "required": [
-          "content",
-          "model"
-        ],
+        "required": ["content", "model"],
         "properties": {
           "additional_instructions": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Additional system instructions appended to the base system prompt"
           },
           "attachments": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/ChatAttachmentWithName"
             },
             "description": "Attachments for the message"
           },
           "chat_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Id of the chat the message belongs to (optional - if not provided, a new chat is created)"
           },
           "content": {
@@ -2731,9 +2372,7 @@
       },
       "JwtPayload": {
         "type": "object",
-        "required": [
-          "token"
-        ],
+        "required": ["token"],
         "properties": {
           "token": {
             "type": "string"
@@ -2742,9 +2381,7 @@
       },
       "MemoryErrorBody": {
         "type": "object",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "error": {
             "type": "string",
@@ -2755,9 +2392,7 @@
       "MemoryResponse": {
         "type": "object",
         "description": "The user's latest memory.",
-        "required": [
-          "memory"
-        ],
+        "required": ["memory"],
         "properties": {
           "memory": {
             "type": "string",
@@ -2767,11 +2402,7 @@
       },
       "MessageWithAttachments": {
         "type": "object",
-        "required": [
-          "content",
-          "date",
-          "attachmentIds"
-        ],
+        "required": ["content", "date", "attachmentIds"],
         "properties": {
           "attachmentIds": {
             "type": "array",
@@ -2814,9 +2445,7 @@
       },
       "ModelMetadata": {
         "type": "object",
-        "required": [
-          "contextWindow"
-        ],
+        "required": ["contextWindow"],
         "properties": {
           "contextWindow": {
             "type": "integer",
@@ -2826,10 +2455,7 @@
       },
       "NewAttachment": {
         "type": "object",
-        "required": [
-          "attachment_type",
-          "attachment_id"
-        ],
+        "required": ["attachment_type", "attachment_id"],
         "properties": {
           "attachment_id": {
             "type": "string"
@@ -2841,19 +2467,10 @@
       },
       "NewChatMessage": {
         "type": "object",
-        "required": [
-          "content",
-          "role",
-          "model",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["content", "role", "model", "createdAt", "updatedAt"],
         "properties": {
           "attachments": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/NewAttachment"
             },
@@ -2868,10 +2485,7 @@
             "format": "date-time"
           },
           "id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional pre-generated ID. If None, the database generates one."
           },
           "model": {
@@ -2890,11 +2504,7 @@
       },
       "NewMessageAttachment": {
         "type": "object",
-        "required": [
-          "messageId",
-          "attachmentType",
-          "attachmentId"
-        ],
+        "required": ["messageId", "attachmentType", "attachmentId"],
         "properties": {
           "attachmentId": {
             "type": "string"
@@ -2912,17 +2522,11 @@
         "description": "Request body for patching a chat.",
         "properties": {
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "New name for the chat."
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "New project ID for the chat. Empty string clears the project."
           },
           "sharePermission": {
@@ -2940,21 +2544,11 @@
       },
       "Provider": {
         "type": "string",
-        "enum": [
-          "openai",
-          "google",
-          "anthropic",
-          "googleanthropic",
-          "xai"
-        ]
+        "enum": ["openai", "google", "anthropic", "googleanthropic", "xai"]
       },
       "Role": {
         "type": "string",
-        "enum": [
-          "user",
-          "assistant",
-          "system"
-        ]
+        "enum": ["user", "assistant", "system"]
       },
       "SendChatMessagePayload": {
         "allOf": [
@@ -2963,25 +2557,14 @@
           },
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "content",
-              "chat_id",
-              "model"
-            ],
+            "required": ["stream_id", "content", "chat_id", "model"],
             "properties": {
               "additional_instructions": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Additional system instructions appended to the base system prompt"
               },
               "attachments": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": ["array", "null"],
                 "items": {
                   "$ref": "#/components/schemas/ChatAttachmentWithName"
                 },
@@ -3014,11 +2597,7 @@
       "SendChatMessageResponse": {
         "type": "object",
         "description": "Response for initiating a chat message stream",
-        "required": [
-          "stream_id",
-          "message_id",
-          "chat_id"
-        ],
+        "required": ["stream_id", "message_id", "chat_id"],
         "properties": {
           "chat_id": {
             "type": "string",
@@ -3036,17 +2615,10 @@
       },
       "SharePermissionV2": {
         "type": "object",
-        "required": [
-          "id",
-          "isPublic",
-          "owner"
-        ],
+        "required": ["id", "isPublic", "owner"],
         "properties": {
           "channelSharePermissions": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/ChannelSharePermission"
             },
@@ -3081,20 +2653,14 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "model",
-              "stream_error"
-            ],
+            "required": ["stream_id", "model", "stream_error"],
             "properties": {
               "model": {
                 "$ref": "#/components/schemas/Model"
               },
               "stream_error": {
                 "type": "string",
-                "enum": [
-                  "provider_error"
-                ]
+                "enum": ["provider_error"]
               },
               "stream_id": {
                 "type": "string"
@@ -3103,16 +2669,11 @@
           },
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "stream_error"
-            ],
+            "required": ["stream_id", "stream_error"],
             "properties": {
               "stream_error": {
                 "type": "string",
-                "enum": [
-                  "model_context_overflow"
-                ]
+                "enum": ["model_context_overflow"]
               },
               "stream_id": {
                 "type": "string"
@@ -3121,16 +2682,11 @@
           },
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "stream_error"
-            ],
+            "required": ["stream_id", "stream_error"],
             "properties": {
               "stream_error": {
                 "type": "string",
-                "enum": [
-                  "internal_error"
-                ]
+                "enum": ["internal_error"]
               },
               "stream_id": {
                 "type": "string"
@@ -3141,9 +2697,7 @@
       },
       "StringIDResponse": {
         "type": "object",
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "properties": {
           "id": {
             "type": "string"
@@ -3153,11 +2707,7 @@
       "ToolSchema": {
         "type": "object",
         "description": "Schema information for a single tool, serializable for API responses.",
-        "required": [
-          "name",
-          "inputSchema",
-          "outputSchema"
-        ],
+        "required": ["name", "inputSchema", "outputSchema"],
         "properties": {
           "inputSchema": {
             "description": "The JSON schema for the tool's input parameters."
@@ -3174,9 +2724,7 @@
       "ToolSchemas": {
         "type": "object",
         "description": "A collection of tool schemas, typically used for API responses.",
-        "required": [
-          "schemas"
-        ],
+        "required": ["schemas"],
         "properties": {
           "schemas": {
             "type": "array",
@@ -3191,29 +2739,21 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "all"
-                ]
+                "enum": ["all"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "none"
-                ]
+                "enum": ["none"]
               }
             }
           }
@@ -3221,10 +2761,7 @@
       },
       "UpdateChannelSharePermission": {
         "type": "object",
-        "required": [
-          "operation",
-          "channelId"
-        ],
+        "required": ["operation", "channelId"],
         "properties": {
           "accessLevel": {
             "oneOf": [
@@ -3249,30 +2786,20 @@
       },
       "UpdateOperation": {
         "type": "string",
-        "enum": [
-          "add",
-          "remove",
-          "replace"
-        ]
+        "enum": ["add", "remove", "replace"]
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",
         "properties": {
           "channelSharePermissions": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/UpdateChannelSharePermission"
             },
             "description": "Any channel share permissions to be created/updated/removed"
           },
           "isPublic": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "If the item is publicly accessible"
           },
           "publicAccessLevel": {
@@ -3291,13 +2818,7 @@
       "UserPdfRect": {
         "type": "object",
         "description": "UserPdfRect is in UserSpace\n(0,0) top left\npercent page units\n1-based page index",
-        "required": [
-          "page_index",
-          "left",
-          "top",
-          "width",
-          "height"
-        ],
+        "required": ["page_index", "left", "top", "width", "height"],
         "properties": {
           "height": {
             "type": "number",
@@ -3325,30 +2846,18 @@
       "WebCitation": {
         "type": "object",
         "description": "A web citation associated with a chat message.",
-        "required": [
-          "url",
-          "title"
-        ],
+        "required": ["url", "title"],
         "properties": {
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "A description of the cited page."
           },
           "favicon_url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The URL of the page's favicon."
           },
           "image_url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The URL of the page's image."
           },
           "title": {
@@ -3363,9 +2872,7 @@
       },
       "WithChatId": {
         "type": "object",
-        "required": [
-          "chat_id"
-        ],
+        "required": ["chat_id"],
         "properties": {
           "chat_id": {
             "type": "string"

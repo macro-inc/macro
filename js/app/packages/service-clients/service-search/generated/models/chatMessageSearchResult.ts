@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChatMessageSearchResultChatMessageId } from './chatMessageSearchResultChatMessageId';
-import type { SearchHighlight } from './searchHighlight';
 import type { ChatMessageSearchResultRole } from './chatMessageSearchResultRole';
 import type { ChatMessageSearchResultScore } from './chatMessageSearchResultScore';
+import type { SearchHighlight } from './searchHighlight';
 
 /**
  * A chat match for a given message id

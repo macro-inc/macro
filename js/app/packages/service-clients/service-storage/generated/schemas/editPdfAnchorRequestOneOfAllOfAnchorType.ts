@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type EditPdfAnchorRequestOneOfAllOfAnchorType = typeof EditPdfAnchorRequestOneOfAllOfAnchorType[keyof typeof EditPdfAnchorRequestOneOfAllOfAnchorType];
-
+export type EditPdfAnchorRequestOneOfAllOfAnchorType =
+  (typeof EditPdfAnchorRequestOneOfAllOfAnchorType)[keyof typeof EditPdfAnchorRequestOneOfAllOfAnchorType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EditPdfAnchorRequestOneOfAllOfAnchorType = {
