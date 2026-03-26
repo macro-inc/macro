@@ -70,7 +70,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get team invite",
+                    message: "unable to get team invite".into(),
                 }),
             )
                 .into_response()
@@ -79,12 +79,12 @@ pub async fn handler(
     if team_invite
         .last_sent_at
         .naive_utc()
-        .lt(&(chrono::Utc::now().naive_utc() - chrono::Duration::minutes(5)))
+        .ge(&(chrono::Utc::now().naive_utc() - chrono::Duration::minutes(5)))
     {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
             Json(ErrorResponse {
-                message: "team invite has not been sent in the last 5 minutes",
+                message: "team invite was already sent within the last 5 minutes".into(),
             }),
         )
             .into_response());
@@ -97,7 +97,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to update team invite last sent at",
+                    message: "unable to update team invite last sent at".into(),
                 }),
             )
                 .into_response()

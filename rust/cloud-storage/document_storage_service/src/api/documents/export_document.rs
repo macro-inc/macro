@@ -74,7 +74,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to convert file type",
+                    message: "unable to convert file type".into(),
                 }),
             )
                 .into_response()
@@ -97,7 +97,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to export document",
+                    message: "unable to export document".into(),
                 }),
             )
                 .into_response()
@@ -114,7 +114,7 @@ pub async fn handler(
         Ok((
             StatusCode::NOT_IMPLEMENTED,
             Json(ErrorResponse {
-                message: "cannot export document with no file type",
+                message: "cannot export document with no file type".into(),
             }),
         )
             .into_response())

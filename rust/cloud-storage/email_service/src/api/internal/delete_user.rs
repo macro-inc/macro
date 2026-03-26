@@ -24,7 +24,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to fetch links",
+                message: "unable to fetch links".into(),
             }),
         )
             .into_response()

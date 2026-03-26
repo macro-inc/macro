@@ -66,7 +66,7 @@ pub(in crate::api) async fn copy_document_handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "cannot copy deleted document",
+                message: "cannot copy deleted document".into(),
             }),
         )
             .into_response());

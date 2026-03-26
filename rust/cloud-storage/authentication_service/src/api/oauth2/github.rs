@@ -30,7 +30,7 @@ pub enum GithubLinkError {
 impl IntoResponse for GithubLinkError {
     fn into_response(self) -> Response {
         Json(ErrorResponse {
-            message: &self.to_string(),
+            message: self.to_string().into(),
         })
         .into_response()
     }

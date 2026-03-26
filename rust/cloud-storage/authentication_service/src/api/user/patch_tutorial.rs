@@ -37,19 +37,19 @@ impl IntoResponse for PatchTutorialCompleteError {
             PatchTutorialCompleteError::UserNotFound => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "user not found",
+                    message: "user not found".into(),
                 }),
             ),
             PatchTutorialCompleteError::InvalidMacroUserId => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "invalid user id",
+                    message: "invalid user id".into(),
                 }),
             ),
             PatchTutorialCompleteError::InternalError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "internal error",
+                    message: "internal error".into(),
                 }),
             ),
         }

@@ -372,7 +372,7 @@ async fn get_typed_notification_by_id<S: ::notification::domain::service::Notifi
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             axum::Json(model_error_response::ErrorResponse {
-                message: "failed to convert notification",
+                message: "failed to convert notification".into(),
             }),
         )
     })?;

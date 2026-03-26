@@ -36,7 +36,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to mute all notifications",
+                message: "unable to mute all notifications".into(),
             }),
         )
             .into_response()

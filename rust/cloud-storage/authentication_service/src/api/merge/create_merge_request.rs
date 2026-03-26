@@ -103,7 +103,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "failed to get user macro id",
+                        message: "failed to get user macro id".into(),
                     }),
                 )
                     .into_response()
@@ -121,7 +121,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to create account merge request",
+                message: "failed to create account merge request".into(),
             }),
         )
             .into_response()
@@ -134,7 +134,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to get user profile",
+                    message: "failed to get user profile".into(),
                 }),
             )
                 .into_response()
@@ -158,7 +158,7 @@ pub async fn handler(
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to send email",
+                message: "failed to send email".into(),
             }),
         )
             .into_response());

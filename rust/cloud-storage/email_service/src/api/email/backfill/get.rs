@@ -52,7 +52,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "error fetching job",
+                message: "error fetching job".into(),
             }),
         )
             .into_response()
@@ -66,7 +66,7 @@ pub async fn handler(
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                message: "job does not exist",
+                message: "job does not exist".into(),
             }),
         )
             .into_response()
@@ -124,7 +124,7 @@ impl IntoResponse for GetActiveBackfillError {
         (
             status_code,
             Json(ErrorResponse {
-                message: self.to_string().as_str(),
+                message: self.to_string().into(),
             }),
         )
             .into_response()

@@ -57,7 +57,13 @@ impl IntoResponse for UpdateThreadLabelError {
         };
 
         let message = self.to_string();
-        (status, Json(ErrorResponse { message: &message })).into_response()
+        (
+            status,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }
 

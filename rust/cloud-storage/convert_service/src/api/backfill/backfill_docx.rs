@@ -55,7 +55,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to get documents",
+                        message: "unable to get documents".into(),
                     }),
                 )
                     .into_response()

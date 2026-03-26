@@ -53,26 +53,26 @@ impl IntoResponse for InviteToTeamError {
             InviteToTeamError::InvalidEmails => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "invalid emails detected",
+                    message: "invalid emails detected".into(),
                 }),
             ),
             InviteToTeamError::NoValidEmailsProvided => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "no emails provided",
+                    message: "no emails provided".into(),
                 }),
             ),
             InviteToTeamError::InviteUsersToTeamError(e) => match e {
                 InviteUsersToTeamError::TooManyEmails => (
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {
-                        message: "too many emails",
+                        message: "too many emails".into(),
                     }),
                 ),
                 _ => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to invite users to team",
+                        message: "unable to invite users to team".into(),
                     }),
                 ),
             },

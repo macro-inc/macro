@@ -47,7 +47,7 @@ pub enum StripeCustomerError {
 impl IntoResponse for StripeCustomerError {
     fn into_response(self) -> Response {
         let err = Json(ErrorResponse {
-            message: &self.to_string(),
+            message: self.to_string().into(),
         });
         match self {
             StripeCustomerError::NoStripeCustomerId => (StatusCode::UNAUTHORIZED, err),

@@ -81,7 +81,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to encode jwt",
+                message: "unable to encode jwt".into(),
             }),
         )
             .into_response()

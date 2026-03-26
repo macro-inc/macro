@@ -59,7 +59,7 @@ pub async fn create_anchor_handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "cannot modify deleted document",
+                message: "cannot modify deleted document".into(),
             }),
         )
             .into_response());

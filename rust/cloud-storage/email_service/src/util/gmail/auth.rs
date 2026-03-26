@@ -98,7 +98,7 @@ pub async fn fetch_gmail_token_usercontext_response(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get gmail access token",
+                    message: "unable to get gmail access token".into(),
                 }),
             )
                 .into_response()
@@ -128,7 +128,7 @@ pub async fn fetch_gmail_token_no_cache(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get gmail access token",
+                    message: "unable to get gmail access token".into(),
                 }),
             )
                 .into_response()
@@ -141,7 +141,7 @@ pub async fn fetch_gmail_token_no_cache(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get gmail access token",
+                    message: "unable to get gmail access token".into(),
                 }),
             )
                 .into_response()

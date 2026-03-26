@@ -53,7 +53,7 @@ pub async fn get_project_content_handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to get project content",
+                message: "unable to get project content".into(),
             }),
         )
             .into_response()
@@ -91,7 +91,7 @@ pub async fn get_project_handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to get project",
+                        message: "unable to get project".into(),
                     }),
                 )
                     .into_response()

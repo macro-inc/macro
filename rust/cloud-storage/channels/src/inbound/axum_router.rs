@@ -625,16 +625,20 @@ pub enum ChannelsHandlerErr {
 impl IntoResponse for ChannelsHandlerErr {
     fn into_response(self) -> axum::response::Response {
         match self {
-            ChannelsHandlerErr::BadRequest(message) => {
-                (StatusCode::BAD_REQUEST, Json(ErrorResponse { message })).into_response()
-            }
+            ChannelsHandlerErr::BadRequest(message) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: message.into(),
+                }),
+            )
+                .into_response(),
             ChannelsHandlerErr::Internal(err) => match err {
                 ChannelMessagesErr::MessageNotFound(id) => {
                     tracing::warn!(message_id=?id, "message not found");
                     (
                         StatusCode::NOT_FOUND,
                         Json(ErrorResponse {
-                            message: "Message not found",
+                            message: "Message not found".into(),
                         }),
                     )
                         .into_response()
@@ -644,7 +648,7 @@ impl IntoResponse for ChannelsHandlerErr {
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
-                            message: "An internal server error occurred",
+                            message: "An internal server error occurred".into(),
                         }),
                     )
                         .into_response()

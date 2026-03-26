@@ -24,7 +24,13 @@ impl IntoResponse for DisableSyncError {
         };
 
         let message = self.to_string();
-        (status_code, Json(ErrorResponse { message: &message })).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }
 

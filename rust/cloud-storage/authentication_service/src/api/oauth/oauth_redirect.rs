@@ -131,21 +131,21 @@ impl IntoResponse for InnerErr {
             InnerErr::InvalidJwtError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to deserialize jwt",
+                    message: "failed to deserialize jwt".into(),
                 }),
             )
                 .into_response(),
             InnerErr::Serde(_error) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "failed to deserialize input",
+                    message: "failed to deserialize input".into(),
                 }),
             )
                 .into_response(),
             InnerErr::MacroCacheErr(_e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to store session code",
+                    message: "unable to store session code".into(),
                 }),
             )
                 .into_response(),
@@ -153,7 +153,7 @@ impl IntoResponse for InnerErr {
             InnerErr::ParseErr(_e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to parse original url",
+                    message: "unable to parse original url".into(),
                 }),
             )
                 .into_response(),
