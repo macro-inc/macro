@@ -2,6 +2,7 @@ import CheckIcon from '@icon/regular/check.svg';
 import ExclamationIcon from '@icon/regular/exclamation-mark.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
+
 import { Toast, toaster } from '@kobalte/core/toast';
 import type { Component } from 'solid-js';
 import {
@@ -13,6 +14,9 @@ import {
   on,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { ClippedPanel } from '../ClippedPanel';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 
 export enum ToastType {
   SUCCESS = 'success',
@@ -47,7 +51,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.SUCCESS]: {
     background: 'bg-success/10',
     accent: 'bg-success',
-    borderColor: 'border-success',
+    borderColor: 'var(--color-success)',
     titleText: 'text-success-ink',
     subtitleText: 'text-success-ink/70',
     icon: CheckIcon,
@@ -61,8 +65,8 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.FAILURE]: {
     background: 'bg-failure/10',
     accent: 'bg-failure',
-    borderColor: 'border-failure',
     titleText: 'text-failure-ink',
+    borderColor: 'var(--color-failure)',
     subtitleText: 'text-failure-ink/70',
     icon: ExclamationIcon,
     button: {
@@ -75,7 +79,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.ALERT]: {
     background: 'bg-alert/10',
     accent: 'bg-alert',
-    borderColor: 'border-alert',
+    borderColor: 'var(--color-alert)',
     titleText: 'text-alert-ink',
     subtitleText: 'text-alert-ink/70',
     icon: ExclamationIcon,
@@ -89,7 +93,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.LOADING]: {
     background: 'bg-accent/10',
     accent: 'bg-accent',
-    borderColor: 'border-accent',
+    borderColor: 'var(--color-edge)',
     titleText: 'text-ink',
     subtitleText: 'text-ink-muted',
     icon: Spinner,
@@ -165,14 +169,15 @@ function alert(message: string, subtext?: string, duration?: number) {
 
 function ToastContent(props: {
   toastId: number;
-  toastType: ToastType;
-  message: string;
+  toastType?: ToastType;
+  message?: string;
   subtext?: string;
   action?: { text: string; onClick: () => void };
   persistent?: boolean;
   duration?: number;
+  embed?: Component;
 }) {
-  const styles = () => TOAST_STYLES[props.toastType];
+  const styles = () => (props.toastType ? TOAST_STYLES[props.toastType] : null);
 
   // Track progress until disappearance (1 = full duration remaining, 0 = time to disappear)
   const [progress, setProgress] = createSignal(1);
@@ -232,68 +237,79 @@ function ToastContent(props: {
   return (
     <Toast
       toastId={props.toastId}
-      class={`relative overflow-visible rounded-xs pointer-events-auto
-        bg-panel
+      class={`relative overflow-visible pointer-events-auto shadow-md rounded-lg
         data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Animated border that fades from opacity 1 to 0 */}
-      <Show when={!props.persistent}>
-        <div
-          class={`absolute inset-0 rounded-xs border-1 pointer-events-none ${styles().borderColor}`}
-          style={{ opacity: progress() }}
-        />
-      </Show>
-
-      <div class="flex">
-        {/* Left accent area with icon */}
-        <div
-          class={`flex items-center justify-center w-12 shrink-0 ${styles().accent}/20`}
+      <ClippedPanel
+        edgeColor="var(--color-edge-muted)"
+        highlightColor={styles()?.borderColor ?? 'var(--color-edge)'}
+        active
+        cornerRadius={'8px'}
+        class="w-md p-3"
+      >
+        <Show
+          when={props.embed}
+          fallback={
+            <>
+              <div class="flex items-center gap-2 justify-between">
+                <div
+                  class="size-5 flex justify-center items-center rounded-full p-0.75"
+                  style={{
+                    'background-color': styles()!.borderColor,
+                  }}
+                >
+                  <Dynamic
+                    component={styles()!.icon}
+                    class={cn(
+                      'size-3.5 text-panel',
+                      props.toastType === ToastType.LOADING
+                        ? 'animate-spin'
+                        : ''
+                    )}
+                  />
+                </div>
+                <Toast.Title class="font-semibold text-ink grow shrink truncate">
+                  {props.message}
+                </Toast.Title>
+                <Toast.CloseButton>
+                  <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                    <XIcon />
+                  </Button>
+                </Toast.CloseButton>
+              </div>
+              <Toast.Description class="text-sm text-ink-extra-muted ml-7">
+                {props.subtext}
+              </Toast.Description>
+              <Show when={props.action}>
+                {(action) => (
+                  <Button
+                    onClick={action().onClick}
+                    variant="secondary"
+                    class="mt-2 text-sm font-semibold py-1.5 px-3 ml-7 rounded px-4"
+                  >
+                    {action().text}
+                  </Button>
+                )}
+              </Show>
+            </>
+          }
         >
-          <Dynamic
-            component={styles().icon}
-            class={`size-6 ${styles().titleText} ${props.toastType === ToastType.LOADING ? 'animate-spin' : ''}`}
-          />
-        </div>
-
-        {/* Content area */}
-        <div class="flex-1 pt-2 px-3 pb-3 pr-10">
-          <Toast.Title class={`font-semibold text-ink`}>
-            {props.message}
-          </Toast.Title>
-          <Show when={props.subtext}>
-            <Toast.Description class={`text-sm text-ink-extra-muted`}>
-              {props.subtext}
-            </Toast.Description>
-          </Show>
-
-          {/* Action button */}
-          <Show when={props.action}>
-            {(action) => (
-              <button
-                onClick={action().onClick}
-                class={`mt-2 w-full text-sm font-semibold py-1.5 px-3 rounded
-                  ${styles().button.background}/20
-                  ${styles().button.hover}
-                  ${styles().button.text}
-                `}
-              >
-                {action().text}
-              </button>
-            )}
-          </Show>
-        </div>
-
-        {/* Close button */}
-        <Toast.CloseButton class="absolute top-2 right-2 p-1 rounded">
-          <XIcon
-            class={`size-4 text-ink-extra-muted transition-colors ${styles().closeButtonHover}`}
-          />
-        </Toast.CloseButton>
-      </div>
+          {(embed) => (
+            <>
+              <Dynamic component={embed()} />
+              <Toast.CloseButton class="absolute top-2 right-2 z-1">
+                <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                  <XIcon />
+                </Button>
+              </Toast.CloseButton>
+            </>
+          )}
+        </Show>
+      </ClippedPanel>
     </Toast>
   );
 }
@@ -407,21 +423,12 @@ function embed(
 ) {
   return toaster.show(
     (props) => (
-      <Toast
+      <ToastContent
         toastId={props.toastId}
-        class="flex flex-col items-center justify-between gap-2 border rounded-md p-3 pointer-events-auto border-edge-muted bg-panel relative
-          data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
-          data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out"
-        duration={options?.duration}
+        embed={component}
         persistent={options?.persistent}
-      >
-        <div class="size-full">
-          <Dynamic component={component} />
-        </div>
-        <Toast.CloseButton class="ml-auto absolute top-2 right-2 z-1">
-          <XIcon class="h-5 ml-4 text-[oklch(0.551_0.027_264.364)]" />
-        </Toast.CloseButton>
-      </Toast>
+        duration={options?.duration}
+      />
     ),
     { region: options?.region || 'toast-region' }
   );
@@ -430,23 +437,12 @@ function embed(
 export function createUploadToast(message: string) {
   return toaster.show(
     (props) => (
-      <Toast
+      <ToastContent
         toastId={props.toastId}
+        toastType={ToastType.LOADING}
+        message={message}
         persistent={true}
-        class={`flex flex-col items-center justify-between gap-2 border rounded-md p-3 shadow-lg bg-menu border-edge-muted pointer-events-auto
-                data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
-                data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
-      >
-        <div class="flex items-center w-full">
-          <Spinner class="mr-3 h-7 animate-spin shrink-0" />
-          <div>
-            <Toast.Title>{message}</Toast.Title>
-          </div>
-          <Toast.CloseButton class="ml-auto">
-            <XIcon class={`h-5 ml-4`} />
-          </Toast.CloseButton>
-        </div>
-      </Toast>
+      />
     ),
     { region: 'stable-toast' }
   );

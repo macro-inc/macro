@@ -6,6 +6,7 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
+import { toast } from '@core/component/Toast/Toast';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
@@ -345,6 +346,30 @@ if (LOCAL_ONLY) {
     'quick-access-list',
     lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
   );
+
+  registerComponent('toast-debug', () => {
+    const PERSIST = 999_999_999;
+
+    const fire = () => {
+      toast.success('Success toast', 'This is a success subtext', { text: 'Undo', onClick: () => {} }, PERSIST);
+      toast.failure('Failure toast', 'This is a failure subtext', PERSIST);
+      toast.alert('Alert toast', 'This is an alert subtext', PERSIST);
+      toast.promise(new Promise(() => {}), { loading: 'Loading toast', subtext: 'This is a loading subtext' });
+    };
+
+    onMount(fire);
+
+    return (
+      <div class="flex items-center justify-center h-full">
+        <button
+          class="px-4 py-2 bg-accent text-panel rounded"
+          onClick={fire}
+        >
+          Show All Toasts
+        </button>
+      </div>
+    );
+  });
 }
 
 if (DEV_MODE_ENV) {
