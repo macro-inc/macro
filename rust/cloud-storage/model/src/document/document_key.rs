@@ -1,6 +1,7 @@
 pub static CONVERTED_DOCUMENT_FILE_NAME: &str = "converted";
 pub static PDF_EXTENSION: &str = "pdf";
 pub static DOCX_EXTENSION: &str = "docx";
+pub static TEMP_FILE_PREFIX: &str = "temp_files";
 
 /// Builds a document key for a document in the cloud storage bucket.
 /// The document_version_id could be the document's version id (i64) or "converted" for files that
@@ -67,6 +68,12 @@ pub fn build_docx_staging_bucket_document_key(
         document_version_id,
         Some(DOCX_EXTENSION),
     )
+}
+
+/// Builds the S3 key for a temporary DOCX export file.
+/// Format: `temp_files/{document_id}.docx`
+pub fn build_temp_docx_key(document_id: &str) -> String {
+    format!("{}/{}.{}", TEMP_FILE_PREFIX, document_id, DOCX_EXTENSION)
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{api::context::ApiContext, service::s3::TEMP_FILE_PREFIX};
+use crate::api::context::ApiContext;
 use axum::{
     Extension, Json,
     extract::{Path, State},
@@ -12,6 +12,7 @@ use axum::{
 };
 use futures::StreamExt;
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use model::document::build_temp_docx_key;
 use model::{
     document::{DocumentBasic, FileType, response::LocationResponseData},
     response::{ErrorResponse, GenericErrorResponse},
@@ -146,7 +147,7 @@ async fn export_basic_document(
 }
 
 async fn export_docx_document(state: &ApiContext, document_id: &str) -> anyhow::Result<String> {
-    let docx_key = format!("{TEMP_FILE_PREFIX}/{document_id}.docx");
+    let docx_key = build_temp_docx_key(document_id);
     let exists = state.s3_client.exists(&docx_key).await?;
 
     if !exists {
