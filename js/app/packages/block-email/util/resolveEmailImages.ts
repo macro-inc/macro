@@ -42,7 +42,8 @@ export function resolveCidImages(
  */
 export async function fetchImagesViaPlatform(
   root: ShadowRoot,
-  blobUrls: string[]
+  blobUrls: string[],
+  isDisposed: () => boolean
 ): Promise<void> {
   if (!isTauri()) return;
 
@@ -54,11 +55,23 @@ export async function fetchImagesViaPlatform(
       const src = img.getAttribute('src');
       if (!src) return;
       try {
+        // Check isDisposed() after every await boundary. The parent effect's
+        // onCleanup only revokes URLs present in blobUrls at cleanup time, so
+        // any blob URL created after cleanup runs would leak. Bailing out early
+        // avoids creating those URLs; the final check after createObjectURL
+        // handles the race where disposal occurs between the blob() await and
+        // the URL being created.
         const response = await platformFetch(src);
+        if (isDisposed()) return;
         const contentType = response.headers.get('content-type') ?? '';
         if (!response.ok || !contentType.startsWith('image/')) return;
         const blob = await response.blob();
+        if (isDisposed()) return;
         const blobUrl = URL.createObjectURL(blob);
+        if (isDisposed()) {
+          URL.revokeObjectURL(blobUrl);
+          return;
+        }
         blobUrls.push(blobUrl);
         img.src = blobUrl;
         img.dataset.tauriFetched = 'true';

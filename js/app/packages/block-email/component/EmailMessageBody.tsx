@@ -157,7 +157,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       if (disposed) return;
       resolveCidImages(root, attachments);
       if (disposed) return;
-      await fetchImagesViaPlatform(root, blobUrls);
+      await fetchImagesViaPlatform(root, blobUrls, () => disposed);
     });
   });
 
