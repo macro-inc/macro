@@ -35,7 +35,8 @@ fn build_cloud_storage_bucket_document_key_helper<T: ToString>(
 
 /// Builds a document key for a document in the cloud storage bucket.
 /// The format is `{user_id}/{document_id}/{document_version_id}`.
-/// Note that some documents will have a different format, see `build_docx_to_pdf_converted_document_key` and `build_docx_staging_bucket_document_key`.
+/// Note that some specific document use cases will have a different format, see:
+/// `build_docx_to_pdf_converted_document_key`, `build_docx_staging_bucket_document_key`, `build_temp_docx_key`.
 pub fn build_cloud_storage_bucket_document_key<T: ToString>(
     user_id: &str,
     document_id: &str,
