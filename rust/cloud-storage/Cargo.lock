@@ -10802,6 +10802,7 @@ dependencies = [
  "macro_entrypoint",
  "models_bulk_upload",
  "openssl",
+ "s3_key",
  "serde",
  "serde_json",
  "sqs_client",

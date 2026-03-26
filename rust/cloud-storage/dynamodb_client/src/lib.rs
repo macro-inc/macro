@@ -53,7 +53,7 @@ impl BulkUpload {
         parent_id: Option<&str>,
     ) -> anyhow::Result<BulkUploadRequest> {
         let table = self.table()?;
-        let key = s3_key::build_bulk_upload_staging_key(request_id);
+        let key = s3_key::BulkUploadStagingKey::new(request_id).to_key();
         bulk_upload::create_bulk_upload_request(
             &self.client,
             table,
