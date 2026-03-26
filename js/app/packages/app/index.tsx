@@ -97,15 +97,6 @@ function main() {
       });
     });
 
-    // Defer analytics initialization to avoid blocking initial render
-    scheduleIdleTask(() => {
-      analytics.init({
-        appVersion: import.meta.env.__APP_VERSION__,
-        segmentWriteKey: import.meta.env.VITE_SEGMENT_WRITE_KEY,
-        mode: import.meta.env.MODE,
-      });
-    });
-
     // this event is emitted when dynamically loading a module fails
     // for example when you're using the app and a new version is deployed
     window.addEventListener('vite:preloadError', () =>
