@@ -54,9 +54,18 @@ pub(crate) async fn list_threads(
         .await
         .context("Failed to send request to Gmail API (list threads)")?;
 
-    let response = response
-        .error_for_status()
-        .context("Gmail API returned an error status (list threads)")?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        anyhow::bail!(
+            "Gmail API error {} (list threads): {}",
+            status,
+            error_body
+        );
+    }
 
     let gmail_response = response
         .json::<ListThreadsResponse>()
@@ -241,10 +250,19 @@ pub(crate) async fn get_message_ids_for_thread(
             thread_id
         ))?;
 
-    let response = response.error_for_status().context(format!(
-        "Gmail API returned an error status for thread {}",
-        thread_id
-    ))?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        anyhow::bail!(
+            "Gmail API error {} (get message ids for thread) for thread_id: {}: {}",
+            status,
+            thread_id,
+            error_body
+        );
+    }
 
     let thread_resource = response
         .json::<MinimalThreadResource>()
