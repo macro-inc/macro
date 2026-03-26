@@ -22,7 +22,8 @@ use model::document::response::{
     GetDocumentResponseData, LocationResponseData, LocationResponseV3,
 };
 use model::document::{
-    CONVERTED_DOCUMENT_FILE_NAME, ContentType, DocumentBasic, FileType, FileTypeExt, build_docx_staging_bucket_document_key,
+    ContentType, DocumentBasic, FileType, FileTypeExt, build_converted_document_key,
+    build_docx_staging_bucket_document_key,
     build_extensionless_document_key,
 };
 use model::response::PresignedUrl;
@@ -151,10 +152,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         document_id: &str,
     ) -> anyhow::Result<LocationResponseData> {
         let url_encoded_owner = urlencoding::encode(owner);
-        let document_key = format!(
-            "{}/{}/{}.pdf",
-            url_encoded_owner, document_id, CONVERTED_DOCUMENT_FILE_NAME
-        );
+        let document_key = build_converted_document_key(&url_encoded_owner, document_id);
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))

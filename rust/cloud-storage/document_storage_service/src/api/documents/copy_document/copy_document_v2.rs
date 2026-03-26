@@ -8,7 +8,7 @@ use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
 use model::{
     document::{
-        BomPart, CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
+        BomPart, DocumentMetadata, FileType, build_converted_document_key,
         build_extensionless_document_key,
     },
     response::GenericResponse,
@@ -74,16 +74,14 @@ pub async fn copy_document<'a>(
             // we need to also copy this over into the new dss file
             let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             // Get the source document key
-            let source_key = format!(
-                "{}/{}/{}.pdf",
-                url_encoded_owner,
-                original_document_metadata.document_id,
-                CONVERTED_DOCUMENT_FILE_NAME
+            let source_key = build_converted_document_key(
+                &url_encoded_owner,
+                &original_document_metadata.document_id,
             );
 
-            let dest_key = format!(
-                "{}/{}/{}.pdf",
-                user_id, updated_document_metadata.document_id, CONVERTED_DOCUMENT_FILE_NAME
+            let dest_key = build_converted_document_key(
+                user_id.as_ref(),
+                &updated_document_metadata.document_id,
             );
 
             if let Err(e) = ctx.s3_client.copy_document(&source_key, &dest_key).await {
