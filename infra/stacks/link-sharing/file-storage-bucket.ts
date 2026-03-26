@@ -102,7 +102,6 @@ export const attachPolicyToBucket = ({
     's3:PutBucketCORS',
     's3:ListBucket',
     's3:PutBucketLogging',
-    's3:GetBucketPolicy',
     's3:PutBucketPolicy',
     's3:DeleteBucketPolicy',
     's3:GetBucketVersioning',
