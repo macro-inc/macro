@@ -159,13 +159,13 @@ pub async fn extract_text_from_document(
 
     let file_type = if document_key.is_converted_pdf() {
         Some(model::document::FileType::Pdf)
-    } else if document_key.is_versioned() {
+    } else if document_key.is_temp() {
+        None
+    } else {
         db.get_document_file_type(document_id).await.map_err(|e| {
             tracing::error!(error=?e, "unable to get file type from db");
             Error::from("unable to get file type from db")
         })?
-    } else {
-        None
     };
 
     match file_type {
