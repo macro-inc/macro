@@ -55,6 +55,8 @@ export async function fetchImagesViaPlatform(
       if (!src) return;
       try {
         const response = await platformFetch(src);
+        const contentType = response.headers.get('content-type') ?? '';
+        if (!response.ok || !contentType.startsWith('image/')) return;
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
         blobUrls.push(blobUrl);

@@ -144,14 +144,19 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   createEffect(() => {
     const root = host().shadowRoot;
     if (!root) return;
+    const attachments = props.message.attachments;
 
     const blobUrls: string[] = [];
+    let disposed = false;
     onCleanup(() => {
+      disposed = true;
       for (const url of blobUrls) URL.revokeObjectURL(url);
     });
 
     queueMicrotask(async () => {
-      resolveCidImages(root, props.message.attachments);
+      if (disposed) return;
+      resolveCidImages(root, attachments);
+      if (disposed) return;
       await fetchImagesViaPlatform(root, blobUrls);
     });
   });
