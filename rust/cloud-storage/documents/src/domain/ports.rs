@@ -146,7 +146,6 @@ pub trait PresignedUploadUrlPort: Send + Sync + 'static {
         sha: &str,
         content_type: ContentType,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
-
 }
 
 /// Port for attaching task system properties.

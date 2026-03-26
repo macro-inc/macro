@@ -65,7 +65,6 @@ impl PresignedUploadUrlPort for S3UploadUrlAdapter {
         )
         .await
     }
-
 }
 
 async fn put_presigned_url(
