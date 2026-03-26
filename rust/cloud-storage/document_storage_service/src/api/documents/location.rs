@@ -108,6 +108,48 @@ pub async fn get_location_handler(
         .unwrap()
 }
 
+/// Signs a document key and returns a CloudFront presigned URL.
+/// Optionally verifies the key exists in S3 when the `location_check` feature is enabled.
+#[tracing::instrument(skip(state))]
+async fn sign_document_key(
+    state: &ApiContext,
+    document_key: &str,
+) -> anyhow::Result<LocationResponseData> {
+    #[cfg(feature = "location_check")]
+    {
+        tracing::trace!("checking if file exists in s3, key: {}", document_key);
+        let exists = verify_file_exists(&state.s3_client, document_key).await?;
+        if !exists {
+            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
+        }
+    }
+
+    let signed_options = get_cloudfront_signed_options(
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_signer_public_key_id,
+        state
+            .config
+            .document_storage_service_cloudfront_signer_private_key
+            .as_ref(),
+        state
+            .config
+            .document_storage_service_presigned_url_expiry_seconds,
+    );
+
+    let signed_url = get_presigned_url(
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_distribution_url,
+        document_key,
+        &signed_options,
+    )?;
+
+    Ok(LocationResponseData::PresignedUrl(signed_url))
+}
+
 /// Gets a signed CloudFront URL for a versioned document.
 ///
 /// For static files (PDF, HTML), the version is always resolved from the DB.
@@ -135,48 +177,14 @@ pub(in crate::api::documents) async fn get_versioned_url(
         }
     };
 
-    #[cfg(feature = "location_check")]
-    {
-        let check_key =
-            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
-        tracing::trace!("checking if file exists in s3, key: {}", check_key);
-        let exists = verify_file_exists(&state.s3_client, &check_key).await?;
-        if !exists {
-            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
-        }
-    }
-
     let url_encoded_owner = urlencoding::encode(owner);
-    let url_encoded_document_key = build_cloud_storage_bucket_document_key(
+    let key = build_cloud_storage_bucket_document_key(
         &url_encoded_owner,
         document_id,
         document_version_id,
     );
 
-    let signed_options = get_cloudfront_signed_options(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_signer_public_key_id,
-        state
-            .config
-            .document_storage_service_cloudfront_signer_private_key
-            .as_ref(),
-        state
-            .config
-            .document_storage_service_presigned_url_expiry_seconds,
-    );
-
-    let signed_url = get_presigned_url(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_distribution_url,
-        &url_encoded_document_key,
-        &signed_options,
-    )?;
-
-    Ok(LocationResponseData::PresignedUrl(signed_url))
+    sign_document_key(state, &key).await
 }
 
 /// Gets the presigned url for the converted docx file
@@ -186,45 +194,10 @@ async fn get_converted_docx_url(
     owner: &str,
     document_id: &str,
 ) -> anyhow::Result<LocationResponseData> {
-    // Check if the item exists in s3
-    #[cfg(feature = "location_check")]
-    {
-        let document_key = build_docx_to_pdf_converted_document_key(owner, document_id);
-        tracing::trace!("checking if file exists in s3, key: {}", document_key);
-        let exists = verify_file_exists(&state.s3_client, &document_key).await?;
-        if !exists {
-            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
-        }
-    }
-
     let url_encoded_owner = urlencoding::encode(owner);
-    let url_encoded_document_key =
-        build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
+    let key = build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
 
-    let signed_options = get_cloudfront_signed_options(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_signer_public_key_id,
-        state
-            .config
-            .document_storage_service_cloudfront_signer_private_key
-            .as_ref(),
-        state
-            .config
-            .document_storage_service_presigned_url_expiry_seconds,
-    );
-
-    let signed_url = get_presigned_url(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_distribution_url,
-        &url_encoded_document_key,
-        &signed_options,
-    )?;
-
-    Ok(LocationResponseData::PresignedUrl(signed_url))
+    sign_document_key(state, &key).await
 }
 
 #[tracing::instrument(skip(state))]
