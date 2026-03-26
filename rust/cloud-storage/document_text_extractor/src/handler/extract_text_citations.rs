@@ -156,10 +156,18 @@ pub async fn extract_text_from_document(
     })?;
 
     let document_id = document_key.document_id();
-    let file_type = db.get_document_file_type(document_id).await.map_err(|e| {
-        tracing::error!(error=?e, "unable to get file type from db");
-        Error::from("unable to get file type from db")
-    })?;
+
+    let file_type = if document_key.is_converted_pdf() {
+        Some(model::document::FileType::Pdf)
+    } else if document_key.is_versioned() {
+        db.get_document_file_type(document_id).await.map_err(|e| {
+            tracing::error!(error=?e, "unable to get file type from db");
+            Error::from("unable to get file type from db")
+        })?
+    } else {
+        None
+    };
+
     match file_type {
         Some(model::document::FileType::Pdf) => {}
         _ => {

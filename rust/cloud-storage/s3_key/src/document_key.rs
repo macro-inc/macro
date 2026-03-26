@@ -95,6 +95,11 @@ impl DocumentKey {
         }
     }
 
+    /// Returns `true` if this is a versioned document key. This is the default.
+    pub fn is_versioned(&self) -> bool {
+        matches!(self, Self::Versioned { .. })
+    }
+
     /// Returns `true` if this is a temporary DOCX export key.
     pub fn is_temp(&self) -> bool {
         matches!(self, Self::TempDocx { .. })
