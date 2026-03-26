@@ -14,7 +14,7 @@ use macro_user_id::{
 use sqlx::PgPool;
 
 use crate::domain::{
-    model::{Permission, RoleId, UserRolesAndPermissionsError},
+    model::{Permission, PermissionId, RoleId, UserRolesAndPermissionsError},
     port::{UserRepository, UserRolesAndPermissionsRepository},
 };
 
@@ -117,9 +117,19 @@ impl MacroDB {
         "#,
             user_id.as_ref(),
         )
-        .map(|r| Permission::new(r.id.parse().unwrap(), r.description))
         .fetch_all(&self.pool)
-        .await?;
+        .await?
+        .into_iter()
+        .filter_map(|r| {
+            let permission_id: Option<PermissionId> = r.id.parse().ok();
+            if let Some(permission_id) = permission_id {
+                Some(Permission::new(permission_id, r.description))
+            } else {
+                tracing::warn!(permission_id=%r.id, "unknown permission id");
+                None
+            }
+        })
+        .collect();
 
         let user_permissions = user_permissions.into_iter().collect::<HashSet<_>>();
 
@@ -151,9 +161,16 @@ impl UserRolesAndPermissionsRepository for MacroDB {
             "#,
             user_id.as_ref()
         )
-        .map(|r| r.role_id.parse().unwrap())
         .fetch_all(&self.pool)
-        .await?;
+        .await?
+        .iter()
+        .filter_map(|r| {
+            r.role_id.parse().ok().or_else(|| {
+                tracing::warn!(role_id = %r.role_id, "Unknown role_id in database, skipping");
+                None
+            })
+        })
+        .collect();
 
         Ok(user_roles.into_iter().collect::<HashSet<_>>())
     }

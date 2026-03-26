@@ -81,7 +81,7 @@ impl FromStr for RoleId {
             "sub_haiku" => Ok(RoleId::SubHaiku),
             "sub_sonnet" => Ok(RoleId::SubSonnet),
             "sub_opus" => Ok(RoleId::SubOpus),
-            _ => Err(anyhow::anyhow!("unknown role id: {s}")),
+            _ => anyhow::bail!("unknown role id: {s}"),
         }
     }
 }
@@ -271,7 +271,7 @@ impl TryFrom<&str> for SubscriptionStatus {
             "canceled" => Ok(Self::Canceled),
             "unpaid" => Ok(Self::Unpaid),
             "paused" => Ok(Self::Paused),
-            _ => Err(anyhow::anyhow!("invalid subscription status {value}")),
+            _ => anyhow::bail!("invalid subscription status {value}"),
         }
     }
 }
