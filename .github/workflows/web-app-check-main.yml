@@ -36,15 +36,7 @@ jobs:
     # Run the type check if rust code or frontend code has changed.
     if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
-    runs-on:
-      [
-        runs-on,
-        runner=8cpu-linux-x64,
-        hdd=40,
-        spot=false,
-        ssh=false,
-        'run-id=${{github.run_id}}',
-      ]
+    runs-on: linux-latest-beefy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
