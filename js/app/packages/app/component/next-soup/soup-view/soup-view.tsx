@@ -48,9 +48,11 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
+import { makePersisted } from '@solid-primitives/storage';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createRenderEffect,
@@ -59,10 +61,10 @@ import {
   Match,
   on,
   onCleanup,
-  onMount,
   Show,
   Suspense,
   Switch,
+  untrack,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -77,7 +79,6 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
-import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
@@ -94,6 +95,7 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import {
   invalidateSoupEntity,
@@ -143,17 +145,23 @@ const useSoupNotificationInvalidators = () => {
   );
 };
 
-const stateCache = new Map<
+type PersistedSoupViewState = {
+  activeTab: string | undefined;
+  filters: { and: string[]; or: string[] };
+  queryFilters: SoupItemsQueryFilters;
+  sort: SystemSortOption[];
+  previewEntity: string | undefined;
+  assigneeFilter: string[];
+};
+
+// Tracks how many SoupViewList instances are mounted per contentId.
+// Used to detect duplicate splits showing the same view.
+const activeSoupViewCounts = new Map<string, number>();
+
+const listStateCache = new Map<
   string,
   {
-    soup: {
-      focus: string | undefined;
-      filters: { and: string[]; or: string[] };
-      queryFilters: SoupItemsQueryFilters;
-      sort: SystemSortOption[];
-      searchText: string;
-      activeTab: string | undefined;
-    };
+    focus: string | undefined;
     virtualCache?: CacheSnapshot;
     scrollOffset?: number;
   }
@@ -170,12 +178,6 @@ export const SoupView = (props: SoupViewProps) => {
   const panel = useSplitPanelOrThrow();
 
   useSoupNotificationInvalidators();
-
-  onMount(() => {
-    if (!props.initialClientFilters) return;
-
-    soup.filters.set(props.initialClientFilters);
-  });
 
   const component = createMemo(() => {
     const content = panel.handle.content();
@@ -299,7 +301,9 @@ export const SoupView = (props: SoupViewProps) => {
           >
             <Suspense>
               <SoupViewFileDropzone>
-                <SoupViewList />
+                <SoupViewList
+                  initialClientFilters={props.initialClientFilters}
+                />
               </SoupViewFileDropzone>
             </Suspense>
           </div>
@@ -317,6 +321,7 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
+  initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -326,7 +331,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     source,
     rows,
     searchText,
-    setSearchText,
     setQueryFilters,
     queryFilters,
     featuredIds,
@@ -334,6 +338,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     isLocalSearchSettling,
     activeTab,
     setActiveTab,
+    assigneeFilter,
+    setAssigneeFilter,
   } = useSoupView();
   const { getSplitCount } = useSplitLayout();
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
@@ -608,65 +614,91 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 
   const isProjectList = panel.handle.content().type === 'project';
+  const contentId = panel.handle.content().id;
 
-  let key = `soup-view-${panel.handle.id}-${panel.handle.content().id}`;
+  // If another SoupViewList with the same contentId is already mounted (e.g.
+  // same view open in two splits), disable all persistence for this instance
+  const prevCount = activeSoupViewCounts.get(contentId) ?? 0;
+  const isDuplicate = prevCount > 0;
+  activeSoupViewCounts.set(contentId, prevCount + 1);
+  onCleanup(() => {
+    const count = activeSoupViewCounts.get(contentId) ?? 1;
+    if (count <= 1) activeSoupViewCounts.delete(contentId);
+    else activeSoupViewCounts.set(contentId, count - 1);
+  });
 
-  if (previewPanel) {
-    key += '-preview';
+  const persistenceDisabled = isProjectList || isDuplicate;
+
+  const [persistedState, setPersistedState] = makePersisted(
+    createSignal<PersistedSoupViewState>(),
+    { name: `macro:soup-view:${contentId}` }
+  );
+
+  const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
+
+  // Set initial state
+  const initial = !persistenceDisabled ? untrack(persistedState) : null;
+  if (initial) {
+    batch(() => {
+      soup.filters.set(initial.filters ?? { and: [], or: [] });
+      setQueryFilters(initial.queryFilters ?? {});
+      soup.sort.setAll(initial.sort ?? []);
+      setActiveTab(initial.activeTab);
+      setAssigneeFilter(initial.assigneeFilter ?? []);
+      if (initial.previewEntity) {
+        soup.setPreviewEntity(initial.previewEntity);
+      }
+    });
+  } else if (props.initialClientFilters) {
+    soup.filters.set(props.initialClientFilters);
   }
 
-  const getCacheKey = () => {
-    return key;
-  };
+  createEffect(
+    on(
+      () =>
+        ({
+          activeTab: activeTab(),
+          filters: {
+            and: soup.filters.andFilters().map((f) => f.id),
+            or: soup.filters.orFilters().map((f) => f.id),
+          },
+          queryFilters: queryFilters(),
+          sort: soup.sort.active().map((s) => s.id),
+          previewEntity: soup.previewEntity(),
+          assigneeFilter: assigneeFilter(),
+        }) satisfies PersistedSoupViewState,
+      (state) => {
+        if (!persistenceDisabled) setPersistedState(state);
+      },
+      { defer: true }
+    )
+  );
 
   onCleanup(() => {
-    const virtualHandle = virtualizerHandle();
-
     if (isProjectList) return;
-
-    stateCache.set(getCacheKey(), {
-      soup: {
-        focus: soup.focus.id(),
-        filters: {
-          and: [...soup.filters.andFilters().map((f) => f.id)],
-          or: [...soup.filters.orFilters().map((f) => f.id)],
-        },
-        queryFilters: queryFilters(),
-        sort: soup.sort.active().map((s) => s.id),
-        searchText: searchText(),
-        activeTab: activeTab(),
-      },
+    const virtualHandle = virtualizerHandle();
+    listStateCache.set(cacheKey, {
+      focus: soup.focus.id(),
       virtualCache: virtualHandle?.cache,
       scrollOffset: virtualHandle?.scrollOffset,
     });
   });
 
+  // Handles restoring scroll + focus.
   let restored = false;
-  const restoreState = () => {
+  const restoreListState = () => {
     if (restored || isProjectList) return;
-
     restored = true;
 
-    const cached = stateCache.get(getCacheKey());
-
-    if (!cached) {
-      registerFocusEffects();
+    const cached = listStateCache.get(cacheKey);
+    if (cached) {
+      soup.focus.set(cached.focus);
+      virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
+      registerFocusEffects(false);
       return;
     }
 
-    soup.focus.set(cached.soup.focus);
-
-    soup.filters.set(cached.soup.filters);
-
-    setQueryFilters(cached.soup.queryFilters);
-    setSearchText(cached.soup.searchText);
-
-    soup.sort.setAll(cached.soup.sort);
-
-    setActiveTab(cached.soup.activeTab);
-
-    virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
-    registerFocusEffects(false);
+    registerFocusEffects();
   };
 
   const registerVirtualizerHandler = (
@@ -674,7 +706,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   ) => {
     setVirtualizerHandle(handle);
 
-    restoreState();
+    restoreListState();
   };
 
   const featuredCount = createMemo(() => featuredIds().length);
@@ -740,7 +772,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   setCollapseEntity={soup.collapseEntity.set}
                 >
                   <SoupList
-                    cache={stateCache.get(getCacheKey())?.virtualCache}
+                    cache={listStateCache.get(cacheKey)?.virtualCache}
                     ref={setLocalEntityListRef}
                     virtualizerClass="scrollbar-hidden"
                     class="overflow-hidden flex min-w-0"

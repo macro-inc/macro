@@ -25,6 +25,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
@@ -550,13 +551,16 @@ export function BaseInput(props: {
         'Email sent',
         undefined,
         draftId
-          ? {
-              text: 'Undo',
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                void undoSend(draftId);
+          ? [
+              {
+                label: 'Undo',
+                icon: ArrowCounterClockwise,
+                onClick: () => {
+                  if (toastId != null) toast.dismiss(toastId);
+                  void undoSend(draftId);
+                },
               },
-            }
+            ]
           : undefined,
         10_000
       );

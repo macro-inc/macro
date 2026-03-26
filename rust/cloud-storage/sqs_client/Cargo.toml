@@ -38,6 +38,7 @@ aws-sdk-sqs = { workspace = true }
 chrono = { workspace = true, optional = true }
 email = { path = "../email", features = ["ports"], optional = true }
 model = { path = "../model", optional = true }
+s3_key = { path = "../s3_key" }
 models_email = { path = "../models_email", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

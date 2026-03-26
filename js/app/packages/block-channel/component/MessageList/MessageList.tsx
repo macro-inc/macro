@@ -55,7 +55,6 @@ import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 import type { MessageListContext } from '@block-channel/utils/listContext';
-import { match } from 'ts-pattern';
 
 false && observedSize;
 
@@ -199,56 +198,9 @@ export function MessageList(props: MessageListProps) {
   });
 
   const getVirtualIndexForMessageId = (messageId: string) => {
-    const list = topLevelMessages();
     const topLevelIndex = topLevelIndexByMessageId().get(messageId);
     if (topLevelIndex === undefined) return undefined;
-    return list.length - 1 - topLevelIndex;
-  };
-
-  const scrollElementIntoView = (
-    targetEl: HTMLElement,
-    align: ScrollToIndexOpts['align'] = 'nearest'
-  ) => {
-    const handle = virtualHandle();
-    const container = scrollContainerRef();
-    if (!handle || !container) return;
-
-    const targetBounds = targetEl.getBoundingClientRect();
-    const containerBounds = container.getBoundingClientRect();
-    const currentOffset = handle.scrollOffset;
-
-    const visualTop = targetBounds.top - containerBounds.top;
-    const visualBottom = targetBounds.bottom - containerBounds.top;
-
-    const targetTop = currentOffset + handle.viewportSize - visualTop;
-    const targetBottom = currentOffset + handle.viewportSize - visualBottom;
-
-    const visibleBottomEdge = currentOffset;
-    const visibleTopEdge = currentOffset + handle.viewportSize;
-
-    const nextOffset = match(align)
-      .with('start', () => targetTop - handle.viewportSize)
-      .with('end', () => targetBottom)
-      .with('center', () => {
-        // Center the element in the viewport
-        const elementCenter = (targetTop + targetBottom) / 2;
-        return elementCenter - handle.viewportSize / 2;
-      })
-      .otherwise(() => {
-        // 'nearest': only scroll if element is out of view
-        if (targetTop > visibleTopEdge) {
-          // Element is above the visible area, scroll up to show it
-          return targetTop - handle.viewportSize;
-        } else if (targetBottom < visibleBottomEdge) {
-          // Element is below the visible area, scroll down to show it
-          return targetBottom;
-        }
-        return undefined;
-      });
-
-    if (nextOffset !== undefined) {
-      handle.scrollTo(nextOffset);
-    }
+    return topLevelIndex;
   };
 
   const tryAlignMessageElement = (
@@ -262,7 +214,7 @@ export function MessageList(props: MessageListProps) {
       `[data-message-body-id="${messageId}"]`
     );
     if (!targetEl) return false;
-    scrollElementIntoView(targetEl, align);
+    targetEl.scrollIntoView({ block: align });
     if (focus) targetEl.focus();
     return true;
   };
@@ -511,7 +463,7 @@ function MessageListImpl(props: MessageListProps) {
       forceBottom ||
       ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
     ) {
-      virtualHandle()?.scrollTo(0);
+      virtualHandle()?.scrollBy(Number.MAX_SAFE_INTEGER);
       return;
     }
 
@@ -686,7 +638,7 @@ function MessageListImpl(props: MessageListProps) {
   });
 
   const threadRows = mapArray(
-    () => filteredTopLevelMessages().toReversed(),
+    () => filteredTopLevelMessages(),
     (message) => {
       const children = () =>
         (viewThreads[message.id] ?? []).filter(messageFilterFn);
@@ -722,7 +674,7 @@ function MessageListImpl(props: MessageListProps) {
       const msg = list[i];
       const threadState = listContext.getThreadState(msg.id);
       if (threadState?.hasActiveReply) {
-        indices.push(length - 1 - i);
+        indices.push(i);
       }
     }
     return indices;
@@ -794,6 +746,17 @@ function MessageListImpl(props: MessageListProps) {
       },
       { defer: true }
     )
+  );
+
+  let mountScrolled = false;
+  createEffect(
+    on(virtualHandle, (handle) => {
+      if (mountScrolled || !handle || props.targetMessage()) return;
+
+      mountScrolled = true;
+
+      scrollToBottomOrTarget({ forceBottom: true });
+    })
   );
 
   const [unviewedMessages, setUnviewedMessages] = createSignal<Message[]>();
@@ -1043,7 +1006,6 @@ function MessageListImpl(props: MessageListProps) {
                 'overflow-y': 'scroll',
                 'overflow-anchor': 'none',
                 display: 'flex',
-                'flex-direction': 'column-reverse',
               }}
               class="scrollbar-hidden [&>div]:mb-auto"
               data-channel-message-list
@@ -1100,7 +1062,6 @@ function MessageListImpl(props: MessageListProps) {
           />
         </Show>
         <CustomScrollbar
-          reverse
           scrollContainer={listContext.scrollContainerRef}
           enabled={hasUserScrolled()}
         />

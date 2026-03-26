@@ -26,6 +26,7 @@ import {
   createNotificationSource,
   type UnifiedNotification,
   usePlatformNotificationState,
+  PlatformNotificationProvider,
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { useObserveRouting } from '@observability';
@@ -450,38 +451,40 @@ export function Root() {
           <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
-                <QuerySyncProviderWithUserId />
-                <UserInfoSideEffects />
-                <ConfiguredGlobalAppStateProvider>
-                  <ChannelsContextProvider>
-                    <QuickAccessProvider>
-                      <SearchProvider>
-                        <TabAttachmentsInit />
-                        <ReactiveFavicon />
-                        <Title>{tabTitle()}</Title>
-                        <MacroJump />
-                        <Visor />
-                        <SuspenseContextComp
-                          fallback={<RootSuspenseFallback />}
-                        >
-                          <IsomorphicRouter
-                            transformUrl={transformShortIdInUrlPathname}
-                            root={Layout}
-                            rootPreload={rootPreload}
-                            base={ROUTER_BASE}
+                <PlatformNotificationProvider>
+                  <QuerySyncProviderWithUserId />
+                  <UserInfoSideEffects />
+                  <ConfiguredGlobalAppStateProvider>
+                    <ChannelsContextProvider>
+                      <QuickAccessProvider>
+                        <SearchProvider>
+                          <TabAttachmentsInit />
+                          <ReactiveFavicon />
+                          <Title>{tabTitle()}</Title>
+                          <MacroJump />
+                          <Visor />
+                          <SuspenseContextComp
+                            fallback={<RootSuspenseFallback />}
                           >
-                            {{
-                              path: '/',
-                              component: TauriRouteListener,
-                              children: ROUTES,
-                            }}
-                          </IsomorphicRouter>
-                        </SuspenseContextComp>
-                        <ToastRegion />
-                      </SearchProvider>
-                    </QuickAccessProvider>
-                  </ChannelsContextProvider>
-                </ConfiguredGlobalAppStateProvider>
+                            <IsomorphicRouter
+                              transformUrl={transformShortIdInUrlPathname}
+                              root={Layout}
+                              rootPreload={rootPreload}
+                              base={ROUTER_BASE}
+                            >
+                              {{
+                                path: '/',
+                                component: TauriRouteListener,
+                                children: ROUTES,
+                              }}
+                            </IsomorphicRouter>
+                          </SuspenseContextComp>
+                          <ToastRegion />
+                        </SearchProvider>
+                      </QuickAccessProvider>
+                    </ChannelsContextProvider>
+                  </ConfiguredGlobalAppStateProvider>
+                </PlatformNotificationProvider>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

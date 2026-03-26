@@ -110,4 +110,14 @@ where
             .map(|p| p.id)
             .collect())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_roles(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<std::collections::HashSet<RoleId>, UserRolesAndPermissionsError> {
+        self.user_roles_and_permissions_repository
+            .get_user_roles(user_id)
+            .await
+    }
 }

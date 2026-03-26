@@ -26,6 +26,7 @@ impl Drop for RecordOnDrop {
 }
 
 impl LastOnlineWorker {
+    /// Create a new [LastOnlineWorker] that processes last-online updates in the background.
     pub fn new<T: SystemTime, R: LastOnlineRepo>(service: LastOnlineService<T, R>) -> Self {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
@@ -38,7 +39,7 @@ impl LastOnlineWorker {
         LastOnlineWorker { tx, handle }
     }
 
-    /// returns a guard which records the users online time during creation and also during drop
+    /// Returns a guard which records the users online time during creation and also during drop.
     pub fn new_guard(&self, user: MacroUserIdStr<'static>) -> RecordOnDrop {
         let tx = self.tx.clone();
         if let Err(e) = tx.try_send(user.clone()) {
@@ -46,5 +47,15 @@ impl LastOnlineWorker {
         }
 
         RecordOnDrop { val: user, tx }
+    }
+
+    /// Record that a user is currently online without creating a guard.
+    ///
+    /// Use this to refresh the last-online timestamp during long-lived connections
+    /// (e.g. on each WebSocket ping/pong) so the user is not falsely reported as offline.
+    pub fn record_online(&self, user: MacroUserIdStr<'static>) {
+        if let Err(e) = self.tx.try_send(user) {
+            tracing::error!("{e:?}");
+        }
     }
 }

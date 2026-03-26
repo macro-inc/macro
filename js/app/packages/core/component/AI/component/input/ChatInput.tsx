@@ -1,12 +1,13 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { Model, ToolSet } from '@core/component/AI/types';
-import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey } from '@core/component/Hotkey';
-import { Tooltip } from '@core/component/Tooltip';
+import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -22,7 +23,6 @@ import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
-import { useAnalytics } from '@app/component/analytics-context';
 
 export type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;

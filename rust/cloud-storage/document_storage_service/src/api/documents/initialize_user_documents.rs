@@ -6,12 +6,13 @@ use axum::{
 use futures::StreamExt;
 use macro_user_id::cowlike::CowLike;
 use model::{
-    document::{BasicDocument, build_extensionless_document_key},
+    document::BasicDocument,
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
 };
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use reqwest::StatusCode;
+use s3_key::build_cloud_storage_bucket_document_key;
 
 const ONBOARDING_FOLDER_NAME: &str = "ONBOARDING_DOCUMENTS";
 const PROJECT_NAME: &str = "Starter Docs";
@@ -168,7 +169,7 @@ pub async fn handler(
                     None => format!("{ONBOARDING_FOLDER_NAME}/{}", uri_document_name),
                 };
 
-                let target_key = build_extensionless_document_key(
+                let target_key = build_cloud_storage_bucket_document_key(
                     user_id.as_ref(),
                     &document.document_id,
                     document.document_version_id,

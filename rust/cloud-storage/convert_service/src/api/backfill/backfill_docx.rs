@@ -13,15 +13,13 @@ use axum::{
 use futures::StreamExt;
 use model::{
     convert::ConvertQueueMessage,
-    document::{BomPart, BomPartWithContent, CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata},
+    document::{BomPart, BomPartWithContent, DocumentMetadata},
     request::pagination::{Pagination, PaginationQueryParams},
     response::ErrorResponse,
 };
+use s3_key::{build_docx_to_pdf_converted_document_key, build_temp_docx_key};
 
 use crate::api::context::ApiContext;
-
-/// All files in temp_files automatically get removed from document storage bucket after 1 day
-static BULK_DOCX_CONVERT_PREFIX: &str = "temp_files";
 
 /// Backfill docx all
 #[utoipa::path(
@@ -117,9 +115,9 @@ async fn process_docx(
                 serde_json::from_value(bom_parts).context("unable to serialize bom parts")?;
 
             // check if the converted item exists in s3
-            let key = format!(
-                "{}/{}/{}.pdf",
-                document.owner, document.document_id, CONVERTED_DOCUMENT_FILE_NAME
+            let key = build_docx_to_pdf_converted_document_key(
+                document.owner.as_ref(),
+                &document.document_id,
             );
 
             let exists = s3_client
@@ -169,10 +167,10 @@ async fn process_docx(
 
             let zipped_docx = zip_bom_parts(bom_parts_with_content).await?;
 
-            let from_key = format!("{}/{}.docx", BULK_DOCX_CONVERT_PREFIX, document.document_id);
-            let to_key = format!(
-                "{}/{}/{}.pdf",
-                document.owner, document.document_id, CONVERTED_DOCUMENT_FILE_NAME
+            let from_key = build_temp_docx_key(&document.document_id);
+            let to_key = build_docx_to_pdf_converted_document_key(
+                document.owner.as_ref(),
+                &document.document_id,
             );
 
             s3_client

@@ -2294,6 +2294,7 @@ dependencies = [
  "remote_env_var",
  "rs-libreoffice-bindings",
  "s3_client",
+ "s3_key",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -3047,6 +3048,7 @@ dependencies = [
  "redis",
  "regex",
  "reqwest",
+ "s3_key",
  "saved_views",
  "schemars",
  "search_service",
@@ -3116,6 +3118,7 @@ dependencies = [
  "model",
  "openssl",
  "pdfium-render",
+ "s3_key",
  "serde",
  "serde_json",
  "sqlx",
@@ -3158,6 +3161,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "reqwest",
+ "s3_key",
  "schemars",
  "serde",
  "serde_json",
@@ -3198,6 +3202,7 @@ dependencies = [
  "openssl",
  "redis",
  "s3_client",
+ "s3_key",
  "serde",
  "serde_json",
  "sha2",
@@ -3301,6 +3306,7 @@ dependencies = [
  "macro_aws_config",
  "model",
  "models_bulk_upload",
+ "s3_key",
  "strum",
  "thiserror 2.0.17",
  "tokio",
@@ -8585,6 +8591,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "s3_key"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "urlencoding",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8767,6 +8781,7 @@ dependencies = [
  "pdfium-render",
  "rust-embed",
  "s3_client",
+ "s3_key",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -8852,12 +8867,11 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
- "model_file_type",
  "openssl",
+ "s3_key",
  "sqs_client",
  "tokio",
  "tracing",
- "urlencoding",
 ]
 
 [[package]]
@@ -9768,6 +9782,7 @@ dependencies = [
  "model",
  "models_email",
  "models_opensearch",
+ "s3_key",
  "serde",
  "serde_json",
  "strum",
@@ -9822,6 +9837,7 @@ dependencies = [
  "macro_middleware",
  "model",
  "models_sfs",
+ "s3_key",
  "secretsmanager_client",
  "serde",
  "serde_dynamo",
@@ -10787,6 +10803,7 @@ dependencies = [
  "macro_entrypoint",
  "models_bulk_upload",
  "openssl",
+ "s3_key",
  "serde",
  "serde_json",
  "sqs_client",

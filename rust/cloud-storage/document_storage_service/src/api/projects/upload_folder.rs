@@ -11,10 +11,7 @@ use axum::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
-    document::{
-        ContentType, DocumentMetadata, FileType, build_docx_staging_bucket_document_key,
-        build_extensionless_document_key,
-    },
+    document::{ContentType, DocumentMetadata, FileType},
     folder::{
         FileSystemNode, S3Destination, S3DestinationMap, UploadFolderRequest,
         UploadFolderResponseData, UploadFolderWithIdsResponse,
@@ -27,6 +24,7 @@ use models_bulk_upload::{
     UploadExtractFolderRequest, UploadExtractFolderResponseData,
 };
 use models_permissions::share_permission::SharePermissionV2;
+use s3_key::{build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key};
 use sqlx::{Pool, Postgres};
 use std::{str::FromStr, sync::Arc};
 use uuid::Uuid;
@@ -273,7 +271,7 @@ async fn build_documents(
             .transpose()?;
         let sha = document.sha.clone().context("document needs a sha")?;
         if file_type != Some(FileType::Docx) {
-            let key = build_extensionless_document_key(
+            let key = build_cloud_storage_bucket_document_key(
                 document.owner.as_ref(),
                 &document.document_id,
                 document.document_version_id,

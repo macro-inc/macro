@@ -44,8 +44,7 @@ pub async fn handle_get_presigned_url(
         return Err((StatusCode::NOT_FOUND, "file not yet uploaded").into_response());
     }
 
-    // Get presigned URL for file
-    let s3_key = format!("file/{}", file_id);
+    let s3_key = s3_key::StaticFileKey::new(&file_id).to_key();
     let presigned_url = storage_client
         .get_presigned_url(s3_key)
         .await

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT team_role as \"team_role!: TeamRole\", team_id\n            FROM team_invite\n            WHERE id = $1 AND email = $2\n            ",
+  "query": "\n            SELECT team_role as \"team_role!: TeamRole\", team_id, tier as \"tier!: TeamUserTier\"\n            FROM team_invite\n            WHERE id = $1 AND email = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -23,6 +23,22 @@
         "ordinal": 1,
         "name": "team_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "tier!: TeamUserTier",
+        "type_info": {
+          "Custom": {
+            "name": "team_user_tier",
+            "kind": {
+              "Enum": [
+                "haiku",
+                "sonnet",
+                "opus"
+              ]
+            }
+          }
+        }
       }
     ],
     "parameters": {
@@ -33,8 +49,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "b60b1112072c68b63df317c76ae2bf8ac8a2162990c35916b021a462ccb9eb6c"
+  "hash": "50332c40ef917c839c4539f12419035115d61a4c9e8146a894e41db59b0f0daa"
 }
