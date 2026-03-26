@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::channel::ChannelSearchResponseItemWithMetadata;
@@ -12,7 +11,7 @@ use crate::{
     chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
     email::SimpleEmailSearchResponseBaseItem, project::SimpleProjectSearchResponseBaseItem,
 };
-use item_filters::{ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, ProjectFilters};
+use item_filters::EntityFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -27,6 +26,38 @@ pub enum UnifiedSearchIndex {
     Projects,
 }
 
+const NIL_UUID: &str = "00000000-0000-0000-0000-000000000000";
+
+/// Build an [EntityFilters] from a list of [UnifiedSearchIndex] to include.
+/// Entity types not in the list are excluded via NIL UUID.
+/// If the list is empty, all entity types are included.
+pub fn entity_filters_from_include(
+    include: Vec<UnifiedSearchIndex>,
+    base: EntityFilters,
+) -> EntityFilters {
+    if include.is_empty() {
+        return base;
+    }
+    let exclude = vec![NIL_UUID.to_string()];
+    let mut filters = base;
+    if !include.contains(&UnifiedSearchIndex::Documents) {
+        filters.document_filters.document_ids = exclude.clone();
+    }
+    if !include.contains(&UnifiedSearchIndex::Chats) {
+        filters.chat_filters.chat_ids = exclude.clone();
+    }
+    if !include.contains(&UnifiedSearchIndex::Emails) {
+        filters.email_filters.recipients = exclude.clone();
+    }
+    if !include.contains(&UnifiedSearchIndex::Channels) {
+        filters.channel_filters.channel_ids = exclude.clone();
+    }
+    if !include.contains(&UnifiedSearchIndex::Projects) {
+        filters.project_filters.project_ids = exclude;
+    }
+    filters
+}
+
 // TODO: query, match_type are common to all requests. consolidate.
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
@@ -36,8 +67,9 @@ pub struct UnifiedSearchRequest {
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
     pub match_type: MatchType,
 
-    /// Search filters for various kinds of items. Set the entire filters property as `null` if you do not have specific filters for a given type, e.g. bcc for email filters.
-    pub filters: Option<UnifiedSearchFilters>,
+    /// Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search.
+    #[serde(default)]
+    pub filters: EntityFilters,
 
     /// Fields to search on (Name, Content, NameContent). Defaults to Content
     #[serde(default)]
@@ -45,72 +77,6 @@ pub struct UnifiedSearchRequest {
 
     #[schemars(skip)]
     pub collapse: Option<bool>,
-
-    /// Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all.
-    #[serde(default)]
-    pub include: Vec<UnifiedSearchIndex>,
-}
-
-impl From<UnifiedSearchIndex> for models_opensearch::SearchEntityType {
-    fn from(index: UnifiedSearchIndex) -> Self {
-        match index {
-            UnifiedSearchIndex::Channels => Self::Channels,
-            UnifiedSearchIndex::Chats => Self::Chats,
-            UnifiedSearchIndex::Documents => Self::Documents,
-            UnifiedSearchIndex::Emails => Self::Emails,
-            UnifiedSearchIndex::Projects => Self::Projects,
-        }
-    }
-}
-
-/// Generates the search indices to search over for unified search
-pub fn generate_unified_search_indices(
-    include: Vec<UnifiedSearchIndex>,
-) -> HashSet<models_opensearch::SearchEntityType> {
-    if include.is_empty() {
-        let include: Vec<models_opensearch::SearchEntityType> = [
-            UnifiedSearchIndex::Channels,
-            UnifiedSearchIndex::Chats,
-            UnifiedSearchIndex::Documents,
-            UnifiedSearchIndex::Emails,
-            UnifiedSearchIndex::Projects,
-        ]
-        .into_iter()
-        .map(|i| i.into())
-        .collect();
-
-        include.into_iter().collect()
-    } else {
-        include.into_iter().map(|i| i.into()).collect()
-    }
-}
-
-// TODO: there's a data correlation between Filters and Response Item. Can this be consolidated?
-// None means do not search this entity, Some(_::default()) means search all for this entity
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
-pub struct UnifiedSearchFilters {
-    /// Document filters. `null` to not filter documents searched over.
-    pub document: Option<DocumentFilters>,
-    /// Chat filters. `null` to not filter chats searched over.
-    pub chat: Option<ChatFilters>,
-    /// Email filters. `null` to not filter emails searched over.
-    pub email: Option<EmailFilters>,
-    /// Channel filters. `null` to not filter channels searched over.
-    pub channel: Option<ChannelFilters>,
-    /// Project filters. `null` to not filter projects searched over.
-    pub project: Option<ProjectFilters>,
-}
-
-impl Default for UnifiedSearchFilters {
-    fn default() -> Self {
-        Self {
-            document: Some(DocumentFilters::default()),
-            chat: Some(ChatFilters::default()),
-            email: Some(EmailFilters::default()),
-            channel: Some(ChannelFilters::default()),
-            project: Some(ProjectFilters::default()),
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]

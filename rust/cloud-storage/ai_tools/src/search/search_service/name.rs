@@ -1,10 +1,10 @@
 use super::types::{PAGE_SIZE, SearchToolResponse};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
-use item_filters::EmailFilters;
+use item_filters::{EmailFilters, EntityFilters};
 use models_search::{
     MatchType,
-    unified::{UnifiedSearchFilters, UnifiedSearchIndex, UnifiedSearchRequest},
+    unified::{UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include},
 };
 use schemars::JsonSchema;
 use search_service_client::SearchServiceClient;
@@ -49,19 +49,19 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
             });
         }
 
+        let base_filters = EntityFilters {
+            email_filters: EmailFilters {
+                importance: Some(true),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
         let search_request = UnifiedSearchRequest {
             query: self.name.to_owned(),
             match_type: MatchType::Partial,
-            filters: Some(UnifiedSearchFilters {
-                email: Some(EmailFilters {
-                    importance: Some(true),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
+            filters: entity_filters_from_include(self.entity_types.clone(), base_filters),
             search_on: models_search::SearchOn::Name,
             collapse: Some(true),
-            include: self.entity_types.clone(),
         };
 
         let response = search_client
