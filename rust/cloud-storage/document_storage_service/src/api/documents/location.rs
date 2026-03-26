@@ -175,15 +175,8 @@ pub(in crate::api::documents) async fn get_static_url(
     document_id: &str,
     file_type: &Option<FileType>,
 ) -> anyhow::Result<LocationResponseData> {
-    let url_encoded_owner = urlencoding::encode(owner);
     let (document_version_id, _) =
         macro_db_client::document::get_document_version_id(&state.db, document_id).await?;
-
-    let document_key = build_cloud_storage_bucket_document_key(
-        &url_encoded_owner,
-        document_id,
-        document_version_id,
-    );
 
     #[cfg(feature = "location_check")]
     {
@@ -195,6 +188,13 @@ pub(in crate::api::documents) async fn get_static_url(
             anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
     }
+
+    let url_encoded_owner = urlencoding::encode(owner);
+    let url_encoded_document_key = build_cloud_storage_bucket_document_key(
+        &url_encoded_owner,
+        document_id,
+        document_version_id,
+    );
 
     let signed_options = get_cloudfront_signed_options(
         &state
@@ -215,7 +215,7 @@ pub(in crate::api::documents) async fn get_static_url(
             .config
             .vars
             .document_storage_service_cloudfront_distribution_url,
-        &document_key,
+        &url_encoded_document_key,
         &signed_options,
     )?;
 
@@ -229,9 +229,6 @@ async fn get_converted_docx_url(
     owner: &str,
     document_id: &str,
 ) -> anyhow::Result<LocationResponseData> {
-    let url_encoded_owner = urlencoding::encode(owner);
-    let document_key = build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
-
     // Check if the item exists in s3
     #[cfg(feature = "location_check")]
     {
@@ -242,6 +239,10 @@ async fn get_converted_docx_url(
             anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
     }
+
+    let url_encoded_owner = urlencoding::encode(owner);
+    let url_encoded_document_key =
+        build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
 
     let signed_options = get_cloudfront_signed_options(
         &state
@@ -262,7 +263,7 @@ async fn get_converted_docx_url(
             .config
             .vars
             .document_storage_service_cloudfront_distribution_url,
-        &document_key,
+        &url_encoded_document_key,
         &signed_options,
     )?;
 
