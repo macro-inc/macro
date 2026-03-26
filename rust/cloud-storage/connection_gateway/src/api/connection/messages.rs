@@ -9,7 +9,9 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
+use cowlike::CowLike;
 use futures::{StreamExt, stream::SplitStream};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::error::Error;
 use tokio::sync::mpsc::Sender;
 use tungstenite::error::{Error as TungsteniteError, ProtocolError};
@@ -79,6 +81,15 @@ pub async fn handle_message(
 
     // Handle incoming ping messages
     if text_message.trim() == PING_MESSAGE {
+        // Refresh last-online timestamp so long-lived connections don't appear offline
+        if let Ok(user_id) =
+            MacroUserIdStr::parse_from_str(&connection_context.user_context.user_id)
+        {
+            connection_context
+                .api_context
+                .last_online_worker
+                .record_online(user_id.into_owned());
+        }
         sender.send(OutgoingMessage::Pong).await?;
         return Ok(());
     }
