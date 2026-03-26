@@ -42,11 +42,10 @@ pub struct UpdateLabelBatchResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, gmail_token, body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    gmail_token: Extension<String>,
     link: Extension<Link>,
     Json(body): Json<UpdateLabelBatchRequest>,
 ) -> Result<Response, Response> {
@@ -208,125 +207,45 @@ pub async fn handler(
         }
     }
 
-    // Build provider message tuples for Gmail API calls (drafts have no provider_id)
-    let provider_message_tuples: Vec<(Uuid, String)> = db_messages
-        .iter()
-        .filter_map(|m| {
-            m.provider_id
-                .as_ref()
-                .filter(|pid| !pid.is_empty())
-                .map(|pid| (m.db_id, pid.clone()))
-        })
-        .collect();
+    // Enqueue one gmail_ops message per provider message (drafts have no provider_id)
+    let (labels_to_add, labels_to_remove) = if is_adding {
+        (vec![provider_label_id.clone()], Vec::new())
+    } else {
+        (Vec::new(), vec![provider_label_id.clone()])
+    };
 
-    // Sync to Gmail in the background. If Gmail fails, revert the DB changes for failed messages.
-    if !provider_message_tuples.is_empty() {
-        let db_clone = ctx.db.clone();
-        let gmail_client_clone = ctx.gmail_client.clone();
-        let gmail_access_token = gmail_token.as_str().to_string();
-        let provider_label_id_clone = provider_label_id.clone();
-        let link_id = link.id;
-        let fusion_user_id = user_context.fusion_user_id.clone();
-
-        let (labels_to_add, labels_to_remove) = if is_adding {
-            (vec![provider_label_id.clone()], Vec::new())
-        } else {
-            (Vec::new(), vec![provider_label_id.clone()])
+    for msg in &db_messages {
+        let Some(ref pid) = msg.provider_id else {
+            continue;
         };
+        if pid.is_empty() {
+            continue;
+        }
 
-        tokio::spawn(async move {
-            let (_success_ids, failed_ids) = gmail_client_clone
-                .batch_modify_labels(
-                    &gmail_access_token,
-                    provider_message_tuples,
-                    labels_to_add,
-                    labels_to_remove,
-                )
-                .await;
-
-            if failed_ids.is_empty() {
-                return;
-            }
-
-            tracing::error!(
-                failed_ids = ?failed_ids,
-                "Gmail API failed to modify labels for some messages, reverting database changes"
-            );
-
-            let mut revert_tx = match db_clone.begin().await {
-                Ok(tx) => tx,
-                Err(e) => {
-                    tracing::error!(error=?e, "Failed to begin transaction for reversion");
-                    return;
-                }
-            };
-
-            let revert_result = async {
-                // Revert label changes for failed messages
-                if is_adding {
-                    email_db_client::labels::delete::delete_message_labels_batch(
-                        &mut *revert_tx,
-                        &failed_ids,
-                        &provider_label_id_clone,
-                        link_id,
-                    )
-                    .await
-                    .context("Failed to revert adding labels")?;
-                } else {
-                    email_db_client::labels::insert::insert_message_labels_batch(
-                        &mut *revert_tx,
-                        &failed_ids,
-                        &provider_label_id_clone,
-                        link_id,
-                    )
-                    .await
-                    .context("Failed to revert removing labels")?;
-                }
-
-                // Revert special flag changes for failed messages
-                if provider_label_id_clone.as_str() == service::label::system_labels::UNREAD {
-                    email_db_client::messages::update::update_message_read_status_batch(
-                        &mut *revert_tx,
-                        failed_ids.clone(),
-                        &fusion_user_id,
-                        is_adding, // revert: if we set read=true (!is_adding), set it back to false (is_adding)
-                    )
-                    .await
-                    .context("Failed to revert message read status")?;
-                } else if provider_label_id_clone.as_str() == service::label::system_labels::STARRED
-                {
-                    email_db_client::messages::update::update_message_starred_status_batch(
-                        &mut *revert_tx,
-                        failed_ids.clone(),
-                        &fusion_user_id,
-                        !is_adding, // revert: opposite of what we set
-                    )
-                    .await
-                    .context("Failed to revert message starred status")?;
-                }
-
-                anyhow::Ok(())
-            }
-            .await;
-
-            match revert_result {
-                Ok(_) => {
-                    if let Err(e) = revert_tx.commit().await {
-                        tracing::error!(error=?e, "Unable to commit transaction for revert");
-                    } else {
-                        tracing::info!(
-                            "Successfully reverted database changes after Gmail API failure"
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(error=?e, "Revert failed, rolling back");
-                    if let Err(rollback_err) = revert_tx.rollback().await {
-                        tracing::error!(error=?rollback_err, "Failed to rollback revert transaction");
-                    }
-                }
-            }
-        });
+        ctx.sqs_client
+            .enqueue_gmail_ops_notification(
+                models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
+                    link_id: link.id,
+                    operation:
+                        models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(
+                            models_email::gmail::gmail_ops::ModifyMessageLabelsPayload {
+                                db_message_id: msg.db_id,
+                                provider_message_id: pid.clone(),
+                                labels_to_add: labels_to_add.clone(),
+                                labels_to_remove: labels_to_remove.clone(),
+                                provider_label_id: provider_label_id.clone(),
+                                link_id: link.id,
+                                fusion_user_id: user_context.fusion_user_id.clone(),
+                                is_adding,
+                            },
+                        ),
+                },
+            )
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, db_message_id=?msg.db_id, "Failed to enqueue gmail ops notification");
+            })
+            .ok();
     }
 
     Ok((

@@ -140,7 +140,6 @@ export * from './backfillJobLinkId';
 export * from './backfillJobStatus';
 export * from './backfillJobThreadsRequestedLimit';
 export * from './blockSenderRequest';
-export * from './blockSenderResponse';
 export * from './cancelBackfillParams';
 export * from './contact';
 export * from './contactEmailAddress';

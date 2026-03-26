@@ -71,6 +71,7 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(macro_aws_config::sqs_client().await)
         .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
+        .gmail_ops_queue(&config.gmail_ops_queue)
         .search_event_queue(&config.search_event_queue)
         .email_backfill_queue(&config.backfill_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)

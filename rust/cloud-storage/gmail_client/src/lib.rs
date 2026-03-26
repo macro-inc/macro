@@ -187,27 +187,6 @@ impl GmailClient {
 
     // Batch adds and removes Gmail labels from multiple messages
     /// Returns a tuple of (successful_message_ids, failed_message_ids)
-    #[tracing::instrument(
-        skip(self, gmail_access_token),
-        fields(message_count = %db_provider_id_tuples.len())
-    )]
-    pub async fn batch_modify_labels(
-        &self,
-        gmail_access_token: &str,
-        db_provider_id_tuples: Vec<(Uuid, String)>,
-        labels_to_add: Vec<String>,
-        labels_to_remove: Vec<String>,
-    ) -> (Vec<Uuid>, Vec<Uuid>) {
-        labels::batch_modify_labels(
-            self,
-            gmail_access_token,
-            db_provider_id_tuples,
-            labels_to_add,
-            labels_to_remove,
-        )
-        .await
-    }
-
     /// Fetches a specific message from Gmail by its provider ID.
     /// Returns raw Gmail MessageResource - callers should map to service layer structs.
     #[tracing::instrument(skip(self, access_token), err)]
