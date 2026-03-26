@@ -1,6 +1,6 @@
 pub const CONVERTED_DOCUMENT_FILE_NAME: &str = "converted";
 const TEMP_FILE_PREFIX: &str = "temp_files";
-const PDF_EXTENSION: &str = "pdf";
+pub const PDF_EXTENSION: &str = "pdf";
 const DOCX_EXTENSION: &str = "docx";
 
 /// Builds a document key for a document in the cloud storage bucket.
