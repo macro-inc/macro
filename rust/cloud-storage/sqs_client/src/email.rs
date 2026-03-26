@@ -1,7 +1,7 @@
 use crate::SQS;
 use email::domain::ports::EmailMessageEnqueuer;
 use models_email::email::service::backfill::BackfillPubsubMessage;
-use models_email::email::service::pubsub::LinkManagerMessage;
+pub use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::pubsub::{SFSUploaderMessage, ScheduledPubsubMessage};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

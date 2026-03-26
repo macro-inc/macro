@@ -31,19 +31,19 @@ impl IntoResponse for DeleteTeamHandlerError {
                 DeleteTeamError::TeamError(_) | DeleteTeamError::StorageLayerError(_) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to delete team",
+                        message: "unable to delete team".into(),
                     }),
                 ),
                 DeleteTeamError::RemoveRolesFromUserError(_) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "invalid roles provided",
+                        message: "invalid roles provided".into(),
                     }),
                 ),
                 DeleteTeamError::CustomerError(_) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to delete team subscription",
+                        message: "unable to delete team subscription".into(),
                     }),
                 ),
             },

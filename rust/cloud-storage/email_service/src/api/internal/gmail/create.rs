@@ -44,7 +44,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: format!("error fetching link for id {}", link_id).as_ref(),
+                        message: format!("error fetching link for id {}", link_id).into(),
                     }),
                 )
                     .into_response()
@@ -54,7 +54,7 @@ pub async fn handler(
                 (
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {
-                        message: "link id does not exist",
+                        message: "link id does not exist".into(),
                     }),
                 )
                     .into_response()
@@ -64,7 +64,7 @@ pub async fn handler(
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: format!("sync must be enabled for link {}", link_id).as_ref(),
+                    message: format!("sync must be enabled for link {}", link_id).into(),
                 }),
             )
                 .into_response());
@@ -82,7 +82,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: format!("error creating backfill job for link {}", link_id).as_ref(),
+                    message: format!("error creating backfill job for link {}", link_id).into(),
                 }),
             )
                 .into_response()
@@ -125,7 +125,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: format!("Failed to enqueue backfill message for link {}", link_id).as_ref(),
+                        message: format!("Failed to enqueue backfill message for link {}", link_id).into(),
                     }),
                 )
                     .into_response()

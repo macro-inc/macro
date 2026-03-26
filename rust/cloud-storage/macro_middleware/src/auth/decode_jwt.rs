@@ -68,7 +68,7 @@ pub async fn handler(
                 return Err((
                     StatusCode::UNAUTHORIZED,
                     Json(ErrorResponse {
-                        message: "unauthorized",
+                        message: "unauthorized".into(),
                     }),
                 )
                     .into_response());
@@ -81,7 +81,7 @@ pub async fn handler(
             MacroAuthError::JwtExpired => (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
-                    message: "jwt expired",
+                    message: "jwt expired".into(),
                 }),
             )
                 .into_response(),
@@ -90,7 +90,7 @@ pub async fn handler(
                 (
                     StatusCode::UNAUTHORIZED,
                     Json(ErrorResponse {
-                        message: "unauthorized",
+                        message: "unauthorized".into(),
                     }),
                 )
                     .into_response()

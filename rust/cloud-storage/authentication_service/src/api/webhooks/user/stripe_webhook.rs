@@ -37,7 +37,7 @@ pub async fn handler(
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "Missing Stripe-Signature header",
+                    message: "Missing Stripe-Signature header".into(),
                 }),
             )
                 .into_response()
@@ -48,7 +48,7 @@ pub async fn handler(
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "Invalid webhook payload encoding",
+                message: "Invalid webhook payload encoding".into(),
             }),
         )
             .into_response()
@@ -65,7 +65,7 @@ pub async fn handler(
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "failed to construct stripe event",
+                message: "failed to construct stripe event".into(),
             }),
         )
             .into_response()

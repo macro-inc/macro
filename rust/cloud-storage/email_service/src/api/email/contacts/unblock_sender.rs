@@ -41,7 +41,7 @@ impl IntoResponse for UnblockSenderError {
         (
             status_code,
             Json(ErrorResponse {
-                message: self.to_string().as_str(),
+                message: self.to_string().into(),
             }),
         )
             .into_response()

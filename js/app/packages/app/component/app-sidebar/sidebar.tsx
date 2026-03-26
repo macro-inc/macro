@@ -32,7 +32,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { debounce, type Scheduled } from '@solid-primitives/scheduled';
+import { debounce } from '@solid-primitives/scheduled';
 import { Hotkey } from '@core/component/Hotkey';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
@@ -124,7 +124,6 @@ type SidebarHotkeyDeps = {
   hotkeyVisible: () => boolean;
   setHotkeyVisible: (visible: boolean) => void;
   resetHotkeysState: VoidFunction;
-  debounceResetHotkeysState: Scheduled<[]>;
   isSlim: () => boolean;
   onOpenChange: (open: boolean) => void;
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
@@ -137,15 +136,19 @@ export const registerSidebarHotkeys = ({
   hotkeyVisible,
   setHotkeyVisible,
   resetHotkeysState,
-  debounceResetHotkeysState,
 }: SidebarHotkeyDeps) => {
+  const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
+  const debounceSetHotkeyVisible = debounce(() => setHotkeyVisible(true), 200);
+
   // Register 'g' as a leader key that activates the global GO_TO command scope
   registerHotkey({
     hotkey: GO_TO_LEADER_KEY,
     scopeId: 'global',
     description: 'Go to page',
     keyDownHandler: () => {
-      setHotkeyVisible(true);
+      // We debounce the time till the hot keys are visible to allow other commands
+      // like g+g to fire
+      debounceSetHotkeyVisible();
       debounceResetHotkeysState();
       return true;
     },
@@ -163,7 +166,15 @@ export const registerSidebarHotkeys = ({
   // not part of the sidebar hotkeys, won't fire the command
   // for the key
   useHotkeyInterceptor((context) => {
-    if (context.eventType !== 'keydown' || !hotkeyVisible()) return false;
+    // If a hotkey is going to be fired, but the hotkeys are not
+    // visible, then it's not a sidebar nav hotkey and we can
+    // ignore it and reset our visible state
+    if (!hotkeyVisible()) {
+      debounceSetHotkeyVisible.clear();
+      return false;
+    }
+
+    if (context.eventType !== 'keydown') return false;
 
     if (
       context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
@@ -296,8 +307,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     activateClosestDOMScope();
   };
 
-  const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
-
   const handleCommandPaletteClick = () => {
     if (!CommandState.isOpen()) {
       analytics.track('command_menu_open', { from: 'sidebar' });
@@ -340,7 +349,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,
-    debounceResetHotkeysState,
     isSlim,
     onOpenChange: props.onOpenChange,
     openWithSplit: layout.openWithSplit,

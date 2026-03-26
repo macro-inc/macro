@@ -60,7 +60,7 @@ pub async fn handler(
                 message: format!(
                     "Must include between 1 and {BATCH_UPDATE_MESSAGE_LIMIT} message IDs in request"
                 )
-                .as_str(),
+                .into(),
             }),
         )
             .into_response());
@@ -73,7 +73,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to fetch label from db",
+                    message: "unable to fetch label from db".into(),
                 }),
             )
                 .into_response()
@@ -85,7 +85,7 @@ pub async fn handler(
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "label not found",
+                    message: "label not found".into(),
                 }),
             )
                 .into_response());
@@ -103,7 +103,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to fetch messages from db",
+                message: "unable to fetch messages from db".into(),
             }),
         )
             .into_response()
@@ -136,7 +136,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to add label to messages",
+                    message: "unable to add label to messages".into(),
                 }),
             )
                 .into_response()
@@ -155,7 +155,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to remove label from messages",
+                    message: "unable to remove label from messages".into(),
                 }),
             )
                 .into_response()
@@ -176,7 +176,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to update message read status",
+                    message: "unable to update message read status".into(),
                 }),
             )
                 .into_response()
@@ -194,7 +194,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to update message starred status",
+                    message: "unable to update message starred status".into(),
                 }),
             )
                 .into_response()

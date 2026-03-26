@@ -48,7 +48,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get current link count",
+                    message: "unable to get current link count".into(),
                 }),
             )
                 .into_response()
@@ -58,7 +58,7 @@ pub async fn handler(
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
             Json(ErrorResponse {
-                message: "you have too many in progress links. resolve them or wait 24 hours before creating new ones",
+                message: "you have too many in progress links. resolve them or wait 24 hours before creating new ones".into(),
             }),
         ).into_response());
     }
@@ -73,7 +73,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to create in progress user link",
+                message: "unable to create in progress user link".into(),
             }),
         )
             .into_response()

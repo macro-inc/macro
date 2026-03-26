@@ -58,7 +58,7 @@ pub(in crate::api::oauth2) async fn handler(
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "unable to decode original url",
+                    message: "unable to decode original url".into(),
                 }),
             )
                 .into_response()
@@ -70,7 +70,7 @@ pub(in crate::api::oauth2) async fn handler(
                 (
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {
-                        message: "unable to parse to original url",
+                        message: "unable to parse to original url".into(),
                     }),
                 )
                     .into_response()
@@ -91,7 +91,7 @@ pub(in crate::api::oauth2) async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to store session code",
+                        message: "unable to store session code".into(),
                     }),
                 )
                     .into_response()

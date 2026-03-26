@@ -61,7 +61,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get file type",
+                    message: "unable to get file type".into(),
                 }),
             )
                 .into_response()
@@ -78,7 +78,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get file type",
+                    message: "unable to get file type".into(),
                 }),
             )
                 .into_response()
@@ -89,7 +89,7 @@ pub async fn handler(
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: &e.to_string(),
+                message: e.to_string().into(),
             }),
         )
             .into_response()
@@ -105,7 +105,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get object from S3",
+                    message: "unable to get object from S3".into(),
                 }),
             )
                 .into_response()
@@ -116,7 +116,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to create directory",
+                message: "unable to create directory".into(),
             }),
         )
             .into_response()
@@ -128,7 +128,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to create file",
+                    message: "unable to create file".into(),
                 }),
             )
                 .into_response()
@@ -139,7 +139,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to write file",
+                message: "unable to write file".into(),
             }),
         )
             .into_response()
@@ -189,7 +189,7 @@ pub async fn handler(
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "fork failed",
+                    message: "fork failed".into(),
                 }),
             )
                 .into_response());
@@ -232,7 +232,7 @@ pub async fn handler(
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "conversion failed",
+                message: "conversion failed".into(),
             }),
         )
             .into_response());
@@ -243,7 +243,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to read file",
+                message: "unable to read file".into(),
             }),
         )
             .into_response()
@@ -257,7 +257,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to upload file",
+                    message: "unable to upload file".into(),
                 }),
             )
                 .into_response()

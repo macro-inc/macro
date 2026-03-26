@@ -49,7 +49,7 @@ pub async fn handler(
                 (
                     StatusCode::NOT_FOUND,
                     Json(ErrorResponse {
-                        message: "no identity provider found",
+                        message: "no identity provider found".into(),
                     }),
                 )
                     .into_response()
@@ -59,7 +59,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to get identity provider id by name",
+                        message: "unable to get identity provider id by name".into(),
                     }),
                 )
                     .into_response()
@@ -77,7 +77,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to fetch links",
+                    message: "unable to fetch links".into(),
                 }),
             )
                 .into_response()
@@ -99,7 +99,7 @@ pub async fn handler(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: format!("No {} link found for this user", idp_name).as_str(),
+                    message: format!("No {} link found for this user", idp_name).into(),
                 }),
             )
                 .into_response()
@@ -121,7 +121,7 @@ pub async fn handler(
                 (
                     StatusCode::NOT_FOUND,
                     Json(ErrorResponse {
-                        message: "no identity provider found",
+                        message: "no identity provider found".into(),
                     }),
                 )
                     .into_response()
@@ -131,7 +131,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to unlink user",
+                        message: "unable to unlink user".into(),
                     }),
                 )
                     .into_response()

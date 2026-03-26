@@ -7,7 +7,6 @@ use anyhow::{Context, anyhow};
 use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::cache::TokenCacheKey;
 use models_email::service::link::{Link, UserProvider};
-use models_email::service::pubsub::LinkManagerOperation;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailLinkMessage;
 use sqs_worker::cleanup_message;
@@ -17,23 +16,13 @@ pub async fn process_message(
     ctx: LinkManagerContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<()> {
-    // Step 1: Parse the incoming message
     let notification_data = extract_message(message)?;
 
-    // Step 2: Fetch the user's link details from the database
-    let link =
-        email_db_client::links::get::fetch_link_by_id(&ctx.db, notification_data.link_id).await?;
+    match notification_data {
+        LinkManagerMessage::Refresh { link_id } => {
+            let link = get_link_or_skip(&ctx, message, link_id).await?;
+            let Some(link) = link else { return Ok(()) };
 
-    let Some(link) = link else {
-        tracing::debug!(link_id=%notification_data.link_id, "Link not found - skipping");
-        cleanup_message(&ctx.sqs_worker, message).await?;
-        return Ok(());
-    };
-
-    // Step 3: Execute the appropriate operation
-    match notification_data.operation {
-        LinkManagerOperation::Refresh => {
-            // Access token is required for refresh - fail if we can't get it
             let gmail_access_token = fetch_token_or_delete_on_revocation(
                 &link,
                 &ctx.redis_client,
@@ -43,9 +32,10 @@ pub async fn process_message(
             .await?;
             handle_refresh(&ctx, &link, &gmail_access_token).await?;
         }
-        LinkManagerOperation::Delete => {
-            // Access token is optional for delete - we still want to clean up the database
-            // even if the user has revoked access. don't delete on revocation -> infinite loop
+        LinkManagerMessage::DeleteLink { link_id } => {
+            let link = get_link_or_skip(&ctx, message, link_id).await?;
+            let Some(link) = link else { return Ok(()) };
+
             let gmail_access_token = fetch_gmail_access_token_from_link(
                 &link,
                 &ctx.redis_client,
@@ -55,12 +45,27 @@ pub async fn process_message(
             .ok();
             handle_delete(&ctx, &link, gmail_access_token.as_deref()).await?;
         }
+        LinkManagerMessage::DeleteUser { fusionauth_user_id } => {
+            handle_delete_all_user_links(&ctx, &fusionauth_user_id).await?;
+        }
     }
 
-    // Step 4: Cleanup the message from the queue
     cleanup_message(&ctx.sqs_worker, message).await?;
-
     Ok(())
+}
+
+/// Fetches a link by ID, cleaning up the message and returning `None` if not found.
+async fn get_link_or_skip(
+    ctx: &LinkManagerContext,
+    message: &aws_sdk_sqs::types::Message,
+    link_id: uuid::Uuid,
+) -> anyhow::Result<Option<Link>> {
+    let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await?;
+    if link.is_none() {
+        tracing::debug!(link_id=%link_id, "Link not found - skipping");
+        cleanup_message(&ctx.sqs_worker, message).await?;
+    }
+    Ok(link)
 }
 
 /// Handles the Refresh operation: renews Gmail watch subscription and syncs contacts.
@@ -97,6 +102,42 @@ async fn handle_refresh(
 
     // Even if above steps fail due to transient errors, we can just try again when this is
     // triggered for the user in 24h.
+    Ok(())
+}
+
+/// Fetches all links for a user and deletes each one via the existing delete handler.
+#[tracing::instrument(skip(ctx), err)]
+async fn handle_delete_all_user_links(
+    ctx: &LinkManagerContext,
+    fusionauth_user_id: &str,
+) -> anyhow::Result<()> {
+    let links =
+        email_db_client::links::get::fetch_links_by_fusionauth_user_id(&ctx.db, fusionauth_user_id)
+            .await
+            .context("Failed to fetch links by fusionauth_user_id")?;
+
+    if links.is_empty() {
+        tracing::info!(fusionauth_user_id, "No email links found for user");
+        return Ok(());
+    }
+
+    tracing::info!(
+        fusionauth_user_id,
+        link_count = links.len(),
+        "Deleting all email links for user"
+    );
+
+    for link in &links {
+        let gmail_access_token =
+            fetch_gmail_access_token_from_link(link, &ctx.redis_client, &ctx.auth_service_client)
+                .await
+                .ok();
+
+        if let Err(e) = handle_delete(ctx, link, gmail_access_token.as_deref()).await {
+            tracing::error!(error=?e, link_id=?link.id, "Failed to delete link during user cleanup");
+        }
+    }
+
     Ok(())
 }
 

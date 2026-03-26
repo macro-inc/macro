@@ -92,7 +92,9 @@ impl IntoResponse for ExtractorError {
             }
         };
 
-        let error_response = ErrorResponse { message: &message };
+        let error_response = ErrorResponse {
+            message: message.into(),
+        };
         (status, axum::Json(error_response)).into_response()
     }
 }

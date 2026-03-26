@@ -54,13 +54,13 @@ pub async fn handler(
                 gmail_client::GmailError::Conflict(_) => (
                     StatusCode::CONFLICT,
                     Json(ErrorResponse {
-                        message: "label with that name already exists",
+                        message: "label with that name already exists".into(),
                     }),
                 ),
                 _ => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "create label call failed",
+                        message: "create label call failed".into(),
                     }),
                 ),
             }
@@ -74,7 +74,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to insert label",
+                    message: "unable to insert label".into(),
                 }),
             )
                 .into_response()

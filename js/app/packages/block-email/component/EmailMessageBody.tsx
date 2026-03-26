@@ -2,7 +2,10 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { SERVER_HOSTS } from '@core/constant/servers';
+import {
+  fetchImagesViaPlatform,
+  resolveCidImages,
+} from '../util/resolveEmailImages';
 import {
   parseEmailContent,
   processEmailColors,
@@ -137,36 +140,25 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     return hostContainer;
   });
 
-  // Resolve inline images that reference attachments via cid: URLs
+  // Resolve images in two sequential steps, resolving cid urls and then fetching images on tauri via plaformFetch
   createEffect(() => {
     const root = host().shadowRoot;
-    if (root) {
-      queueMicrotask(() => {
-        // Build a map from normalized content-id => sfs_id
-        const contentIdToSfsId = new Map<string, string>();
-        for (const att of props.message.attachments ?? []) {
-          const contentId = att.content_id;
-          const sfsId = att.sfs_id;
-          if (!contentId || !sfsId) continue;
-          const normalized = contentId.replace(/[<>]/g, '');
-          contentIdToSfsId.set(normalized, sfsId);
-        }
+    if (!root) return;
+    const attachments = props.message.attachments;
 
-        const images = root.querySelectorAll('img[src^="cid:"]');
-        for (const img of images) {
-          if (!(img instanceof HTMLImageElement)) continue;
-          if (img.dataset.cidResolved === 'true') continue;
-          const src = img.getAttribute('src');
-          if (!src?.startsWith('cid:')) continue;
-          const rawCid = src.slice(4);
-          const normalizedCid = rawCid.replace(/[<>]/g, '');
-          const sfsId = contentIdToSfsId.get(normalizedCid);
-          if (!sfsId) continue;
-          img.src = `${SERVER_HOSTS['static-file']}/file/${sfsId}`;
-          img.dataset.cidResolved = 'true';
-        }
-      });
-    }
+    const blobUrls: string[] = [];
+    let disposed = false;
+    onCleanup(() => {
+      disposed = true;
+      for (const url of blobUrls) URL.revokeObjectURL(url);
+    });
+
+    queueMicrotask(async () => {
+      if (disposed) return;
+      resolveCidImages(root, attachments);
+      if (disposed) return;
+      await fetchImagesViaPlatform(root, blobUrls, () => disposed);
+    });
   });
 
   // Process the email colors when: the theme changes, or the source HTML changes.

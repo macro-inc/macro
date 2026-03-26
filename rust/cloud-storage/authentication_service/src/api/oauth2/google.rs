@@ -141,7 +141,13 @@ pub(in crate::api::oauth2) async fn handler(
             .await
             .map_err(|(status_code, error)| {
                 tracing::error!(error=?error, "unable to link user");
-                (status_code, Json(ErrorResponse { message: &error })).into_response()
+                (
+                    status_code,
+                    Json(ErrorResponse {
+                        message: error.into(),
+                    }),
+                )
+                    .into_response()
             })?;
         // Early exit, we don't actually log the user into fusionauth
         return Ok(StatusCode::OK.into_response());

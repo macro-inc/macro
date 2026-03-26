@@ -48,7 +48,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get team",
+                    message: "unable to get team".into(),
                 }),
             )
                 .into_response()

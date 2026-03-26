@@ -31,7 +31,7 @@ pub fn extract_email_with_response(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to get email from user id",
+                message: "unable to get email from user id".into(),
             }),
         )
     })

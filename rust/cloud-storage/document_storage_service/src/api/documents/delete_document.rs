@@ -58,7 +58,7 @@ pub async fn permanently_delete_document_handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to get bom parts",
+                        message: "unable to get bom parts".into(),
                     }),
                 )
                     .into_response()
@@ -82,7 +82,7 @@ pub async fn permanently_delete_document_handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to decrement sha ref counts",
+                        message: "unable to decrement sha ref counts".into(),
                     }),
                 )
                     .into_response()
@@ -97,7 +97,7 @@ pub async fn permanently_delete_document_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to delete document",
+                    message: "unable to delete document".into(),
                 }),
             )
                 .into_response()
@@ -123,7 +123,7 @@ pub async fn permanently_delete_document_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to enqueue document delete",
+                    message: "unable to enqueue document delete".into(),
                 }),
             )
                 .into_response()
@@ -140,7 +140,7 @@ pub async fn permanently_delete_document_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to send message to search extractor queue",
+                    message: "unable to send message to search extractor queue".into(),
                 }),
             )
                 .into_response()

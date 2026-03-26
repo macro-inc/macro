@@ -200,6 +200,7 @@ export const useSearchResponseItemMapper = () => {
             results: result.document_search_results,
           });
         }
+        const properties = result.properties ?? undefined;
         return {
           type: 'document',
           subType: result.sub_type === 'task' ? { type: 'task' } : null,
@@ -210,6 +211,7 @@ export const useSearchResponseItemMapper = () => {
           updatedAt: result.metadata?.updated_at,
           fileType: result.file_type || undefined,
           projectId: result.metadata?.project_id ?? undefined,
+          properties,
           search,
         };
       }

@@ -82,34 +82,36 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
         Some(CommentError::CommentNotFound) => Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                message: e.to_string().as_ref(),
+                message: e.to_string().into(),
             }),
         )
             .into_response()),
         Some(CommentError::ThreadNotFound) => Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                message: e.to_string().as_ref(),
+                message: e.to_string().into(),
             }),
         )
             .into_response()),
         Some(CommentError::AnchorNotFound) => Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                message: e.to_string().as_ref(),
+                message: e.to_string().into(),
             }),
         )
             .into_response()),
         Some(CommentError::InvalidPermissions) => Err((
             StatusCode::FORBIDDEN,
             Json(ErrorResponse {
-                message: e.to_string().as_ref(),
+                message: e.to_string().into(),
             }),
         )
             .into_response()),
         Some(CommentError::NotAllowed(msg)) => Err((
             StatusCode::METHOD_NOT_ALLOWED,
-            Json(ErrorResponse { message: msg }),
+            Json(ErrorResponse {
+                message: msg.into(),
+            }),
         )
             .into_response()),
         None => {
@@ -117,7 +119,7 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: default_msg,
+                    message: default_msg.into(),
                 }),
             )
                 .into_response())

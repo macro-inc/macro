@@ -27,7 +27,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "error fetching job",
+                    message: "error fetching job".into(),
                 }),
             )
                 .into_response()
@@ -40,7 +40,7 @@ pub async fn handler(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "job does not exist",
+                    message: "job does not exist".into(),
                 }),
             )
                 .into_response()
@@ -50,7 +50,7 @@ pub async fn handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "job already cancelled",
+                message: "job already cancelled".into(),
             }),
         )
             .into_response());
@@ -58,7 +58,7 @@ pub async fn handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "job already completed",
+                message: "job already completed".into(),
             }),
         )
             .into_response());
@@ -66,7 +66,7 @@ pub async fn handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "job already failed",
+                message: "job already failed".into(),
             }),
         )
             .into_response());
@@ -83,7 +83,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "error updating job status",
+                message: "error updating job status".into(),
             }),
         )
             .into_response()

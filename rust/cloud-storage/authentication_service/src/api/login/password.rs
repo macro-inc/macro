@@ -40,7 +40,7 @@ pub async fn handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "invalid email",
+                message: "invalid email".into(),
             }),
         )
             .into_response());
@@ -62,7 +62,7 @@ pub async fn handler(
                     return Err((
                         StatusCode::UNAUTHORIZED,
                         Json(ErrorResponse {
-                            message: "user has not verified their primary email",
+                            message: "user has not verified their primary email".into(),
                         }),
                     )
                         .into_response());
@@ -76,7 +76,7 @@ pub async fn handler(
                             (
                                 StatusCode::INTERNAL_SERVER_ERROR,
                                 Json(ErrorResponse {
-                                    message: "unable to register user",
+                                    message: "unable to register user".into(),
                                 }),
                             )
                                 .into_response()
@@ -91,7 +91,7 @@ pub async fn handler(
                             (
                                 StatusCode::INTERNAL_SERVER_ERROR,
                                 Json(ErrorResponse {
-                                    message: "unable to login user",
+                                    message: "unable to login user".into(),
                                 }),
                             )
                                 .into_response()
@@ -101,7 +101,7 @@ pub async fn handler(
                     return Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
-                            message: "unable to login user",
+                            message: "unable to login user".into(),
                         }),
                     )
                         .into_response());

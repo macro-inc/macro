@@ -425,6 +425,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             terms: vec!["test".to_string()],
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
+            ..Default::default()
         },
         email_search_args: UnifiedEmailSearchArgs {
             terms: vec!["test".to_string()],
@@ -797,6 +798,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             terms: vec!["test".to_string()],
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
+            ..Default::default()
         },
         email_search_args: UnifiedEmailSearchArgs {
             terms: vec!["test".to_string()],
@@ -848,6 +850,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
             terms: vec!["test".to_string()],
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
+            ..Default::default()
         },
         ..Default::default()
     };

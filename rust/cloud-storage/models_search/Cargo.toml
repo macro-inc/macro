@@ -15,4 +15,5 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 utoipa = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
+models_soup = { path = "../models_soup", features = ["schema"] }
 uuid = { workspace = true }

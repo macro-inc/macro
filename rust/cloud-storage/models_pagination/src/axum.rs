@@ -58,31 +58,31 @@ impl IntoResponse for CursorExtractErr {
             CursorExtractErr::DecodeErr(Base64SerdeErr::DecodeErr(_e)) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "failed to decode cursor value",
+                    message: "failed to decode cursor value".into(),
                 }),
             ),
             CursorExtractErr::DecodeErr(Base64SerdeErr::SerdeErr(_e)) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "the cursor contained unexpected data",
+                    message: "the cursor contained unexpected data".into(),
                 }),
             ),
             CursorExtractErr::SizeErr => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "Query is too large, must be <32kb",
+                    message: "Query is too large, must be <32kb".into(),
                 }),
             ),
             CursorExtractErr::InvalidQueryParamsErr => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "invalid cursor query parameters",
+                    message: "invalid cursor query parameters".into(),
                 }),
             ),
             CursorExtractErr::MutuallyExclusiveErr => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "provide only one of cursor or previous_cursor",
+                    message: "provide only one of cursor or previous_cursor".into(),
                 }),
             ),
         }

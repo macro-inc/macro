@@ -30,13 +30,13 @@ impl IntoResponse for RejectInvitationError {
                 RemoveTeamInviteError::TeamInviteDoesNotExist => (
                     StatusCode::NOT_FOUND,
                     Json(ErrorResponse {
-                        message: "team invite does not exist",
+                        message: "team invite does not exist".into(),
                     }),
                 ),
                 RemoveTeamInviteError::UserNotInTeam => (
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {
-                        message: "user not in team",
+                        message: "user not in team".into(),
                     }),
                 ),
                 RemoveTeamInviteError::StorageLayerError(_)
@@ -44,7 +44,7 @@ impl IntoResponse for RejectInvitationError {
                 | RemoveTeamInviteError::TeamError(_) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to reject invitation",
+                        message: "unable to reject invitation".into(),
                     }),
                 ),
             },

@@ -36,19 +36,19 @@ impl IntoResponse for PatchUserGroupError {
             PatchUserGroupError::UserNotFound => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "user not found",
+                    message: "user not found".into(),
                 }),
             ),
             PatchUserGroupError::InvalidMacroUserId => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "invalid user id",
+                    message: "invalid user id".into(),
                 }),
             ),
             PatchUserGroupError::InternalError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "internal error",
+                    message: "internal error".into(),
                 }),
             ),
         }

@@ -37,19 +37,19 @@ impl IntoResponse for PatchAiConsentError {
             PatchAiConsentError::UserNotFound => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "user not found",
+                    message: "user not found".into(),
                 }),
             ),
             PatchAiConsentError::InvalidMacroUserId => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "invalid user id",
+                    message: "invalid user id".into(),
                 }),
             ),
             PatchAiConsentError::InternalError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "internal error",
+                    message: "internal error".into(),
                 }),
             ),
         }

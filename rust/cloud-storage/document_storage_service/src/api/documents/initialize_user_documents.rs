@@ -51,7 +51,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to get folder content names",
+                    message: "failed to get folder content names".into(),
                 }),
             )
                 .into_response()
@@ -68,7 +68,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to start transaction",
+                message: "unable to start transaction".into(),
             }),
         )
             .into_response()
@@ -92,7 +92,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to create project",
+                    message: "failed to create project".into(),
                 }),
             )
                 .into_response()
@@ -115,7 +115,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to create onboarding documents",
+                    message: "failed to create onboarding documents".into(),
                 }),
             )
                 .into_response()
@@ -129,7 +129,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to fill markdown template",
+                message: "failed to fill markdown template".into(),
             }),
         )
             .into_response()
@@ -141,7 +141,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to fill canvas template",
+                message: "failed to fill canvas template".into(),
             }),
         )
             .into_response()
@@ -206,7 +206,7 @@ pub async fn handler(
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to copy documents",
+                message: "failed to copy documents".into(),
             }),
         )
             .into_response());
@@ -225,7 +225,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to set onboarding status",
+                message: "failed to set onboarding status".into(),
             }),
         )
             .into_response()
@@ -239,7 +239,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to commit transaction",
+                message: "failed to commit transaction".into(),
             }),
         )
             .into_response()

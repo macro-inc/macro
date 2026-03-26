@@ -13,6 +13,7 @@ use model::{
     tracking::IPContext,
 };
 use model_user::axum_extractor::MacroUserExtractor;
+use macro_user_id::user_id::MacroUserIdStr;
 use teams::domain::{model::RemoveUserFromTeamError, team_repo::TeamService};
 
 #[derive(serde::Deserialize)]
@@ -25,6 +26,8 @@ pub struct Param {
 pub enum RemoveFromTeamError {
     #[error("unable to remove user from team")]
     RemoveUserFromTeamError(#[from] RemoveUserFromTeamError),
+    #[error("invalid user id")]
+    InvalidUserId,
 }
 
 impl IntoResponse for RemoveFromTeamError {
@@ -34,31 +37,31 @@ impl IntoResponse for RemoveFromTeamError {
                 RemoveUserFromTeamError::TeamDoesNotExist => (
                     StatusCode::NOT_FOUND,
                     Json(ErrorResponse {
-                        message: "team does not exist",
+                        message: "team does not exist".into(),
                     }),
                 ),
                 RemoveUserFromTeamError::RemoveRolesFromUserError(_) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to remove roles from user",
+                        message: "unable to remove roles from user".into(),
                     }),
                 ),
                 RemoveUserFromTeamError::NoSubscription => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "no subscription",
+                        message: "no subscription".into(),
                     }),
                 ),
                 RemoveUserFromTeamError::CannotRemoveOwner => (
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {
-                        message: "cannot remove owner",
+                        message: "cannot remove owner".into(),
                     }),
                 ),
                 RemoveUserFromTeamError::UserNotInTeam => (
                     StatusCode::NOT_FOUND,
                     Json(ErrorResponse {
-                        message: "user not in team",
+                        message: "user not in team".into(),
                     }),
                 ),
                 RemoveUserFromTeamError::StorageLayerError(_)
@@ -66,10 +69,16 @@ impl IntoResponse for RemoveFromTeamError {
                 | RemoveUserFromTeamError::TeamError(_) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to remove user from team",
+                        message: "unable to remove user from team".into(),
                     }),
                 ),
             },
+            RemoveFromTeamError::InvalidUserId => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "invalid user id".into(),
+                }),
+            ),
         }
         .into_response()
     }
@@ -105,8 +114,11 @@ pub async fn handler(
 ) -> Result<(StatusCode, Json<EmptyResponse>), RemoveFromTeamError> {
     tracing::info!("remove_user_from_team");
 
+    let remove_user_id = MacroUserIdStr::try_from(remove_user_id)
+        .map_err(|_| RemoveFromTeamError::InvalidUserId)?;
+
     ctx.teams_service
-        .remove_user_from_team(&team_id, &user_context.macro_user_id)
+        .remove_user_from_team(&team_id, &remove_user_id)
         .await?;
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())))

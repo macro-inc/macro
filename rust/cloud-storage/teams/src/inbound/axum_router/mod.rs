@@ -115,19 +115,19 @@ impl IntoResponse for TeamError {
             TeamError::TeamDoesNotExist => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "team does not exist",
+                    message: "team does not exist".into(),
                 }),
             ),
             TeamError::TeamInviteDoesNotExist => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "team invite does not exist",
+                    message: "team invite does not exist".into(),
                 }),
             ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "internal server error",
+                    message: "internal server error".into(),
                 }),
             ),
         }
@@ -141,13 +141,13 @@ impl IntoResponse for CreateTeamError {
             CreateTeamError::InvalidTeamName(_) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "invalid team name",
+                    message: "invalid team name".into(),
                 }),
             ),
             CreateTeamError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to create team",
+                    message: "unable to create team".into(),
                 }),
             ),
         }
@@ -161,19 +161,19 @@ impl IntoResponse for DeleteTeamError {
             DeleteTeamError::TeamError(_) | DeleteTeamError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to delete team",
+                    message: "unable to delete team".into(),
                 }),
             ),
             DeleteTeamError::RemoveRolesFromUserError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "invalid roles provided",
+                    message: "invalid roles provided".into(),
                 }),
             ),
             DeleteTeamError::CustomerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to delete team subscription",
+                    message: "unable to delete team subscription".into(),
                 }),
             ),
         }
@@ -187,13 +187,13 @@ impl IntoResponse for InviteUsersToTeamError {
             InviteUsersToTeamError::TooManyEmails => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "too many emails",
+                    message: "too many emails".into(),
                 }),
             ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to invite users to team",
+                    message: "unable to invite users to team".into(),
                 }),
             ),
         }
@@ -206,7 +206,7 @@ impl IntoResponse for JoinTeamError {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to join team",
+                message: "unable to join team".into(),
             }),
         )
             .into_response()
@@ -219,19 +219,19 @@ impl IntoResponse for RemoveTeamInviteError {
             RemoveTeamInviteError::TeamInviteDoesNotExist => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "team invite does not exist",
+                    message: "team invite does not exist".into(),
                 }),
             ),
             RemoveTeamInviteError::UserNotInTeam => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "user not in team",
+                    message: "user not in team".into(),
                 }),
             ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "internal server error",
+                    message: "internal server error".into(),
                 }),
             ),
         }
@@ -245,25 +245,25 @@ impl IntoResponse for RemoveUserFromTeamError {
             RemoveUserFromTeamError::TeamDoesNotExist => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "team does not exist",
+                    message: "team does not exist".into(),
                 }),
             ),
             RemoveUserFromTeamError::CannotRemoveOwner => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "cannot remove owner",
+                    message: "cannot remove owner".into(),
                 }),
             ),
             RemoveUserFromTeamError::UserNotInTeam => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "user not in team",
+                    message: "user not in team".into(),
                 }),
             ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to remove user from team",
+                    message: "unable to remove user from team".into(),
                 }),
             ),
         }
@@ -277,19 +277,19 @@ impl IntoResponse for ReinviteError {
             ReinviteError::TooManyRequests => (
                 StatusCode::TOO_MANY_REQUESTS,
                 Json(ErrorResponse {
-                    message: "team invite has not been sent in the last 5 minutes",
+                    message: "team invite has not been sent in the last 5 minutes".into(),
                 }),
             ),
             ReinviteError::InviteNotFound => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "team invite does not exist",
+                    message: "team invite does not exist".into(),
                 }),
             ),
             ReinviteError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "internal server error",
+                    message: "internal server error".into(),
                 }),
             ),
         }

@@ -7,7 +7,6 @@ use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::email::service::link::Link;
 use models_email::email::service::pubsub::LinkManagerMessage;
-use models_email::service::pubsub::LinkManagerOperation;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
@@ -24,7 +23,13 @@ impl IntoResponse for DisableSyncError {
         };
 
         let message = self.to_string();
-        (status_code, Json(ErrorResponse { message: &message })).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -50,10 +55,7 @@ pub async fn disable_handler(
     tracing::info!(user_id = %user_context.user_id, "Disable called");
 
     // Enqueue the delete operation to handle cleanup asynchronously
-    let message = LinkManagerMessage {
-        link_id: link.id,
-        operation: LinkManagerOperation::Delete,
-    };
+    let message = LinkManagerMessage::DeleteLink { link_id: link.id };
 
     ctx.sqs_client
         .enqueue_link_manager_notification(message)
