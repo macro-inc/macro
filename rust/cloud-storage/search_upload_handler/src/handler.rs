@@ -5,35 +5,8 @@ use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
-use model::document::TEMP_FILE_PREFIX;
+use s3_key::DocumentKey;
 use sqs_client::search::{SearchQueueMessage, document::SearchExtractorMessage};
-
-#[derive(Debug)]
-struct DocumentKeyParts {
-    pub user_id: String,
-    pub document_id: String,
-    pub document_version_id: String,
-}
-
-impl TryFrom<String> for DocumentKeyParts {
-    type Error = anyhow::Error;
-
-    /// Tries to convert the document key into it's parts
-    /// Key format: `user_id/document_id/version_id`
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let parts: Vec<&str> = value.split('/').collect();
-
-        if parts.len() != 3 {
-            anyhow::bail!("expected 3 parts, got {}", parts.len());
-        }
-
-        Ok(Self {
-            user_id: parts[0].to_string(),
-            document_id: parts[1].to_string(),
-            document_version_id: parts[2].to_string(),
-        })
-    }
-}
 
 /// Handles the Eventbridge event
 #[tracing::instrument(skip(sqs_client, dss_client), err)]
@@ -53,32 +26,25 @@ pub async fn handler(
         .unwrap_or("")
         .to_string();
 
-    let key = match urlencoding::decode(&key) {
-        Ok(decoded) => decoded.to_string(),
+    let document_key = match DocumentKey::from_s3_key(&key) {
+        Ok(key) => key,
         Err(e) => {
-            tracing::warn!(error=?e, key=%key, "unable to decode key");
-            return Ok(()); // Skip processing if key cannot be decoded
+            tracing::warn!(error=?e, "unable to parse key");
+            return Ok(());
         }
     };
 
-    // Ignore temp files as it leads to failures
-    if key.starts_with(&format!("{TEMP_FILE_PREFIX}/")) {
+    if document_key.is_temp() {
         tracing::trace!("skipping temp file");
         return Ok(());
     }
 
-    let document_key_parts: DocumentKeyParts = match key.try_into() {
-        Ok(parts) => parts,
-        Err(e) => {
-            tracing::warn!(error=?e, "unable to decode key");
-            return Ok(()); // Skip processing if key cannot be decoded
-        }
-    };
+    let document_id = document_key.document_id();
 
-    tracing::trace!(document_key_parts=?document_key_parts, "processing document key");
+    tracing::trace!(?document_key, "processing document key");
 
     let document_basic = dss_client
-        .get_document_basic(&document_key_parts.document_id)
+        .get_document_basic(document_id)
         .await
         .context("Failed to fetch document basic info")?
         .ok_or_else(|| anyhow::anyhow!("document not found"))?;
@@ -88,9 +54,9 @@ pub async fn handler(
         .ok_or_else(|| anyhow::anyhow!("file type not found"))?;
 
     let search_extractor_message = SearchExtractorMessage {
-        user_id: document_key_parts.user_id,
-        document_id: document_key_parts.document_id,
-        document_version_id: Some(document_key_parts.document_version_id),
+        user_id: document_basic.owner.to_string(),
+        document_id: document_id.to_string(),
+        document_version_id: document_key.version_id_string(),
         file_type,
     };
 

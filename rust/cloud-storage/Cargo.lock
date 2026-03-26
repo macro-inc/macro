@@ -3116,6 +3116,7 @@ dependencies = [
  "model",
  "openssl",
  "pdfium-render",
+ "s3_key",
  "serde",
  "serde_json",
  "sqlx",
@@ -6257,6 +6258,7 @@ dependencies = [
  "models_comms",
  "models_pagination",
  "models_permissions",
+ "s3_key",
  "schemars",
  "serde",
  "serde_json",
@@ -8583,6 +8585,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "s3_key"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "urlencoding",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8847,13 +8857,11 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
- "model",
- "model_file_type",
  "openssl",
+ "s3_key",
  "sqs_client",
  "tokio",
  "tracing",
- "urlencoding",
 ]
 
 [[package]]
