@@ -273,7 +273,7 @@ where
 
             // Decrement the quantity of the subscription
             self.customer_repository
-                .decrease_subscription_quantity(&subscription_id, 1)
+                .decrease_subscription_quantity(&subscription_id, 1, tier)
                 .await?;
 
             if !self.team_repository.is_user_member_of_team(user_id).await? {
@@ -400,7 +400,7 @@ where
 
         // Increment the quantity of the subscription by the number of emails
         self.customer_repository
-            .increase_subscription_quantity(&subscription_id, 1)
+            .increase_subscription_quantity(&subscription_id, 1, team_member.tier)
             .await?;
 
         Ok(team_member)
