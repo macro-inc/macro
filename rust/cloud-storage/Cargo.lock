@@ -9835,6 +9835,7 @@ dependencies = [
  "macro_middleware",
  "model",
  "models_sfs",
+ "s3_key",
  "secretsmanager_client",
  "serde",
  "serde_dynamo",
