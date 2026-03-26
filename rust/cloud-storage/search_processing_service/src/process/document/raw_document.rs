@@ -4,7 +4,7 @@ use anyhow::Context;
 use chrono::Utc;
 use model::document::{
     CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
-    build_cloud_storage_bucket_document_key,
+    build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key,
 };
 use model_file_type::FileAssociation;
 use models_search::document::MarkdownParseResult;
@@ -122,10 +122,13 @@ pub async fn update_search_with_raw_document(
             .as_str(),
     )?;
 
-    // Skip if the message has a stale version id (unless it's a converted document)
-    if let Some(msg_version_id) = search_extractor_message.document_version_id.as_ref()
+    let key = if document_version_id == CONVERTED_DOCUMENT_FILE_NAME {
+        build_docx_to_pdf_converted_document_key(
+            &search_extractor_message.user_id,
+            &search_extractor_message.document_id,
+        )
+    } else if let Some(msg_version_id) = search_extractor_message.document_version_id.as_ref()
         && msg_version_id != &document_version_id
-        && msg_version_id != CONVERTED_DOCUMENT_FILE_NAME
     {
         tracing::debug!(
             msg_version_id,
@@ -133,14 +136,13 @@ pub async fn update_search_with_raw_document(
             "document version is not latest, skipping"
         );
         return Ok(());
-    }
-
-    // document_version_id will be "converted" or document version id
-    let key = build_cloud_storage_bucket_document_key(
-        &search_extractor_message.user_id,
-        &search_extractor_message.document_id,
-        &document_version_id,
-    );
+    } else {
+        build_cloud_storage_bucket_document_key(
+            &search_extractor_message.user_id,
+            &search_extractor_message.document_id,
+            &document_version_id,
+        )
+    };
 
     let content = s3_client
         .get(document_storage_bucket, &key)
