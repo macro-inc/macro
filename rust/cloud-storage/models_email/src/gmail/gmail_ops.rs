@@ -33,14 +33,6 @@ pub struct ModifyMessageLabelsPayload {
     pub provider_message_id: String,
     pub labels_to_add: Vec<String>,
     pub labels_to_remove: Vec<String>,
-    /// The provider label ID being modified (for DB revert on failure)
-    pub provider_label_id: String,
-    /// The link ID (for DB revert on failure)
-    pub link_id: Uuid,
-    /// The user's fusionauth ID (for DB revert on failure)
-    pub fusion_user_id: String,
-    /// Whether labels are being added (true) or removed (false)
-    pub is_adding: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

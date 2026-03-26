@@ -170,39 +170,36 @@ pub async fn archived_handler(
         (vec![system_labels::INBOX.to_string()], Vec::new())
     };
 
-    for msg in &affected_messages {
-        let Some(ref pid) = msg.provider_id else {
-            continue;
-        };
-        if pid.is_empty() {
-            continue;
-        }
+    let gmail_ops_messages: Vec<_> = affected_messages
+        .iter()
+        .filter_map(|msg| {
+            msg.provider_id
+                .as_ref()
+                .filter(|pid| !pid.is_empty())
+                .map(
+                    |pid| models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
+                        link_id: link.id,
+                        operation:
+                            models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(
+                                models_email::gmail::gmail_ops::ModifyMessageLabelsPayload {
+                                    db_message_id: msg.db_id,
+                                    provider_message_id: pid.clone(),
+                                    labels_to_add: labels_to_add.clone(),
+                                    labels_to_remove: labels_to_remove.clone(),
+                                },
+                            ),
+                    },
+                )
+        })
+        .collect();
 
-        ctx.sqs_client
-            .enqueue_gmail_ops_notification(
-                models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
-                    link_id: link.id,
-                    operation:
-                        models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(
-                            models_email::gmail::gmail_ops::ModifyMessageLabelsPayload {
-                                db_message_id: msg.db_id,
-                                provider_message_id: pid.clone(),
-                                labels_to_add: labels_to_add.clone(),
-                                labels_to_remove: labels_to_remove.clone(),
-                                provider_label_id: system_labels::INBOX.to_string(),
-                                link_id: link.id,
-                                fusion_user_id: user_context.fusion_user_id.clone(),
-                                is_adding: !is_archiving,
-                            },
-                        ),
-                },
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, db_message_id=?msg.db_id, "Failed to enqueue gmail ops notification for archived");
-            })
-            .ok();
-    }
+    ctx.sqs_client
+        .enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "Failed to enqueue gmail ops notifications batch for archived");
+        })
+        .ok();
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }

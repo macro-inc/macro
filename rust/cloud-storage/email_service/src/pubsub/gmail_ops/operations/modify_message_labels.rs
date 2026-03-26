@@ -8,7 +8,8 @@ use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::result;
 
-/// Modifies labels for a single message in Gmail. Reverts DB changes on failure.
+/// Modifies labels for a single message in Gmail. Reverts DB changes on permanent failure.
+/// Transient errors (5xx, timeouts) are retried; permanent errors (4xx) trigger revert.
 #[tracing::instrument(skip(ctx, link))]
 pub async fn modify_message_labels(
     ctx: &GmailOpsContext,
@@ -35,27 +36,70 @@ pub async fn modify_message_labels(
         )
         .await;
 
-    if let Err(e) = result {
-        tracing::error!(
-            error = ?e,
-            db_message_id = %payload.db_message_id,
-            provider_message_id = %payload.provider_message_id,
-            "Failed to modify labels in Gmail, reverting database changes"
-        );
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let error_str = e.to_string();
+            let is_transient = is_transient_error(&error_str);
 
-        revert_db_changes(ctx, payload).await;
+            if is_transient {
+                tracing::warn!(
+                    error = ?e,
+                    db_message_id = %payload.db_message_id,
+                    provider_message_id = %payload.provider_message_id,
+                    "Transient Gmail error modifying labels, will retry"
+                );
+                return Err(ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::GmailApiFailed,
+                    source: anyhow::anyhow!("Transient Gmail error: {}", e),
+                }));
+            }
 
-        return Err(ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::GmailApiFailed,
-            source: anyhow::anyhow!("Failed to modify message labels in Gmail: {}", e),
-        }));
+            tracing::error!(
+                error = ?e,
+                db_message_id = %payload.db_message_id,
+                provider_message_id = %payload.provider_message_id,
+                "Permanent Gmail error modifying labels, reverting database changes"
+            );
+
+            revert_db_changes(ctx, link, payload).await;
+
+            Err(ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::GmailApiFailed,
+                source: anyhow::anyhow!("Failed to modify message labels in Gmail: {}", e),
+            }))
+        }
     }
+}
 
-    Ok(())
+/// Returns true if the error looks transient (5xx, timeout, connection error).
+fn is_transient_error(error_str: &str) -> bool {
+    // Gmail API 5xx errors
+    if error_str.contains("500")
+        || error_str.contains("502")
+        || error_str.contains("503")
+        || error_str.contains("429")
+    {
+        return true;
+    }
+    // Network-level errors
+    if error_str.contains("timeout")
+        || error_str.contains("connection")
+        || error_str.contains("Failed to send request")
+    {
+        return true;
+    }
+    false
 }
 
 /// Reverts the optimistic DB changes for a single message that failed in Gmail.
-async fn revert_db_changes(ctx: &GmailOpsContext, payload: &ModifyMessageLabelsPayload) {
+/// Fetches the necessary context (fusionauth_user_id, which labels were modified) from the
+/// link and payload rather than storing it in the SQS message.
+async fn revert_db_changes(
+    ctx: &GmailOpsContext,
+    link: &Link,
+    payload: &ModifyMessageLabelsPayload,
+) {
     let mut tx = match ctx.db.begin().await {
         Ok(tx) => tx,
         Err(e) => {
@@ -66,13 +110,28 @@ async fn revert_db_changes(ctx: &GmailOpsContext, payload: &ModifyMessageLabelsP
 
     let failed_ids = vec![payload.db_message_id];
 
+    // Determine if labels were being added or removed based on payload
+    let is_adding = !payload.labels_to_add.is_empty();
+
+    // The provider_label_id is the label being modified — use the first from whichever list is populated
+    let provider_label_id = if is_adding {
+        payload.labels_to_add.first()
+    } else {
+        payload.labels_to_remove.first()
+    };
+
+    let Some(provider_label_id) = provider_label_id else {
+        tracing::error!("No label IDs in payload, cannot revert");
+        return;
+    };
+
     let revert_result = async {
-        if payload.is_adding {
+        if is_adding {
             email_db_client::labels::delete::delete_message_labels_batch(
                 &mut *tx,
                 &failed_ids,
-                &payload.provider_label_id,
-                payload.link_id,
+                provider_label_id,
+                link.id,
             )
             .await
             .context("Failed to revert adding labels")?;
@@ -80,28 +139,28 @@ async fn revert_db_changes(ctx: &GmailOpsContext, payload: &ModifyMessageLabelsP
             email_db_client::labels::insert::insert_message_labels_batch(
                 &mut *tx,
                 &failed_ids,
-                &payload.provider_label_id,
-                payload.link_id,
+                provider_label_id,
+                link.id,
             )
             .await
             .context("Failed to revert removing labels")?;
         }
 
-        if payload.provider_label_id == service::label::system_labels::UNREAD {
+        if *provider_label_id == service::label::system_labels::UNREAD {
             email_db_client::messages::update::update_message_read_status_batch(
                 &mut *tx,
                 failed_ids.clone(),
-                &payload.fusion_user_id,
-                payload.is_adding,
+                &link.fusionauth_user_id,
+                is_adding,
             )
             .await
             .context("Failed to revert message read status")?;
-        } else if payload.provider_label_id == service::label::system_labels::STARRED {
+        } else if *provider_label_id == service::label::system_labels::STARRED {
             email_db_client::messages::update::update_message_starred_status_batch(
                 &mut *tx,
                 failed_ids,
-                &payload.fusion_user_id,
-                !payload.is_adding,
+                &link.fusionauth_user_id,
+                !is_adding,
             )
             .await
             .context("Failed to revert message starred status")?;

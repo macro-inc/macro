@@ -1,4 +1,6 @@
-use crate::SQS;
+use crate::{MAX_BATCH_SIZE, SQS};
+use anyhow::Context;
+use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
 use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
 use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
 
@@ -57,6 +59,47 @@ impl SQS {
             return enqueue_notification(&self.inner, gmail_ops_queue, &message).await;
         }
         anyhow::bail!("gmail_ops_queue is not configured")
+    }
+
+    /// Sends a batch of messages to the Gmail operations queue.
+    /// Messages are batched into groups of up to 10 (SQS limit).
+    #[tracing::instrument(skip(self, messages), fields(message_count = messages.len()))]
+    pub async fn enqueue_gmail_ops_notifications_batch(
+        &self,
+        messages: Vec<GmailOpsPubsubMessage>,
+    ) -> anyhow::Result<()> {
+        let Some(gmail_ops_queue) = &self.gmail_ops_queue else {
+            anyhow::bail!("gmail_ops_queue is not configured")
+        };
+
+        if messages.is_empty() {
+            return Ok(());
+        }
+
+        let entries: Vec<SendMessageBatchRequestEntry> = messages
+            .iter()
+            .enumerate()
+            .map(|(i, msg)| {
+                let body = serde_json::to_string(msg)?;
+                SendMessageBatchRequestEntry::builder()
+                    .id(i.to_string())
+                    .message_body(body)
+                    .build()
+                    .context("Failed to build batch entry")
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        for chunk in entries.chunks(MAX_BATCH_SIZE) {
+            self.inner
+                .send_message_batch()
+                .queue_url(gmail_ops_queue)
+                .set_entries(Some(chunk.to_vec()))
+                .send()
+                .await
+                .context("Failed to send gmail ops batch")?;
+        }
+
+        Ok(())
     }
 
     /// Sends a message to the Gmail operations retry queue

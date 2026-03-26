@@ -151,40 +151,37 @@ pub async fn seen_handler(
         }
     }
 
-    // Enqueue one gmail_ops message per provider message
-    for msg in &unread_messages {
-        let Some(ref pid) = msg.provider_id else {
-            continue;
-        };
-        if pid.is_empty() {
-            continue;
-        }
+    // Enqueue gmail ops messages in batch
+    let gmail_ops_messages: Vec<_> = unread_messages
+        .iter()
+        .filter_map(|msg| {
+            msg.provider_id
+                .as_ref()
+                .filter(|pid| !pid.is_empty())
+                .map(
+                    |pid| models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
+                        link_id: link.id,
+                        operation:
+                            models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(
+                                models_email::gmail::gmail_ops::ModifyMessageLabelsPayload {
+                                    db_message_id: msg.db_id,
+                                    provider_message_id: pid.clone(),
+                                    labels_to_add: Vec::new(),
+                                    labels_to_remove: vec![system_labels::UNREAD.to_string()],
+                                },
+                            ),
+                    },
+                )
+        })
+        .collect();
 
-        ctx.sqs_client
-            .enqueue_gmail_ops_notification(
-                models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
-                    link_id: link.id,
-                    operation:
-                        models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(
-                            models_email::gmail::gmail_ops::ModifyMessageLabelsPayload {
-                                db_message_id: msg.db_id,
-                                provider_message_id: pid.clone(),
-                                labels_to_add: Vec::new(),
-                                labels_to_remove: vec![system_labels::UNREAD.to_string()],
-                                provider_label_id: system_labels::UNREAD.to_string(),
-                                link_id: link.id,
-                                fusion_user_id: user_context.fusion_user_id.clone(),
-                                is_adding: false,
-                            },
-                        ),
-                },
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, db_message_id=?msg.db_id, "Failed to enqueue gmail ops notification for seen");
-            })
-            .ok();
-    }
+    ctx.sqs_client
+        .enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "Failed to enqueue gmail ops notifications batch for seen");
+        })
+        .ok();
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }
