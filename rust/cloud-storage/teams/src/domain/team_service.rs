@@ -338,17 +338,17 @@ where
     async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), DeleteTeamError> {
         let members = self.team_repository.get_all_team_members(team_id).await?;
 
-        let subscription_id = self.get_team_subscription(team_id).await?;
-
-        // Cancel subscription
-        let subscription_id = stripe::SubscriptionId::from_str(&subscription_id).map_err(|_| {
-            DeleteTeamError::StorageLayerError(anyhow::anyhow!("Invalid subscription id"))
-        })?;
-
-        self.customer_repository
-            .cancel_subscription(&subscription_id)
-            .await
-            .map_err(DeleteTeamError::CustomerError)?;
+        let subscription_id = self
+            .team_repository
+            .get_team_subscription_id(team_id)
+            .await?;
+        if let Some(subscription_id) = subscription_id {
+            // Cancel subscription
+            self.customer_repository
+                .cancel_subscription(&subscription_id)
+                .await
+                .map_err(DeleteTeamError::CustomerError)?;
+        }
 
         self.team_repository
             .delete_team(team_id)
@@ -403,10 +403,6 @@ where
             .await?;
 
         let subscription_id = self.get_team_subscription(&team_member.team_id).await?;
-
-        // Increase the quantity of the subscription
-        let subscription_id = stripe::SubscriptionId::from_str(&subscription_id)
-            .map_err(|e| JoinTeamError::StorageLayerError(e.into()))?;
 
         // Increment the quantity of the subscription by the number of emails
         self.customer_repository

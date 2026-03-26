@@ -482,19 +482,25 @@ async fn test_get_user_remaining_tiers_multi_team_user(pool: Pool<Postgres>) -> 
     let team_c = macro_uuid::string_to_uuid("cccc3333-3333-3333-3333-333333333333")?;
 
     // Excluding Team A (haiku): should still have Sonnet and Opus from B and C
-    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_a).await?;
+    let tiers = team_repo
+        .get_user_remaining_tiers(&user_id, &team_a)
+        .await?;
     assert!(tiers.contains(&TeamUserTier::Sonnet));
     assert!(tiers.contains(&TeamUserTier::Opus));
     assert!(!tiers.contains(&TeamUserTier::Haiku));
 
     // Excluding Team B (sonnet): should still have Haiku and Opus from A and C
-    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_b).await?;
+    let tiers = team_repo
+        .get_user_remaining_tiers(&user_id, &team_b)
+        .await?;
     assert!(tiers.contains(&TeamUserTier::Haiku));
     assert!(tiers.contains(&TeamUserTier::Opus));
     assert!(!tiers.contains(&TeamUserTier::Sonnet));
 
     // Excluding Team C (opus): should still have Haiku and Sonnet from A and B
-    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_c).await?;
+    let tiers = team_repo
+        .get_user_remaining_tiers(&user_id, &team_c)
+        .await?;
     assert!(tiers.contains(&TeamUserTier::Haiku));
     assert!(tiers.contains(&TeamUserTier::Sonnet));
     assert!(!tiers.contains(&TeamUserTier::Opus));
@@ -515,7 +521,9 @@ async fn test_get_user_remaining_tiers_single_team_user(
     let team_a = macro_uuid::string_to_uuid("aaaa1111-1111-1111-1111-111111111111")?;
 
     // single@test.com is only in Team A; excluding it should return empty
-    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_a).await?;
+    let tiers = team_repo
+        .get_user_remaining_tiers(&user_id, &team_a)
+        .await?;
     assert!(tiers.is_empty());
 
     Ok(())
@@ -534,7 +542,9 @@ async fn test_get_user_remaining_tiers_user_not_in_any_team(
     let team_a = macro_uuid::string_to_uuid("aaaa1111-1111-1111-1111-111111111111")?;
 
     // User not in any team should return empty
-    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_a).await?;
+    let tiers = team_repo
+        .get_user_remaining_tiers(&user_id, &team_a)
+        .await?;
     assert!(tiers.is_empty());
 
     Ok(())
@@ -553,7 +563,9 @@ async fn test_get_user_remaining_tiers_includes_owner_role(
     let user_id = MacroUserIdStr::parse_from_str("macro|owner@test.com")?;
     let team_a = macro_uuid::string_to_uuid("aaaa1111-1111-1111-1111-111111111111")?;
 
-    let tiers = team_repo.get_user_remaining_tiers(&user_id, &team_a).await?;
+    let tiers = team_repo
+        .get_user_remaining_tiers(&user_id, &team_a)
+        .await?;
     assert!(tiers.contains(&TeamUserTier::Sonnet));
     assert!(tiers.contains(&TeamUserTier::Opus));
 
@@ -573,7 +585,9 @@ async fn test_get_user_remaining_tiers_excluding_nonexistent_team(
     let fake_team = macro_uuid::string_to_uuid("deadbeef-dead-beef-dead-beefdeadbeef")?;
 
     // Excluding a team the user isn't in should return all their tiers
-    let tiers = team_repo.get_user_remaining_tiers(&user_id, &fake_team).await?;
+    let tiers = team_repo
+        .get_user_remaining_tiers(&user_id, &fake_team)
+        .await?;
     assert!(tiers.contains(&TeamUserTier::Haiku));
     assert!(tiers.contains(&TeamUserTier::Sonnet));
     assert!(tiers.contains(&TeamUserTier::Opus));
