@@ -35,7 +35,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { beveledCorners } from '../../core/signal/beveledCorners';
 import { ComposeEmailInput } from './ComposeEmailInput';
 import {
   createEmailFormState,

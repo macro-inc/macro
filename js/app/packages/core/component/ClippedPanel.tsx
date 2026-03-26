@@ -1,6 +1,6 @@
 import { cornerClip } from '@core/util/clipPath';
 import { createMemo, splitProps, type JSX } from 'solid-js';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { beveledCorners } from '../signal/beveledCorners';
 import { cn } from '@ui/utils/classname';
 
 export type ClippedPanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
