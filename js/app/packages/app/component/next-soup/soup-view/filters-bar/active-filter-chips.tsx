@@ -28,6 +28,10 @@ interface ActiveFilterChipsProps {
   onClearAll: () => void;
   /** Check if a filter option is currently active */
   isOptionActive: (optionId: string) => boolean;
+  /** Extra class applied to each chip wrapper */
+  chipClass?: string;
+  /** Hide the "Category: " prefix in each chip label */
+  hideCategoryLabel?: boolean;
 }
 
 const FilterChip = (props: {
@@ -35,6 +39,8 @@ const FilterChip = (props: {
   onRemove: () => void;
   onReplace: (newOptionId: string) => void;
   isOptionActive: (optionId: string) => boolean;
+  chipClass?: string;
+  hideCategoryLabel?: boolean;
 }) => {
   const [open, setOpen] = createSignal(false);
 
@@ -47,7 +53,8 @@ const FilterChip = (props: {
         'flex text-xs rounded-xs',
         'bg-ink/10 text-ink-muted border border-edge-muted',
         'group',
-        'transition-colors'
+        'transition-colors',
+        props.chipClass
       )}
     >
       <Show
@@ -62,7 +69,10 @@ const FilterChip = (props: {
               )}
             </Show>
             <span class="font-medium">
-              {props.filter.categoryLabel}: {props.filter.optionLabel}
+              <Show when={!props.hideCategoryLabel}>
+                {props.filter.categoryLabel}:{' '}
+              </Show>
+              {props.filter.optionLabel}
             </span>
           </span>
         }
@@ -82,7 +92,10 @@ const FilterChip = (props: {
               )}
             </Show>
             <span class="font-medium">
-              {props.filter.categoryLabel}: {props.filter.optionLabel}
+              <Show when={!props.hideCategoryLabel}>
+                {props.filter.categoryLabel}:{' '}
+              </Show>
+              {props.filter.optionLabel}
             </span>
           </DropdownMenu.Trigger>
 
@@ -177,6 +190,8 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                     props.onReplace(filter.optionId, newOptionId)
                   }
                   isOptionActive={props.isOptionActive}
+                  chipClass={props.chipClass}
+                  hideCategoryLabel={props.hideCategoryLabel}
                 />
               }
             >
@@ -188,6 +203,8 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                     props.onReplace(filter.optionId, newOptionId)
                   }
                   isOptionActive={props.isOptionActive}
+                  chipClass={props.chipClass}
+                  hideCategoryLabel={props.hideCategoryLabel}
                 />
                 <Button
                   class={cn(

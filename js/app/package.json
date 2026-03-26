@@ -32,6 +32,7 @@
 		"@codemirror/lang-rust": "^6.0.2",
 		"@codemirror/language": "^6.11.3",
 		"@corvu/dialog": "^0.2.4",
+		"@corvu/drawer": "^0.2.4",
 		"@corvu/resizable": "^0.2.5",
 		"@corvu/tooltip": "^0.2.2",
 		"@date-fns/tz": "^1.4.1",

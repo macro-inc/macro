@@ -3,9 +3,11 @@ import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/so
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
-import { createMemo, createSignal, Match, Switch } from 'solid-js';
+import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
+import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
+import { isMobile } from '@core/mobile/isMobile';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { Button } from './button';
 import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
@@ -75,14 +77,23 @@ export const SoupFiltersBar = () => {
       </Match>
       <Match when={true}>
         <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted/50 w-full">
-          <UnifiedFilterDropdown />
-          <ActiveFilterChips
-            filters={activeFiltersList()}
-            onRemove={removeFilter}
-            onReplace={replaceFilter}
-            onClearAll={resetToTabDefaults}
-            isOptionActive={isOptionActive}
-          />
+          <Show
+            when={isMobile()}
+            fallback={
+              <>
+                <UnifiedFilterDropdown />
+                <ActiveFilterChips
+                  filters={activeFiltersList()}
+                  onRemove={removeFilter}
+                  onReplace={replaceFilter}
+                  onClearAll={resetToTabDefaults}
+                  isOptionActive={isOptionActive}
+                />
+              </>
+            }
+          >
+            <MobileFilterDrawer />
+          </Show>
           <div class="flex-1" />
           <Tooltip
             tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}

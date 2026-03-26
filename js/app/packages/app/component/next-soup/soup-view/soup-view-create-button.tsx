@@ -46,7 +46,11 @@ function CreateOptionIcon(props: { id: BlockName | 'import' }) {
       when={props.id !== 'import'}
       fallback={<UploadIcon class="size-3.5" />}
     >
-      <EntityIcon targetType={props.id as BlockName} size="xs" />
+      <EntityIcon
+        targetType={props.id as BlockName}
+        size="xs"
+        class="mobile:size-6"
+      />
     </Show>
   );
 }
