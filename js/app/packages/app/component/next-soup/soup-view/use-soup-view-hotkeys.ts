@@ -17,6 +17,7 @@ import type { SoupState } from '../create-soup-state';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
+import { VIEW_TAB_LISTS } from './soup-view-tabs';
 import { useAnalytics } from '@app/component/analytics-context';
 
 type UseSoupViewHotkeysOptions = {
@@ -305,10 +306,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const getTabKeys = () => {
     const view = currentView();
-    if (!view) return [];
-    const config = VIEW_TAB_PRESETS[view];
-    if (!config) return [];
-    return Object.keys(config.tabs);
+    if (!view || !(view in VIEW_TAB_LISTS)) return [];
+    return VIEW_TAB_LISTS[view as keyof typeof VIEW_TAB_LISTS].map((t) => t.value);
   };
 
   const switchToTabIndex = (index: number) => {
