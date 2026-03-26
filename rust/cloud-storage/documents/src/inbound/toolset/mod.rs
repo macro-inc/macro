@@ -58,9 +58,6 @@ where
 {
     AsyncToolSet::new()
         .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc>>()
-        .expect("failed to add ReadMetadata tool")
         .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc>>()
-        .expect("failed to add ReadContent tool")
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc>>()
-        .expect("failed to add CreateDocument tool")
 }
