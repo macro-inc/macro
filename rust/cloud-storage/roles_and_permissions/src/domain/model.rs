@@ -61,6 +61,31 @@ pub enum RoleId {
     SubOpus,
 }
 
+impl FromStr for RoleId {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "professional_subscriber" => Ok(RoleId::ProfessionalSubscriber),
+            "team_subscriber" => Ok(RoleId::TeamSubscriber),
+            "corporate" => Ok(RoleId::Corporate),
+            "partner_sales" => Ok(RoleId::PartnerSales),
+            "self_serve" => Ok(RoleId::SelfServe),
+            "super_admin" => Ok(RoleId::SuperAdmin),
+            "online_subscriber" => Ok(RoleId::OnlineSubscriber),
+            "organization_it" => Ok(RoleId::OrganizationIt),
+            "manage_organization_subscription" => Ok(RoleId::ManageOrganizationSubscription),
+            "email_tool" => Ok(RoleId::EmailTool),
+            "email_tool_on_prem" => Ok(RoleId::EmailToolOnPrem),
+            "ai_subscriber" => Ok(RoleId::AiSubscriber),
+            "editor_user" => Ok(RoleId::EditorUser),
+            "sub_haiku" => Ok(RoleId::SubHaiku),
+            "sub_sonnet" => Ok(RoleId::SubSonnet),
+            "sub_opus" => Ok(RoleId::SubOpus),
+            _ => anyhow::bail!("unknown role id: {s}"),
+        }
+    }
+}
+
 impl Display for RoleId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -246,7 +271,7 @@ impl TryFrom<&str> for SubscriptionStatus {
             "canceled" => Ok(Self::Canceled),
             "unpaid" => Ok(Self::Unpaid),
             "paused" => Ok(Self::Paused),
-            _ => Err(anyhow::anyhow!("invalid subscription status {value}")),
+            _ => anyhow::bail!("invalid subscription status {value}"),
         }
     }
 }

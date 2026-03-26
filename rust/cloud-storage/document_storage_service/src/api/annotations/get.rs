@@ -92,7 +92,7 @@ pub async fn get_document_anchors_handler(
         _ => Err((
             StatusCode::METHOD_NOT_ALLOWED,
             Json(ErrorResponse {
-                message: "Unsupported file type",
+                message: "Unsupported file type".into(),
             }),
         )
             .into_response()),

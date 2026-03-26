@@ -22,6 +22,12 @@ pub trait UserRepository: Clone + Send + Sync + 'static {
 
 /// The UserRolesAndPermissionsRepository defines a set of actions to perform on the users roles and permissions
 pub trait UserRolesAndPermissionsRepository: Clone + Send + Sync + 'static {
+    /// Gets the roles for a MacroUserID
+    fn get_user_roles(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<HashSet<RoleId>, UserRolesAndPermissionsError>> + Send;
+
     /// Gets the permissiosn for a MacroUserID
     fn get_user_permissions(
         &self,
@@ -43,6 +49,12 @@ pub trait UserRolesAndPermissionsRepository: Clone + Send + Sync + 'static {
 
 /// The UserRolesAndPermissionsService defines a set of actions to perform on the users for their roles and permissions
 pub trait UserRolesAndPermissionsService: Clone + Send + Sync + 'static {
+    /// Gets the users roles
+    fn get_user_roles(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<HashSet<RoleId>, UserRolesAndPermissionsError>> + Send;
+
     /// Gets the users permissions
     fn get_user_permissions(
         &self,

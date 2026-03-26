@@ -61,7 +61,13 @@ impl IntoResponse for DocumentError {
         }
 
         let message = self.to_string();
-        (status_code, Json(ErrorResponse { message: &message })).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -165,7 +171,8 @@ async fn ensure_document_exists<T: DocumentService, Svc: EntityAccessService>(
                     return (
                         StatusCode::NOT_FOUND,
                         Json(ErrorResponse {
-                            message: &format!("document with id \"{}\" was not found", document_id),
+                            message: format!("document with id \"{}\" was not found", document_id)
+                                .into(),
                         }),
                     )
                         .into_response();
@@ -176,7 +183,7 @@ async fn ensure_document_exists<T: DocumentService, Svc: EntityAccessService>(
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
-                            message: "unknown error occurred",
+                            message: "unknown error occurred".into(),
                         }),
                     )
                         .into_response();

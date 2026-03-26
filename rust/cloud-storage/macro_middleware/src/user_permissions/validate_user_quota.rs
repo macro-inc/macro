@@ -37,7 +37,7 @@ pub async fn document_handler(
         Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "no permissions were found for user",
+                message: "no permissions were found for user".into(),
             }),
         )
             .into_response())
@@ -70,7 +70,7 @@ pub async fn ai_chat_message_handler(
         Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "no permissions were found for user",
+                message: "no permissions were found for user".into(),
             }),
         )
             .into_response())

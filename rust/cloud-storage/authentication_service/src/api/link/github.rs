@@ -41,7 +41,7 @@ pub enum InitGithubLinkError {
 
 impl IntoResponse for InitGithubLinkError {
     fn into_response(self) -> Response {
-        let message: &str = &self.to_string();
+        let message = self.to_string();
         let status_code: StatusCode = match &self {
             InitGithubLinkError::InvalidUserId(_) => StatusCode::BAD_REQUEST,
             InitGithubLinkError::TooManyInProgressLinks => StatusCode::TOO_MANY_REQUESTS,
@@ -50,7 +50,13 @@ impl IntoResponse for InitGithubLinkError {
             | InitGithubLinkError::IdentityProviderNotFound => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        (status_code, Json(ErrorResponse { message })).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }
 

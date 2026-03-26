@@ -30,7 +30,7 @@ pub mod ports;
 #[cfg(test)]
 mod test;
 
-/// Send as part of a batched digest email (collected over 5-30 minutes).
+/// Send as part of a batched digest email (collected over a 24-hour window).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct BatchSend<T>(T);
@@ -310,7 +310,7 @@ pub struct StateMachineDriverA<U, N, O, B> {
 }
 
 impl<U, N, O, B> StateMachineDriverA<U, N, O, B> {
-    /// Create a new instance with the default time windows (30 min digest, 60 min online).
+    /// Create a new instance with the default time windows (24-hour digest, 60 min online).
     pub fn new_with_defaults(
         user_checker: U,
         notification_checker: N,

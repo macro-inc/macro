@@ -63,7 +63,7 @@ pub async fn save_document_handler(
         return (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "cannot modify deleted document",
+                message: "cannot modify deleted document".into(),
             }),
         )
             .into_response();

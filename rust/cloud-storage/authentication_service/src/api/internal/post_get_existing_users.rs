@@ -35,7 +35,7 @@ pub enum GetExistingUsersError {
 
 impl IntoResponse for GetExistingUsersError {
     fn into_response(self) -> Response {
-        let status_code = match self {
+        let status_code = match &self {
             GetExistingUsersError::InvalidMacroId => StatusCode::BAD_REQUEST,
             GetExistingUsersError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -43,7 +43,7 @@ impl IntoResponse for GetExistingUsersError {
         (
             status_code,
             Json(ErrorResponse {
-                message: self.to_string().as_str(),
+                message: self.to_string().into(),
             }),
         )
             .into_response()

@@ -119,7 +119,7 @@ pub async fn handler(
                                 (
                                     StatusCode::BAD_REQUEST,
                                     Json(ErrorResponse {
-                                        message: "invalid macro user id",
+                                        message: "invalid macro user id".into(),
                                     }),
                                 )
                                     .into_response()

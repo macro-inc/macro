@@ -41,9 +41,19 @@ pub async fn modify_message_labels(
         .await
         .context("Failed to send request to Gmail API (modify message labels)")?;
 
-    response
-        .error_for_status()
-        .context("Gmail API returned an error status (modify message labels)")?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        anyhow::bail!(
+            "Gmail API error {} (modify message labels) for provider_message_id: {}: {}",
+            status,
+            provider_message_id,
+            error_body
+        );
+    }
 
     Ok(())
 }
@@ -133,9 +143,14 @@ pub async fn fetch_user_labels(
         .await
         .context("Failed to send request to Gmail API (fetch labels)")?;
 
-    let response = response
-        .error_for_status()
-        .context("Gmail API returned an error status (fetch labels)")?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        anyhow::bail!("Gmail API error {} (fetch labels): {}", status, error_body);
+    }
 
     let labels_response = response
         .json::<GmailLabelsResponse>()

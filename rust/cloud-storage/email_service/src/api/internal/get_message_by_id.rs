@@ -25,7 +25,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "internal server error",
+                    message: "internal server error".into(),
                 }),
             )
                 .into_response()
@@ -37,7 +37,7 @@ pub async fn handler(
         Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                message: "message not found",
+                message: "message not found".into(),
             }),
         )
             .into_response())
@@ -57,7 +57,7 @@ pub async fn get_message_by_id_batch_handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "internal server error",
+                        message: "internal server error".into(),
                     }),
                 )
                     .into_response()
@@ -83,7 +83,7 @@ pub async fn get_message_by_id_batch_handler(
         Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                message: "messages not found",
+                message: "messages not found".into(),
             }),
         )
             .into_response())

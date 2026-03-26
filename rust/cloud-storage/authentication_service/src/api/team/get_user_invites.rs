@@ -37,7 +37,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to get user invites",
+                        message: "unable to get user invites".into(),
                     }),
                 )
                     .into_response()

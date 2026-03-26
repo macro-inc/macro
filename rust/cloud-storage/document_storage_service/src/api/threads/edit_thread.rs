@@ -53,7 +53,7 @@ pub async fn edit_thread_handler(
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
-                message: "you do not have valid permissions to move this item",
+                message: "you do not have valid permissions to move this item".into(),
             }),
         )
             .into_response());
@@ -63,7 +63,7 @@ pub async fn edit_thread_handler(
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
-                message: "you do not have valid permission to modify share permissions",
+                message: "you do not have valid permission to modify share permissions".into(),
             }),
         )
             .into_response());
@@ -75,7 +75,7 @@ pub async fn edit_thread_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to edit thread",
+                    message: "unable to edit thread".into(),
                 }),
             )
                 .into_response()
@@ -92,7 +92,7 @@ pub async fn edit_thread_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to update thread share permissions",
+                    message: "unable to update thread share permissions".into(),
                 }),
             )
                 .into_response()
@@ -111,7 +111,7 @@ pub async fn edit_thread_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to update user item access",
+                    message: "unable to update user item access".into(),
                 }),
             )
                 .into_response()
@@ -122,7 +122,7 @@ pub async fn edit_thread_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to edit thread",
+                    message: "unable to edit thread".into(),
                 }),
             )
                 .into_response()

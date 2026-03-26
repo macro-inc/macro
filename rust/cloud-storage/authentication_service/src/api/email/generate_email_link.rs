@@ -98,7 +98,7 @@ pub async fn handler(
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "user profile already exists",
+                    message: "user profile already exists".into(),
                 }),
             )
                 .into_response());
@@ -110,7 +110,7 @@ pub async fn handler(
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to check for existing user profile",
+                        message: "unable to check for existing user profile".into(),
                     }),
                 )
                     .into_response());
@@ -137,7 +137,7 @@ pub async fn handler(
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "email already in progress",
+                    message: "email already in progress".into(),
                 }),
             )
                 .into_response());

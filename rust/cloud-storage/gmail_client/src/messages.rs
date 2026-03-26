@@ -38,12 +38,19 @@ pub(crate) async fn get_message(
         return Ok(None);
     }
 
-    let response = response.error_for_status().with_context(|| {
-        format!(
-            "Gmail API returned an error status (get message) for message_provider_id: {}",
-            message_provider_id
-        )
-    })?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        anyhow::bail!(
+            "Gmail API error {} (get message) for message_provider_id: {}: {}",
+            status,
+            message_provider_id,
+            error_body
+        );
+    }
 
     let message_response = response
         .json::<MessageResource>()
@@ -84,12 +91,19 @@ pub(crate) async fn get_message_thread_id(
         return Ok(None);
     }
 
-    let response = response.error_for_status().with_context(|| {
-        format!(
-            "Gmail API returned an error status (get message) for message_provider_id: {}",
-            message_provider_id
-        )
-    })?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        anyhow::bail!(
+            "Gmail API error {} (get message thread_id) for message_provider_id: {}: {}",
+            status,
+            message_provider_id,
+            error_body
+        );
+    }
 
     let message_response = response
         .json::<MinimalMessageResource>()
@@ -129,12 +143,19 @@ pub(crate) async fn get_message_label_ids(
         return Ok(None);
     }
 
-    let response = response.error_for_status().with_context(|| {
-        format!(
-            "Gmail API returned an error status (get message) for message_provider_id: {}",
-            message_provider_id
-        )
-    })?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        anyhow::bail!(
+            "Gmail API error {} (get message label_ids) for message_provider_id: {}: {}",
+            status,
+            message_provider_id,
+            error_body
+        );
+    }
 
     let message_response = response
         .json::<MinimalMessageResource>()

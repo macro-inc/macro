@@ -58,7 +58,7 @@ pub async fn handler(
             return Err((
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
-                    message: "invalid verification id",
+                    message: "invalid verification id".into(),
                 }),
             )
                 .into_response());
@@ -71,7 +71,7 @@ pub async fn handler(
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "cannot verify email link. user profile already exists. use account merge instead",
+                    message: "cannot verify email link. user profile already exists. use account merge instead".into(),
                 }),
             )
                 .into_response());

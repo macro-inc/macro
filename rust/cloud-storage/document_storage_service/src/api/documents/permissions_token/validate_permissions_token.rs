@@ -62,7 +62,7 @@ pub async fn handler(
                 return Err((
                     StatusCode::UNAUTHORIZED,
                     Json(ErrorResponse {
-                        message: "jwt is expired",
+                        message: "jwt is expired".into(),
                     }),
                 )
                     .into_response());
@@ -71,7 +71,7 @@ pub async fn handler(
                 return Err((
                     StatusCode::UNAUTHORIZED,
                     Json(ErrorResponse {
-                        message: "unable to decode jwt",
+                        message: "unable to decode jwt".into(),
                     }),
                 )
                     .into_response());
@@ -83,7 +83,7 @@ pub async fn handler(
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
-                message: "jwt user id does not match user id",
+                message: "jwt user id does not match user id".into(),
             }),
         )
             .into_response());

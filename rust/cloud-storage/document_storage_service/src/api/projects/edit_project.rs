@@ -61,7 +61,7 @@ pub async fn edit_project_handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "cannot modify deleted project",
+                message: "cannot modify deleted project".into(),
             }),
         )
             .into_response());

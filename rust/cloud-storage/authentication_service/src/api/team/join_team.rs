@@ -31,7 +31,7 @@ impl IntoResponse for JoinTeamHandlerError {
             JoinTeamHandlerError::JoinTeamError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to join team",
+                    message: "unable to join team".into(),
                 }),
             )
                 .into_response(),

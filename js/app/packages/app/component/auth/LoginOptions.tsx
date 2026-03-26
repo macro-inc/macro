@@ -16,6 +16,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { type JSX, Show } from 'solid-js';
 import { Stage } from './Shared';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
+import { useAnalytics } from '@app/component/analytics-context';
 
 function LoginOption(props: {
   icon: JSX.Element;
@@ -49,9 +50,12 @@ export function LoginOptions(props: {
   setStage: (next: Stage) => void;
   signupMode?: boolean;
 }) {
+  const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
 
   const startSsoLogin = async (idp_name: string) => {
+    const analyticsEvent = props.signupMode ? 'sign_up' : 'login';
+
     const authUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
     authUrl.searchParams.set('idp_name', idp_name);
 
@@ -99,6 +103,10 @@ export function LoginOptions(props: {
         invalidateAllAfterLogin();
       }
 
+      analytics.track(analyticsEvent, {
+        method: idp_name,
+      });
+
       return;
     }
 
@@ -112,6 +120,11 @@ export function LoginOptions(props: {
     } else {
       authUrl.searchParams.set('original_url', window.location.href);
     }
+
+    analytics.track(analyticsEvent, {
+      method: idp_name,
+    });
+
     window.location.href = authUrl.toString();
   };
 

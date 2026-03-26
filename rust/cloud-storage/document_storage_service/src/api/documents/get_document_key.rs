@@ -5,13 +5,11 @@ use crate::model::response::documents::get::{GetDocumentKeyResponse, GetDocument
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
-use model::document::{
-    CONVERTED_DOCUMENT_FILE_NAME, FileType, build_cloud_storage_bucket_document_key,
-    build_extensionless_document_key,
-};
+use model::document::FileType;
 use model::response::GenericErrorResponse;
 use model::{document::DocumentBasic, response::GenericResponse, user::UserContext};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
+use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -79,38 +77,14 @@ pub async fn get_document_key_handler(
                     }
                 };
 
-            // Try extensionless key first, fall back to legacy key with extension
-            let extensionless_key = build_extensionless_document_key(
+            build_cloud_storage_bucket_document_key(
                 document_context.owner.as_ref(),
                 &document_id,
                 document_version_id,
-            );
-            let extensionless_exists = match state.s3_client.exists(&extensionless_key).await {
-                Ok(exists) => exists,
-                Err(e) => {
-                    tracing::error!(error=?e, "unable to check if extensionless key exists");
-                    return GenericResponse::builder()
-                        .message("unable to check document key")
-                        .is_error(true)
-                        .send(StatusCode::INTERNAL_SERVER_ERROR);
-                }
-            };
-            if extensionless_exists {
-                extensionless_key
-            } else {
-                build_cloud_storage_bucket_document_key(
-                    document_context.owner.as_ref(),
-                    &document_id,
-                    document_version_id,
-                    Some(file_type.as_str()),
-                )
-            }
+            )
         }
         FileType::Docx => {
-            format!(
-                "{}/{}/{}.pdf",
-                document_context.owner, document_id, CONVERTED_DOCUMENT_FILE_NAME
-            )
+            build_docx_to_pdf_converted_document_key(document_context.owner.as_ref(), &document_id)
         }
         _ => {
             tracing::error!("invalid file type");

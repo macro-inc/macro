@@ -65,28 +65,6 @@ impl PresignedUploadUrlPort for S3UploadUrlAdapter {
         )
         .await
     }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn document_key_exists(&self, key: &str) -> anyhow::Result<bool> {
-        let result = self
-            .client
-            .head_object()
-            .bucket(&self.document_storage_bucket)
-            .key(key)
-            .send()
-            .await;
-
-        match result {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.as_service_error().is_some_and(|e| e.is_not_found()) {
-                    Ok(false)
-                } else {
-                    Err(err.into())
-                }
-            }
-        }
-    }
 }
 
 async fn put_presigned_url(

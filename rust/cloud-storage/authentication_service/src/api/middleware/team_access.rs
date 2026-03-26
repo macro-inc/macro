@@ -65,7 +65,7 @@ pub enum RoleAccessErr {
 impl IntoResponse for RoleAccessErr {
     fn into_response(self) -> Response {
         let err = Json(ErrorResponse {
-            message: &self.to_string(),
+            message: self.to_string().into(),
         });
         match self {
             RoleAccessErr::MissingTeamId => (StatusCode::BAD_REQUEST, err),

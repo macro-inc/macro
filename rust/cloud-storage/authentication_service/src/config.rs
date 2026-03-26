@@ -60,6 +60,9 @@ pub struct Config {
     /// The search event queue
     pub search_event_queue: String,
 
+    /// The email link manager queue
+    pub link_manager_queue: String,
+
     /// The github client id
     pub github_client_id: String,
     /// The github client secret
@@ -142,6 +145,9 @@ impl Config {
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
+        let link_manager_queue =
+            std::env::var("LINK_MANAGER_QUEUE").context("LINK_MANAGER_QUEUE must be provided")?;
+
         let github_client_id =
             std::env::var("GITHUB_CLIENT_ID").context("GITHUB_CLIENT_ID must be provided")?;
         let github_client_secret = std::env::var("GITHUB_CLIENT_SECRET")
@@ -178,6 +184,7 @@ impl Config {
             document_storage_service_url,
             notification_queue,
             search_event_queue,
+            link_manager_queue,
             environment,
             github_client_id,
             github_client_secret,

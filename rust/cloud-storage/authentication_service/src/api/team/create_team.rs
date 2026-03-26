@@ -43,7 +43,7 @@ pub async fn handler(
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "invalid macro user id",
+                message: "invalid macro user id".into(),
             }),
         )
             .into_response()
@@ -57,7 +57,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to create team",
+                    message: "unable to create team".into(),
                 }),
             )
                 .into_response()
