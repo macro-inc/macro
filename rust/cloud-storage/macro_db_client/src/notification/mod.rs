@@ -8,7 +8,6 @@ use crate::{
 };
 
 pub mod document;
-pub mod macrotation;
 pub mod project;
 
 /// Attaches to cloud storage item based notifications

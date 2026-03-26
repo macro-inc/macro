@@ -24,17 +24,3 @@ pub async fn get_document_notification_users(
 
     Ok(users)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("macrotations")))]
-    async fn test_get_document_notification_users(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let users = get_document_notification_users(&pool, "document-one").await?;
-
-        assert_eq!(users, vec!["macro|user2@user.com"]);
-        Ok(())
-    }
-}
