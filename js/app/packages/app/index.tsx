@@ -3,7 +3,6 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 // SolidDevtools retains disposed memos, causes memory leak
 // import 'solid-devtools';
-import * as analytics from '@coparse/analytics';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
