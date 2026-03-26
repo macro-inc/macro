@@ -39,7 +39,11 @@ pub async fn modify_message_labels(
 
     match result {
         Ok(()) => Ok(()),
-        Err(e @ (GmailError::ServerError(..) | GmailError::HttpRequest(_))) => {
+        Err(
+            e @ (GmailError::ServerError(..)
+            | GmailError::HttpRequest(_)
+            | GmailError::RateLimitExceeded),
+        ) => {
             tracing::warn!(
                 error = ?e,
                 db_message_id = %payload.db_message_id,
