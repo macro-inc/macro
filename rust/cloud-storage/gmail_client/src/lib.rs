@@ -33,7 +33,7 @@ pub(crate) fn sanitize_error_body(body: &str) -> String {
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;
 use crate::messages::{get_message, get_message_label_ids, get_message_thread_id};
-use crate::threads::{DEFAULT_BATCH_SIZE, get_threads_with_retry};
+use crate::threads::get_thread;
 #[allow(unused_imports)]
 use mockall::automock;
 use models_email::email::service;
@@ -55,8 +55,6 @@ pub struct GmailClient {
     inner: reqwest::Client,
     /// The base url for Gmail API
     base_url: String,
-    /// The base url for batch requests to the Gmail API
-    base_batch_url: String,
     /// The url for fetching google certs
     certs_url: String,
     /// The url for fetching contact information via People API
@@ -72,7 +70,6 @@ impl GmailClient {
         Self {
             inner: reqwest::Client::new(),
             base_url: String::from("https://www.googleapis.com/gmail/v1"),
-            base_batch_url: String::from("https://www.googleapis.com/batch/gmail/v1"),
             certs_url: String::from("https://www.googleapis.com/oauth2/v3/certs"),
             contacts_url: String::from("https://people.googleapis.com/v1"),
             audience: "macro-gmail-webhook".to_string(),
@@ -101,15 +98,15 @@ impl GmailClient {
         threads::get_message_ids_for_thread(self, access_token, thread_id).await
     }
 
-    /// Fetches the threads and messages for the given thread_ids.
-    /// Returns raw Gmail ThreadResource objects - callers should map to service layer structs.
+    /// Fetches a single thread and its messages from Gmail.
+    /// Returns a raw Gmail ThreadResource - callers should map to service layer structs.
     #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_threads(
+    pub async fn get_thread(
         &self,
         access_token: &str,
-        thread_ids: &Vec<String>,
-    ) -> anyhow::Result<Vec<ThreadResource>> {
-        get_threads_with_retry(self, access_token, thread_ids, DEFAULT_BATCH_SIZE).await
+        thread_id: &str,
+    ) -> anyhow::Result<ThreadResource> {
+        get_thread(self, access_token, thread_id).await
     }
 
     /// Gets the changes to a user's inbox that have occurred since start_history_id.
