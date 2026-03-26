@@ -1,16 +1,71 @@
 //! Contains the models for teams
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
-use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
+use roles_and_permissions::domain::model::{RoleId, UserRolesAndPermissionsError};
 
-#[derive(
-    Eq, PartialEq, Debug, Clone, PartialOrd, sqlx::Type, Copy, std::cmp::Ord, serde::Serialize,
-)]
+#[derive(Eq, PartialEq, Debug, Clone, Hash, PartialOrd, Copy, std::cmp::Ord, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-#[sqlx(type_name = "\"team_role\"", rename_all = "lowercase")]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "\"team_user_tier\"", rename_all = "lowercase")
+)]
+/// Ordered from lowest to highest tier top -> bottom
+pub enum TeamUserTier {
+    /// Haiku
+    Haiku,
+    /// Sonnet,
+    Sonnet,
+    /// Opus
+    Opus,
+}
+
+impl std::fmt::Display for TeamUserTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TeamUserTier::Haiku => write!(f, "haiku"),
+            TeamUserTier::Sonnet => write!(f, "sonnet"),
+            TeamUserTier::Opus => write!(f, "opus"),
+        }
+    }
+}
+
+impl From<TeamUserTier> for RoleId {
+    fn from(value: TeamUserTier) -> Self {
+        match value {
+            TeamUserTier::Haiku => RoleId::SubHaiku,
+            TeamUserTier::Sonnet => RoleId::SubSonnet,
+            TeamUserTier::Opus => RoleId::SubOpus,
+        }
+    }
+}
+
+impl TeamUserTier {
+    /// Given a list of a users roles, this will try to grab the users respective
+    /// team tier
+    pub fn try_from_roles(roles: HashSet<RoleId>) -> anyhow::Result<TeamUserTier> {
+        if roles.contains(&RoleId::SubHaiku) {
+            Ok(TeamUserTier::Haiku)
+        } else if roles.contains(&RoleId::SubSonnet) {
+            Ok(TeamUserTier::Sonnet)
+        } else if roles.contains(&RoleId::SubOpus) {
+            Ok(TeamUserTier::Opus)
+        } else {
+            anyhow::bail!("unable to extract team tier from user roles")
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, PartialOrd, Copy, std::cmp::Ord, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "\"team_role\"", rename_all = "lowercase")
+)]
 /// Ordered from least to most access top -> bottom
 pub enum TeamRole {
     /// The user is a member of the team
@@ -42,6 +97,9 @@ pub struct TeamMember<'a> {
     pub user_id: MacroUserIdStr<'a>,
     /// The role of the team member
     pub role: TeamRole,
+    /// The tier of the team member
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub tier: TeamUserTier,
 }
 
 /// A team with its members
@@ -88,12 +146,13 @@ pub struct PatchTeamRequest {
 pub struct Team {
     pub(crate) id: uuid::Uuid,
     pub(crate) name: String,
-    pub(crate) owner_id: String,
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub(crate) owner_id: MacroUserIdStr<'static>,
 }
 
 impl Team {
     /// Creates a new Team
-    pub fn new(id: uuid::Uuid, name: String, owner_id: String) -> Self {
+    pub fn new(id: uuid::Uuid, name: String, owner_id: MacroUserIdStr<'static>) -> Self {
         Self { id, name, owner_id }
     }
 }
@@ -111,7 +170,7 @@ impl Team {
 
     /// The owner id of the team
     pub fn owner_id(&self) -> &str {
-        &self.owner_id
+        self.owner_id.as_ref()
     }
 }
 
@@ -336,4 +395,15 @@ pub enum RevokePermissionsForTeamMembersError {
     /// Underlying user roles and permissions error
     #[error("Underlying user roles and permissions error")]
     RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
+}
+
+/// Error when restoring permissions for team members
+#[derive(Debug, thiserror::Error)]
+pub enum RestorePermissionsForTeamMembersError {
+    /// Underlying team error
+    #[error("Underlying team error")]
+    TeamError(#[from] TeamError),
+    /// Underlying user roles and permissions error
+    #[error("Underlying user roles and permissions error")]
+    AddRolesToUserError(#[from] UserRolesAndPermissionsError),
 }

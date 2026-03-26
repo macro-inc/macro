@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { $, write } from 'bun';
 import { type Service, services } from './services';
 
-const MAX_CONCURRENCY = 6;
+const elapsed = (start: number) => `${((performance.now() - start) / 1000).toFixed(1)}s`;
 
 // Map service names to Rust crate names
 const serviceToCrate: Record<string, string> = {
@@ -33,42 +33,34 @@ const getServiceClientsDir = () => path.resolve(import.meta.dirname, '../package
 // Parse arguments
 const getTargetServices = () => process.argv.slice(2).filter(arg => arg !== '--check');
 
-// Build OpenAPI binaries. In CI (--check), batches to MAX_CONCURRENCY to limit resource usage.
-async function buildOpenApiBinaries(crateNames: string[], { checkMode = false, rustCloudStorageDir = getRustCloudStorageDir() } = {}): Promise<void> {
+// Build all OpenAPI binaries in a single cargo invocation (cargo parallelizes internally).
+async function buildOpenApiBinaries(crateNames: string[], { rustCloudStorageDir = getRustCloudStorageDir() } = {}): Promise<void> {
   if (crateNames.length === 0) return;
 
-  const batchSize = checkMode ? MAX_CONCURRENCY : crateNames.length;
+  const binArgs = crateNames.flatMap(crate => ['--bin', `${crate}_openapi`]);
 
-  for (let i = 0; i < crateNames.length; i += batchSize) {
-    const batch = crateNames.slice(i, i + batchSize);
-    const packageArgs = batch.flatMap(crate => ['-p', crate]);
-    const binArgs = batch.flatMap(crate => ['--bin', `${crate}_openapi`]);
-
-    // Also build the DCS models binary if document_cognition_service is included
-    if (batch.includes('document_cognition_service')) {
-      binArgs.push('--bin', 'document_cognition_service_models');
-    }
-
-    if (batchSize < crateNames.length) {
-      console.log(`Building batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(crateNames.length / batchSize)} (${batch.length} crates)...`);
-    } else {
-      console.log(`Building ${crateNames.length} OpenAPI binaries in parallel...`);
-    }
-    await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --release ${packageArgs} ${binArgs}`;
+  // Also build the DCS models + tools binaries if document_cognition_service is included
+  if (crateNames.includes('document_cognition_service')) {
+    binArgs.push('--bin', 'document_cognition_service_models');
+    binArgs.push('--bin', 'gen_tool_schemas');
   }
+
+  console.log(`Building ${crateNames.length} OpenAPI binaries...`);
+  console.log(`cargo build args: ${binArgs.join(' ')}`);
+  await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build ${binArgs}`;
   console.log('Build complete.\n');
 }
 
 // Run pre-built binary directly (no cargo lock needed)
 async function runOpenApiBinary(crateName: string, rustCloudStorageDir = getRustCloudStorageDir()): Promise<string> {
-  const binaryPath = path.join(rustCloudStorageDir, 'target', 'release', `${crateName}_openapi`);
+  const binaryPath = path.join(rustCloudStorageDir, 'target', 'debug', `${crateName}_openapi`);
   const result = await $`${binaryPath}`.text();
   return result;
 }
 
-// Run a named binary from the release directory
+// Run a named binary from the debug directory
 async function runBinary(binaryName: string, rustCloudStorageDir = getRustCloudStorageDir()): Promise<string> {
-  const binaryPath = path.join(rustCloudStorageDir, 'target', 'release', binaryName);
+  const binaryPath = path.join(rustCloudStorageDir, 'target', 'debug', binaryName);
   const result = await $`${binaryPath}`.text();
   return result;
 }
@@ -127,10 +119,12 @@ const processService = async (service: Service, { serviceClientsDir }: { service
     const generatedDir = path.resolve(outputDir, 'generated');
     const openApiPath = path.join(outputDir, 'openapi.json');
 
-    console.log(`[${service.name}] Running OpenAPI binary...`);
+    const serviceStart = performance.now();
 
-    // Run pre-built binary directly
+    console.log(`[${service.name}] Running OpenAPI binary...`);
+    let stepStart = performance.now();
     const openApiJson = await runOpenApiBinary(crateName);
+    console.log(`[${service.name}] OpenAPI binary finished (${elapsed(stepStart)})`);
 
     // Remove existing generated dir
     await $`rm -rf ${generatedDir}`.quiet();
@@ -140,25 +134,30 @@ const processService = async (service: Service, { serviceClientsDir }: { service
     console.log(`[${service.name}] Saved OpenAPI spec`);
 
     // Run orval to generate types
+    stepStart = performance.now();
     await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`.quiet();
+    console.log(`[${service.name}] Orval finished (${elapsed(stepStart)})`);
 
     // Special handling for document-cognition
     if (service.name === 'document-cognition') {
-      // Run the models binary to get the models JSON from local Rust code
+      stepStart = performance.now();
       const rustCloudStorageDir = getRustCloudStorageDir();
       const modelsJson = await runBinary('document_cognition_service_models', rustCloudStorageDir);
+      console.log(`[${service.name}] Models binary finished (${elapsed(stepStart)})`);
       const modelsJsonPath = path.join(import.meta.dirname, '.models.json');
       await write(modelsJsonPath, modelsJson);
 
+      stepStart = performance.now();
       const appDir = path.resolve(import.meta.dirname, '..');
       try {
         await $`cd ${appDir} && MODELS_JSON=${modelsJsonPath} bun scripts/generate-dcs-types.ts`.quiet();
       } finally {
         await $`rm -f ${modelsJsonPath}`.quiet();
       }
+      console.log(`[${service.name}] DCS types generation finished (${elapsed(stepStart)})`);
     }
 
-    console.log(`[${service.name}] ✓ Done`);
+    console.log(`[${service.name}] ✓ Done (total: ${elapsed(serviceStart)})`);
     return { service: service.name, status: 'success' as const };
   } catch (error) {
     console.error(`[${service.name}] Failed:`, error);
@@ -181,10 +180,12 @@ async function main() {
   console.log(`\nProcessing ${servicesToProcess.length} service(s)...\n`);
 
   // Phase 1: Build all binaries in a single cargo invocation (parallelized by cargo)
-  await buildOpenApiBinaries(crateNames, { checkMode });
+  const buildStart = performance.now();
+  await buildOpenApiBinaries(crateNames);
+  console.log(`Phase 1 (cargo build) total: ${elapsed(buildStart)}`);
 
   // Phase 2: Run binaries and generate TypeScript in parallel
-  console.log('Generating TypeScript clients in parallel...\n');
+  console.log('\nGenerating TypeScript clients...\n');
   const results = await Promise.all(
     servicesToProcess.map(service => processService(service, { serviceClientsDir }))
   );
@@ -210,12 +211,15 @@ async function main() {
   // On NixOS, the npm-installed biome binary doesn't work due to dynamic linking issues.
   // We detect NixOS and use the system biome instead.
   const isNixOS = process.env.NIX_PATH !== undefined || (await Bun.file("/etc/os-release").exists() && (await Bun.file("/etc/os-release").text()).includes("NixOS"));
+  const biomeStart = performance.now();
+  console.log('\nRunning biome check...');
   if (isNixOS) {
     const systemBiomePath = await $`bash -c 'PATH=$(echo "$PATH" | tr ":" "\n" | grep -v node_modules | tr "\n" ":") which biome'`.text();
     await $`${systemBiomePath.trim()} check --write --unsafe packages/service-clients/`;
   } else {
     await $`biome check --write --unsafe packages/service-clients/`;
   }
+  console.log(`Biome check finished (${elapsed(biomeStart)})`);
 
   // In check mode, verify no uncommitted changes
   if (checkMode) {
