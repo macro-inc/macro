@@ -12,6 +12,7 @@ macro_aws_config = { path = "../macro_aws_config" }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
+model = { path = "../model" }
 model_file_type = { path = "../model_file_type" }
 openssl = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [

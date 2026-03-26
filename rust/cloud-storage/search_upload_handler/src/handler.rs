@@ -5,6 +5,7 @@ use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
+use model::document::TEMP_FILE_PREFIX;
 use sqs_client::search::{SearchQueueMessage, document::SearchExtractorMessage};
 
 #[derive(Debug)]
@@ -61,7 +62,7 @@ pub async fn handler(
     };
 
     // Ignore temp files as it leads to failures
-    if key.starts_with("temp_files/") {
+    if key.starts_with(&format!("{TEMP_FILE_PREFIX}/")) {
         tracing::trace!("skipping temp file");
         return Ok(());
     }
