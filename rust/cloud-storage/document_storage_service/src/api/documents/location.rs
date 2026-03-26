@@ -120,7 +120,7 @@ async fn sign_document_key(
     #[cfg(feature = "location_check")]
     {
         tracing::trace!("checking if file exists in s3, key: {}", check_key);
-        let exists = verify_file_exists(&state.s3_client, check_key).await?;
+        let exists = &state.s3_client.exists(check_key).await?;
         if !exists {
             anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
@@ -337,11 +337,4 @@ pub(in crate::api::documents) fn get_presigned_url(
     };
 
     Ok(signed_url)
-}
-
-async fn verify_file_exists(
-    s3_client: &service::s3::S3,
-    document_key: &str,
-) -> anyhow::Result<bool> {
-    s3_client.exists(document_key).await
 }
