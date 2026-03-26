@@ -427,7 +427,9 @@ pub(in crate::api::search) async fn perform_unified_search(
             // We only want to search over content if you are not searching name only
             match search_on {
                 SearchOn::Content | SearchOn::NameContent => {
-                    if let SearchCursorOption::Done = unified_search_args.cursor {
+                    if unified_search_args.search_indices.is_empty() {
+                        Ok((vec![], SearchCursorOption::Done))
+                    } else if let SearchCursorOption::Done = unified_search_args.cursor {
                         Ok((vec![], SearchCursorOption::Done))
                     } else {
                         ctx.opensearch_client
