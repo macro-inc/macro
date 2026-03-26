@@ -116,7 +116,6 @@ async fn get_editable_url(
     document_version_id: Option<i64>,
     file_type: &str,
 ) -> anyhow::Result<LocationResponseData> {
-    let url_encoded_owner = urlencoding::encode(owner);
     let document_version_id = if let Some(document_version_id) = document_version_id {
         document_version_id
     } else {
@@ -124,12 +123,6 @@ async fn get_editable_url(
             .await?
             .0
     };
-
-    let document_key = build_cloud_storage_bucket_document_key(
-        &url_encoded_owner,
-        document_id,
-        document_version_id,
-    );
 
     #[cfg(feature = "location_check")]
     {
@@ -141,6 +134,13 @@ async fn get_editable_url(
             anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
     }
+
+    let url_encoded_owner = urlencoding::encode(owner);
+    let url_encoded_document_key = build_cloud_storage_bucket_document_key(
+        &url_encoded_owner,
+        document_id,
+        document_version_id,
+    );
 
     let signed_options = get_cloudfront_signed_options(
         &state
@@ -161,7 +161,7 @@ async fn get_editable_url(
             .config
             .vars
             .document_storage_service_cloudfront_distribution_url,
-        &document_key,
+        &url_encoded_document_key,
         &signed_options,
     )?;
 
