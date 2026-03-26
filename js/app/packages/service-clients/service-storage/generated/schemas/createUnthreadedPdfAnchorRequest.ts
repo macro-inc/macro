@@ -6,5 +6,4 @@
  */
 import type { CreateUnthreadedPdfAnchorRequestOneOf } from './createUnthreadedPdfAnchorRequestOneOf';
 
-export type CreateUnthreadedPdfAnchorRequest =
-  CreateUnthreadedPdfAnchorRequestOneOf;
+export type CreateUnthreadedPdfAnchorRequest = CreateUnthreadedPdfAnchorRequestOneOf;

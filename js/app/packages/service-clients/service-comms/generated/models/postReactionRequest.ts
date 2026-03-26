@@ -4,9 +4,8 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { PostReactionRequestNonce } from './postReactionRequestNonce';
 import type { ReactionAction } from './reactionAction';
+import type { PostReactionRequestNonce } from './postReactionRequestNonce';
 
 export interface PostReactionRequest {
   action: ReactionAction;

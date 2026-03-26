@@ -7,5 +7,4 @@
 import type { SoupEmailThreadPreview } from './soupEmailThreadPreview';
 import type { SoupEnrichedEmailThreadPreviewAllOf } from './soupEnrichedEmailThreadPreviewAllOf';
 
-export type SoupEnrichedEmailThreadPreview = SoupEmailThreadPreview &
-  SoupEnrichedEmailThreadPreviewAllOf;
+export type SoupEnrichedEmailThreadPreview = SoupEmailThreadPreview & SoupEnrichedEmailThreadPreviewAllOf;

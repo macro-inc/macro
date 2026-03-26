@@ -4,9 +4,8 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { NotificationFilters } from './notificationFilters';
 import type { ProjectFiltersImportance } from './projectFiltersImportance';
+import type { NotificationFilters } from './notificationFilters';
 
 /**
  * The project filters used to filter down what projects you search over.

@@ -4,9 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-
-import type { AccessLevel } from './accessLevel';
 import type { ChatResponse } from './chatResponse';
+import type { AccessLevel } from './accessLevel';
 
 /**
  * Wrapper response for get_chat, matching the DCS API response shape.

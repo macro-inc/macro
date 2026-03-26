@@ -6,10 +6,10 @@
  */
 import type { ApiUserNotificationAllOfCreatedAt } from './apiUserNotificationAllOfCreatedAt';
 import type { ApiUserNotificationAllOfDeletedAt } from './apiUserNotificationAllOfDeletedAt';
+import type { NotifEvent } from './notifEvent';
 import type { ApiUserNotificationAllOfSenderId } from './apiUserNotificationAllOfSenderId';
 import type { ApiUserNotificationAllOfUpdatedAt } from './apiUserNotificationAllOfUpdatedAt';
 import type { ApiUserNotificationAllOfViewedAt } from './apiUserNotificationAllOfViewedAt';
-import type { NotifEvent } from './notifEvent';
 
 export type ApiUserNotificationAllOf = {
   /** When the notification was created. */

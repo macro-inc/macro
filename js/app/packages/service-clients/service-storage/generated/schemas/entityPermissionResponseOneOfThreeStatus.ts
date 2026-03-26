@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type EntityPermissionResponseOneOfThreeStatus =
-  (typeof EntityPermissionResponseOneOfThreeStatus)[keyof typeof EntityPermissionResponseOneOfThreeStatus];
+export type EntityPermissionResponseOneOfThreeStatus = typeof EntityPermissionResponseOneOfThreeStatus[keyof typeof EntityPermissionResponseOneOfThreeStatus];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EntityPermissionResponseOneOfThreeStatus = {

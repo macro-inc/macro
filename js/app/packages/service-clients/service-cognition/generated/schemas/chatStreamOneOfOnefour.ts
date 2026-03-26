@@ -4,10 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-
+import type { Model } from './model';
 import type { ChatStreamOneOfOnefourNewModel } from './chatStreamOneOfOnefourNewModel';
 import type { ChatStreamOneOfOnefourType } from './chatStreamOneOfOnefourType';
-import type { Model } from './model';
 
 /**
  * Notifies the client that the available models have changed

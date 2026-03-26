@@ -6,5 +6,4 @@
  */
 import type { UpdateSharePermissionRequestV2 } from './updateSharePermissionRequestV2';
 
-export type EditDocumentServiceArgsSharePermission =
-  null | UpdateSharePermissionRequestV2;
+export type EditDocumentServiceArgsSharePermission = null | UpdateSharePermissionRequestV2;

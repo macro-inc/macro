@@ -8,8 +8,8 @@
 /**
  * The role a user has within a channel.
  */
-export type ParticipantRole =
-  (typeof ParticipantRole)[keyof typeof ParticipantRole];
+export type ParticipantRole = typeof ParticipantRole[keyof typeof ParticipantRole];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ParticipantRole = {

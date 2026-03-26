@@ -8,6 +8,4 @@
 /**
  * The org id
  */
-export type SimpleChannelSearchReponseBaseItemHumanReadableTimestampOrgId =
-  | number
-  | null;
+export type SimpleChannelSearchReponseBaseItemHumanReadableTimestampOrgId = number | null;

@@ -6,13 +6,13 @@
  */
 
 export type GetTypedNotificationsByEventItemIdParams = {
-  /**
-   * Size limit per page.
-   * @minimum 0
-   */
-  limit?: number;
-  /**
-   * Cursor value. Base64 encoded timestamp and item id.
-   */
-  cursor?: string;
+/**
+ * Size limit per page.
+ * @minimum 0
+ */
+limit?: number;
+/**
+ * Cursor value. Base64 encoded timestamp and item id.
+ */
+cursor?: string;
 };

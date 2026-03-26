@@ -6,8 +6,8 @@
  */
 import type { SoupProjectDeletedAt } from './soupProjectDeletedAt';
 import type { SoupProjectParentId } from './soupProjectParentId';
-import type { SoupProjectViewedAt } from './soupProjectViewedAt';
 import type { SoupProperty } from './soupProperty';
+import type { SoupProjectViewedAt } from './soupProjectViewedAt';
 
 export interface SoupProject {
   /** The time the project was created */

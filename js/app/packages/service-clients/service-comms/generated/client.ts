@@ -34,1512 +34,1417 @@ import type {
   PostMessageResponse,
   PostReactionRequest,
   PostTypingRequest,
-  RemoveParticipantsRequest,
+  RemoveParticipantsRequest
 } from './models';
 
 export type getActivityResponse200 = {
-  data: ApiActivity[];
-  status: 200;
-};
+  data: ApiActivity[]
+  status: 200
+}
 
 export type getActivityResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type getActivityResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type getActivityResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type getActivityResponseSuccess = getActivityResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type getActivityResponseSuccess = (getActivityResponse200) & {
   headers: Headers;
 };
-export type getActivityResponseError = (
-  | getActivityResponse401
-  | getActivityResponse404
-  | getActivityResponse500
-) & {
+export type getActivityResponseError = (getActivityResponse401 | getActivityResponse404 | getActivityResponse500) & {
   headers: Headers;
 };
 
-export type getActivityResponse =
-  | getActivityResponseSuccess
-  | getActivityResponseError;
+export type getActivityResponse = (getActivityResponseSuccess | getActivityResponseError)
 
 export const getGetActivityUrl = () => {
-  return `/activity`;
-};
 
-export const getActivity = async (
-  options?: RequestInit
-): Promise<getActivityResponse> => {
-  const res = await fetch(getGetActivityUrl(), {
+
+  
+
+  return `/activity`
+}
+
+export const getActivity = async ( options?: RequestInit): Promise<getActivityResponse> => {
+  
+  const res = await fetch(getGetActivityUrl(),
+  {      
     ...options,
-    method: 'GET',
-  });
+    method: 'GET'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getActivityResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getActivityResponse
+}
 
-  const data: getActivityResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getActivityResponse;
-};
+
 
 export type getChannelsResponse200 = {
-  data: ApiChannelWithLatest[];
-  status: 200;
-};
+  data: ApiChannelWithLatest[]
+  status: 200
+}
 
 export type getChannelsResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type getChannelsResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type getChannelsResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type getChannelsResponseSuccess = getChannelsResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type getChannelsResponseSuccess = (getChannelsResponse200) & {
   headers: Headers;
 };
-export type getChannelsResponseError = (
-  | getChannelsResponse401
-  | getChannelsResponse404
-  | getChannelsResponse500
-) & {
+export type getChannelsResponseError = (getChannelsResponse401 | getChannelsResponse404 | getChannelsResponse500) & {
   headers: Headers;
 };
 
-export type getChannelsResponse =
-  | getChannelsResponseSuccess
-  | getChannelsResponseError;
+export type getChannelsResponse = (getChannelsResponseSuccess | getChannelsResponseError)
 
 export const getGetChannelsUrl = () => {
-  return `/channels`;
-};
 
-export const getChannels = async (
-  options?: RequestInit
-): Promise<getChannelsResponse> => {
-  const res = await fetch(getGetChannelsUrl(), {
+
+  
+
+  return `/channels`
+}
+
+export const getChannels = async ( options?: RequestInit): Promise<getChannelsResponse> => {
+  
+  const res = await fetch(getGetChannelsUrl(),
+  {      
     ...options,
-    method: 'GET',
-  });
+    method: 'GET'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getChannelsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getChannelsResponse
+}
 
-  const data: getChannelsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getChannelsResponse;
-};
+
 
 export type postActivityResponse200 = {
-  data: Activity;
-  status: 200;
-};
+  data: Activity
+  status: 200
+}
 
 export type postActivityResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type postActivityResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type postActivityResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type postActivityResponseSuccess = postActivityResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type postActivityResponseSuccess = (postActivityResponse200) & {
   headers: Headers;
 };
-export type postActivityResponseError = (
-  | postActivityResponse401
-  | postActivityResponse404
-  | postActivityResponse500
-) & {
+export type postActivityResponseError = (postActivityResponse401 | postActivityResponse404 | postActivityResponse500) & {
   headers: Headers;
 };
 
-export type postActivityResponse =
-  | postActivityResponseSuccess
-  | postActivityResponseError;
+export type postActivityResponse = (postActivityResponseSuccess | postActivityResponseError)
 
 export const getPostActivityUrl = () => {
-  return `/comms/activity`;
-};
 
-export const postActivity = async (
-  postActivityRequest: PostActivityRequest,
-  options?: RequestInit
-): Promise<postActivityResponse> => {
-  const res = await fetch(getPostActivityUrl(), {
+
+  
+
+  return `/comms/activity`
+}
+
+export const postActivity = async (postActivityRequest: PostActivityRequest, options?: RequestInit): Promise<postActivityResponse> => {
+  
+  const res = await fetch(getPostActivityUrl(),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(postActivityRequest),
-  });
+    body: JSON.stringify(
+      postActivityRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: postActivityResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as postActivityResponse
+}
 
-  const data: postActivityResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postActivityResponse;
-};
+
 
 export type getAttachmentReferencesResponse200 = {
-  data: GetAttachmentReferencesResponse;
-  status: 200;
-};
+  data: GetAttachmentReferencesResponse
+  status: 200
+}
 
 export type getAttachmentReferencesResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type getAttachmentReferencesResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type getAttachmentReferencesResponse500 = {
-  data: string;
-  status: 500;
+  data: string
+  status: 500
+}
+    
+export type getAttachmentReferencesResponseSuccess = (getAttachmentReferencesResponse200) & {
+  headers: Headers;
 };
-
-export type getAttachmentReferencesResponseSuccess =
-  getAttachmentReferencesResponse200 & {
-    headers: Headers;
-  };
-export type getAttachmentReferencesResponseError = (
-  | getAttachmentReferencesResponse401
-  | getAttachmentReferencesResponse404
-  | getAttachmentReferencesResponse500
-) & {
+export type getAttachmentReferencesResponseError = (getAttachmentReferencesResponse401 | getAttachmentReferencesResponse404 | getAttachmentReferencesResponse500) & {
   headers: Headers;
 };
 
-export type getAttachmentReferencesResponse =
-  | getAttachmentReferencesResponseSuccess
-  | getAttachmentReferencesResponseError;
+export type getAttachmentReferencesResponse = (getAttachmentReferencesResponseSuccess | getAttachmentReferencesResponseError)
 
-export const getGetAttachmentReferencesUrl = (
-  entityType: string,
-  entityId: string
-) => {
-  return `/comms/attachments/${entityType}/${entityId}/references`;
-};
+export const getGetAttachmentReferencesUrl = (entityType: string,
+    entityId: string,) => {
 
-export const getAttachmentReferences = async (
-  entityType: string,
-  entityId: string,
-  options?: RequestInit
-): Promise<getAttachmentReferencesResponse> => {
-  const res = await fetch(getGetAttachmentReferencesUrl(entityType, entityId), {
+
+  
+
+  return `/comms/attachments/${entityType}/${entityId}/references`
+}
+
+export const getAttachmentReferences = async (entityType: string,
+    entityId: string, options?: RequestInit): Promise<getAttachmentReferencesResponse> => {
+  
+  const res = await fetch(getGetAttachmentReferencesUrl(entityType,entityId),
+  {      
     ...options,
-    method: 'GET',
-  });
+    method: 'GET'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getAttachmentReferencesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAttachmentReferencesResponse
+}
 
-  const data: getAttachmentReferencesResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getAttachmentReferencesResponse;
-};
+
 
 export type createChannelResponse201 = {
-  data: CreateChannelResponse;
-  status: 201;
-};
+  data: CreateChannelResponse
+  status: 201
+}
 
 export type createChannelResponse400 = {
-  data: string;
-  status: 400;
-};
+  data: string
+  status: 400
+}
 
 export type createChannelResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type createChannelResponse403 = {
-  data: string;
-  status: 403;
-};
+  data: string
+  status: 403
+}
 
 export type createChannelResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type createChannelResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type createChannelResponseSuccess = createChannelResponse201 & {
+  data: string
+  status: 500
+}
+    
+export type createChannelResponseSuccess = (createChannelResponse201) & {
   headers: Headers;
 };
-export type createChannelResponseError = (
-  | createChannelResponse400
-  | createChannelResponse401
-  | createChannelResponse403
-  | createChannelResponse404
-  | createChannelResponse500
-) & {
+export type createChannelResponseError = (createChannelResponse400 | createChannelResponse401 | createChannelResponse403 | createChannelResponse404 | createChannelResponse500) & {
   headers: Headers;
 };
 
-export type createChannelResponse =
-  | createChannelResponseSuccess
-  | createChannelResponseError;
+export type createChannelResponse = (createChannelResponseSuccess | createChannelResponseError)
 
 export const getCreateChannelUrl = () => {
-  return `/comms/channels`;
-};
 
-export const createChannel = async (
-  createChannelRequest: CreateChannelRequest,
-  options?: RequestInit
-): Promise<createChannelResponse> => {
-  const res = await fetch(getCreateChannelUrl(), {
+
+  
+
+  return `/comms/channels`
+}
+
+export const createChannel = async (createChannelRequest: CreateChannelRequest, options?: RequestInit): Promise<createChannelResponse> => {
+  
+  const res = await fetch(getCreateChannelUrl(),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createChannelRequest),
-  });
+    body: JSON.stringify(
+      createChannelRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: createChannelResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as createChannelResponse
+}
 
-  const data: createChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createChannelResponse;
-};
+
 
 /**
  * given a user and a recipient, either finds or creates a direct message channel
  */
 export type getOrCreateDmResponse200 = {
-  data: GetOrCreateDmResponse;
-  status: 200;
-};
+  data: GetOrCreateDmResponse
+  status: 200
+}
 
 export type getOrCreateDmResponse400 = {
-  data: string;
-  status: 400;
-};
+  data: string
+  status: 400
+}
 
 export type getOrCreateDmResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type getOrCreateDmResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type getOrCreateDmResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type getOrCreateDmResponseSuccess = getOrCreateDmResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type getOrCreateDmResponseSuccess = (getOrCreateDmResponse200) & {
   headers: Headers;
 };
-export type getOrCreateDmResponseError = (
-  | getOrCreateDmResponse400
-  | getOrCreateDmResponse401
-  | getOrCreateDmResponse404
-  | getOrCreateDmResponse500
-) & {
+export type getOrCreateDmResponseError = (getOrCreateDmResponse400 | getOrCreateDmResponse401 | getOrCreateDmResponse404 | getOrCreateDmResponse500) & {
   headers: Headers;
 };
 
-export type getOrCreateDmResponse =
-  | getOrCreateDmResponseSuccess
-  | getOrCreateDmResponseError;
+export type getOrCreateDmResponse = (getOrCreateDmResponseSuccess | getOrCreateDmResponseError)
 
 export const getGetOrCreateDmUrl = () => {
-  return `/comms/channels/get_or_create_dm`;
-};
 
-export const getOrCreateDm = async (
-  getOrCreateDmRequest: GetOrCreateDmRequest,
-  options?: RequestInit
-): Promise<getOrCreateDmResponse> => {
-  const res = await fetch(getGetOrCreateDmUrl(), {
+
+  
+
+  return `/comms/channels/get_or_create_dm`
+}
+
+export const getOrCreateDm = async (getOrCreateDmRequest: GetOrCreateDmRequest, options?: RequestInit): Promise<getOrCreateDmResponse> => {
+  
+  const res = await fetch(getGetOrCreateDmUrl(),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(getOrCreateDmRequest),
-  });
+    body: JSON.stringify(
+      getOrCreateDmRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getOrCreateDmResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getOrCreateDmResponse
+}
 
-  const data: getOrCreateDmResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getOrCreateDmResponse;
-};
+
 
 /**
  * given a list of partiicpants, either fetch an existing private channel with the permtation or create a new one
  */
 export type getOrCreatePrivateResponse200 = {
-  data: GetOrCreatePrivateResponse;
-  status: 200;
-};
+  data: GetOrCreatePrivateResponse
+  status: 200
+}
 
 export type getOrCreatePrivateResponse400 = {
-  data: string;
-  status: 400;
-};
+  data: string
+  status: 400
+}
 
 export type getOrCreatePrivateResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type getOrCreatePrivateResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type getOrCreatePrivateResponse500 = {
-  data: string;
-  status: 500;
+  data: string
+  status: 500
+}
+    
+export type getOrCreatePrivateResponseSuccess = (getOrCreatePrivateResponse200) & {
+  headers: Headers;
 };
-
-export type getOrCreatePrivateResponseSuccess =
-  getOrCreatePrivateResponse200 & {
-    headers: Headers;
-  };
-export type getOrCreatePrivateResponseError = (
-  | getOrCreatePrivateResponse400
-  | getOrCreatePrivateResponse401
-  | getOrCreatePrivateResponse404
-  | getOrCreatePrivateResponse500
-) & {
+export type getOrCreatePrivateResponseError = (getOrCreatePrivateResponse400 | getOrCreatePrivateResponse401 | getOrCreatePrivateResponse404 | getOrCreatePrivateResponse500) & {
   headers: Headers;
 };
 
-export type getOrCreatePrivateResponse =
-  | getOrCreatePrivateResponseSuccess
-  | getOrCreatePrivateResponseError;
+export type getOrCreatePrivateResponse = (getOrCreatePrivateResponseSuccess | getOrCreatePrivateResponseError)
 
 export const getGetOrCreatePrivateUrl = () => {
-  return `/comms/channels/get_or_create_private`;
-};
 
-export const getOrCreatePrivate = async (
-  getOrCreatePrivateRequest: GetOrCreatePrivateRequest,
-  options?: RequestInit
-): Promise<getOrCreatePrivateResponse> => {
-  const res = await fetch(getGetOrCreatePrivateUrl(), {
+
+  
+
+  return `/comms/channels/get_or_create_private`
+}
+
+export const getOrCreatePrivate = async (getOrCreatePrivateRequest: GetOrCreatePrivateRequest, options?: RequestInit): Promise<getOrCreatePrivateResponse> => {
+  
+  const res = await fetch(getGetOrCreatePrivateUrl(),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(getOrCreatePrivateRequest),
-  });
+    body: JSON.stringify(
+      getOrCreatePrivateRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getOrCreatePrivateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getOrCreatePrivateResponse
+}
 
-  const data: getOrCreatePrivateResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getOrCreatePrivateResponse;
-};
+
 
 export type getMessageWithContextResponse200 = {
-  data: GetMessageWithContextResponse;
-  status: 200;
-};
+  data: GetMessageWithContextResponse
+  status: 200
+}
 
 export type getMessageWithContextResponse400 = {
-  data: string;
-  status: 400;
-};
+  data: string
+  status: 400
+}
 
 export type getMessageWithContextResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type getMessageWithContextResponse500 = {
-  data: string;
-  status: 500;
+  data: string
+  status: 500
+}
+    
+export type getMessageWithContextResponseSuccess = (getMessageWithContextResponse200) & {
+  headers: Headers;
 };
-
-export type getMessageWithContextResponseSuccess =
-  getMessageWithContextResponse200 & {
-    headers: Headers;
-  };
-export type getMessageWithContextResponseError = (
-  | getMessageWithContextResponse400
-  | getMessageWithContextResponse401
-  | getMessageWithContextResponse500
-) & {
+export type getMessageWithContextResponseError = (getMessageWithContextResponse400 | getMessageWithContextResponse401 | getMessageWithContextResponse500) & {
   headers: Headers;
 };
 
-export type getMessageWithContextResponse =
-  | getMessageWithContextResponseSuccess
-  | getMessageWithContextResponseError;
+export type getMessageWithContextResponse = (getMessageWithContextResponseSuccess | getMessageWithContextResponseError)
 
-export const getGetMessageWithContextUrl = (
-  params: GetMessageWithContextParams
-) => {
+export const getGetMessageWithContextUrl = (params: GetMessageWithContextParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
+    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0
-    ? `/comms/channels/messages/context?${stringifiedParams}`
-    : `/comms/channels/messages/context`;
-};
+  return stringifiedParams.length > 0 ? `/comms/channels/messages/context?${stringifiedParams}` : `/comms/channels/messages/context`
+}
 
-export const getMessageWithContext = async (
-  params: GetMessageWithContextParams,
-  options?: RequestInit
-): Promise<getMessageWithContextResponse> => {
-  const res = await fetch(getGetMessageWithContextUrl(params), {
+export const getMessageWithContext = async (params: GetMessageWithContextParams, options?: RequestInit): Promise<getMessageWithContextResponse> => {
+  
+  const res = await fetch(getGetMessageWithContextUrl(params),
+  {      
     ...options,
-    method: 'GET',
-  });
+    method: 'GET'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getMessageWithContextResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMessageWithContextResponse
+}
 
-  const data: getMessageWithContextResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getMessageWithContextResponse;
-};
+
 
 export type getChannelResponse200 = {
-  data: GetChannelResponse;
-  status: 200;
-};
+  data: GetChannelResponse
+  status: 200
+}
 
 export type getChannelResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type getChannelResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type getChannelResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type getChannelResponseSuccess = getChannelResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type getChannelResponseSuccess = (getChannelResponse200) & {
   headers: Headers;
 };
-export type getChannelResponseError = (
-  | getChannelResponse401
-  | getChannelResponse404
-  | getChannelResponse500
-) & {
+export type getChannelResponseError = (getChannelResponse401 | getChannelResponse404 | getChannelResponse500) & {
   headers: Headers;
 };
 
-export type getChannelResponse =
-  | getChannelResponseSuccess
-  | getChannelResponseError;
+export type getChannelResponse = (getChannelResponseSuccess | getChannelResponseError)
 
-export const getGetChannelUrl = (
-  channelId: string,
-  params?: GetChannelParams
-) => {
+export const getGetChannelUrl = (channelId: string,
+    params?: GetChannelParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
+    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0
-    ? `/comms/channels/${channelId}?${stringifiedParams}`
-    : `/comms/channels/${channelId}`;
-};
+  return stringifiedParams.length > 0 ? `/comms/channels/${channelId}?${stringifiedParams}` : `/comms/channels/${channelId}`
+}
 
-export const getChannel = async (
-  channelId: string,
-  params?: GetChannelParams,
-  options?: RequestInit
-): Promise<getChannelResponse> => {
-  const res = await fetch(getGetChannelUrl(channelId, params), {
+export const getChannel = async (channelId: string,
+    params?: GetChannelParams, options?: RequestInit): Promise<getChannelResponse> => {
+  
+  const res = await fetch(getGetChannelUrl(channelId,params),
+  {      
     ...options,
-    method: 'GET',
-  });
+    method: 'GET'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getChannelResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getChannelResponse
+}
 
-  const data: getChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getChannelResponse;
-};
+
 
 export type deleteChannelResponse204 = {
-  data: string;
-  status: 204;
-};
+  data: string
+  status: 204
+}
 
 export type deleteChannelResponse400 = {
-  data: string;
-  status: 400;
-};
+  data: string
+  status: 400
+}
 
 export type deleteChannelResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type deleteChannelResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type deleteChannelResponseSuccess = deleteChannelResponse204 & {
+  data: string
+  status: 500
+}
+    
+export type deleteChannelResponseSuccess = (deleteChannelResponse204) & {
   headers: Headers;
 };
-export type deleteChannelResponseError = (
-  | deleteChannelResponse400
-  | deleteChannelResponse404
-  | deleteChannelResponse500
-) & {
+export type deleteChannelResponseError = (deleteChannelResponse400 | deleteChannelResponse404 | deleteChannelResponse500) & {
   headers: Headers;
 };
 
-export type deleteChannelResponse =
-  | deleteChannelResponseSuccess
-  | deleteChannelResponseError;
+export type deleteChannelResponse = (deleteChannelResponseSuccess | deleteChannelResponseError)
 
-export const getDeleteChannelUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}`;
-};
+export const getDeleteChannelUrl = (channelId: string,) => {
 
-export const deleteChannel = async (
-  channelId: string,
-  options?: RequestInit
-): Promise<deleteChannelResponse> => {
-  const res = await fetch(getDeleteChannelUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}`
+}
+
+export const deleteChannel = async (channelId: string, options?: RequestInit): Promise<deleteChannelResponse> => {
+  
+  const res = await fetch(getDeleteChannelUrl(channelId),
+  {      
     ...options,
-    method: 'DELETE',
-  });
+    method: 'DELETE'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: deleteChannelResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as deleteChannelResponse
+}
 
-  const data: deleteChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteChannelResponse;
-};
+
 
 export type patchChannelResponse200 = {
-  data: string;
-  status: 200;
-};
+  data: string
+  status: 200
+}
 
 export type patchChannelResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type patchChannelResponseSuccess = patchChannelResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type patchChannelResponseSuccess = (patchChannelResponse200) & {
   headers: Headers;
 };
-export type patchChannelResponseError = patchChannelResponse500 & {
+export type patchChannelResponseError = (patchChannelResponse500) & {
   headers: Headers;
 };
 
-export type patchChannelResponse =
-  | patchChannelResponseSuccess
-  | patchChannelResponseError;
+export type patchChannelResponse = (patchChannelResponseSuccess | patchChannelResponseError)
 
-export const getPatchChannelUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}`;
-};
+export const getPatchChannelUrl = (channelId: string,) => {
 
-export const patchChannel = async (
-  channelId: string,
-  patchChannelOptions: PatchChannelOptions,
-  options?: RequestInit
-): Promise<patchChannelResponse> => {
-  const res = await fetch(getPatchChannelUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}`
+}
+
+export const patchChannel = async (channelId: string,
+    patchChannelOptions: PatchChannelOptions, options?: RequestInit): Promise<patchChannelResponse> => {
+  
+  const res = await fetch(getPatchChannelUrl(channelId),
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchChannelOptions),
-  });
+    body: JSON.stringify(
+      patchChannelOptions,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: patchChannelResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as patchChannelResponse
+}
 
-  const data: patchChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchChannelResponse;
-};
+
 
 /**
  * allows a user to attempt to join a channel
  */
 export type joinChannelResponse200 = {
-  data: void;
-  status: 200;
-};
+  data: void
+  status: 200
+}
 
 export type joinChannelResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type joinChannelResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type joinChannelResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type joinChannelResponseSuccess = joinChannelResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type joinChannelResponseSuccess = (joinChannelResponse200) & {
   headers: Headers;
 };
-export type joinChannelResponseError = (
-  | joinChannelResponse401
-  | joinChannelResponse404
-  | joinChannelResponse500
-) & {
+export type joinChannelResponseError = (joinChannelResponse401 | joinChannelResponse404 | joinChannelResponse500) & {
   headers: Headers;
 };
 
-export type joinChannelResponse =
-  | joinChannelResponseSuccess
-  | joinChannelResponseError;
+export type joinChannelResponse = (joinChannelResponseSuccess | joinChannelResponseError)
 
-export const getJoinChannelUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}/join`;
-};
+export const getJoinChannelUrl = (channelId: string,) => {
 
-export const joinChannel = async (
-  channelId: string,
-  options?: RequestInit
-): Promise<joinChannelResponse> => {
-  const res = await fetch(getJoinChannelUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}/join`
+}
+
+export const joinChannel = async (channelId: string, options?: RequestInit): Promise<joinChannelResponse> => {
+  
+  const res = await fetch(getJoinChannelUrl(channelId),
+  {      
     ...options,
-    method: 'POST',
-  });
+    method: 'POST'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: joinChannelResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as joinChannelResponse
+}
 
-  const data: joinChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as joinChannelResponse;
-};
+
 
 /**
  * allows a user to attempt to leave a channel
  */
 export type leaveChannelResponse200 = {
-  data: void;
-  status: 200;
-};
+  data: void
+  status: 200
+}
 
 export type leaveChannelResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type leaveChannelResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type leaveChannelResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type leaveChannelResponseSuccess = leaveChannelResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type leaveChannelResponseSuccess = (leaveChannelResponse200) & {
   headers: Headers;
 };
-export type leaveChannelResponseError = (
-  | leaveChannelResponse401
-  | leaveChannelResponse404
-  | leaveChannelResponse500
-) & {
+export type leaveChannelResponseError = (leaveChannelResponse401 | leaveChannelResponse404 | leaveChannelResponse500) & {
   headers: Headers;
 };
 
-export type leaveChannelResponse =
-  | leaveChannelResponseSuccess
-  | leaveChannelResponseError;
+export type leaveChannelResponse = (leaveChannelResponseSuccess | leaveChannelResponseError)
 
-export const getLeaveChannelUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}/leave`;
-};
+export const getLeaveChannelUrl = (channelId: string,) => {
 
-export const leaveChannel = async (
-  channelId: string,
-  options?: RequestInit
-): Promise<leaveChannelResponse> => {
-  const res = await fetch(getLeaveChannelUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}/leave`
+}
+
+export const leaveChannel = async (channelId: string, options?: RequestInit): Promise<leaveChannelResponse> => {
+  
+  const res = await fetch(getLeaveChannelUrl(channelId),
+  {      
     ...options,
-    method: 'POST',
-  });
+    method: 'POST'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: leaveChannelResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as leaveChannelResponse
+}
 
-  const data: leaveChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as leaveChannelResponse;
-};
+
 
 export type getMentionsForChannelResponse200 = {
-  data: GetMentionsResponse;
-  status: 200;
-};
+  data: GetMentionsResponse
+  status: 200
+}
 
 export type getMentionsForChannelResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type getMentionsForChannelResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type getMentionsForChannelResponse500 = {
-  data: string;
-  status: 500;
+  data: string
+  status: 500
+}
+    
+export type getMentionsForChannelResponseSuccess = (getMentionsForChannelResponse200) & {
+  headers: Headers;
 };
-
-export type getMentionsForChannelResponseSuccess =
-  getMentionsForChannelResponse200 & {
-    headers: Headers;
-  };
-export type getMentionsForChannelResponseError = (
-  | getMentionsForChannelResponse401
-  | getMentionsForChannelResponse404
-  | getMentionsForChannelResponse500
-) & {
+export type getMentionsForChannelResponseError = (getMentionsForChannelResponse401 | getMentionsForChannelResponse404 | getMentionsForChannelResponse500) & {
   headers: Headers;
 };
 
-export type getMentionsForChannelResponse =
-  | getMentionsForChannelResponseSuccess
-  | getMentionsForChannelResponseError;
+export type getMentionsForChannelResponse = (getMentionsForChannelResponseSuccess | getMentionsForChannelResponseError)
 
-export const getGetMentionsForChannelUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}/mentions`;
-};
+export const getGetMentionsForChannelUrl = (channelId: string,) => {
 
-export const getMentionsForChannel = async (
-  channelId: string,
-  options?: RequestInit
-): Promise<getMentionsForChannelResponse> => {
-  const res = await fetch(getGetMentionsForChannelUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}/mentions`
+}
+
+export const getMentionsForChannel = async (channelId: string, options?: RequestInit): Promise<getMentionsForChannelResponse> => {
+  
+  const res = await fetch(getGetMentionsForChannelUrl(channelId),
+  {      
     ...options,
-    method: 'GET',
-  });
+    method: 'GET'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getMentionsForChannelResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMentionsForChannelResponse
+}
 
-  const data: getMentionsForChannelResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getMentionsForChannelResponse;
-};
+
 
 export type postMessageResponse201 = {
-  data: PostMessageResponse;
-  status: 201;
-};
+  data: PostMessageResponse
+  status: 201
+}
 
 export type postMessageResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type postMessageResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type postMessageResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type postMessageResponseSuccess = postMessageResponse201 & {
+  data: string
+  status: 500
+}
+    
+export type postMessageResponseSuccess = (postMessageResponse201) & {
   headers: Headers;
 };
-export type postMessageResponseError = (
-  | postMessageResponse401
-  | postMessageResponse404
-  | postMessageResponse500
-) & {
+export type postMessageResponseError = (postMessageResponse401 | postMessageResponse404 | postMessageResponse500) & {
   headers: Headers;
 };
 
-export type postMessageResponse =
-  | postMessageResponseSuccess
-  | postMessageResponseError;
+export type postMessageResponse = (postMessageResponseSuccess | postMessageResponseError)
 
-export const getPostMessageUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}/message`;
-};
+export const getPostMessageUrl = (channelId: string,) => {
 
-export const postMessage = async (
-  channelId: string,
-  postMessageRequest: PostMessageRequest,
-  options?: RequestInit
-): Promise<postMessageResponse> => {
-  const res = await fetch(getPostMessageUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}/message`
+}
+
+export const postMessage = async (channelId: string,
+    postMessageRequest: PostMessageRequest, options?: RequestInit): Promise<postMessageResponse> => {
+  
+  const res = await fetch(getPostMessageUrl(channelId),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(postMessageRequest),
-  });
+    body: JSON.stringify(
+      postMessageRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: postMessageResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as postMessageResponse
+}
 
-  const data: postMessageResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postMessageResponse;
-};
+
 
 export type deleteMessageResponse201 = {
-  data: string;
-  status: 201;
-};
+  data: string
+  status: 201
+}
 
 export type deleteMessageResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type deleteMessageResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type deleteMessageResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type deleteMessageResponseSuccess = deleteMessageResponse201 & {
+  data: string
+  status: 500
+}
+    
+export type deleteMessageResponseSuccess = (deleteMessageResponse201) & {
   headers: Headers;
 };
-export type deleteMessageResponseError = (
-  | deleteMessageResponse401
-  | deleteMessageResponse404
-  | deleteMessageResponse500
-) & {
+export type deleteMessageResponseError = (deleteMessageResponse401 | deleteMessageResponse404 | deleteMessageResponse500) & {
   headers: Headers;
 };
 
-export type deleteMessageResponse =
-  | deleteMessageResponseSuccess
-  | deleteMessageResponseError;
+export type deleteMessageResponse = (deleteMessageResponseSuccess | deleteMessageResponseError)
 
-export const getDeleteMessageUrl = (channelId: string, messageId: string) => {
-  return `/comms/channels/${channelId}/message/${messageId}`;
-};
+export const getDeleteMessageUrl = (channelId: string,
+    messageId: string,) => {
 
-export const deleteMessage = async (
-  channelId: string,
-  messageId: string,
-  options?: RequestInit
-): Promise<deleteMessageResponse> => {
-  const res = await fetch(getDeleteMessageUrl(channelId, messageId), {
+
+  
+
+  return `/comms/channels/${channelId}/message/${messageId}`
+}
+
+export const deleteMessage = async (channelId: string,
+    messageId: string, options?: RequestInit): Promise<deleteMessageResponse> => {
+  
+  const res = await fetch(getDeleteMessageUrl(channelId,messageId),
+  {      
     ...options,
-    method: 'DELETE',
-  });
+    method: 'DELETE'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: deleteMessageResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as deleteMessageResponse
+}
 
-  const data: deleteMessageResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteMessageResponse;
-};
+
 
 export type patchMessageResponse201 = {
-  data: string;
-  status: 201;
-};
+  data: string
+  status: 201
+}
 
 export type patchMessageResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type patchMessageResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type patchMessageResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type patchMessageResponseSuccess = patchMessageResponse201 & {
+  data: string
+  status: 500
+}
+    
+export type patchMessageResponseSuccess = (patchMessageResponse201) & {
   headers: Headers;
 };
-export type patchMessageResponseError = (
-  | patchMessageResponse401
-  | patchMessageResponse404
-  | patchMessageResponse500
-) & {
+export type patchMessageResponseError = (patchMessageResponse401 | patchMessageResponse404 | patchMessageResponse500) & {
   headers: Headers;
 };
 
-export type patchMessageResponse =
-  | patchMessageResponseSuccess
-  | patchMessageResponseError;
+export type patchMessageResponse = (patchMessageResponseSuccess | patchMessageResponseError)
 
-export const getPatchMessageUrl = (channelId: string, messageId: string) => {
-  return `/comms/channels/${channelId}/message/${messageId}`;
-};
+export const getPatchMessageUrl = (channelId: string,
+    messageId: string,) => {
 
-export const patchMessage = async (
-  channelId: string,
-  messageId: string,
-  patchMessageRequest: PatchMessageRequest,
-  options?: RequestInit
-): Promise<patchMessageResponse> => {
-  const res = await fetch(getPatchMessageUrl(channelId, messageId), {
+
+  
+
+  return `/comms/channels/${channelId}/message/${messageId}`
+}
+
+export const patchMessage = async (channelId: string,
+    messageId: string,
+    patchMessageRequest: PatchMessageRequest, options?: RequestInit): Promise<patchMessageResponse> => {
+  
+  const res = await fetch(getPatchMessageUrl(channelId,messageId),
+  {      
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchMessageRequest),
-  });
+    body: JSON.stringify(
+      patchMessageRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: patchMessageResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as patchMessageResponse
+}
 
-  const data: patchMessageResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchMessageResponse;
-};
+
 
 /**
  * adds a list of participants to the channel, user must be a participant
  */
 export type addParticipantsResponse200 = {
-  data: void;
-  status: 200;
-};
+  data: void
+  status: 200
+}
 
 export type addParticipantsResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type addParticipantsResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type addParticipantsResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type addParticipantsResponseSuccess = addParticipantsResponse200 & {
+  data: string
+  status: 500
+}
+    
+export type addParticipantsResponseSuccess = (addParticipantsResponse200) & {
   headers: Headers;
 };
-export type addParticipantsResponseError = (
-  | addParticipantsResponse401
-  | addParticipantsResponse404
-  | addParticipantsResponse500
-) & {
+export type addParticipantsResponseError = (addParticipantsResponse401 | addParticipantsResponse404 | addParticipantsResponse500) & {
   headers: Headers;
 };
 
-export type addParticipantsResponse =
-  | addParticipantsResponseSuccess
-  | addParticipantsResponseError;
+export type addParticipantsResponse = (addParticipantsResponseSuccess | addParticipantsResponseError)
 
-export const getAddParticipantsUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}/participants`;
-};
+export const getAddParticipantsUrl = (channelId: string,) => {
 
-export const addParticipants = async (
-  channelId: string,
-  addParticipantsRequest: AddParticipantsRequest,
-  options?: RequestInit
-): Promise<addParticipantsResponse> => {
-  const res = await fetch(getAddParticipantsUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}/participants`
+}
+
+export const addParticipants = async (channelId: string,
+    addParticipantsRequest: AddParticipantsRequest, options?: RequestInit): Promise<addParticipantsResponse> => {
+  
+  const res = await fetch(getAddParticipantsUrl(channelId),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(addParticipantsRequest),
-  });
+    body: JSON.stringify(
+      addParticipantsRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: addParticipantsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as addParticipantsResponse
+}
 
-  const data: addParticipantsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as addParticipantsResponse;
-};
+
 
 /**
  * removes a list of participants from the channel, user must be a participant
  */
 export type removeParticipantsResponse200 = {
-  data: void;
-  status: 200;
-};
+  data: void
+  status: 200
+}
 
 export type removeParticipantsResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type removeParticipantsResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type removeParticipantsResponse500 = {
-  data: string;
-  status: 500;
+  data: string
+  status: 500
+}
+    
+export type removeParticipantsResponseSuccess = (removeParticipantsResponse200) & {
+  headers: Headers;
 };
-
-export type removeParticipantsResponseSuccess =
-  removeParticipantsResponse200 & {
-    headers: Headers;
-  };
-export type removeParticipantsResponseError = (
-  | removeParticipantsResponse401
-  | removeParticipantsResponse404
-  | removeParticipantsResponse500
-) & {
+export type removeParticipantsResponseError = (removeParticipantsResponse401 | removeParticipantsResponse404 | removeParticipantsResponse500) & {
   headers: Headers;
 };
 
-export type removeParticipantsResponse =
-  | removeParticipantsResponseSuccess
-  | removeParticipantsResponseError;
+export type removeParticipantsResponse = (removeParticipantsResponseSuccess | removeParticipantsResponseError)
 
-export const getRemoveParticipantsUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}/participants`;
-};
+export const getRemoveParticipantsUrl = (channelId: string,) => {
 
-export const removeParticipants = async (
-  channelId: string,
-  removeParticipantsRequest: RemoveParticipantsRequest,
-  options?: RequestInit
-): Promise<removeParticipantsResponse> => {
-  const res = await fetch(getRemoveParticipantsUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}/participants`
+}
+
+export const removeParticipants = async (channelId: string,
+    removeParticipantsRequest: RemoveParticipantsRequest, options?: RequestInit): Promise<removeParticipantsResponse> => {
+  
+  const res = await fetch(getRemoveParticipantsUrl(channelId),
+  {      
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(removeParticipantsRequest),
-  });
+    body: JSON.stringify(
+      removeParticipantsRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: removeParticipantsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as removeParticipantsResponse
+}
 
-  const data: removeParticipantsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as removeParticipantsResponse;
-};
+
 
 export type postReactionResponse201 = {
-  data: string;
-  status: 201;
-};
+  data: string
+  status: 201
+}
 
 export type postReactionResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type postReactionResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type postReactionResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type postReactionResponseSuccess = postReactionResponse201 & {
+  data: string
+  status: 500
+}
+    
+export type postReactionResponseSuccess = (postReactionResponse201) & {
   headers: Headers;
 };
-export type postReactionResponseError = (
-  | postReactionResponse401
-  | postReactionResponse404
-  | postReactionResponse500
-) & {
+export type postReactionResponseError = (postReactionResponse401 | postReactionResponse404 | postReactionResponse500) & {
   headers: Headers;
 };
 
-export type postReactionResponse =
-  | postReactionResponseSuccess
-  | postReactionResponseError;
+export type postReactionResponse = (postReactionResponseSuccess | postReactionResponseError)
 
-export const getPostReactionUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}/reaction`;
-};
+export const getPostReactionUrl = (channelId: string,) => {
 
-export const postReaction = async (
-  channelId: string,
-  postReactionRequest: PostReactionRequest,
-  options?: RequestInit
-): Promise<postReactionResponse> => {
-  const res = await fetch(getPostReactionUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}/reaction`
+}
+
+export const postReaction = async (channelId: string,
+    postReactionRequest: PostReactionRequest, options?: RequestInit): Promise<postReactionResponse> => {
+  
+  const res = await fetch(getPostReactionUrl(channelId),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(postReactionRequest),
-  });
+    body: JSON.stringify(
+      postReactionRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: postReactionResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as postReactionResponse
+}
 
-  const data: postReactionResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postReactionResponse;
-};
+
 
 export type postTypingResponse201 = {
-  data: string;
-  status: 201;
-};
+  data: string
+  status: 201
+}
 
 export type postTypingResponse401 = {
-  data: string;
-  status: 401;
-};
+  data: string
+  status: 401
+}
 
 export type postTypingResponse404 = {
-  data: string;
-  status: 404;
-};
+  data: string
+  status: 404
+}
 
 export type postTypingResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type postTypingResponseSuccess = postTypingResponse201 & {
+  data: string
+  status: 500
+}
+    
+export type postTypingResponseSuccess = (postTypingResponse201) & {
   headers: Headers;
 };
-export type postTypingResponseError = (
-  | postTypingResponse401
-  | postTypingResponse404
-  | postTypingResponse500
-) & {
+export type postTypingResponseError = (postTypingResponse401 | postTypingResponse404 | postTypingResponse500) & {
   headers: Headers;
 };
 
-export type postTypingResponse =
-  | postTypingResponseSuccess
-  | postTypingResponseError;
+export type postTypingResponse = (postTypingResponseSuccess | postTypingResponseError)
 
-export const getPostTypingUrl = (channelId: string) => {
-  return `/comms/channels/${channelId}/typing`;
-};
+export const getPostTypingUrl = (channelId: string,) => {
 
-export const postTyping = async (
-  channelId: string,
-  postTypingRequest: PostTypingRequest,
-  options?: RequestInit
-): Promise<postTypingResponse> => {
-  const res = await fetch(getPostTypingUrl(channelId), {
+
+  
+
+  return `/comms/channels/${channelId}/typing`
+}
+
+export const postTyping = async (channelId: string,
+    postTypingRequest: PostTypingRequest, options?: RequestInit): Promise<postTypingResponse> => {
+  
+  const res = await fetch(getPostTypingUrl(channelId),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(postTypingRequest),
-  });
+    body: JSON.stringify(
+      postTypingRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: postTypingResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as postTypingResponse
+}
 
-  const data: postTypingResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postTypingResponse;
-};
+
 
 export type createMentionHandlerResponse201 = {
-  data: CreateEntityMentionResponse;
-  status: 201;
-};
+  data: CreateEntityMentionResponse
+  status: 201
+}
 
 export type createMentionHandlerResponse400 = {
-  data: void;
-  status: 400;
-};
+  data: void
+  status: 400
+}
 
 export type createMentionHandlerResponse500 = {
-  data: void;
-  status: 500;
+  data: void
+  status: 500
+}
+    
+export type createMentionHandlerResponseSuccess = (createMentionHandlerResponse201) & {
+  headers: Headers;
 };
-
-export type createMentionHandlerResponseSuccess =
-  createMentionHandlerResponse201 & {
-    headers: Headers;
-  };
-export type createMentionHandlerResponseError = (
-  | createMentionHandlerResponse400
-  | createMentionHandlerResponse500
-) & {
+export type createMentionHandlerResponseError = (createMentionHandlerResponse400 | createMentionHandlerResponse500) & {
   headers: Headers;
 };
 
-export type createMentionHandlerResponse =
-  | createMentionHandlerResponseSuccess
-  | createMentionHandlerResponseError;
+export type createMentionHandlerResponse = (createMentionHandlerResponseSuccess | createMentionHandlerResponseError)
 
 export const getCreateMentionHandlerUrl = () => {
-  return `/comms/mentions`;
-};
 
-export const createMentionHandler = async (
-  createEntityMentionRequest: CreateEntityMentionRequest,
-  options?: RequestInit
-): Promise<createMentionHandlerResponse> => {
-  const res = await fetch(getCreateMentionHandlerUrl(), {
+
+  
+
+  return `/comms/mentions`
+}
+
+export const createMentionHandler = async (createEntityMentionRequest: CreateEntityMentionRequest, options?: RequestInit): Promise<createMentionHandlerResponse> => {
+  
+  const res = await fetch(getCreateMentionHandlerUrl(),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createEntityMentionRequest),
-  });
+    body: JSON.stringify(
+      createEntityMentionRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: createMentionHandlerResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as createMentionHandlerResponse
+}
 
-  const data: createMentionHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createMentionHandlerResponse;
-};
+
 
 export type deleteMentionHandlerResponse200 = {
-  data: DeleteEntityMentionResponse;
-  status: 200;
-};
+  data: DeleteEntityMentionResponse
+  status: 200
+}
 
 export type deleteMentionHandlerResponse400 = {
-  data: void;
-  status: 400;
-};
+  data: void
+  status: 400
+}
 
 export type deleteMentionHandlerResponse403 = {
-  data: void;
-  status: 403;
-};
+  data: void
+  status: 403
+}
 
 export type deleteMentionHandlerResponse404 = {
-  data: void;
-  status: 404;
-};
+  data: void
+  status: 404
+}
 
 export type deleteMentionHandlerResponse500 = {
-  data: void;
-  status: 500;
+  data: void
+  status: 500
+}
+    
+export type deleteMentionHandlerResponseSuccess = (deleteMentionHandlerResponse200) & {
+  headers: Headers;
 };
-
-export type deleteMentionHandlerResponseSuccess =
-  deleteMentionHandlerResponse200 & {
-    headers: Headers;
-  };
-export type deleteMentionHandlerResponseError = (
-  | deleteMentionHandlerResponse400
-  | deleteMentionHandlerResponse403
-  | deleteMentionHandlerResponse404
-  | deleteMentionHandlerResponse500
-) & {
+export type deleteMentionHandlerResponseError = (deleteMentionHandlerResponse400 | deleteMentionHandlerResponse403 | deleteMentionHandlerResponse404 | deleteMentionHandlerResponse500) & {
   headers: Headers;
 };
 
-export type deleteMentionHandlerResponse =
-  | deleteMentionHandlerResponseSuccess
-  | deleteMentionHandlerResponseError;
+export type deleteMentionHandlerResponse = (deleteMentionHandlerResponseSuccess | deleteMentionHandlerResponseError)
 
-export const getDeleteMentionHandlerUrl = (mentionId: string) => {
-  return `/comms/mentions/${mentionId}`;
-};
+export const getDeleteMentionHandlerUrl = (mentionId: string,) => {
 
-export const deleteMentionHandler = async (
-  mentionId: string,
-  options?: RequestInit
-): Promise<deleteMentionHandlerResponse> => {
-  const res = await fetch(getDeleteMentionHandlerUrl(mentionId), {
+
+  
+
+  return `/comms/mentions/${mentionId}`
+}
+
+export const deleteMentionHandler = async (mentionId: string, options?: RequestInit): Promise<deleteMentionHandlerResponse> => {
+  
+  const res = await fetch(getDeleteMentionHandlerUrl(mentionId),
+  {      
     ...options,
-    method: 'DELETE',
-  });
+    method: 'DELETE'
+    
+    
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: deleteMentionHandlerResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as deleteMentionHandlerResponse
+}
 
-  const data: deleteMentionHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteMentionHandlerResponse;
-};
+
 
 export type getBatchChannelPreviewResponse200 = {
-  data: GetBatchChannelPreviewResponse;
-  status: 200;
-};
+  data: GetBatchChannelPreviewResponse
+  status: 200
+}
 
 export type getBatchChannelPreviewResponse401 = {
-  data: GenericErrorResponse;
-  status: 401;
-};
+  data: GenericErrorResponse
+  status: 401
+}
 
 export type getBatchChannelPreviewResponse404 = {
-  data: GenericErrorResponse;
-  status: 404;
-};
+  data: GenericErrorResponse
+  status: 404
+}
 
 export type getBatchChannelPreviewResponse500 = {
-  data: GenericErrorResponse;
-  status: 500;
+  data: GenericErrorResponse
+  status: 500
+}
+    
+export type getBatchChannelPreviewResponseSuccess = (getBatchChannelPreviewResponse200) & {
+  headers: Headers;
 };
-
-export type getBatchChannelPreviewResponseSuccess =
-  getBatchChannelPreviewResponse200 & {
-    headers: Headers;
-  };
-export type getBatchChannelPreviewResponseError = (
-  | getBatchChannelPreviewResponse401
-  | getBatchChannelPreviewResponse404
-  | getBatchChannelPreviewResponse500
-) & {
+export type getBatchChannelPreviewResponseError = (getBatchChannelPreviewResponse401 | getBatchChannelPreviewResponse404 | getBatchChannelPreviewResponse500) & {
   headers: Headers;
 };
 
-export type getBatchChannelPreviewResponse =
-  | getBatchChannelPreviewResponseSuccess
-  | getBatchChannelPreviewResponseError;
+export type getBatchChannelPreviewResponse = (getBatchChannelPreviewResponseSuccess | getBatchChannelPreviewResponseError)
 
 export const getGetBatchChannelPreviewUrl = () => {
-  return `/comms/preview`;
-};
 
-export const getBatchChannelPreview = async (
-  getBatchChannelPreviewRequest: GetBatchChannelPreviewRequest,
-  options?: RequestInit
-): Promise<getBatchChannelPreviewResponse> => {
-  const res = await fetch(getGetBatchChannelPreviewUrl(), {
+
+  
+
+  return `/comms/preview`
+}
+
+export const getBatchChannelPreview = async (getBatchChannelPreviewRequest: GetBatchChannelPreviewRequest, options?: RequestInit): Promise<getBatchChannelPreviewResponse> => {
+  
+  const res = await fetch(getGetBatchChannelPreviewUrl(),
+  {      
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(getBatchChannelPreviewRequest),
-  });
+    body: JSON.stringify(
+      getBatchChannelPreviewRequest,)
+  }
+)
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getBatchChannelPreviewResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getBatchChannelPreviewResponse;
-};
+  
+  const data: getBatchChannelPreviewResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getBatchChannelPreviewResponse
+}

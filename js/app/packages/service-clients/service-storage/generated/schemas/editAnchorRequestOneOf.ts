@@ -4,9 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { EditAnchorRequestOneOfAllOf } from './editAnchorRequestOneOfAllOf';
 import type { EditPdfAnchorRequest } from './editPdfAnchorRequest';
+import type { EditAnchorRequestOneOfAllOf } from './editAnchorRequestOneOfAllOf';
 
-export type EditAnchorRequestOneOf = EditPdfAnchorRequest &
-  EditAnchorRequestOneOfAllOf;
+export type EditAnchorRequestOneOf = EditPdfAnchorRequest & EditAnchorRequestOneOfAllOf;

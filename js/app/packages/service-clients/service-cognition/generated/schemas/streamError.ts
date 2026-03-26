@@ -5,10 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { StreamErrorOneOf } from './streamErrorOneOf';
-import type { StreamErrorOneOfFive } from './streamErrorOneOfFive';
 import type { StreamErrorOneOfThree } from './streamErrorOneOfThree';
+import type { StreamErrorOneOfFive } from './streamErrorOneOfFive';
 
-export type StreamError =
-  | StreamErrorOneOf
-  | StreamErrorOneOfThree
-  | StreamErrorOneOfFive;
+export type StreamError = StreamErrorOneOf | StreamErrorOneOfThree | StreamErrorOneOfFive;

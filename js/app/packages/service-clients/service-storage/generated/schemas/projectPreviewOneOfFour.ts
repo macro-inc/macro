@@ -4,9 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ProjectPreviewOneOfFourAllOf } from './projectPreviewOneOfFourAllOf';
 import type { WithProjectId } from './withProjectId';
+import type { ProjectPreviewOneOfFourAllOf } from './projectPreviewOneOfFourAllOf';
 
-export type ProjectPreviewOneOfFour = WithProjectId &
-  ProjectPreviewOneOfFourAllOf;
+export type ProjectPreviewOneOfFour = WithProjectId & ProjectPreviewOneOfFourAllOf;

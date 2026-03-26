@@ -8,7 +8,4 @@ import type { ProjectPreviewOneOf } from './projectPreviewOneOf';
 import type { ProjectPreviewOneOfFour } from './projectPreviewOneOfFour';
 import type { ProjectPreviewOneOfSeven } from './projectPreviewOneOfSeven';
 
-export type ProjectPreview =
-  | ProjectPreviewOneOf
-  | ProjectPreviewOneOfFour
-  | ProjectPreviewOneOfSeven;
+export type ProjectPreview = ProjectPreviewOneOf | ProjectPreviewOneOfFour | ProjectPreviewOneOfSeven;

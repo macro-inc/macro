@@ -7,6 +7,4 @@
 import type { FileSystemNodeWithIdsOneOf } from './fileSystemNodeWithIdsOneOf';
 import type { FileSystemNodeWithIdsOneOfThree } from './fileSystemNodeWithIdsOneOfThree';
 
-export type FileSystemNodeWithIds =
-  | FileSystemNodeWithIdsOneOf
-  | FileSystemNodeWithIdsOneOfThree;
+export type FileSystemNodeWithIds = FileSystemNodeWithIdsOneOf | FileSystemNodeWithIdsOneOfThree;

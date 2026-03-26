@@ -12,7 +12,9 @@
   "paths": {
     "/activity": {
       "get": {
-        "tags": ["activity"],
+        "tags": [
+          "activity"
+        ],
         "operationId": "get_activity",
         "responses": {
           "200": {
@@ -63,7 +65,9 @@
     },
     "/channels": {
       "get": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "get_channels",
         "responses": {
           "200": {
@@ -114,7 +118,9 @@
     },
     "/comms/activity": {
       "post": {
-        "tags": ["activity"],
+        "tags": [
+          "activity"
+        ],
         "operationId": "post_activity",
         "requestBody": {
           "content": {
@@ -172,7 +178,9 @@
     },
     "/comms/attachments/{entity_type}/{entity_id}/references": {
       "get": {
-        "tags": ["attachments"],
+        "tags": [
+          "attachments"
+        ],
         "operationId": "get_attachment_references",
         "parameters": [
           {
@@ -240,7 +248,9 @@
     },
     "/comms/channels": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "create_channel",
         "requestBody": {
           "content": {
@@ -318,7 +328,9 @@
     },
     "/comms/channels/get_or_create_dm": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "description": "given a user and a recipient, either finds or creates a direct message channel",
         "operationId": "get_or_create_dm",
         "requestBody": {
@@ -387,7 +399,9 @@
     },
     "/comms/channels/get_or_create_private": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "description": "given a list of partiicpants, either fetch an existing private channel with the permtation or create a new one",
         "operationId": "get_or_create_private",
         "requestBody": {
@@ -456,7 +470,9 @@
     },
     "/comms/channels/messages/context": {
       "get": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "get_message_with_context",
         "parameters": [
           {
@@ -535,7 +551,9 @@
     },
     "/comms/channels/{channel_id}": {
       "get": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "get_channel",
         "parameters": [
           {
@@ -611,7 +629,9 @@
         }
       },
       "delete": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "delete_channel",
         "parameters": [
           {
@@ -668,7 +688,9 @@
         }
       },
       "patch": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "patch_channel",
         "parameters": [
           {
@@ -717,7 +739,9 @@
     },
     "/comms/channels/{channel_id}/join": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "description": "allows a user to attempt to join a channel",
         "operationId": "join_channel",
         "parameters": [
@@ -770,7 +794,9 @@
     },
     "/comms/channels/{channel_id}/leave": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "description": "allows a user to attempt to leave a channel",
         "operationId": "leave_channel",
         "parameters": [
@@ -823,7 +849,9 @@
     },
     "/comms/channels/{channel_id}/mentions": {
       "get": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "get_mentions_for_channel",
         "parameters": [
           {
@@ -882,7 +910,9 @@
     },
     "/comms/channels/{channel_id}/message": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "post_message",
         "parameters": [
           {
@@ -951,7 +981,9 @@
     },
     "/comms/channels/{channel_id}/message/{message_id}": {
       "delete": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "delete_message",
         "parameters": [
           {
@@ -1017,7 +1049,9 @@
         }
       },
       "patch": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "patch_message",
         "parameters": [
           {
@@ -1095,7 +1129,9 @@
     },
     "/comms/channels/{channel_id}/participants": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "description": "adds a list of participants to the channel, user must be a participant",
         "operationId": "add_participants",
         "parameters": [
@@ -1156,7 +1192,9 @@
         }
       },
       "delete": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "description": "removes a list of participants from the channel, user must be a participant",
         "operationId": "remove_participants",
         "parameters": [
@@ -1219,7 +1257,9 @@
     },
     "/comms/channels/{channel_id}/reaction": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "post_reaction",
         "parameters": [
           {
@@ -1288,7 +1328,9 @@
     },
     "/comms/channels/{channel_id}/typing": {
       "post": {
-        "tags": ["channels"],
+        "tags": [
+          "channels"
+        ],
         "operationId": "post_typing",
         "parameters": [
           {
@@ -1357,7 +1399,9 @@
     },
     "/comms/mentions": {
       "post": {
-        "tags": ["mentions"],
+        "tags": [
+          "mentions"
+        ],
         "operationId": "create_mention_handler",
         "requestBody": {
           "content": {
@@ -1391,7 +1435,9 @@
     },
     "/comms/mentions/{mention_id}": {
       "delete": {
-        "tags": ["mentions"],
+        "tags": [
+          "mentions"
+        ],
         "operationId": "delete_mention_handler",
         "parameters": [
           {
@@ -1432,7 +1478,9 @@
     },
     "/comms/preview": {
       "post": {
-        "tags": ["preview"],
+        "tags": [
+          "preview"
+        ],
         "operationId": "get_batch_channel_preview",
         "requestBody": {
           "content": {
@@ -1494,7 +1542,13 @@
       "Activity": {
         "type": "object",
         "description": "Represents a user's activity in a channel",
-        "required": ["id", "user_id", "channel_id", "created_at", "updated_at"],
+        "required": [
+          "id",
+          "user_id",
+          "channel_id",
+          "created_at",
+          "updated_at"
+        ],
         "properties": {
           "channel_id": {
             "type": "string",
@@ -1509,7 +1563,10 @@
             "format": "uuid"
           },
           "interacted_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "the last time the user intereacted with the channel\neg. reacting, replying, sending a message"
           },
@@ -1521,7 +1578,10 @@
             "type": "string"
           },
           "viewed_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "the last time the user viewed the channel"
           }
@@ -1529,11 +1589,16 @@
       },
       "ActivityType": {
         "type": "string",
-        "enum": ["view", "interact"]
+        "enum": [
+          "view",
+          "interact"
+        ]
       },
       "AddParticipantsRequest": {
         "type": "object",
-        "required": ["participants"],
+        "required": [
+          "participants"
+        ],
         "properties": {
           "participants": {
             "type": "array",
@@ -1545,7 +1610,13 @@
       },
       "ApiActivity": {
         "type": "object",
-        "required": ["id", "user_id", "channel_id", "created_at", "updated_at"],
+        "required": [
+          "id",
+          "user_id",
+          "channel_id",
+          "created_at",
+          "updated_at"
+        ],
         "properties": {
           "channel_id": {
             "type": "string",
@@ -1560,7 +1631,10 @@
             "format": "uuid"
           },
           "interacted_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "the last time the user intereacted with the channel\neg. reacting, replying, sending a message"
           },
@@ -1572,7 +1646,10 @@
             "type": "string"
           },
           "viewed_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "the last time the user viewed the channel"
           }
@@ -1590,15 +1667,24 @@
             "type": "object",
             "properties": {
               "frecency_score": {
-                "type": ["number", "null"],
+                "type": [
+                  "number",
+                  "null"
+                ],
                 "format": "double"
               },
               "interacted_at": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time"
               },
               "viewed_at": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time"
               }
             }
@@ -1631,7 +1717,10 @@
             "type": "string"
           },
           "height": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "id": {
@@ -1643,7 +1732,10 @@
             "format": "uuid"
           },
           "width": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "dimensions of image/video"
           }
@@ -1674,11 +1766,17 @@
             "description": "uuid of the channel"
           },
           "name": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "string name of the channel"
           },
           "org_id": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "id of the organization this channel belongs too",
             "minimum": 0
@@ -1713,7 +1811,10 @@
             "format": "date-time"
           },
           "deleted_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "mentions": {
@@ -1731,7 +1832,10 @@
             "type": "string"
           },
           "thread_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "updated_at": {
@@ -1742,7 +1846,12 @@
       },
       "ChannelParticipant": {
         "type": "object",
-        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "required": [
+          "channel_id",
+          "user_id",
+          "role",
+          "joined_at"
+        ],
         "properties": {
           "channel_id": {
             "type": "string",
@@ -1755,7 +1864,10 @@
             "description": "timestamp of when the user joined the channel"
           },
           "left_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "timestamp of when the user left the channel"
           },
@@ -1778,11 +1890,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["access"]
+                    "enum": [
+                      "access"
+                    ]
                   }
                 }
               }
@@ -1795,11 +1911,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["no_access"]
+                    "enum": [
+                      "no_access"
+                    ]
                   }
                 }
               }
@@ -1812,11 +1932,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["does_not_exist"]
+                    "enum": [
+                      "does_not_exist"
+                    ]
                   }
                 }
               }
@@ -1826,7 +1950,11 @@
       },
       "ChannelPreviewData": {
         "type": "object",
-        "required": ["channel_id", "channel_name", "channel_type"],
+        "required": [
+          "channel_id",
+          "channel_name",
+          "channel_type"
+        ],
         "properties": {
           "channel_id": {
             "type": "string"
@@ -1862,7 +1990,10 @@
             "description": "Channel that contains the message"
           },
           "channel_name": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional channel name (DMs do not have a name)"
           },
           "message_content": {
@@ -1884,7 +2015,10 @@
             "description": "Sender of the message"
           },
           "thread_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "If the message belongs to a thread this is the parent id"
           }
@@ -1892,7 +2026,13 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "direct_message", "team"]
+        "enum": [
+          "public",
+          "organization",
+          "private",
+          "direct_message",
+          "team"
+        ]
       },
       "ChannelWithParticipants": {
         "allOf": [
@@ -1901,7 +2041,9 @@
           },
           {
             "type": "object",
-            "required": ["participants"],
+            "required": [
+              "participants"
+            ],
             "properties": {
               "participants": {
                 "type": "array",
@@ -1915,11 +2057,16 @@
       },
       "CommunicationServiceApiVersion": {
         "type": "string",
-        "enum": ["v1"]
+        "enum": [
+          "v1"
+        ]
       },
       "CountedReaction": {
         "type": "object",
-        "required": ["emoji", "users"],
+        "required": [
+          "emoji",
+          "users"
+        ],
         "properties": {
           "emoji": {
             "type": "string"
@@ -1934,14 +2081,20 @@
       },
       "CreateChannelRequest": {
         "type": "object",
-        "required": ["channel_type", "participants"],
+        "required": [
+          "channel_type",
+          "participants"
+        ],
         "properties": {
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "The type of channel"
           },
           "name": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optionally a name for the channel"
           },
           "participants": {
@@ -1952,7 +2105,10 @@
             "description": "list of participants not including the owner"
           },
           "team_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "If the channel_type is team, provide the id of the team you are creating the channel for"
           }
@@ -1960,7 +2116,9 @@
       },
       "CreateChannelResponse": {
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -2021,13 +2179,18 @@
             "type": "string"
           },
           "user_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "DeleteEntityMentionRequest": {
         "type": "object",
-        "required": ["entity_mention_id"],
+        "required": [
+          "entity_mention_id"
+        ],
         "properties": {
           "entity_mention_id": {
             "type": "string"
@@ -2036,7 +2199,9 @@
       },
       "DeleteEntityMentionResponse": {
         "type": "object",
-        "required": ["deleted"],
+        "required": [
+          "deleted"
+        ],
         "properties": {
           "deleted": {
             "type": "boolean"
@@ -2045,7 +2210,10 @@
       },
       "DeleteMessageParams": {
         "type": "object",
-        "required": ["channel_id", "message_id"],
+        "required": [
+          "channel_id",
+          "message_id"
+        ],
         "properties": {
           "channel_id": {
             "type": "string"
@@ -2087,7 +2255,10 @@
             "type": "string"
           },
           "user_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -2101,11 +2272,15 @@
               },
               {
                 "type": "object",
-                "required": ["reference_type"],
+                "required": [
+                  "reference_type"
+                ],
                 "properties": {
                   "reference_type": {
                     "type": "string",
-                    "enum": ["channel"]
+                    "enum": [
+                      "channel"
+                    ]
                   }
                 }
               }
@@ -2120,11 +2295,15 @@
               },
               {
                 "type": "object",
-                "required": ["reference_type"],
+                "required": [
+                  "reference_type"
+                ],
                 "properties": {
                   "reference_type": {
                     "type": "string",
-                    "enum": ["generic"]
+                    "enum": [
+                      "generic"
+                    ]
                   }
                 }
               }
@@ -2135,7 +2314,10 @@
       },
       "GenericErrorResponse": {
         "type": "object",
-        "required": ["error", "message"],
+        "required": [
+          "error",
+          "message"
+        ],
         "properties": {
           "error": {
             "type": "boolean",
@@ -2183,14 +2365,19 @@
             "description": "Type of the source entity (e.g., \"document\", \"chat\", etc.)"
           },
           "user_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "User who created this reference (optional for non-user sources like channels)"
           }
         }
       },
       "GetAttachmentReferencesResponse": {
         "type": "object",
-        "required": ["references"],
+        "required": [
+          "references"
+        ],
         "properties": {
           "references": {
             "type": "array",
@@ -2202,7 +2389,9 @@
       },
       "GetBatchChannelPreviewRequest": {
         "type": "object",
-        "required": ["channel_ids"],
+        "required": [
+          "channel_ids"
+        ],
         "properties": {
           "channel_ids": {
             "type": "array",
@@ -2214,7 +2403,9 @@
       },
       "GetBatchChannelPreviewResponse": {
         "type": "object",
-        "required": ["previews"],
+        "required": [
+          "previews"
+        ],
         "properties": {
           "previews": {
             "type": "array",
@@ -2292,7 +2483,9 @@
       },
       "GetMentionsResponse": {
         "type": "object",
-        "required": ["mentions"],
+        "required": [
+          "mentions"
+        ],
         "properties": {
           "mentions": {
             "type": "array",
@@ -2304,7 +2497,9 @@
       },
       "GetMessageWithContextResponse": {
         "type": "object",
-        "required": ["messages"],
+        "required": [
+          "messages"
+        ],
         "properties": {
           "messages": {
             "type": "array",
@@ -2316,11 +2511,16 @@
       },
       "GetOrCreateAction": {
         "type": "string",
-        "enum": ["get", "create"]
+        "enum": [
+          "get",
+          "create"
+        ]
       },
       "GetOrCreateDmRequest": {
         "type": "object",
-        "required": ["recipient_id"],
+        "required": [
+          "recipient_id"
+        ],
         "properties": {
           "recipient_id": {
             "type": "string"
@@ -2329,7 +2529,10 @@
       },
       "GetOrCreateDmResponse": {
         "type": "object",
-        "required": ["channel_id", "action"],
+        "required": [
+          "channel_id",
+          "action"
+        ],
         "properties": {
           "action": {
             "$ref": "#/components/schemas/GetOrCreateAction"
@@ -2341,7 +2544,9 @@
       },
       "GetOrCreatePrivateRequest": {
         "type": "object",
-        "required": ["recipients"],
+        "required": [
+          "recipients"
+        ],
         "properties": {
           "recipients": {
             "type": "array",
@@ -2353,7 +2558,10 @@
       },
       "GetOrCreatePrivateResponse": {
         "type": "object",
-        "required": ["channel_id", "action"],
+        "required": [
+          "channel_id",
+          "action"
+        ],
         "properties": {
           "action": {
             "$ref": "#/components/schemas/GetOrCreateAction"
@@ -2411,11 +2619,17 @@
             "format": "date-time"
           },
           "deleted_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "edited_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "id": {
@@ -2426,7 +2640,10 @@
             "type": "string"
           },
           "thread_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "updated_at": {
@@ -2437,7 +2654,12 @@
       },
       "MessageMention": {
         "type": "object",
-        "required": ["message_id", "entity_type", "entity_id", "created_at"],
+        "required": [
+          "message_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
@@ -2457,7 +2679,10 @@
       },
       "NewAttachment": {
         "type": "object",
-        "required": ["entity_type", "entity_id"],
+        "required": [
+          "entity_type",
+          "entity_id"
+        ],
         "properties": {
           "entity_id": {
             "type": "string"
@@ -2466,12 +2691,18 @@
             "type": "string"
           },
           "height": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "dimensions of image/video"
           },
           "width": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           }
         }
@@ -2480,11 +2711,15 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["Access"],
+            "required": [
+              "Access"
+            ],
             "properties": {
               "Access": {
                 "type": "object",
-                "required": ["role"],
+                "required": [
+                  "role"
+                ],
                 "properties": {
                   "role": {
                     "$ref": "#/components/schemas/ParticipantRole"
@@ -2495,25 +2730,37 @@
           },
           {
             "type": "string",
-            "enum": ["NoAccess"]
+            "enum": [
+              "NoAccess"
+            ]
           }
         ]
       },
       "ParticipantRole": {
         "type": "string",
-        "enum": ["owner", "admin", "member"]
+        "enum": [
+          "owner",
+          "admin",
+          "member"
+        ]
       },
       "PatchChannelOptions": {
         "type": "object",
         "properties": {
           "channel_name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "PatchMessageParams": {
         "type": "object",
-        "required": ["channel_id", "message_id"],
+        "required": [
+          "channel_id",
+          "message_id"
+        ],
         "properties": {
           "channel_id": {
             "type": "string"
@@ -2527,22 +2774,34 @@
         "type": "object",
         "properties": {
           "attachment_ids_to_delete": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "string"
             }
           },
           "content": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "nonce": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "PostActivityRequest": {
         "type": "object",
-        "required": ["channel_id", "activity_type"],
+        "required": [
+          "channel_id",
+          "activity_type"
+        ],
         "properties": {
           "activity_type": {
             "$ref": "#/components/schemas/ActivityType"
@@ -2554,7 +2813,11 @@
       },
       "PostMessageRequest": {
         "type": "object",
-        "required": ["content", "mentions", "attachments"],
+        "required": [
+          "content",
+          "mentions",
+          "attachments"
+        ],
         "properties": {
           "attachments": {
             "type": "array",
@@ -2572,29 +2835,44 @@
             }
           },
           "nonce": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "thread_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           }
         }
       },
       "PostMessageResponse": {
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
           },
           "nonce": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "PostReactionRequest": {
         "type": "object",
-        "required": ["emoji", "message_id", "action"],
+        "required": [
+          "emoji",
+          "message_id",
+          "action"
+        ],
         "properties": {
           "action": {
             "$ref": "#/components/schemas/ReactionAction"
@@ -2606,28 +2884,44 @@
             "type": "string"
           },
           "nonce": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "PostTypingRequest": {
         "type": "object",
-        "required": ["action"],
+        "required": [
+          "action"
+        ],
         "properties": {
           "action": {
             "$ref": "#/components/schemas/TypingAction"
           },
           "nonce": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "thread_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "Reaction": {
         "type": "object",
-        "required": ["message_id", "user_id", "emoji", "created_at"],
+        "required": [
+          "message_id",
+          "user_id",
+          "emoji",
+          "created_at"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
@@ -2647,11 +2941,16 @@
       },
       "ReactionAction": {
         "type": "string",
-        "enum": ["Add", "Remove"]
+        "enum": [
+          "Add",
+          "Remove"
+        ]
       },
       "RemoveParticipantsRequest": {
         "type": "object",
-        "required": ["participants"],
+        "required": [
+          "participants"
+        ],
         "properties": {
           "participants": {
             "type": "array",
@@ -2663,7 +2962,10 @@
       },
       "SimpleMention": {
         "type": "object",
-        "required": ["entity_type", "entity_id"],
+        "required": [
+          "entity_type",
+          "entity_id"
+        ],
         "properties": {
           "entity_id": {
             "type": "string"
@@ -2675,7 +2977,9 @@
       },
       "StringIDResponse": {
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -2684,11 +2988,16 @@
       },
       "TypingAction": {
         "type": "string",
-        "enum": ["start", "stop"]
+        "enum": [
+          "start",
+          "stop"
+        ]
       },
       "WithChannelId": {
         "type": "object",
-        "required": ["channel_id"],
+        "required": [
+          "channel_id"
+        ],
         "properties": {
           "channel_id": {
             "type": "string"

@@ -4,11 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ApiMessageAttachment } from './apiMessageAttachment';
 import type { ApiChannelMessageDeletedAt } from './apiChannelMessageDeletedAt';
 import type { ApiChannelMessageEditedAt } from './apiChannelMessageEditedAt';
 import type { ApiCountedReaction } from './apiCountedReaction';
-import type { ApiMessageAttachment } from './apiMessageAttachment';
 import type { ApiThreadInfo } from './apiThreadInfo';
 
 /**

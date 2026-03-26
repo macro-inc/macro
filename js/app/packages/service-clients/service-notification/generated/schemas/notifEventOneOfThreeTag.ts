@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type NotifEventOneOfThreeTag =
-  (typeof NotifEventOneOfThreeTag)[keyof typeof NotifEventOneOfThreeTag];
+export type NotifEventOneOfThreeTag = typeof NotifEventOneOfThreeTag[keyof typeof NotifEventOneOfThreeTag];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfThreeTag = {

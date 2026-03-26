@@ -4,1260 +4,729 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import { z as zod } from 'zod';
+import {
+  z as zod
+} from 'zod';
+
 
 /**
  * @deprecated
  * @summary Gets the users recent activities
  */
 export const getRecentActivityHandlerQueryParams = zod.object({
-  limit: zod
-    .number()
-    .describe('The maximum number of items to retreive. Default 10, max 100.'),
-  offset: zod.number().describe('The offset to start from. Default 0.'),
-});
+  "limit": zod.number().describe('The maximum number of items to retreive. Default 10, max 100.'),
+  "offset": zod.number().describe('The offset to start from. Default 0.')
+})
 
 export const getRecentActivityHandlerResponse = zod.object({
-  data: zod
-    .union([
-      zod.null(),
-      zod.object({
-        next_offset: zod
-          .number()
-          .nullish()
-          .describe('The next offset to be used if there is one'),
-        recent: zod
-          .array(
-            zod.union([
-              zod.object({
-                Document: zod.object({
-                  branchedFromId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The id of the document this document branched from'
-                    ),
-                  branchedFromVersionId: zod
-                    .number()
-                    .nullish()
-                    .describe(
-                      'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-                    ),
-                  createdAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the document was created'),
-                  deletedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the document was deleted'),
-                  documentFamilyId: zod
-                    .number()
-                    .nullish()
-                    .describe(
-                      'The id of the document family this document belongs to'
-                    ),
-                  documentVersionId: zod
-                    .number()
-                    .describe(
-                      'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-                    ),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('The file type of the document (e.g. pdf, docx)'),
-                  id: zod.string().describe('The document id'),
-                  name: zod.string().describe('The name of the document'),
-                  owner: zod.string().describe('The owner of the document'),
-                  projectId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The id of the project that this document belongs to'
-                    ),
-                  sha: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-                    ),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .object({
-                          is_completed: zod
-                            .boolean()
-                            .describe(
-                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                            ),
-                          type: zod.enum(['task']),
-                        })
-                        .describe(
-                          'A task document with its associated properties'
-                        )
-                        .describe(
-                          'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                        ),
-                    ])
-                    .optional(),
-                  updatedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe(
-                      'The time the document instance / document BOM was updated'
-                    ),
-                  type: zod.enum(['document']),
-                }),
-              }),
-              zod.object({
-                Chat: zod.object({
-                  createdAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was created'),
-                  deletedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was deleted'),
-                  id: zod.string().describe('The chat uuid'),
-                  isPersistent: zod.boolean(),
-                  model: zod
-                    .string()
-                    .nullish()
-                    .describe('The model used to generate the chat'),
-                  name: zod.string().describe('The name of the chat'),
-                  projectId: zod
-                    .string()
-                    .nullish()
-                    .describe('The project id of the chat'),
-                  tokenCount: zod.number().nullish(),
-                  updatedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was last updated'),
-                  userId: zod.string().describe('Who the chat belongs to'),
-                  type: zod.enum(['chat']),
-                }),
-              }),
-            ])
-          )
-          .describe('The activities returned from the query'),
-        total: zod
-          .number()
-          .describe('The total number of activities the user has'),
-      }),
-    ])
-    .optional(),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.union([zod.null(),zod.object({
+  "next_offset": zod.number().nullish().describe('The next offset to be used if there is one'),
+  "recent": zod.array(zod.union([zod.object({
+  "Document": zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated'),
+  "type": zod.enum(['document'])
+})
+}),zod.object({
+  "Chat": zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the chat was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the chat was deleted'),
+  "id": zod.string().describe('The chat uuid'),
+  "isPersistent": zod.boolean(),
+  "model": zod.string().nullish().describe('The model used to generate the chat'),
+  "name": zod.string().describe('The name of the chat'),
+  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "tokenCount": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the chat was last updated'),
+  "userId": zod.string().describe('Who the chat belongs to'),
+  "type": zod.enum(['chat'])
+})
+})])).describe('The activities returned from the query'),
+  "total": zod.number().describe('The total number of activities the user has')
+})]).optional(),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Deletes a single unthreaded anchor for a document
 If you need to delete a threaded anchor, see the delete comment handler
  */
-export const deleteAnchorBody = zod
-  .object({
-    anchorType: zod.enum(['highlight']),
-    uuid: zod.string().uuid(),
-  })
-  .and(
-    zod.object({
-      fileType: zod.enum(['pdf']),
-    })
-  );
+export const deleteAnchorBody = zod.object({
+  "anchorType": zod.enum(['highlight']),
+  "uuid": zod.string().uuid()
+}).and(zod.object({
+  "fileType": zod.enum(['pdf'])
+}))
 
-export const deleteAnchorResponse = zod
-  .union([
-    zod.object({
-      anchorType: zod.enum(['free-comment']),
-      uuid: zod.string().uuid(),
-    }),
-    zod.object({
-      anchorType: zod.enum(['highlight']),
-      uuid: zod.string().uuid(),
-    }),
-  ])
-  .and(
-    zod.object({
-      fileType: zod.enum(['pdf']),
-    })
-  )
-  .and(
-    zod.object({
-      documentId: zod.string(),
-      threadId: zod.number().nullish(),
-    })
-  );
+export const deleteAnchorResponse = zod.union([zod.object({
+  "anchorType": zod.enum(['free-comment']),
+  "uuid": zod.string().uuid()
+}),zod.object({
+  "anchorType": zod.enum(['highlight']),
+  "uuid": zod.string().uuid()
+})]).and(zod.object({
+  "fileType": zod.enum(['pdf'])
+})).and(zod.object({
+  "documentId": zod.string(),
+  "threadId": zod.number().nullish()
+}))
+
 
 /**
  * @summary Edits a single anchor for a document
  */
-export const editAnchorBody = zod
-  .object({
-    allowableEdits: zod.any().optional(),
-    heightPct: zod.number().nullish(),
-    originalIndex: zod.number().nullish(),
-    originalPage: zod.number().nullish(),
-    page: zod.number().nullish(),
-    rotation: zod.number().nullish(),
-    shouldLockOnSave: zod.boolean().nullish(),
-    uuid: zod.string().uuid(),
-    wasDeleted: zod.boolean().nullish(),
-    wasEdited: zod.boolean().nullish(),
-    widthPct: zod.number().nullish(),
-    xPct: zod.number().nullish(),
-    yPct: zod.number().nullish(),
-  })
-  .and(
-    zod.object({
-      anchorType: zod.enum(['free-comment']),
-    })
-  )
-  .and(
-    zod.object({
-      fileType: zod.enum(['pdf']),
-    })
-  );
+export const editAnchorBody = zod.object({
+  "allowableEdits": zod.any().optional(),
+  "heightPct": zod.number().nullish(),
+  "originalIndex": zod.number().nullish(),
+  "originalPage": zod.number().nullish(),
+  "page": zod.number().nullish(),
+  "rotation": zod.number().nullish(),
+  "shouldLockOnSave": zod.boolean().nullish(),
+  "uuid": zod.string().uuid(),
+  "wasDeleted": zod.boolean().nullish(),
+  "wasEdited": zod.boolean().nullish(),
+  "widthPct": zod.number().nullish(),
+  "xPct": zod.number().nullish(),
+  "yPct": zod.number().nullish()
+}).and(zod.object({
+  "anchorType": zod.enum(['free-comment'])
+})).and(zod.object({
+  "fileType": zod.enum(['pdf'])
+}))
 
-export const editAnchorResponse = zod
-  .union([
-    zod
-      .object({
-        allowableEdits: zod.any().optional(),
-        documentId: zod.string(),
-        heightPct: zod.number(),
-        originalIndex: zod.number(),
-        originalPage: zod.number(),
-        owner: zod.string(),
-        page: zod.number(),
-        rotation: zod.number(),
-        shouldLockOnSave: zod.boolean(),
-        threadId: zod.number(),
-        uuid: zod.string().uuid(),
-        wasDeleted: zod.boolean(),
-        wasEdited: zod.boolean(),
-        widthPct: zod.number(),
-        xPct: zod.number(),
-        yPct: zod.number(),
-      })
-      .and(
-        zod.object({
-          anchorType: zod.enum(['placeable']),
-        })
-      ),
-    zod
-      .object({
-        alpha: zod.number(),
-        blue: zod.number(),
-        createdAt: zod.string().datetime({}).nullish(),
-        deletedAt: zod.string().datetime({}).nullish(),
-        documentId: zod.string(),
-        green: zod.number(),
-        highlightRects: zod.array(
-          zod.object({
-            height: zod.number(),
-            id: zod.number(),
-            left: zod.number(),
-            top: zod.number(),
-            width: zod.number(),
-          })
-        ),
-        highlightType: zod.union([
-          zod.literal(1),
-          zod.literal(2),
-          zod.literal(3),
-        ]),
-        owner: zod.string(),
-        page: zod.number(),
-        pageViewportHeight: zod.number(),
-        pageViewportWidth: zod.number(),
-        red: zod.number(),
-        text: zod.string(),
-        threadId: zod.number().nullish(),
-        updatedAt: zod.string().datetime({}).nullish(),
-        uuid: zod.string().uuid(),
-      })
-      .and(
-        zod.object({
-          anchorType: zod.enum(['highlight']),
-        })
-      ),
-  ])
-  .and(
-    zod.object({
-      documentId: zod.string(),
-    })
-  );
+export const editAnchorResponse = zod.union([zod.object({
+  "allowableEdits": zod.any().optional(),
+  "documentId": zod.string(),
+  "heightPct": zod.number(),
+  "originalIndex": zod.number(),
+  "originalPage": zod.number(),
+  "owner": zod.string(),
+  "page": zod.number(),
+  "rotation": zod.number(),
+  "shouldLockOnSave": zod.boolean(),
+  "threadId": zod.number(),
+  "uuid": zod.string().uuid(),
+  "wasDeleted": zod.boolean(),
+  "wasEdited": zod.boolean(),
+  "widthPct": zod.number(),
+  "xPct": zod.number(),
+  "yPct": zod.number()
+}).and(zod.object({
+  "anchorType": zod.enum(['placeable'])
+})),zod.object({
+  "alpha": zod.number(),
+  "blue": zod.number(),
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "documentId": zod.string(),
+  "green": zod.number(),
+  "highlightRects": zod.array(zod.object({
+  "height": zod.number(),
+  "id": zod.number(),
+  "left": zod.number(),
+  "top": zod.number(),
+  "width": zod.number()
+})),
+  "highlightType": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "owner": zod.string(),
+  "page": zod.number(),
+  "pageViewportHeight": zod.number(),
+  "pageViewportWidth": zod.number(),
+  "red": zod.number(),
+  "text": zod.string(),
+  "threadId": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish(),
+  "uuid": zod.string().uuid()
+}).and(zod.object({
+  "anchorType": zod.enum(['highlight'])
+}))]).and(zod.object({
+  "documentId": zod.string()
+}))
+
 
 /**
  * @summary Gets a set of comment anchors for a document
  */
 export const getDocumentAnchorsParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getDocumentAnchorsResponse = zod.object({
-  data: zod.array(
-    zod.union([
-      zod
-        .object({
-          allowableEdits: zod.any().optional(),
-          documentId: zod.string(),
-          heightPct: zod.number(),
-          originalIndex: zod.number(),
-          originalPage: zod.number(),
-          owner: zod.string(),
-          page: zod.number(),
-          rotation: zod.number(),
-          shouldLockOnSave: zod.boolean(),
-          threadId: zod.number(),
-          uuid: zod.string().uuid(),
-          wasDeleted: zod.boolean(),
-          wasEdited: zod.boolean(),
-          widthPct: zod.number(),
-          xPct: zod.number(),
-          yPct: zod.number(),
-        })
-        .and(
-          zod.object({
-            anchorType: zod.enum(['placeable']),
-          })
-        ),
-      zod
-        .object({
-          alpha: zod.number(),
-          blue: zod.number(),
-          createdAt: zod.string().datetime({}).nullish(),
-          deletedAt: zod.string().datetime({}).nullish(),
-          documentId: zod.string(),
-          green: zod.number(),
-          highlightRects: zod.array(
-            zod.object({
-              height: zod.number(),
-              id: zod.number(),
-              left: zod.number(),
-              top: zod.number(),
-              width: zod.number(),
-            })
-          ),
-          highlightType: zod.union([
-            zod.literal(1),
-            zod.literal(2),
-            zod.literal(3),
-          ]),
-          owner: zod.string(),
-          page: zod.number(),
-          pageViewportHeight: zod.number(),
-          pageViewportWidth: zod.number(),
-          red: zod.number(),
-          text: zod.string(),
-          threadId: zod.number().nullish(),
-          updatedAt: zod.string().datetime({}).nullish(),
-          uuid: zod.string().uuid(),
-        })
-        .and(
-          zod.object({
-            anchorType: zod.enum(['highlight']),
-          })
-        ),
-    ])
-  ),
-});
+  "data": zod.array(zod.union([zod.object({
+  "allowableEdits": zod.any().optional(),
+  "documentId": zod.string(),
+  "heightPct": zod.number(),
+  "originalIndex": zod.number(),
+  "originalPage": zod.number(),
+  "owner": zod.string(),
+  "page": zod.number(),
+  "rotation": zod.number(),
+  "shouldLockOnSave": zod.boolean(),
+  "threadId": zod.number(),
+  "uuid": zod.string().uuid(),
+  "wasDeleted": zod.boolean(),
+  "wasEdited": zod.boolean(),
+  "widthPct": zod.number(),
+  "xPct": zod.number(),
+  "yPct": zod.number()
+}).and(zod.object({
+  "anchorType": zod.enum(['placeable'])
+})),zod.object({
+  "alpha": zod.number(),
+  "blue": zod.number(),
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "documentId": zod.string(),
+  "green": zod.number(),
+  "highlightRects": zod.array(zod.object({
+  "height": zod.number(),
+  "id": zod.number(),
+  "left": zod.number(),
+  "top": zod.number(),
+  "width": zod.number()
+})),
+  "highlightType": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "owner": zod.string(),
+  "page": zod.number(),
+  "pageViewportHeight": zod.number(),
+  "pageViewportWidth": zod.number(),
+  "red": zod.number(),
+  "text": zod.string(),
+  "threadId": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish(),
+  "uuid": zod.string().uuid()
+}).and(zod.object({
+  "anchorType": zod.enum(['highlight'])
+}))]))
+})
+
 
 /**
  * @summary Creates an unthreaded anchor for a document
 If you need to create a threaded anchor, see the create comment handler
  */
 export const createAnchorParams = zod.object({
-  document_id: zod.string().describe('The document id'),
-});
+  "document_id": zod.string().describe('The document id')
+})
 
-export const createAnchorBody = zod
-  .object({
-    alpha: zod.number(),
-    blue: zod.number(),
-    green: zod.number(),
-    highlightRects: zod.array(
-      zod.object({
-        height: zod.number(),
-        left: zod.number(),
-        top: zod.number(),
-        width: zod.number(),
-      })
-    ),
-    highlightType: zod.union([zod.literal(1), zod.literal(2), zod.literal(3)]),
-    page: zod.number(),
-    pageViewportHeight: zod.number(),
-    pageViewportWidth: zod.number(),
-    red: zod.number(),
-    text: zod.string(),
-    uuid: zod.string().uuid().nullish(),
-  })
-  .and(
-    zod.object({
-      anchorType: zod.enum(['highlight']),
-    })
-  )
-  .and(
-    zod.object({
-      fileType: zod.enum(['pdf']),
-    })
-  );
+export const createAnchorBody = zod.object({
+  "alpha": zod.number(),
+  "blue": zod.number(),
+  "green": zod.number(),
+  "highlightRects": zod.array(zod.object({
+  "height": zod.number(),
+  "left": zod.number(),
+  "top": zod.number(),
+  "width": zod.number()
+})),
+  "highlightType": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "page": zod.number(),
+  "pageViewportHeight": zod.number(),
+  "pageViewportWidth": zod.number(),
+  "red": zod.number(),
+  "text": zod.string(),
+  "uuid": zod.string().uuid().nullish()
+}).and(zod.object({
+  "anchorType": zod.enum(['highlight'])
+})).and(zod.object({
+  "fileType": zod.enum(['pdf'])
+}))
 
-export const createAnchorResponse = zod
-  .union([
-    zod
-      .object({
-        allowableEdits: zod.any().optional(),
-        documentId: zod.string(),
-        heightPct: zod.number(),
-        originalIndex: zod.number(),
-        originalPage: zod.number(),
-        owner: zod.string(),
-        page: zod.number(),
-        rotation: zod.number(),
-        shouldLockOnSave: zod.boolean(),
-        threadId: zod.number(),
-        uuid: zod.string().uuid(),
-        wasDeleted: zod.boolean(),
-        wasEdited: zod.boolean(),
-        widthPct: zod.number(),
-        xPct: zod.number(),
-        yPct: zod.number(),
-      })
-      .and(
-        zod.object({
-          anchorType: zod.enum(['placeable']),
-        })
-      ),
-    zod
-      .object({
-        alpha: zod.number(),
-        blue: zod.number(),
-        createdAt: zod.string().datetime({}).nullish(),
-        deletedAt: zod.string().datetime({}).nullish(),
-        documentId: zod.string(),
-        green: zod.number(),
-        highlightRects: zod.array(
-          zod.object({
-            height: zod.number(),
-            id: zod.number(),
-            left: zod.number(),
-            top: zod.number(),
-            width: zod.number(),
-          })
-        ),
-        highlightType: zod.union([
-          zod.literal(1),
-          zod.literal(2),
-          zod.literal(3),
-        ]),
-        owner: zod.string(),
-        page: zod.number(),
-        pageViewportHeight: zod.number(),
-        pageViewportWidth: zod.number(),
-        red: zod.number(),
-        text: zod.string(),
-        threadId: zod.number().nullish(),
-        updatedAt: zod.string().datetime({}).nullish(),
-        uuid: zod.string().uuid(),
-      })
-      .and(
-        zod.object({
-          anchorType: zod.enum(['highlight']),
-        })
-      ),
-  ])
-  .and(
-    zod.object({
-      documentId: zod.string(),
-    })
-  );
+export const createAnchorResponse = zod.union([zod.object({
+  "allowableEdits": zod.any().optional(),
+  "documentId": zod.string(),
+  "heightPct": zod.number(),
+  "originalIndex": zod.number(),
+  "originalPage": zod.number(),
+  "owner": zod.string(),
+  "page": zod.number(),
+  "rotation": zod.number(),
+  "shouldLockOnSave": zod.boolean(),
+  "threadId": zod.number(),
+  "uuid": zod.string().uuid(),
+  "wasDeleted": zod.boolean(),
+  "wasEdited": zod.boolean(),
+  "widthPct": zod.number(),
+  "xPct": zod.number(),
+  "yPct": zod.number()
+}).and(zod.object({
+  "anchorType": zod.enum(['placeable'])
+})),zod.object({
+  "alpha": zod.number(),
+  "blue": zod.number(),
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "documentId": zod.string(),
+  "green": zod.number(),
+  "highlightRects": zod.array(zod.object({
+  "height": zod.number(),
+  "id": zod.number(),
+  "left": zod.number(),
+  "top": zod.number(),
+  "width": zod.number()
+})),
+  "highlightType": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "owner": zod.string(),
+  "page": zod.number(),
+  "pageViewportHeight": zod.number(),
+  "pageViewportWidth": zod.number(),
+  "red": zod.number(),
+  "text": zod.string(),
+  "threadId": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish(),
+  "uuid": zod.string().uuid()
+}).and(zod.object({
+  "anchorType": zod.enum(['highlight'])
+}))]).and(zod.object({
+  "documentId": zod.string()
+}))
+
 
 /**
  * @summary Deletes a single comment for a document
  */
 export const deleteCommentParams = zod.object({
-  comment_id: zod.number().describe('The comment id'),
-});
+  "comment_id": zod.number().describe('The comment id')
+})
 
 export const deleteCommentBodyRemoveAnchorThreadOnlyDefault = null;
 
 export const deleteCommentBody = zod.object({
-  removeAnchorThreadOnly: zod.boolean().nullish(),
-});
+  "removeAnchorThreadOnly": zod.boolean().nullish()
+})
 
 export const deleteCommentResponse = zod.object({
-  anchor: zod
-    .union([
-      zod.null(),
-      zod
-        .union([
-          zod.object({
-            anchorType: zod.enum(['free-comment']),
-            uuid: zod.string().uuid(),
-          }),
-          zod.object({
-            anchorType: zod.enum(['highlight']),
-            uuid: zod.string().uuid(),
-          }),
-        ])
-        .and(
-          zod.object({
-            fileType: zod.enum(['pdf']),
-          })
-        )
-        .and(
-          zod.object({
-            deleted: zod.boolean(),
-          })
-        ),
-    ])
-    .optional(),
-  commentId: zod.number(),
-  documentId: zod.string(),
-  thread: zod.object({
-    deleted: zod.boolean(),
-    threadId: zod.number(),
-  }),
-});
+  "anchor": zod.union([zod.null(),zod.union([zod.object({
+  "anchorType": zod.enum(['free-comment']),
+  "uuid": zod.string().uuid()
+}),zod.object({
+  "anchorType": zod.enum(['highlight']),
+  "uuid": zod.string().uuid()
+})]).and(zod.object({
+  "fileType": zod.enum(['pdf'])
+})).and(zod.object({
+  "deleted": zod.boolean()
+}))]).optional(),
+  "commentId": zod.number(),
+  "documentId": zod.string(),
+  "thread": zod.object({
+  "deleted": zod.boolean(),
+  "threadId": zod.number()
+})
+})
+
 
 /**
  * @summary Edits a single comment for a document
  */
 export const editCommentParams = zod.object({
-  comment_id: zod.number().describe('The comment id'),
-});
+  "comment_id": zod.number().describe('The comment id')
+})
 
 export const editCommentBody = zod.object({
-  mentions: zod
-    .union([
-      zod.null(),
-      zod.object({
-        mentionId: zod.string(),
-        users: zod.array(zod.string()),
-      }),
-    ])
-    .optional(),
-  metadata: zod.any().optional(),
-  text: zod.string().nullish(),
-  threadId: zod.number(),
-});
+  "mentions": zod.union([zod.null(),zod.object({
+  "mentionId": zod.string(),
+  "users": zod.array(zod.string())
+})]).optional(),
+  "metadata": zod.any().optional(),
+  "text": zod.string().nullish(),
+  "threadId": zod.number()
+})
 
-export const editCommentResponse = zod
-  .object({
-    commentId: zod.number(),
-    createdAt: zod.string().datetime({}).nullish(),
-    deletedAt: zod.string().datetime({}).nullish(),
-    metadata: zod.any().optional(),
-    order: zod.number().nullish(),
-    owner: zod.string(),
-    sender: zod.string().nullish(),
-    text: zod.string(),
-    threadId: zod.number(),
-    updatedAt: zod.string().datetime({}).nullish(),
-  })
-  .and(
-    zod.object({
-      documentId: zod.string(),
-      documentName: zod.string(),
-      documentOwner: zod.string(),
-      fileType: zod.string().nullish(),
-    })
-  );
+export const editCommentResponse = zod.object({
+  "commentId": zod.number(),
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "metadata": zod.any().optional(),
+  "order": zod.number().nullish(),
+  "owner": zod.string(),
+  "sender": zod.string().nullish(),
+  "text": zod.string(),
+  "threadId": zod.number(),
+  "updatedAt": zod.string().datetime({}).nullish()
+}).and(zod.object({
+  "documentId": zod.string(),
+  "documentName": zod.string(),
+  "documentOwner": zod.string(),
+  "fileType": zod.string().nullish()
+}))
+
 
 /**
  * @summary Gets a set of comment threads for a document
  */
 export const getDocumentCommentsParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getDocumentCommentsResponse = zod.object({
-  data: zod.array(
-    zod.object({
-      comments: zod.array(
-        zod.object({
-          commentId: zod.number(),
-          createdAt: zod.string().datetime({}).nullish(),
-          deletedAt: zod.string().datetime({}).nullish(),
-          metadata: zod.any().optional(),
-          order: zod.number().nullish(),
-          owner: zod.string(),
-          sender: zod.string().nullish(),
-          text: zod.string(),
-          threadId: zod.number(),
-          updatedAt: zod.string().datetime({}).nullish(),
-        })
-      ),
-      thread: zod.object({
-        createdAt: zod.string().datetime({}).nullish(),
-        deletedAt: zod.string().datetime({}).nullish(),
-        documentId: zod.string(),
-        metadata: zod.any().optional(),
-        owner: zod.string(),
-        resolved: zod.boolean(),
-        threadId: zod.number(),
-        updatedAt: zod.string().datetime({}).nullish(),
-      }),
-    })
-  ),
-});
+  "data": zod.array(zod.object({
+  "comments": zod.array(zod.object({
+  "commentId": zod.number(),
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "metadata": zod.any().optional(),
+  "order": zod.number().nullish(),
+  "owner": zod.string(),
+  "sender": zod.string().nullish(),
+  "text": zod.string(),
+  "threadId": zod.number(),
+  "updatedAt": zod.string().datetime({}).nullish()
+})),
+  "thread": zod.object({
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "documentId": zod.string(),
+  "metadata": zod.any().optional(),
+  "owner": zod.string(),
+  "resolved": zod.boolean(),
+  "threadId": zod.number(),
+  "updatedAt": zod.string().datetime({}).nullish()
+})
+}))
+})
+
 
 /**
  * @summary Creates a single comment for a document
 Optionally creates a new thread/anchor if one does not exist
  */
 export const createCommentParams = zod.object({
-  document_id: zod.string().describe('The document id'),
-});
+  "document_id": zod.string().describe('The document id')
+})
 
 export const createCommentBody = zod.object({
-  anchor: zod
-    .union([
-      zod.null(),
-      zod
-        .union([
-          zod
-            .object({
-              allowableEdits: zod.any().optional(),
-              heightPct: zod.number(),
-              originalIndex: zod.number(),
-              originalPage: zod.number(),
-              page: zod.number(),
-              rotation: zod.number(),
-              shouldLockOnSave: zod.boolean(),
-              uuid: zod.string().uuid().nullish(),
-              wasDeleted: zod.boolean(),
-              wasEdited: zod.boolean(),
-              widthPct: zod.number(),
-              xPct: zod.number(),
-              yPct: zod.number(),
-            })
-            .and(
-              zod.object({
-                anchorType: zod.enum(['free-comment']),
-              })
-            ),
-          zod
-            .object({
-              alpha: zod.number(),
-              blue: zod.number(),
-              green: zod.number(),
-              highlightRects: zod.array(
-                zod.object({
-                  height: zod.number(),
-                  left: zod.number(),
-                  top: zod.number(),
-                  width: zod.number(),
-                })
-              ),
-              highlightType: zod.union([
-                zod.literal(1),
-                zod.literal(2),
-                zod.literal(3),
-              ]),
-              page: zod.number(),
-              pageViewportHeight: zod.number(),
-              pageViewportWidth: zod.number(),
-              red: zod.number(),
-              text: zod.string(),
-              uuid: zod.string().uuid().nullish(),
-            })
-            .and(
-              zod.object({
-                anchorType: zod.enum(['highlight']),
-              })
-            ),
-          zod
-            .object({
-              attachmentType: zod.enum(['highlight']),
-              uuid: zod.string().uuid(),
-            })
-            .and(
-              zod.object({
-                anchorType: zod.enum(['attachment']),
-              })
-            ),
-        ])
-        .and(
-          zod.object({
-            fileType: zod.enum(['pdf']),
-          })
-        ),
-    ])
-    .optional(),
-  mentions: zod
-    .union([
-      zod.null(),
-      zod.object({
-        mentionId: zod.string(),
-        users: zod.array(zod.string()),
-      }),
-    ])
-    .optional(),
-  metadata: zod.any().optional(),
-  text: zod.string(),
-  threadId: zod.number().nullish(),
-  threadMetadata: zod.any().optional(),
-});
+  "anchor": zod.union([zod.null(),zod.union([zod.object({
+  "allowableEdits": zod.any().optional(),
+  "heightPct": zod.number(),
+  "originalIndex": zod.number(),
+  "originalPage": zod.number(),
+  "page": zod.number(),
+  "rotation": zod.number(),
+  "shouldLockOnSave": zod.boolean(),
+  "uuid": zod.string().uuid().nullish(),
+  "wasDeleted": zod.boolean(),
+  "wasEdited": zod.boolean(),
+  "widthPct": zod.number(),
+  "xPct": zod.number(),
+  "yPct": zod.number()
+}).and(zod.object({
+  "anchorType": zod.enum(['free-comment'])
+})),zod.object({
+  "alpha": zod.number(),
+  "blue": zod.number(),
+  "green": zod.number(),
+  "highlightRects": zod.array(zod.object({
+  "height": zod.number(),
+  "left": zod.number(),
+  "top": zod.number(),
+  "width": zod.number()
+})),
+  "highlightType": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "page": zod.number(),
+  "pageViewportHeight": zod.number(),
+  "pageViewportWidth": zod.number(),
+  "red": zod.number(),
+  "text": zod.string(),
+  "uuid": zod.string().uuid().nullish()
+}).and(zod.object({
+  "anchorType": zod.enum(['highlight'])
+})),zod.object({
+  "attachmentType": zod.enum(['highlight']),
+  "uuid": zod.string().uuid()
+}).and(zod.object({
+  "anchorType": zod.enum(['attachment'])
+}))]).and(zod.object({
+  "fileType": zod.enum(['pdf'])
+}))]).optional(),
+  "mentions": zod.union([zod.null(),zod.object({
+  "mentionId": zod.string(),
+  "users": zod.array(zod.string())
+})]).optional(),
+  "metadata": zod.any().optional(),
+  "text": zod.string(),
+  "threadId": zod.number().nullish(),
+  "threadMetadata": zod.any().optional()
+})
 
-export const createCommentResponse = zod
-  .object({
-    comments: zod.array(
-      zod.object({
-        commentId: zod.number(),
-        createdAt: zod.string().datetime({}).nullish(),
-        deletedAt: zod.string().datetime({}).nullish(),
-        metadata: zod.any().optional(),
-        order: zod.number().nullish(),
-        owner: zod.string(),
-        sender: zod.string().nullish(),
-        text: zod.string(),
-        threadId: zod.number(),
-        updatedAt: zod.string().datetime({}).nullish(),
-      })
-    ),
-    thread: zod.object({
-      createdAt: zod.string().datetime({}).nullish(),
-      deletedAt: zod.string().datetime({}).nullish(),
-      documentId: zod.string(),
-      metadata: zod.any().optional(),
-      owner: zod.string(),
-      resolved: zod.boolean(),
-      threadId: zod.number(),
-      updatedAt: zod.string().datetime({}).nullish(),
-    }),
-  })
-  .and(
-    zod.object({
-      anchor: zod
-        .union([
-          zod.null(),
-          zod.union([
-            zod
-              .object({
-                allowableEdits: zod.any().optional(),
-                documentId: zod.string(),
-                heightPct: zod.number(),
-                originalIndex: zod.number(),
-                originalPage: zod.number(),
-                owner: zod.string(),
-                page: zod.number(),
-                rotation: zod.number(),
-                shouldLockOnSave: zod.boolean(),
-                threadId: zod.number(),
-                uuid: zod.string().uuid(),
-                wasDeleted: zod.boolean(),
-                wasEdited: zod.boolean(),
-                widthPct: zod.number(),
-                xPct: zod.number(),
-                yPct: zod.number(),
-              })
-              .and(
-                zod.object({
-                  anchorType: zod.enum(['placeable']),
-                })
-              ),
-            zod
-              .object({
-                alpha: zod.number(),
-                blue: zod.number(),
-                createdAt: zod.string().datetime({}).nullish(),
-                deletedAt: zod.string().datetime({}).nullish(),
-                documentId: zod.string(),
-                green: zod.number(),
-                highlightRects: zod.array(
-                  zod.object({
-                    height: zod.number(),
-                    id: zod.number(),
-                    left: zod.number(),
-                    top: zod.number(),
-                    width: zod.number(),
-                  })
-                ),
-                highlightType: zod.union([
-                  zod.literal(1),
-                  zod.literal(2),
-                  zod.literal(3),
-                ]),
-                owner: zod.string(),
-                page: zod.number(),
-                pageViewportHeight: zod.number(),
-                pageViewportWidth: zod.number(),
-                red: zod.number(),
-                text: zod.string(),
-                threadId: zod.number().nullish(),
-                updatedAt: zod.string().datetime({}).nullish(),
-                uuid: zod.string().uuid(),
-              })
-              .and(
-                zod.object({
-                  anchorType: zod.enum(['highlight']),
-                })
-              ),
-          ]),
-        ])
-        .optional(),
-      documentId: zod.string(),
-    })
-  );
+export const createCommentResponse = zod.object({
+  "comments": zod.array(zod.object({
+  "commentId": zod.number(),
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "metadata": zod.any().optional(),
+  "order": zod.number().nullish(),
+  "owner": zod.string(),
+  "sender": zod.string().nullish(),
+  "text": zod.string(),
+  "threadId": zod.number(),
+  "updatedAt": zod.string().datetime({}).nullish()
+})),
+  "thread": zod.object({
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "documentId": zod.string(),
+  "metadata": zod.any().optional(),
+  "owner": zod.string(),
+  "resolved": zod.boolean(),
+  "threadId": zod.number(),
+  "updatedAt": zod.string().datetime({}).nullish()
+})
+}).and(zod.object({
+  "anchor": zod.union([zod.null(),zod.union([zod.object({
+  "allowableEdits": zod.any().optional(),
+  "documentId": zod.string(),
+  "heightPct": zod.number(),
+  "originalIndex": zod.number(),
+  "originalPage": zod.number(),
+  "owner": zod.string(),
+  "page": zod.number(),
+  "rotation": zod.number(),
+  "shouldLockOnSave": zod.boolean(),
+  "threadId": zod.number(),
+  "uuid": zod.string().uuid(),
+  "wasDeleted": zod.boolean(),
+  "wasEdited": zod.boolean(),
+  "widthPct": zod.number(),
+  "xPct": zod.number(),
+  "yPct": zod.number()
+}).and(zod.object({
+  "anchorType": zod.enum(['placeable'])
+})),zod.object({
+  "alpha": zod.number(),
+  "blue": zod.number(),
+  "createdAt": zod.string().datetime({}).nullish(),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "documentId": zod.string(),
+  "green": zod.number(),
+  "highlightRects": zod.array(zod.object({
+  "height": zod.number(),
+  "id": zod.number(),
+  "left": zod.number(),
+  "top": zod.number(),
+  "width": zod.number()
+})),
+  "highlightType": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "owner": zod.string(),
+  "page": zod.number(),
+  "pageViewportHeight": zod.number(),
+  "pageViewportWidth": zod.number(),
+  "red": zod.number(),
+  "text": zod.string(),
+  "threadId": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish(),
+  "uuid": zod.string().uuid()
+}).and(zod.object({
+  "anchorType": zod.enum(['highlight'])
+}))])]).optional(),
+  "documentId": zod.string()
+}))
+
 
 /**
  * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({
-  channel_id: zod.string().uuid().describe('Channel ID'),
-});
+  "channel_id": zod.string().uuid().describe('Channel ID')
+})
 
 export const getChannelAttachmentsQueryLimitMin = 0;
 
-export const getChannelAttachmentsQueryParams = zod.object({
-  limit: zod
-    .number()
-    .min(getChannelAttachmentsQueryLimitMin)
-    .optional()
-    .describe('Page size (1-100, default 50)'),
-  cursor: zod.string().optional().describe('Base64 encoded cursor value'),
-});
 
-export const getChannelAttachmentsResponse = zod
-  .object({
-    items: zod
-      .array(
-        zod
-          .object({
-            channel_id: zod.string().uuid().describe('Channel id.'),
-            created_at: zod
-              .string()
-              .datetime({})
-              .describe('When the attachment was created.'),
-            entity_id: zod.string().describe('Entity id.'),
-            entity_type: zod.string().describe('Type of entity.'),
-            height: zod.number().nullish().describe('Height (for images).'),
-            id: zod.string().uuid().describe('Attachment id.'),
-            message_id: zod
-              .string()
-              .uuid()
-              .describe('Message id this attachment belongs to.'),
-            width: zod.number().nullish().describe('Width (for images).'),
-          })
-          .describe('A channel-level attachment.')
-      )
-      .describe('Attachments on this page.'),
-    next_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the next page, null if no more pages.'),
-  })
-  .describe('Paginated response of channel attachments.');
+export const getChannelAttachmentsQueryParams = zod.object({
+  "limit": zod.number().min(getChannelAttachmentsQueryLimitMin).optional().describe('Page size (1-100, default 50)'),
+  "cursor": zod.string().optional().describe('Base64 encoded cursor value')
+})
+
+export const getChannelAttachmentsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "channel_id": zod.string().uuid().describe('Channel id.'),
+  "created_at": zod.string().datetime({}).describe('When the attachment was created.'),
+  "entity_id": zod.string().describe('Entity id.'),
+  "entity_type": zod.string().describe('Type of entity.'),
+  "height": zod.number().nullish().describe('Height (for images).'),
+  "id": zod.string().uuid().describe('Attachment id.'),
+  "message_id": zod.string().uuid().describe('Message id this attachment belongs to.'),
+  "width": zod.number().nullish().describe('Width (for images).')
+}).describe('A channel-level attachment.')).describe('Attachments on this page.'),
+  "next_cursor": zod.string().nullish().describe('Cursor for the next page, null if no more pages.')
+}).describe('Paginated response of channel attachments.')
+
 
 /**
  * @summary Handler for `GET /channels/{channel_id}/messages`.
  */
 export const getChannelMessagesParams = zod.object({
-  channel_id: zod.string().uuid().describe('Channel ID'),
-});
+  "channel_id": zod.string().uuid().describe('Channel ID')
+})
 
 export const getChannelMessagesQueryLimitMin = 0;
 
-export const getChannelMessagesQueryParams = zod.object({
-  limit: zod
-    .number()
-    .min(getChannelMessagesQueryLimitMin)
-    .optional()
-    .describe('Page size (1-100, default 50)'),
-  cursor: zod
-    .string()
-    .optional()
-    .describe('Base64 encoded cursor value for older messages'),
-  previous_cursor: zod
-    .string()
-    .optional()
-    .describe('Base64 encoded cursor value for newer messages'),
-  load_around_message_id: zod
-    .string()
-    .uuid()
-    .optional()
-    .describe('Return a centered window around this message ID'),
-});
 
-export const getChannelMessagesResponse = zod
-  .object({
-    items: zod
-      .array(
-        zod
-          .object({
-            attachments: zod
-              .array(
-                zod
-                  .object({
-                    created_at: zod
-                      .string()
-                      .datetime({})
-                      .describe('When the attachment was created.'),
-                    entity_id: zod.string().describe('Entity id.'),
-                    entity_type: zod.string().describe('Type of entity.'),
-                    height: zod
-                      .number()
-                      .nullish()
-                      .describe('Height (for images).'),
-                    id: zod.string().uuid().describe('Attachment id.'),
-                    width: zod
-                      .number()
-                      .nullish()
-                      .describe('Width (for images).'),
-                  })
-                  .describe('An attachment on a message.')
-              )
-              .describe('Attachments on this message.'),
-            channel_id: zod.string().uuid().describe('Channel id.'),
-            content: zod.string().describe('Message content.'),
-            created_at: zod
-              .string()
-              .datetime({})
-              .describe('When the message was created.'),
-            deleted_at: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('When the message was soft-deleted.'),
-            edited_at: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('When the message was edited.'),
-            id: zod.string().uuid().describe('Message id.'),
-            reactions: zod
-              .array(
-                zod
-                  .object({
-                    emoji: zod.string().describe('The emoji string.'),
-                    users: zod
-                      .array(zod.string())
-                      .describe('User ids who added this reaction.'),
-                  })
-                  .describe('A reaction with emoji and user list.')
-              )
-              .describe('Reactions on this message.'),
-            sender_id: zod.string().describe('Sender user id.'),
-            thread: zod
-              .object({
-                latest_reply_at: zod
-                  .string()
-                  .datetime({})
-                  .nullish()
-                  .describe('Timestamp of the latest reply.'),
-                preview: zod
-                  .array(
-                    zod
-                      .object({
-                        attachments: zod
-                          .array(
-                            zod
-                              .object({
-                                created_at: zod
-                                  .string()
-                                  .datetime({})
-                                  .describe('When the attachment was created.'),
-                                entity_id: zod.string().describe('Entity id.'),
-                                entity_type: zod
-                                  .string()
-                                  .describe('Type of entity.'),
-                                height: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Height (for images).'),
-                                id: zod
-                                  .string()
-                                  .uuid()
-                                  .describe('Attachment id.'),
-                                width: zod
-                                  .number()
-                                  .nullish()
-                                  .describe('Width (for images).'),
-                              })
-                              .describe('An attachment on a message.')
-                          )
-                          .describe('Attachments on this reply.'),
-                        content: zod.string().describe('Reply content.'),
-                        created_at: zod
-                          .string()
-                          .datetime({})
-                          .describe('When the reply was created.'),
-                        edited_at: zod
-                          .string()
-                          .datetime({})
-                          .nullish()
-                          .describe('When the reply was edited.'),
-                        id: zod.string().uuid().describe('Reply id.'),
-                        reactions: zod
-                          .array(
-                            zod
-                              .object({
-                                emoji: zod
-                                  .string()
-                                  .describe('The emoji string.'),
-                                users: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'User ids who added this reaction.'
-                                  ),
-                              })
-                              .describe('A reaction with emoji and user list.')
-                          )
-                          .describe('Reactions on this reply.'),
-                        sender_id: zod.string().describe('Sender user id.'),
-                        updated_at: zod
-                          .string()
-                          .datetime({})
-                          .describe('When the reply was last updated.'),
-                      })
-                      .describe('A thread reply shown in preview.')
-                  )
-                  .describe('Last N replies for thread preview.'),
-                reply_count: zod.number().describe('Total reply count.'),
-              })
-              .describe('Thread metadata and preview replies.'),
-            updated_at: zod
-              .string()
-              .datetime({})
-              .describe('When the message was last updated.'),
-          })
-          .describe('A top-level channel message with thread info.')
-      )
-      .describe('Messages on this page.'),
-    next_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the next page, null if no more pages.'),
-    previous_cursor: zod
-      .string()
-      .nullish()
-      .describe('Cursor for the previous page, null if no newer page exists.'),
-  })
-  .describe('Paginated response of channel messages.');
+export const getChannelMessagesQueryParams = zod.object({
+  "limit": zod.number().min(getChannelMessagesQueryLimitMin).optional().describe('Page size (1-100, default 50)'),
+  "cursor": zod.string().optional().describe('Base64 encoded cursor value for older messages'),
+  "previous_cursor": zod.string().optional().describe('Base64 encoded cursor value for newer messages'),
+  "load_around_message_id": zod.string().uuid().optional().describe('Return a centered window around this message ID')
+})
+
+export const getChannelMessagesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "attachments": zod.array(zod.object({
+  "created_at": zod.string().datetime({}).describe('When the attachment was created.'),
+  "entity_id": zod.string().describe('Entity id.'),
+  "entity_type": zod.string().describe('Type of entity.'),
+  "height": zod.number().nullish().describe('Height (for images).'),
+  "id": zod.string().uuid().describe('Attachment id.'),
+  "width": zod.number().nullish().describe('Width (for images).')
+}).describe('An attachment on a message.')).describe('Attachments on this message.'),
+  "channel_id": zod.string().uuid().describe('Channel id.'),
+  "content": zod.string().describe('Message content.'),
+  "created_at": zod.string().datetime({}).describe('When the message was created.'),
+  "deleted_at": zod.string().datetime({}).nullish().describe('When the message was soft-deleted.'),
+  "edited_at": zod.string().datetime({}).nullish().describe('When the message was edited.'),
+  "id": zod.string().uuid().describe('Message id.'),
+  "reactions": zod.array(zod.object({
+  "emoji": zod.string().describe('The emoji string.'),
+  "users": zod.array(zod.string()).describe('User ids who added this reaction.')
+}).describe('A reaction with emoji and user list.')).describe('Reactions on this message.'),
+  "sender_id": zod.string().describe('Sender user id.'),
+  "thread": zod.object({
+  "latest_reply_at": zod.string().datetime({}).nullish().describe('Timestamp of the latest reply.'),
+  "preview": zod.array(zod.object({
+  "attachments": zod.array(zod.object({
+  "created_at": zod.string().datetime({}).describe('When the attachment was created.'),
+  "entity_id": zod.string().describe('Entity id.'),
+  "entity_type": zod.string().describe('Type of entity.'),
+  "height": zod.number().nullish().describe('Height (for images).'),
+  "id": zod.string().uuid().describe('Attachment id.'),
+  "width": zod.number().nullish().describe('Width (for images).')
+}).describe('An attachment on a message.')).describe('Attachments on this reply.'),
+  "content": zod.string().describe('Reply content.'),
+  "created_at": zod.string().datetime({}).describe('When the reply was created.'),
+  "edited_at": zod.string().datetime({}).nullish().describe('When the reply was edited.'),
+  "id": zod.string().uuid().describe('Reply id.'),
+  "reactions": zod.array(zod.object({
+  "emoji": zod.string().describe('The emoji string.'),
+  "users": zod.array(zod.string()).describe('User ids who added this reaction.')
+}).describe('A reaction with emoji and user list.')).describe('Reactions on this reply.'),
+  "sender_id": zod.string().describe('Sender user id.'),
+  "updated_at": zod.string().datetime({}).describe('When the reply was last updated.')
+}).describe('A thread reply shown in preview.')).describe('Last N replies for thread preview.'),
+  "reply_count": zod.number().describe('Total reply count.')
+}).describe('Thread metadata and preview replies.'),
+  "updated_at": zod.string().datetime({}).describe('When the message was last updated.')
+}).describe('A top-level channel message with thread info.')).describe('Messages on this page.'),
+  "next_cursor": zod.string().nullish().describe('Cursor for the next page, null if no more pages.'),
+  "previous_cursor": zod.string().nullish().describe('Cursor for the previous page, null if no newer page exists.')
+}).describe('Paginated response of channel messages.')
+
 
 /**
  * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
  */
 export const getThreadRepliesParams = zod.object({
-  channel_id: zod.string().uuid().describe('Channel ID'),
-  message_id: zod
-    .string()
-    .uuid()
-    .describe('Message ID (thread parent or reply id)'),
-});
+  "channel_id": zod.string().uuid().describe('Channel ID'),
+  "message_id": zod.string().uuid().describe('Message ID (thread parent or reply id)')
+})
 
-export const getThreadRepliesResponseItem = zod
-  .object({
-    attachments: zod
-      .array(
-        zod
-          .object({
-            created_at: zod
-              .string()
-              .datetime({})
-              .describe('When the attachment was created.'),
-            entity_id: zod.string().describe('Entity id.'),
-            entity_type: zod.string().describe('Type of entity.'),
-            height: zod.number().nullish().describe('Height (for images).'),
-            id: zod.string().uuid().describe('Attachment id.'),
-            width: zod.number().nullish().describe('Width (for images).'),
-          })
-          .describe('An attachment on a message.')
-      )
-      .describe('Attachments on this reply.'),
-    content: zod.string().describe('Reply content.'),
-    created_at: zod
-      .string()
-      .datetime({})
-      .describe('When the reply was created.'),
-    edited_at: zod
-      .string()
-      .datetime({})
-      .nullish()
-      .describe('When the reply was edited.'),
-    id: zod.string().uuid().describe('Reply id.'),
-    reactions: zod
-      .array(
-        zod
-          .object({
-            emoji: zod.string().describe('The emoji string.'),
-            users: zod
-              .array(zod.string())
-              .describe('User ids who added this reaction.'),
-          })
-          .describe('A reaction with emoji and user list.')
-      )
-      .describe('Reactions on this reply.'),
-    sender_id: zod.string().describe('Sender user id.'),
-    updated_at: zod
-      .string()
-      .datetime({})
-      .describe('When the reply was last updated.'),
-  })
-  .describe('A thread reply shown in preview.');
-export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem);
+export const getThreadRepliesResponseItem = zod.object({
+  "attachments": zod.array(zod.object({
+  "created_at": zod.string().datetime({}).describe('When the attachment was created.'),
+  "entity_id": zod.string().describe('Entity id.'),
+  "entity_type": zod.string().describe('Type of entity.'),
+  "height": zod.number().nullish().describe('Height (for images).'),
+  "id": zod.string().uuid().describe('Attachment id.'),
+  "width": zod.number().nullish().describe('Width (for images).')
+}).describe('An attachment on a message.')).describe('Attachments on this reply.'),
+  "content": zod.string().describe('Reply content.'),
+  "created_at": zod.string().datetime({}).describe('When the reply was created.'),
+  "edited_at": zod.string().datetime({}).nullish().describe('When the reply was edited.'),
+  "id": zod.string().uuid().describe('Reply id.'),
+  "reactions": zod.array(zod.object({
+  "emoji": zod.string().describe('The emoji string.'),
+  "users": zod.array(zod.string()).describe('User ids who added this reaction.')
+}).describe('A reaction with emoji and user list.')).describe('Reactions on this reply.'),
+  "sender_id": zod.string().describe('Sender user id.'),
+  "updated_at": zod.string().datetime({}).describe('When the reply was last updated.')
+}).describe('A thread reply shown in preview.')
+export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem)
+
 
 /**
  * @summary Handler for `GET /channels/{channel_id}/participants`.
  */
 export const getChannelParticipantsParams = zod.object({
-  channel_id: zod.string().uuid().describe('Channel ID'),
-});
+  "channel_id": zod.string().uuid().describe('Channel ID')
+})
 
-export const getChannelParticipantsResponseItem = zod
-  .object({
-    channel_id: zod.string().uuid().describe('Channel id.'),
-    joined_at: zod.string().datetime({}).describe('When the user joined.'),
-    role: zod
-      .enum(['owner', 'admin', 'member'])
-      .describe('Participant role in a channel.'),
-    user_id: zod.string().describe('User id.'),
-  })
-  .describe('A channel participant.');
-export const getChannelParticipantsResponse = zod.array(
-  getChannelParticipantsResponseItem
-);
+export const getChannelParticipantsResponseItem = zod.object({
+  "channel_id": zod.string().uuid().describe('Channel id.'),
+  "joined_at": zod.string().datetime({}).describe('When the user joined.'),
+  "role": zod.enum(['owner', 'admin', 'member']).describe('Participant role in a channel.'),
+  "user_id": zod.string().describe('User id.')
+}).describe('A channel participant.')
+export const getChannelParticipantsResponse = zod.array(getChannelParticipantsResponseItem)
+
 
 /**
  * @summary Gets the users documents to populate their recent document list
  */
 export const getUserDocumentsHandlerQueryParams = zod.object({
-  limit: zod
-    .number()
-    .describe(
-      'The maximum number of documents to retreive. Default 10, max 100.'
-    ),
-  offset: zod.number().describe('The offset to start from. Default 0.'),
-  file_type: zod.string().describe('The file type to filter by. Default all.'),
-});
+  "limit": zod.number().describe('The maximum number of documents to retreive. Default 10, max 100.'),
+  "offset": zod.number().describe('The offset to start from. Default 0.'),
+  "file_type": zod.string().describe('The file type to filter by. Default all.')
+})
 
 export const getUserDocumentsHandlerResponse = zod.object({
-  data: zod
-    .union([
-      zod.null(),
-      zod.object({
-        documents: zod.array(
-          zod.object({
-            branchedFromId: zod
-              .string()
-              .nullish()
-              .describe('The id of the document this document branched from'),
-            branchedFromVersionId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-              ),
-            createdAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was deleted'),
-            documentBom: zod
-              .array(
-                zod.object({
-                  id: zod.string().describe('The uuid of the bom part'),
-                  path: zod
-                    .string()
-                    .describe('The file path of the bom part content'),
-                  sha: zod
-                    .string()
-                    .describe(
-                      'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-                    ),
-                })
-              )
-              .nullish()
-              .describe(
-                'If the document is a DOCX document and unzipped, the document_bom will be present'
-              ),
-            documentFamilyId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the document family this document belongs to'
-              ),
-            documentId: zod.string().describe('The document id'),
-            documentName: zod.string().describe('The name of the document'),
-            documentVersionId: zod
-              .number()
-              .describe(
-                'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-              ),
-            fileType: zod
-              .string()
-              .nullish()
-              .describe('The file type of the document (file extension)'),
-            modificationData: zod
-              .any()
-              .optional()
-              .describe(
-                'The modification data for the document instance.\nThis is only used for PDF documents.'
-              ),
-            owner: zod.string().describe('The owner of the document'),
-            projectId: zod
-              .string()
-              .nullish()
-              .describe('The id of the project that this document belongs to'),
-            projectName: zod
-              .string()
-              .nullish()
-              .describe(
-                'The name of the project that this document belongs to'
-              ),
-            sha: zod
-              .string()
-              .nullish()
-              .describe(
-                'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-              ),
-            subType: zod
-              .union([
-                zod.null(),
-                zod
-                  .enum(['task'])
-                  .describe(
-                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-                  ),
-              ])
-              .optional(),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe(
-                'The time the document instance / document BOM was updated'
-              ),
-          })
-        ),
-        next_offset: zod
-          .number()
-          .nullish()
-          .describe('The next offset to be used if there is one'),
-        total: zod
-          .number()
-          .describe('The total number of documents the user has'),
-      }),
-    ])
-    .optional(),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-  message: zod.string().nullish().describe('Message to explain failure'),
-});
+  "data": zod.union([zod.null(),zod.object({
+  "documents": zod.array(zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentBom": zod.array(zod.object({
+  "id": zod.string().describe('The uuid of the bom part'),
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).nullish().describe('If the document is a DOCX document and unzipped, the document_bom will be present'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentId": zod.string().describe('The document id'),
+  "documentName": zod.string().describe('The name of the document'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
+  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated')
+})),
+  "next_offset": zod.number().nullish().describe('The next offset to be used if there is one'),
+  "total": zod.number().describe('The total number of documents the user has')
+})]).optional(),
+  "error": zod.boolean().describe('Indicates if an error occurred'),
+  "message": zod.string().nullish().describe('Message to explain failure')
+})
+
 
 /**
  * Creates a new document, generates an S3 presigned upload URL, and returns
@@ -1265,422 +734,165 @@ the document metadata with the URL for the client to upload to.
  * @summary Handler for `POST /documents`.
  */
 export const createDocumentBody = zod.object({
-  branchedFromId: zod
-    .string()
-    .nullish()
-    .describe('The document id if the document is being branched.'),
-  branchedFromVersionId: zod
-    .number()
-    .nullish()
-    .describe('The version id if the document is being branched.'),
-  createdAt: zod
-    .string()
-    .datetime({})
-    .nullish()
-    .describe(
-      "Optional time to set the document's created_at to. Set when backfilling email attachments."
-    ),
-  documentFamilyId: zod
-    .number()
-    .nullish()
-    .describe('The document family id if the document is being branched.'),
-  documentName: zod
-    .string()
-    .describe('The name of the document without extension.'),
-  emailAttachmentId: zod
-    .string()
-    .uuid()
-    .nullish()
-    .describe(
-      'Internal only field that links the document created to the specified email attachment by\ncreating a row in the document_email table.'
-    ),
-  fileType: zod
-    .string()
-    .nullish()
-    .describe('Optional file type of the document.'),
-  id: zod
-    .string()
-    .uuid()
-    .nullish()
-    .describe('The id of the document in the database'),
-  isTask: zod
-    .boolean()
-    .optional()
-    .describe(
-      'Whether the document is a task.\nThis is only applicable for md documents and the request will fail if the file type is not\nmd.'
-    ),
-  jobId: zod
-    .string()
-    .nullish()
-    .describe(
-      'Optional job id to be used to track an upload job for the newly created document.\nWill need to have a corresponding job initiated for the file beforehand.'
-    ),
-  mimeType: zod
-    .string()
-    .nullish()
-    .describe(
-      'The content type of the document (currently only used for logging matches against file type).'
-    ),
-  projectId: zod.string().uuid().nullish(),
-  sha: zod.string().describe('The sha of the document.'),
-  skipHistory: zod
-    .boolean()
-    .optional()
-    .describe(
-      'Whether to add a viewed_at record for this document upon creation.'
-    ),
-});
+  "branchedFromId": zod.string().nullish().describe('The document id if the document is being branched.'),
+  "branchedFromVersionId": zod.number().nullish().describe('The version id if the document is being branched.'),
+  "createdAt": zod.string().datetime({}).nullish().describe('Optional time to set the document\'s created_at to. Set when backfilling email attachments.'),
+  "documentFamilyId": zod.number().nullish().describe('The document family id if the document is being branched.'),
+  "documentName": zod.string().describe('The name of the document without extension.'),
+  "emailAttachmentId": zod.string().uuid().nullish().describe('Internal only field that links the document created to the specified email attachment by\ncreating a row in the document_email table.'),
+  "fileType": zod.string().nullish().describe('Optional file type of the document.'),
+  "id": zod.string().uuid().nullish().describe('The id of the document in the database'),
+  "isTask": zod.boolean().optional().describe('Whether the document is a task.\nThis is only applicable for md documents and the request will fail if the file type is not\nmd.'),
+  "jobId": zod.string().nullish().describe('Optional job id to be used to track an upload job for the newly created document.\nWill need to have a corresponding job initiated for the file beforehand.'),
+  "mimeType": zod.string().nullish().describe('The content type of the document (currently only used for logging matches against file type).'),
+  "projectId": zod.string().uuid().nullish(),
+  "sha": zod.string().describe('The sha of the document.'),
+  "skipHistory": zod.boolean().optional().describe('Whether to add a viewed_at record for this document upon creation.')
+})
 
 export const createDocumentResponse = zod.object({
-  data: zod
-    .object({
-      documentMetadata: zod.object({
-        branchedFromId: zod
-          .string()
-          .nullish()
-          .describe('The id of the document this document branched from'),
-        branchedFromVersionId: zod
-          .number()
-          .nullish()
-          .describe(
-            'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-          ),
-        createdAt: zod
-          .string()
-          .datetime({})
-          .nullish()
-          .describe('The time the document was created'),
-        documentBom: zod
-          .array(
-            zod.object({
-              id: zod.string().describe('The uuid of the bom part'),
-              path: zod
-                .string()
-                .describe('The file path of the bom part content'),
-              sha: zod
-                .string()
-                .describe(
-                  'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-                ),
-            })
-          )
-          .nullish()
-          .describe(
-            'If the document is a DOCX document, the document_bom will be present'
-          ),
-        documentFamilyId: zod
-          .number()
-          .nullish()
-          .describe('The id of the document family this document belongs to'),
-        documentId: zod.string().describe('The document id'),
-        documentName: zod.string().describe('The name of the document'),
-        documentVersionId: zod
-          .number()
-          .describe(
-            'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-          ),
-        fileType: zod
-          .string()
-          .nullish()
-          .describe('The file type of the document'),
-        modificationData: zod
-          .any()
-          .optional()
-          .describe(
-            'The modification data for the document instance.\nThis is only used for PDF documents.'
-          ),
-        owner: zod.string().describe('The owner of the document'),
-        sha: zod
-          .string()
-          .nullish()
-          .describe(
-            'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-          ),
-        subType: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['task'])
-              .describe(
-                'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-              ),
-          ])
-          .optional(),
-        updatedAt: zod
-          .string()
-          .datetime({})
-          .nullish()
-          .describe(
-            'The time the document instance / document BOM was updated'
-          ),
-      }),
-      presignedUrl: zod.string().nullish(),
-    })
-    .and(
-      zod.object({
-        contentType: zod
-          .string()
-          .describe('Content type of the document converted from file type'),
-        fileType: zod
-          .string()
-          .nullish()
-          .describe('The file type of the document'),
-      })
-    )
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "documentMetadata": zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "documentBom": zod.array(zod.object({
+  "id": zod.string().describe('The uuid of the bom part'),
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).nullish().describe('If the document is a DOCX document, the document_bom will be present'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentId": zod.string().describe('The document id'),
+  "documentName": zod.string().describe('The name of the document'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document'),
+  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
+  "owner": zod.string().describe('The owner of the document'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated')
+}),
+  "presignedUrl": zod.string().nullish()
+}).and(zod.object({
+  "contentType": zod.string().describe('Content type of the document converted from file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document')
+})).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * This endpoint creates task metadata and sets properties atomically.
 Task content should be set separately via the sync service.
  * @summary Creates a task document with properties in a single call.
  */
-export const createTaskHandlerBody = zod
-  .object({
-    projectId: zod
-      .string()
-      .uuid()
-      .nullish()
-      .describe('Optional project ID to associate the task with.'),
-    propertyValues: zod
-      .array(
-        zod
-          .object({
-            propertyId: zod.string().describe('The property definition ID.'),
-            value: zod
-              .union([
-                zod
-                  .object({
-                    type: zod.enum(['boolean']),
-                    value: zod.boolean(),
-                  })
-                  .describe('Boolean true/false value'),
-                zod
-                  .object({
-                    type: zod.enum(['date']),
-                    value: zod.string().datetime({}),
-                  })
-                  .describe('Date and time value'),
-                zod
-                  .object({
-                    type: zod.enum(['number']),
-                    value: zod.number(),
-                  })
-                  .describe('Numeric value'),
-                zod
-                  .object({
-                    type: zod.enum(['string']),
-                    value: zod.string(),
-                  })
-                  .describe('String/text value'),
-                zod
-                  .object({
-                    option_id: zod.string().uuid(),
-                    type: zod.enum(['select_option']),
-                  })
-                  .describe('Select option by ID (for select-type properties)'),
-                zod
-                  .object({
-                    option_ids: zod.array(zod.string().uuid()),
-                    type: zod.enum(['multi_select_option']),
-                  })
-                  .describe(
-                    'Multiple select options by ID (for multi-select properties)'
-                  ),
-                zod
-                  .object({
-                    reference: zod
-                      .object({
-                        entity_id: zod.string(),
-                        entity_type: zod
-                          .enum([
-                            'CHANNEL',
-                            'CHAT',
-                            'COMPANY',
-                            'DOCUMENT',
-                            'PROJECT',
-                            'TASK',
-                            'THREAD',
-                            'USER',
-                          ])
-                          .describe(
-                            'Type of entity that can be referenced by entity properties.'
-                          ),
-                        specific_message_id: zod
-                          .string()
-                          .uuid()
-                          .nullish()
-                          .describe(
-                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                          ),
-                      })
-                      .describe(
-                        'Entity reference for entity-type property values.'
-                      ),
-                    type: zod.enum(['entity_reference']),
-                  })
-                  .describe('Entity reference'),
-                zod
-                  .object({
-                    references: zod.array(
-                      zod
-                        .object({
-                          entity_id: zod.string(),
-                          entity_type: zod
-                            .enum([
-                              'CHANNEL',
-                              'CHAT',
-                              'COMPANY',
-                              'DOCUMENT',
-                              'PROJECT',
-                              'TASK',
-                              'THREAD',
-                              'USER',
-                            ])
-                            .describe(
-                              'Type of entity that can be referenced by entity properties.'
-                            ),
-                          specific_message_id: zod
-                            .string()
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                            ),
-                        })
-                        .describe(
-                          'Entity reference for entity-type property values.'
-                        )
-                    ),
-                    type: zod.enum(['multi_entity_reference']),
-                  })
-                  .describe(
-                    'Multiple entity references (for multi-select entity properties)'
-                  ),
-                zod
-                  .object({
-                    type: zod.enum(['link']),
-                    url: zod.string(),
-                  })
-                  .describe('Link value'),
-                zod
-                  .object({
-                    type: zod.enum(['multi_link']),
-                    urls: zod.array(zod.string()),
-                  })
-                  .describe(
-                    'Multiple link values (for multi-select link properties)'
-                  ),
-              ])
-              .describe(
-                'Type-safe enum for setting entity property values - provides compile-time validation.'
-              ),
-          })
-          .describe('Property input for setting a property value on a task.')
-      )
-      .nullish()
-      .describe('Optional property values to set on the task.'),
-    shareWithTeam: zod
-      .boolean()
-      .optional()
-      .describe(
-        'Whether to share the task with your team or not\nDefaults to true'
-      ),
-    taskName: zod.string().describe('The name of the task.'),
-  })
-  .describe('Request body for creating a task.');
+export const createTaskHandlerBody = zod.object({
+  "projectId": zod.string().uuid().nullish().describe('Optional project ID to associate the task with.'),
+  "propertyValues": zod.array(zod.object({
+  "propertyId": zod.string().describe('The property definition ID.'),
+  "value": zod.union([zod.object({
+  "type": zod.enum(['boolean']),
+  "value": zod.boolean()
+}).describe('Boolean true/false value'),zod.object({
+  "type": zod.enum(['date']),
+  "value": zod.string().datetime({})
+}).describe('Date and time value'),zod.object({
+  "type": zod.enum(['number']),
+  "value": zod.number()
+}).describe('Numeric value'),zod.object({
+  "type": zod.enum(['string']),
+  "value": zod.string()
+}).describe('String/text value'),zod.object({
+  "option_id": zod.string().uuid(),
+  "type": zod.enum(['select_option'])
+}).describe('Select option by ID (for select-type properties)'),zod.object({
+  "option_ids": zod.array(zod.string().uuid()),
+  "type": zod.enum(['multi_select_option'])
+}).describe('Multiple select options by ID (for multi-select properties)'),zod.object({
+  "reference": zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.'),
+  "type": zod.enum(['entity_reference'])
+}).describe('Entity reference'),zod.object({
+  "references": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')),
+  "type": zod.enum(['multi_entity_reference'])
+}).describe('Multiple entity references (for multi-select entity properties)'),zod.object({
+  "type": zod.enum(['link']),
+  "url": zod.string()
+}).describe('Link value'),zod.object({
+  "type": zod.enum(['multi_link']),
+  "urls": zod.array(zod.string())
+}).describe('Multiple link values (for multi-select link properties)')]).describe('Type-safe enum for setting entity property values - provides compile-time validation.')
+}).describe('Property input for setting a property value on a task.')).nullish().describe('Optional property values to set on the task.'),
+  "shareWithTeam": zod.boolean().optional().describe('Whether to share the task with your team or not\nDefaults to true'),
+  "taskName": zod.string().describe('The name of the task.')
+}).describe('Request body for creating a task.')
 
-export const createTaskHandlerResponse = zod
-  .object({
-    documentId: zod.string().describe('The document ID of the created task.'),
-  })
-  .describe('Response for creating a task.');
+export const createTaskHandlerResponse = zod.object({
+  "documentId": zod.string().describe('The document ID of the created task.')
+}).describe('Response for creating a task.')
+
 
 export const initializeUserDocumentsResponse = zod.object({
-  success: zod.boolean().describe('Indicates if the request was successful'),
-});
+  "success": zod.boolean().describe('Indicates if the request was successful')
+})
+
 
 /**
  * @summary Gets a list of all the user's documents so they are able to be searched on
  */
 export const getDocumentListHandlerResponse = zod.object({
-  data: zod
-    .array(
-      zod.object({
-        branchedFromId: zod
-          .string()
-          .nullish()
-          .describe('The id of the document this document branched from'),
-        branchedFromVersionId: zod
-          .number()
-          .nullish()
-          .describe(
-            'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-          ),
-        createdAt: zod
-          .string()
-          .datetime({})
-          .nullish()
-          .describe('The time the document was created'),
-        documentFamilyId: zod
-          .number()
-          .nullish()
-          .describe('The id of the document family this document belongs to'),
-        documentId: zod.string().describe('The id of the document'),
-        documentName: zod.string().describe('The name of the document'),
-        documentVersionId: zod
-          .number()
-          .describe('The id of the document version'),
-        fileType: zod
-          .string()
-          .nullish()
-          .describe('The file type of the document'),
-        updatedAt: zod
-          .string()
-          .datetime({})
-          .nullish()
-          .describe(
-            'The time the document instance / document BOM was updated'
-          ),
-      })
-    )
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.array(zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentId": zod.string().describe('The id of the document'),
+  "documentName": zod.string().describe('The name of the document'),
+  "documentVersionId": zod.number().describe('The id of the document version'),
+  "fileType": zod.string().nullish().describe('The file type of the document'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated')
+})).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Validates the provided document permissions token
  */
 export const validateDocumentPermissionsTokenBody = zod.object({
-  token: zod.string().describe('The encoded document permissions token'),
-});
+  "token": zod.string().describe('The encoded document permissions token')
+})
 
 export const validateDocumentPermissionsTokenResponseExpMin = 0;
 
+
 export const validateDocumentPermissionsTokenResponse = zod.object({
-  access_level: zod
-    .enum(['view', 'comment', 'edit', 'owner'])
-    .describe('Ordered from least to most access top -> bottom'),
-  document_id: zod.string().describe('The document id'),
-  exp: zod
-    .number()
-    .min(validateDocumentPermissionsTokenResponseExpMin)
-    .describe('The expiration time of the token'),
-  iss: zod.string().describe('The issuer of the token'),
-  user_id: zod.string().nullish().describe('The users id if present'),
-});
+  "access_level": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
+  "document_id": zod.string().describe('The document id'),
+  "exp": zod.number().min(validateDocumentPermissionsTokenResponseExpMin).describe('The expiration time of the token'),
+  "iss": zod.string().describe('The issuer of the token'),
+  "user_id": zod.string().nullish().describe('The users id if present')
+})
+
 
 /**
  * @summary Generates a document permissions token for a provided document id
  */
 export const getDocumentPermissionsTokenParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getDocumentPermissionsTokenResponse = zod.object({
-  token: zod.string().describe('The encoded document permissions token'),
-});
+  "token": zod.string().describe('The encoded document permissions token')
+})
+
 
 /**
  * @deprecated
@@ -1688,361 +900,152 @@ export const getDocumentPermissionsTokenResponse = zod.object({
 any new content
  */
 export const presaveDocumentHandlerParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const presaveDocumentHandlerBody = zod.object({
-  newBom: zod
-    .array(
-      zod.object({
-        path: zod.string().describe('The file path of the bom part content'),
-        sha: zod
-          .string()
-          .describe(
-            'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-          ),
-      })
-    )
-    .describe(
-      'The updated BOM for the document\nContaining the file path and the sha'
-    ),
-});
+  "newBom": zod.array(zod.object({
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).describe('The updated BOM for the document\nContaining the file path and the sha')
+})
 
 export const presaveDocumentHandlerResponse = zod.object({
-  data: zod.object({
-    presignedUrls: zod
-      .array(
-        zod.object({
-          presignedUrl: zod
-            .string()
-            .describe('The presigned url used to upload the sha'),
-          sha: zod.string().describe('The sha of the item'),
-        })
-      )
-      .describe(
-        'Contains any presigned urls you need to upload specific bom parts with.'
-      ),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "presignedUrls": zod.array(zod.object({
+  "presignedUrl": zod.string().describe('The presigned url used to upload the sha'),
+  "sha": zod.string().describe('The sha of the item')
+})).describe('Contains any presigned urls you need to upload specific bom parts with.')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 export const getBatchPreviewHandlerBody = zod.object({
-  document_ids: zod.array(zod.string()),
-});
+  "document_ids": zod.array(zod.string())
+})
 
 export const getBatchPreviewHandlerResponse = zod.object({
-  previews: zod.array(
-    zod.union([
-      zod
-        .object({
-          document_id: zod.string().describe('The document id'),
-          document_name: zod.string().describe('The name of the document'),
-          file_type: zod
-            .string()
-            .nullish()
-            .describe('The file type of the document (e.g. pdf, docx)'),
-          owner: zod.string().describe('The id of the owner of the document'),
-          sub_type: zod
-            .union([
-              zod.null(),
-              zod
-                .object({
-                  is_completed: zod
-                    .boolean()
-                    .describe(
-                      'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                    ),
-                  type: zod.enum(['task']),
-                })
-                .describe('A task document with completion status')
-                .describe(
-                  'The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states.'
-                ),
-            ])
-            .optional(),
-          updated_at: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the document was last updated'),
-        })
-        .and(
-          zod.object({
-            type: zod.enum(['access']),
-          })
-        ),
-      zod
-        .object({
-          document_id: zod.string(),
-        })
-        .and(
-          zod.object({
-            type: zod.enum(['no_access']),
-          })
-        ),
-      zod
-        .object({
-          document_id: zod.string(),
-        })
-        .and(
-          zod.object({
-            type: zod.enum(['does_not_exist']),
-          })
-        ),
-    ])
-  ),
-});
+  "previews": zod.array(zod.union([zod.object({
+  "document_id": zod.string().describe('The document id'),
+  "document_name": zod.string().describe('The name of the document'),
+  "file_type": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "owner": zod.string().describe('The id of the owner of the document'),
+  "sub_type": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with completion status').describe('The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states.')]).optional(),
+  "updated_at": zod.string().datetime({}).nullish().describe('The time the document was last updated')
+}).and(zod.object({
+  "type": zod.enum(['access'])
+})),zod.object({
+  "document_id": zod.string()
+}).and(zod.object({
+  "type": zod.enum(['no_access'])
+})),zod.object({
+  "document_id": zod.string()
+}).and(zod.object({
+  "type": zod.enum(['does_not_exist'])
+}))]))
+})
+
 
 /**
  * Returns document metadata, user access level, and view location.
  * @summary Handler for `GET /documents/{document_id}`.
  */
 export const getDocumentParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getDocumentResponse = zod.object({
-  data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was created'),
-      deletedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was deleted'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document and unzipped, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document (file extension)'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      projectId: zod
-        .string()
-        .nullish()
-        .describe('The id of the project that this document belongs to'),
-      projectName: zod
-        .string()
-        .nullish()
-        .describe('The name of the project that this document belongs to'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
-    userAccessLevel: zod
-      .enum(['view', 'comment', 'edit', 'owner'])
-      .describe('Ordered from least to most access top -> bottom'),
-    viewLocation: zod
-      .string()
-      .nullish()
-      .describe('The users view location if there is one'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "documentMetadata": zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentBom": zod.array(zod.object({
+  "id": zod.string().describe('The uuid of the bom part'),
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).nullish().describe('If the document is a DOCX document and unzipped, the document_bom will be present'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentId": zod.string().describe('The document id'),
+  "documentName": zod.string().describe('The name of the document'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
+  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated')
+}),
+  "userAccessLevel": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
+  "viewLocation": zod.string().nullish().describe('The users view location if there is one')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Creates a new version of a document
  */
 export const saveDocumentHandlerParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const saveDocumentHandlerBody = zod.object({
-  modificationData: zod
-    .any()
-    .optional()
-    .describe(
-      'The modification data for the document instance.\nUsed to store highlights and other overlays onto a static file'
-    ),
-  newBom: zod
-    .array(
-      zod.object({
-        path: zod.string().describe('The file path of the bom part content'),
-        sha: zod
-          .string()
-          .describe(
-            'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-          ),
-      })
-    )
-    .nullish()
-    .describe(
-      '**DOCX ONLY**\nThe updated BOM for the document.\nContaining the file path and the sha.'
-    ),
-  sha: zod
-    .string()
-    .nullish()
-    .describe(
-      'The sha of the new document.\nThis is used to generate a presigned url to upload the new document content to s3.'
-    ),
-});
+  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nUsed to store highlights and other overlays onto a static file'),
+  "newBom": zod.array(zod.object({
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).nullish().describe('**DOCX ONLY**\nThe updated BOM for the document.\nContaining the file path and the sha.'),
+  "sha": zod.string().nullish().describe('The sha of the new document.\nThis is used to generate a presigned url to upload the new document content to s3.')
+})
 
 export const saveDocumentHandlerResponse = zod.object({
-  data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was created'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
-    presignedUrl: zod
-      .string()
-      .nullish()
-      .describe(
-        'If the document is an editable file, we provide a presigned url to save the updated file to.'
-      ),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "documentMetadata": zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "documentBom": zod.array(zod.object({
+  "id": zod.string().describe('The uuid of the bom part'),
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).nullish().describe('If the document is a DOCX document, the document_bom will be present'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentId": zod.string().describe('The document id'),
+  "documentName": zod.string().describe('The name of the document'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document'),
+  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
+  "owner": zod.string().describe('The owner of the document'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated')
+}),
+  "presignedUrl": zod.string().nullish().describe('If the document is an editable file, we provide a presigned url to save the updated file to.')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * Soft-deletes a document (only owners can delete).
  * @summary Handler for `DELETE /documents/{document_id}`.
  */
 export const deleteDocumentParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const deleteDocumentResponse = zod.object({
-  success: zod.boolean().describe('Indicates if the request was successful'),
-});
+  "success": zod.boolean().describe('Indicates if the request was successful')
+})
+
 
 /**
  * Edits document metadata such as name or project, and modifies
@@ -2051,69 +1054,30 @@ and edit access to the target project if moving the document.
  * @summary Handler for `PATCH /documents/{document_id}`.
  */
 export const editDocumentParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
-export const editDocumentBody = zod
-  .object({
-    documentName: zod.string().nullish().describe('The name of the document.'),
-    projectId: zod
-      .string()
-      .nullish()
-      .describe('The new project id of the document.'),
-    sharePermission: zod
-      .union([
-        zod.null(),
-        zod.object({
-          channelSharePermissions: zod
-            .array(
-              zod.object({
-                accessLevel: zod
-                  .union([
-                    zod.null(),
-                    zod
-                      .enum(['view', 'comment', 'edit', 'owner'])
-                      .describe(
-                        'Ordered from least to most access top -> bottom'
-                      ),
-                  ])
-                  .optional(),
-                channelId: zod.string().describe('The channel id'),
-                operation: zod.enum(['add', 'remove', 'replace']),
-              })
-            )
-            .nullish()
-            .describe(
-              'Any channel share permissions to be created/updated/removed'
-            ),
-          isPublic: zod
-            .boolean()
-            .nullish()
-            .describe('If the item is publicly accessible'),
-          publicAccessLevel: zod
-            .union([
-              zod.null(),
-              zod
-                .enum(['view', 'comment', 'edit', 'owner'])
-                .describe('Ordered from least to most access top -> bottom'),
-            ])
-            .optional(),
-        }),
-      ])
-      .optional(),
-  })
-  .describe('Arguments for the edit_document service call.');
+export const editDocumentBody = zod.object({
+  "documentName": zod.string().nullish().describe('The name of the document.'),
+  "projectId": zod.string().nullish().describe('The new project id of the document.'),
+  "sharePermission": zod.union([zod.null(),zod.object({
+  "channelSharePermissions": zod.array(zod.object({
+  "accessLevel": zod.union([zod.null(),zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')]).optional(),
+  "channelId": zod.string().describe('The channel id'),
+  "operation": zod.enum(['add', 'remove', 'replace'])
+})).nullish().describe('Any channel share permissions to be created/updated/removed'),
+  "isPublic": zod.boolean().nullish().describe('If the item is publicly accessible'),
+  "publicAccessLevel": zod.union([zod.null(),zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')]).optional()
+})]).optional()
+}).describe('Arguments for the edit_document service call.')
 
-export const editDocumentResponse = zod
-  .object({
-    data: zod.object({
-      success: zod
-        .boolean()
-        .describe('Indicates if the request was successful'),
-    }),
-    error: zod.boolean().describe('Whether an error occurred.'),
-  })
-  .describe('Edit document response.');
+export const editDocumentResponse = zod.object({
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Whether an error occurred.')
+}).describe('Edit document response.')
+
 
 /**
  * @summary Handles copying a given document. This is the similar to
@@ -2123,286 +1087,173 @@ this will not require you to re-upload the document when it's made saving
 time and resources.
  */
 export const copyDocumentHandlerParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const copyDocumentHandlerQueryParams = zod.object({
-  version_id: zod
-    .number()
-    .optional()
-    .describe(
-      'The version id of the document to copy. Defaults to copying the latest version of the document.'
-    ),
-});
+  "version_id": zod.number().optional().describe('The version id of the document to copy. Defaults to copying the latest version of the document.')
+})
 
 export const copyDocumentHandlerBody = zod.object({
-  documentName: zod
-    .string()
-    .describe('The name of the document without extension.'),
-  versionId: zod
-    .union([
-      zod.null(),
-      zod.object({
-        counter: zod.number(),
-        peer: zod.string(),
-      }),
-    ])
-    .optional(),
-});
+  "documentName": zod.string().describe('The name of the document without extension.'),
+  "versionId": zod.union([zod.null(),zod.object({
+  "counter": zod.number(),
+  "peer": zod.string()
+})]).optional()
+})
 
 export const copyDocumentHandlerResponse = zod.object({
-  data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was created'),
-      deletedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was deleted'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document and unzipped, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document (file extension)'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      projectId: zod
-        .string()
-        .nullish()
-        .describe('The id of the project that this document belongs to'),
-      projectName: zod
-        .string()
-        .nullish()
-        .describe('The name of the project that this document belongs to'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
-    userAccessLevel: zod
-      .enum(['view', 'comment', 'edit', 'owner'])
-      .describe('Ordered from least to most access top -> bottom'),
-    viewLocation: zod
-      .string()
-      .nullish()
-      .describe('The users view location if there is one'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "documentMetadata": zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentBom": zod.array(zod.object({
+  "id": zod.string().describe('The uuid of the bom part'),
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).nullish().describe('If the document is a DOCX document and unzipped, the document_bom will be present'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentId": zod.string().describe('The document id'),
+  "documentName": zod.string().describe('The name of the document'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
+  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated')
+}),
+  "userAccessLevel": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
+  "viewLocation": zod.string().nullish().describe('The users view location if there is one')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Generates a presigned url to download the raw content of the document
 For files with modification layers, they will not be applied in the downloaded file.
  */
 export const exportDocumentParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const exportDocumentResponse = zod.object({
-  presigned_url: zod
-    .string()
-    .describe('The presigned url to download the raw content of the document'),
-});
+  "presigned_url": zod.string().describe('The presigned url to download the raw content of the document')
+})
+
 
 /**
  * @summary Gets the presigned url(s) for the document. aka location
  */
 export const getLocationHandlerParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getLocationHandlerQueryParams = zod.object({
-  document_version_id: zod
-    .number()
-    .describe('A specific document version id to get the location for.'),
-  get_converted_docx_url: zod
-    .boolean()
-    .describe('If true, this will return the converted docx url.'),
-});
+  "document_version_id": zod.number().describe('A specific document version id to get the location for.'),
+  "get_converted_docx_url": zod.boolean().describe('If true, this will return the converted docx url.')
+})
 
-export const getLocationHandlerResponse = zod.union([
-  zod
-    .object({
-      presignedUrl: zod
-        .string()
-        .describe('The presigned url of the document if it is not a docx'),
-    })
-    .describe('The presigned url of the document if it is not a docx'),
-  zod
-    .object({
-      presignedUrls: zod
-        .array(
-          zod.object({
-            presignedUrl: zod
-              .string()
-              .describe('The presigned url used to upload the sha'),
-            sha: zod.string().describe('The sha of the item'),
-          })
-        )
-        .describe('The presigned urls of the docx bom parts if it is a docx'),
-    })
-    .describe('The presigned urls of the docx bom parts if it is a docx'),
-]);
+export const getLocationHandlerResponse = zod.union([zod.object({
+  "presignedUrl": zod.string().describe('The presigned url of the document if it is not a docx')
+}).describe('The presigned url of the document if it is not a docx'),zod.object({
+  "presignedUrls": zod.array(zod.object({
+  "presignedUrl": zod.string().describe('The presigned url used to upload the sha'),
+  "sha": zod.string().describe('The sha of the item')
+})).describe('The presigned urls of the docx bom parts if it is a docx')
+}).describe('The presigned urls of the docx bom parts if it is a docx')])
+
 
 /**
  * Returns a presigned URL or sync service content for accessing the document.
  * @summary Handler for `GET /documents/{document_id}/location_v3`.
  */
 export const getDocumentLocationV3Params = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getDocumentLocationV3QueryParams = zod.object({
-  document_version_id: zod
-    .number()
-    .optional()
-    .describe('A specific document version id to get the location for.'),
-  get_converted_docx_url: zod
-    .boolean()
-    .optional()
-    .describe('If true, this will return the converted docx url.'),
-});
+  "document_version_id": zod.number().optional().describe('A specific document version id to get the location for.'),
+  "get_converted_docx_url": zod.boolean().optional().describe('If true, this will return the converted docx url.')
+})
+
 
 /**
  * @summary Permanently deletes a document.
  */
 export const permanentlyDeleteDocumentParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const permanentlyDeleteDocumentResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Fetches the document pdf processing result for a given document id
  */
 export const getDocumentProcessingResultParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getDocumentProcessingResultResponse = zod.object({
-  data: zod
-    .union([
-      zod.null(),
-      zod.object({
-        result: zod.string().describe('The stringified result'),
-      }),
-    ])
-    .optional(),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-  message: zod.string().nullish().describe('Message to explain failure'),
-});
+  "data": zod.union([zod.null(),zod.object({
+  "result": zod.string().describe('The stringified result')
+})]).optional(),
+  "error": zod.boolean().describe('Indicates if an error occurred'),
+  "message": zod.string().nullish().describe('Message to explain failure')
+})
+
 
 /**
  * @summary Fetches the document processing result for a given document id and job id
  */
 export const jobProcessingResultHandlerParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-  job_id: zod.string().describe('Job ID'),
-});
+  "document_id": zod.string().describe('Document ID'),
+  "job_id": zod.string().describe('Job ID')
+})
 
 export const jobProcessingResultHandlerResponse = zod.object({
-  data: zod
-    .union([
-      zod.null(),
-      zod.object({
-        result: zod.string().describe('The stringified result'),
-      }),
-    ])
-    .optional(),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-  message: zod.string().nullish().describe('Message to explain failure'),
-});
+  "data": zod.union([zod.null(),zod.object({
+  "result": zod.string().describe('The stringified result')
+})]).optional(),
+  "error": zod.boolean().describe('Indicates if an error occurred'),
+  "message": zod.string().nullish().describe('Message to explain failure')
+})
+
 
 /**
  * @summary Deletes a specific document
  */
 export const revertDeleteDocumentParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const revertDeleteDocumentResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * Returns the short UUID for a document.
  * @summary Handler for `GET /documents/{document_id}/short_id`.
  */
 export const getDocumentShortIdParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
+
 
 /**
  * @summary For any file that isn't PDF or DOCX, use this endpoint for saving.
@@ -2410,4746 +1261,1324 @@ This endpoint will allow you to save the document by providing the file content 
 simple_save is different than the save_document endpoint because it does not return a presigned URL, Instead, it simply saves the file to S3 directly (and returns the document metadata).
  */
 export const simpleSaveParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const simpleSaveResponse = zod.object({
-  data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was created'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
-    presignedUrl: zod
-      .string()
-      .nullish()
-      .describe(
-        'If the document is an editable file, we provide a presigned url to save the updated file to.'
-      ),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "documentMetadata": zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "documentBom": zod.array(zod.object({
+  "id": zod.string().describe('The uuid of the bom part'),
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).nullish().describe('If the document is a DOCX document, the document_bom will be present'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentId": zod.string().describe('The document id'),
+  "documentName": zod.string().describe('The name of the document'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document'),
+  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
+  "owner": zod.string().describe('The owner of the document'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated')
+}),
+  "presignedUrl": zod.string().nullish().describe('If the document is an editable file, we provide a presigned url to save the updated file to.')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Gets the list of users who have viewed a given document
  */
 export const getDocumentViewsHandlerParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getDocumentViewsHandlerResponse = zod.object({
-  count: zod.number().describe('Total number of views for the document'),
-  users: zod
-    .array(zod.string())
-    .describe('List of user emails who have viewed the document'),
-});
+  "count": zod.number().describe('Total number of views for the document'),
+  "users": zod.array(zod.string()).describe('List of user emails who have viewed the document')
+})
+
 
 /**
  * @summary Gets a particular document by its id
  */
 export const getDocumentVersionParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-  document_version_id: zod.number().describe('Document Version ID'),
-});
+  "document_id": zod.string().describe('Document ID'),
+  "document_version_id": zod.number().describe('Document Version ID')
+})
 
 export const getDocumentVersionResponse = zod.object({
-  data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was created'),
-      deletedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was deleted'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document and unzipped, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document (file extension)'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      projectId: zod
-        .string()
-        .nullish()
-        .describe('The id of the project that this document belongs to'),
-      projectName: zod
-        .string()
-        .nullish()
-        .describe('The name of the project that this document belongs to'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
-    userAccessLevel: zod
-      .enum(['view', 'comment', 'edit', 'owner'])
-      .describe('Ordered from least to most access top -> bottom'),
-    viewLocation: zod
-      .string()
-      .nullish()
-      .describe('The users view location if there is one'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "documentMetadata": zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentBom": zod.array(zod.object({
+  "id": zod.string().describe('The uuid of the bom part'),
+  "path": zod.string().describe('The file path of the bom part content'),
+  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
+})).nullish().describe('If the document is a DOCX document and unzipped, the document_bom will be present'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentId": zod.string().describe('The document id'),
+  "documentName": zod.string().describe('The name of the document'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
+  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated')
+}),
+  "userAccessLevel": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
+  "viewLocation": zod.string().nullish().describe('The users view location if there is one')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Get the current user's permission for a given entity.
  */
 export const getEntityPermissionParams = zod.object({
-  entity_type: zod
-    .string()
-    .describe(
-      'Entity type (document, chat, project, thread, email_thread, channel)'
-    ),
-  entity_id: zod.string().describe('Entity ID'),
-});
+  "entity_type": zod.string().describe('Entity type (document, chat, project, thread, email_thread, channel)'),
+  "entity_id": zod.string().describe('Entity ID')
+})
 
-export const getEntityPermissionResponse = zod
-  .union([
-    zod.object({
-      permission: zod
-        .union([
-          zod
-            .object({
-              access_level: zod
-                .enum(['view', 'comment', 'edit', 'owner'])
-                .describe('Ordered from least to most access top -> bottom'),
-              type: zod.enum(['access_level']),
-            })
-            .describe(
-              'Permission for item-based entities (document, chat, project, thread).'
-            ),
-          zod
-            .object({
-              role: zod
-                .enum(['owner', 'admin', 'member'])
-                .describe('The role a user has within a channel.'),
-              type: zod.enum(['channel_role']),
-            })
-            .describe('Permission for channel-based entities.'),
-        ])
-        .describe(
-          "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
-        ),
-      status: zod.enum(['access']),
-    }),
-    zod.object({
-      status: zod.enum(['no_access']),
-    }),
-  ])
-  .describe('API response envelope for entity permissions.');
+export const getEntityPermissionResponse = zod.union([zod.object({
+  "permission": zod.union([zod.object({
+  "access_level": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
+  "type": zod.enum(['access_level'])
+}).describe('Permission for item-based entities (document, chat, project, thread).'),zod.object({
+  "role": zod.enum(['owner', 'admin', 'member']).describe('The role a user has within a channel.'),
+  "type": zod.enum(['channel_role'])
+}).describe('Permission for channel-based entities.')]).describe('A user\'s permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles.'),
+  "status": zod.enum(['access'])
+}),zod.object({
+  "status": zod.enum(['no_access'])
+})]).describe('API response envelope for entity permissions.')
+
 
 /**
  * @summary Gets the users history
  */
 export const getHistoryHandlerResponse = zod.object({
-  data: zod
-    .array(
-      zod.union([
-        zod.object({
-          branchedFromId: zod
-            .string()
-            .nullish()
-            .describe('The id of the document this document branched from'),
-          branchedFromVersionId: zod
-            .number()
-            .nullish()
-            .describe(
-              'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-            ),
-          createdAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the document was created'),
-          deletedAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the document was deleted'),
-          documentFamilyId: zod
-            .number()
-            .nullish()
-            .describe('The id of the document family this document belongs to'),
-          documentVersionId: zod
-            .number()
-            .describe(
-              'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-            ),
-          fileType: zod
-            .string()
-            .nullish()
-            .describe('The file type of the document (e.g. pdf, docx)'),
-          id: zod.string().describe('The document id'),
-          name: zod.string().describe('The name of the document'),
-          owner: zod.string().describe('The owner of the document'),
-          projectId: zod
-            .string()
-            .nullish()
-            .describe('The id of the project that this document belongs to'),
-          sha: zod
-            .string()
-            .nullish()
-            .describe(
-              'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-            ),
-          subType: zod
-            .union([
-              zod.null(),
-              zod
-                .object({
-                  is_completed: zod
-                    .boolean()
-                    .describe(
-                      'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                    ),
-                  type: zod.enum(['task']),
-                })
-                .describe('A task document with its associated properties')
-                .describe(
-                  'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                ),
-            ])
-            .optional(),
-          updatedAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe(
-              'The time the document instance / document BOM was updated'
-            ),
-          type: zod.enum(['document']),
-        }),
-        zod.object({
-          createdAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the chat was created'),
-          deletedAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the chat was deleted'),
-          id: zod.string().describe('The chat uuid'),
-          isPersistent: zod.boolean(),
-          model: zod
-            .string()
-            .nullish()
-            .describe('The model used to generate the chat'),
-          name: zod.string().describe('The name of the chat'),
-          projectId: zod
-            .string()
-            .nullish()
-            .describe('The project id of the chat'),
-          tokenCount: zod.number().nullish(),
-          updatedAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the chat was last updated'),
-          userId: zod.string().describe('Who the chat belongs to'),
-          type: zod.enum(['chat']),
-        }),
-        zod.object({
-          createdAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the project was created'),
-          deletedAt: zod.string().datetime({}).nullish(),
-          id: zod.string().describe('The id of the project'),
-          name: zod.string().describe('The name of the project'),
-          parentId: zod.string().nullish().describe('The parent project id'),
-          updatedAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the project was updated'),
-          userId: zod
-            .string()
-            .describe('The user id of who created the project'),
-          type: zod.enum(['project']),
-        }),
-      ])
-    )
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.array(zod.union([zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated'),
+  "type": zod.enum(['document'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the chat was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the chat was deleted'),
+  "id": zod.string().describe('The chat uuid'),
+  "isPersistent": zod.boolean(),
+  "model": zod.string().nullish().describe('The model used to generate the chat'),
+  "name": zod.string().describe('The name of the chat'),
+  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "tokenCount": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the chat was last updated'),
+  "userId": zod.string().describe('Who the chat belongs to'),
+  "type": zod.enum(['chat'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+})])).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Upserts an item into the user's history and performs other necessary tracking actions
  */
 export const upsertHistoryHandlerParams = zod.object({
-  item_type: zod.string().describe('Type of the item'),
-  item_id: zod.string().describe('ID of the item'),
-});
+  "item_type": zod.string().describe('Type of the item'),
+  "item_id": zod.string().describe('ID of the item')
+})
 
 export const upsertHistoryHandlerResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Deletes an item from the user's history
  */
 export const deleteHistoryHandlerParams = zod.object({
-  item_type: zod.string().describe('Type of the item'),
-  item_id: zod.string().describe('ID of the item'),
-});
+  "item_type": zod.string().describe('Type of the item'),
+  "item_id": zod.string().describe('ID of the item')
+})
 
 export const deleteHistoryHandlerResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Gets the instructions document for the current user
  */
 export const getInstructionsHandlerResponse = zod.object({
-  documentId: zod.string(),
-});
+  "documentId": zod.string()
+})
+
 
 /**
  * @summary Creates an instructions document for the current user
  */
 export const createInstructionsHandlerResponse = zod.object({
-  documentId: zod.string(),
-});
+  "documentId": zod.string()
+})
+
 
 /**
  * @summary Gets the items the user has access to
  */
 export const getItemsSoupQueryLimitMin = 0;
 
+
 export const getItemsSoupQueryParams = zod.object({
-  expand: zod
-    .boolean()
-    .optional()
-    .describe('Whether to expand projects. Defaults to true.'),
-  limit: zod
-    .number()
-    .min(getItemsSoupQueryLimitMin)
-    .optional()
-    .describe('Limit the number of items returned. Defaults to 20. Max 500.'),
-  sort_method: zod
-    .enum([
-      'viewed_at',
-      'created_at',
-      'updated_at',
-      'viewed_updated',
-      'frecency',
-    ])
-    .optional()
-    .describe(
-      'Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.'
-    ),
-  cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
-});
+  "expand": zod.boolean().optional().describe('Whether to expand projects. Defaults to true.'),
+  "limit": zod.number().min(getItemsSoupQueryLimitMin).optional().describe('Limit the number of items returned. Defaults to 20. Max 500.'),
+  "sort_method": zod.enum(['viewed_at', 'created_at', 'updated_at', 'viewed_updated', 'frecency']).optional().describe('Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.'),
+  "cursor": zod.string().optional().describe('Base64 encoded cursor value.')
+})
 
 export const getItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
 
+
 export const getItemsSoupResponse = zod.object({
-  items: zod.array(
-    zod
-      .union([
-        zod.object({
-          data: zod.object({
-            branchedFromId: zod
-              .string()
-              .uuid()
-              .nullish()
-              .describe('The id of the document this document branched from'),
-            branchedFromVersionId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
-              ),
-            createdAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the document was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was deleted'),
-            documentFamilyId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the document family this document belongs to'
-              ),
-            documentVersionId: zod
-              .number()
-              .describe(
-                'The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'
-              ),
-            fileType: zod
-              .string()
-              .nullish()
-              .describe('The file type of the document (e.g. pdf, docx)'),
-            id: zod.string().uuid().describe('The document id'),
-            name: zod.string().describe('The name of the document'),
-            ownerId: zod.string().describe('The owner of the document'),
-            projectId: zod
-              .string()
-              .uuid()
-              .nullish()
-              .describe('The id of the project that this document belongs to'),
-            properties: zod
-              .array(
-                zod
-                  .object({
-                    definition: zod
-                      .object({
-                        created_at: zod.string().datetime({}),
-                        data_type: zod
-                          .enum([
-                            'BOOLEAN',
-                            'DATE',
-                            'NUMBER',
-                            'STRING',
-                            'SELECT_NUMBER',
-                            'SELECT_STRING',
-                            'ENTITY',
-                            'LINK',
-                          ])
-                          .describe(
-                            'Data type for property values, determining storage and validation.'
-                          ),
-                        display_name: zod.string(),
-                        id: zod.string().uuid(),
-                        is_metadata: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
-                          ),
-                        is_multi_select: zod.boolean(),
-                        is_system: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system property (stored in DB).'
-                          ),
-                        owner: zod
-                          .union([
-                            zod
-                              .object({
-                                scope: zod.enum(['user']),
-                                user_id: zod.string(),
-                              })
-                              .describe('User-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['organization']),
-                              })
-                              .describe('Organization-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['user_and_organization']),
-                                user_id: zod.string(),
-                              })
-                              .describe('Both user and organization-scoped'),
-                            zod
-                              .object({
-                                scope: zod.enum(['system']),
-                              })
-                              .describe(
-                                'System-owned property (no user or org owner)'
-                              ),
-                          ])
-                          .describe(
-                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-                          ),
-                        specific_entity_type: zod
-                          .union([
-                            zod.null(),
-                            zod
-                              .enum([
-                                'CHANNEL',
-                                'CHAT',
-                                'COMPANY',
-                                'DOCUMENT',
-                                'PROJECT',
-                                'TASK',
-                                'THREAD',
-                                'USER',
-                              ])
-                              .describe(
-                                'Type of entity that can be referenced by entity properties.'
-                              ),
-                          ])
-                          .optional(),
-                        updated_at: zod.string().datetime({}),
-                      })
-                      .describe(
-                        'Property definition model (service representation).'
-                      ),
-                    value: zod
-                      .union([
-                        zod.null(),
-                        zod
-                          .union([
-                            zod
-                              .object({
-                                type: zod.enum(['Boolean']),
-                                value: zod
-                                  .boolean()
-                                  .describe(
-                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                  ),
-                              })
-                              .describe(
-                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Number']),
-                                value: zod
-                                  .number()
-                                  .describe(
-                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                  ),
-                              })
-                              .describe(
-                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['String']),
-                                value: zod
-                                  .string()
-                                  .describe(
-                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                  ),
-                              })
-                              .describe(
-                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Date']),
-                                value: zod
-                                  .string()
-                                  .datetime({})
-                                  .describe(
-                                    'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                  ),
-                              })
-                              .describe(
-                                'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['SelectOption']),
-                                value: zod
-                                  .array(zod.string().uuid())
-                                  .describe(
-                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['EntityReference']),
-                                value: zod
-                                  .array(
-                                    zod
-                                      .object({
-                                        entity_id: zod.string(),
-                                        entity_type: zod
-                                          .enum([
-                                            'CHANNEL',
-                                            'CHAT',
-                                            'COMPANY',
-                                            'DOCUMENT',
-                                            'PROJECT',
-                                            'TASK',
-                                            'THREAD',
-                                            'USER',
-                                          ])
-                                          .describe(
-                                            'Type of entity that can be referenced by entity properties.'
-                                          ),
-                                        specific_message_id: zod
-                                          .string()
-                                          .uuid()
-                                          .nullish()
-                                          .describe(
-                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                                          ),
-                                      })
-                                      .describe(
-                                        'Entity reference for entity-type property values.'
-                                      )
-                                  )
-                                  .describe(
-                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Link']),
-                                value: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                              ),
-                          ])
-                          .describe(
-                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.'
-                          ),
-                      ])
-                      .optional(),
-                  })
-                  .describe(
-                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
-                  )
-              )
-              .describe('Properties'),
-            sha: zod
-              .string()
-              .nullish()
-              .describe(
-                'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-              ),
-            subType: zod
-              .union([
-                zod.null(),
-                zod
-                  .object({
-                    is_completed: zod
-                      .boolean()
-                      .describe(
-                        'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                      ),
-                    type: zod.enum(['task']),
-                  })
-                  .describe('A task document with its associated properties')
-                  .describe(
-                    'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                  ),
-              ])
-              .optional(),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .describe(
-                'The time the document instance / document BOM was updated'
-              ),
-            viewedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was last viewed'),
-          }),
-          tag: zod.enum(['document']),
-        }),
-        zod.object({
-          data: zod.object({
-            createdAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the chat was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the chat was deleted'),
-            id: zod.string().uuid().describe('The chat uuid'),
-            isPersistent: zod
-              .boolean()
-              .describe('Whether the chat is persistent or not'),
-            name: zod.string().describe('The name of the chat'),
-            ownerId: zod.string().describe('Who the chat belongs to'),
-            projectId: zod
-              .string()
-              .uuid()
-              .nullish()
-              .describe('The project id of the chat'),
-            properties: zod
-              .array(
-                zod
-                  .object({
-                    definition: zod
-                      .object({
-                        created_at: zod.string().datetime({}),
-                        data_type: zod
-                          .enum([
-                            'BOOLEAN',
-                            'DATE',
-                            'NUMBER',
-                            'STRING',
-                            'SELECT_NUMBER',
-                            'SELECT_STRING',
-                            'ENTITY',
-                            'LINK',
-                          ])
-                          .describe(
-                            'Data type for property values, determining storage and validation.'
-                          ),
-                        display_name: zod.string(),
-                        id: zod.string().uuid(),
-                        is_metadata: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
-                          ),
-                        is_multi_select: zod.boolean(),
-                        is_system: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system property (stored in DB).'
-                          ),
-                        owner: zod
-                          .union([
-                            zod
-                              .object({
-                                scope: zod.enum(['user']),
-                                user_id: zod.string(),
-                              })
-                              .describe('User-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['organization']),
-                              })
-                              .describe('Organization-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['user_and_organization']),
-                                user_id: zod.string(),
-                              })
-                              .describe('Both user and organization-scoped'),
-                            zod
-                              .object({
-                                scope: zod.enum(['system']),
-                              })
-                              .describe(
-                                'System-owned property (no user or org owner)'
-                              ),
-                          ])
-                          .describe(
-                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-                          ),
-                        specific_entity_type: zod
-                          .union([
-                            zod.null(),
-                            zod
-                              .enum([
-                                'CHANNEL',
-                                'CHAT',
-                                'COMPANY',
-                                'DOCUMENT',
-                                'PROJECT',
-                                'TASK',
-                                'THREAD',
-                                'USER',
-                              ])
-                              .describe(
-                                'Type of entity that can be referenced by entity properties.'
-                              ),
-                          ])
-                          .optional(),
-                        updated_at: zod.string().datetime({}),
-                      })
-                      .describe(
-                        'Property definition model (service representation).'
-                      ),
-                    value: zod
-                      .union([
-                        zod.null(),
-                        zod
-                          .union([
-                            zod
-                              .object({
-                                type: zod.enum(['Boolean']),
-                                value: zod
-                                  .boolean()
-                                  .describe(
-                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                  ),
-                              })
-                              .describe(
-                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Number']),
-                                value: zod
-                                  .number()
-                                  .describe(
-                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                  ),
-                              })
-                              .describe(
-                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['String']),
-                                value: zod
-                                  .string()
-                                  .describe(
-                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                  ),
-                              })
-                              .describe(
-                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Date']),
-                                value: zod
-                                  .string()
-                                  .datetime({})
-                                  .describe(
-                                    'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                  ),
-                              })
-                              .describe(
-                                'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['SelectOption']),
-                                value: zod
-                                  .array(zod.string().uuid())
-                                  .describe(
-                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['EntityReference']),
-                                value: zod
-                                  .array(
-                                    zod
-                                      .object({
-                                        entity_id: zod.string(),
-                                        entity_type: zod
-                                          .enum([
-                                            'CHANNEL',
-                                            'CHAT',
-                                            'COMPANY',
-                                            'DOCUMENT',
-                                            'PROJECT',
-                                            'TASK',
-                                            'THREAD',
-                                            'USER',
-                                          ])
-                                          .describe(
-                                            'Type of entity that can be referenced by entity properties.'
-                                          ),
-                                        specific_message_id: zod
-                                          .string()
-                                          .uuid()
-                                          .nullish()
-                                          .describe(
-                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                                          ),
-                                      })
-                                      .describe(
-                                        'Entity reference for entity-type property values.'
-                                      )
-                                  )
-                                  .describe(
-                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Link']),
-                                value: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                              ),
-                          ])
-                          .describe(
-                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.'
-                          ),
-                      ])
-                      .optional(),
-                  })
-                  .describe(
-                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
-                  )
-              )
-              .describe('Properties'),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the chat was last updated'),
-            viewedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the chat was last viewed'),
-          }),
-          tag: zod.enum(['chat']),
-        }),
-        zod.object({
-          data: zod.object({
-            createdAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the project was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the project was deleted'),
-            id: zod.string().uuid().describe('The id of the project'),
-            name: zod.string().describe('The name of the project'),
-            ownerId: zod
-              .string()
-              .describe('The user id of who created the project'),
-            parentId: zod
-              .string()
-              .uuid()
-              .nullish()
-              .describe('The parent project id'),
-            properties: zod
-              .array(
-                zod
-                  .object({
-                    definition: zod
-                      .object({
-                        created_at: zod.string().datetime({}),
-                        data_type: zod
-                          .enum([
-                            'BOOLEAN',
-                            'DATE',
-                            'NUMBER',
-                            'STRING',
-                            'SELECT_NUMBER',
-                            'SELECT_STRING',
-                            'ENTITY',
-                            'LINK',
-                          ])
-                          .describe(
-                            'Data type for property values, determining storage and validation.'
-                          ),
-                        display_name: zod.string(),
-                        id: zod.string().uuid(),
-                        is_metadata: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
-                          ),
-                        is_multi_select: zod.boolean(),
-                        is_system: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system property (stored in DB).'
-                          ),
-                        owner: zod
-                          .union([
-                            zod
-                              .object({
-                                scope: zod.enum(['user']),
-                                user_id: zod.string(),
-                              })
-                              .describe('User-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['organization']),
-                              })
-                              .describe('Organization-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['user_and_organization']),
-                                user_id: zod.string(),
-                              })
-                              .describe('Both user and organization-scoped'),
-                            zod
-                              .object({
-                                scope: zod.enum(['system']),
-                              })
-                              .describe(
-                                'System-owned property (no user or org owner)'
-                              ),
-                          ])
-                          .describe(
-                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-                          ),
-                        specific_entity_type: zod
-                          .union([
-                            zod.null(),
-                            zod
-                              .enum([
-                                'CHANNEL',
-                                'CHAT',
-                                'COMPANY',
-                                'DOCUMENT',
-                                'PROJECT',
-                                'TASK',
-                                'THREAD',
-                                'USER',
-                              ])
-                              .describe(
-                                'Type of entity that can be referenced by entity properties.'
-                              ),
-                          ])
-                          .optional(),
-                        updated_at: zod.string().datetime({}),
-                      })
-                      .describe(
-                        'Property definition model (service representation).'
-                      ),
-                    value: zod
-                      .union([
-                        zod.null(),
-                        zod
-                          .union([
-                            zod
-                              .object({
-                                type: zod.enum(['Boolean']),
-                                value: zod
-                                  .boolean()
-                                  .describe(
-                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                  ),
-                              })
-                              .describe(
-                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Number']),
-                                value: zod
-                                  .number()
-                                  .describe(
-                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                  ),
-                              })
-                              .describe(
-                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['String']),
-                                value: zod
-                                  .string()
-                                  .describe(
-                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                  ),
-                              })
-                              .describe(
-                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Date']),
-                                value: zod
-                                  .string()
-                                  .datetime({})
-                                  .describe(
-                                    'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                  ),
-                              })
-                              .describe(
-                                'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['SelectOption']),
-                                value: zod
-                                  .array(zod.string().uuid())
-                                  .describe(
-                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['EntityReference']),
-                                value: zod
-                                  .array(
-                                    zod
-                                      .object({
-                                        entity_id: zod.string(),
-                                        entity_type: zod
-                                          .enum([
-                                            'CHANNEL',
-                                            'CHAT',
-                                            'COMPANY',
-                                            'DOCUMENT',
-                                            'PROJECT',
-                                            'TASK',
-                                            'THREAD',
-                                            'USER',
-                                          ])
-                                          .describe(
-                                            'Type of entity that can be referenced by entity properties.'
-                                          ),
-                                        specific_message_id: zod
-                                          .string()
-                                          .uuid()
-                                          .nullish()
-                                          .describe(
-                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                                          ),
-                                      })
-                                      .describe(
-                                        'Entity reference for entity-type property values.'
-                                      )
-                                  )
-                                  .describe(
-                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Link']),
-                                value: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                              ),
-                          ])
-                          .describe(
-                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.'
-                          ),
-                      ])
-                      .optional(),
-                  })
-                  .describe(
-                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
-                  )
-              )
-              .describe('Properties'),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the project was updated'),
-            viewedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was last viewed'),
-          }),
-          tag: zod.enum(['project']),
-        }),
-        zod.object({
-          data: zod
-            .object({
-              createdAt: zod.string().datetime({}),
-              id: zod.string().uuid(),
-              inboxVisible: zod.boolean(),
-              isDraft: zod.boolean(),
-              isImportant: zod.boolean(),
-              isRead: zod.boolean(),
-              name: zod.string().nullish(),
-              ownerId: zod.string(),
-              projectId: zod.string().nullish(),
-              providerId: zod.string().nullish(),
-              senderEmail: zod.string().nullish(),
-              senderName: zod.string().nullish(),
-              senderPhotoUrl: zod.string().nullish(),
-              snippet: zod.string().nullish(),
-              sortTs: zod.string().datetime({}),
-              updatedAt: zod.string().datetime({}),
-              viewedAt: zod.string().datetime({}).nullish(),
-            })
-            .and(
-              zod.object({
-                attachments: zod.array(
-                  zod.object({
-                    contentId: zod.string().nullish(),
-                    createdAt: zod.string().datetime({}),
-                    filename: zod.string().nullish(),
-                    id: zod.string().uuid(),
-                    messageId: zod.string().uuid(),
-                    mimeType: zod.string().nullish(),
-                    providerAttachmentId: zod.string().nullish(),
-                    sizeBytes: zod.number().nullish(),
-                  })
-                ),
-                labels: zod.array(
-                  zod.object({
-                    createdAt: zod.string().datetime({}),
-                    id: zod.string().uuid(),
-                    labelListVisibility: zod.enum([
-                      'labelShow',
-                      'labelShowIfUnread',
-                      'labelHide',
-                    ]),
-                    linkId: zod.string().uuid(),
-                    messageListVisibility: zod.enum(['show', 'hide']),
-                    name: zod.string(),
-                    providerLabelId: zod.string(),
-                    type: zod.enum(['system', 'user']),
-                  })
-                ),
-                participants: zod.array(
-                  zod.object({
-                    emailAddress: zod.string().nullish(),
-                    id: zod.string().uuid(),
-                    linkId: zod.string().uuid(),
-                    name: zod.string().nullish(),
-                    sfsPhotoUrl: zod.string().nullish(),
-                  })
-                ),
-                properties: zod.array(
-                  zod
-                    .object({
-                      definition: zod
-                        .object({
-                          created_at: zod.string().datetime({}),
-                          data_type: zod
-                            .enum([
-                              'BOOLEAN',
-                              'DATE',
-                              'NUMBER',
-                              'STRING',
-                              'SELECT_NUMBER',
-                              'SELECT_STRING',
-                              'ENTITY',
-                              'LINK',
-                            ])
-                            .describe(
-                              'Data type for property values, determining storage and validation.'
-                            ),
-                          display_name: zod.string(),
-                          id: zod.string().uuid(),
-                          is_metadata: zod
-                            .boolean()
-                            .describe(
-                              'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
-                            ),
-                          is_multi_select: zod.boolean(),
-                          is_system: zod
-                            .boolean()
-                            .describe(
-                              'Flag to indicate if this is a system property (stored in DB).'
-                            ),
-                          owner: zod
-                            .union([
-                              zod
-                                .object({
-                                  scope: zod.enum(['user']),
-                                  user_id: zod.string(),
-                                })
-                                .describe('User-scoped property only'),
-                              zod
-                                .object({
-                                  organization_id: zod.number(),
-                                  scope: zod.enum(['organization']),
-                                })
-                                .describe('Organization-scoped property only'),
-                              zod
-                                .object({
-                                  organization_id: zod.number(),
-                                  scope: zod.enum(['user_and_organization']),
-                                  user_id: zod.string(),
-                                })
-                                .describe('Both user and organization-scoped'),
-                              zod
-                                .object({
-                                  scope: zod.enum(['system']),
-                                })
-                                .describe(
-                                  'System-owned property (no user or org owner)'
-                                ),
-                            ])
-                            .describe(
-                              'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-                            ),
-                          specific_entity_type: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .enum([
-                                  'CHANNEL',
-                                  'CHAT',
-                                  'COMPANY',
-                                  'DOCUMENT',
-                                  'PROJECT',
-                                  'TASK',
-                                  'THREAD',
-                                  'USER',
-                                ])
-                                .describe(
-                                  'Type of entity that can be referenced by entity properties.'
-                                ),
-                            ])
-                            .optional(),
-                          updated_at: zod.string().datetime({}),
-                        })
-                        .describe(
-                          'Property definition model (service representation).'
-                        ),
-                      value: zod
-                        .union([
-                          zod.null(),
-                          zod
-                            .union([
-                              zod
-                                .object({
-                                  type: zod.enum(['Boolean']),
-                                  value: zod
-                                    .boolean()
-                                    .describe(
-                                      'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                    ),
-                                })
-                                .describe(
-                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['Number']),
-                                  value: zod
-                                    .number()
-                                    .describe(
-                                      'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                    ),
-                                })
-                                .describe(
-                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['String']),
-                                  value: zod
-                                    .string()
-                                    .describe(
-                                      'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                    ),
-                                })
-                                .describe(
-                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['Date']),
-                                  value: zod
-                                    .string()
-                                    .datetime({})
-                                    .describe(
-                                      'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                    ),
-                                })
-                                .describe(
-                                  'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['SelectOption']),
-                                  value: zod
-                                    .array(zod.string().uuid())
-                                    .describe(
-                                      'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                    ),
-                                })
-                                .describe(
-                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['EntityReference']),
-                                  value: zod
-                                    .array(
-                                      zod
-                                        .object({
-                                          entity_id: zod.string(),
-                                          entity_type: zod
-                                            .enum([
-                                              'CHANNEL',
-                                              'CHAT',
-                                              'COMPANY',
-                                              'DOCUMENT',
-                                              'PROJECT',
-                                              'TASK',
-                                              'THREAD',
-                                              'USER',
-                                            ])
-                                            .describe(
-                                              'Type of entity that can be referenced by entity properties.'
-                                            ),
-                                          specific_message_id: zod
-                                            .string()
-                                            .uuid()
-                                            .nullish()
-                                            .describe(
-                                              'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                                            ),
-                                        })
-                                        .describe(
-                                          'Entity reference for entity-type property values.'
-                                        )
-                                    )
-                                    .describe(
-                                      'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                    ),
-                                })
-                                .describe(
-                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['Link']),
-                                  value: zod
-                                    .array(zod.string())
-                                    .describe(
-                                      'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                    ),
-                                })
-                                .describe(
-                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                ),
-                            ])
-                            .describe(
-                              'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.'
-                            ),
-                        ])
-                        .optional(),
-                    })
-                    .describe(
-                      'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
-                    )
-                ),
-              })
-            ),
-          tag: zod.enum(['emailThread']),
-        }),
-        zod.object({
-          data: zod
-            .object({
-              channel: zod.object({
-                channel_type: zod.enum([
-                  'public',
-                  'organization',
-                  'private',
-                  'direct_message',
-                  'team',
-                ]),
-                created_at: zod.string().datetime({}),
-                id: zod.string().uuid(),
-                name: zod.string().nullish(),
-                org_id: zod
-                  .number()
-                  .min(getItemsSoupResponseItemsItemDataChannelOrgIdMin)
-                  .nullish(),
-                owner_id: zod.string(),
-                team_id: zod.string().uuid().nullish(),
-                updated_at: zod.string().datetime({}),
-              }),
-              participants: zod.array(
-                zod.object({
-                  channel_id: zod.string().uuid(),
-                  joined_at: zod.string().datetime({}),
-                  left_at: zod.string().datetime({}).nullish(),
-                  role: zod
-                    .enum(['owner', 'admin', 'member'])
-                    .describe('The role a user has within a channel.'),
-                  user_id: zod.string(),
-                })
-              ),
-            })
-            .and(
-              zod.object({
-                latest_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.string().datetime({}),
-                      deleted_at: zod.string().datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
-                        .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
-                        ),
-                      message_id: zod.string().uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.string().uuid().nullish(),
-                      updated_at: zod.string().datetime({}),
-                    }),
-                  ])
-                  .optional(),
-                latest_non_thread_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.string().datetime({}),
-                      deleted_at: zod.string().datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
-                        .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
-                        ),
-                      message_id: zod.string().uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.string().uuid().nullish(),
-                      updated_at: zod.string().datetime({}),
-                    }),
-                  ])
-                  .optional(),
-              })
-            )
-            .and(
-              zod.object({
-                interacted_at: zod.string().datetime({}).nullish(),
-                viewed_at: zod.string().datetime({}).nullish(),
-              })
-            ),
-          tag: zod.enum(['channel']),
-        }),
-      ])
-      .and(
-        zod.object({
-          frecency_score: zod.number(),
-        })
-      )
-  ),
-  next_cursor: zod.string().nullish(),
-});
+  "items": zod.array(zod.union([zod.object({
+  "data": zod.object({
+  "branchedFromId": zod.string().uuid().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'),
+  "createdAt": zod.string().datetime({}).describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().uuid().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "ownerId": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
+  "properties": zod.array(zod.object({
+  "definition": zod.object({
+  "created_at": zod.string().datetime({}),
+  "data_type": zod.enum(['BOOLEAN', 'DATE', 'NUMBER', 'STRING', 'SELECT_NUMBER', 'SELECT_STRING', 'ENTITY', 'LINK']).describe('Data type for property values, determining storage and validation.'),
+  "display_name": zod.string(),
+  "id": zod.string().uuid(),
+  "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
+  "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
+  "owner": zod.union([zod.object({
+  "scope": zod.enum(['user']),
+  "user_id": zod.string()
+}).describe('User-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['organization'])
+}).describe('Organization-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['user_and_organization']),
+  "user_id": zod.string()
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "updated_at": zod.string().datetime({})
+}).describe('Property definition model (service representation).'),
+  "value": zod.union([zod.null(),zod.union([zod.object({
+  "type": zod.enum(['Boolean']),
+  "value": zod.boolean().describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}')
+}).describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'),zod.object({
+  "type": zod.enum(['Number']),
+  "value": zod.number().describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}')
+}).describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'),zod.object({
+  "type": zod.enum(['String']),
+  "value": zod.string().describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}')
+}).describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'),zod.object({
+  "type": zod.enum(['Date']),
+  "value": zod.string().datetime({}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}')
+}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'),zod.object({
+  "type": zod.enum(['SelectOption']),
+  "value": zod.array(zod.string().uuid()).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)')
+}).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['EntityReference']),
+  "value": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
+}).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['Link']),
+  "value": zod.array(zod.string()).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')
+}).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')]).describe('Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.')]).optional()
+}).describe('A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.')).describe('Properties'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
+  "updatedAt": zod.string().datetime({}).describe('The time the document instance / document BOM was updated'),
+  "viewedAt": zod.string().datetime({}).nullish().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['document'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.string().datetime({}).describe('The time the chat was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the chat was deleted'),
+  "id": zod.string().uuid().describe('The chat uuid'),
+  "isPersistent": zod.boolean().describe('Whether the chat is persistent or not'),
+  "name": zod.string().describe('The name of the chat'),
+  "ownerId": zod.string().describe('Who the chat belongs to'),
+  "projectId": zod.string().uuid().nullish().describe('The project id of the chat'),
+  "properties": zod.array(zod.object({
+  "definition": zod.object({
+  "created_at": zod.string().datetime({}),
+  "data_type": zod.enum(['BOOLEAN', 'DATE', 'NUMBER', 'STRING', 'SELECT_NUMBER', 'SELECT_STRING', 'ENTITY', 'LINK']).describe('Data type for property values, determining storage and validation.'),
+  "display_name": zod.string(),
+  "id": zod.string().uuid(),
+  "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
+  "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
+  "owner": zod.union([zod.object({
+  "scope": zod.enum(['user']),
+  "user_id": zod.string()
+}).describe('User-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['organization'])
+}).describe('Organization-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['user_and_organization']),
+  "user_id": zod.string()
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "updated_at": zod.string().datetime({})
+}).describe('Property definition model (service representation).'),
+  "value": zod.union([zod.null(),zod.union([zod.object({
+  "type": zod.enum(['Boolean']),
+  "value": zod.boolean().describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}')
+}).describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'),zod.object({
+  "type": zod.enum(['Number']),
+  "value": zod.number().describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}')
+}).describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'),zod.object({
+  "type": zod.enum(['String']),
+  "value": zod.string().describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}')
+}).describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'),zod.object({
+  "type": zod.enum(['Date']),
+  "value": zod.string().datetime({}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}')
+}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'),zod.object({
+  "type": zod.enum(['SelectOption']),
+  "value": zod.array(zod.string().uuid()).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)')
+}).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['EntityReference']),
+  "value": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
+}).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['Link']),
+  "value": zod.array(zod.string()).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')
+}).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')]).describe('Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.')]).optional()
+}).describe('A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.')).describe('Properties'),
+  "updatedAt": zod.string().datetime({}).describe('The time the chat was last updated'),
+  "viewedAt": zod.string().datetime({}).nullish().describe('The time the chat was last viewed')
+}),
+  "tag": zod.enum(['chat'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.string().datetime({}).describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the project was deleted'),
+  "id": zod.string().uuid().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "ownerId": zod.string().describe('The user id of who created the project'),
+  "parentId": zod.string().uuid().nullish().describe('The parent project id'),
+  "properties": zod.array(zod.object({
+  "definition": zod.object({
+  "created_at": zod.string().datetime({}),
+  "data_type": zod.enum(['BOOLEAN', 'DATE', 'NUMBER', 'STRING', 'SELECT_NUMBER', 'SELECT_STRING', 'ENTITY', 'LINK']).describe('Data type for property values, determining storage and validation.'),
+  "display_name": zod.string(),
+  "id": zod.string().uuid(),
+  "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
+  "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
+  "owner": zod.union([zod.object({
+  "scope": zod.enum(['user']),
+  "user_id": zod.string()
+}).describe('User-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['organization'])
+}).describe('Organization-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['user_and_organization']),
+  "user_id": zod.string()
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "updated_at": zod.string().datetime({})
+}).describe('Property definition model (service representation).'),
+  "value": zod.union([zod.null(),zod.union([zod.object({
+  "type": zod.enum(['Boolean']),
+  "value": zod.boolean().describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}')
+}).describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'),zod.object({
+  "type": zod.enum(['Number']),
+  "value": zod.number().describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}')
+}).describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'),zod.object({
+  "type": zod.enum(['String']),
+  "value": zod.string().describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}')
+}).describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'),zod.object({
+  "type": zod.enum(['Date']),
+  "value": zod.string().datetime({}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}')
+}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'),zod.object({
+  "type": zod.enum(['SelectOption']),
+  "value": zod.array(zod.string().uuid()).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)')
+}).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['EntityReference']),
+  "value": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
+}).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['Link']),
+  "value": zod.array(zod.string()).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')
+}).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')]).describe('Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.')]).optional()
+}).describe('A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.')).describe('Properties'),
+  "updatedAt": zod.string().datetime({}).describe('The time the project was updated'),
+  "viewedAt": zod.string().datetime({}).nullish().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['project'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "inboxVisible": zod.boolean(),
+  "isDraft": zod.boolean(),
+  "isImportant": zod.boolean(),
+  "isRead": zod.boolean(),
+  "name": zod.string().nullish(),
+  "ownerId": zod.string(),
+  "projectId": zod.string().nullish(),
+  "providerId": zod.string().nullish(),
+  "senderEmail": zod.string().nullish(),
+  "senderName": zod.string().nullish(),
+  "senderPhotoUrl": zod.string().nullish(),
+  "snippet": zod.string().nullish(),
+  "sortTs": zod.string().datetime({}),
+  "updatedAt": zod.string().datetime({}),
+  "viewedAt": zod.string().datetime({}).nullish()
+}).and(zod.object({
+  "attachments": zod.array(zod.object({
+  "contentId": zod.string().nullish(),
+  "createdAt": zod.string().datetime({}),
+  "filename": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "messageId": zod.string().uuid(),
+  "mimeType": zod.string().nullish(),
+  "providerAttachmentId": zod.string().nullish(),
+  "sizeBytes": zod.number().nullish()
+})),
+  "labels": zod.array(zod.object({
+  "createdAt": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "labelListVisibility": zod.enum(['labelShow', 'labelShowIfUnread', 'labelHide']),
+  "linkId": zod.string().uuid(),
+  "messageListVisibility": zod.enum(['show', 'hide']),
+  "name": zod.string(),
+  "providerLabelId": zod.string(),
+  "type": zod.enum(['system', 'user'])
+})),
+  "participants": zod.array(zod.object({
+  "emailAddress": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "linkId": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "sfsPhotoUrl": zod.string().nullish()
+})),
+  "properties": zod.array(zod.object({
+  "definition": zod.object({
+  "created_at": zod.string().datetime({}),
+  "data_type": zod.enum(['BOOLEAN', 'DATE', 'NUMBER', 'STRING', 'SELECT_NUMBER', 'SELECT_STRING', 'ENTITY', 'LINK']).describe('Data type for property values, determining storage and validation.'),
+  "display_name": zod.string(),
+  "id": zod.string().uuid(),
+  "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
+  "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
+  "owner": zod.union([zod.object({
+  "scope": zod.enum(['user']),
+  "user_id": zod.string()
+}).describe('User-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['organization'])
+}).describe('Organization-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['user_and_organization']),
+  "user_id": zod.string()
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "updated_at": zod.string().datetime({})
+}).describe('Property definition model (service representation).'),
+  "value": zod.union([zod.null(),zod.union([zod.object({
+  "type": zod.enum(['Boolean']),
+  "value": zod.boolean().describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}')
+}).describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'),zod.object({
+  "type": zod.enum(['Number']),
+  "value": zod.number().describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}')
+}).describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'),zod.object({
+  "type": zod.enum(['String']),
+  "value": zod.string().describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}')
+}).describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'),zod.object({
+  "type": zod.enum(['Date']),
+  "value": zod.string().datetime({}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}')
+}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'),zod.object({
+  "type": zod.enum(['SelectOption']),
+  "value": zod.array(zod.string().uuid()).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)')
+}).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['EntityReference']),
+  "value": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
+}).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['Link']),
+  "value": zod.array(zod.string()).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')
+}).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')]).describe('Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.')]).optional()
+}).describe('A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'))
+})),
+  "tag": zod.enum(['emailThread'])
+}),zod.object({
+  "data": zod.object({
+  "channel": zod.object({
+  "channel_type": zod.enum(['public', 'organization', 'private', 'direct_message', 'team']),
+  "created_at": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "org_id": zod.number().min(getItemsSoupResponseItemsItemDataChannelOrgIdMin).nullish(),
+  "owner_id": zod.string(),
+  "team_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+}),
+  "participants": zod.array(zod.object({
+  "channel_id": zod.string().uuid(),
+  "joined_at": zod.string().datetime({}),
+  "left_at": zod.string().datetime({}).nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']).describe('The role a user has within a channel.'),
+  "user_id": zod.string()
+}))
+}).and(zod.object({
+  "latest_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional(),
+  "latest_non_thread_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional()
+})).and(zod.object({
+  "interacted_at": zod.string().datetime({}).nullish(),
+  "viewed_at": zod.string().datetime({}).nullish()
+})),
+  "tag": zod.enum(['channel'])
+})]).and(zod.object({
+  "frecency_score": zod.number()
+}))),
+  "next_cursor": zod.string().nullish()
+})
+
 
 /**
  * @summary Gets the items the user has access to
  */
 export const postItemsSoupQueryParams = zod.object({
-  cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
-});
+  "cursor": zod.string().optional().describe('Base64 encoded cursor value.')
+})
 
 export const postItemsSoupBodyLimitMin = 0;
 
-export const postItemsSoupBody = zod
-  .object({
-    channel_filters: zod
-      .object({
-        channel_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
-          ),
-        channel_types: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
-          ),
-        importance: zod
-          .boolean()
-          .nullish()
-          .describe(
-            'Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
-          ),
-        mentions: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
-          ),
-        notification_filters: zod
-          .object({
-            done: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
-              ),
-          })
-          .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
-        org_id: zod
-          .number()
-          .nullish()
-          .describe(
-            'Channel organization ID to search within. Empty to ignore organization filtering.'
-          ),
-        sender_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
-          ),
-        team_id: zod
-          .string()
-          .nullish()
-          .describe(
-            'Channel team ID to search within. Empty to ignore team filtering.'
-          ),
-        thread_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads."
-          ),
-      })
-      .optional()
-      .describe(
-        'The channel message filters used to filter down what channel messages you search over.'
-      ),
-    chat_filters: zod
-      .object({
-        chat_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
-          ),
-        importance: zod
-          .boolean()
-          .nullish()
-          .describe(
-            'Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
-          ),
-        notification_filters: zod
-          .object({
-            done: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
-              ),
-          })
-          .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
-        owners: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
-          ),
-        project_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering."
-          ),
-        role: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles."
-          ),
-      })
-      .optional()
-      .describe(
-        'The chat filters used to filter down what chats you search over.'
-      ),
-    document_filters: zod
-      .object({
-        document_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Document ids to search over. Examples: ['doc1'], ['doc1', 'doc2']. Empty to search all accessible documents."
-          ),
-        file_types: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
-          ),
-        importance: zod
-          .boolean()
-          .nullish()
-          .describe(
-            'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
-          ),
-        is_email_attachment: zod
-          .boolean()
-          .nullish()
-          .describe(
-            'Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both.'
-          ),
-        notification_filters: zod
-          .object({
-            done: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
-              ),
-          })
-          .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
-        owners: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
-          ),
-        project_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
-          ),
-        sub_types: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Filter by document sub type. Examples: ['task']. Empty to search all sub types."
-          ),
-        task_filters: zod
-          .object({
-            include_cbm_atm_nc: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters.'
-              ),
-          })
-          .optional()
-          .describe('Task-only filters nested under document filters.'),
-      })
-      .optional()
-      .describe(
-        'The document filters used to filter down what documents you search over.'
-      ),
-    email_filters: zod
-      .object({
-        bcc: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
-          ),
-        cc: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
-          ),
-        email_thread_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
-          ),
-        exclude_labels: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            'Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.'
-          ),
-        importance: zod
-          .boolean()
-          .nullish()
-          .describe(
-            'Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums).'
-          ),
-        include_labels: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
-          ),
-        notification_filters: zod
-          .object({
-            done: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
-              ),
-          })
-          .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
-        project_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            'A list of project ids to search within. Empty to ignore project filtering.'
-          ),
-        recipients: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient."
-          ),
-        senders: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
-          ),
-        shared: zod
-          .enum(['exclude', 'include', 'only'])
-          .optional()
-          .describe(
-            'Controls whether shared email threads are included in results.'
-          ),
-      })
-      .optional()
-      .describe(
-        'The email filters used to filter down what emails you search over.'
-      ),
-    project_filters: zod
-      .object({
-        importance: zod
-          .boolean()
-          .nullish()
-          .describe(
-            'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
-          ),
-        notification_filters: zod
-          .object({
-            done: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
-              ),
-          })
-          .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
-        owners: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
-          ),
-        project_ids: zod
-          .array(zod.string())
-          .optional()
-          .describe(
-            "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
-          ),
-      })
-      .optional()
-      .describe(
-        'The project filters used to filter down what projects you search over.'
-      ),
-    property_filters: zod
-      .array(
-        zod
-          .object({
-            entity_ids: zod
-              .array(zod.string())
-              .optional()
-              .describe(
-                "Entity reference IDs to match. Multiple values are OR'd together."
-              ),
-            entity_type: zod
-              .string()
-              .nullish()
-              .describe(
-                'The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types.'
-              ),
-            option_ids: zod
-              .array(zod.string())
-              .optional()
-              .describe(
-                "Select option UUIDs to match. Multiple values are OR'd together."
-              ),
-            property_definition_id: zod
-              .string()
-              .describe('The UUID of the property definition to filter on.'),
-          })
-          .describe(
-            "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together."
-          )
-      )
-      .optional()
-      .describe('property-based filters applied across entity types'),
-  })
-  .describe('a bundle of all of the filters for each entity type')
-  .and(
-    zod.object({
-      expand: zod
-        .boolean()
-        .nullish()
-        .describe('Whether to expand projects. Defaults to true.'),
-      limit: zod
-        .number()
-        .min(postItemsSoupBodyLimitMin)
-        .nullish()
-        .describe(
-          'Limit the number of items returned. Defaults to 20. Max 500.'
-        ),
-      sort_method: zod
-        .union([
-          zod.null(),
-          zod.enum([
-            'viewed_at',
-            'created_at',
-            'updated_at',
-            'viewed_updated',
-            'frecency',
-          ]),
-        ])
-        .optional(),
-    })
-  )
-  .and(
-    zod.object({
-      emailView: zod
-        .string()
-        .optional()
-        .describe('the view of specific emails to display'),
-    })
-  );
+
+export const postItemsSoupBody = zod.object({
+  "channel_filters": zod.object({
+  "channel_ids": zod.array(zod.string()).optional().describe('Channel IDs to search within. Examples: [\'general\']. Empty to search all accessible channels.'),
+  "channel_types": zod.array(zod.string()).optional().describe('Channel types to filter by. Examples: [\'public\'], [\'direct_message\', \'private\']. Empty to search all channel types.'),
+  "importance": zod.boolean().nullish().describe('Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'),
+  "mentions": zod.array(zod.string()).optional().describe('Channel user mentions to search for. Examples: [\'@username\']. Empty if not filtering by mentions.'),
+  "notification_filters": zod.object({
+  "done": zod.boolean().nullish().describe('Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'),
+  "seen": zod.boolean().nullish().describe('Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.')
+}).optional().describe('Notification-level filters that apply to an entity type.'),
+  "org_id": zod.number().nullish().describe('Channel organization ID to search within. Empty to ignore organization filtering.'),
+  "sender_ids": zod.array(zod.string()).optional().describe('Sender IDs to search within. Examples: [\'user1\']. Empty to search all accessible senders.'),
+  "team_id": zod.string().nullish().describe('Channel team ID to search within. Empty to ignore team filtering.'),
+  "thread_ids": zod.array(zod.string()).optional().describe('Channel thread IDs to search within. Examples: [\'thread123\']. Empty to search all threads.')
+}).optional().describe('The channel message filters used to filter down what channel messages you search over.'),
+  "chat_filters": zod.object({
+  "chat_ids": zod.array(zod.string()).optional().describe('Chat ids to search over. Examples: [\'chat1\'], [\'chat1\', \'chat2\']. When provided, chat search will only match results on these chats. Empty to search all accessible chats.'),
+  "importance": zod.boolean().nullish().describe('Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'),
+  "notification_filters": zod.object({
+  "done": zod.boolean().nullish().describe('Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'),
+  "seen": zod.boolean().nullish().describe('Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.')
+}).optional().describe('Notification-level filters that apply to an entity type.'),
+  "owners": zod.array(zod.string()).optional().describe('Filter by chat owner. Examples: [\'macro|user1@user.com\'], [\'macro|user1@user.com\', \'macro|user2@user.com\']. Empty to search all owners.'),
+  "project_ids": zod.array(zod.string()).optional().describe('A list of project ids to search within. Examples: [\'project1\']. Empty to ignore project filtering.'),
+  "role": zod.array(zod.string()).optional().describe('Chat message roles to search. Examples: [\'user\'], [\'assistant\']. Empty to search all roles.')
+}).optional().describe('The chat filters used to filter down what chats you search over.'),
+  "document_filters": zod.object({
+  "document_ids": zod.array(zod.string()).optional().describe('Document ids to search over. Examples: [\'doc1\'], [\'doc1\', \'doc2\']. Empty to search all accessible documents.'),
+  "file_types": zod.array(zod.string()).optional().describe('Document file types to search. Examples: [\'pdf\'], [\'md\', \'txt\']. Empty to search all file types.'),
+  "importance": zod.boolean().nullish().describe('Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'),
+  "is_email_attachment": zod.boolean().nullish().describe('Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both.'),
+  "notification_filters": zod.object({
+  "done": zod.boolean().nullish().describe('Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'),
+  "seen": zod.boolean().nullish().describe('Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.')
+}).optional().describe('Notification-level filters that apply to an entity type.'),
+  "owners": zod.array(zod.string()).optional().describe('Filter by document owner. Examples: [\'macro|user1@user.com\'], [\'macro|user1@user.com\', \'macro|user2@user.com\']. Empty to search all owners.'),
+  "project_ids": zod.array(zod.string()).optional().describe('A list of project ids to search within. Examples: [\'project1\'].\nfiltering. Empty to ignore project filtering.'),
+  "sub_types": zod.array(zod.string()).optional().describe('Filter by document sub type. Examples: [\'task\']. Empty to search all sub types.'),
+  "task_filters": zod.object({
+  "include_cbm_atm_nc": zod.boolean().nullish().describe('Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters.')
+}).optional().describe('Task-only filters nested under document filters.')
+}).optional().describe('The document filters used to filter down what documents you search over.'),
+  "email_filters": zod.object({
+  "bcc": zod.array(zod.string()).optional().describe('Email BCC addresses to filter by. Examples: [\'user@example.com\']. Empty if not filtering by BCC.'),
+  "cc": zod.array(zod.string()).optional().describe('Email CC addresses to filter by. Examples: [\'user@example.com\']. Empty if not filtering by CC.'),
+  "email_thread_ids": zod.array(zod.string()).optional().describe('Email thread IDs to filter by. Examples: [\'thread-uuid-1\']. Empty to search all threads.'),
+  "exclude_labels": zod.array(zod.string()).optional().describe('Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.'),
+  "importance": zod.boolean().nullish().describe('Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums).'),
+  "include_labels": zod.array(zod.string()).optional().describe('Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'),
+  "notification_filters": zod.object({
+  "done": zod.boolean().nullish().describe('Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'),
+  "seen": zod.boolean().nullish().describe('Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.')
+}).optional().describe('Notification-level filters that apply to an entity type.'),
+  "project_ids": zod.array(zod.string()).optional().describe('A list of project ids to search within. Empty to ignore project filtering.'),
+  "recipients": zod.array(zod.string()).optional().describe('Email Recipient addresses to filter by. Examples: [\'user@example.com\']. Empty if not filtering by Recipient.'),
+  "senders": zod.array(zod.string()).optional().describe('Email sender addresses to filter by. Examples: [\'user@example.com\']. Empty to search all senders.'),
+  "shared": zod.enum(['exclude', 'include', 'only']).optional().describe('Controls whether shared email threads are included in results.')
+}).optional().describe('The email filters used to filter down what emails you search over.'),
+  "project_filters": zod.object({
+  "importance": zod.boolean().nullish().describe('Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'),
+  "notification_filters": zod.object({
+  "done": zod.boolean().nullish().describe('Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'),
+  "seen": zod.boolean().nullish().describe('Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.')
+}).optional().describe('Notification-level filters that apply to an entity type.'),
+  "owners": zod.array(zod.string()).optional().describe('Filter by project owner. Examples: [\'macro|user1@user.com\'], [\'macro|user1@user.com\', \'macro|user2@user.com\']. Empty to search all owners.'),
+  "project_ids": zod.array(zod.string()).optional().describe('Project IDs to search within. Examples: [\'project1\']. Empty to search all accessible projects.')
+}).optional().describe('The project filters used to filter down what projects you search over.'),
+  "property_filters": zod.array(zod.object({
+  "entity_ids": zod.array(zod.string()).optional().describe('Entity reference IDs to match. Multiple values are OR\'d together.'),
+  "entity_type": zod.string().nullish().describe('The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types.'),
+  "option_ids": zod.array(zod.string()).optional().describe('Select option UUIDs to match. Multiple values are OR\'d together.'),
+  "property_definition_id": zod.string().describe('The UUID of the property definition to filter on.')
+}).describe('A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR\'d together.\nMultiple filters are AND\'d together.')).optional().describe('property-based filters applied across entity types')
+}).describe('a bundle of all of the filters for each entity type').and(zod.object({
+  "expand": zod.boolean().nullish().describe('Whether to expand projects. Defaults to true.'),
+  "limit": zod.number().min(postItemsSoupBodyLimitMin).nullish().describe('Limit the number of items returned. Defaults to 20. Max 500.'),
+  "sort_method": zod.union([zod.null(),zod.enum(['viewed_at', 'created_at', 'updated_at', 'viewed_updated', 'frecency'])]).optional()
+})).and(zod.object({
+  "emailView": zod.string().optional().describe('the view of specific emails to display')
+}))
 
 export const postItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
 
+
 export const postItemsSoupResponse = zod.object({
-  items: zod.array(
-    zod
-      .union([
-        zod.object({
-          data: zod.object({
-            branchedFromId: zod
-              .string()
-              .uuid()
-              .nullish()
-              .describe('The id of the document this document branched from'),
-            branchedFromVersionId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
-              ),
-            createdAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the document was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was deleted'),
-            documentFamilyId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the document family this document belongs to'
-              ),
-            documentVersionId: zod
-              .number()
-              .describe(
-                'The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'
-              ),
-            fileType: zod
-              .string()
-              .nullish()
-              .describe('The file type of the document (e.g. pdf, docx)'),
-            id: zod.string().uuid().describe('The document id'),
-            name: zod.string().describe('The name of the document'),
-            ownerId: zod.string().describe('The owner of the document'),
-            projectId: zod
-              .string()
-              .uuid()
-              .nullish()
-              .describe('The id of the project that this document belongs to'),
-            properties: zod
-              .array(
-                zod
-                  .object({
-                    definition: zod
-                      .object({
-                        created_at: zod.string().datetime({}),
-                        data_type: zod
-                          .enum([
-                            'BOOLEAN',
-                            'DATE',
-                            'NUMBER',
-                            'STRING',
-                            'SELECT_NUMBER',
-                            'SELECT_STRING',
-                            'ENTITY',
-                            'LINK',
-                          ])
-                          .describe(
-                            'Data type for property values, determining storage and validation.'
-                          ),
-                        display_name: zod.string(),
-                        id: zod.string().uuid(),
-                        is_metadata: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
-                          ),
-                        is_multi_select: zod.boolean(),
-                        is_system: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system property (stored in DB).'
-                          ),
-                        owner: zod
-                          .union([
-                            zod
-                              .object({
-                                scope: zod.enum(['user']),
-                                user_id: zod.string(),
-                              })
-                              .describe('User-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['organization']),
-                              })
-                              .describe('Organization-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['user_and_organization']),
-                                user_id: zod.string(),
-                              })
-                              .describe('Both user and organization-scoped'),
-                            zod
-                              .object({
-                                scope: zod.enum(['system']),
-                              })
-                              .describe(
-                                'System-owned property (no user or org owner)'
-                              ),
-                          ])
-                          .describe(
-                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-                          ),
-                        specific_entity_type: zod
-                          .union([
-                            zod.null(),
-                            zod
-                              .enum([
-                                'CHANNEL',
-                                'CHAT',
-                                'COMPANY',
-                                'DOCUMENT',
-                                'PROJECT',
-                                'TASK',
-                                'THREAD',
-                                'USER',
-                              ])
-                              .describe(
-                                'Type of entity that can be referenced by entity properties.'
-                              ),
-                          ])
-                          .optional(),
-                        updated_at: zod.string().datetime({}),
-                      })
-                      .describe(
-                        'Property definition model (service representation).'
-                      ),
-                    value: zod
-                      .union([
-                        zod.null(),
-                        zod
-                          .union([
-                            zod
-                              .object({
-                                type: zod.enum(['Boolean']),
-                                value: zod
-                                  .boolean()
-                                  .describe(
-                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                  ),
-                              })
-                              .describe(
-                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Number']),
-                                value: zod
-                                  .number()
-                                  .describe(
-                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                  ),
-                              })
-                              .describe(
-                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['String']),
-                                value: zod
-                                  .string()
-                                  .describe(
-                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                  ),
-                              })
-                              .describe(
-                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Date']),
-                                value: zod
-                                  .string()
-                                  .datetime({})
-                                  .describe(
-                                    'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                  ),
-                              })
-                              .describe(
-                                'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['SelectOption']),
-                                value: zod
-                                  .array(zod.string().uuid())
-                                  .describe(
-                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['EntityReference']),
-                                value: zod
-                                  .array(
-                                    zod
-                                      .object({
-                                        entity_id: zod.string(),
-                                        entity_type: zod
-                                          .enum([
-                                            'CHANNEL',
-                                            'CHAT',
-                                            'COMPANY',
-                                            'DOCUMENT',
-                                            'PROJECT',
-                                            'TASK',
-                                            'THREAD',
-                                            'USER',
-                                          ])
-                                          .describe(
-                                            'Type of entity that can be referenced by entity properties.'
-                                          ),
-                                        specific_message_id: zod
-                                          .string()
-                                          .uuid()
-                                          .nullish()
-                                          .describe(
-                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                                          ),
-                                      })
-                                      .describe(
-                                        'Entity reference for entity-type property values.'
-                                      )
-                                  )
-                                  .describe(
-                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Link']),
-                                value: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                              ),
-                          ])
-                          .describe(
-                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.'
-                          ),
-                      ])
-                      .optional(),
-                  })
-                  .describe(
-                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
-                  )
-              )
-              .describe('Properties'),
-            sha: zod
-              .string()
-              .nullish()
-              .describe(
-                'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-              ),
-            subType: zod
-              .union([
-                zod.null(),
-                zod
-                  .object({
-                    is_completed: zod
-                      .boolean()
-                      .describe(
-                        'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                      ),
-                    type: zod.enum(['task']),
-                  })
-                  .describe('A task document with its associated properties')
-                  .describe(
-                    'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                  ),
-              ])
-              .optional(),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .describe(
-                'The time the document instance / document BOM was updated'
-              ),
-            viewedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was last viewed'),
-          }),
-          tag: zod.enum(['document']),
-        }),
-        zod.object({
-          data: zod.object({
-            createdAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the chat was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the chat was deleted'),
-            id: zod.string().uuid().describe('The chat uuid'),
-            isPersistent: zod
-              .boolean()
-              .describe('Whether the chat is persistent or not'),
-            name: zod.string().describe('The name of the chat'),
-            ownerId: zod.string().describe('Who the chat belongs to'),
-            projectId: zod
-              .string()
-              .uuid()
-              .nullish()
-              .describe('The project id of the chat'),
-            properties: zod
-              .array(
-                zod
-                  .object({
-                    definition: zod
-                      .object({
-                        created_at: zod.string().datetime({}),
-                        data_type: zod
-                          .enum([
-                            'BOOLEAN',
-                            'DATE',
-                            'NUMBER',
-                            'STRING',
-                            'SELECT_NUMBER',
-                            'SELECT_STRING',
-                            'ENTITY',
-                            'LINK',
-                          ])
-                          .describe(
-                            'Data type for property values, determining storage and validation.'
-                          ),
-                        display_name: zod.string(),
-                        id: zod.string().uuid(),
-                        is_metadata: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
-                          ),
-                        is_multi_select: zod.boolean(),
-                        is_system: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system property (stored in DB).'
-                          ),
-                        owner: zod
-                          .union([
-                            zod
-                              .object({
-                                scope: zod.enum(['user']),
-                                user_id: zod.string(),
-                              })
-                              .describe('User-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['organization']),
-                              })
-                              .describe('Organization-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['user_and_organization']),
-                                user_id: zod.string(),
-                              })
-                              .describe('Both user and organization-scoped'),
-                            zod
-                              .object({
-                                scope: zod.enum(['system']),
-                              })
-                              .describe(
-                                'System-owned property (no user or org owner)'
-                              ),
-                          ])
-                          .describe(
-                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-                          ),
-                        specific_entity_type: zod
-                          .union([
-                            zod.null(),
-                            zod
-                              .enum([
-                                'CHANNEL',
-                                'CHAT',
-                                'COMPANY',
-                                'DOCUMENT',
-                                'PROJECT',
-                                'TASK',
-                                'THREAD',
-                                'USER',
-                              ])
-                              .describe(
-                                'Type of entity that can be referenced by entity properties.'
-                              ),
-                          ])
-                          .optional(),
-                        updated_at: zod.string().datetime({}),
-                      })
-                      .describe(
-                        'Property definition model (service representation).'
-                      ),
-                    value: zod
-                      .union([
-                        zod.null(),
-                        zod
-                          .union([
-                            zod
-                              .object({
-                                type: zod.enum(['Boolean']),
-                                value: zod
-                                  .boolean()
-                                  .describe(
-                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                  ),
-                              })
-                              .describe(
-                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Number']),
-                                value: zod
-                                  .number()
-                                  .describe(
-                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                  ),
-                              })
-                              .describe(
-                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['String']),
-                                value: zod
-                                  .string()
-                                  .describe(
-                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                  ),
-                              })
-                              .describe(
-                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Date']),
-                                value: zod
-                                  .string()
-                                  .datetime({})
-                                  .describe(
-                                    'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                  ),
-                              })
-                              .describe(
-                                'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['SelectOption']),
-                                value: zod
-                                  .array(zod.string().uuid())
-                                  .describe(
-                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['EntityReference']),
-                                value: zod
-                                  .array(
-                                    zod
-                                      .object({
-                                        entity_id: zod.string(),
-                                        entity_type: zod
-                                          .enum([
-                                            'CHANNEL',
-                                            'CHAT',
-                                            'COMPANY',
-                                            'DOCUMENT',
-                                            'PROJECT',
-                                            'TASK',
-                                            'THREAD',
-                                            'USER',
-                                          ])
-                                          .describe(
-                                            'Type of entity that can be referenced by entity properties.'
-                                          ),
-                                        specific_message_id: zod
-                                          .string()
-                                          .uuid()
-                                          .nullish()
-                                          .describe(
-                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                                          ),
-                                      })
-                                      .describe(
-                                        'Entity reference for entity-type property values.'
-                                      )
-                                  )
-                                  .describe(
-                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Link']),
-                                value: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                              ),
-                          ])
-                          .describe(
-                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.'
-                          ),
-                      ])
-                      .optional(),
-                  })
-                  .describe(
-                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
-                  )
-              )
-              .describe('Properties'),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the chat was last updated'),
-            viewedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the chat was last viewed'),
-          }),
-          tag: zod.enum(['chat']),
-        }),
-        zod.object({
-          data: zod.object({
-            createdAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the project was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the project was deleted'),
-            id: zod.string().uuid().describe('The id of the project'),
-            name: zod.string().describe('The name of the project'),
-            ownerId: zod
-              .string()
-              .describe('The user id of who created the project'),
-            parentId: zod
-              .string()
-              .uuid()
-              .nullish()
-              .describe('The parent project id'),
-            properties: zod
-              .array(
-                zod
-                  .object({
-                    definition: zod
-                      .object({
-                        created_at: zod.string().datetime({}),
-                        data_type: zod
-                          .enum([
-                            'BOOLEAN',
-                            'DATE',
-                            'NUMBER',
-                            'STRING',
-                            'SELECT_NUMBER',
-                            'SELECT_STRING',
-                            'ENTITY',
-                            'LINK',
-                          ])
-                          .describe(
-                            'Data type for property values, determining storage and validation.'
-                          ),
-                        display_name: zod.string(),
-                        id: zod.string().uuid(),
-                        is_metadata: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
-                          ),
-                        is_multi_select: zod.boolean(),
-                        is_system: zod
-                          .boolean()
-                          .describe(
-                            'Flag to indicate if this is a system property (stored in DB).'
-                          ),
-                        owner: zod
-                          .union([
-                            zod
-                              .object({
-                                scope: zod.enum(['user']),
-                                user_id: zod.string(),
-                              })
-                              .describe('User-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['organization']),
-                              })
-                              .describe('Organization-scoped property only'),
-                            zod
-                              .object({
-                                organization_id: zod.number(),
-                                scope: zod.enum(['user_and_organization']),
-                                user_id: zod.string(),
-                              })
-                              .describe('Both user and organization-scoped'),
-                            zod
-                              .object({
-                                scope: zod.enum(['system']),
-                              })
-                              .describe(
-                                'System-owned property (no user or org owner)'
-                              ),
-                          ])
-                          .describe(
-                            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-                          ),
-                        specific_entity_type: zod
-                          .union([
-                            zod.null(),
-                            zod
-                              .enum([
-                                'CHANNEL',
-                                'CHAT',
-                                'COMPANY',
-                                'DOCUMENT',
-                                'PROJECT',
-                                'TASK',
-                                'THREAD',
-                                'USER',
-                              ])
-                              .describe(
-                                'Type of entity that can be referenced by entity properties.'
-                              ),
-                          ])
-                          .optional(),
-                        updated_at: zod.string().datetime({}),
-                      })
-                      .describe(
-                        'Property definition model (service representation).'
-                      ),
-                    value: zod
-                      .union([
-                        zod.null(),
-                        zod
-                          .union([
-                            zod
-                              .object({
-                                type: zod.enum(['Boolean']),
-                                value: zod
-                                  .boolean()
-                                  .describe(
-                                    'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                  ),
-                              })
-                              .describe(
-                                'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Number']),
-                                value: zod
-                                  .number()
-                                  .describe(
-                                    'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                  ),
-                              })
-                              .describe(
-                                'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['String']),
-                                value: zod
-                                  .string()
-                                  .describe(
-                                    'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                  ),
-                              })
-                              .describe(
-                                'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Date']),
-                                value: zod
-                                  .string()
-                                  .datetime({})
-                                  .describe(
-                                    'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                  ),
-                              })
-                              .describe(
-                                'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['SelectOption']),
-                                value: zod
-                                  .array(zod.string().uuid())
-                                  .describe(
-                                    'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['EntityReference']),
-                                value: zod
-                                  .array(
-                                    zod
-                                      .object({
-                                        entity_id: zod.string(),
-                                        entity_type: zod
-                                          .enum([
-                                            'CHANNEL',
-                                            'CHAT',
-                                            'COMPANY',
-                                            'DOCUMENT',
-                                            'PROJECT',
-                                            'TASK',
-                                            'THREAD',
-                                            'USER',
-                                          ])
-                                          .describe(
-                                            'Type of entity that can be referenced by entity properties.'
-                                          ),
-                                        specific_message_id: zod
-                                          .string()
-                                          .uuid()
-                                          .nullish()
-                                          .describe(
-                                            'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                                          ),
-                                      })
-                                      .describe(
-                                        'Entity reference for entity-type property values.'
-                                      )
-                                  )
-                                  .describe(
-                                    'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                              ),
-                            zod
-                              .object({
-                                type: zod.enum(['Link']),
-                                value: zod
-                                  .array(zod.string())
-                                  .describe(
-                                    'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                  ),
-                              })
-                              .describe(
-                                'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                              ),
-                          ])
-                          .describe(
-                            'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.'
-                          ),
-                      ])
-                      .optional(),
-                  })
-                  .describe(
-                    'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
-                  )
-              )
-              .describe('Properties'),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .describe('The time the project was updated'),
-            viewedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was last viewed'),
-          }),
-          tag: zod.enum(['project']),
-        }),
-        zod.object({
-          data: zod
-            .object({
-              createdAt: zod.string().datetime({}),
-              id: zod.string().uuid(),
-              inboxVisible: zod.boolean(),
-              isDraft: zod.boolean(),
-              isImportant: zod.boolean(),
-              isRead: zod.boolean(),
-              name: zod.string().nullish(),
-              ownerId: zod.string(),
-              projectId: zod.string().nullish(),
-              providerId: zod.string().nullish(),
-              senderEmail: zod.string().nullish(),
-              senderName: zod.string().nullish(),
-              senderPhotoUrl: zod.string().nullish(),
-              snippet: zod.string().nullish(),
-              sortTs: zod.string().datetime({}),
-              updatedAt: zod.string().datetime({}),
-              viewedAt: zod.string().datetime({}).nullish(),
-            })
-            .and(
-              zod.object({
-                attachments: zod.array(
-                  zod.object({
-                    contentId: zod.string().nullish(),
-                    createdAt: zod.string().datetime({}),
-                    filename: zod.string().nullish(),
-                    id: zod.string().uuid(),
-                    messageId: zod.string().uuid(),
-                    mimeType: zod.string().nullish(),
-                    providerAttachmentId: zod.string().nullish(),
-                    sizeBytes: zod.number().nullish(),
-                  })
-                ),
-                labels: zod.array(
-                  zod.object({
-                    createdAt: zod.string().datetime({}),
-                    id: zod.string().uuid(),
-                    labelListVisibility: zod.enum([
-                      'labelShow',
-                      'labelShowIfUnread',
-                      'labelHide',
-                    ]),
-                    linkId: zod.string().uuid(),
-                    messageListVisibility: zod.enum(['show', 'hide']),
-                    name: zod.string(),
-                    providerLabelId: zod.string(),
-                    type: zod.enum(['system', 'user']),
-                  })
-                ),
-                participants: zod.array(
-                  zod.object({
-                    emailAddress: zod.string().nullish(),
-                    id: zod.string().uuid(),
-                    linkId: zod.string().uuid(),
-                    name: zod.string().nullish(),
-                    sfsPhotoUrl: zod.string().nullish(),
-                  })
-                ),
-                properties: zod.array(
-                  zod
-                    .object({
-                      definition: zod
-                        .object({
-                          created_at: zod.string().datetime({}),
-                          data_type: zod
-                            .enum([
-                              'BOOLEAN',
-                              'DATE',
-                              'NUMBER',
-                              'STRING',
-                              'SELECT_NUMBER',
-                              'SELECT_STRING',
-                              'ENTITY',
-                              'LINK',
-                            ])
-                            .describe(
-                              'Data type for property values, determining storage and validation.'
-                            ),
-                          display_name: zod.string(),
-                          id: zod.string().uuid(),
-                          is_metadata: zod
-                            .boolean()
-                            .describe(
-                              'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
-                            ),
-                          is_multi_select: zod.boolean(),
-                          is_system: zod
-                            .boolean()
-                            .describe(
-                              'Flag to indicate if this is a system property (stored in DB).'
-                            ),
-                          owner: zod
-                            .union([
-                              zod
-                                .object({
-                                  scope: zod.enum(['user']),
-                                  user_id: zod.string(),
-                                })
-                                .describe('User-scoped property only'),
-                              zod
-                                .object({
-                                  organization_id: zod.number(),
-                                  scope: zod.enum(['organization']),
-                                })
-                                .describe('Organization-scoped property only'),
-                              zod
-                                .object({
-                                  organization_id: zod.number(),
-                                  scope: zod.enum(['user_and_organization']),
-                                  user_id: zod.string(),
-                                })
-                                .describe('Both user and organization-scoped'),
-                              zod
-                                .object({
-                                  scope: zod.enum(['system']),
-                                })
-                                .describe(
-                                  'System-owned property (no user or org owner)'
-                                ),
-                            ])
-                            .describe(
-                              'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-                            ),
-                          specific_entity_type: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .enum([
-                                  'CHANNEL',
-                                  'CHAT',
-                                  'COMPANY',
-                                  'DOCUMENT',
-                                  'PROJECT',
-                                  'TASK',
-                                  'THREAD',
-                                  'USER',
-                                ])
-                                .describe(
-                                  'Type of entity that can be referenced by entity properties.'
-                                ),
-                            ])
-                            .optional(),
-                          updated_at: zod.string().datetime({}),
-                        })
-                        .describe(
-                          'Property definition model (service representation).'
-                        ),
-                      value: zod
-                        .union([
-                          zod.null(),
-                          zod
-                            .union([
-                              zod
-                                .object({
-                                  type: zod.enum(['Boolean']),
-                                  value: zod
-                                    .boolean()
-                                    .describe(
-                                      'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                    ),
-                                })
-                                .describe(
-                                  'Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['Number']),
-                                  value: zod
-                                    .number()
-                                    .describe(
-                                      'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                    ),
-                                })
-                                .describe(
-                                  'Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['String']),
-                                  value: zod
-                                    .string()
-                                    .describe(
-                                      'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                    ),
-                                })
-                                .describe(
-                                  'String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['Date']),
-                                  value: zod
-                                    .string()
-                                    .datetime({})
-                                    .describe(
-                                      'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                    ),
-                                })
-                                .describe(
-                                  'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['SelectOption']),
-                                  value: zod
-                                    .array(zod.string().uuid())
-                                    .describe(
-                                      'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                    ),
-                                })
-                                .describe(
-                                  'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['EntityReference']),
-                                  value: zod
-                                    .array(
-                                      zod
-                                        .object({
-                                          entity_id: zod.string(),
-                                          entity_type: zod
-                                            .enum([
-                                              'CHANNEL',
-                                              'CHAT',
-                                              'COMPANY',
-                                              'DOCUMENT',
-                                              'PROJECT',
-                                              'TASK',
-                                              'THREAD',
-                                              'USER',
-                                            ])
-                                            .describe(
-                                              'Type of entity that can be referenced by entity properties.'
-                                            ),
-                                          specific_message_id: zod
-                                            .string()
-                                            .uuid()
-                                            .nullish()
-                                            .describe(
-                                              'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.'
-                                            ),
-                                        })
-                                        .describe(
-                                          'Entity reference for entity-type property values.'
-                                        )
-                                    )
-                                    .describe(
-                                      'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                    ),
-                                })
-                                .describe(
-                                  'Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'
-                                ),
-                              zod
-                                .object({
-                                  type: zod.enum(['Link']),
-                                  value: zod
-                                    .array(zod.string())
-                                    .describe(
-                                      'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                    ),
-                                })
-                                .describe(
-                                  'Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)'
-                                ),
-                            ])
-                            .describe(
-                              'Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.'
-                            ),
-                        ])
-                        .optional(),
-                    })
-                    .describe(
-                      'A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'
-                    )
-                ),
-              })
-            ),
-          tag: zod.enum(['emailThread']),
-        }),
-        zod.object({
-          data: zod
-            .object({
-              channel: zod.object({
-                channel_type: zod.enum([
-                  'public',
-                  'organization',
-                  'private',
-                  'direct_message',
-                  'team',
-                ]),
-                created_at: zod.string().datetime({}),
-                id: zod.string().uuid(),
-                name: zod.string().nullish(),
-                org_id: zod
-                  .number()
-                  .min(postItemsSoupResponseItemsItemDataChannelOrgIdMin)
-                  .nullish(),
-                owner_id: zod.string(),
-                team_id: zod.string().uuid().nullish(),
-                updated_at: zod.string().datetime({}),
-              }),
-              participants: zod.array(
-                zod.object({
-                  channel_id: zod.string().uuid(),
-                  joined_at: zod.string().datetime({}),
-                  left_at: zod.string().datetime({}).nullish(),
-                  role: zod
-                    .enum(['owner', 'admin', 'member'])
-                    .describe('The role a user has within a channel.'),
-                  user_id: zod.string(),
-                })
-              ),
-            })
-            .and(
-              zod.object({
-                latest_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.string().datetime({}),
-                      deleted_at: zod.string().datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
-                        .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
-                        ),
-                      message_id: zod.string().uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.string().uuid().nullish(),
-                      updated_at: zod.string().datetime({}),
-                    }),
-                  ])
-                  .optional(),
-                latest_non_thread_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.string().datetime({}),
-                      deleted_at: zod.string().datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
-                        .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
-                        ),
-                      message_id: zod.string().uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.string().uuid().nullish(),
-                      updated_at: zod.string().datetime({}),
-                    }),
-                  ])
-                  .optional(),
-              })
-            )
-            .and(
-              zod.object({
-                interacted_at: zod.string().datetime({}).nullish(),
-                viewed_at: zod.string().datetime({}).nullish(),
-              })
-            ),
-          tag: zod.enum(['channel']),
-        }),
-      ])
-      .and(
-        zod.object({
-          frecency_score: zod.number(),
-        })
-      )
-  ),
-  next_cursor: zod.string().nullish(),
-});
+  "items": zod.array(zod.union([zod.object({
+  "data": zod.object({
+  "branchedFromId": zod.string().uuid().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'),
+  "createdAt": zod.string().datetime({}).describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().uuid().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "ownerId": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
+  "properties": zod.array(zod.object({
+  "definition": zod.object({
+  "created_at": zod.string().datetime({}),
+  "data_type": zod.enum(['BOOLEAN', 'DATE', 'NUMBER', 'STRING', 'SELECT_NUMBER', 'SELECT_STRING', 'ENTITY', 'LINK']).describe('Data type for property values, determining storage and validation.'),
+  "display_name": zod.string(),
+  "id": zod.string().uuid(),
+  "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
+  "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
+  "owner": zod.union([zod.object({
+  "scope": zod.enum(['user']),
+  "user_id": zod.string()
+}).describe('User-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['organization'])
+}).describe('Organization-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['user_and_organization']),
+  "user_id": zod.string()
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "updated_at": zod.string().datetime({})
+}).describe('Property definition model (service representation).'),
+  "value": zod.union([zod.null(),zod.union([zod.object({
+  "type": zod.enum(['Boolean']),
+  "value": zod.boolean().describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}')
+}).describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'),zod.object({
+  "type": zod.enum(['Number']),
+  "value": zod.number().describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}')
+}).describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'),zod.object({
+  "type": zod.enum(['String']),
+  "value": zod.string().describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}')
+}).describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'),zod.object({
+  "type": zod.enum(['Date']),
+  "value": zod.string().datetime({}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}')
+}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'),zod.object({
+  "type": zod.enum(['SelectOption']),
+  "value": zod.array(zod.string().uuid()).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)')
+}).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['EntityReference']),
+  "value": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
+}).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['Link']),
+  "value": zod.array(zod.string()).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')
+}).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')]).describe('Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.')]).optional()
+}).describe('A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.')).describe('Properties'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
+  "updatedAt": zod.string().datetime({}).describe('The time the document instance / document BOM was updated'),
+  "viewedAt": zod.string().datetime({}).nullish().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['document'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.string().datetime({}).describe('The time the chat was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the chat was deleted'),
+  "id": zod.string().uuid().describe('The chat uuid'),
+  "isPersistent": zod.boolean().describe('Whether the chat is persistent or not'),
+  "name": zod.string().describe('The name of the chat'),
+  "ownerId": zod.string().describe('Who the chat belongs to'),
+  "projectId": zod.string().uuid().nullish().describe('The project id of the chat'),
+  "properties": zod.array(zod.object({
+  "definition": zod.object({
+  "created_at": zod.string().datetime({}),
+  "data_type": zod.enum(['BOOLEAN', 'DATE', 'NUMBER', 'STRING', 'SELECT_NUMBER', 'SELECT_STRING', 'ENTITY', 'LINK']).describe('Data type for property values, determining storage and validation.'),
+  "display_name": zod.string(),
+  "id": zod.string().uuid(),
+  "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
+  "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
+  "owner": zod.union([zod.object({
+  "scope": zod.enum(['user']),
+  "user_id": zod.string()
+}).describe('User-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['organization'])
+}).describe('Organization-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['user_and_organization']),
+  "user_id": zod.string()
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "updated_at": zod.string().datetime({})
+}).describe('Property definition model (service representation).'),
+  "value": zod.union([zod.null(),zod.union([zod.object({
+  "type": zod.enum(['Boolean']),
+  "value": zod.boolean().describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}')
+}).describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'),zod.object({
+  "type": zod.enum(['Number']),
+  "value": zod.number().describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}')
+}).describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'),zod.object({
+  "type": zod.enum(['String']),
+  "value": zod.string().describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}')
+}).describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'),zod.object({
+  "type": zod.enum(['Date']),
+  "value": zod.string().datetime({}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}')
+}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'),zod.object({
+  "type": zod.enum(['SelectOption']),
+  "value": zod.array(zod.string().uuid()).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)')
+}).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['EntityReference']),
+  "value": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
+}).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['Link']),
+  "value": zod.array(zod.string()).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')
+}).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')]).describe('Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.')]).optional()
+}).describe('A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.')).describe('Properties'),
+  "updatedAt": zod.string().datetime({}).describe('The time the chat was last updated'),
+  "viewedAt": zod.string().datetime({}).nullish().describe('The time the chat was last viewed')
+}),
+  "tag": zod.enum(['chat'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.string().datetime({}).describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the project was deleted'),
+  "id": zod.string().uuid().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "ownerId": zod.string().describe('The user id of who created the project'),
+  "parentId": zod.string().uuid().nullish().describe('The parent project id'),
+  "properties": zod.array(zod.object({
+  "definition": zod.object({
+  "created_at": zod.string().datetime({}),
+  "data_type": zod.enum(['BOOLEAN', 'DATE', 'NUMBER', 'STRING', 'SELECT_NUMBER', 'SELECT_STRING', 'ENTITY', 'LINK']).describe('Data type for property values, determining storage and validation.'),
+  "display_name": zod.string(),
+  "id": zod.string().uuid(),
+  "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
+  "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
+  "owner": zod.union([zod.object({
+  "scope": zod.enum(['user']),
+  "user_id": zod.string()
+}).describe('User-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['organization'])
+}).describe('Organization-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['user_and_organization']),
+  "user_id": zod.string()
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "updated_at": zod.string().datetime({})
+}).describe('Property definition model (service representation).'),
+  "value": zod.union([zod.null(),zod.union([zod.object({
+  "type": zod.enum(['Boolean']),
+  "value": zod.boolean().describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}')
+}).describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'),zod.object({
+  "type": zod.enum(['Number']),
+  "value": zod.number().describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}')
+}).describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'),zod.object({
+  "type": zod.enum(['String']),
+  "value": zod.string().describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}')
+}).describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'),zod.object({
+  "type": zod.enum(['Date']),
+  "value": zod.string().datetime({}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}')
+}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'),zod.object({
+  "type": zod.enum(['SelectOption']),
+  "value": zod.array(zod.string().uuid()).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)')
+}).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['EntityReference']),
+  "value": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
+}).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['Link']),
+  "value": zod.array(zod.string()).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')
+}).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')]).describe('Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.')]).optional()
+}).describe('A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.')).describe('Properties'),
+  "updatedAt": zod.string().datetime({}).describe('The time the project was updated'),
+  "viewedAt": zod.string().datetime({}).nullish().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['project'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "inboxVisible": zod.boolean(),
+  "isDraft": zod.boolean(),
+  "isImportant": zod.boolean(),
+  "isRead": zod.boolean(),
+  "name": zod.string().nullish(),
+  "ownerId": zod.string(),
+  "projectId": zod.string().nullish(),
+  "providerId": zod.string().nullish(),
+  "senderEmail": zod.string().nullish(),
+  "senderName": zod.string().nullish(),
+  "senderPhotoUrl": zod.string().nullish(),
+  "snippet": zod.string().nullish(),
+  "sortTs": zod.string().datetime({}),
+  "updatedAt": zod.string().datetime({}),
+  "viewedAt": zod.string().datetime({}).nullish()
+}).and(zod.object({
+  "attachments": zod.array(zod.object({
+  "contentId": zod.string().nullish(),
+  "createdAt": zod.string().datetime({}),
+  "filename": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "messageId": zod.string().uuid(),
+  "mimeType": zod.string().nullish(),
+  "providerAttachmentId": zod.string().nullish(),
+  "sizeBytes": zod.number().nullish()
+})),
+  "labels": zod.array(zod.object({
+  "createdAt": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "labelListVisibility": zod.enum(['labelShow', 'labelShowIfUnread', 'labelHide']),
+  "linkId": zod.string().uuid(),
+  "messageListVisibility": zod.enum(['show', 'hide']),
+  "name": zod.string(),
+  "providerLabelId": zod.string(),
+  "type": zod.enum(['system', 'user'])
+})),
+  "participants": zod.array(zod.object({
+  "emailAddress": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "linkId": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "sfsPhotoUrl": zod.string().nullish()
+})),
+  "properties": zod.array(zod.object({
+  "definition": zod.object({
+  "created_at": zod.string().datetime({}),
+  "data_type": zod.enum(['BOOLEAN', 'DATE', 'NUMBER', 'STRING', 'SELECT_NUMBER', 'SELECT_STRING', 'ENTITY', 'LINK']).describe('Data type for property values, determining storage and validation.'),
+  "display_name": zod.string(),
+  "id": zod.string().uuid(),
+  "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
+  "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
+  "owner": zod.union([zod.object({
+  "scope": zod.enum(['user']),
+  "user_id": zod.string()
+}).describe('User-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['organization'])
+}).describe('Organization-scoped property only'),zod.object({
+  "organization_id": zod.number(),
+  "scope": zod.enum(['user_and_organization']),
+  "user_id": zod.string()
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "updated_at": zod.string().datetime({})
+}).describe('Property definition model (service representation).'),
+  "value": zod.union([zod.null(),zod.union([zod.object({
+  "type": zod.enum(['Boolean']),
+  "value": zod.boolean().describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}')
+}).describe('Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}'),zod.object({
+  "type": zod.enum(['Number']),
+  "value": zod.number().describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}')
+}).describe('Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}'),zod.object({
+  "type": zod.enum(['String']),
+  "value": zod.string().describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}')
+}).describe('String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}'),zod.object({
+  "type": zod.enum(['Date']),
+  "value": zod.string().datetime({}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}')
+}).describe('Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'),zod.object({
+  "type": zod.enum(['SelectOption']),
+  "value": zod.array(zod.string().uuid()).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)')
+}).describe('Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['EntityReference']),
+  "value": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
+}).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
+  "type": zod.enum(['Link']),
+  "value": zod.array(zod.string()).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')
+}).describe('Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)')]).describe('Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database.')]).optional()
+}).describe('A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.'))
+})),
+  "tag": zod.enum(['emailThread'])
+}),zod.object({
+  "data": zod.object({
+  "channel": zod.object({
+  "channel_type": zod.enum(['public', 'organization', 'private', 'direct_message', 'team']),
+  "created_at": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "org_id": zod.number().min(postItemsSoupResponseItemsItemDataChannelOrgIdMin).nullish(),
+  "owner_id": zod.string(),
+  "team_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+}),
+  "participants": zod.array(zod.object({
+  "channel_id": zod.string().uuid(),
+  "joined_at": zod.string().datetime({}),
+  "left_at": zod.string().datetime({}).nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']).describe('The role a user has within a channel.'),
+  "user_id": zod.string()
+}))
+}).and(zod.object({
+  "latest_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional(),
+  "latest_non_thread_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional()
+})).and(zod.object({
+  "interacted_at": zod.string().datetime({}).nullish(),
+  "viewed_at": zod.string().datetime({}).nullish()
+})),
+  "tag": zod.enum(['channel'])
+})]).and(zod.object({
+  "frecency_score": zod.number()
+}))),
+  "next_cursor": zod.string().nullish()
+})
+
 
 /**
  * @summary Gets the users pinned items
  */
 export const getPinsHandlerResponse = zod.object({
-  data: zod
-    .union([
-      zod.null(),
-      zod.object({
-        recent: zod
-          .array(
-            zod.object({
-              activity: zod.union([
-                zod.object({
-                  branchedFromId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The id of the document this document branched from'
-                    ),
-                  branchedFromVersionId: zod
-                    .number()
-                    .nullish()
-                    .describe(
-                      'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-                    ),
-                  createdAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the document was created'),
-                  deletedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the document was deleted'),
-                  documentFamilyId: zod
-                    .number()
-                    .nullish()
-                    .describe(
-                      'The id of the document family this document belongs to'
-                    ),
-                  documentVersionId: zod
-                    .number()
-                    .describe(
-                      'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-                    ),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('The file type of the document (e.g. pdf, docx)'),
-                  id: zod.string().describe('The document id'),
-                  name: zod.string().describe('The name of the document'),
-                  owner: zod.string().describe('The owner of the document'),
-                  projectId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The id of the project that this document belongs to'
-                    ),
-                  sha: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-                    ),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .object({
-                          is_completed: zod
-                            .boolean()
-                            .describe(
-                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                            ),
-                          type: zod.enum(['task']),
-                        })
-                        .describe(
-                          'A task document with its associated properties'
-                        )
-                        .describe(
-                          'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                        ),
-                    ])
-                    .optional(),
-                  updatedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe(
-                      'The time the document instance / document BOM was updated'
-                    ),
-                  type: zod.enum(['document']),
-                }),
-                zod.object({
-                  createdAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was created'),
-                  deletedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was deleted'),
-                  id: zod.string().describe('The chat uuid'),
-                  isPersistent: zod.boolean(),
-                  model: zod
-                    .string()
-                    .nullish()
-                    .describe('The model used to generate the chat'),
-                  name: zod.string().describe('The name of the chat'),
-                  projectId: zod
-                    .string()
-                    .nullish()
-                    .describe('The project id of the chat'),
-                  tokenCount: zod.number().nullish(),
-                  updatedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was last updated'),
-                  userId: zod.string().describe('Who the chat belongs to'),
-                  type: zod.enum(['chat']),
-                }),
-                zod.object({
-                  createdAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the project was created'),
-                  deletedAt: zod.string().datetime({}).nullish(),
-                  id: zod.string().describe('The id of the project'),
-                  name: zod.string().describe('The name of the project'),
-                  parentId: zod
-                    .string()
-                    .nullish()
-                    .describe('The parent project id'),
-                  updatedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the project was updated'),
-                  userId: zod
-                    .string()
-                    .describe('The user id of who created the project'),
-                  type: zod.enum(['project']),
-                }),
-              ]),
-              item: zod.union([
-                zod.object({
-                  branchedFromId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The id of the document this document branched from'
-                    ),
-                  branchedFromVersionId: zod
-                    .number()
-                    .nullish()
-                    .describe(
-                      'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-                    ),
-                  createdAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the document was created'),
-                  deletedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the document was deleted'),
-                  documentFamilyId: zod
-                    .number()
-                    .nullish()
-                    .describe(
-                      'The id of the document family this document belongs to'
-                    ),
-                  documentVersionId: zod
-                    .number()
-                    .describe(
-                      'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-                    ),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('The file type of the document (e.g. pdf, docx)'),
-                  id: zod.string().describe('The document id'),
-                  name: zod.string().describe('The name of the document'),
-                  owner: zod.string().describe('The owner of the document'),
-                  projectId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The id of the project that this document belongs to'
-                    ),
-                  sha: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-                    ),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .object({
-                          is_completed: zod
-                            .boolean()
-                            .describe(
-                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                            ),
-                          type: zod.enum(['task']),
-                        })
-                        .describe(
-                          'A task document with its associated properties'
-                        )
-                        .describe(
-                          'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                        ),
-                    ])
-                    .optional(),
-                  updatedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe(
-                      'The time the document instance / document BOM was updated'
-                    ),
-                  type: zod.enum(['document']),
-                }),
-                zod.object({
-                  createdAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was created'),
-                  deletedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was deleted'),
-                  id: zod.string().describe('The chat uuid'),
-                  isPersistent: zod.boolean(),
-                  model: zod
-                    .string()
-                    .nullish()
-                    .describe('The model used to generate the chat'),
-                  name: zod.string().describe('The name of the chat'),
-                  projectId: zod
-                    .string()
-                    .nullish()
-                    .describe('The project id of the chat'),
-                  tokenCount: zod.number().nullish(),
-                  updatedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the chat was last updated'),
-                  userId: zod.string().describe('Who the chat belongs to'),
-                  type: zod.enum(['chat']),
-                }),
-                zod.object({
-                  createdAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the project was created'),
-                  deletedAt: zod.string().datetime({}).nullish(),
-                  id: zod.string().describe('The id of the project'),
-                  name: zod.string().describe('The name of the project'),
-                  parentId: zod
-                    .string()
-                    .nullish()
-                    .describe('The parent project id'),
-                  updatedAt: zod
-                    .string()
-                    .datetime({})
-                    .nullish()
-                    .describe('The time the project was updated'),
-                  userId: zod
-                    .string()
-                    .describe('The user id of who created the project'),
-                  type: zod.enum(['project']),
-                }),
-              ]),
-              pinIndex: zod.number().describe('The pin index'),
-            })
-          )
-          .describe('The pins returned from the query'),
-      }),
-    ])
-    .optional(),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.union([zod.null(),zod.object({
+  "recent": zod.array(zod.object({
+  "activity": zod.union([zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated'),
+  "type": zod.enum(['document'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the chat was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the chat was deleted'),
+  "id": zod.string().describe('The chat uuid'),
+  "isPersistent": zod.boolean(),
+  "model": zod.string().nullish().describe('The model used to generate the chat'),
+  "name": zod.string().describe('The name of the chat'),
+  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "tokenCount": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the chat was last updated'),
+  "userId": zod.string().describe('Who the chat belongs to'),
+  "type": zod.enum(['chat'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+})]),
+  "item": zod.union([zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated'),
+  "type": zod.enum(['document'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the chat was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the chat was deleted'),
+  "id": zod.string().describe('The chat uuid'),
+  "isPersistent": zod.boolean(),
+  "model": zod.string().nullish().describe('The model used to generate the chat'),
+  "name": zod.string().describe('The name of the chat'),
+  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "tokenCount": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the chat was last updated'),
+  "userId": zod.string().describe('Who the chat belongs to'),
+  "type": zod.enum(['chat'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+})]),
+  "pinIndex": zod.number().describe('The pin index')
+})).describe('The pins returned from the query')
+})]).optional(),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Saves the updated order of the pins for the user
  */
 export const reorderPinsHandlerBodyItem = zod.object({
-  pinIndex: zod.number().describe('The index of the pin'),
-  pinnedItemId: zod.string().describe('The id of the pinned item'),
-  pinnedItemType: zod.string().describe('The type of the pin'),
-});
-export const reorderPinsHandlerBody = zod.array(reorderPinsHandlerBodyItem);
+  "pinIndex": zod.number().describe('The index of the pin'),
+  "pinnedItemId": zod.string().describe('The id of the pinned item'),
+  "pinnedItemType": zod.string().describe('The type of the pin')
+})
+export const reorderPinsHandlerBody = zod.array(reorderPinsHandlerBodyItem)
 
 export const reorderPinsHandlerResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Pins the item for the user
  */
 export const addPinHandlerParams = zod.object({
-  pinned_item_id: zod.string().describe('ID of the pinned item'),
-});
+  "pinned_item_id": zod.string().describe('ID of the pinned item')
+})
 
 export const addPinHandlerBody = zod.object({
-  pinIndex: zod.number().describe('The index of the pin'),
-  pinType: zod.string().describe('The type of the pin'),
-});
+  "pinIndex": zod.number().describe('The index of the pin'),
+  "pinType": zod.string().describe('The type of the pin')
+})
 
 export const addPinHandlerResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Deletes the pin for the user
  */
 export const removePinHandlerParams = zod.object({
-  pinned_item_id: zod.string().describe('ID of the pinned item'),
-});
+  "pinned_item_id": zod.string().describe('ID of the pinned item')
+})
 
 export const removePinHandlerBody = zod.object({
-  pinType: zod.string().describe('The type of the pin'),
-});
+  "pinType": zod.string().describe('The type of the pin')
+})
 
 export const removePinHandlerResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Gets all the users projects. This includes projects shared with the user.
  */
 export const getProjectsHandlerResponse = zod.object({
-  data: zod
-    .array(
-      zod.object({
-        createdAt: zod
-          .string()
-          .datetime({})
-          .nullish()
-          .describe('The time the project was created'),
-        deletedAt: zod.string().datetime({}).nullish(),
-        id: zod.string().describe('The id of the project'),
-        name: zod.string().describe('The name of the project'),
-        parentId: zod.string().nullish().describe('The parent project id'),
-        updatedAt: zod
-          .string()
-          .datetime({})
-          .nullish()
-          .describe('The time the project was updated'),
-        userId: zod.string().describe('The user id of who created the project'),
-        type: zod.enum(['project']),
-      })
-    )
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.array(zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+})).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Creates a new project.
 The project can be created as a sub-project of another project or as a top-level project.
  */
 export const createProjectHandlerBody = zod.object({
-  name: zod.string().describe('The name of the project.'),
-  projectParentId: zod
-    .string()
-    .nullish()
-    .describe('The project that the new project will belong to.'),
-});
+  "name": zod.string().describe('The name of the project.'),
+  "projectParentId": zod.string().nullish().describe('The project that the new project will belong to.')
+})
 
 export const createProjectHandlerResponse = zod.object({
-  data: zod.object({
-    createdAt: zod
-      .string()
-      .datetime({})
-      .nullish()
-      .describe('The time the project was created'),
-    deletedAt: zod.string().datetime({}).nullish(),
-    id: zod.string().describe('The id of the project'),
-    name: zod.string().describe('The name of the project'),
-    parentId: zod.string().nullish().describe('The parent project id'),
-    updatedAt: zod
-      .string()
-      .datetime({})
-      .nullish()
-      .describe('The time the project was updated'),
-    userId: zod.string().describe('The user id of who created the project'),
-    type: zod.enum(['project']),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Gets all the users projects that are pending upload. This includes projects shared with the user.
  */
 export const getPendingProjectsHandlerResponse = zod.object({
-  data: zod
-    .array(
-      zod
-        .object({
-          createdAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the project was created'),
-          deletedAt: zod.string().datetime({}).nullish(),
-          id: zod.string().describe('The id of the project'),
-          name: zod.string().describe('The name of the project'),
-          parentId: zod.string().nullish().describe('The parent project id'),
-          updatedAt: zod
-            .string()
-            .datetime({})
-            .nullish()
-            .describe('The time the project was updated'),
-          userId: zod
-            .string()
-            .describe('The user id of who created the project'),
-          type: zod.enum(['project']),
-        })
-        .and(
-          zod.object({
-            documentStatuses: zod.array(
-              zod.object({
-                documentId: zod.string(),
-                status: zod
-                  .enum(['pending', 'completed', 'failed', 'unknown'])
-                  .describe('The upload status of the document'),
-              })
-            ),
-          })
-        )
-    )
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.array(zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+}).and(zod.object({
+  "documentStatuses": zod.array(zod.object({
+  "documentId": zod.string(),
+  "status": zod.enum(['pending', 'completed', 'failed', 'unknown']).describe('The upload status of the document')
+}))
+}))).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 export const getBatchProjectPreviewBody = zod.object({
-  projectIds: zod.array(zod.string()),
-});
+  "projectIds": zod.array(zod.string())
+})
 
 export const getBatchProjectPreviewResponse = zod.object({
-  previews: zod.array(
-    zod.union([
-      zod
-        .object({
-          id: zod.string(),
-          name: zod.string(),
-          owner: zod.string(),
-          path: zod.array(zod.string()),
-          updatedAt: zod.string().datetime({}).nullish(),
-        })
-        .and(
-          zod.object({
-            access: zod.enum(['access']),
-          })
-        ),
-      zod
-        .object({
-          id: zod.string(),
-        })
-        .and(
-          zod.object({
-            access: zod.enum(['no_access']),
-          })
-        ),
-      zod
-        .object({
-          id: zod.string(),
-        })
-        .and(
-          zod.object({
-            access: zod.enum(['does_not_exist']),
-          })
-        ),
-    ])
-  ),
-});
+  "previews": zod.array(zod.union([zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "owner": zod.string(),
+  "path": zod.array(zod.string()),
+  "updatedAt": zod.string().datetime({}).nullish()
+}).and(zod.object({
+  "access": zod.enum(['access'])
+})),zod.object({
+  "id": zod.string()
+}).and(zod.object({
+  "access": zod.enum(['no_access'])
+})),zod.object({
+  "id": zod.string()
+}).and(zod.object({
+  "access": zod.enum(['does_not_exist'])
+}))]))
+})
+
 
 /**
  * @summary Uploads a folder to the user's cloud storage. Mimicing the folder structure
 with projects and placing all documents in the correct location.
  */
 export const uploadFolderHandlerBody = zod.object({
-  content: zod
-    .array(
-      zod.object({
-        fileType: zod
-          .union([
-            zod.null(),
-            zod
-              .enum([
-                'docx',
-                'pdf',
-                'md',
-                'canvas',
-                'coffee',
-                'cson',
-                'iced',
-                'c',
-                'i',
-                'cpp',
-                'cppm',
-                'cc',
-                'ccm',
-                'cxx',
-                'cxxm',
-                'cplusplus',
-                'cplusplusm',
-                'hpp',
-                'hh',
-                'hxx',
-                'hplusplus',
-                'h',
-                'ii',
-                'ino',
-                'inl',
-                'ipp',
-                'ixx',
-                'tpp',
-                'txx',
-                'hppin',
-                'hin',
-                'cu',
-                'cuh',
-                'cs',
-                'csx',
-                'cake',
-                'css',
-                'dart',
-                'diff',
-                'patch',
-                'rej',
-                'dockerfile',
-                'containerfile',
-                'go',
-                'handlebars',
-                'hbs',
-                'hjs',
-                'hlsl',
-                'hlsli',
-                'fx',
-                'fxh',
-                'vsh',
-                'psh',
-                'cginc',
-                'compute',
-                'html',
-                'htm',
-                'shtml',
-                'xhtml',
-                'xht',
-                'mdoc',
-                'jsp',
-                'asp',
-                'aspx',
-                'jshtm',
-                'volt',
-                'ejs',
-                'rhtml',
-                'ini',
-                'conf',
-                'properties',
-                'cfg',
-                'directory',
-                'gitattributes',
-                'gitconfig',
-                'gitmodules',
-                'editorconfig',
-                'repo',
-                'java',
-                'jav',
-                'jsx',
-                'js',
-                'es6',
-                'mjs',
-                'cjs',
-                'pac',
-                'json',
-                'bowerrc',
-                'jscsrc',
-                'webmanifest',
-                'jsmap',
-                'cssmap',
-                'tsmap',
-                'har',
-                'jslintrc',
-                'jsonld',
-                'geojson',
-                'ipynb',
-                'vuerc',
-                'jsonc',
-                'eslintrc',
-                'eslintrcjson',
-                'jsfmtrc',
-                'jshintrc',
-                'swcrc',
-                'hintrc',
-                'babelrc',
-                'jsonl',
-                'ndjson',
-                'codesnippets',
-                'jl',
-                'jmd',
-                'sty',
-                'cls',
-                'bbx',
-                'cbx',
-                'tex',
-                'ltx',
-                'ctx',
-                'bib',
-                'less',
-                'log',
-                'lua',
-                'mak',
-                'mk',
-                'mkd',
-                'mdwn',
-                'mdown',
-                'markdown',
-                'markdn',
-                'mdtxt',
-                'mdtext',
-                'workbook',
-                'm',
-                'mm',
-                'pl',
-                'pm',
-                'pod',
-                't',
-                'psgi',
-                'raku',
-                'rakumod',
-                'rakutest',
-                'rakudoc',
-                'nqp',
-                'p6',
-                'pl6',
-                'pm6',
-                'php',
-                'php4',
-                'php5',
-                'phtml',
-                'ctp',
-                'ps1',
-                'psm1',
-                'psd1',
-                'pssc',
-                'psrc',
-                'py',
-                'rpy',
-                'pyw',
-                'cpy',
-                'gyp',
-                'gypi',
-                'pyi',
-                'ipy',
-                'pyt',
-                'r',
-                'rhistory',
-                'rprofile',
-                'rt',
-                'cshtml',
-                'razor',
-                'rb',
-                'rbx',
-                'rjs',
-                'gemspec',
-                'rake',
-                'ru',
-                'erb',
-                'podspec',
-                'rbi',
-                'rs',
-                'scss',
-                'sass',
-                'shader',
-                'sh',
-                'bash',
-                'bashrc',
-                'bashaliases',
-                'bashprofile',
-                'bashlogin',
-                'ebuild',
-                'eclass',
-                'profile',
-                'bashlogout',
-                'xprofile',
-                'xsession',
-                'xsessionrc',
-                'zsh',
-                'zshrc',
-                'zprofile',
-                'zlogin',
-                'zlogout',
-                'zshenv',
-                'zshtheme',
-                'fish',
-                'ksh',
-                'csh',
-                'cshrc',
-                'tcshrc',
-                'yashrc',
-                'yashprofile',
-                'sql',
-                'dsql',
-                'swift',
-                'ts',
-                'cts',
-                'mts',
-                'tsx',
-                'tsbuildinfo',
-                'xml',
-                'xsd',
-                'ascx',
-                'atom',
-                'axml',
-                'axaml',
-                'bpmn',
-                'cpt',
-                'csl',
-                'csproj',
-                'csprojuser',
-                'dita',
-                'ditamap',
-                'dtd',
-                'ent',
-                'mod',
-                'dtml',
-                'fsproj',
-                'fxml',
-                'iml',
-                'isml',
-                'jmx',
-                'launch',
-                'menu',
-                'mxml',
-                'nuspec',
-                'opml',
-                'owl',
-                'proj',
-                'props',
-                'pt',
-                'publishsettings',
-                'pubxml',
-                'pubxmluser',
-                'rbxlx',
-                'rbxmx',
-                'rdf',
-                'rng',
-                'rss',
-                'shproj',
-                'storyboard',
-                'targets',
-                'tld',
-                'tmx',
-                'vbproj',
-                'vbprojuser',
-                'vcxproj',
-                'vcxprojfilters',
-                'wsdl',
-                'wxi',
-                'wxl',
-                'wxs',
-                'xaml',
-                'xbl',
-                'xib',
-                'xlf',
-                'xliff',
-                'xpdl',
-                'xul',
-                'xoml',
-                'xsl',
-                'xslt',
-                'yaml',
-                'yml',
-                'eyaml',
-                'eyml',
-                'cff',
-                'yamltmlanguage',
-                'yamltmpreferences',
-                'yamltmtheme',
-                'winget',
-                'txt',
-                'csv',
-                'tsv',
-                'jpeg',
-                'jpg',
-                'png',
-                'gif',
-                'svg',
-                'webp',
-                'avif',
-                'bmp',
-                'ico',
-                'tiff',
-                'tif',
-                'heic',
-                'heif',
-                'tar',
-                'targz',
-                'tgz',
-                'gz',
-                'bz2',
-                'tarbz2',
-                'tbz2',
-                'z',
-                'tarz',
-                'lz',
-                'tarlz',
-                'xz',
-                'tarxz',
-                'txz',
-                'lzma',
-                'tarlzma',
-                'rar',
-                'sevenz',
-                'zst',
-                'tarzst',
-                'tzst',
-                'zip',
-                'exe',
-                'msi',
-                'dll',
-                'bat',
-                'cmd',
-                'com',
-                'appimage',
-                'app',
-                'bin',
-                'deb',
-                'rpm',
-                'apk',
-                'dmg',
-                'pkg',
-                'crx',
-                'xpi',
-                'mp3',
-                'wav',
-                'ogg',
-                'flac',
-                'aac',
-                'm4a',
-                'wma',
-                'mid',
-                'midi',
-                'mp4',
-                'mkv',
-                'webm',
-                'avi',
-                'mov',
-                'wmv',
-                'mpg',
-                'mpeg',
-                'm4v',
-                'flv',
-                'f4v',
-                'threegp',
-                'ttf',
-                'otf',
-                'woff',
-                'woff2',
-                'eot',
-                'rtf',
-                'odt',
-                'ods',
-                'odp',
-                'odg',
-                'odf',
-                'epub',
-                'mobi',
-                'azw',
-                'azw3',
-                'djvu',
-                'xls',
-                'ppt',
-                'pptx',
-                'xlsx',
-                'db',
-                'sqlite',
-                'sqlite3',
-                'mdb',
-                'accdb',
-                'dbf',
-                'plist',
-                'toml',
-                'env',
-                'dot',
-                'gv',
-                'torrent',
-                'ics',
-                'vcf',
-                'ai',
-                'eps',
-                'ps',
-                'dxf',
-                'dwg',
-                'stl',
-                'obj',
-                'fbx',
-                'blend',
-                'dae',
-                'threeds',
-                'gltf',
-                'glb',
-                'vhd',
-                'vhdx',
-                'vmdk',
-                'ova',
-                'ovf',
-                'iso',
-                'img',
-                'swf',
-              ])
-              .describe(
-                'Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n'
-              ),
-          ])
-          .optional(),
-        fullName: zod
-          .string()
-          .describe('The full OS name of the file for deduplication'),
-        name: zod
-          .string()
-          .describe('The name of the file, without the extension'),
-        relativePath: zod
-          .string()
-          .describe(
-            'The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end.'
-          ),
-        sha: zod.string().describe('The sha of the file.'),
-      })
-    )
-    .describe('The content of the folder'),
-  parentId: zod
-    .string()
-    .nullish()
-    .describe('Optional parent project id to upload the folder into'),
-  rootFolderName: zod
-    .string()
-    .describe(
-      'The name of the folder you are uploading.\n\nThis is used to help us generate the folder map more easily.'
-    ),
-  uploadRequestId: zod.string().describe('The upload request id'),
-});
+  "content": zod.array(zod.object({
+  "fileType": zod.union([zod.null(),zod.enum(['docx', 'pdf', 'md', 'canvas', 'coffee', 'cson', 'iced', 'c', 'i', 'cpp', 'cppm', 'cc', 'ccm', 'cxx', 'cxxm', 'cplusplus', 'cplusplusm', 'hpp', 'hh', 'hxx', 'hplusplus', 'h', 'ii', 'ino', 'inl', 'ipp', 'ixx', 'tpp', 'txx', 'hppin', 'hin', 'cu', 'cuh', 'cs', 'csx', 'cake', 'css', 'dart', 'diff', 'patch', 'rej', 'dockerfile', 'containerfile', 'go', 'handlebars', 'hbs', 'hjs', 'hlsl', 'hlsli', 'fx', 'fxh', 'vsh', 'psh', 'cginc', 'compute', 'html', 'htm', 'shtml', 'xhtml', 'xht', 'mdoc', 'jsp', 'asp', 'aspx', 'jshtm', 'volt', 'ejs', 'rhtml', 'ini', 'conf', 'properties', 'cfg', 'directory', 'gitattributes', 'gitconfig', 'gitmodules', 'editorconfig', 'repo', 'java', 'jav', 'jsx', 'js', 'es6', 'mjs', 'cjs', 'pac', 'json', 'bowerrc', 'jscsrc', 'webmanifest', 'jsmap', 'cssmap', 'tsmap', 'har', 'jslintrc', 'jsonld', 'geojson', 'ipynb', 'vuerc', 'jsonc', 'eslintrc', 'eslintrcjson', 'jsfmtrc', 'jshintrc', 'swcrc', 'hintrc', 'babelrc', 'jsonl', 'ndjson', 'codesnippets', 'jl', 'jmd', 'sty', 'cls', 'bbx', 'cbx', 'tex', 'ltx', 'ctx', 'bib', 'less', 'log', 'lua', 'mak', 'mk', 'mkd', 'mdwn', 'mdown', 'markdown', 'markdn', 'mdtxt', 'mdtext', 'workbook', 'm', 'mm', 'pl', 'pm', 'pod', 't', 'psgi', 'raku', 'rakumod', 'rakutest', 'rakudoc', 'nqp', 'p6', 'pl6', 'pm6', 'php', 'php4', 'php5', 'phtml', 'ctp', 'ps1', 'psm1', 'psd1', 'pssc', 'psrc', 'py', 'rpy', 'pyw', 'cpy', 'gyp', 'gypi', 'pyi', 'ipy', 'pyt', 'r', 'rhistory', 'rprofile', 'rt', 'cshtml', 'razor', 'rb', 'rbx', 'rjs', 'gemspec', 'rake', 'ru', 'erb', 'podspec', 'rbi', 'rs', 'scss', 'sass', 'shader', 'sh', 'bash', 'bashrc', 'bashaliases', 'bashprofile', 'bashlogin', 'ebuild', 'eclass', 'profile', 'bashlogout', 'xprofile', 'xsession', 'xsessionrc', 'zsh', 'zshrc', 'zprofile', 'zlogin', 'zlogout', 'zshenv', 'zshtheme', 'fish', 'ksh', 'csh', 'cshrc', 'tcshrc', 'yashrc', 'yashprofile', 'sql', 'dsql', 'swift', 'ts', 'cts', 'mts', 'tsx', 'tsbuildinfo', 'xml', 'xsd', 'ascx', 'atom', 'axml', 'axaml', 'bpmn', 'cpt', 'csl', 'csproj', 'csprojuser', 'dita', 'ditamap', 'dtd', 'ent', 'mod', 'dtml', 'fsproj', 'fxml', 'iml', 'isml', 'jmx', 'launch', 'menu', 'mxml', 'nuspec', 'opml', 'owl', 'proj', 'props', 'pt', 'publishsettings', 'pubxml', 'pubxmluser', 'rbxlx', 'rbxmx', 'rdf', 'rng', 'rss', 'shproj', 'storyboard', 'targets', 'tld', 'tmx', 'vbproj', 'vbprojuser', 'vcxproj', 'vcxprojfilters', 'wsdl', 'wxi', 'wxl', 'wxs', 'xaml', 'xbl', 'xib', 'xlf', 'xliff', 'xpdl', 'xul', 'xoml', 'xsl', 'xslt', 'yaml', 'yml', 'eyaml', 'eyml', 'cff', 'yamltmlanguage', 'yamltmpreferences', 'yamltmtheme', 'winget', 'txt', 'csv', 'tsv', 'jpeg', 'jpg', 'png', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tiff', 'tif', 'heic', 'heif', 'tar', 'targz', 'tgz', 'gz', 'bz2', 'tarbz2', 'tbz2', 'z', 'tarz', 'lz', 'tarlz', 'xz', 'tarxz', 'txz', 'lzma', 'tarlzma', 'rar', 'sevenz', 'zst', 'tarzst', 'tzst', 'zip', 'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'appimage', 'app', 'bin', 'deb', 'rpm', 'apk', 'dmg', 'pkg', 'crx', 'xpi', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'mid', 'midi', 'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'flv', 'f4v', 'threegp', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'rtf', 'odt', 'ods', 'odp', 'odg', 'odf', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'xls', 'ppt', 'pptx', 'xlsx', 'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'plist', 'toml', 'env', 'dot', 'gv', 'torrent', 'ics', 'vcf', 'ai', 'eps', 'ps', 'dxf', 'dwg', 'stl', 'obj', 'fbx', 'blend', 'dae', 'threeds', 'gltf', 'glb', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'iso', 'img', 'swf']).describe('Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n')]).optional(),
+  "fullName": zod.string().describe('The full OS name of the file for deduplication'),
+  "name": zod.string().describe('The name of the file, without the extension'),
+  "relativePath": zod.string().describe('The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end.'),
+  "sha": zod.string().describe('The sha of the file.')
+})).describe('The content of the folder'),
+  "parentId": zod.string().nullish().describe('Optional parent project id to upload the folder into'),
+  "rootFolderName": zod.string().describe('The name of the folder you are uploading.\n\nThis is used to help us generate the folder map more easily.'),
+  "uploadRequestId": zod.string().describe('The upload request id')
+})
 
 export const uploadFolderHandlerResponse = zod.object({
-  data: zod
-    .object({
-      destinationMap: zod.record(
-        zod.string(),
-        zod.union([
-          zod
-            .object({
-              presignedUrl: zod
-                .string()
-                .describe('The presigned url used to upload the sha'),
-              sha: zod.string().describe('The sha of the item'),
-            })
-            .and(
-              zod.object({
-                type: zod.enum(['external']),
-              })
-            ),
-          zod
-            .object({
-              bucket: zod.string(),
-              key: zod.string(),
-            })
-            .and(
-              zod.object({
-                type: zod.enum(['internal']),
-              })
-            ),
-        ])
-      ),
-      fileSystem: zod.union([
-        zod.object({
-          document_id: zod.string(),
-          item: zod.object({
-            fileType: zod
-              .union([
-                zod.null(),
-                zod
-                  .enum([
-                    'docx',
-                    'pdf',
-                    'md',
-                    'canvas',
-                    'coffee',
-                    'cson',
-                    'iced',
-                    'c',
-                    'i',
-                    'cpp',
-                    'cppm',
-                    'cc',
-                    'ccm',
-                    'cxx',
-                    'cxxm',
-                    'cplusplus',
-                    'cplusplusm',
-                    'hpp',
-                    'hh',
-                    'hxx',
-                    'hplusplus',
-                    'h',
-                    'ii',
-                    'ino',
-                    'inl',
-                    'ipp',
-                    'ixx',
-                    'tpp',
-                    'txx',
-                    'hppin',
-                    'hin',
-                    'cu',
-                    'cuh',
-                    'cs',
-                    'csx',
-                    'cake',
-                    'css',
-                    'dart',
-                    'diff',
-                    'patch',
-                    'rej',
-                    'dockerfile',
-                    'containerfile',
-                    'go',
-                    'handlebars',
-                    'hbs',
-                    'hjs',
-                    'hlsl',
-                    'hlsli',
-                    'fx',
-                    'fxh',
-                    'vsh',
-                    'psh',
-                    'cginc',
-                    'compute',
-                    'html',
-                    'htm',
-                    'shtml',
-                    'xhtml',
-                    'xht',
-                    'mdoc',
-                    'jsp',
-                    'asp',
-                    'aspx',
-                    'jshtm',
-                    'volt',
-                    'ejs',
-                    'rhtml',
-                    'ini',
-                    'conf',
-                    'properties',
-                    'cfg',
-                    'directory',
-                    'gitattributes',
-                    'gitconfig',
-                    'gitmodules',
-                    'editorconfig',
-                    'repo',
-                    'java',
-                    'jav',
-                    'jsx',
-                    'js',
-                    'es6',
-                    'mjs',
-                    'cjs',
-                    'pac',
-                    'json',
-                    'bowerrc',
-                    'jscsrc',
-                    'webmanifest',
-                    'jsmap',
-                    'cssmap',
-                    'tsmap',
-                    'har',
-                    'jslintrc',
-                    'jsonld',
-                    'geojson',
-                    'ipynb',
-                    'vuerc',
-                    'jsonc',
-                    'eslintrc',
-                    'eslintrcjson',
-                    'jsfmtrc',
-                    'jshintrc',
-                    'swcrc',
-                    'hintrc',
-                    'babelrc',
-                    'jsonl',
-                    'ndjson',
-                    'codesnippets',
-                    'jl',
-                    'jmd',
-                    'sty',
-                    'cls',
-                    'bbx',
-                    'cbx',
-                    'tex',
-                    'ltx',
-                    'ctx',
-                    'bib',
-                    'less',
-                    'log',
-                    'lua',
-                    'mak',
-                    'mk',
-                    'mkd',
-                    'mdwn',
-                    'mdown',
-                    'markdown',
-                    'markdn',
-                    'mdtxt',
-                    'mdtext',
-                    'workbook',
-                    'm',
-                    'mm',
-                    'pl',
-                    'pm',
-                    'pod',
-                    't',
-                    'psgi',
-                    'raku',
-                    'rakumod',
-                    'rakutest',
-                    'rakudoc',
-                    'nqp',
-                    'p6',
-                    'pl6',
-                    'pm6',
-                    'php',
-                    'php4',
-                    'php5',
-                    'phtml',
-                    'ctp',
-                    'ps1',
-                    'psm1',
-                    'psd1',
-                    'pssc',
-                    'psrc',
-                    'py',
-                    'rpy',
-                    'pyw',
-                    'cpy',
-                    'gyp',
-                    'gypi',
-                    'pyi',
-                    'ipy',
-                    'pyt',
-                    'r',
-                    'rhistory',
-                    'rprofile',
-                    'rt',
-                    'cshtml',
-                    'razor',
-                    'rb',
-                    'rbx',
-                    'rjs',
-                    'gemspec',
-                    'rake',
-                    'ru',
-                    'erb',
-                    'podspec',
-                    'rbi',
-                    'rs',
-                    'scss',
-                    'sass',
-                    'shader',
-                    'sh',
-                    'bash',
-                    'bashrc',
-                    'bashaliases',
-                    'bashprofile',
-                    'bashlogin',
-                    'ebuild',
-                    'eclass',
-                    'profile',
-                    'bashlogout',
-                    'xprofile',
-                    'xsession',
-                    'xsessionrc',
-                    'zsh',
-                    'zshrc',
-                    'zprofile',
-                    'zlogin',
-                    'zlogout',
-                    'zshenv',
-                    'zshtheme',
-                    'fish',
-                    'ksh',
-                    'csh',
-                    'cshrc',
-                    'tcshrc',
-                    'yashrc',
-                    'yashprofile',
-                    'sql',
-                    'dsql',
-                    'swift',
-                    'ts',
-                    'cts',
-                    'mts',
-                    'tsx',
-                    'tsbuildinfo',
-                    'xml',
-                    'xsd',
-                    'ascx',
-                    'atom',
-                    'axml',
-                    'axaml',
-                    'bpmn',
-                    'cpt',
-                    'csl',
-                    'csproj',
-                    'csprojuser',
-                    'dita',
-                    'ditamap',
-                    'dtd',
-                    'ent',
-                    'mod',
-                    'dtml',
-                    'fsproj',
-                    'fxml',
-                    'iml',
-                    'isml',
-                    'jmx',
-                    'launch',
-                    'menu',
-                    'mxml',
-                    'nuspec',
-                    'opml',
-                    'owl',
-                    'proj',
-                    'props',
-                    'pt',
-                    'publishsettings',
-                    'pubxml',
-                    'pubxmluser',
-                    'rbxlx',
-                    'rbxmx',
-                    'rdf',
-                    'rng',
-                    'rss',
-                    'shproj',
-                    'storyboard',
-                    'targets',
-                    'tld',
-                    'tmx',
-                    'vbproj',
-                    'vbprojuser',
-                    'vcxproj',
-                    'vcxprojfilters',
-                    'wsdl',
-                    'wxi',
-                    'wxl',
-                    'wxs',
-                    'xaml',
-                    'xbl',
-                    'xib',
-                    'xlf',
-                    'xliff',
-                    'xpdl',
-                    'xul',
-                    'xoml',
-                    'xsl',
-                    'xslt',
-                    'yaml',
-                    'yml',
-                    'eyaml',
-                    'eyml',
-                    'cff',
-                    'yamltmlanguage',
-                    'yamltmpreferences',
-                    'yamltmtheme',
-                    'winget',
-                    'txt',
-                    'csv',
-                    'tsv',
-                    'jpeg',
-                    'jpg',
-                    'png',
-                    'gif',
-                    'svg',
-                    'webp',
-                    'avif',
-                    'bmp',
-                    'ico',
-                    'tiff',
-                    'tif',
-                    'heic',
-                    'heif',
-                    'tar',
-                    'targz',
-                    'tgz',
-                    'gz',
-                    'bz2',
-                    'tarbz2',
-                    'tbz2',
-                    'z',
-                    'tarz',
-                    'lz',
-                    'tarlz',
-                    'xz',
-                    'tarxz',
-                    'txz',
-                    'lzma',
-                    'tarlzma',
-                    'rar',
-                    'sevenz',
-                    'zst',
-                    'tarzst',
-                    'tzst',
-                    'zip',
-                    'exe',
-                    'msi',
-                    'dll',
-                    'bat',
-                    'cmd',
-                    'com',
-                    'appimage',
-                    'app',
-                    'bin',
-                    'deb',
-                    'rpm',
-                    'apk',
-                    'dmg',
-                    'pkg',
-                    'crx',
-                    'xpi',
-                    'mp3',
-                    'wav',
-                    'ogg',
-                    'flac',
-                    'aac',
-                    'm4a',
-                    'wma',
-                    'mid',
-                    'midi',
-                    'mp4',
-                    'mkv',
-                    'webm',
-                    'avi',
-                    'mov',
-                    'wmv',
-                    'mpg',
-                    'mpeg',
-                    'm4v',
-                    'flv',
-                    'f4v',
-                    'threegp',
-                    'ttf',
-                    'otf',
-                    'woff',
-                    'woff2',
-                    'eot',
-                    'rtf',
-                    'odt',
-                    'ods',
-                    'odp',
-                    'odg',
-                    'odf',
-                    'epub',
-                    'mobi',
-                    'azw',
-                    'azw3',
-                    'djvu',
-                    'xls',
-                    'ppt',
-                    'pptx',
-                    'xlsx',
-                    'db',
-                    'sqlite',
-                    'sqlite3',
-                    'mdb',
-                    'accdb',
-                    'dbf',
-                    'plist',
-                    'toml',
-                    'env',
-                    'dot',
-                    'gv',
-                    'torrent',
-                    'ics',
-                    'vcf',
-                    'ai',
-                    'eps',
-                    'ps',
-                    'dxf',
-                    'dwg',
-                    'stl',
-                    'obj',
-                    'fbx',
-                    'blend',
-                    'dae',
-                    'threeds',
-                    'gltf',
-                    'glb',
-                    'vhd',
-                    'vhdx',
-                    'vmdk',
-                    'ova',
-                    'ovf',
-                    'iso',
-                    'img',
-                    'swf',
-                  ])
-                  .describe(
-                    'Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n'
-                  ),
-              ])
-              .optional(),
-            fullName: zod
-              .string()
-              .describe('The full OS name of the file for deduplication'),
-            name: zod
-              .string()
-              .describe('The name of the file, without the extension'),
-            relativePath: zod
-              .string()
-              .describe(
-                'The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end.'
-              ),
-            sha: zod.string().describe('The sha of the file.'),
-          }),
-          type: zod.enum(['file']),
-        }),
-        zod.object({
-          content: zod.record(zod.string(), zod.any()),
-          project_id: zod.string(),
-          type: zod.enum(['folder']),
-        }),
-      ]),
-    })
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "destinationMap": zod.record(zod.string(), zod.union([zod.object({
+  "presignedUrl": zod.string().describe('The presigned url used to upload the sha'),
+  "sha": zod.string().describe('The sha of the item')
+}).and(zod.object({
+  "type": zod.enum(['external'])
+})),zod.object({
+  "bucket": zod.string(),
+  "key": zod.string()
+}).and(zod.object({
+  "type": zod.enum(['internal'])
+}))])),
+  "fileSystem": zod.union([zod.object({
+  "document_id": zod.string(),
+  "item": zod.object({
+  "fileType": zod.union([zod.null(),zod.enum(['docx', 'pdf', 'md', 'canvas', 'coffee', 'cson', 'iced', 'c', 'i', 'cpp', 'cppm', 'cc', 'ccm', 'cxx', 'cxxm', 'cplusplus', 'cplusplusm', 'hpp', 'hh', 'hxx', 'hplusplus', 'h', 'ii', 'ino', 'inl', 'ipp', 'ixx', 'tpp', 'txx', 'hppin', 'hin', 'cu', 'cuh', 'cs', 'csx', 'cake', 'css', 'dart', 'diff', 'patch', 'rej', 'dockerfile', 'containerfile', 'go', 'handlebars', 'hbs', 'hjs', 'hlsl', 'hlsli', 'fx', 'fxh', 'vsh', 'psh', 'cginc', 'compute', 'html', 'htm', 'shtml', 'xhtml', 'xht', 'mdoc', 'jsp', 'asp', 'aspx', 'jshtm', 'volt', 'ejs', 'rhtml', 'ini', 'conf', 'properties', 'cfg', 'directory', 'gitattributes', 'gitconfig', 'gitmodules', 'editorconfig', 'repo', 'java', 'jav', 'jsx', 'js', 'es6', 'mjs', 'cjs', 'pac', 'json', 'bowerrc', 'jscsrc', 'webmanifest', 'jsmap', 'cssmap', 'tsmap', 'har', 'jslintrc', 'jsonld', 'geojson', 'ipynb', 'vuerc', 'jsonc', 'eslintrc', 'eslintrcjson', 'jsfmtrc', 'jshintrc', 'swcrc', 'hintrc', 'babelrc', 'jsonl', 'ndjson', 'codesnippets', 'jl', 'jmd', 'sty', 'cls', 'bbx', 'cbx', 'tex', 'ltx', 'ctx', 'bib', 'less', 'log', 'lua', 'mak', 'mk', 'mkd', 'mdwn', 'mdown', 'markdown', 'markdn', 'mdtxt', 'mdtext', 'workbook', 'm', 'mm', 'pl', 'pm', 'pod', 't', 'psgi', 'raku', 'rakumod', 'rakutest', 'rakudoc', 'nqp', 'p6', 'pl6', 'pm6', 'php', 'php4', 'php5', 'phtml', 'ctp', 'ps1', 'psm1', 'psd1', 'pssc', 'psrc', 'py', 'rpy', 'pyw', 'cpy', 'gyp', 'gypi', 'pyi', 'ipy', 'pyt', 'r', 'rhistory', 'rprofile', 'rt', 'cshtml', 'razor', 'rb', 'rbx', 'rjs', 'gemspec', 'rake', 'ru', 'erb', 'podspec', 'rbi', 'rs', 'scss', 'sass', 'shader', 'sh', 'bash', 'bashrc', 'bashaliases', 'bashprofile', 'bashlogin', 'ebuild', 'eclass', 'profile', 'bashlogout', 'xprofile', 'xsession', 'xsessionrc', 'zsh', 'zshrc', 'zprofile', 'zlogin', 'zlogout', 'zshenv', 'zshtheme', 'fish', 'ksh', 'csh', 'cshrc', 'tcshrc', 'yashrc', 'yashprofile', 'sql', 'dsql', 'swift', 'ts', 'cts', 'mts', 'tsx', 'tsbuildinfo', 'xml', 'xsd', 'ascx', 'atom', 'axml', 'axaml', 'bpmn', 'cpt', 'csl', 'csproj', 'csprojuser', 'dita', 'ditamap', 'dtd', 'ent', 'mod', 'dtml', 'fsproj', 'fxml', 'iml', 'isml', 'jmx', 'launch', 'menu', 'mxml', 'nuspec', 'opml', 'owl', 'proj', 'props', 'pt', 'publishsettings', 'pubxml', 'pubxmluser', 'rbxlx', 'rbxmx', 'rdf', 'rng', 'rss', 'shproj', 'storyboard', 'targets', 'tld', 'tmx', 'vbproj', 'vbprojuser', 'vcxproj', 'vcxprojfilters', 'wsdl', 'wxi', 'wxl', 'wxs', 'xaml', 'xbl', 'xib', 'xlf', 'xliff', 'xpdl', 'xul', 'xoml', 'xsl', 'xslt', 'yaml', 'yml', 'eyaml', 'eyml', 'cff', 'yamltmlanguage', 'yamltmpreferences', 'yamltmtheme', 'winget', 'txt', 'csv', 'tsv', 'jpeg', 'jpg', 'png', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tiff', 'tif', 'heic', 'heif', 'tar', 'targz', 'tgz', 'gz', 'bz2', 'tarbz2', 'tbz2', 'z', 'tarz', 'lz', 'tarlz', 'xz', 'tarxz', 'txz', 'lzma', 'tarlzma', 'rar', 'sevenz', 'zst', 'tarzst', 'tzst', 'zip', 'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'appimage', 'app', 'bin', 'deb', 'rpm', 'apk', 'dmg', 'pkg', 'crx', 'xpi', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'mid', 'midi', 'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'flv', 'f4v', 'threegp', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'rtf', 'odt', 'ods', 'odp', 'odg', 'odf', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'xls', 'ppt', 'pptx', 'xlsx', 'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'plist', 'toml', 'env', 'dot', 'gv', 'torrent', 'ics', 'vcf', 'ai', 'eps', 'ps', 'dxf', 'dwg', 'stl', 'obj', 'fbx', 'blend', 'dae', 'threeds', 'gltf', 'glb', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'iso', 'img', 'swf']).describe('Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n')]).optional(),
+  "fullName": zod.string().describe('The full OS name of the file for deduplication'),
+  "name": zod.string().describe('The name of the file, without the extension'),
+  "relativePath": zod.string().describe('The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end.'),
+  "sha": zod.string().describe('The sha of the file.')
+}),
+  "type": zod.enum(['file'])
+}),zod.object({
+  "content": zod.record(zod.string(), zod.any()),
+  "project_id": zod.string(),
+  "type": zod.enum(['folder'])
+})])
+}).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Creates a request id in the dynamodb table for tracking the upload
@@ -7157,708 +2586,392 @@ Returns a presigned url for uploading a zip file to the staging bucket
 Returns a request id for tracking the upload
  */
 export const uploadExtractFolderHandlerBody = zod.object({
-  name: zod.string().nullish(),
-  parentId: zod.string().nullish(),
-  sha: zod.string(),
-});
+  "name": zod.string().nullish(),
+  "parentId": zod.string().nullish(),
+  "sha": zod.string()
+})
 
 export const uploadExtractFolderHandlerResponse = zod.object({
-  data: zod
-    .object({
-      presignedUrl: zod.string(),
-      requestId: zod.string(),
-    })
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "presignedUrl": zod.string(),
+  "requestId": zod.string()
+}).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 export const getProjectHandlerParams = zod.object({
-  id: zod.string().describe('ID of the project'),
-});
+  "id": zod.string().describe('ID of the project')
+})
 
 export const getProjectHandlerResponse = zod.object({
-  data: zod.object({
-    projectMetadata: zod.object({
-      createdAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the project was created'),
-      deletedAt: zod.string().datetime({}).nullish(),
-      id: zod.string().describe('The id of the project'),
-      name: zod.string().describe('The name of the project'),
-      parentId: zod.string().nullish().describe('The parent project id'),
-      updatedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the project was updated'),
-      userId: zod.string().describe('The user id of who created the project'),
-      type: zod.enum(['project']),
-    }),
-    userAccessLevel: zod
-      .enum(['view', 'comment', 'edit', 'owner'])
-      .describe('Ordered from least to most access top -> bottom'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "projectMetadata": zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+}),
+  "userAccessLevel": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Deletes a project.
 Soft deletes the project and all of its children.
  */
 export const deleteProjectHandlerParams = zod.object({
-  id: zod.string().describe('ID of the project'),
-});
+  "id": zod.string().describe('ID of the project')
+})
 
 export const deleteProjectHandlerResponse = zod.object({
-  data: zod
-    .object({
-      chat_ids: zod
-        .array(zod.string())
-        .describe('The ids of the chats that were marked as deleted'),
-      document_ids: zod
-        .array(zod.string())
-        .describe('The ids of the documents that were marked as deleted'),
-      project_ids: zod
-        .array(zod.string())
-        .describe('The ids of the project that were marked as deleted'),
-    })
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "chat_ids": zod.array(zod.string()).describe('The ids of the chats that were marked as deleted'),
+  "document_ids": zod.array(zod.string()).describe('The ids of the documents that were marked as deleted'),
+  "project_ids": zod.array(zod.string()).describe('The ids of the project that were marked as deleted')
+}).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Gets the user's access level to the project
  */
 export const getProjectUserAccessLevelParams = zod.object({
-  id: zod.string().describe('ID of the project'),
-});
+  "id": zod.string().describe('ID of the project')
+})
 
-export const getProjectUserAccessLevelResponse = zod
-  .enum(['view', 'comment', 'edit', 'owner'])
-  .describe('Ordered from least to most access top -> bottom');
+export const getProjectUserAccessLevelResponse = zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')
+
 
 /**
  * @summary Gets the content of a project.
 This includes the projects sub-projects as well as the items in the project.
  */
 export const getProjectContentHandlerParams = zod.object({
-  id: zod.string().describe('ID of the project'),
-});
+  "id": zod.string().describe('ID of the project')
+})
 
 export const getProjectContentHandlerResponse = zod.object({
-  data: zod
-    .array(
-      zod.object({
-        item: zod.union([
-          zod.object({
-            branchedFromId: zod
-              .string()
-              .nullish()
-              .describe('The id of the document this document branched from'),
-            branchedFromVersionId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-              ),
-            createdAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the document was deleted'),
-            documentFamilyId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the document family this document belongs to'
-              ),
-            documentVersionId: zod
-              .number()
-              .describe(
-                'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-              ),
-            fileType: zod
-              .string()
-              .nullish()
-              .describe('The file type of the document (e.g. pdf, docx)'),
-            id: zod.string().describe('The document id'),
-            name: zod.string().describe('The name of the document'),
-            owner: zod.string().describe('The owner of the document'),
-            projectId: zod
-              .string()
-              .nullish()
-              .describe('The id of the project that this document belongs to'),
-            sha: zod
-              .string()
-              .nullish()
-              .describe(
-                'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-              ),
-            subType: zod
-              .union([
-                zod.null(),
-                zod
-                  .object({
-                    is_completed: zod
-                      .boolean()
-                      .describe(
-                        'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                      ),
-                    type: zod.enum(['task']),
-                  })
-                  .describe('A task document with its associated properties')
-                  .describe(
-                    'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                  ),
-              ])
-              .optional(),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe(
-                'The time the document instance / document BOM was updated'
-              ),
-            type: zod.enum(['document']),
-          }),
-          zod.object({
-            createdAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the chat was created'),
-            deletedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the chat was deleted'),
-            id: zod.string().describe('The chat uuid'),
-            isPersistent: zod.boolean(),
-            model: zod
-              .string()
-              .nullish()
-              .describe('The model used to generate the chat'),
-            name: zod.string().describe('The name of the chat'),
-            projectId: zod
-              .string()
-              .nullish()
-              .describe('The project id of the chat'),
-            tokenCount: zod.number().nullish(),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the chat was last updated'),
-            userId: zod.string().describe('Who the chat belongs to'),
-            type: zod.enum(['chat']),
-          }),
-          zod.object({
-            createdAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the project was created'),
-            deletedAt: zod.string().datetime({}).nullish(),
-            id: zod.string().describe('The id of the project'),
-            name: zod.string().describe('The name of the project'),
-            parentId: zod.string().nullish().describe('The parent project id'),
-            updatedAt: zod
-              .string()
-              .datetime({})
-              .nullish()
-              .describe('The time the project was updated'),
-            userId: zod
-              .string()
-              .describe('The user id of who created the project'),
-            type: zod.enum(['project']),
-          }),
-        ]),
-        userAccessLevel: zod
-          .enum(['view', 'comment', 'edit', 'owner'])
-          .describe('Ordered from least to most access top -> bottom'),
-      })
-    )
-    .describe(
-      'DSS Items inside of a given project with their user access level attached to each item'
-    ),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.array(zod.object({
+  "item": zod.union([zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated'),
+  "type": zod.enum(['document'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the chat was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the chat was deleted'),
+  "id": zod.string().describe('The chat uuid'),
+  "isPersistent": zod.boolean(),
+  "model": zod.string().nullish().describe('The model used to generate the chat'),
+  "name": zod.string().describe('The name of the chat'),
+  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "tokenCount": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the chat was last updated'),
+  "userId": zod.string().describe('Who the chat belongs to'),
+  "type": zod.enum(['chat'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+})]),
+  "userAccessLevel": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')
+})).describe('DSS Items inside of a given project with their user access level attached to each item'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Permanently deletes a project and all of it's children.
  */
 export const permanentlyDeleteProjectParams = zod.object({
-  id: zod.string().describe('ID of the project'),
-});
+  "id": zod.string().describe('ID of the project')
+})
 
 export const permanentlyDeleteProjectResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Gets the current documents share permissions
 Gets the projects share permissions
  */
 export const getProjectPermissionsV2Params = zod.object({
-  id: zod.string().describe('ID of the project'),
-});
+  "id": zod.string().describe('ID of the project')
+})
 
 export const getProjectPermissionsV2Response = zod.object({
-  channelSharePermissions: zod
-    .array(
-      zod
-        .object({
-          access_level: zod
-            .enum(['view', 'comment', 'edit', 'owner'])
-            .describe('Ordered from least to most access top -> bottom'),
-          channel_id: zod.string().describe('The channel id'),
-        })
-        .describe('The channel share permission')
-    )
-    .nullish()
-    .describe('The channel share permissions for the item'),
-  id: zod.string().describe('The share permission id'),
-  isPublic: zod.boolean().describe('If the item is publicly accessible'),
-  owner: zod.string().describe('The owner of the item'),
-  publicAccessLevel: zod
-    .union([
-      zod.null(),
-      zod
-        .enum(['view', 'comment', 'edit', 'owner'])
-        .describe('Ordered from least to most access top -> bottom'),
-    ])
-    .optional(),
-});
+  "channelSharePermissions": zod.array(zod.object({
+  "access_level": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
+  "channel_id": zod.string().describe('The channel id')
+}).describe('The channel share permission')).nullish().describe('The channel share permissions for the item'),
+  "id": zod.string().describe('The share permission id'),
+  "isPublic": zod.boolean().describe('If the item is publicly accessible'),
+  "owner": zod.string().describe('The owner of the item'),
+  "publicAccessLevel": zod.union([zod.null(),zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')]).optional()
+})
+
 
 /**
  * @summary Deletes a specific document
  */
 export const revertDeleteProjectParams = zod.object({
-  id: zod.string().describe('ID of the project'),
-});
+  "id": zod.string().describe('ID of the project')
+})
 
 export const revertDeleteProjectResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Gets the users recently deleted items.
  */
 export const recentlyDeletedResponse = zod.object({
-  data: zod
-    .object({
-      items: zod
-        .array(
-          zod.union([
-            zod.object({
-              branchedFromId: zod
-                .string()
-                .nullish()
-                .describe('The id of the document this document branched from'),
-              branchedFromVersionId: zod
-                .number()
-                .nullish()
-                .describe(
-                  'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-                ),
-              createdAt: zod
-                .string()
-                .datetime({})
-                .nullish()
-                .describe('The time the document was created'),
-              deletedAt: zod
-                .string()
-                .datetime({})
-                .nullish()
-                .describe('The time the document was deleted'),
-              documentFamilyId: zod
-                .number()
-                .nullish()
-                .describe(
-                  'The id of the document family this document belongs to'
-                ),
-              documentVersionId: zod
-                .number()
-                .describe(
-                  'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-                ),
-              fileType: zod
-                .string()
-                .nullish()
-                .describe('The file type of the document (e.g. pdf, docx)'),
-              id: zod.string().describe('The document id'),
-              name: zod.string().describe('The name of the document'),
-              owner: zod.string().describe('The owner of the document'),
-              projectId: zod
-                .string()
-                .nullish()
-                .describe(
-                  'The id of the project that this document belongs to'
-                ),
-              sha: zod
-                .string()
-                .nullish()
-                .describe(
-                  'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-                ),
-              subType: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .object({
-                      is_completed: zod
-                        .boolean()
-                        .describe(
-                          'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                        ),
-                      type: zod.enum(['task']),
-                    })
-                    .describe('A task document with its associated properties')
-                    .describe(
-                      'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
-                    ),
-                ])
-                .optional(),
-              updatedAt: zod
-                .string()
-                .datetime({})
-                .nullish()
-                .describe(
-                  'The time the document instance / document BOM was updated'
-                ),
-              type: zod.enum(['document']),
-            }),
-            zod.object({
-              createdAt: zod
-                .string()
-                .datetime({})
-                .nullish()
-                .describe('The time the chat was created'),
-              deletedAt: zod
-                .string()
-                .datetime({})
-                .nullish()
-                .describe('The time the chat was deleted'),
-              id: zod.string().describe('The chat uuid'),
-              isPersistent: zod.boolean(),
-              model: zod
-                .string()
-                .nullish()
-                .describe('The model used to generate the chat'),
-              name: zod.string().describe('The name of the chat'),
-              projectId: zod
-                .string()
-                .nullish()
-                .describe('The project id of the chat'),
-              tokenCount: zod.number().nullish(),
-              updatedAt: zod
-                .string()
-                .datetime({})
-                .nullish()
-                .describe('The time the chat was last updated'),
-              userId: zod.string().describe('Who the chat belongs to'),
-              type: zod.enum(['chat']),
-            }),
-            zod.object({
-              createdAt: zod
-                .string()
-                .datetime({})
-                .nullish()
-                .describe('The time the project was created'),
-              deletedAt: zod.string().datetime({}).nullish(),
-              id: zod.string().describe('The id of the project'),
-              name: zod.string().describe('The name of the project'),
-              parentId: zod
-                .string()
-                .nullish()
-                .describe('The parent project id'),
-              updatedAt: zod
-                .string()
-                .datetime({})
-                .nullish()
-                .describe('The time the project was updated'),
-              userId: zod
-                .string()
-                .describe('The user id of who created the project'),
-              type: zod.enum(['project']),
-            }),
-          ])
-        )
-        .describe('The items returned from the call'),
-    })
-    .describe('Data to be returned'),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "items": zod.array(zod.union([zod.object({
+  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the document was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the document was deleted'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "owner": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the document instance / document BOM was updated'),
+  "type": zod.enum(['document'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the chat was created'),
+  "deletedAt": zod.string().datetime({}).nullish().describe('The time the chat was deleted'),
+  "id": zod.string().describe('The chat uuid'),
+  "isPersistent": zod.boolean(),
+  "model": zod.string().nullish().describe('The model used to generate the chat'),
+  "name": zod.string().describe('The name of the chat'),
+  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "tokenCount": zod.number().nullish(),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the chat was last updated'),
+  "userId": zod.string().describe('Who the chat belongs to'),
+  "type": zod.enum(['chat'])
+}),zod.object({
+  "createdAt": zod.string().datetime({}).nullish().describe('The time the project was created'),
+  "deletedAt": zod.string().datetime({}).nullish(),
+  "id": zod.string().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "parentId": zod.string().nullish().describe('The parent project id'),
+  "updatedAt": zod.string().datetime({}).nullish().describe('The time the project was updated'),
+  "userId": zod.string().describe('The user id of who created the project'),
+  "type": zod.enum(['project'])
+})])).describe('The items returned from the call')
+}).describe('Data to be returned'),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 export const getViewsHandlerResponse = zod.object({
-  excludedDefaultViews: zod.array(
-    zod
-      .object({
-        defaultViewId: zod.string(),
-        id: zod.string().uuid(),
-        userId: zod.string(),
-      })
-      .describe(
-        "Frontend can define any set of its own default views for the user.\nThis is a list of views that are excluded from the default views list on the frontend.\n\nIt is important that the frontend can quickly iterate on default views, for that reason\nwe don't keep track of default views in the database, only those that are explicitly excluded."
-      )
-  ),
-  views: zod.array(
-    zod.object({
-      config: zod
-        .any()
-        .describe(
-          'It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux.'
-        ),
-      createdAt: zod.string().datetime({}),
-      id: zod.string().uuid(),
-      name: zod.string(),
-      updatedAt: zod.string().datetime({}),
-      userId: zod.string(),
-    })
-  ),
-});
+  "excludedDefaultViews": zod.array(zod.object({
+  "defaultViewId": zod.string(),
+  "id": zod.string().uuid(),
+  "userId": zod.string()
+}).describe('Frontend can define any set of its own default views for the user.\nThis is a list of views that are excluded from the default views list on the frontend.\n\nIt is important that the frontend can quickly iterate on default views, for that reason\nwe don\'t keep track of default views in the database, only those that are explicitly excluded.')),
+  "views": zod.array(zod.object({
+  "config": zod.any().describe('It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux.'),
+  "createdAt": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "updatedAt": zod.string().datetime({}),
+  "userId": zod.string()
+}))
+})
+
 
 export const createViewHandlerBody = zod.object({
-  config: zod.any(),
-  name: zod.string(),
-});
+  "config": zod.any(),
+  "name": zod.string()
+})
 
 export const createViewHandlerResponse = zod.object({
-  config: zod
-    .any()
-    .describe(
-      'It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux.'
-    ),
-  createdAt: zod.string().datetime({}),
-  id: zod.string().uuid(),
-  name: zod.string(),
-  updatedAt: zod.string().datetime({}),
-  userId: zod.string(),
-});
+  "config": zod.any().describe('It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux.'),
+  "createdAt": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "updatedAt": zod.string().datetime({}),
+  "userId": zod.string()
+})
+
 
 export const deleteViewHandlerParams = zod.object({
-  saved_view_id: zod.string().describe('The id of the saved view to delete'),
-});
+  "saved_view_id": zod.string().describe('The id of the saved view to delete')
+})
+
 
 export const excludeDefaultViewHandlerBody = zod.object({
-  defaultViewId: zod.string(),
-});
+  "defaultViewId": zod.string()
+})
+
 
 export const patchViewHandlerParams = zod.object({
-  saved_view_id: zod.string().describe('The id of the saved view to patch'),
-});
+  "saved_view_id": zod.string().describe('The id of the saved view to patch')
+})
 
 export const patchViewHandlerBody = zod.object({
-  config: zod.any().optional(),
-  name: zod.string().nullish(),
-});
+  "config": zod.any().optional(),
+  "name": zod.string().nullish()
+})
+
 
 /**
  * @summary Gets a UserPdfDocumentLocation entry
  */
 export const getUserDocumentViewLocationParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getUserDocumentViewLocationResponse = zod.object({
-  location: zod.string().nullish(),
-});
+  "location": zod.string().nullish()
+})
+
 
 export const upsertUserDocumentViewLocationParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const upsertUserDocumentViewLocationBody = zod.object({
-  location: zod.string(),
-});
+  "location": zod.string()
+})
 
-export const upsertUserDocumentViewLocationResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
+export const upsertUserDocumentViewLocationResponse = zod.object({
+
+}).describe('Empty response is required due to custom fetch forcing `response.json()`')
+
 
 /**
  * @summary Deletes a document location for the user
  */
 export const deleteUserDocumentViewLocationParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
-export const deleteUserDocumentViewLocationResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
+export const deleteUserDocumentViewLocationResponse = zod.object({
+
+}).describe('Empty response is required due to custom fetch forcing `response.json()`')
+
 
 /**
  * @summary Gets the current documents share permissions
  */
 export const getDocumentPermissionsV2Params = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
+  "document_id": zod.string().describe('Document ID')
+})
 
 export const getDocumentPermissionsV2Response = zod.object({
-  documentPermissions: zod.object({
-    channelSharePermissions: zod
-      .array(
-        zod
-          .object({
-            access_level: zod
-              .enum(['view', 'comment', 'edit', 'owner'])
-              .describe('Ordered from least to most access top -> bottom'),
-            channel_id: zod.string().describe('The channel id'),
-          })
-          .describe('The channel share permission')
-      )
-      .nullish()
-      .describe('The channel share permissions for the item'),
-    id: zod.string().describe('The share permission id'),
-    isPublic: zod.boolean().describe('If the item is publicly accessible'),
-    owner: zod.string().describe('The owner of the item'),
-    publicAccessLevel: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['view', 'comment', 'edit', 'owner'])
-          .describe('Ordered from least to most access top -> bottom'),
-      ])
-      .optional(),
-  }),
-});
+  "documentPermissions": zod.object({
+  "channelSharePermissions": zod.array(zod.object({
+  "access_level": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
+  "channel_id": zod.string().describe('The channel id')
+}).describe('The channel share permission')).nullish().describe('The channel share permissions for the item'),
+  "id": zod.string().describe('The share permission id'),
+  "isPublic": zod.boolean().describe('If the item is publicly accessible'),
+  "owner": zod.string().describe('The owner of the item'),
+  "publicAccessLevel": zod.union([zod.null(),zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')]).optional()
+})
+})
+
 
 /**
  * @summary Edits a project.
  */
 export const editProjectV2Params = zod.object({
-  id: zod.string().describe('ID of the project'),
-});
+  "id": zod.string().describe('ID of the project')
+})
 
 export const editProjectV2Body = zod.object({
-  name: zod.string().nullish().describe('The new name of the project.'),
-  projectParentId: zod
-    .string()
-    .nullish()
-    .describe('The new project that the new project will belong to.'),
-  sharePermission: zod
-    .union([
-      zod.null(),
-      zod.object({
-        channelSharePermissions: zod
-          .array(
-            zod.object({
-              accessLevel: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum(['view', 'comment', 'edit', 'owner'])
-                    .describe(
-                      'Ordered from least to most access top -> bottom'
-                    ),
-                ])
-                .optional(),
-              channelId: zod.string().describe('The channel id'),
-              operation: zod.enum(['add', 'remove', 'replace']),
-            })
-          )
-          .nullish()
-          .describe(
-            'Any channel share permissions to be created/updated/removed'
-          ),
-        isPublic: zod
-          .boolean()
-          .nullish()
-          .describe('If the item is publicly accessible'),
-        publicAccessLevel: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['view', 'comment', 'edit', 'owner'])
-              .describe('Ordered from least to most access top -> bottom'),
-          ])
-          .optional(),
-      }),
-    ])
-    .optional(),
-});
+  "name": zod.string().nullish().describe('The new name of the project.'),
+  "projectParentId": zod.string().nullish().describe('The new project that the new project will belong to.'),
+  "sharePermission": zod.union([zod.null(),zod.object({
+  "channelSharePermissions": zod.array(zod.object({
+  "accessLevel": zod.union([zod.null(),zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')]).optional(),
+  "channelId": zod.string().describe('The channel id'),
+  "operation": zod.enum(['add', 'remove', 'replace'])
+})).nullish().describe('Any channel share permissions to be created/updated/removed'),
+  "isPublic": zod.boolean().nullish().describe('If the item is publicly accessible'),
+  "publicAccessLevel": zod.union([zod.null(),zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')]).optional()
+})]).optional()
+})
 
 export const editProjectV2Response = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
 
 /**
  * @summary Edits the share permissions of a thread.
  */
 export const editThreadV2Params = zod.object({
-  thread_id: zod.string().describe('thread ID'),
-});
+  "thread_id": zod.string().describe('thread ID')
+})
 
 export const editThreadV2Body = zod.object({
-  projectId: zod
-    .string()
-    .nullish()
-    .describe('The new project that the thread will belong to.'),
-  sharePermission: zod
-    .union([
-      zod.null(),
-      zod.object({
-        channelSharePermissions: zod
-          .array(
-            zod.object({
-              accessLevel: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum(['view', 'comment', 'edit', 'owner'])
-                    .describe(
-                      'Ordered from least to most access top -> bottom'
-                    ),
-                ])
-                .optional(),
-              channelId: zod.string().describe('The channel id'),
-              operation: zod.enum(['add', 'remove', 'replace']),
-            })
-          )
-          .nullish()
-          .describe(
-            'Any channel share permissions to be created/updated/removed'
-          ),
-        isPublic: zod
-          .boolean()
-          .nullish()
-          .describe('If the item is publicly accessible'),
-        publicAccessLevel: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['view', 'comment', 'edit', 'owner'])
-              .describe('Ordered from least to most access top -> bottom'),
-          ])
-          .optional(),
-      }),
-    ])
-    .optional(),
-});
+  "projectId": zod.string().nullish().describe('The new project that the thread will belong to.'),
+  "sharePermission": zod.union([zod.null(),zod.object({
+  "channelSharePermissions": zod.array(zod.object({
+  "accessLevel": zod.union([zod.null(),zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')]).optional(),
+  "channelId": zod.string().describe('The channel id'),
+  "operation": zod.enum(['add', 'remove', 'replace'])
+})).nullish().describe('Any channel share permissions to be created/updated/removed'),
+  "isPublic": zod.boolean().nullish().describe('If the item is publicly accessible'),
+  "publicAccessLevel": zod.union([zod.null(),zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom')]).optional()
+})]).optional()
+})
 
 export const editThreadV2Response = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+  "data": zod.object({
+  "success": zod.boolean().describe('Indicates if the request was successful')
+}),
+  "error": zod.boolean().describe('Indicates if an error occurred')
+})
+
+

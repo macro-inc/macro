@@ -7,6 +7,4 @@
 import type { HashMapOneOf } from './hashMapOneOf';
 import type { HashMapOneOfFour } from './hashMapOneOfFour';
 
-export interface HashMap {
-  [key: string]: HashMapOneOf | HashMapOneOfFour;
-}
+export interface HashMap {[key: string]: HashMapOneOf | HashMapOneOfFour}

@@ -5,7 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type Provider = (typeof Provider)[keyof typeof Provider];
+export type Provider = typeof Provider[keyof typeof Provider];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const Provider = {

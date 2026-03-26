@@ -9,6 +9,4 @@ import type { UpdateChannelSharePermission } from './updateChannelSharePermissio
 /**
  * Any channel share permissions to be created/updated/removed
  */
-export type UpdateSharePermissionRequestV2ChannelSharePermissions =
-  | UpdateChannelSharePermission[]
-  | null;
+export type UpdateSharePermissionRequestV2ChannelSharePermissions = UpdateChannelSharePermission[] | null;

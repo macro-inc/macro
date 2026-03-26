@@ -12,7 +12,9 @@
   "paths": {
     "/batch_send": {
       "post": {
-        "tags": ["message"],
+        "tags": [
+          "message"
+        ],
         "operationId": "batch_send_message_handler",
         "requestBody": {
           "content": {
@@ -50,7 +52,9 @@
     },
     "/message/send/{entity_type}/{entity_id}": {
       "post": {
-        "tags": ["message"],
+        "tags": [
+          "message"
+        ],
         "operationId": "send_message_handler",
         "parameters": [
           {
@@ -128,7 +132,9 @@
     },
     "/track/{entity_type}/{entity_id}": {
       "get": {
-        "tags": ["entities"],
+        "tags": [
+          "entities"
+        ],
         "operationId": "get_entity_handler",
         "parameters": [
           {
@@ -193,7 +199,11 @@
       "BatchSendMessageBody": {
         "type": "object",
         "description": "The body of a batch send message request.",
-        "required": ["message", "entities", "message_type"],
+        "required": [
+          "message",
+          "entities",
+          "message_type"
+        ],
         "properties": {
           "entities": {
             "type": "array",
@@ -214,7 +224,10 @@
       "Entity": {
         "type": "object",
         "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
-        "required": ["entity_type", "entity_id"],
+        "required": [
+          "entity_type",
+          "entity_id"
+        ],
         "properties": {
           "entity_id": {
             "type": "string",
@@ -241,7 +254,10 @@
       },
       "GenericErrorResponse": {
         "type": "object",
-        "required": ["error", "message"],
+        "required": [
+          "error",
+          "message"
+        ],
         "properties": {
           "error": {
             "type": "boolean",
@@ -256,7 +272,11 @@
       "MessageReceipt": {
         "type": "object",
         "description": "A receipt for a message that was sent to a user.",
-        "required": ["user_id", "delivery_count", "active"],
+        "required": [
+          "user_id",
+          "delivery_count",
+          "active"
+        ],
         "properties": {
           "active": {
             "type": "boolean",
@@ -277,7 +297,10 @@
       "SendMessageBody": {
         "type": "object",
         "description": "The body of a send message request.",
-        "required": ["message", "message_type"],
+        "required": [
+          "message",
+          "message_type"
+        ],
         "properties": {
           "message": {
             "description": "the message to send"
@@ -291,7 +314,9 @@
       "SendMessageResponse": {
         "type": "object",
         "description": "The response from sending a message.",
-        "required": ["receipts"],
+        "required": [
+          "receipts"
+        ],
         "properties": {
           "receipts": {
             "type": "array",
@@ -339,7 +364,10 @@
             "description": "type of the entity"
           },
           "last_ping": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "the timestamp of the last ping",
             "minimum": 0
@@ -360,11 +388,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["created"]
+                    "enum": [
+                      "created"
+                    ]
                   }
                 }
               }
@@ -379,11 +411,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["closed"]
+                    "enum": [
+                      "closed"
+                    ]
                   }
                 }
               }
@@ -403,7 +439,11 @@
       },
       "StreamId": {
         "type": "object",
-        "required": ["entity_type", "entity_id", "stream_id"],
+        "required": [
+          "entity_type",
+          "entity_id",
+          "stream_id"
+        ],
         "properties": {
           "entity_id": {
             "type": "string"
@@ -418,7 +458,10 @@
       },
       "StreamItem": {
         "type": "object",
-        "required": ["id", "payload"],
+        "required": [
+          "id",
+          "payload"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/StreamId"
@@ -428,7 +471,9 @@
       },
       "StringIDResponse": {
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -444,11 +489,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["track_entity"]
+                    "enum": [
+                      "track_entity"
+                    ]
                   }
                 }
               }
@@ -461,11 +510,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["stream_events"]
+                    "enum": [
+                      "stream_events"
+                    ]
                   }
                 }
               }
@@ -476,7 +529,11 @@
       "TrackAction": {
         "type": "string",
         "description": "The type of action that can occur on an [Entity]",
-        "enum": ["open", "ping", "close"]
+        "enum": [
+          "open",
+          "ping",
+          "close"
+        ]
       },
       "TrackEntityMessage": {
         "allOf": [
@@ -485,7 +542,9 @@
           },
           {
             "type": "object",
-            "required": ["action"],
+            "required": [
+              "action"
+            ],
             "properties": {
               "action": {
                 "$ref": "#/components/schemas/TrackAction"
@@ -498,7 +557,11 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["requestId", "projectId", "status"],
+            "required": [
+              "requestId",
+              "projectId",
+              "status"
+            ],
             "properties": {
               "projectId": {
                 "type": "string"
@@ -508,13 +571,19 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["completed"]
+                "enum": [
+                  "completed"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["requestId", "projectId", "status"],
+            "required": [
+              "requestId",
+              "projectId",
+              "status"
+            ],
             "properties": {
               "projectId": {
                 "type": "string"
@@ -524,33 +593,45 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["partially_completed"]
+                "enum": [
+                  "partially_completed"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["requestId", "status"],
+            "required": [
+              "requestId",
+              "status"
+            ],
             "properties": {
               "requestId": {
                 "type": "string"
               },
               "status": {
                 "type": "string",
-                "enum": ["failed"]
+                "enum": [
+                  "failed"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["requestId", "status"],
+            "required": [
+              "requestId",
+              "status"
+            ],
             "properties": {
               "requestId": {
                 "type": "string"
               },
               "status": {
                 "type": "string",
-                "enum": ["unknown"]
+                "enum": [
+                  "unknown"
+                ]
               }
             }
           }

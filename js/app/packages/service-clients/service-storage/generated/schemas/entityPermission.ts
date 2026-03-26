@@ -13,6 +13,4 @@ import type { EntityPermissionOneOfThree } from './entityPermissionOneOfThree';
 Items (documents, chats, projects, threads) use access levels.
 Channels use participant roles.
  */
-export type EntityPermission =
-  | EntityPermissionOneOf
-  | EntityPermissionOneOfThree;
+export type EntityPermission = EntityPermissionOneOf | EntityPermissionOneOfThree;

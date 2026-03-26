@@ -6,5 +6,4 @@
  */
 import type { GetDocumentProcessingResult } from './getDocumentProcessingResult';
 
-export type GetDocumentProcessingResultResponseData =
-  null | GetDocumentProcessingResult;
+export type GetDocumentProcessingResultResponseData = null | GetDocumentProcessingResult;

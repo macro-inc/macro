@@ -9,6 +9,4 @@ import type { ChannelSharePermission } from './channelSharePermission';
 /**
  * The channel share permissions for the item
  */
-export type SharePermissionV2ChannelSharePermissions =
-  | ChannelSharePermission[]
-  | null;
+export type SharePermissionV2ChannelSharePermissions = ChannelSharePermission[] | null;

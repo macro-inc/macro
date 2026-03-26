@@ -5,7 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ABGroup = (typeof ABGroup)[keyof typeof ABGroup];
+export type ABGroup = typeof ABGroup[keyof typeof ABGroup];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ABGroup = {

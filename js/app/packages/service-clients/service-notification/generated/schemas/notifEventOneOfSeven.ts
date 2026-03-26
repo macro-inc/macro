@@ -4,9 +4,8 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { NotifEventOneOfSevenTag } from './notifEventOneOfSevenTag';
 import type { RepliedToDocumentCommentThreadMetadata } from './repliedToDocumentCommentThreadMetadata';
+import type { NotifEventOneOfSevenTag } from './notifEventOneOfSevenTag';
 
 /**
  * Someone replied to a document comment thread the user participated in.

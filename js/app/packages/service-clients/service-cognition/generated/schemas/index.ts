@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export * from './accessLevel';
 export * from './aIModel';
+export * from './accessLevel';
 export * from './assistantMessagePart';
 export * from './assistantMessagePartOneOf';
 export * from './assistantMessagePartOneOfFive';

@@ -6,13 +6,13 @@
  */
 
 export type GetChannelAttachmentsParams = {
-  /**
-   * Page size (1-100, default 50)
-   * @minimum 0
-   */
-  limit?: number;
-  /**
-   * Base64 encoded cursor value
-   */
-  cursor?: string;
+/**
+ * Page size (1-100, default 50)
+ * @minimum 0
+ */
+limit?: number;
+/**
+ * Base64 encoded cursor value
+ */
+cursor?: string;
 };

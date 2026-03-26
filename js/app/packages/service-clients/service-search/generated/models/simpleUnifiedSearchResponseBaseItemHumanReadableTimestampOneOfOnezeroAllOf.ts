@@ -6,7 +6,6 @@
  */
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezeroAllOfType } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezeroAllOfType';
 
-export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezeroAllOf =
-  {
-    type: SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezeroAllOfType;
-  };
+export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezeroAllOf = {
+  type: SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezeroAllOfType;
+};

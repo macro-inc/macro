@@ -4,12 +4,10 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CreatePropertyDefinitionRequestAllOf } from './createPropertyDefinitionRequestAllOf';
 import type { PropertyOwner } from './propertyOwner';
+import type { CreatePropertyDefinitionRequestAllOf } from './createPropertyDefinitionRequestAllOf';
 
 /**
  * Request to create a new property definition.
  */
-export type CreatePropertyDefinitionRequest = PropertyOwner &
-  CreatePropertyDefinitionRequestAllOf;
+export type CreatePropertyDefinitionRequest = PropertyOwner & CreatePropertyDefinitionRequestAllOf;

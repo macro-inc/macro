@@ -12,7 +12,9 @@
   "paths": {
     "/proxy": {
       "get": {
-        "tags": ["proxy"],
+        "tags": [
+          "proxy"
+        ],
         "operationId": "proxy_request_handler",
         "parameters": [
           {
@@ -30,7 +32,9 @@
     },
     "/unfurl": {
       "get": {
-        "tags": ["unfurl"],
+        "tags": [
+          "unfurl"
+        ],
         "operationId": "get_unfurl",
         "parameters": [
           {
@@ -89,7 +93,9 @@
     },
     "/unfurl/bulk": {
       "post": {
-        "tags": ["unfurl"],
+        "tags": [
+          "unfurl"
+        ],
         "operationId": "get_unfurl_bulk",
         "requestBody": {
           "description": "JSON list of URLs",
@@ -151,7 +157,9 @@
     "schemas": {
       "GetUnfurlBulkBody": {
         "type": "object",
-        "required": ["url_list"],
+        "required": [
+          "url_list"
+        ],
         "properties": {
           "url_list": {
             "type": "array",
@@ -163,7 +171,9 @@
       },
       "GetUnfurlBulkResponse": {
         "type": "object",
-        "required": ["responses"],
+        "required": [
+          "responses"
+        ],
         "properties": {
           "responses": {
             "$ref": "#/components/schemas/Vec"
@@ -172,7 +182,9 @@
       },
       "GetUnfurlQueryParams": {
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "properties": {
           "url": {
             "type": "string"
@@ -181,16 +193,28 @@
       },
       "GetUnfurlResponse": {
         "type": "object",
-        "required": ["url", "title"],
+        "required": [
+          "url",
+          "title"
+        ],
         "properties": {
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "favicon_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "image_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "title": {
             "type": "string"
@@ -202,7 +226,9 @@
       },
       "ProxyParams": {
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "properties": {
           "url": {
             "type": "string"
@@ -218,16 +244,28 @@
             },
             {
               "type": "object",
-              "required": ["url", "title"],
+              "required": [
+                "url",
+                "title"
+              ],
               "properties": {
                 "description": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "favicon_url": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "image_url": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "title": {
                   "type": "string"

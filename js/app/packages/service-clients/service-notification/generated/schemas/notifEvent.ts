@@ -5,15 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NotifEventOneOf } from './notifEventOneOf';
-import type { NotifEventOneOfFive } from './notifEventOneOfFive';
-import type { NotifEventOneOfNine } from './notifEventOneOfNine';
-import type { NotifEventOneOfOnefive } from './notifEventOneOfOnefive';
-import type { NotifEventOneOfOnenine } from './notifEventOneOfOnenine';
-import type { NotifEventOneOfOneone } from './notifEventOneOfOneone';
-import type { NotifEventOneOfOneseven } from './notifEventOneOfOneseven';
-import type { NotifEventOneOfOnethree } from './notifEventOneOfOnethree';
-import type { NotifEventOneOfSeven } from './notifEventOneOfSeven';
 import type { NotifEventOneOfThree } from './notifEventOneOfThree';
+import type { NotifEventOneOfFive } from './notifEventOneOfFive';
+import type { NotifEventOneOfSeven } from './notifEventOneOfSeven';
+import type { NotifEventOneOfNine } from './notifEventOneOfNine';
+import type { NotifEventOneOfOneone } from './notifEventOneOfOneone';
+import type { NotifEventOneOfOnethree } from './notifEventOneOfOnethree';
+import type { NotifEventOneOfOnefive } from './notifEventOneOfOnefive';
+import type { NotifEventOneOfOneseven } from './notifEventOneOfOneseven';
+import type { NotifEventOneOfOnenine } from './notifEventOneOfOnenine';
 import type { NotifEventOneOfTwoone } from './notifEventOneOfTwoone';
 import type { NotifEventOneOfTwothree } from './notifEventOneOfTwothree';
 
@@ -25,16 +25,4 @@ shape produced by [`UserNotificationRow::into_tagged`] +
 
 Only includes variants whose metadata types implement the `Notification` trait.
  */
-export type NotifEvent =
-  | NotifEventOneOf
-  | NotifEventOneOfThree
-  | NotifEventOneOfFive
-  | NotifEventOneOfSeven
-  | NotifEventOneOfNine
-  | NotifEventOneOfOneone
-  | NotifEventOneOfOnethree
-  | NotifEventOneOfOnefive
-  | NotifEventOneOfOneseven
-  | NotifEventOneOfOnenine
-  | NotifEventOneOfTwoone
-  | NotifEventOneOfTwothree;
+export type NotifEvent = NotifEventOneOf | NotifEventOneOfThree | NotifEventOneOfFive | NotifEventOneOfSeven | NotifEventOneOfNine | NotifEventOneOfOneone | NotifEventOneOfOnethree | NotifEventOneOfOnefive | NotifEventOneOfOneseven | NotifEventOneOfOnenine | NotifEventOneOfTwoone | NotifEventOneOfTwothree;

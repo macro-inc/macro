@@ -13,8 +13,8 @@ import type { BasicDocumentFileType } from './basicDocumentFileType';
 import type { BasicDocumentProjectId } from './basicDocumentProjectId';
 import type { BasicDocumentSha } from './basicDocumentSha';
 import type { BasicDocumentSubTypeProperty } from './basicDocumentSubTypeProperty';
-import type { BasicDocumentType } from './basicDocumentType';
 import type { BasicDocumentUpdatedAt } from './basicDocumentUpdatedAt';
+import type { BasicDocumentType } from './basicDocumentType';
 
 export interface BasicDocument {
   /** The id of the document this document branched from */

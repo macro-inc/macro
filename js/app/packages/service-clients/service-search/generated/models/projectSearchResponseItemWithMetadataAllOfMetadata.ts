@@ -6,5 +6,4 @@
  */
 import type { ProjectMetadata } from './projectMetadata';
 
-export type ProjectSearchResponseItemWithMetadataAllOfMetadata =
-  null | ProjectMetadata;
+export type ProjectSearchResponseItemWithMetadataAllOfMetadata = null | ProjectMetadata;

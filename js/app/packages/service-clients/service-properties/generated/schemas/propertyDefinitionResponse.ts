@@ -10,6 +10,4 @@ import type { PropertyDefinitionWithOptions } from './propertyDefinitionWithOpti
 /**
  * Response for property definition with optional property options
  */
-export type PropertyDefinitionResponse =
-  | PropertyDefinition
-  | PropertyDefinitionWithOptions;
+export type PropertyDefinitionResponse = PropertyDefinition | PropertyDefinitionWithOptions;

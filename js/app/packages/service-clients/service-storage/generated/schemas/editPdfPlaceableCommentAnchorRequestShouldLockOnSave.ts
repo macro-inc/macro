@@ -5,6 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type EditPdfPlaceableCommentAnchorRequestShouldLockOnSave =
-  | boolean
-  | null;
+export type EditPdfPlaceableCommentAnchorRequestShouldLockOnSave = boolean | null;

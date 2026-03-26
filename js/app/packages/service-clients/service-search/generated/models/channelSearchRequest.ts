@@ -7,5 +7,4 @@
 import type { ChannelSearchRequestAllOf } from './channelSearchRequestAllOf';
 import type { ChannelSearchRequestAllOfTwo } from './channelSearchRequestAllOfTwo';
 
-export type ChannelSearchRequest = ChannelSearchRequestAllOf &
-  ChannelSearchRequestAllOfTwo;
+export type ChannelSearchRequest = ChannelSearchRequestAllOf & ChannelSearchRequestAllOfTwo;

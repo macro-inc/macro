@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type StreamEventOneOfAllOfType =
-  (typeof StreamEventOneOfAllOfType)[keyof typeof StreamEventOneOfAllOfType];
+export type StreamEventOneOfAllOfType = typeof StreamEventOneOfAllOfType[keyof typeof StreamEventOneOfAllOfType];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const StreamEventOneOfAllOfType = {

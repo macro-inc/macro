@@ -47,6 +47,7 @@ export * from './entityType';
 export * from './errorResponse';
 export * from './getAllUserNotificationsResponse';
 export * from './getAllUserNotificationsResponseNextCursor';
+export * from './getNotificationTypePreferencesResponse';
 export * from './getTypedNotificationsByEventItemIdParams';
 export * from './inviteToTeamMetadata';
 export * from './inviteToTeamMetadataRole';

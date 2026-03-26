@@ -4,9 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CreateUnthreadedPdfAnchorRequestOneOfAllOf } from './createUnthreadedPdfAnchorRequestOneOfAllOf';
 import type { PdfHighlightAnchorRequest } from './pdfHighlightAnchorRequest';
+import type { CreateUnthreadedPdfAnchorRequestOneOfAllOf } from './createUnthreadedPdfAnchorRequestOneOfAllOf';
 
-export type CreateUnthreadedPdfAnchorRequestOneOf = PdfHighlightAnchorRequest &
-  CreateUnthreadedPdfAnchorRequestOneOfAllOf;
+export type CreateUnthreadedPdfAnchorRequestOneOf = PdfHighlightAnchorRequest & CreateUnthreadedPdfAnchorRequestOneOfAllOf;

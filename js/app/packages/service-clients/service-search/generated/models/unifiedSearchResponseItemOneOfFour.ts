@@ -7,5 +7,4 @@
 import type { ChatSearchResponseItemWithMetadata } from './chatSearchResponseItemWithMetadata';
 import type { UnifiedSearchResponseItemOneOfFourAllOf } from './unifiedSearchResponseItemOneOfFourAllOf';
 
-export type UnifiedSearchResponseItemOneOfFour =
-  ChatSearchResponseItemWithMetadata & UnifiedSearchResponseItemOneOfFourAllOf;
+export type UnifiedSearchResponseItemOneOfFour = ChatSearchResponseItemWithMetadata & UnifiedSearchResponseItemOneOfFourAllOf;

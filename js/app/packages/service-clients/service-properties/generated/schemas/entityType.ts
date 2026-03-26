@@ -8,7 +8,8 @@
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = (typeof EntityType)[keyof typeof EntityType];
+export type EntityType = typeof EntityType[keyof typeof EntityType];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EntityType = {

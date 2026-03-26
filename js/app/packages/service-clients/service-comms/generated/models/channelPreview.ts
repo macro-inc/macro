@@ -8,7 +8,4 @@ import type { ChannelPreviewOneOf } from './channelPreviewOneOf';
 import type { ChannelPreviewOneOfFour } from './channelPreviewOneOfFour';
 import type { ChannelPreviewOneOfSeven } from './channelPreviewOneOfSeven';
 
-export type ChannelPreview =
-  | ChannelPreviewOneOf
-  | ChannelPreviewOneOfFour
-  | ChannelPreviewOneOfSeven;
+export type ChannelPreview = ChannelPreviewOneOf | ChannelPreviewOneOfFour | ChannelPreviewOneOfSeven;

@@ -4,11 +4,10 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { EntityPropertyResponse } from './entityPropertyResponse';
-import type { EntityPropertyWithDefinitionResponseOptions } from './entityPropertyWithDefinitionResponseOptions';
-import type { EntityPropertyWithDefinitionResponseValue } from './entityPropertyWithDefinitionResponseValue';
 import type { PropertyDefinitionResponse } from './propertyDefinitionResponse';
+import type { EntityPropertyWithDefinitionResponseOptions } from './entityPropertyWithDefinitionResponseOptions';
+import type { EntityPropertyResponse } from './entityPropertyResponse';
+import type { EntityPropertyWithDefinitionResponseValue } from './entityPropertyWithDefinitionResponseValue';
 
 /**
  * Entity property with definition response (API representation).

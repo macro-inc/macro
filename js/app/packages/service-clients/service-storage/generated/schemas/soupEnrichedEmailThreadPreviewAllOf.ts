@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupAttachment } from './soupAttachment';
-import type { SoupContact } from './soupContact';
 import type { SoupLabel } from './soupLabel';
+import type { SoupContact } from './soupContact';
 import type { SoupProperty } from './soupProperty';
 
 export type SoupEnrichedEmailThreadPreviewAllOf = {

@@ -8,7 +8,4 @@ import type { DocumentPreviewOneOf } from './documentPreviewOneOf';
 import type { DocumentPreviewOneOfFour } from './documentPreviewOneOfFour';
 import type { DocumentPreviewOneOfSeven } from './documentPreviewOneOfSeven';
 
-export type DocumentPreview =
-  | DocumentPreviewOneOf
-  | DocumentPreviewOneOfFour
-  | DocumentPreviewOneOfSeven;
+export type DocumentPreview = DocumentPreviewOneOf | DocumentPreviewOneOfFour | DocumentPreviewOneOfSeven;

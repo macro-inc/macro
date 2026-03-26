@@ -6,5 +6,4 @@
  */
 import type { ChatMetadata } from './chatMetadata';
 
-export type ChatSearchResponseItemWithMetadataAllOfMetadata =
-  null | ChatMetadata;
+export type ChatSearchResponseItemWithMetadataAllOfMetadata = null | ChatMetadata;

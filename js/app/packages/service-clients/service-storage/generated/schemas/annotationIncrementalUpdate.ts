@@ -6,15 +6,9 @@
  */
 import type { AnnotationIncrementalUpdateOneOf } from './annotationIncrementalUpdateOneOf';
 import type { AnnotationIncrementalUpdateOneOfFour } from './annotationIncrementalUpdateOneOfFour';
-import type { AnnotationIncrementalUpdateOneOfOnesix } from './annotationIncrementalUpdateOneOfOnesix';
-import type { AnnotationIncrementalUpdateOneOfOnethree } from './annotationIncrementalUpdateOneOfOnethree';
-import type { AnnotationIncrementalUpdateOneOfOnezero } from './annotationIncrementalUpdateOneOfOnezero';
 import type { AnnotationIncrementalUpdateOneOfSeven } from './annotationIncrementalUpdateOneOfSeven';
+import type { AnnotationIncrementalUpdateOneOfOnezero } from './annotationIncrementalUpdateOneOfOnezero';
+import type { AnnotationIncrementalUpdateOneOfOnethree } from './annotationIncrementalUpdateOneOfOnethree';
+import type { AnnotationIncrementalUpdateOneOfOnesix } from './annotationIncrementalUpdateOneOfOnesix';
 
-export type AnnotationIncrementalUpdate =
-  | AnnotationIncrementalUpdateOneOf
-  | AnnotationIncrementalUpdateOneOfFour
-  | AnnotationIncrementalUpdateOneOfSeven
-  | AnnotationIncrementalUpdateOneOfOnezero
-  | AnnotationIncrementalUpdateOneOfOnethree
-  | AnnotationIncrementalUpdateOneOfOnesix;
+export type AnnotationIncrementalUpdate = AnnotationIncrementalUpdateOneOf | AnnotationIncrementalUpdateOneOfFour | AnnotationIncrementalUpdateOneOfSeven | AnnotationIncrementalUpdateOneOfOnezero | AnnotationIncrementalUpdateOneOfOnethree | AnnotationIncrementalUpdateOneOfOnesix;

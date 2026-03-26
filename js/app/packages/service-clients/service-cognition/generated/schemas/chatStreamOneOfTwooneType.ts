@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ChatStreamOneOfTwooneType =
-  (typeof ChatStreamOneOfTwooneType)[keyof typeof ChatStreamOneOfTwooneType];
+export type ChatStreamOneOfTwooneType = typeof ChatStreamOneOfTwooneType[keyof typeof ChatStreamOneOfTwooneType];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChatStreamOneOfTwooneType = {

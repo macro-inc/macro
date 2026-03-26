@@ -5,7 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type TypingAction = (typeof TypingAction)[keyof typeof TypingAction];
+export type TypingAction = typeof TypingAction[keyof typeof TypingAction];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TypingAction = {

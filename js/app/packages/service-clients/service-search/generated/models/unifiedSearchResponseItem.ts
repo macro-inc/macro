@@ -6,13 +6,8 @@
  */
 import type { UnifiedSearchResponseItemOneOf } from './unifiedSearchResponseItemOneOf';
 import type { UnifiedSearchResponseItemOneOfFour } from './unifiedSearchResponseItemOneOfFour';
-import type { UnifiedSearchResponseItemOneOfOnethree } from './unifiedSearchResponseItemOneOfOnethree';
-import type { UnifiedSearchResponseItemOneOfOnezero } from './unifiedSearchResponseItemOneOfOnezero';
 import type { UnifiedSearchResponseItemOneOfSeven } from './unifiedSearchResponseItemOneOfSeven';
+import type { UnifiedSearchResponseItemOneOfOnezero } from './unifiedSearchResponseItemOneOfOnezero';
+import type { UnifiedSearchResponseItemOneOfOnethree } from './unifiedSearchResponseItemOneOfOnethree';
 
-export type UnifiedSearchResponseItem =
-  | UnifiedSearchResponseItemOneOf
-  | UnifiedSearchResponseItemOneOfFour
-  | UnifiedSearchResponseItemOneOfSeven
-  | UnifiedSearchResponseItemOneOfOnezero
-  | UnifiedSearchResponseItemOneOfOnethree;
+export type UnifiedSearchResponseItem = UnifiedSearchResponseItemOneOf | UnifiedSearchResponseItemOneOfFour | UnifiedSearchResponseItemOneOfSeven | UnifiedSearchResponseItemOneOfOnezero | UnifiedSearchResponseItemOneOfOnethree;

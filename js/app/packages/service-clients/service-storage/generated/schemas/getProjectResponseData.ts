@@ -4,9 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { AccessLevel } from './accessLevel';
 import type { Project } from './project';
+import type { AccessLevel } from './accessLevel';
 
 export interface GetProjectResponseData {
   /** The metadata of the project */

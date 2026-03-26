@@ -9,6 +9,4 @@ import type { ChatAttachmentWithName } from './chatAttachmentWithName';
 /**
  * Use citation prompt
  */
-export type SendChatMessagePayloadAllOfAttachments =
-  | ChatAttachmentWithName[]
-  | null;
+export type SendChatMessagePayloadAllOfAttachments = ChatAttachmentWithName[] | null;

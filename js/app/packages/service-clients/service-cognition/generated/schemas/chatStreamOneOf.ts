@@ -4,9 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-
-import type { ChatStreamOneOfAllOf } from './chatStreamOneOfAllOf';
 import type { StreamError } from './streamError';
+import type { ChatStreamOneOfAllOf } from './chatStreamOneOfAllOf';
 
 /**
  * Misc error
