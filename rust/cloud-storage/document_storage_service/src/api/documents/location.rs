@@ -108,75 +108,32 @@ pub async fn get_location_handler(
         .unwrap()
 }
 
+/// Gets a signed CloudFront URL for a versioned document.
+///
+/// For static files (PDF, HTML), the version is always resolved from the DB.
+/// For editable files (MD, Canvas), a caller-provided version ID is used if present,
+/// otherwise the latest version is fetched.
 #[tracing::instrument(skip(state))]
-async fn get_editable_url(
+pub(in crate::api::documents) async fn get_versioned_url(
     state: &ApiContext,
     owner: &str,
     document_id: &str,
     document_version_id: Option<i64>,
-    file_type: &str,
+    is_static: bool,
 ) -> anyhow::Result<LocationResponseData> {
-    let document_version_id = if let Some(document_version_id) = document_version_id {
-        document_version_id
-    } else {
-        macro_db_client::document::get_latest_document_version_id(&state.db, document_id)
-            .await?
-            .0
-    };
-
-    #[cfg(feature = "location_check")]
-    {
-        let check_key =
-            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
-        tracing::trace!("checking if file exists in s3, key: {}", check_key);
-        let exists = verify_file_exists(&state.s3_client, &check_key).await?;
-        if !exists {
-            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
+    let document_version_id = match document_version_id {
+        Some(v) if !is_static => v,
+        _ if is_static => {
+            macro_db_client::document::get_document_version_id(&state.db, document_id)
+                .await?
+                .0
         }
-    }
-
-    let url_encoded_owner = urlencoding::encode(owner);
-    let url_encoded_document_key = build_cloud_storage_bucket_document_key(
-        &url_encoded_owner,
-        document_id,
-        document_version_id,
-    );
-
-    let signed_options = get_cloudfront_signed_options(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_signer_public_key_id,
-        state
-            .config
-            .document_storage_service_cloudfront_signer_private_key
-            .as_ref(),
-        state
-            .config
-            .document_storage_service_presigned_url_expiry_seconds,
-    );
-
-    let signed_url = get_presigned_url(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_distribution_url,
-        &url_encoded_document_key,
-        &signed_options,
-    )?;
-
-    Ok(LocationResponseData::PresignedUrl(signed_url))
-}
-
-#[tracing::instrument(skip(state))]
-pub(in crate::api::documents) async fn get_static_url(
-    state: &ApiContext,
-    owner: &str,
-    document_id: &str,
-    file_type: &Option<FileType>,
-) -> anyhow::Result<LocationResponseData> {
-    let (document_version_id, _) =
-        macro_db_client::document::get_document_version_id(&state.db, document_id).await?;
+        _ => {
+            macro_db_client::document::get_latest_document_version_id(&state.db, document_id)
+                .await?
+                .0
+        }
+    };
 
     #[cfg(feature = "location_check")]
     {
@@ -370,10 +327,7 @@ pub(in crate::api::documents) async fn get_presigned_url_by_type(
     get_converted_docx: bool,
 ) -> anyhow::Result<LocationResponseData> {
     match file_type {
-        None => {
-            // no file type will always be static
-            get_static_url(state, owner, document_id, &file_type).await
-        }
+        None => get_versioned_url(state, owner, document_id, document_version_id, true).await,
         Some(file_type) => {
             if file_type == FileType::Docx && get_converted_docx {
                 tracing::debug!("getting converted docx url");
@@ -381,17 +335,9 @@ pub(in crate::api::documents) async fn get_presigned_url_by_type(
             } else if file_type == FileType::Docx && !get_converted_docx {
                 tracing::debug!("getting legacy docx urls");
                 get_docx_urls(state, document_id, document_version_id).await
-            } else if file_type.is_static() {
-                get_static_url(state, owner, document_id, &Some(file_type)).await
             } else {
-                get_editable_url(
-                    state,
-                    owner,
-                    document_id,
-                    document_version_id,
-                    file_type.as_str(),
-                )
-                .await
+                let is_static = file_type.is_static();
+                get_versioned_url(state, owner, document_id, document_version_id, is_static).await
             }
         }
     }
