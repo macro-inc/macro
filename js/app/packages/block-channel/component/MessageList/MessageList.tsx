@@ -202,7 +202,7 @@ export function MessageList(props: MessageListProps) {
     const list = topLevelMessages();
     const topLevelIndex = topLevelIndexByMessageId().get(messageId);
     if (topLevelIndex === undefined) return undefined;
-    return list.length - 1 - topLevelIndex;
+    return topLevelIndex;
   };
 
   const scrollElementIntoView = (
@@ -511,7 +511,7 @@ function MessageListImpl(props: MessageListProps) {
       forceBottom ||
       ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
     ) {
-      virtualHandle()?.scrollTo(0);
+      virtualHandle()?.scrollBy(Number.MAX_SAFE_INTEGER);
       return;
     }
 
@@ -686,7 +686,7 @@ function MessageListImpl(props: MessageListProps) {
   });
 
   const threadRows = mapArray(
-    () => filteredTopLevelMessages().toReversed(),
+    () => filteredTopLevelMessages(),
     (message) => {
       const children = () =>
         (viewThreads[message.id] ?? []).filter(messageFilterFn);
@@ -722,7 +722,7 @@ function MessageListImpl(props: MessageListProps) {
       const msg = list[i];
       const threadState = listContext.getThreadState(msg.id);
       if (threadState?.hasActiveReply) {
-        indices.push(length - 1 - i);
+        indices.push(i);
       }
     }
     return indices;
@@ -794,6 +794,17 @@ function MessageListImpl(props: MessageListProps) {
       },
       { defer: true }
     )
+  );
+
+  let mountScrolled = false;
+  createEffect(
+    on(virtualHandle, (handle) => {
+      if (mountScrolled || !handle || props.targetMessage()) return;
+
+      mountScrolled = true;
+
+      scrollToBottomOrTarget({ forceBottom: true });
+    })
   );
 
   const [unviewedMessages, setUnviewedMessages] = createSignal<Message[]>();
@@ -1043,7 +1054,6 @@ function MessageListImpl(props: MessageListProps) {
                 'overflow-y': 'scroll',
                 'overflow-anchor': 'none',
                 display: 'flex',
-                'flex-direction': 'column-reverse',
               }}
               class="scrollbar-hidden [&>div]:mb-auto"
               data-channel-message-list
@@ -1100,7 +1110,6 @@ function MessageListImpl(props: MessageListProps) {
           />
         </Show>
         <CustomScrollbar
-          reverse
           scrollContainer={listContext.scrollContainerRef}
           enabled={hasUserScrolled()}
         />
