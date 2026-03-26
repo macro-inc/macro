@@ -41,6 +41,16 @@ impl MockUserRolesAndPermissionsRepository {
 }
 
 impl UserRolesAndPermissionsRepository for MockUserRolesAndPermissionsRepository {
+    async fn get_user_roles(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<HashSet<RoleId>, UserRolesAndPermissionsError> {
+        Ok(HashSet::from([
+            RoleId::SelfServe,
+            RoleId::ProfessionalSubscriber,
+        ]))
+    }
+
     async fn get_user_permissions(
         &self,
         _user_id: &MacroUserIdStr<'_>,
@@ -103,5 +113,49 @@ async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
         mock_user_roles_and_permissions_repository.get_remove_roles_from_user_calls(),
         1
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_user_roles() -> anyhow::Result<()> {
+    let mock_user_repository = MockUserRepository::default();
+    let mock_user_roles_and_permissions_repository =
+        MockUserRolesAndPermissionsRepository::default();
+
+    let user_service = UserRolesAndPermissionsServiceImpl::new(
+        mock_user_roles_and_permissions_repository,
+        mock_user_repository,
+    );
+
+    let roles = user_service
+        .get_user_roles(&MacroUserIdStr::parse_from_str("macro|user@user.com")?)
+        .await?;
+
+    assert_eq!(roles.len(), 2);
+    assert!(roles.contains(&RoleId::SelfServe));
+    assert!(roles.contains(&RoleId::ProfessionalSubscriber));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_user_roles_delegates_to_repository() -> anyhow::Result<()> {
+    let mock_user_repository = MockUserRepository::default();
+    let mock_user_roles_and_permissions_repository =
+        MockUserRolesAndPermissionsRepository::default();
+
+    let user_service = UserRolesAndPermissionsServiceImpl::new(
+        mock_user_roles_and_permissions_repository,
+        mock_user_repository,
+    );
+
+    let roles = user_service
+        .get_user_roles(&MacroUserIdStr::parse_from_str("macro|other@user.com")?)
+        .await?;
+
+    // Mock returns the same roles regardless of user_id
+    assert!(roles.contains(&RoleId::SelfServe));
+    assert!(roles.contains(&RoleId::ProfessionalSubscriber));
+
     Ok(())
 }

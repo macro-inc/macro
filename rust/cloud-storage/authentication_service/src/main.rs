@@ -228,7 +228,11 @@ async fn main() -> anyhow::Result<()> {
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        &config.stripe_price_ids.stripe_price_id_haiku,
+        teams::outbound::customer_repo::StripePriceIds {
+            haiku: config.stripe_price_ids.stripe_price_id_haiku.to_string(),
+            sonnet: config.stripe_price_ids.stripe_price_id_sonnet.to_string(),
+            opus: config.stripe_price_ids.stripe_price_id_opus.to_string(),
+        },
     );
     let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
 
