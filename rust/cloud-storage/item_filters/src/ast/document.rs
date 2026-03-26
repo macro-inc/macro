@@ -126,10 +126,14 @@ fn format(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
     Ok((rest, out))
 }
 
-/// Expand an `assoc:*` string (e.g. `"assoc:code"`, `"assoc:other"`) into
-/// the concrete [FileType] variants it covers. Returns an empty vec if the
-/// string is not a valid `assoc:` prefix.
-pub fn expand_assoc(s: &str) -> Vec<FileType> {
+/// Resolve a file type string to concrete [FileType] variants.
+/// Handles both plain extensions (e.g. `"md"`, `"pdf"`) and `assoc:*` prefixes
+/// (e.g. `"assoc:code"`, `"assoc:other"`). Returns an empty vec if the string
+/// is not a recognized extension or association.
+pub fn resolve_file_types(s: &str) -> Vec<FileType> {
+    if let Ok(ft) = FileType::from_str(s) {
+        return vec![ft];
+    }
     match format(s) {
         Ok((_, iter)) => iter.collect(),
         Err(_) => vec![],

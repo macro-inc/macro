@@ -13,7 +13,7 @@ use crate::{
 };
 use item_filters::{
     ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
-    ast::document::expand_assoc,
+    ast::document::resolve_file_types,
 };
 use model_file_type::FileAssociation;
 use schemars::JsonSchema;
@@ -130,26 +130,16 @@ fn strip_nil_uuids(ids: &mut Vec<String>) {
     ids.retain(|id| id != NIL_UUID);
 }
 
-/// Expand `assoc:*` prefixes in file type strings to concrete file extensions for search.
-/// Uses the same parsing as the soup filter AST ([`item_filters::ast::document::expand_assoc`]).
-/// Non-searchable associations (e.g. `assoc:image`, `assoc:other`) are dropped
-/// since the search processing service does not index those file types.
-/// Plain file extensions (e.g. `md`, `pdf`) are kept as-is.
+/// Resolve file type strings to concrete extensions for search, dropping
+/// non-searchable types. Handles both plain extensions (`"md"`) and `assoc:*`
+/// prefixes (`"assoc:code"`).
 fn expand_file_types_for_search(file_types: Vec<String>) -> Vec<String> {
-    let mut expanded = Vec::new();
-    for ft in &file_types {
-        if ft.starts_with("assoc:") {
-            expanded.extend(
-                expand_assoc(ft)
-                    .into_iter()
-                    .filter(|ty| is_searchable_association(&ty.macro_app_path()))
-                    .map(|ty| ty.as_str().to_string()),
-            );
-        } else {
-            expanded.push(ft.clone());
-        }
-    }
-    expanded
+    file_types
+        .iter()
+        .flat_map(|ft| resolve_file_types(ft))
+        .filter(|ty| is_searchable_association(&ty.macro_app_path()))
+        .map(|ty| ty.as_str().to_string())
+        .collect()
 }
 
 impl From<EntityFilters> for SearchEntityFilters {
