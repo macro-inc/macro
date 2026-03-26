@@ -614,7 +614,6 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "model_user",
- "models_email",
  "models_team",
  "native_app_service",
  "non_empty",

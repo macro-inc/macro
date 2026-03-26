@@ -17,7 +17,7 @@ use stripe::CustomerId;
 use tracing::Instrument;
 
 use crate::api::context::ApiContext;
-use models_email::email::service::pubsub::LinkManagerMessage;
+use sqs_client::email::LinkManagerMessage;
 
 /// Delete user webhook
 #[tracing::instrument(skip(ctx, req, _internal_access), fields(event_id=req.event.id, email=req.event.user.email,fusionauth_user_id=req.event.user.id))]
