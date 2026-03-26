@@ -8,7 +8,7 @@ use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
 use model::{
     document::{
-        BomPart, DocumentMetadata, FileType, build_converted_document_key,
+        BomPart, DocumentMetadata, FileType, build_docx_to_pdf_converted_document_key,
         build_extensionless_document_key,
     },
     response::GenericResponse,
@@ -74,12 +74,12 @@ pub async fn copy_document<'a>(
             // we need to also copy this over into the new dss file
             let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             // Get the source document key
-            let source_key = build_converted_document_key(
+            let source_key = build_docx_to_pdf_converted_document_key(
                 &url_encoded_owner,
                 &original_document_metadata.document_id,
             );
 
-            let dest_key = build_converted_document_key(
+            let dest_key = build_docx_to_pdf_converted_document_key(
                 user_id.as_ref(),
                 &updated_document_metadata.document_id,
             );

@@ -7,7 +7,7 @@ use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::document::{
     FileType,
-    build_converted_document_key, build_extensionless_document_key,
+    build_docx_to_pdf_converted_document_key, build_extensionless_document_key,
 };
 use model::response::GenericErrorResponse;
 use model::{document::DocumentBasic, response::GenericResponse, user::UserContext};
@@ -86,7 +86,7 @@ pub async fn get_document_key_handler(
             )
         }
         FileType::Docx => {
-            build_converted_document_key(
+            build_docx_to_pdf_converted_document_key(
                 document_context.owner.as_ref(),
                 &document_id,
             )

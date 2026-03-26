@@ -21,7 +21,7 @@ use axum::{
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use model::{
     document::{
-        DocumentBasic, FileType, FileTypeExt, build_converted_document_key,
+        DocumentBasic, FileType, FileTypeExt, build_docx_to_pdf_converted_document_key,
         build_extensionless_document_key,
         response::LocationResponseData,
     },
@@ -227,12 +227,12 @@ async fn get_converted_docx_url(
     document_id: &str,
 ) -> anyhow::Result<LocationResponseData> {
     let url_encoded_owner = urlencoding::encode(owner);
-    let document_key = build_converted_document_key(&url_encoded_owner, document_id);
+    let document_key = build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
 
     // Check if the item exists in s3
     #[cfg(feature = "location_check")]
     {
-        let document_key = build_converted_document_key(owner, document_id);
+        let document_key = build_docx_to_pdf_converted_document_key(owner, document_id);
         tracing::trace!("checking if file exists in s3, key: {}", document_key);
         let exists = verify_file_exists(&state.s3_client, &document_key).await?;
         if !exists {

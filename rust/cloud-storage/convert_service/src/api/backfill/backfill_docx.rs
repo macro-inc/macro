@@ -13,7 +13,7 @@ use axum::{
 use futures::StreamExt;
 use model::{
     convert::ConvertQueueMessage,
-    document::{BomPart, BomPartWithContent, DocumentMetadata, build_converted_document_key},
+    document::{BomPart, BomPartWithContent, DocumentMetadata, build_docx_to_pdf_converted_document_key},
     request::pagination::{Pagination, PaginationQueryParams},
     response::ErrorResponse,
 };
@@ -117,7 +117,7 @@ async fn process_docx(
                 serde_json::from_value(bom_parts).context("unable to serialize bom parts")?;
 
             // check if the converted item exists in s3
-            let key = build_converted_document_key(document.owner.as_ref(), &document.document_id);
+            let key = build_docx_to_pdf_converted_document_key(document.owner.as_ref(), &document.document_id);
 
             let exists = s3_client
                 .exists(document_storage_bucket, &key)
@@ -167,7 +167,7 @@ async fn process_docx(
             let zipped_docx = zip_bom_parts(bom_parts_with_content).await?;
 
             let from_key = format!("{}/{}.docx", BULK_DOCX_CONVERT_PREFIX, document.document_id);
-            let to_key = build_converted_document_key(document.owner.as_ref(), &document.document_id);
+            let to_key = build_docx_to_pdf_converted_document_key(document.owner.as_ref(), &document.document_id);
 
             s3_client
                 .put(document_storage_bucket, &from_key, &zipped_docx)

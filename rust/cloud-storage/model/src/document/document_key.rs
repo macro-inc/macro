@@ -50,7 +50,7 @@ pub fn build_cloud_storage_bucket_document_key<T: ToString>(
 
 /// Builds the S3 key for a converted DOCX document's PDF output.
 /// Format: `{user_id}/{document_id}/converted.pdf`
-pub fn build_converted_document_key(user_id: &str, document_id: &str) -> String {
+pub fn build_docx_to_pdf_converted_document_key(user_id: &str, document_id: &str) -> String {
     format!("{}/{}/{}.pdf", user_id, document_id, CONVERTED_DOCUMENT_FILE_NAME)
 }
 
