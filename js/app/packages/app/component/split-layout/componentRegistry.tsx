@@ -1,4 +1,3 @@
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
@@ -7,7 +6,6 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
-import { toast } from '@core/component/Toast/Toast';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
@@ -347,53 +345,6 @@ if (LOCAL_ONLY) {
     'quick-access-list',
     lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
   );
-
-  registerComponent('toast-debug', () => {
-    const PERSIST = 999_999_999;
-
-    const fire = () => {
-      toast.success(
-        'Success toast',
-        'This is a success subtext',
-        [{ label: 'Undo', icon: ArrowCounterClockwise, onClick: () => {} }],
-        PERSIST
-      );
-      toast.failure('Failure toast', 'This is a failure subtext', PERSIST);
-      toast.alert('Alert toast', 'This is an alert subtext', PERSIST);
-      toast.promise(new Promise(() => {}), {
-        loading: 'Loading toast',
-        subtext: 'This is a loading subtext',
-      });
-    };
-
-    const fireWithProgress = () => {
-      toast.success(
-        'Timed success',
-        'Disappears in 5s — watch the bar',
-        undefined,
-        5000
-      );
-      toast.failure('Timed failure', 'Disappears in 8s — watch the bar', 8000);
-      toast.alert('Timed alert', 'Disappears in 6s — watch the bar', 6000);
-    };
-
-    onMount(fire);
-
-    return (
-      <div class="flex items-center justify-center h-full">
-        <button class="px-4 py-2 bg-accent text-panel rounded" onClick={fire}>
-          Show All Toasts
-        </button>
-        <button
-          class="px-4 py-2 bg-panel border border-edge-muted text-ink rounded"
-          onClick={fireWithProgress}
-        >
-          Show Timed Toasts (with progress bar)
-        </button>
-      </div>
-    );
-  });
-}
 
 if (DEV_MODE_ENV) {
   // NOTE (seamus) : putting pixel icons on dev/staging for aidan
