@@ -55,7 +55,6 @@ import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 import type { MessageListContext } from '@block-channel/utils/listContext';
-import { match } from 'ts-pattern';
 
 false && observedSize;
 
@@ -205,52 +204,6 @@ export function MessageList(props: MessageListProps) {
     return topLevelIndex;
   };
 
-  const scrollElementIntoView = (
-    targetEl: HTMLElement,
-    align: ScrollToIndexOpts['align'] = 'nearest'
-  ) => {
-    const handle = virtualHandle();
-    const container = scrollContainerRef();
-    if (!handle || !container) return;
-
-    const targetBounds = targetEl.getBoundingClientRect();
-    const containerBounds = container.getBoundingClientRect();
-    const currentOffset = handle.scrollOffset;
-
-    const visualTop = targetBounds.top - containerBounds.top;
-    const visualBottom = targetBounds.bottom - containerBounds.top;
-
-    const targetTop = currentOffset + handle.viewportSize - visualTop;
-    const targetBottom = currentOffset + handle.viewportSize - visualBottom;
-
-    const visibleBottomEdge = currentOffset;
-    const visibleTopEdge = currentOffset + handle.viewportSize;
-
-    const nextOffset = match(align)
-      .with('start', () => targetTop - handle.viewportSize)
-      .with('end', () => targetBottom)
-      .with('center', () => {
-        // Center the element in the viewport
-        const elementCenter = (targetTop + targetBottom) / 2;
-        return elementCenter - handle.viewportSize / 2;
-      })
-      .otherwise(() => {
-        // 'nearest': only scroll if element is out of view
-        if (targetTop > visibleTopEdge) {
-          // Element is above the visible area, scroll up to show it
-          return targetTop - handle.viewportSize;
-        } else if (targetBottom < visibleBottomEdge) {
-          // Element is below the visible area, scroll down to show it
-          return targetBottom;
-        }
-        return undefined;
-      });
-
-    if (nextOffset !== undefined) {
-      handle.scrollTo(nextOffset);
-    }
-  };
-
   const tryAlignMessageElement = (
     messageId: string,
     align: ScrollToIndexOpts['align'],
@@ -263,7 +216,6 @@ export function MessageList(props: MessageListProps) {
     );
     if (!targetEl) return false;
     targetEl.scrollIntoView({ block: align });
-    // scrollElementIntoView(targetEl, align);
     if (focus) targetEl.focus();
     return true;
   };
