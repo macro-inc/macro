@@ -1,4 +1,4 @@
-use crate::GmailClient;
+use crate::{GmailClient, sanitize_error_body};
 use anyhow::{Context, anyhow};
 use models_email::email::service::thread::{ThreadList, ThreadSummary};
 use models_email::gmail::error::GmailError;
@@ -60,11 +60,8 @@ pub(crate) async fn list_threads(
             .text()
             .await
             .unwrap_or_else(|_| "Failed to read error body".to_string());
-        anyhow::bail!(
-            "Gmail API error {} (list threads): {}",
-            status,
-            error_body
-        );
+        let sanitized = sanitize_error_body(&error_body);
+        anyhow::bail!("Gmail API error {} (list threads): {}", status, sanitized);
     }
 
     let gmail_response = response
@@ -256,11 +253,12 @@ pub(crate) async fn get_message_ids_for_thread(
             .text()
             .await
             .unwrap_or_else(|_| "Failed to read error body".to_string());
+        let sanitized = sanitize_error_body(&error_body);
         anyhow::bail!(
             "Gmail API error {} (get message ids for thread) for thread_id: {}: {}",
             status,
             thread_id,
-            error_body
+            sanitized
         );
     }
 

@@ -149,11 +149,7 @@ pub async fn fetch_user_labels(
             .text()
             .await
             .unwrap_or_else(|_| "Failed to read error body".to_string());
-        anyhow::bail!(
-            "Gmail API error {} (fetch labels): {}",
-            status,
-            error_body
-        );
+        anyhow::bail!("Gmail API error {} (fetch labels): {}", status, error_body);
     }
 
     let labels_response = response

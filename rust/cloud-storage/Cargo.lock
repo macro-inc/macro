@@ -4374,6 +4374,7 @@ dependencies = [
  "mail-builder",
  "mockall",
  "models_email",
+ "regex",
  "reqwest",
  "serde_json",
  "tokio",

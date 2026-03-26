@@ -75,11 +75,7 @@ pub(crate) async fn stop_watch(client: &GmailClient, access_token: &str) -> anyh
             .text()
             .await
             .unwrap_or_else(|_| "Failed to read error body".to_string());
-        anyhow::bail!(
-            "Gmail API error {} (stop watch): {}",
-            status,
-            error_body
-        );
+        anyhow::bail!("Gmail API error {} (stop watch): {}", status, error_body);
     }
 
     Ok(())

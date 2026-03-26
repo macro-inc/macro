@@ -11,6 +11,24 @@ pub(crate) mod threads;
 pub(crate) mod watch;
 
 use crate::labels::delete_gmail_label;
+use regex::Regex;
+use std::sync::LazyLock;
+
+const MAX_ERROR_BODY_LEN: usize = 1024;
+
+static EMAIL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
+
+/// Sanitize a Gmail API error body: redact email addresses, cap length.
+pub(crate) fn sanitize_error_body(body: &str) -> String {
+    let redacted = EMAIL_REGEX.replace_all(body, "[REDACTED_EMAIL]");
+    let trimmed = redacted.trim();
+    if trimmed.len() <= MAX_ERROR_BODY_LEN {
+        trimmed.to_string()
+    } else {
+        format!("{}… (truncated)", &trimmed[..MAX_ERROR_BODY_LEN])
+    }
+}
 
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;

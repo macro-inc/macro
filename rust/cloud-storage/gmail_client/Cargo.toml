@@ -16,6 +16,7 @@ jsonwebtoken = { workspace = true }
 mail-builder = "0.4.3"
 mockall = { workspace = true }
 models_email = { path = "../models_email" }
+regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 serde_json = { workspace = true }
 tokio = { workspace = true }
