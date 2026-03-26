@@ -487,6 +487,7 @@ static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     ),
     responses(
         (status = 200),
+        (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
