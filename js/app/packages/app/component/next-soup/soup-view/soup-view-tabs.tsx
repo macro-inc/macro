@@ -27,7 +27,7 @@ import ChevronDownIcon from '@icon/regular/caret-down.svg';
 type TabItem = { value: string; label: string };
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
-type TabbedListView = Extract<
+export type TabbedListView = Extract<
   ListView,
   'inbox' | 'agents' | 'mail' | 'documents' | 'tasks' | 'channels' | 'folders'
 >;
