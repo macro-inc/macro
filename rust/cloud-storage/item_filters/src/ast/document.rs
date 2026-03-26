@@ -126,6 +126,16 @@ fn format(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
     Ok((rest, out))
 }
 
+/// Expand an `assoc:*` string (e.g. `"assoc:code"`, `"assoc:other"`) into
+/// the concrete [FileType] variants it covers. Returns an empty vec if the
+/// string is not a valid `assoc:` prefix.
+pub fn expand_assoc(s: &str) -> Vec<FileType> {
+    match format(s) {
+        Ok((_, iter)) => iter.collect(),
+        Err(_) => vec![],
+    }
+}
+
 fn create_file_iter(s: &str) -> impl Iterator<Item = Result<FileType, ValueError<FileType>>> {
     match FileType::from_str(s) {
         Ok(f) => Either::Left(Some(Ok(f)).into_iter()),

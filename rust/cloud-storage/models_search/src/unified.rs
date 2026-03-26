@@ -11,7 +11,11 @@ use crate::{
     chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
     email::SimpleEmailSearchResponseBaseItem, project::SimpleProjectSearchResponseBaseItem,
 };
-use item_filters::EntityFilters;
+use item_filters::{
+    ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
+    ast::document::expand_assoc,
+};
+use model_file_type::FileAssociation;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -77,6 +81,112 @@ pub struct UnifiedSearchRequest {
 
     #[schemars(skip)]
     pub collapse: Option<bool>,
+}
+
+/// Whether a [FileAssociation] is indexed by the search processing service.
+pub fn is_searchable_association(assoc: &FileAssociation) -> bool {
+    matches!(
+        assoc,
+        FileAssociation::Pdf(_)
+            | FileAssociation::Write(_)
+            | FileAssociation::Code(_)
+            | FileAssociation::Canvas(_)
+            | FileAssociation::Md(_)
+    )
+}
+
+/// Converted entity filters for the search service.
+/// Determines which entity types to include based on NIL UUID exclusion
+/// and expands file association prefixes (e.g. `assoc:code`) to concrete extensions.
+#[derive(Debug, Clone)]
+pub struct SearchEntityFilters {
+    /// Whether to include documents in search results
+    pub should_include_documents: bool,
+    /// Whether to include chats in search results
+    pub should_include_chats: bool,
+    /// Whether to include emails in search results
+    pub should_include_emails: bool,
+    /// Whether to include channels in search results
+    pub should_include_channels: bool,
+    /// Whether to include projects in search results
+    pub should_include_projects: bool,
+    /// Document filters with file associations expanded
+    pub document_filters: DocumentFilters,
+    /// Chat filters
+    pub chat_filters: ChatFilters,
+    /// Email filters
+    pub email_filters: EmailFilters,
+    /// Channel filters
+    pub channel_filters: ChannelFilters,
+    /// Project filters
+    pub project_filters: ProjectFilters,
+}
+
+fn contains_nil_uuid(ids: &[String]) -> bool {
+    ids.iter().any(|id| id == NIL_UUID)
+}
+
+fn strip_nil_uuids(ids: &mut Vec<String>) {
+    ids.retain(|id| id != NIL_UUID);
+}
+
+/// Expand `assoc:*` prefixes in file type strings to concrete file extensions for search.
+/// Uses the same parsing as the soup filter AST ([`item_filters::ast::document::expand_assoc`]).
+/// Non-searchable associations (e.g. `assoc:image`, `assoc:other`) are dropped
+/// since the search processing service does not index those file types.
+/// Plain file extensions (e.g. `md`, `pdf`) are kept as-is.
+fn expand_file_types_for_search(file_types: Vec<String>) -> Vec<String> {
+    let mut expanded = Vec::new();
+    for ft in &file_types {
+        if ft.starts_with("assoc:") {
+            expanded.extend(
+                expand_assoc(ft)
+                    .into_iter()
+                    .filter(|ty| is_searchable_association(&ty.macro_app_path()))
+                    .map(|ty| ty.as_str().to_string()),
+            );
+        } else {
+            expanded.push(ft.clone());
+        }
+    }
+    expanded
+}
+
+impl From<EntityFilters> for SearchEntityFilters {
+    fn from(filters: EntityFilters) -> Self {
+        let mut document_filters = filters.document_filters;
+        let mut chat_filters = filters.chat_filters;
+        let mut email_filters = filters.email_filters;
+        let mut channel_filters = filters.channel_filters;
+        let mut project_filters = filters.project_filters;
+
+        let should_include_documents = !contains_nil_uuid(&document_filters.document_ids);
+        let should_include_chats = !contains_nil_uuid(&chat_filters.chat_ids);
+        let should_include_emails = !contains_nil_uuid(&email_filters.recipients);
+        let should_include_channels = !contains_nil_uuid(&channel_filters.channel_ids);
+        let should_include_projects = !contains_nil_uuid(&project_filters.project_ids);
+
+        strip_nil_uuids(&mut document_filters.document_ids);
+        strip_nil_uuids(&mut chat_filters.chat_ids);
+        strip_nil_uuids(&mut email_filters.recipients);
+        strip_nil_uuids(&mut channel_filters.channel_ids);
+        strip_nil_uuids(&mut project_filters.project_ids);
+
+        document_filters.file_types = expand_file_types_for_search(document_filters.file_types);
+
+        Self {
+            should_include_documents,
+            should_include_chats,
+            should_include_emails,
+            should_include_channels,
+            should_include_projects,
+            document_filters,
+            chat_filters,
+            email_filters,
+            channel_filters,
+            project_filters,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]

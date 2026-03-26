@@ -12,7 +12,7 @@ use axum::{
 };
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
-use item_filters::SearchEntityFilters;
+use models_search::unified::SearchEntityFilters;
 use models_search::{
     SearchOn, SimpleSearchResponse,
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},

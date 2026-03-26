@@ -3,6 +3,10 @@ use utoipa::OpenApi;
 
 use crate::api::search;
 
+use item_filters::{
+    ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, NotificationFilters,
+    ProjectFilters, PropertyFilter, SharedEmailFilter, TaskFilters,
+};
 use model::{document::FileType, response::EmptyResponse};
 use models_search::channel::{
     ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResult,
@@ -19,10 +23,6 @@ use models_search::document::{
 use models_search::email::{
     EmailSearchRequest, EmailSearchResponse, EmailSearchResponseItem, EmailSearchResult,
     SimpleEmailSearchResponse, SimpleEmailSearchResponseItem,
-};
-use item_filters::{
-    ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters,
-    NotificationFilters, ProjectFilters, PropertyFilter, SharedEmailFilter, TaskFilters,
 };
 use models_search::unified::{
     SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchRequest,
