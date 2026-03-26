@@ -155,6 +155,10 @@ type PersistedSoupViewState = {
   assigneeFilter: string[];
 };
 
+// Tracks how many SoupViewList instances are mounted per contentId.
+// Used to detect duplicate splits showing the same view.
+const activeSoupViewCounts = new Map<string, number>();
+
 const listStateCache = new Map<
   string,
   {
@@ -614,6 +618,21 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const isProjectList = panel.handle.content().type === 'project';
   const contentId = panel.handle.content().id;
 
+  // If another SoupViewList with the same contentId is already mounted (e.g.
+  // same view open in two splits), disable all persistence for this instance
+  const isDuplicate = (activeSoupViewCounts.get(contentId) ?? 0) > 0;
+  activeSoupViewCounts.set(
+    contentId,
+    (activeSoupViewCounts.get(contentId) ?? 0) + 1
+  );
+  onCleanup(() => {
+    const count = activeSoupViewCounts.get(contentId) ?? 1;
+    if (count <= 1) activeSoupViewCounts.delete(contentId);
+    else activeSoupViewCounts.set(contentId, count - 1);
+  });
+
+  const persistenceDisabled = isProjectList || isDuplicate;
+
   const [persistedState, setPersistedState] = makePersisted(
     createSignal<PersistedSoupViewState>(),
     { name: `macro:soup-view:${contentId}` }
@@ -629,8 +648,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return key;
   };
 
-  // Set intial state
-  if (!isProjectList) {
+  // Set initial state
+  if (!persistenceDisabled) {
     const initial = untrack(persistedState);
     if (initial) {
       batch(() => {
@@ -665,14 +684,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
           assigneeFilter: assigneeFilter(),
         }) satisfies PersistedSoupViewState,
       (state) => {
-        if (!isProjectList) setPersistedState(state);
+        if (!persistenceDisabled) setPersistedState(state);
       },
       { defer: true }
     )
   );
 
   onCleanup(() => {
-    if (isProjectList) return;
+    if (persistenceDisabled) return;
     const virtualHandle = virtualizerHandle();
     listStateCache.set(getCacheKey(), {
       focus: soup.focus.id(),
