@@ -8,8 +8,8 @@ use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
 use model::{
     document::{
-        BomPart, DocumentMetadata, FileType, build_docx_to_pdf_converted_document_key,
-        build_extensionless_document_key,
+        BomPart, DocumentMetadata, FileType, build_cloud_storage_bucket_document_key,
+        build_docx_to_pdf_converted_document_key,
     },
     response::GenericResponse,
 };
@@ -131,13 +131,13 @@ pub async fn copy_document<'a>(
             })?
             .0;
 
-            let dest_key = build_extensionless_document_key(
+            let dest_key = build_cloud_storage_bucket_document_key(
                 user_id.as_ref(),
                 &updated_document_metadata.document_id,
                 updated_document_metadata.document_version_id,
             );
 
-            let source_key = build_extensionless_document_key(
+            let source_key = build_cloud_storage_bucket_document_key(
                 original_document_metadata.owner.as_ref(),
                 &original_document_metadata.document_id,
                 document_version_id,
@@ -203,13 +203,13 @@ pub async fn copy_document<'a>(
                 .0
             };
 
-            let dest_key = build_extensionless_document_key(
+            let dest_key = build_cloud_storage_bucket_document_key(
                 user_id.as_ref(),
                 &updated_document_metadata.document_id,
                 updated_document_metadata.document_version_id,
             );
 
-            let source_key = build_extensionless_document_key(
+            let source_key = build_cloud_storage_bucket_document_key(
                 original_document_metadata.owner.as_ref(),
                 &original_document_metadata.document_id,
                 document_version_id,

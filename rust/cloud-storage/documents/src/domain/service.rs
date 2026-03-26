@@ -22,8 +22,8 @@ use model::document::response::{
     GetDocumentResponseData, LocationResponseData, LocationResponseV3,
 };
 use model::document::{
-    ContentType, DocumentBasic, FileType, FileTypeExt, build_docx_staging_bucket_document_key,
-    build_docx_to_pdf_converted_document_key, build_extensionless_document_key,
+    ContentType, DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key,
+    build_docx_staging_bucket_document_key, build_docx_to_pdf_converted_document_key,
 };
 use model::response::PresignedUrl;
 use tracing;
@@ -118,8 +118,11 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
                 .0
         };
 
-        let document_key =
-            build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id);
+        let document_key = build_cloud_storage_bucket_document_key(
+            &url_encoded_owner,
+            document_id,
+            document_version_id,
+        );
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -138,8 +141,11 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .await
             .map_err(Into::into)?;
 
-        let document_key =
-            build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id);
+        let document_key = build_cloud_storage_bucket_document_key(
+            &url_encoded_owner,
+            document_id,
+            document_version_id,
+        );
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -519,7 +525,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
                     .await
             }
             _ => {
-                let key = build_extensionless_document_key(
+                let key = build_cloud_storage_bucket_document_key(
                     document_metadata.owner.as_ref(),
                     &document_id,
                     document_metadata.document_version_id,

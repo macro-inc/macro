@@ -21,8 +21,8 @@ use axum::{
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use model::{
     document::{
-        DocumentBasic, FileType, FileTypeExt, build_docx_to_pdf_converted_document_key,
-        build_extensionless_document_key, response::LocationResponseData,
+        DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key,
+        build_docx_to_pdf_converted_document_key, response::LocationResponseData,
     },
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
     user::UserContext,
@@ -127,12 +127,16 @@ async fn get_editable_url(
             .0
     };
 
-    let document_key =
-        build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id);
+    let document_key = build_cloud_storage_bucket_document_key(
+        &url_encoded_owner,
+        document_id,
+        document_version_id,
+    );
 
     #[cfg(feature = "location_check")]
     {
-        let check_key = build_extensionless_document_key(owner, document_id, document_version_id);
+        let check_key =
+            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
         tracing::trace!("checking if file exists in s3, key: {}", check_key);
         let exists = verify_file_exists(&state.s3_client, &check_key).await?;
         if !exists {
@@ -177,12 +181,16 @@ pub(in crate::api::documents) async fn get_static_url(
     let (document_version_id, _) =
         macro_db_client::document::get_document_version_id(&state.db, document_id).await?;
 
-    let document_key =
-        build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id);
+    let document_key = build_cloud_storage_bucket_document_key(
+        &url_encoded_owner,
+        document_id,
+        document_version_id,
+    );
 
     #[cfg(feature = "location_check")]
     {
-        let check_key = build_extensionless_document_key(owner, document_id, document_version_id);
+        let check_key =
+            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
         tracing::trace!("checking if file exists in s3, key: {}", check_key);
         let exists = verify_file_exists(&state.s3_client, &check_key).await?;
         if !exists {

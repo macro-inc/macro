@@ -3,7 +3,8 @@ use std::str::FromStr;
 use anyhow::Context;
 use chrono::Utc;
 use model::document::{
-    CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType, build_extensionless_document_key,
+    CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
+    build_cloud_storage_bucket_document_key,
 };
 use model_file_type::FileAssociation;
 use models_search::document::MarkdownParseResult;
@@ -139,7 +140,7 @@ pub async fn update_search_with_raw_document(
     }
 
     // document_version_id will be "converted" or document version id
-    let key = build_extensionless_document_key(
+    let key = build_cloud_storage_bucket_document_key(
         &search_extractor_message.user_id,
         &search_extractor_message.document_id,
         &document_version_id,

@@ -32,9 +32,10 @@ fn build_cloud_storage_bucket_document_key_helper<T: ToString>(
     }
 }
 
-/// Builds an extensionless document key for a document in the cloud storage bucket.
-/// This is the new convention — document IDs are unique so extensions are unnecessary in S3 keys.
-pub fn build_extensionless_document_key<T: ToString>(
+/// Builds a document key for a document in the cloud storage bucket.
+/// The format is `{user_id}/{document_id}/{document_version_id}`.
+/// Note that some documents will have a different format, see `build_docx_to_pdf_converted_document_key` and `build_docx_staging_bucket_document_key`.
+pub fn build_cloud_storage_bucket_document_key<T: ToString>(
     user_id: &str,
     document_id: &str,
     document_version_id: T,
@@ -73,8 +74,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_extensionless_document_key() {
-        let key = build_extensionless_document_key("owner", "document-id", 1);
+    fn test_build_cloud_storage_bucket_document_key() {
+        let key = build_cloud_storage_bucket_document_key("owner", "document-id", 1);
         assert_eq!(key, "owner/document-id/1");
     }
 
