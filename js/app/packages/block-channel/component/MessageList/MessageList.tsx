@@ -198,7 +198,6 @@ export function MessageList(props: MessageListProps) {
   });
 
   const getVirtualIndexForMessageId = (messageId: string) => {
-    const list = topLevelMessages();
     const topLevelIndex = topLevelIndexByMessageId().get(messageId);
     if (topLevelIndex === undefined) return undefined;
     return topLevelIndex;
