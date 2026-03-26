@@ -628,23 +628,26 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return key;
   };
 
-  let initialized = false;
-
-  createEffect(() => {
-    const state: PersistedSoupViewState = {
-      activeTab: activeTab(),
-      filters: {
-        and: soup.filters.andFilters().map((f) => f.id),
-        or: soup.filters.orFilters().map((f) => f.id),
+  createEffect(
+    on(
+      () =>
+        ({
+          activeTab: activeTab(),
+          filters: {
+            and: soup.filters.andFilters().map((f) => f.id),
+            or: soup.filters.orFilters().map((f) => f.id),
+          },
+          queryFilters: queryFilters(),
+          sort: soup.sort.active().map((s) => s.id),
+          searchText: searchText(),
+          previewEntity: soup.previewEntity(),
+        }) satisfies PersistedSoupViewState,
+      (state) => {
+        if (!isProjectList) setPersistedState(state);
       },
-      queryFilters: queryFilters(),
-      sort: soup.sort.active().map((s) => s.id),
-      searchText: searchText(),
-      previewEntity: soup.previewEntity(),
-    };
-    if (!initialized || isProjectList) return;
-    setPersistedState(state);
-  });
+      { defer: true }
+    )
+  );
 
   onCleanup(() => {
     if (isProjectList) return;
@@ -661,7 +664,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (restored || isProjectList) return;
 
     restored = true;
-    initialized = true;
 
     // Always restore display settings from persistent state (covers both in-session and cross-session)
     const persisted = persistedState();
