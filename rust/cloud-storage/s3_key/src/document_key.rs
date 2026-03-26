@@ -6,6 +6,9 @@ pub const CONVERTED_DOCUMENT_FILE_NAME: &str = "converted";
 /// The prefix used for temporary files in S3.
 pub const TEMP_FILE_PREFIX: &str = "temp_files";
 
+/// The prefix for bulk upload zips in the staging bucket.
+const BULK_UPLOAD_STAGING_PREFIX: &str = "extract";
+
 /// The file extension for PDF files.
 pub const PDF_EXTENSION: &str = "pdf";
 
@@ -207,6 +210,12 @@ pub fn build_docx_staging_bucket_document_key(
 /// Format: `temp_files/{document_id}.docx`
 pub fn build_temp_docx_key(document_id: &str) -> String {
     format!("{}/{}.{}", TEMP_FILE_PREFIX, document_id, DOCX_EXTENSION)
+}
+
+/// Builds the S3 key for a bulk upload zip in the staging bucket.
+/// Format: `extract/{request_id}`
+pub fn build_bulk_upload_staging_key(request_id: &str) -> String {
+    format!("{BULK_UPLOAD_STAGING_PREFIX}/{request_id}")
 }
 
 #[cfg(test)]

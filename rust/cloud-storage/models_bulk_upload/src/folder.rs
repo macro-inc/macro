@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-pub static EXTRACT_UPLOAD_FOLDER: &str = "extract";
-
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, ToSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct S3ObjectInfo {

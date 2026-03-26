@@ -120,3 +120,9 @@ fn test_build_temp_docx_key() {
     let key = build_temp_docx_key("document-id");
     assert_eq!(key, "temp_files/document-id.docx");
 }
+
+#[test]
+fn test_build_bulk_upload_staging_key() {
+    let key = build_bulk_upload_staging_key("request-123");
+    assert_eq!(key, "extract/request-123");
+}

@@ -3,8 +3,7 @@ use macro_aws_config::SdkConfig;
 mod bulk_upload;
 
 use models_bulk_upload::{
-    BulkUploadRequest, BulkUploadRequestDocuments, EXTRACT_UPLOAD_FOLDER, UploadDocumentStatus,
-    UploadFolderStatus,
+    BulkUploadRequest, BulkUploadRequestDocuments, UploadDocumentStatus, UploadFolderStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -54,7 +53,7 @@ impl BulkUpload {
         parent_id: Option<&str>,
     ) -> anyhow::Result<BulkUploadRequest> {
         let table = self.table()?;
-        let key = format!("{}/{}", EXTRACT_UPLOAD_FOLDER, request_id);
+        let key = s3_key::build_bulk_upload_staging_key(request_id);
         bulk_upload::create_bulk_upload_request(
             &self.client,
             table,

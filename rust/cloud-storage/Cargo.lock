@@ -3306,6 +3306,7 @@ dependencies = [
  "macro_aws_config",
  "model",
  "models_bulk_upload",
+ "s3_key",
  "strum",
  "thiserror 2.0.17",
  "tokio",
