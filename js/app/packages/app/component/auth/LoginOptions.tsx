@@ -54,6 +54,8 @@ export function LoginOptions(props: {
   const location = useLocation<RedirectLocation>();
 
   const startSsoLogin = async (idp_name: string) => {
+    const analyticsEvent = props.signupMode ? 'sign_up' : 'login';
+
     const authUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
     authUrl.searchParams.set('idp_name', idp_name);
 
@@ -101,11 +103,9 @@ export function LoginOptions(props: {
         invalidateAllAfterLogin();
       }
 
-      if (props.signupMode) {
-        analytics.track('sign_up', {
-          idp: idp_name,
-        });
-      }
+      analytics.track(analyticsEvent, {
+        method: idp_name,
+      });
 
       return;
     }
@@ -121,11 +121,9 @@ export function LoginOptions(props: {
       authUrl.searchParams.set('original_url', window.location.href);
     }
 
-    if (props.signupMode) {
-      analytics.track('sign_up', {
-        idp: idp_name,
-      });
-    }
+    analytics.track(analyticsEvent, {
+      method: idp_name,
+    });
 
     window.location.href = authUrl.toString();
   };
