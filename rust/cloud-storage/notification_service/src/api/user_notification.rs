@@ -431,7 +431,7 @@ pub struct GetNotificationTypePreferencesResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn get_notification_type_preferences<S: NotificationReader>(
+pub async fn get_notification_type_preferences<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
 ) -> Result<
@@ -461,7 +461,7 @@ async fn get_notification_type_preferences<S: NotificationReader>(
 }
 
 /// The types of notifications that are blockable
-const BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     HashSet::from([
         EmailDigestNotification::TYPE_NAME,
         NewEmailMetadata::TYPE_NAME,
@@ -491,7 +491,7 @@ const BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn disable_notification_type<S: NotificationReader>(
+pub async fn disable_notification_type<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     Path(NotificationEventTypePath {
@@ -542,7 +542,7 @@ async fn disable_notification_type<S: NotificationReader>(
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn enable_notification_type<S: NotificationReader>(
+pub async fn enable_notification_type<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     Path(NotificationEventTypePath {
