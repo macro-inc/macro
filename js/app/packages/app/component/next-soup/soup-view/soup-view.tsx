@@ -48,6 +48,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
+import { makePersisted } from '@solid-primitives/storage';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -143,17 +144,19 @@ const useSoupNotificationInvalidators = () => {
   );
 };
 
+type PersistedSoupViewState = {
+  activeTab: string | undefined;
+  filters: { and: string[]; or: string[] };
+  queryFilters: SoupItemsQueryFilters;
+  sort: SystemSortOption[];
+  searchText: string;
+  previewEntity: string | undefined;
+};
+
 const stateCache = new Map<
   string,
   {
-    soup: {
-      focus: string | undefined;
-      filters: { and: string[]; or: string[] };
-      queryFilters: SoupItemsQueryFilters;
-      sort: SystemSortOption[];
-      searchText: string;
-      activeTab: string | undefined;
-    };
+    focus: string | undefined;
     virtualCache?: CacheSnapshot;
     scrollOffset?: number;
   }
@@ -608,8 +611,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 
   const isProjectList = panel.handle.content().type === 'project';
+  const contentId = panel.handle.content().id;
 
-  let key = `soup-view-${panel.handle.id}-${panel.handle.content().id}`;
+  const [persistedState, setPersistedState] = makePersisted(
+    createSignal<PersistedSoupViewState>(),
+    { name: `macro:soup-view:${contentId}` }
+  );
+
+  let key = `soup-view-${panel.handle.id}-${contentId}`;
 
   if (previewPanel) {
     key += '-preview';
@@ -619,23 +628,29 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return key;
   };
 
-  onCleanup(() => {
-    const virtualHandle = virtualizerHandle();
+  let initialized = false;
 
-    if (isProjectList) return;
-
-    stateCache.set(getCacheKey(), {
-      soup: {
-        focus: soup.focus.id(),
-        filters: {
-          and: [...soup.filters.andFilters().map((f) => f.id)],
-          or: [...soup.filters.orFilters().map((f) => f.id)],
-        },
-        queryFilters: queryFilters(),
-        sort: soup.sort.active().map((s) => s.id),
-        searchText: searchText(),
-        activeTab: activeTab(),
+  createEffect(() => {
+    const state: PersistedSoupViewState = {
+      activeTab: activeTab(),
+      filters: {
+        and: soup.filters.andFilters().map((f) => f.id),
+        or: soup.filters.orFilters().map((f) => f.id),
       },
+      queryFilters: queryFilters(),
+      sort: soup.sort.active().map((s) => s.id),
+      searchText: searchText(),
+      previewEntity: soup.previewEntity(),
+    };
+    if (!initialized || isProjectList) return;
+    setPersistedState(state);
+  });
+
+  onCleanup(() => {
+    if (isProjectList) return;
+    const virtualHandle = virtualizerHandle();
+    stateCache.set(getCacheKey(), {
+      focus: soup.focus.id(),
       virtualCache: virtualHandle?.cache,
       scrollOffset: virtualHandle?.scrollOffset,
     });
@@ -646,27 +661,30 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (restored || isProjectList) return;
 
     restored = true;
+    initialized = true;
 
-    const cached = stateCache.get(getCacheKey());
-
-    if (!cached) {
-      registerFocusEffects();
-      return;
+    // Always restore display settings from persistent state (covers both in-session and cross-session)
+    const persisted = persistedState();
+    if (persisted) {
+      soup.filters.set(persisted.filters);
+      setQueryFilters(persisted.queryFilters);
+      setSearchText(persisted.searchText);
+      soup.sort.setAll(persisted.sort);
+      setActiveTab(persisted.activeTab);
+      if (persisted.previewEntity) {
+        soup.setPreviewEntity(persisted.previewEntity);
+      }
     }
 
-    soup.focus.set(cached.soup.focus);
-
-    soup.filters.set(cached.soup.filters);
-
-    setQueryFilters(cached.soup.queryFilters);
-    setSearchText(cached.soup.searchText);
-
-    soup.sort.setAll(cached.soup.sort);
-
-    setActiveTab(cached.soup.activeTab);
-
-    virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
-    registerFocusEffects(false);
+    // Additionally restore scroll + focus if returning within the same session
+    const cached = stateCache.get(getCacheKey());
+    if (cached) {
+      soup.focus.set(cached.focus);
+      virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
+      registerFocusEffects(false);
+    } else {
+      registerFocusEffects();
+    }
   };
 
   const registerVirtualizerHandler = (
