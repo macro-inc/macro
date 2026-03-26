@@ -1,1 +1,1 @@
-DROP TABLE "Macrotation";
+DROP TABLE IF EXISTS "Macrotation";
