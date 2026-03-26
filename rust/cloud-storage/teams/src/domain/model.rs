@@ -396,3 +396,14 @@ pub enum RevokePermissionsForTeamMembersError {
     #[error("Underlying user roles and permissions error")]
     RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
 }
+
+/// Error when restoring permissions for team members
+#[derive(Debug, thiserror::Error)]
+pub enum RestorePermissionsForTeamMembersError {
+    /// Underlying team error
+    #[error("Underlying team error")]
+    TeamError(#[from] TeamError),
+    /// Underlying user roles and permissions error
+    #[error("Underlying user roles and permissions error")]
+    AddRolesToUserError(#[from] UserRolesAndPermissionsError),
+}

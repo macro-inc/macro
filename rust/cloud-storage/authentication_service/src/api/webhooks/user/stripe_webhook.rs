@@ -371,7 +371,9 @@ async fn handle_team_subscription_event(
 
     match subscription_status {
         "active" => {
-            // TODO: ensure all users have permissions now that status is active again
+            ctx.teams_service
+                .restore_permissions_for_team_members(team_id)
+                .await?;
 
             track_stripe_subscription(ctx.analytics_client.clone(), subscription_id, tracking_data);
             Ok(())

@@ -7,8 +7,8 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 use crate::domain::model::{
     CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
     ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-    TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -252,6 +252,13 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RevokePermissionsForTeamMembersError>> + Send;
+
+    /// Restores permissions for all team members.
+    /// This is used when a team subscription becomes active again.
+    fn restore_permissions_for_team_members(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), RestorePermissionsForTeamMembersError>> + Send;
 
     /// Gets a team by id with all its members
     fn get_team(

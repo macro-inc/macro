@@ -1,6 +1,6 @@
 //! Contains the service logic for teams
 
-use std::{collections::HashSet, str::FromStr, sync::Arc};
+use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Context;
 use macro_user_id::{
@@ -20,8 +20,9 @@ use crate::domain::{
     model::{
         CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
         ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
-        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
+        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
+        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier,
+        TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
 };
@@ -443,6 +444,30 @@ where
                     .await
                     .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
             }
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn restore_permissions_for_team_members(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<(), RestorePermissionsForTeamMembersError> {
+        let members = self.team_repository.get_team_members(team_id).await?;
+
+        if members.is_empty() {
+            return Ok(());
+        }
+
+        for member in members {
+            let roles = vec![RoleId::TeamSubscriber, RoleId::from(member.tier)];
+            let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
+
+            self.user_roles_and_permissions_service
+                .dangerous_upsert_roles_for_user(&member.user_id, roles)
+                .await
+                .map_err(RestorePermissionsForTeamMembersError::AddRolesToUserError)?;
         }
 
         Ok(())
