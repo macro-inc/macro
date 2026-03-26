@@ -186,7 +186,8 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
-    .search_event_queue(&config.search_event_queue);
+    .search_event_queue(&config.search_event_queue)
+    .email_link_manager_queue(&config.link_manager_queue);
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers

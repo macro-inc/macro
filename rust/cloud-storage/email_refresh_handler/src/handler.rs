@@ -7,7 +7,6 @@ use lambda_runtime::{
 };
 use macro_env::Environment;
 use models_email::email::service::pubsub::LinkManagerMessage;
-use models_email::service::pubsub::LinkManagerOperation;
 use sqlx::types::uuid;
 use sqlx::{Pool, Postgres, Type};
 
@@ -70,10 +69,7 @@ async fn send_refresh_messages(ctx: &context::Context) -> Result<(), Error> {
         );
 
         for link_id in link_ids {
-            let notif = LinkManagerMessage {
-                link_id,
-                operation: LinkManagerOperation::Refresh,
-            };
+            let notif = LinkManagerMessage::Refresh { link_id };
             ctx.sqs_client
                 .enqueue_link_manager_notification(notif)
                 .await
@@ -106,10 +102,7 @@ async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
         );
 
         for link_id in inactive_links {
-            let notif = LinkManagerMessage {
-                link_id,
-                operation: LinkManagerOperation::Delete,
-            };
+            let notif = LinkManagerMessage::DeleteLink { link_id };
             ctx.sqs_client
                 .enqueue_link_manager_notification(notif)
                 .await

@@ -2,6 +2,7 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
   config,
+  getLinkManagerQueue,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
@@ -192,6 +193,8 @@ const { notificationIngressQueueName, notificationIngressQueueArn } =
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
+const { linkManagerQueueName, linkManagerQueueArn } = getLinkManagerQueue();
+
 const service = new AuthenticationService('authentication-service', {
   secretKeyArns,
   clusterName: fusionAuthClusterName,
@@ -205,7 +208,11 @@ const service = new AuthenticationService('authentication-service', {
   isPrivate: false,
   healthCheckPath: '/health',
   tags,
-  queueArns: [notificationIngressQueueArn, searchEventQueueArn],
+  queueArns: [
+    notificationIngressQueueArn,
+    searchEventQueueArn,
+    linkManagerQueueArn,
+  ],
   containerEnvVars: [
     { name: 'ENVIRONMENT', value: stack },
     {
@@ -288,6 +295,10 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'SEARCH_EVENT_QUEUE',
       value: pulumi.interpolate`${searchEventQueueName}`,
+    },
+    {
+      name: 'LINK_MANAGER_QUEUE',
+      value: pulumi.interpolate`${linkManagerQueueName}`,
     },
     {
       name: 'MACRO_API_TOKEN_ISSUER',

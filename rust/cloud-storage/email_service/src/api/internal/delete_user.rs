@@ -5,7 +5,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use model::response::ErrorResponse;
 use models_email::email::service::pubsub::LinkManagerMessage;
-use models_email::service::pubsub::LinkManagerOperation;
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
@@ -31,10 +30,7 @@ pub async fn handler(
     })?;
 
     for link in links {
-        let message = LinkManagerMessage {
-            link_id: link.id,
-            operation: LinkManagerOperation::Delete,
-        };
+        let message = LinkManagerMessage::DeleteLink { link_id: link.id };
 
         ctx.sqs_client
             .enqueue_link_manager_notification(message)

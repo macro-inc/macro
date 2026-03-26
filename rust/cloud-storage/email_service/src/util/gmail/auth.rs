@@ -10,7 +10,7 @@ use model::user::UserContext;
 use models_email::email::service::cache::TokenCacheKey;
 use models_email::email::service::link::Link;
 use models_email::email::service::link::UserProvider;
-use models_email::email::service::pubsub::{LinkManagerMessage, LinkManagerOperation};
+use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::gmail::inbox_sync::KeyMap;
 use sqs_client::SQS;
 use std::sync::Arc;
@@ -35,9 +35,8 @@ pub async fn fetch_token_or_delete_on_revocation(
             );
 
             sqs_client
-                .enqueue_link_manager_notification(LinkManagerMessage {
+                .enqueue_link_manager_notification(LinkManagerMessage::DeleteLink {
                     link_id: link.id,
-                    operation: LinkManagerOperation::Delete,
                 })
                 .await
                 .inspect_err(|e| {

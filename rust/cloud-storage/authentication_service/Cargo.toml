@@ -54,6 +54,7 @@ http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
 macro_auth = { path = "../macro_auth" }
+models_email = { path = "../models_email" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
   "auth",
@@ -105,6 +106,7 @@ sha1 = "0.10.6"
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "search",
+  "email",
 ] }
 teams = { path = "../teams" }
 thiserror = { workspace = true }
