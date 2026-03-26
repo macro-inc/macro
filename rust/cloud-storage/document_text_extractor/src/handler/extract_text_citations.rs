@@ -155,27 +155,18 @@ pub async fn extract_text_from_document(
         Error::from("invalid key format")
     })?;
 
-    // For legacy keys with extension, check the extension directly
-    // For extensionless keys, look up file type from DB
-    if document_key_parts.has_extension {
-        if !key.ends_with(".pdf") {
-            tracing::info!("skipping non-pdf file for extraction");
+    let file_type = db
+        .get_document_file_type(&document_key_parts.document_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "unable to get file type from db");
+            Error::from("unable to get file type from db")
+        })?;
+    match file_type {
+        Some(model::document::FileType::Pdf) => {}
+        _ => {
+            tracing::info!(file_type=?file_type, "skipping non-pdf file for extraction");
             return Ok(None);
-        }
-    } else {
-        let file_type = db
-            .get_document_file_type(&document_key_parts.document_id)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to get file type from db");
-                Error::from("unable to get file type from db")
-            })?;
-        match file_type {
-            Some(model::document::FileType::Pdf) => {}
-            _ => {
-                tracing::info!(file_type=?file_type, "skipping non-pdf file for extraction");
-                return Ok(None);
-            }
         }
     }
 

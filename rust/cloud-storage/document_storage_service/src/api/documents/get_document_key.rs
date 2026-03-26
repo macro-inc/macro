@@ -6,7 +6,7 @@ use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::document::{
-    CONVERTED_DOCUMENT_FILE_NAME, FileType, build_cloud_storage_bucket_document_key,
+    CONVERTED_DOCUMENT_FILE_NAME, FileType,
     build_extensionless_document_key,
 };
 use model::response::GenericErrorResponse;
@@ -79,32 +79,11 @@ pub async fn get_document_key_handler(
                     }
                 };
 
-            // Try extensionless key first, fall back to legacy key with extension
-            let extensionless_key = build_extensionless_document_key(
+            build_extensionless_document_key(
                 document_context.owner.as_ref(),
                 &document_id,
                 document_version_id,
-            );
-            let extensionless_exists = match state.s3_client.exists(&extensionless_key).await {
-                Ok(exists) => exists,
-                Err(e) => {
-                    tracing::error!(error=?e, "unable to check if extensionless key exists");
-                    return GenericResponse::builder()
-                        .message("unable to check document key")
-                        .is_error(true)
-                        .send(StatusCode::INTERNAL_SERVER_ERROR);
-                }
-            };
-            if extensionless_exists {
-                extensionless_key
-            } else {
-                build_cloud_storage_bucket_document_key(
-                    document_context.owner.as_ref(),
-                    &document_id,
-                    document_version_id,
-                    Some(file_type.as_str()),
-                )
-            }
+            )
         }
         FileType::Docx => {
             format!(

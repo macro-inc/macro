@@ -147,8 +147,6 @@ pub trait PresignedUploadUrlPort: Send + Sync + 'static {
         content_type: ContentType,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
-    /// Check if a document key exists in the storage bucket.
-    fn document_key_exists(&self, key: &str) -> impl Future<Output = anyhow::Result<bool>> + Send;
 }
 
 /// Port for attaching task system properties.
