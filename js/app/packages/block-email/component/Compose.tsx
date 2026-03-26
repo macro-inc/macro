@@ -1,3 +1,4 @@
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
@@ -558,13 +559,16 @@ export function EmailCompose(props: EmailComposeProps) {
         'Email sent',
         undefined,
         draftId
-          ? {
-              text: 'Undo',
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                void undoSend(draftId);
+          ? [
+              {
+                label: 'Undo',
+                icon: ArrowCounterClockwise,
+                onClick: () => {
+                  if (toastId != null) toast.dismiss(toastId);
+                  void undoSend(draftId);
+                },
               },
-            }
+            ]
           : undefined,
         10_000
       );

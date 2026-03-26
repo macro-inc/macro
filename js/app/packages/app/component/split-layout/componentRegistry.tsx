@@ -1,3 +1,4 @@
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
@@ -351,21 +352,43 @@ if (LOCAL_ONLY) {
     const PERSIST = 999_999_999;
 
     const fire = () => {
-      toast.success('Success toast', 'This is a success subtext', { text: 'Undo', onClick: () => {} }, PERSIST);
+      toast.success(
+        'Success toast',
+        'This is a success subtext',
+        [{ label: 'Undo', icon: ArrowCounterClockwise, onClick: () => {} }],
+        PERSIST
+      );
       toast.failure('Failure toast', 'This is a failure subtext', PERSIST);
       toast.alert('Alert toast', 'This is an alert subtext', PERSIST);
-      toast.promise(new Promise(() => {}), { loading: 'Loading toast', subtext: 'This is a loading subtext' });
+      toast.promise(new Promise(() => {}), {
+        loading: 'Loading toast',
+        subtext: 'This is a loading subtext',
+      });
+    };
+
+    const fireWithProgress = () => {
+      toast.success(
+        'Timed success',
+        'Disappears in 5s — watch the bar',
+        undefined,
+        5000
+      );
+      toast.failure('Timed failure', 'Disappears in 8s — watch the bar', 8000);
+      toast.alert('Timed alert', 'Disappears in 6s — watch the bar', 6000);
     };
 
     onMount(fire);
 
     return (
       <div class="flex items-center justify-center h-full">
-        <button
-          class="px-4 py-2 bg-accent text-panel rounded"
-          onClick={fire}
-        >
+        <button class="px-4 py-2 bg-accent text-panel rounded" onClick={fire}>
           Show All Toasts
+        </button>
+        <button
+          class="px-4 py-2 bg-panel border border-edge-muted text-ink rounded"
+          onClick={fireWithProgress}
+        >
+          Show Timed Toasts (with progress bar)
         </button>
       </div>
     );

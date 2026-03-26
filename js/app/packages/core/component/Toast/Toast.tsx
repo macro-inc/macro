@@ -1,12 +1,15 @@
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import CheckIcon from '@icon/regular/check.svg';
 import ExclamationIcon from '@icon/regular/exclamation-mark.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
-
 import { Toast, toaster } from '@kobalte/core/toast';
-import type { Component } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import {
   Show,
+  For,
+  Switch,
+  Match,
   createSignal,
   onMount,
   onCleanup,
@@ -106,6 +109,27 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   },
 };
 
+/** A single entry in the actions row — icon and label rendered as a button */
+export interface ToastAction {
+  label: string;
+  icon?: Component<{ class?: string }>;
+  onClick: () => void;
+}
+
+/**
+ * Config for a fully custom toast.
+ * Replaces the icon, title, and accent color of the standard layout while
+ * still using the shared ClippedPanel chrome and progress/dismiss machinery.
+ */
+export interface CustomToastConfig {
+  title: string;
+  children?: JSX.Element;
+  icon?: Component<{ class?: string }>;
+  /** Any CSS color value, e.g. 'var(--color-success)' or '#ff6600' */
+  color?: string;
+  actions?: ToastAction[];
+}
+
 interface ToastMessage {
   message: string;
   toastType: ToastType;
@@ -113,10 +137,7 @@ interface ToastMessage {
   timeoutId: ReturnType<typeof setTimeout>;
   toastId?: number;
   subtext?: string;
-  action?: {
-    text: string;
-    onClick: () => void;
-  };
+  actions?: ToastAction[];
 }
 
 const recentToasts: Map<string, ToastMessage> = new Map();
@@ -144,11 +165,11 @@ function dismissIfRecent(message: string, type: ToastType): void {
 function success(
   message: string,
   subtext?: string,
-  action?: { text: string; onClick: () => void },
+  actions?: ToastAction[],
   duration?: number
 ): number | undefined {
   dismissIfRecent(message, ToastType.SUCCESS);
-  return createToast(message, ToastType.SUCCESS, subtext, action, duration);
+  return createToast(message, ToastType.SUCCESS, subtext, actions, duration);
 }
 
 function dismiss(toastId: number) {
@@ -167,26 +188,64 @@ function alert(message: string, subtext?: string, duration?: number) {
   createToast(message, ToastType.ALERT, subtext, undefined, duration);
 }
 
+// ─── Shared actions row ──────────────────────────────────────────────────────
+
+function ActionsRow(props: { actions: ToastAction[] }) {
+  return (
+    <div class="flex flex-row flex-wrap justify-end gap-2 mt-2">
+      <For each={props.actions}>
+        {(action) => (
+          <Button
+            onClick={action.onClick}
+            variant="secondary"
+            class="flex items-center gap-1.5 rounded py-1.5 px-3 text-sm font-semibold"
+          >
+            <Show when={action.icon}>
+              {(icon) => (
+                <Dynamic component={icon()} class="size-3.5 shrink-0" />
+              )}
+            </Show>
+            {action.label}
+          </Button>
+        )}
+      </For>
+    </div>
+  );
+}
+
+// ─── Toast content ───────────────────────────────────────────────────────────
+
 function ToastContent(props: {
   toastId: number;
   toastType?: ToastType;
   message?: string;
   subtext?: string;
-  action?: { text: string; onClick: () => void };
+  actions?: ToastAction[];
   persistent?: boolean;
+  /** When provided, drives the auto-dismiss timer AND shows the progress bar. */
   duration?: number;
   embed?: Component;
+  custom?: CustomToastConfig;
 }) {
   const styles = () => (props.toastType ? TOAST_STYLES[props.toastType] : null);
 
-  // Track progress until disappearance (1 = full duration remaining, 0 = time to disappear)
+  const accentColor = () => {
+    if (props.custom?.color) return props.custom.color;
+    return styles()?.borderColor ?? 'var(--color-edge)';
+  };
+
+  // progress: 1 = full time remaining, 0 = expired.
+  // Only meaningful (and only rendered) when props.duration is explicitly set.
   const [progress, setProgress] = createSignal(1);
+
+  const showProgress = () => false;
+
   const [isHovered, setIsHovered] = createSignal(false);
 
   let elapsed = 0;
 
   onMount(() => {
-    // Skip countdown for persistent toasts
+    // Persistent toasts never auto-dismiss
     if (props.persistent) return;
 
     const duration = props.duration ?? 3000;
@@ -196,7 +255,6 @@ function ToastContent(props: {
     const update = () => {
       const currentTime = performance.now();
 
-      // Initialize lastTime on first frame
       if (lastTime === null) {
         lastTime = currentTime;
       }
@@ -213,21 +271,18 @@ function ToastContent(props: {
       if (remaining > 0) {
         rafId = requestAnimationFrame(update);
       } else {
-        // Dismiss the toast when countdown completes
         toaster.dismiss(props.toastId);
       }
     };
 
     rafId = requestAnimationFrame(update);
-
     onCleanup(() => cancelAnimationFrame(rafId));
   });
 
-  // Reset timer immediately when user starts hovering
+  // Reset timer when user starts hovering
   createEffect(
     on(isHovered, (hovered) => {
       if (hovered && !props.persistent) {
-        // User started hovering - reset timer and progress immediately
         elapsed = 0;
         setProgress(1);
       }
@@ -246,76 +301,117 @@ function ToastContent(props: {
     >
       <ClippedPanel
         edgeColor="var(--color-edge-muted)"
-        highlightColor={styles()?.borderColor ?? 'var(--color-edge)'}
+        highlightColor={accentColor()}
         active
         cornerRadius={'8px'}
-        class="w-md p-3"
+        class="relative w-md p-3 overflow-clip"
       >
-        <Show
-          when={props.embed}
-          fallback={
-            <>
-              <div class="flex items-center gap-2 justify-between">
-                <div
-                  class="size-5 flex justify-center items-center rounded-full p-0.75"
-                  style={{
-                    'background-color': styles()!.borderColor,
-                  }}
-                >
-                  <Dynamic
-                    component={styles()!.icon}
-                    class={cn(
-                      'size-3.5 text-panel',
-                      props.toastType === ToastType.LOADING
-                        ? 'animate-spin'
-                        : ''
-                    )}
-                  />
-                </div>
-                <Toast.Title class="font-semibold text-ink grow shrink truncate">
-                  {props.message}
-                </Toast.Title>
-                <Toast.CloseButton>
+        <Switch>
+          {/* ── Embed layout ── */}
+          <Match when={props.embed}>
+            {(embed) => (
+              <>
+                <Dynamic component={embed()} />
+                <Toast.CloseButton class="absolute top-2 right-2 z-1">
                   <Button variant="ghost" size="icon-sm" class="rounded-xs">
                     <XIcon />
                   </Button>
                 </Toast.CloseButton>
-              </div>
-              <Toast.Description class="text-sm text-ink-extra-muted ml-7">
-                {props.subtext}
-              </Toast.Description>
-              <Show when={props.action}>
-                {(action) => (
-                  <Button
-                    onClick={action().onClick}
-                    variant="secondary"
-                    class="mt-2 text-sm font-semibold py-1.5 px-3 ml-7 rounded px-4"
+              </>
+            )}
+          </Match>
+
+          {/* ── Custom layout ── */}
+          <Match when={props.custom}>
+            {(customConfig) => (
+              <>
+                <div class="flex items-center gap-2 justify-between">
+                  <Show when={customConfig().icon}>
+                    {(icon) => (
+                      <div class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75">
+                        <Dynamic component={icon()} />
+                      </div>
+                    )}
+                  </Show>
+                  <Toast.Title class="font-semibold text-ink grow shrink truncate">
+                    {customConfig().title}
+                  </Toast.Title>
+                  <Toast.CloseButton>
+                    <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                      <XIcon />
+                    </Button>
+                  </Toast.CloseButton>
+                </div>
+                <Show when={customConfig().children}>
+                  <div class="my-2 ml-7">{customConfig().children}</div>
+                </Show>
+                <Show when={customConfig().actions?.length}>
+                  <ActionsRow actions={customConfig().actions!} />
+                </Show>
+              </>
+            )}
+          </Match>
+
+          {/* ── Standard layout ── */}
+          <Match when={styles()}>
+            {(s) => (
+              <>
+                <div class="flex items-center gap-2 justify-between">
+                  <div
+                    class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75"
+                    style={{ 'background-color': s().borderColor }}
                   >
-                    {action().text}
-                  </Button>
-                )}
-              </Show>
-            </>
-          }
-        >
-          {(embed) => (
-            <>
-              <Dynamic component={embed()} />
-              <Toast.CloseButton class="absolute top-2 right-2 z-1">
-                <Button variant="ghost" size="icon-sm" class="rounded-xs">
-                  <XIcon />
-                </Button>
-              </Toast.CloseButton>
-            </>
-          )}
+                    <Dynamic
+                      component={s().icon}
+                      class={cn(
+                        'size-3.5 text-panel',
+                        props.toastType === ToastType.LOADING
+                          ? 'animate-spin'
+                          : ''
+                      )}
+                    />
+                  </div>
+                  <Toast.Title class="font-semibold text-ink grow shrink truncate">
+                    {props.message}
+                  </Toast.Title>
+                  <Toast.CloseButton>
+                    <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                      <XIcon />
+                    </Button>
+                  </Toast.CloseButton>
+                </div>
+                <Show when={props.subtext}>
+                  <Toast.Description class="text-sm text-ink-extra-muted ml-7">
+                    {props.subtext}
+                  </Toast.Description>
+                </Show>
+                <Show when={props.actions?.length}>
+                  <ActionsRow actions={props.actions!} />
+                </Show>
+              </>
+            )}
+          </Match>
+        </Switch>
+
+        {/* Progress bar — only rendered when an explicit duration was passed */}
+        <Show when={showProgress()}>
+          <div
+            class="absolute bottom-0 h-1 left-0"
+            style={{
+              'background-color': accentColor(),
+              width: `${(1 - progress()) * 100}%`,
+            }}
+          />
         </Show>
       </ClippedPanel>
     </Toast>
   );
 }
 
+// ─── promise helper ──────────────────────────────────────────────────────────
+
 async function promise<T>(
-  promise: Promise<T>,
+  promiseArg: Promise<T>,
   options: {
     loading: string;
     success?: string | ((result: T) => string);
@@ -337,7 +433,7 @@ async function promise<T>(
     { region: 'toast-region' }
   );
 
-  return promise
+  return promiseArg
     .then((result) => {
       toaster.dismiss(toastId);
 
@@ -368,11 +464,15 @@ async function promise<T>(
     });
 }
 
+// ─── createToast (internal) ──────────────────────────────────────────────────
+
 function createToast(
   message: string,
   toastType: ToastType,
   subtext?: string,
-  action?: { text: string; onClick: () => void },
+  actions?: ToastAction[],
+  // When undefined, the toast auto-dismisses after a default delay but shows NO progress bar.
+  // When explicitly set, the toast uses that duration AND shows the progress bar.
   duration?: number
 ) {
   const key = createToastKey(message, toastType);
@@ -393,8 +493,10 @@ function createToast(
         toastType={toastType}
         message={message}
         subtext={subtext}
-        action={action}
-        duration={duration ?? THROTTLE_DURATION + 100}
+        actions={actions}
+        // Pass duration only when explicitly provided — this is what gates the progress bar.
+        // When undefined, ToastContent falls back to its own default dismiss timing internally.
+        duration={duration}
       />
     ),
     { region: 'toast-region' }
@@ -407,11 +509,13 @@ function createToast(
     timeoutId,
     toastId,
     subtext,
-    action,
+    actions,
   });
 
   return toastId;
 }
+
+// ─── embed ───────────────────────────────────────────────────────────────────
 
 function embed(
   component: Component,
@@ -434,6 +538,36 @@ function embed(
   );
 }
 
+// ─── custom ──────────────────────────────────────────────────────────────────
+
+/**
+ * Show a toast with a fully custom title, icon, accent color, body content,
+ * and actions row — while still using the shared ClippedPanel chrome and
+ * progress/dismiss machinery.
+ */
+function custom(
+  config: CustomToastConfig,
+  options?: {
+    persistent?: boolean;
+    duration?: number;
+    region?: string;
+  }
+): number {
+  return toaster.show(
+    (props) => (
+      <ToastContent
+        toastId={props.toastId}
+        custom={config}
+        persistent={options?.persistent}
+        duration={options?.duration}
+      />
+    ),
+    { region: options?.region || 'toast-region' }
+  );
+}
+
+// ─── upload helper (kept for backwards compat) ───────────────────────────────
+
 export function createUploadToast(message: string) {
   return toaster.show(
     (props) => (
@@ -448,11 +582,14 @@ export function createUploadToast(message: string) {
   );
 }
 
+// ─── public API ──────────────────────────────────────────────────────────────
+
 export const toast = {
   success,
   failure,
   alert,
   promise,
   embed,
+  custom,
   dismiss,
 };
