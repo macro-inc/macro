@@ -7,10 +7,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{
-    model::request::documents::location::LocationQueryParams,
-    service::{self},
-};
+use crate::model::request::documents::location::LocationQueryParams;
 use axum::{
     Extension,
     body::Body,
