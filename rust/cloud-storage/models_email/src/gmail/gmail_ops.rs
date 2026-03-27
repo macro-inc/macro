@@ -26,6 +26,7 @@ pub enum GmailOpsOperation {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ModifyMessageLabelsPayload {
     /// The database ID of the message to modify
     pub db_message_id: Uuid,
@@ -36,16 +37,19 @@ pub struct ModifyMessageLabelsPayload {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteLabelPayload {
     pub provider_label_id: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct BlockSenderPayload {
     pub email_address: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct UnblockSenderPayload {
     pub email_address: String,
 }

@@ -80,6 +80,7 @@ pub async fn handler(
             ),
         })
         .await
+        .inspect_err(|e| tracing::error!(error = ?e, "Failed to enqueue block sender operation"))
         .map_err(|_| BlockSenderError::EnqueueFailed)?;
 
     Ok(StatusCode::OK)
