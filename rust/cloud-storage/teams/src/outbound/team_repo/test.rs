@@ -414,17 +414,18 @@ async fn test_get_team_members(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let members = team_repo.get_team_members(&team_id).await?;
 
-    assert_eq!(members.len(), 1);
+    assert_eq!(members.len(), 2);
 
-    let results = vec![("macro|user2@user.com", TeamRole::Member)];
+    let expected = vec!["macro|user2@user.com", "macro|user@user.com"];
 
-    assert_eq!(
-        members
-            .iter()
-            .map(|m| (m.user_id.as_ref(), m.role))
-            .collect::<Vec<_>>(),
-        results
-    );
+    let mut results = members
+        .iter()
+        .map(|m| m.user_id.as_ref())
+        .collect::<Vec<&str>>();
+
+    results.sort();
+
+    assert_eq!(results, expected);
 
     Ok(())
 }

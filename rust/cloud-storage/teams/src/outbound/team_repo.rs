@@ -592,7 +592,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 team_role as "team_role!: TeamRole",
                 tier as "tier!: TeamUserTier"
             FROM team_user
-            WHERE team_id = $1 AND team_role NOT IN ('owner')
+            WHERE team_id = $1
             "#,
             team_id,
         )
