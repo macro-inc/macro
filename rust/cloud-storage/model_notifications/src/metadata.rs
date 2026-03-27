@@ -1,13 +1,18 @@
+use std::time::Duration;
+
 use doppleganger::Doppleganger;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
-use notification::domain::models::Notification;
+use notification::domain::models::queue_message::EmailContent;
 use notification::domain::models::{
     NotifCollapseKey, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
+};
+use notification::domain::models::{
+    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey,
 };
 use rootcause::Report;
 use rootcause::report;
@@ -265,6 +270,33 @@ impl notification::domain::models::Notification for DocumentMentionMetadata {
 
 impl notification::domain::models::Notification for InviteToTeamMetadata {
     const TYPE_NAME: &'static str = "invite_to_team";
+}
+
+impl NotificationExtEmail for InviteToTeamMetadata {
+    fn format_email(&self) -> EmailContent {
+        EmailContent {
+            subject: format!(
+                "{} has invited you to the {} team on Macro",
+                self.invited_by.as_ref(),
+                self.team_name
+            ),
+            body: "Placeholder".to_string(),
+        }
+    }
+
+    fn rate_limit_config() -> RateLimitConfig {
+        const HOURS_PER_WEEK: u64 = 24 * 7;
+        RateLimitConfig {
+            max_count: 1,
+            window: Duration::from_hours(HOURS_PER_WEEK),
+        }
+    }
+
+    fn rate_limit_key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&Self::TYPE_NAME)
+            .append(&self.team_id)
+            .finish()
+    }
 }
 
 pub trait NotificationTitle {
