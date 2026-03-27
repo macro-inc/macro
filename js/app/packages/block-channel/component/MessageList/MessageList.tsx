@@ -686,7 +686,10 @@ function MessageListImpl(props: MessageListProps) {
     if (!initialScrollComplete()) return true;
 
     const THRESHOLD = 100;
-    const distanceFromBottom = handle.scrollOffset;
+    const scrollHeight = handle.scrollSize;
+    const viewportHeight = handle.viewportSize;
+    const scrollTop = handle.scrollOffset;
+    const distanceFromBottom = scrollHeight - viewportHeight - scrollTop;
     return distanceFromBottom <= THRESHOLD;
   };
 
