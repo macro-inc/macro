@@ -342,6 +342,7 @@ function MessageListImpl(props: MessageListProps) {
     createSignal(false);
   const [isScrollingDown, setIsScrollingDown] = createSignal(false);
   let prevScrollOffset: number | undefined;
+  let prevScrollSize: number | undefined;
   let downwardScrollAccumulator = 0;
 
   // Navigation methods for keyboard navigation
@@ -665,7 +666,6 @@ function MessageListImpl(props: MessageListProps) {
 
   // Indices of top-level rows that should remain mounted even when off screen.
   // Criteria: thread has an active reply, so keep its parent row mounted.
-  // NOTE: VList receives reversed top-level rows, so indices must be normalized.
   const keepMountedIndices = createMemo(() => {
     const list = filteredTopLevelMessages();
     const length = list.length;
@@ -694,29 +694,45 @@ function MessageListImpl(props: MessageListProps) {
     const handle = virtualHandle();
     if (!handle) return false;
     const THRESHOLD = 2000;
-    return handle.scrollOffset > THRESHOLD;
+    const scrollHeight = handle.scrollSize;
+    const viewportHeight = handle.viewportSize;
+    const scrollTop = handle.scrollOffset;
+    const distanceFromBottom = scrollHeight - viewportHeight - scrollTop;
+    return distanceFromBottom > THRESHOLD;
   };
 
   // Track scroll direction.
   // Requires 100px of cumulative downward scrolling before triggering.
-  // Any upward scroll resets the accumulator immediately.
-  const updateScrollDirection = () => {
+  const updateScrollDirection = (offset: number) => {
     const handle = virtualHandle();
-    if (handle && prevScrollOffset !== undefined) {
-      const currentOffset = handle.scrollOffset;
-      const delta = prevScrollOffset - currentOffset; // positive = scrolling down
-      if (delta > 0) {
-        downwardScrollAccumulator += delta;
-        if (downwardScrollAccumulator >= 100) {
-          setIsScrollingDown(true);
-        }
-      } else if (delta < 0) {
-        downwardScrollAccumulator = 0;
-        setIsScrollingDown(false);
-      }
+    const scrollSize = handle?.scrollSize ?? 0;
+
+    if (prevScrollOffset === undefined) {
+      prevScrollOffset = offset;
+      prevScrollSize = scrollSize;
+      return;
     }
-    if (handle) {
-      prevScrollOffset = handle.scrollOffset;
+
+    const delta = offset - prevScrollOffset; // positive = scrolling down
+    const scrollSizeChanged = prevScrollSize !== scrollSize;
+
+    prevScrollOffset = offset;
+    prevScrollSize = scrollSize;
+
+    // Ignore scroll events where scrollSize changed - virtualization adjustments
+    // can cause offset jumps that don't reflect actual user scroll direction
+    if (scrollSizeChanged) {
+      return;
+    }
+
+    if (delta > 0) {
+      downwardScrollAccumulator += delta;
+      if (downwardScrollAccumulator >= 100) {
+        setIsScrollingDown(true);
+      }
+    } else {
+      downwardScrollAccumulator = 0;
+      setIsScrollingDown(false);
     }
   };
 
@@ -823,14 +839,14 @@ function MessageListImpl(props: MessageListProps) {
   );
 
   // Handle vlistscroll events
-  const handleScroll = () => {
+  const handleScroll = (offset: number) => {
     if (!initialScrollComplete()) return;
 
     const nearBottom = checkIfNearBottom();
     setIsNearBottom(nearBottom);
 
     setIsScrolledBackSignificantly(checkIfScrolledBackSignificantly());
-    updateScrollDirection();
+    updateScrollDirection(offset);
 
     if (!nearBottom && dismissJumpToLatest()) {
       setDismissJumpToLatest(false);
