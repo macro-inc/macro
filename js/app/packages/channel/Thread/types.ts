@@ -41,4 +41,5 @@ export type ThreadProps = {
   highlighted?: boolean;
   selectedMessageId?: Accessor<string | undefined>;
   messageListScopeId?: string;
+  isNewestThread?: boolean;
 } & ThreadState;

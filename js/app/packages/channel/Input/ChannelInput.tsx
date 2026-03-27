@@ -6,6 +6,7 @@ import { createConfiguredChannelMarkdownEditor } from './configured-markdown-edi
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
 import { createMentionsTracker } from './mentions-tracker';
+import { createTypingTracker } from './create-typing-tracker';
 import {
   chatRuleset,
   handleFileFolderDrop,
@@ -60,6 +61,11 @@ export function ChannelInput(props: ChannelInputProps) {
     });
   let clearComposer = () => {};
 
+  const typingTracker = createTypingTracker({
+    onStartTyping: () => props.onStartTyping?.(),
+    onStopTyping: () => props.onStopTyping?.(),
+  });
+
   const inputState = createInputState({
     initialInput: props.input,
     mentions: mentionsTracker.mentions,
@@ -79,9 +85,15 @@ export function ChannelInput(props: ChannelInputProps) {
     clearInput: () => markdownEditor.controls.clear(),
     callbacks: {
       onChange: props.onChange,
-      onSend: props.onSend,
+      onSend: (snapshot) => {
+        typingTracker.stop();
+        return props.onSend?.(snapshot);
+      },
       onToggleFormatRibbon: props.onToggleFormatRibbon,
-      onClose: props.onClose,
+      onClose: (snapshot) => {
+        typingTracker.stop();
+        return props.onClose?.(snapshot);
+      },
       onRemoveAttachment: props.onRemoveAttachment,
     },
     persistenceKey: props.persistenceKey,
@@ -99,9 +111,11 @@ export function ChannelInput(props: ChannelInputProps) {
     },
     onChange: (markdown) => {
       inputState.setValue(markdown);
+      typingTracker.keystroke();
     },
     onEnter: () => {
       if (isMobile()) return false;
+      typingTracker.stop();
       inputState.commands.send();
       return true;
     },
