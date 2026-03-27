@@ -6,7 +6,6 @@ import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import XIcon from '@icon/regular/x.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 import { Button } from './button';
