@@ -73,7 +73,7 @@ pub async fn handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "idp_name or idp_id need to be provided",
+                message: "idp_name or idp_id need to be provided".into(),
             }),
         )
             .into_response());
@@ -85,7 +85,7 @@ pub async fn handler(
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "provided idp_id is empty",
+                    message: "provided idp_id is empty".into(),
                 }),
             )
                 .into_response());
@@ -100,7 +100,7 @@ pub async fn handler(
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "provided idp_name is empty",
+                    message: "provided idp_name is empty".into(),
                 }),
             )
                 .into_response());
@@ -115,7 +115,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to find idp from idp_name",
+                        message: "unable to find idp from idp_name".into(),
                     }),
                 )
                     .into_response()
@@ -146,7 +146,7 @@ pub async fn handler(
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "unable to serialize state into string",
+                    message: "unable to serialize state into string".into(),
                 }),
             )
                 .into_response()

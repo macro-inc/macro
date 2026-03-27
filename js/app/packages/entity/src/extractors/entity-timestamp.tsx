@@ -8,6 +8,7 @@ export function EntityTimestamp(props: {
 }) {
   const timestamp = () => {
     if (props.overrideTimeStamp) return props.overrideTimeStamp;
+    if (props.entity.sortTs) return props.entity.sortTs;
     if (props.entity.updatedAt) return props.entity.updatedAt;
     return new Date();
   };

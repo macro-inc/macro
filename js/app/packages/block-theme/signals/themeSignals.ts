@@ -1,4 +1,4 @@
-import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES, BEVELED_CORNERS, BLACK_BEZELS } from '../constants';
+import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES, BLACK_BEZELS } from '../constants';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import type { ThemeV0, ThemeV1 } from '../types/themeTypes';
 import { convertThemev0v1 } from '../utils/themeMigrations';
@@ -75,10 +75,7 @@ export const [monochromeIcons, setMonochromeIcons] = makePersisted(
 );
 
 
-export const [beveledCorners, setBeveledCorners] = makePersisted(
-  createSignal<boolean>(BEVELED_CORNERS),
-  {name: 'macro-beveled-corners'}
-);
+export { beveledCorners, setBeveledCorners } from '../../core/signal/beveledCorners';
 
 export const [blackBezels, setBlackBezels] = makePersisted(
   createSignal<boolean>(BLACK_BEZELS),

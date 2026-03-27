@@ -10,7 +10,7 @@ export function ToastRegion() {
           duration={Infinity}
           pauseOnInteraction={false}
         >
-          <Toast.List class="absolute bottom-0 right-0 flex-col p-4 gap-2" />
+          <Toast.List class="absolute bottom-0 right-0 flex flex-col p-4 gap-2" />
         </Toast.Region>
         <Toast.Region regionId="stable-toast" duration={Infinity}>
           <Toast.List class="absolute bottom-0 right-0 flex flex-col p-4 gap-2" />

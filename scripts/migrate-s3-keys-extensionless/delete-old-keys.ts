@@ -22,6 +22,7 @@ const LIMIT = process.env.LIMIT ? parseInt(process.env.LIMIT, 10) : undefined;
 const USER = process.env.USER_PREFIX;
 const DOCUMENT_ID = process.env.DOCUMENT_ID;
 const KEYS_FILE = process.env.KEYS_FILE;
+const SKIP_VERIFY = process.env.SKIP_VERIFY === "true";
 const CURSOR_FILE = `delete-cursor-${S3_BUCKET}.txt`;
 
 if (!S3_BUCKET) {
@@ -83,18 +84,23 @@ interface Stats {
 const stats: Stats = { scanned: 0, deleted: 0, skipped: 0, errors: 0 };
 
 async function deleteBatch(keys: string[]): Promise<void> {
-  // Verify extensionless copy exists before deleting
-  const safeToDelete: string[] = [];
-  await Promise.all(
-    keys.map(async (key) => {
-      if (await extensionlessExists(key)) {
-        safeToDelete.push(key);
-      } else {
-        log(`SKIP (no extensionless copy): ${key}`);
-        stats.skipped++;
-      }
-    })
-  );
+  let safeToDelete: string[];
+
+  if (SKIP_VERIFY) {
+    safeToDelete = keys;
+  } else {
+    safeToDelete = [];
+    await Promise.all(
+      keys.map(async (key) => {
+        if (await extensionlessExists(key)) {
+          safeToDelete.push(key);
+        } else {
+          log(`SKIP (no extensionless copy): ${key}`);
+          stats.skipped++;
+        }
+      })
+    );
+  }
 
   if (safeToDelete.length === 0) return;
 
@@ -146,7 +152,7 @@ async function deleteFromFile(filePath: string) {
     stats.scanned++;
     batch.push(key);
 
-    if (batch.length >= CONCURRENCY) {
+    if (batch.length >= 1000) {
       if (LIMIT !== undefined && stats.deleted + stats.skipped >= LIMIT) break;
       await deleteBatch(batch);
       batch = [];
@@ -237,6 +243,7 @@ async function main() {
   log("=== Deleting old legacy S3 keys ===");
   log(`Bucket: ${S3_BUCKET}`);
   if (KEYS_FILE) log(`Keys file: ${KEYS_FILE}`);
+  if (SKIP_VERIFY) log(`Skipping extensionless verification`);
   if (USER) log(`User: ${USER}`);
   if (DOCUMENT_ID) log(`Document: ${DOCUMENT_ID}`);
   if (DRY_RUN) log(`=== DRY RUN MODE ===${LIMIT ? ` (limit: ${LIMIT})` : ""}`);

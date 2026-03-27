@@ -73,8 +73,8 @@
 //!
 //! // Build toolset with tools using different contexts
 //! let toolset = AsyncToolSet::<AppContext>::new()
-//!     .add_tool::<ReadDocumentTool, Arc<dyn DocumentApi>>().unwrap()
-//!     .add_tool::<UpdatePropertyTool, Arc<dyn PropertyApi>>().unwrap();
+//!     .add_tool::<ReadDocumentTool, Arc<dyn DocumentApi>>()
+//!     .add_tool::<UpdatePropertyTool, Arc<dyn PropertyApi>>();
 //! ```
 //!
 //! # Nested Toolsets
@@ -118,11 +118,11 @@
 //!
 //! // Build a subtoolset with the narrower context
 //! let sub_toolset = AsyncToolSet::<SubContext>::new()
-//!     .add_tool::<SubTool, SubContext>().unwrap();
+//!     .add_tool::<SubTool, SubContext>();
 //!
 //! // Merge into parent toolset - tools are automatically widened
 //! let parent_toolset = AsyncToolSet::<ParentContext>::new()
-//!     .add_subtoolset::<SubContext>(sub_toolset).unwrap();
+//!     .add_subtoolset::<SubContext>(sub_toolset);
 //!
 //! assert!(parent_toolset.tools.contains_key("SubTool"));
 //! ```

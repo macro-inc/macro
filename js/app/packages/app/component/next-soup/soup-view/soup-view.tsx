@@ -79,7 +79,6 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
-import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
@@ -96,6 +95,7 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import {
   invalidateSoupEntity,
@@ -150,7 +150,6 @@ type PersistedSoupViewState = {
   filters: { and: string[]; or: string[] };
   queryFilters: SoupItemsQueryFilters;
   sort: SystemSortOption[];
-  searchText: string;
   previewEntity: string | undefined;
   assigneeFilter: string[];
 };
@@ -163,6 +162,7 @@ const listStateCache = new Map<
   string,
   {
     focus: string | undefined;
+    searchText: string;
     virtualCache?: CacheSnapshot;
     scrollOffset?: number;
   }
@@ -620,11 +620,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // If another SoupViewList with the same contentId is already mounted (e.g.
   // same view open in two splits), disable all persistence for this instance
-  const isDuplicate = (activeSoupViewCounts.get(contentId) ?? 0) > 0;
-  activeSoupViewCounts.set(
-    contentId,
-    (activeSoupViewCounts.get(contentId) ?? 0) + 1
-  );
+  const prevCount = activeSoupViewCounts.get(contentId) ?? 0;
+  const isDuplicate = prevCount > 0;
+  activeSoupViewCounts.set(contentId, prevCount + 1);
   onCleanup(() => {
     const count = activeSoupViewCounts.get(contentId) ?? 1;
     if (count <= 1) activeSoupViewCounts.delete(contentId);
@@ -638,35 +636,31 @@ export const SoupViewList = (props: SoupViewListProps) => {
     { name: `macro:soup-view:${contentId}` }
   );
 
-  let key = `soup-view-${panel.handle.id}-${contentId}`;
+  const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
-  if (previewPanel) {
-    key += '-preview';
-  }
-
-  const getCacheKey = () => {
-    return key;
-  };
+  // Restore previewEntity synchronously so the first-render effect sees the
+  // correct value and avoids a transient window where previewEntity is undefined.
+  const initialPersistedState = !persistenceDisabled
+    ? untrack(persistedState)
+    : null;
+  soup.setPreviewEntity(initialPersistedState?.previewEntity);
 
   // Set initial state
-  if (!persistenceDisabled) {
-    const initial = untrack(persistedState);
-    if (initial) {
+  onMount(() => {
+    if (initialPersistedState) {
       batch(() => {
-        soup.filters.set(initial.filters);
-        setQueryFilters(initial.queryFilters);
-        setSearchText(initial.searchText);
-        soup.sort.setAll(initial.sort);
-        setActiveTab(initial.activeTab);
-        setAssigneeFilter(initial.assigneeFilter ?? []);
-        if (initial.previewEntity) {
-          soup.setPreviewEntity(initial.previewEntity);
-        }
+        soup.filters.set(initialPersistedState.filters ?? { and: [], or: [] });
+        setQueryFilters(initialPersistedState.queryFilters ?? {});
+        soup.sort.setAll(initialPersistedState.sort ?? []);
+        setActiveTab(initialPersistedState.activeTab);
+        setAssigneeFilter(initialPersistedState.assigneeFilter ?? []);
       });
-    } else if (props.initialClientFilters) {
-      soup.filters.set(props.initialClientFilters);
+    } else {
+      if (props.initialClientFilters) {
+        soup.filters.set(props.initialClientFilters);
+      }
     }
-  }
+  });
 
   createEffect(
     on(
@@ -679,7 +673,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
           },
           queryFilters: queryFilters(),
           sort: soup.sort.active().map((s) => s.id),
-          searchText: searchText(),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),
         }) satisfies PersistedSoupViewState,
@@ -691,9 +684,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 
   onCleanup(() => {
-    if (persistenceDisabled) return;
+    if (isProjectList) return;
     const virtualHandle = virtualizerHandle();
-    listStateCache.set(getCacheKey(), {
+    listStateCache.set(cacheKey, {
+      searchText: searchText(),
       focus: soup.focus.id(),
       virtualCache: virtualHandle?.cache,
       scrollOffset: virtualHandle?.scrollOffset,
@@ -706,14 +700,16 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (restored || isProjectList) return;
     restored = true;
 
-    const cached = listStateCache.get(getCacheKey());
+    const cached = listStateCache.get(cacheKey);
     if (cached) {
+      setSearchText(cached.searchText);
       soup.focus.set(cached.focus);
       virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
       registerFocusEffects(false);
-    } else {
-      registerFocusEffects();
+      return;
     }
+
+    registerFocusEffects();
   };
 
   const registerVirtualizerHandler = (
@@ -787,7 +783,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   setCollapseEntity={soup.collapseEntity.set}
                 >
                   <SoupList
-                    cache={listStateCache.get(getCacheKey())?.virtualCache}
+                    cache={listStateCache.get(cacheKey)?.virtualCache}
                     ref={setLocalEntityListRef}
                     virtualizerClass="scrollbar-hidden"
                     class="overflow-hidden flex min-w-0"
@@ -798,6 +794,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   >
                     {(row, i) => {
                       const timestamp = () => {
+                        if (row.original.sortTs) return row.original.sortTs;
+
                         const sort_ = soup.sort.active();
                         if (!sort_.length) return;
 

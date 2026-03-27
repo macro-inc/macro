@@ -7,10 +7,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{
-    model::request::documents::location::LocationQueryParams,
-    service::{self},
-};
+use crate::model::request::documents::location::LocationQueryParams;
 use axum::{
     Extension,
     body::Body,
@@ -20,14 +17,11 @@ use axum::{
 };
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use model::{
-    document::{
-        CONVERTED_DOCUMENT_FILE_NAME, DocumentBasic, FileType, FileTypeExt,
-        build_cloud_storage_bucket_document_key, build_extensionless_document_key,
-        response::LocationResponseData,
-    },
+    document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseData},
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
     user::UserContext,
 };
+use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -111,59 +105,19 @@ pub async fn get_location_handler(
         .unwrap()
 }
 
-#[tracing::instrument(skip(state))]
-async fn get_editable_url(
+/// Signs a document key and returns a CloudFront presigned URL.
+/// `check_key` is the non-URL-encoded key for S3 existence verification.
+/// `signed_key` is the URL-encoded key for the CloudFront signed URL.
+#[tracing::instrument(skip(state), err)]
+async fn sign_document_key(
     state: &ApiContext,
-    owner: &str,
-    document_id: &str,
-    document_version_id: Option<i64>,
-    file_type: &str,
+    #[allow(unused_variables)] check_key: &str,
+    signed_key: &str,
 ) -> anyhow::Result<LocationResponseData> {
-    let url_encoded_owner = urlencoding::encode(owner);
-    let document_version_id = if let Some(document_version_id) = document_version_id {
-        document_version_id
-    } else {
-        macro_db_client::document::get_latest_document_version_id(&state.db, document_id)
-            .await?
-            .0
-    };
-
-    // Try extensionless key first, fall back to legacy key with extension
-    let extensionless_key =
-        build_extensionless_document_key(owner, document_id, document_version_id);
-    let extensionless_exists = verify_file_exists(&state.s3_client, &extensionless_key).await?;
-    let document_key = if extensionless_exists {
-        build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
-    } else {
-        build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-            Some(file_type),
-        )
-    };
-
-    // Check if the item exists in s3
     #[cfg(feature = "location_check")]
     {
-        // NOTE: owner is not url encoded
-        let check_key = if verify_file_exists(
-            &state.s3_client,
-            &build_extensionless_document_key(owner, document_id, document_version_id),
-        )
-        .await?
-        {
-            build_extensionless_document_key(owner, document_id, document_version_id)
-        } else {
-            build_cloud_storage_bucket_document_key(
-                owner,
-                document_id,
-                document_version_id,
-                Some(file_type),
-            )
-        };
         tracing::trace!("checking if file exists in s3, key: {}", check_key);
-        let exists = verify_file_exists(&state.s3_client, &check_key).await?;
+        let exists = &state.s3_client.exists(check_key).await?;
         if !exists {
             anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
@@ -188,90 +142,50 @@ async fn get_editable_url(
             .config
             .vars
             .document_storage_service_cloudfront_distribution_url,
-        &document_key,
+        signed_key,
         &signed_options,
     )?;
 
     Ok(LocationResponseData::PresignedUrl(signed_url))
 }
 
+/// Gets a signed CloudFront URL for a versioned document.
+///
+/// For static files (PDF, HTML), the version is always resolved from the DB.
+/// For editable files (MD, Canvas), a caller-provided version ID is used if present,
+/// otherwise the latest version is fetched.
 #[tracing::instrument(skip(state))]
-pub(in crate::api::documents) async fn get_static_url(
+pub(in crate::api::documents) async fn get_versioned_url(
     state: &ApiContext,
     owner: &str,
     document_id: &str,
-    file_type: &Option<FileType>,
+    document_version_id: Option<i64>,
+    is_static: bool,
 ) -> anyhow::Result<LocationResponseData> {
-    let url_encoded_owner = urlencoding::encode(owner);
-    let (document_version_id, _) =
-        macro_db_client::document::get_document_version_id(&state.db, document_id).await?;
-
-    // Try extensionless key first, fall back to legacy key with extension
-    let extensionless_key =
-        build_extensionless_document_key(owner, document_id, document_version_id);
-    let file_type_str = file_type.as_ref().map(|s| s.as_str());
-    let extensionless_exists = verify_file_exists(&state.s3_client, &extensionless_key).await?;
-    let document_key = if extensionless_exists {
-        build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
-    } else {
-        build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-            file_type_str,
-        )
+    let document_version_id = match document_version_id {
+        Some(v) if !is_static => v,
+        _ if is_static => {
+            macro_db_client::document::get_document_version_id(&state.db, document_id)
+                .await?
+                .0
+        }
+        _ => {
+            macro_db_client::document::get_latest_document_version_id(&state.db, document_id)
+                .await?
+                .0
+        }
     };
 
-    // Check if the item exists in s3
-    #[cfg(feature = "location_check")]
-    {
-        // NOTE: owner is not url encoded
-        let check_key = if verify_file_exists(
-            &state.s3_client,
-            &build_extensionless_document_key(owner, document_id, document_version_id),
-        )
-        .await?
-        {
-            build_extensionless_document_key(owner, document_id, document_version_id)
-        } else {
-            build_cloud_storage_bucket_document_key(
-                owner,
-                document_id,
-                document_version_id,
-                file_type_str,
-            )
-        };
-        tracing::trace!("checking if file exists in s3, key: {}", check_key);
-        let exists = verify_file_exists(&state.s3_client, &check_key).await?;
-        if !exists {
-            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
-        }
-    }
-
-    let signed_options = get_cloudfront_signed_options(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_signer_public_key_id,
-        state
-            .config
-            .document_storage_service_cloudfront_signer_private_key
-            .as_ref(),
-        state
-            .config
-            .document_storage_service_presigned_url_expiry_seconds,
+    let check_key =
+        build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
+    let url_encoded_owner = urlencoding::encode(owner);
+    let signed_key = build_cloud_storage_bucket_document_key(
+        &url_encoded_owner,
+        document_id,
+        document_version_id,
     );
 
-    let signed_url = get_presigned_url(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_distribution_url,
-        &document_key,
-        &signed_options,
-    )?;
-
-    Ok(LocationResponseData::PresignedUrl(signed_url))
+    sign_document_key(state, &check_key, &signed_key).await
 }
 
 /// Gets the presigned url for the converted docx file
@@ -281,50 +195,11 @@ async fn get_converted_docx_url(
     owner: &str,
     document_id: &str,
 ) -> anyhow::Result<LocationResponseData> {
+    let check_key = build_docx_to_pdf_converted_document_key(owner, document_id);
     let url_encoded_owner = urlencoding::encode(owner);
-    let document_key = format!(
-        "{}/{}/{}.pdf",
-        url_encoded_owner, document_id, CONVERTED_DOCUMENT_FILE_NAME
-    );
+    let signed_key = build_docx_to_pdf_converted_document_key(&url_encoded_owner, document_id);
 
-    // Check if the item exists in s3
-    #[cfg(feature = "location_check")]
-    {
-        let document_key = format!(
-            "{}/{}/{}.pdf",
-            owner, document_id, CONVERTED_DOCUMENT_FILE_NAME
-        );
-        tracing::trace!("checking if file exists in s3, key: {}", document_key);
-        let exists = verify_file_exists(&state.s3_client, &document_key).await?;
-        if !exists {
-            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
-        }
-    }
-
-    let signed_options = get_cloudfront_signed_options(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_signer_public_key_id,
-        state
-            .config
-            .document_storage_service_cloudfront_signer_private_key
-            .as_ref(),
-        state
-            .config
-            .document_storage_service_presigned_url_expiry_seconds,
-    );
-
-    let signed_url = get_presigned_url(
-        &state
-            .config
-            .vars
-            .document_storage_service_cloudfront_distribution_url,
-        &document_key,
-        &signed_options,
-    )?;
-
-    Ok(LocationResponseData::PresignedUrl(signed_url))
+    sign_document_key(state, &check_key, &signed_key).await
 }
 
 #[tracing::instrument(skip(state))]
@@ -427,10 +302,7 @@ pub(in crate::api::documents) async fn get_presigned_url_by_type(
     get_converted_docx: bool,
 ) -> anyhow::Result<LocationResponseData> {
     match file_type {
-        None => {
-            // no file type will always be static
-            get_static_url(state, owner, document_id, &file_type).await
-        }
+        None => get_versioned_url(state, owner, document_id, document_version_id, true).await,
         Some(file_type) => {
             if file_type == FileType::Docx && get_converted_docx {
                 tracing::debug!("getting converted docx url");
@@ -438,24 +310,16 @@ pub(in crate::api::documents) async fn get_presigned_url_by_type(
             } else if file_type == FileType::Docx && !get_converted_docx {
                 tracing::debug!("getting legacy docx urls");
                 get_docx_urls(state, document_id, document_version_id).await
-            } else if file_type.is_static() {
-                get_static_url(state, owner, document_id, &Some(file_type)).await
             } else {
-                get_editable_url(
-                    state,
-                    owner,
-                    document_id,
-                    document_version_id,
-                    file_type.as_str(),
-                )
-                .await
+                let is_static = file_type.is_static();
+                get_versioned_url(state, owner, document_id, document_version_id, is_static).await
             }
         }
     }
 }
 
 /// Makes a cloudfront presigned url for the provided key
-#[tracing::instrument(skip(options))]
+#[tracing::instrument(skip(options), err)]
 pub(in crate::api::documents) fn get_presigned_url(
     cloudfront_distribution_url: &str,
     key: &str,
@@ -470,11 +334,4 @@ pub(in crate::api::documents) fn get_presigned_url(
     };
 
     Ok(signed_url)
-}
-
-async fn verify_file_exists(
-    s3_client: &service::s3::S3,
-    document_key: &str,
-) -> anyhow::Result<bool> {
-    s3_client.exists(document_key).await
 }

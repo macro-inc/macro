@@ -105,6 +105,7 @@ members = [
   "rpc/axum_rpc_emit",
   "rpc/axum_rpc_parse",
   "s3_client",
+  "s3_key",
   "scribe",
   "search_processing_service",
   "search_service",

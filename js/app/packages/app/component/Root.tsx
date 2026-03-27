@@ -23,6 +23,7 @@ import { transformShortIdInUrlPathname } from '@core/util/url';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { Provider as EntityProvider } from '@macro-entity';
 import {
+  BrowserNotificationModal,
   createNotificationSource,
   type UnifiedNotification,
   usePlatformNotificationState,
@@ -450,6 +451,7 @@ export function Root() {
           <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
+                <BrowserNotificationModal />
                 <QuerySyncProviderWithUserId />
                 <UserInfoSideEffects />
                 <ConfiguredGlobalAppStateProvider>

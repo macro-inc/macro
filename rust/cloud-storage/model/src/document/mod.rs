@@ -17,8 +17,6 @@ mod basic;
 pub use basic::*;
 mod document_family;
 pub use document_family::*;
-pub mod document_key;
-pub use document_key::*;
 
 use models_permissions::share_permission::access_level::AccessLevel;
 

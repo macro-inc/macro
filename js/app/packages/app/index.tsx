@@ -3,7 +3,6 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 // SolidDevtools retains disposed memos, causes memory leak
 // import 'solid-devtools';
-import * as analytics from '@coparse/analytics';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
@@ -94,15 +93,6 @@ function main() {
     scheduleIdleTask(() => {
       import('@observability').then((Observability) => {
         Observability.init(import.meta.env.__APP_VERSION__);
-      });
-    });
-
-    // Defer analytics initialization to avoid blocking initial render
-    scheduleIdleTask(() => {
-      analytics.init({
-        appVersion: import.meta.env.__APP_VERSION__,
-        segmentWriteKey: import.meta.env.VITE_SEGMENT_WRITE_KEY,
-        mode: import.meta.env.MODE,
       });
     });
 

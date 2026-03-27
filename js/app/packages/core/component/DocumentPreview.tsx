@@ -48,7 +48,7 @@ import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
 import { Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { beveledCorners } from '../signal/beveledCorners';
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';

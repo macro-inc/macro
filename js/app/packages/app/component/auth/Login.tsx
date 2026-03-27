@@ -81,7 +81,9 @@ export function Login() {
 
     if (!user || !user.authenticated) return;
 
-    analytics.track('login');
+    analytics.track('login', {
+      method: 'email',
+    });
     identifyUser();
   };
 

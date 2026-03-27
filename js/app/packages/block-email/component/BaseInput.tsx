@@ -1,6 +1,7 @@
 import { fileSelector } from '@core/directive/fileSelector';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
   MACRO_EMAIL_SIGNATURE,
   MAX_ATTACHMENTS_BYTES_SIZE,
@@ -24,6 +25,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
@@ -549,13 +551,16 @@ export function BaseInput(props: {
         'Email sent',
         undefined,
         draftId
-          ? {
-              text: 'Undo',
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                void undoSend(draftId);
+          ? [
+              {
+                label: 'Undo',
+                icon: ArrowCounterClockwise,
+                onClick: () => {
+                  if (toastId != null) toast.dismiss(toastId);
+                  void undoSend(draftId);
+                },
               },
-            }
+            ]
           : undefined,
         10_000
       );
@@ -1019,18 +1024,17 @@ export function BaseInput(props: {
 
     // If not already in To or CC, add user to CC
     if (!isInTo && !isInCc) {
-      // Find the user in recipient options
-      const userOption = ctx.recipientOptions().find((recipient) => {
-        const email = recipient.data.email;
-        if (!email) return false;
-        return email === mentionEmail;
-      });
+      // Find the user in recipient options, or construct from mention data
+      const userOption =
+        ctx.recipientOptions().find((recipient) => {
+          const email = recipient.data.email;
+          if (!email) return false;
+          return email === mentionEmail;
+        }) ?? convertContactInfoToEmailRecipient({ email: mentionEmail });
 
-      if (userOption) {
-        // Add to CC recipients
-        form().setRecipients('cc', [...form().recipients().cc, userOption]);
-        toast.success(`${mentionEmail} added to CC`);
-      }
+      // Add to CC recipients
+      form().setRecipients('cc', [...form().recipients().cc, userOption]);
+      toast.success(`${mentionEmail} added to CC`);
     }
   };
 

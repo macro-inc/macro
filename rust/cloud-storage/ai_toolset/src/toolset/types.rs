@@ -82,14 +82,14 @@ impl<T> ToolSet<T> {
     /// Merges another toolset into this one.
     ///
     /// Returns an error if any tool names conflict between the two toolsets.
-    pub fn add_toolset(mut self, toolset: ToolSet<T>) -> Result<Self, ToolSetCreationError> {
+    pub fn add_toolset(mut self, toolset: ToolSet<T>) -> Self {
         for (name, _) in toolset.tools.iter() {
             if self.tools.contains_key(name) {
-                return Err(ToolSetCreationError::NameConflict(name.clone()));
+                panic!("{}", ToolSetCreationError::NameConflict(name.clone()));
             }
         }
         self.tools.extend(toolset.tools);
-        Ok(self)
+        self
     }
 }
 
@@ -105,34 +105,40 @@ where
     /// can be narrowed to the specific context required by each tool.
     ///
     /// Returns an error if schema validation fails or a tool with the same name exists.
-    pub fn add_tool<T, ToolContext>(mut self) -> Result<Self, ToolSetCreationError>
+    pub fn add_tool<T, ToolContext>(mut self) -> Self
     where
         ToolContext: Sync + Send + FromRef<ToolSetContext> + 'static,
         T: JsonSchema + AsyncTool<ToolContext> + for<'de> Deserialize<'de> + 'static + Send + Sync,
         T::Output: Serialize + JsonSchema + 'static,
     {
         let tool_object = AsyncToolObject::try_from_tool::<T, ToolContext, T::Output>()
-            .map_err(ToolSetCreationError::Validation)?;
+            .expect("expect conversion to AsyncToolObject");
         if self.tools.contains_key(&tool_object.name) {
-            Err(ToolSetCreationError::NameConflict(tool_object.name.clone()))
+            panic!(
+                "{}",
+                ToolSetCreationError::NameConflict(tool_object.name.clone())
+            );
         } else {
             self.tools.insert(tool_object.name.clone(), tool_object);
-            Ok(self)
+            self
         }
     }
 
     /// Adds a user tool to the toolset
     /// A user tool isn't executed automatically by default
-    pub fn add_user_tool<T, ToolContext>(mut self) -> Result<Self, ToolSetCreationError>
+    pub fn add_user_tool<T, ToolContext>(mut self) -> Self
     where
         ToolContext: Sync + Send + FromRef<ToolSetContext> + 'static,
         T: JsonSchema + AsyncTool<ToolContext> + for<'de> Deserialize<'de> + 'static + Send + Sync,
         T::Output: Serialize + JsonSchema + 'static,
     {
         let tool_object = AsyncToolObject::try_from_tool::<T, ToolContext, T::Output>()
-            .map_err(ToolSetCreationError::Validation)?;
+            .expect("conversion to AsyncToolObject");
         if self.user_tools.contains_key(&tool_object.name) {
-            return Err(ToolSetCreationError::NameConflict(tool_object.name.clone()));
+            panic!(
+                "{}",
+                ToolSetCreationError::NameConflict(tool_object.name.clone())
+            );
         } else {
             self.user_tools
                 .insert(tool_object.name.clone(), tool_object);
@@ -231,28 +237,26 @@ where
     ///
     /// // Build a subtoolset with the narrower context
     /// let sub_toolset = AsyncToolSet::<SubContext>::new()
-    ///     .add_tool::<SubTool, SubContext>().unwrap();
+    ///     .add_tool::<SubTool, SubContext>();
     ///
     /// // Merge into parent toolset - tools are automatically widened
     /// let parent_toolset = AsyncToolSet::<ParentContext>::new()
-    ///     .add_subtoolset::<SubContext>(sub_toolset).unwrap();
+    ///     .add_subtoolset::<SubContext>(sub_toolset);
     ///
     /// assert!(parent_toolset.tools.contains_key("SubTool"));
     /// ```
-    pub fn add_subtoolset<SubContext>(
-        mut self,
-        subtoolset: AsyncToolSet<SubContext>,
-    ) -> Result<Self, ToolSetCreationError>
+    #[tracing::instrument(skip_all)]
+    pub fn add_subtoolset<SubContext>(mut self, subtoolset: AsyncToolSet<SubContext>) -> Self
     where
         SubContext: FromRef<ToolSetContext> + Send + Sync + 'static,
     {
         for (name, tool) in subtoolset.tools {
             if self.tools.contains_key(&name) {
-                return Err(ToolSetCreationError::NameConflict(name));
+                panic!("{}", ToolSetCreationError::NameConflict(name));
             }
             let widened = tool.widen::<ToolSetContext>();
             self.tools.insert(name, widened);
         }
-        Ok(self)
+        self
     }
 }

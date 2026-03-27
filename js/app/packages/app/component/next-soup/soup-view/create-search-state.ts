@@ -1,6 +1,4 @@
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
-import { getFileAssociations } from '@app/component/next-soup/filters/query-filters';
 import { useSearchContext } from '@app/component/next-soup/search-context';
 import {
   createSoupFreshSearch,
@@ -8,7 +6,6 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
-import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import type { EntityData } from '@entity';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
@@ -16,12 +13,8 @@ import {
   useSearchSoupQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
-import type {
-  UnifiedSearchIndex,
-  UnifiedSearchRequest,
-} from '@service-search/generated/models';
+import type { UnifiedSearchRequest } from '@service-search/generated/models';
 import { type Accessor, createMemo, createSignal, on } from 'solid-js';
-import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -58,80 +51,17 @@ export const createSearchState = ({
     () => trimmedSearchText() === debouncedSearchForService()
   );
 
-  const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
-    () => {
-      const types = soup.filters.activeIds() as FilterID[];
-      const includeArray: UnifiedSearchIndex[] = [];
-      for (const type of types) {
-        match(type)
-          .with('file-folder', () => {
-            // TODO: distinguish between document and project requests
-            includeArray.push('documents');
-            includeArray.push('projects');
-          })
-          .with('document', 'task', () => {
-            includeArray.push('documents');
-          })
-          .with('agent', () => {
-            includeArray.push('chats');
-          })
-          .with('people', 'teams', 'channels', () => {
-            includeArray.push('channels');
-          })
-          .with('email', () => {
-            includeArray.push('emails');
-          })
-          .otherwise(() => {});
-      }
-      return Array.from(new Set(includeArray));
-    },
-    [],
-    { equals: arrayEquals }
-  );
-
   const isSearchServiceDisabled = createMemo(
     () => !validateSearchServiceText(debouncedSearchForService())
   );
 
-  const searchFilters = createMemo(() => {
-    const {
-      channel_filters,
-      chat_filters,
-      document_filters,
-      email_filters,
-      project_filters,
-    } = queryFilters();
-
-    let fileTypes = document_filters?.file_types;
-
-    if (soup.filters.isActive('file-folder')) {
-      fileTypes = getFileAssociations('search');
-    }
-
-    // NOTE: the garbage UUID filters are excluded by the include array anyways so they no-op
-    return {
-      channel: channel_filters,
-      chat: chat_filters,
-      document: { ...document_filters, file_types: fileTypes },
-      email: email_filters,
-      project: project_filters,
-    };
-  });
-
   const searchUnifiedNameContentRequest = createMemo(
-    (): UnifiedSearchRequest => {
-      const query = debouncedSearchForService();
-      const include = unifiedSearchIncludeArray();
-      const filters = searchFilters();
-
-      return {
-        search_on: 'name_content',
-        match_type: 'partial',
-        query,
-        include,
-        filters,
-      };
-    }
+    (): UnifiedSearchRequest => ({
+      search_on: 'name_content',
+      match_type: 'partial',
+      query: debouncedSearchForService(),
+      filters: queryFilters(),
+    })
   );
 
   const searchQuery = useSearchSoupQuery(

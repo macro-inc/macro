@@ -59,7 +59,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "error fetching attachment",
+                    message: "error fetching attachment".into(),
                 }),
             )
                 .into_response()
@@ -73,7 +73,7 @@ pub async fn handler(
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "attachment does not exist",
+                    message: "attachment does not exist".into(),
                 }),
             )
                 .into_response()
@@ -105,7 +105,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "error fetching attachment",
+                        message: "error fetching attachment".into(),
                     }),
                 )
                     .into_response()
@@ -127,7 +127,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "error fetching attachment",
+                        message: "error fetching attachment".into(),
                     }),
                 )
                     .into_response()
@@ -148,7 +148,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "error uploading attachment",
+                    message: "error uploading attachment".into(),
                 }),
             )
                 .into_response()

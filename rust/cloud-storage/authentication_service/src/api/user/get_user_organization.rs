@@ -29,7 +29,7 @@ impl IntoResponse for UserOrganizationError {
             UserOrganizationError::InternalError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "internal error",
+                    message: "internal error".into(),
                 }),
             ),
         }

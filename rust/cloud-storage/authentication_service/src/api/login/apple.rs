@@ -45,7 +45,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to find idp",
+                    message: "unable to find idp".into(),
                 }),
             )
                 .into_response()
@@ -60,7 +60,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to complete apple login",
+                    message: "unable to complete apple login".into(),
                 }),
             )
                 .into_response()

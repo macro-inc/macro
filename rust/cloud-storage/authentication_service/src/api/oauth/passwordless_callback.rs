@@ -81,7 +81,7 @@ pub async fn handler(
                 FusionAuthClientError::IncorrectCode => (
                     StatusCode::UNAUTHORIZED,
                     Json(ErrorResponse {
-                        message: "invalid code",
+                        message: "invalid code".into(),
                     }),
                 )
                     .into_response(),

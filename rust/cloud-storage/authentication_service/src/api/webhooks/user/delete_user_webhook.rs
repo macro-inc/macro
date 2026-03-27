@@ -17,6 +17,7 @@ use stripe::CustomerId;
 use tracing::Instrument;
 
 use crate::api::context::ApiContext;
+use sqs_client::email::LinkManagerMessage;
 
 /// Delete user webhook
 #[tracing::instrument(skip(ctx, req, _internal_access), fields(event_id=req.event.id, email=req.event.user.email,fusionauth_user_id=req.event.user.id))]
@@ -67,7 +68,7 @@ pub async fn handler(
 
     // TODO: should probably make this into an event so we can handle service restarts
     // Spawn a single tokio task to perform the user deletion
-    tokio::spawn(delete_user(ctx, macro_user, user_ids).in_current_span());
+    tokio::spawn(delete_user(ctx, macro_user, fusionauth_user_id, user_ids).in_current_span());
 
     Ok(StatusCode::OK.into_response())
 }
@@ -76,9 +77,27 @@ pub async fn handler(
 async fn delete_user(
     ctx: ApiContext,
     macro_user: macro_db_client::macro_user::MacroUser,
+    fusionauth_user_id: String,
     user_ids: Vec<String>,
 ) -> anyhow::Result<()> {
     tracing::info!("deleting user");
+
+    // Enqueue email link deletion via the link manager queue
+    tokio::spawn({
+        let sqs_client = ctx.sqs_client.clone();
+        let fusionauth_user_id = fusionauth_user_id.clone();
+        async move {
+            let message = LinkManagerMessage::DeleteUser {
+                fusionauth_user_id: fusionauth_user_id.clone(),
+            };
+            if let Err(e) = sqs_client
+                .enqueue_link_manager_notification(message)
+                .await
+            {
+                tracing::error!(error=?e, fusionauth_user_id, "unable to enqueue email link deletion");
+            }
+        }
+    }.in_current_span());
 
     tokio::spawn({
         let user_ids = user_ids.clone();

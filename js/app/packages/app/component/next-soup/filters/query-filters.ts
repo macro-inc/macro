@@ -1,4 +1,3 @@
-import { codeFileExtensions } from '@block-code/util/languageSupport';
 import type { SoupItemsQueryFilters, SoupBody } from '@queries/soup/items';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
@@ -68,24 +67,9 @@ export function filterSoupItemByRequestBody(
     .exhaustive();
 }
 
-export const FILE_ASSOCIATION_TYPES = [
-  'code',
-  'image',
-  'pdf',
-  'unknown',
-] as const;
-
-/** Expands file association types to file extensions for soup or search */
-export const getFileAssociations = (type: 'soup' | 'search') => {
-  return FILE_ASSOCIATION_TYPES.flatMap((fileType) => {
-    if (fileType === 'code')
-      return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
-    if (fileType === 'image')
-      return type === 'soup' ? ['assoc:image'] : [NIL_UUID];
-    if (fileType === 'unknown')
-      return type === 'soup' ? ['assoc:other'] : [NIL_UUID];
-    return [fileType];
-  });
+/** File types or associations for soup */
+export const getFileAssociations = () => {
+  return ['assoc:code', 'assoc:image', 'assoc:other', 'pdf'];
 };
 
 export const QUERY_FILTERS = {
@@ -147,7 +131,7 @@ export const QUERY_FILTERS = {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
-    document_filters: { file_types: getFileAssociations('soup') },
+    document_filters: { file_types: getFileAssociations() },
   },
 
   documentAndFile: {
@@ -155,7 +139,7 @@ export const QUERY_FILTERS = {
     chat_filters: { chat_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
     document_filters: {
-      file_types: ['md', 'canvas', 'docx', ...getFileAssociations('soup')],
+      file_types: ['md', 'canvas', 'docx', ...getFileAssociations()],
     },
   },
 

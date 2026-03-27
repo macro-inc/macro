@@ -29,7 +29,9 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
 
         (
             status_code,
-            axum::Json(model_error_response::ErrorResponse { message }),
+            axum::Json(model_error_response::ErrorResponse {
+                message: message.into(),
+            }),
         )
             .into_response()
     }

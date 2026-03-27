@@ -427,4 +427,4 @@ export const SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
 
 type SoupFilter = ReturnType<typeof createSoupFilters>[number];
 
-export type FilterID = Extract<SoupFilter, { id: string & {} }>['id'];
+export type FilterID = Extract<SoupFilter, { id: string }>['id'];

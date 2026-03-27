@@ -50,7 +50,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get session code",
+                    message: "unable to get session code".into(),
                 }),
             )
                 .into_response()
@@ -60,7 +60,7 @@ pub async fn handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "invalid session code",
+                message: "invalid session code".into(),
             }),
         )
             .into_response());
@@ -72,11 +72,11 @@ pub async fn handler(
         .refresh_token("", &refresh_token)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, refresh_token=?refresh_token, "unable to refresh token");
+            tracing::error!(error=?e, "unable to refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to refresh token",
+                    message: "unable to refresh token".into(),
                 }),
             )
                 .into_response()

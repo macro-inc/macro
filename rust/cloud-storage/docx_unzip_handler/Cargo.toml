@@ -25,6 +25,7 @@ macro_env = { path = "../macro_env" }
 macro_sha_count_client = { path = "../macro_sha_count_client" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
+s3_key = { path = "../s3_key" }
 openssl = { workspace = true }
 redis = { workspace = true, features = [
   "aio",

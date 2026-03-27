@@ -34,6 +34,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "auth",
 ] }
 model = { path = "../model" }
+s3_key = { path = "../s3_key" }
 models_sfs = { path = "../models_sfs" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }

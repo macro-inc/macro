@@ -42,7 +42,7 @@ pub async fn list_contacts_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to fetch links",
+                    message: "unable to fetch links".into(),
                 }),
             )
                 .into_response()
@@ -51,7 +51,7 @@ pub async fn list_contacts_handler(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "link not found",
+                    message: "link not found".into(),
                 }),
             )
                 .into_response()
@@ -64,7 +64,7 @@ pub async fn list_contacts_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to fetch contacts",
+                    message: "unable to fetch contacts".into(),
                 }),
             )
                 .into_response()

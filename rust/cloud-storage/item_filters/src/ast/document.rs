@@ -126,6 +126,20 @@ fn format(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
     Ok((rest, out))
 }
 
+/// Resolve a file type string to concrete [FileType] variants.
+/// Handles both plain extensions (e.g. `"md"`, `"pdf"`) and `assoc:*` prefixes
+/// (e.g. `"assoc:code"`, `"assoc:other"`). Returns an empty vec if the string
+/// is not a recognized extension or association.
+pub fn resolve_file_types(s: &str) -> Vec<FileType> {
+    if let Ok(ft) = FileType::from_str(s) {
+        return vec![ft];
+    }
+    match format(s) {
+        Ok((_, iter)) => iter.collect(),
+        Err(_) => vec![],
+    }
+}
+
 fn create_file_iter(s: &str) -> impl Iterator<Item = Result<FileType, ValueError<FileType>>> {
     match FileType::from_str(s) {
         Ok(f) => Either::Left(Some(Ok(f)).into_iter()),

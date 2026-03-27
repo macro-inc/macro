@@ -1,3 +1,4 @@
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
@@ -397,19 +398,22 @@ export async function blockSenderWithToast(senderEmail: string) {
   toast.success(
     'Sender blocked',
     `All new messages will be trashed for ${senderEmail}`,
-    {
-      text: 'Undo',
-      onClick: async () => {
-        const undoResult = await emailClient.unblockSender({
-          email_address: senderEmail,
-        });
-        if (isErr(undoResult)) {
-          toast.failure('Failed to unblock sender', senderEmail);
-        } else {
-          toast.success('Sender unblocked');
-        }
+    [
+      {
+        label: 'Undo',
+        icon: ArrowCounterClockwise,
+        onClick: async () => {
+          const undoResult = await emailClient.unblockSender({
+            email_address: senderEmail,
+          });
+          if (isErr(undoResult)) {
+            toast.failure('Failed to unblock sender', senderEmail);
+          } else {
+            toast.success('Sender unblocked');
+          }
+        },
       },
-    }
+    ]
   );
 }
 
@@ -435,20 +439,23 @@ async function upsertSenderFilterWithToast(
   toast.success(
     `Sender marked as ${label}`,
     `Messages from ${senderEmail} will appear in ${label}`,
-    {
-      text: 'Undo',
-      onClick: async () => {
-        const undoResult = await emailClient.deleteEmailFilter({
-          id: filterId,
-        });
-        if (isErr(undoResult)) {
-          toast.failure('Failed to undo', senderEmail);
-        } else {
-          invalidateAllSoup();
-          toast.success('Sender filter removed');
-        }
+    [
+      {
+        label: 'Undo',
+        icon: ArrowCounterClockwise,
+        onClick: async () => {
+          const undoResult = await emailClient.deleteEmailFilter({
+            id: filterId,
+          });
+          if (isErr(undoResult)) {
+            toast.failure('Failed to undo', senderEmail);
+          } else {
+            invalidateAllSoup();
+            toast.success('Sender filter removed');
+          }
+        },
       },
-    }
+    ]
   );
 }
 

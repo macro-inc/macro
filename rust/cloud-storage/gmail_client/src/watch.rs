@@ -69,9 +69,14 @@ pub(crate) async fn stop_watch(client: &GmailClient, access_token: &str) -> anyh
         .await
         .context("Failed to send request to Gmail API (stop watch)")?;
 
-    response
-        .error_for_status()
-        .context("Gmail API returned an error status (stop watch)")?;
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        anyhow::bail!("Gmail API error {} (stop watch): {}", status, error_body);
+    }
 
     Ok(())
 }

@@ -35,7 +35,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to unsubscribe email",
+                    message: "unable to unsubscribe email".into(),
                 }),
             )
                 .into_response()

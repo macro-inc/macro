@@ -533,6 +533,141 @@
         }
       }
     },
+    "/v1/user_notifications/preferences": {
+      "get": {
+        "tags": ["user_notification"],
+        "summary": "Get the notification types that the user has disabled.",
+        "operationId": "get_notification_type_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetNotificationTypePreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/preferences/{notification_event_type}/disable": {
+      "put": {
+        "tags": ["user_notification"],
+        "summary": "Disable a notification type for the authenticated user.",
+        "operationId": "disable_notification_type",
+        "parameters": [
+          {
+            "name": "notification_event_type",
+            "in": "path",
+            "description": "The notification event type to disable",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/preferences/{notification_event_type}/enable": {
+      "put": {
+        "tags": ["user_notification"],
+        "summary": "Re-enable a notification type for the authenticated user.",
+        "operationId": "enable_notification_type",
+        "parameters": [
+          {
+            "name": "notification_event_type",
+            "in": "path",
+            "description": "The notification event type to enable",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/user_notifications/{notification_id}": {
       "get": {
         "tags": ["user_notification"],
@@ -1255,6 +1390,20 @@
           "next_cursor": {
             "type": ["string", "null"],
             "description": "The next page cursor if it exists."
+          }
+        }
+      },
+      "GetNotificationTypePreferencesResponse": {
+        "type": "object",
+        "description": "Response for listing disabled notification types.",
+        "required": ["disabled_types"],
+        "properties": {
+          "disabled_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The notification types that the user has disabled."
           }
         }
       },

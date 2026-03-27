@@ -39,7 +39,7 @@ pub async fn webhook_handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to enqueue gmail notification",
+                message: "unable to enqueue gmail notification".into(),
             }),
         )
             .into_response()
@@ -61,7 +61,7 @@ pub async fn webhook_handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to enqueue gmail notification",
+                        message: "unable to enqueue gmail notification".into(),
                     }),
                 )
                     .into_response()
@@ -85,7 +85,7 @@ async fn validate_google_token(ctx: &ApiContext, headers: &HeaderMap) -> Result<
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to get google public keys",
+                message: "unable to get google public keys".into(),
             }),
         )
             .into_response()
@@ -97,7 +97,7 @@ async fn validate_google_token(ctx: &ApiContext, headers: &HeaderMap) -> Result<
         (
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
-                message: "Missing Authorization bearer token",
+                message: "Missing Authorization bearer token".into(),
             }),
         )
             .into_response()
@@ -133,7 +133,7 @@ async fn validate_google_token(ctx: &ApiContext, headers: &HeaderMap) -> Result<
                                 return Err((
                                 StatusCode::UNAUTHORIZED,
                                 Json(ErrorResponse {
-                                    message: "Authentication failed and couldn't refresh verification keys",
+                                    message: "Authentication failed and couldn't refresh verification keys".into(),
                                 }),
                             ).into_response());
                             }
@@ -151,7 +151,7 @@ async fn validate_google_token(ctx: &ApiContext, headers: &HeaderMap) -> Result<
                             (
                                 StatusCode::UNAUTHORIZED,
                                 Json(ErrorResponse {
-                                    message: "Invalid authentication token",
+                                    message: "Invalid authentication token".into(),
                                 }),
                             )
                                 .into_response()
@@ -165,7 +165,7 @@ async fn validate_google_token(ctx: &ApiContext, headers: &HeaderMap) -> Result<
                     Err((
                         StatusCode::UNAUTHORIZED,
                         Json(ErrorResponse {
-                            message: "Invalid authentication token",
+                            message: "Invalid authentication token".into(),
                         }),
                     )
                         .into_response())

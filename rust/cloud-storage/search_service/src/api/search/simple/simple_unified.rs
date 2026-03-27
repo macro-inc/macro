@@ -12,10 +12,10 @@ use axum::{
 };
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::unified::generate_unified_search_indices;
+use models_search::unified::SearchEntityFilters;
 use models_search::{
     SearchOn, SimpleSearchResponse,
-    unified::{SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest},
+    unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},
 };
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::model::SearchHit;
@@ -163,23 +163,19 @@ pub(in crate::api::search) async fn perform_unified_search(
     let terms: Vec<String> = vec![query];
 
     let match_type = req.match_type;
-    let include = req.include;
 
-    let filters = req.filters.unwrap_or_default();
-    let channel_filters = filters.channel.unwrap_or_default();
-    let email_filters = filters.email.unwrap_or_default();
-    let chat_filters = filters.chat.unwrap_or_default();
-    let doc_filters = filters.document.unwrap_or_default();
-    let project_filters = filters.project.unwrap_or_default();
+    let search_filters = SearchEntityFilters::from(req.filters);
+    let channel_filters = search_filters.channel_filters;
+    let email_filters = search_filters.email_filters;
+    let chat_filters = search_filters.chat_filters;
+    let doc_filters = search_filters.document_filters;
+    let project_filters = search_filters.project_filters;
 
-    let should_include_documents =
-        include.is_empty() || include.contains(&UnifiedSearchIndex::Documents);
-    let should_include_channels =
-        include.is_empty() || include.contains(&UnifiedSearchIndex::Channels);
-    let should_include_chats = include.is_empty() || include.contains(&UnifiedSearchIndex::Chats);
-    let should_include_projects =
-        include.is_empty() || include.contains(&UnifiedSearchIndex::Projects);
-    let should_include_emails = include.is_empty() || include.contains(&UnifiedSearchIndex::Emails);
+    let should_include_documents = search_filters.should_include_documents;
+    let should_include_channels = search_filters.should_include_channels;
+    let should_include_chats = search_filters.should_include_chats;
+    let should_include_projects = search_filters.should_include_projects;
+    let should_include_emails = search_filters.should_include_emails;
     let email_terms = split_search_terms(&terms);
     let is_email_multi_term = email_terms.len() > 1;
 
@@ -277,7 +273,25 @@ pub(in crate::api::search) async fn perform_unified_search(
         cursor: content_cursor_for_search,
         match_type: match_type.to_string(),
         collapse,
-        search_indices: generate_unified_search_indices(include),
+        search_indices: {
+            let mut indices = std::collections::HashSet::new();
+            if should_include_documents {
+                indices.insert(models_opensearch::SearchEntityType::Documents);
+            }
+            if should_include_chats {
+                indices.insert(models_opensearch::SearchEntityType::Chats);
+            }
+            if should_include_emails {
+                indices.insert(models_opensearch::SearchEntityType::Emails);
+            }
+            if should_include_channels {
+                indices.insert(models_opensearch::SearchEntityType::Channels);
+            }
+            if should_include_projects {
+                indices.insert(models_opensearch::SearchEntityType::Projects);
+            }
+            indices
+        },
         document_search_args: filter_document_response.clone(),
         email_search_args: filter_email_response.clone(),
         channel_message_search_args: filter_channel_response,
@@ -413,7 +427,9 @@ pub(in crate::api::search) async fn perform_unified_search(
             // We only want to search over content if you are not searching name only
             match search_on {
                 SearchOn::Content | SearchOn::NameContent => {
-                    if let SearchCursorOption::Done = unified_search_args.cursor {
+                    if unified_search_args.search_indices.is_empty() {
+                        Ok((vec![], SearchCursorOption::Done))
+                    } else if let SearchCursorOption::Done = unified_search_args.cursor {
                         Ok((vec![], SearchCursorOption::Done))
                     } else {
                         ctx.opensearch_client

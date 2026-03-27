@@ -1,4 +1,3 @@
-use super::chained::Chained;
 use super::chat::Chat;
 use crate::tool::types::AsyncToolSet;
 use crate::types::AnthropicClient;
@@ -42,14 +41,6 @@ where
 {
     pub fn chat(&self) -> Chat<I, T> {
         Chat::new(
-            self.client.clone(),
-            self.toolset.clone(),
-            self.context.clone(),
-        )
-    }
-
-    pub fn chained(&self) -> Chained<I, T> {
-        Chained::new(
             self.client.clone(),
             self.toolset.clone(),
             self.context.clone(),

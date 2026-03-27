@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{api::context::ApiContext, service::s3::TEMP_FILE_PREFIX};
+use crate::api::context::ApiContext;
 use axum::{
     Extension, Json,
     extract::{Path, State},
@@ -17,6 +17,7 @@ use model::{
     response::{ErrorResponse, GenericErrorResponse},
     user::UserContext,
 };
+use s3_key::build_temp_docx_key;
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use serde::{Deserialize, Serialize};
@@ -74,7 +75,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to convert file type",
+                    message: "unable to convert file type".into(),
                 }),
             )
                 .into_response()
@@ -97,7 +98,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to export document",
+                    message: "unable to export document".into(),
                 }),
             )
                 .into_response()
@@ -114,7 +115,7 @@ pub async fn handler(
         Ok((
             StatusCode::NOT_IMPLEMENTED,
             Json(ErrorResponse {
-                message: "cannot export document with no file type",
+                message: "cannot export document with no file type".into(),
             }),
         )
             .into_response())
@@ -146,7 +147,7 @@ async fn export_basic_document(
 }
 
 async fn export_docx_document(state: &ApiContext, document_id: &str) -> anyhow::Result<String> {
-    let docx_key = format!("{TEMP_FILE_PREFIX}/{document_id}.docx");
+    let docx_key = build_temp_docx_key(document_id);
     let exists = state.s3_client.exists(&docx_key).await?;
 
     if !exists {

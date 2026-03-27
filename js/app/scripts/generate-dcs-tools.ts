@@ -100,14 +100,14 @@ type AiToolsResponse = z.infer<typeof AiToolsResponseSchema>["schemas"];
 
 async function buildAndRunSchemaGenerator(): Promise<void> {
 	console.log("Building gen_tool_schemas binary...");
-	await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --release -p ai_tools --bin gen_tool_schemas`;
+	await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --bin gen_tool_schemas`;
 	console.log("Build complete.");
 
 	// Remove existing schemas dir if it exists (the binary expects to create it)
 	await $`rm -rf ${path.join(aiToolsDir, "schemas")}`.quiet();
 
 	console.log("Running gen_tool_schemas...");
-	const binaryPath = path.join(rustCloudStorageDir, "target", "release", "gen_tool_schemas");
+	const binaryPath = path.join(rustCloudStorageDir, "target", "debug", "gen_tool_schemas");
 	await $`cd ${aiToolsDir} && ${binaryPath}`;
 	console.log("Schema generation complete.");
 }

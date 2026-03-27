@@ -40,7 +40,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to fetch label",
+                    message: "unable to fetch label".into(),
                 }),
             )
                 .into_response()
@@ -49,7 +49,7 @@ pub async fn handler(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "Label not found in database.",
+                    message: "Label not found in database.".into(),
                 }),
             )
                 .into_response()
@@ -79,7 +79,7 @@ pub async fn handler(
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "delete label gmail api call failed",
+                        message: "delete label gmail api call failed".into(),
                     }),
                 )
                     .into_response());
@@ -95,7 +95,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to delete label from database",
+                        message: "unable to delete label from database".into(),
                     }),
                 )
                     .into_response()
@@ -106,7 +106,7 @@ pub async fn handler(
         return Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                message: "Label not found in database during deletion.",
+                message: "Label not found in database during deletion.".into(),
             }),
         )
             .into_response());

@@ -201,4 +201,41 @@ impl NotificationRepository for SandboxNotificationRepository {
     async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {
         self.inner.delete_device_by_endpoint(endpoint_arn).await
     }
+
+    async fn get_users_with_type_disabled<'a>(
+        &self,
+        notification_event_type: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        self.inner
+            .get_users_with_type_disabled(notification_event_type, user_ids)
+            .await
+    }
+
+    async fn get_disabled_notification_types(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<notification::domain::models::DisabledNotificationType>, Report> {
+        self.inner.get_disabled_notification_types(user_id).await
+    }
+
+    async fn disable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> Result<(), Report> {
+        self.inner
+            .disable_notification_type(user_id, notification_event_type)
+            .await
+    }
+
+    async fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> Result<(), Report> {
+        self.inner
+            .enable_notification_type(user_id, notification_event_type)
+            .await
+    }
 }

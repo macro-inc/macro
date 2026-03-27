@@ -404,6 +404,7 @@ export const mapSoupPageToEntityList: (
             ...item.data,
             createdAt: item.data.createdAt,
             updatedAt: item.data.updatedAt,
+            sortTs: item.data.sortTs,
             senderEmail: item.data.senderEmail ?? undefined,
             senderName: item.data.senderName ?? undefined,
             snippet: item.data.snippet ?? undefined,

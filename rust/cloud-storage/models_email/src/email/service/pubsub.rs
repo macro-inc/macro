@@ -39,22 +39,17 @@ pub enum FailureReason {
     InvalidData,
 }
 
-/// The message we send from the email_refresh_handler lambda to the service via SQS to refresh
-/// a user's inbox subscription
+/// The message sent to the link manager SQS queue.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct LinkManagerMessage {
-    pub link_id: Uuid,
-    pub operation: LinkManagerOperation,
-}
-
-/// The operations that can be performed by the LinkManager.
-#[derive(Debug, Serialize, Deserialize)]
-pub enum LinkManagerOperation {
+#[serde(tag = "operation")]
+pub enum LinkManagerMessage {
     /// Triggers a contact sync and refreshes the Gmail watch subscription to continue receiving
     /// inbox notifications for the user.
-    Refresh,
-    /// Delete the link from the database.
-    Delete,
+    Refresh { link_id: Uuid },
+    /// Delete a single link from the database.
+    DeleteLink { link_id: Uuid },
+    /// Delete all links for a user, identified by fusionauth_user_id.
+    DeleteUser { fusionauth_user_id: String },
 }
 
 /// The message we send from the email_scheduled_handler lambda to the service via SQS to trigger

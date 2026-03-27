@@ -15,6 +15,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -77,16 +78,19 @@ export function TopBar(props: {
     const toastId = toast.success(
       'Moved to Trash',
       undefined,
-      {
-        text: 'Undo',
-        onClick: () => {
-          if (toastId != null) toast.dismiss(toastId);
-          handle.undo().then(
-            () => toast.success('Restored from Trash'),
-            () => toast.failure('Failed to restore from Trash')
-          );
+      [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Restored from Trash'),
+              () => toast.failure('Failed to restore from Trash')
+            );
+          },
         },
-      },
+      ],
       10_000
     );
 

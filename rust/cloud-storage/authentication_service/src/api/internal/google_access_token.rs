@@ -46,7 +46,7 @@ async fn get_access_token(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to find idp",
+                    message: "unable to find idp".into(),
                 }),
             )
                 .into_response()
@@ -61,7 +61,7 @@ async fn get_access_token(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to fetch links",
+                    message: "unable to fetch links".into(),
                 }),
             )
                 .into_response()
@@ -82,7 +82,7 @@ async fn get_access_token(
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: format!("No {} link found for this user", identity_provider_name)
-                        .as_str(),
+                        .into(),
                 }),
             )
                 .into_response()
@@ -99,7 +99,7 @@ async fn get_access_token(
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             };
             let message = format!("unable to fetch {} access token", identity_provider_name);
-            (status_code, Json(ErrorResponse { message: &message })).into_response()
+            (status_code, Json(ErrorResponse { message: message.into() })).into_response()
         })?;
 
     Ok((

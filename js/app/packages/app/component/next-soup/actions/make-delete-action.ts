@@ -1,3 +1,4 @@
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
@@ -77,16 +78,19 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
           ? `Moved ${emailEntities.length} items to Trash`
           : 'Moved to Trash',
         undefined,
-        {
-          text: 'Undo',
-          onClick: () => {
-            if (toastId != null) toast.dismiss(toastId);
-            handle.undo().then(
-              () => toast.success('Restored from Trash'),
-              () => toast.failure('Failed to restore from Trash')
-            );
+        [
+          {
+            label: 'Undo',
+            icon: ArrowCounterClockwise,
+            onClick: () => {
+              if (toastId != null) toast.dismiss(toastId);
+              handle.undo().then(
+                () => toast.success('Restored from Trash'),
+                () => toast.failure('Failed to restore from Trash')
+              );
+            },
           },
-        },
+        ],
         10_000
       );
 

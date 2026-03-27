@@ -14,11 +14,12 @@ use axum::{
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::document::response::DocumentResponseMetadata;
 use model::{
-    document::{DocumentBasic, FileType, FileTypeExt, build_extensionless_document_key},
+    document::{DocumentBasic, FileType, FileTypeExt},
     response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
 use models_permissions::share_permission::access_level::EditAccessLevel;
+use s3_key::build_cloud_storage_bucket_document_key;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -114,7 +115,7 @@ pub async fn handler(
         }
     };
 
-    let key = build_extensionless_document_key(
+    let key = build_cloud_storage_bucket_document_key(
         document.owner.as_ref(),
         &document.document_id,
         document.document_version_id,

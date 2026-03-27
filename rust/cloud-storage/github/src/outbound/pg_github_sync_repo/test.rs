@@ -224,15 +224,25 @@ async fn test_get_user_team_ids(pool: Pool<Postgres>) {
     let repo = PgGithubSyncRepo::new(pool);
 
     let team_ids = repo.get_user_team_ids("macro|user@user.com").await.unwrap();
+    assert_eq!(team_ids.len(), 1);
+    assert_eq!(
+        team_ids[0],
+        "dddddddd-dddd-dddd-dddd-dddddddddddd"
+            .parse::<Uuid>()
+            .unwrap()
+    );
 
-    assert_eq!(team_ids.len(), 2);
-    let expected: Vec<Uuid> = vec![
-        "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap(),
-        "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap(),
-    ];
-    for id in &expected {
-        assert!(team_ids.contains(id));
-    }
+    let team_ids2 = repo
+        .get_user_team_ids("macro|user2@user.com")
+        .await
+        .unwrap();
+    assert_eq!(team_ids2.len(), 1);
+    assert_eq!(
+        team_ids2[0],
+        "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+            .parse::<Uuid>()
+            .unwrap()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
