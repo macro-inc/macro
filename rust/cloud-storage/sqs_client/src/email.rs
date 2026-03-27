@@ -44,7 +44,7 @@ impl SQS {
             return enqueue_link_manager_notification(&self.inner, link_manager_queue, message)
                 .await;
         }
-        Err(anyhow::anyhow!("link_manzager_queue is not configured"))
+        anyhow::bail!("link_manager_queue is not configured")
     }
 
     /// Sends a message to the email backfill queue
@@ -126,6 +126,7 @@ impl EmailMessageEnqueuer for SQS {
         .await
     }
 
+    #[tracing::instrument(skip(self, messages, labels_to_add, labels_to_remove), err)]
     async fn enqueue_gmail_ops_modify_labels_batch(
         &self,
         link_id: Uuid,
