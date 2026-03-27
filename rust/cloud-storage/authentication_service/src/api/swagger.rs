@@ -120,7 +120,6 @@ use model::user::{
                 teams::inbound::axum_router::patch_team_user_tier::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::reinvite_to_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType>,

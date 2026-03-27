@@ -6,7 +6,7 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 
 use crate::domain::model::{
     CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
-    PatchTeamUserTierRequest, ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
+    PatchTeamUserTierRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
     TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
 };
@@ -165,18 +165,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         req: &PatchTeamRequest,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
-    /// Gets detailed info about a team invite by id
-    fn get_team_invite_details_by_id(
-        &self,
-        invite_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<TeamInviteDetails, TeamError>> + Send;
-
-    /// Updates the last_sent_at field of a team invite
-    fn update_team_invite_last_sent_at(
-        &self,
-        invite_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send;
-
     /// Gets the role of a user in a team
     fn get_team_role(
         &self,
@@ -297,13 +285,6 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         req: &PatchTeamRequest,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
-
-    /// Reinvites a user to a team (rate-limited to 5 min)
-    fn reinvite_to_team(
-        &self,
-        team_invite_id: &uuid::Uuid,
-        invited_by: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<TeamInviteDetails, ReinviteError>> + Send;
 
     /// Gets the role of a user in a team
     fn get_team_role(

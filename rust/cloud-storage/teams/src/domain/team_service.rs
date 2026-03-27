@@ -19,7 +19,7 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
-        PatchTeamUserTierRequest, ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
+        PatchTeamUserTierRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
         TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier,
         TeamWithMembers,
@@ -479,54 +479,6 @@ where
         req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
         self.team_repository.patch_team(team_id, req).await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn reinvite_to_team(
-        &self,
-        team_invite_id: &uuid::Uuid,
-        invited_by: &MacroUserIdStr<'_>,
-    ) -> Result<TeamInviteDetails, ReinviteError> {
-        let invite = self
-            .team_repository
-            .get_team_invite_details_by_id(team_invite_id)
-            .await
-            .map_err(|e| match e {
-                TeamError::TeamInviteDoesNotExist => ReinviteError::InviteNotFound,
-                other => ReinviteError::StorageLayerError(other.into()),
-            })?;
-
-        // Rate limit: must wait 5 minutes between reinvites
-        let five_minutes_ago = chrono::Utc::now() - chrono::Duration::minutes(5);
-        if invite.last_sent_at > five_minutes_ago {
-            return Err(ReinviteError::TooManyRequests);
-        }
-
-        self.team_repository
-            .update_team_invite_last_sent_at(team_invite_id)
-            .await
-            .map_err(|e| ReinviteError::StorageLayerError(e.into()))?;
-
-        // Send notification
-        let team_name = self
-            .team_repository
-            .get_team_name(&invite.team_id)
-            .await
-            .map_err(|e| ReinviteError::StorageLayerError(e.into()))?;
-
-        let invited_by = invited_by.clone().into_owned();
-        self.send_invite_notification(
-            &invite.team_id,
-            team_invite_id,
-            &invite.email,
-            &team_name,
-            &invited_by,
-        )
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "unable to send reinvite notification"))
-        .ok();
-
-        Ok(invite)
     }
 
     #[tracing::instrument(skip(self), err)]

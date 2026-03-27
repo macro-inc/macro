@@ -54,6 +54,7 @@ async-stripe = { workspace = true, default-features = false, features = [
   "runtime-tokio-hyper",
 ], optional = true } # Outbound dependencies
 sqlx = { workspace = true, optional = true }
+url = { workspace = true }
 urlencoding = { workspace = true }
 
 [dev-dependencies]

@@ -400,20 +400,6 @@ pub enum JoinTeamError {
     AddRolesToUserError(#[from] UserRolesAndPermissionsError),
 }
 
-/// Errors for reinviting a user to a team
-#[derive(Debug, thiserror::Error)]
-pub enum ReinviteError {
-    /// The invite was sent too recently
-    #[error("Too many requests")]
-    TooManyRequests,
-    /// The invite does not exist
-    #[error("Invite not found")]
-    InviteNotFound,
-    /// Storage layer error
-    #[error("Storage layer error {0}")]
-    StorageLayerError(#[from] anyhow::Error),
-}
-
 /// Errors for revoking permissions for team members
 #[derive(Debug, thiserror::Error)]
 pub enum RevokePermissionsForTeamMembersError {
