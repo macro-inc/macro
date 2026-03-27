@@ -31,6 +31,13 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 
 export type FilterOption = {
+  id: FilterID;
+  label: string;
+  icon?: () => JSX.Element;
+};
+
+/** Options whose ids are arbitrary strings (e.g. contact IDs), not FilterIDs. */
+type SearchableOption = {
   id: string;
   label: string;
   icon?: () => JSX.Element;
@@ -308,7 +315,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
 /** Searchable submenu for filters with many options like assignees */
 const SearchableFilterSubmenu = (props: {
   label: string;
-  options: Accessor<FilterOption[]>;
+  options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
   onToggle: (id: string) => void;
   placeholder?: string;
@@ -500,13 +507,13 @@ export const UnifiedFilterDropdown = () => {
   };
 
   const toggleFilter = (optionId: string) => {
-    soup.filters.toggle({ or: [optionId as FilterID] });
+    soup.filters.toggle({ or: [optionId] });
   };
 
   // Assignee options for tasks view
-  const assigneeOptions = createMemo((): FilterOption[] => {
+  const assigneeOptions = createMemo((): SearchableOption[] => {
     const currentUserId = userId();
-    const noAssigneeOption: FilterOption = {
+    const noAssigneeOption: SearchableOption = {
       id: NO_ASSIGNEE,
       label: 'Unassigned',
       icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,

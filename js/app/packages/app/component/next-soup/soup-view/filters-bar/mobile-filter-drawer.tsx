@@ -13,6 +13,7 @@ import { Button } from './button';
 import {
   VIEW_FILTER_CATEGORIES,
   buildContactLabel,
+  type FilterOption,
 } from './unified-filter-dropdown';
 import { ActiveFilterChips } from './active-filter-chips';
 import { useFilterRefinements } from './use-filter-refinements';
@@ -22,7 +23,6 @@ import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
-import type { FilterID } from '@app/component/next-soup/filters';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { UserIcon } from '@core/component/UserIcon';
 
@@ -59,8 +59,8 @@ export const MobileFilterDrawer = () => {
 
   const hasFiltersOrCategories = () => categories().length > 0 || isTasksView();
 
-  const toggleFilter = (optionId: string) => {
-    soup.filters.toggle({ or: [optionId as FilterID] });
+  const toggleFilter = (optionId: FilterOption['id']) => {
+    soup.filters.toggle({ or: [optionId] });
   };
 
   const toggleAssignee = (id: string) => {
@@ -126,7 +126,7 @@ export const MobileFilterDrawer = () => {
 
         <Drawer.Portal>
           <Drawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
-          <Drawer.Content class="fixed bottom-0 left-0 right-0 z-modal bg-menu rounded-t-lg shadow-lg flex flex-col h-[80dvh] border-l border-r border-t border-edge transition-transform duration-100 ease-out data-[closing]:ease-in">
+          <Drawer.Content class="fixed bottom-0 left-0 right-0 z-modal bg-menu rounded-t-lg shadow-lg flex flex-col h-[80dvh] border-l border-r border-t border-edge transition-transform duration-100 ease-out data-[closing]:ease-in pb-(--safe-bottom)">
             {/* Drag handle */}
             <div class="flex justify-center pt-3 pb-1 shrink-0">
               <div class="w-10 h-1 rounded-full bg-edge-muted" />
@@ -165,57 +165,72 @@ export const MobileFilterDrawer = () => {
                   defaultValue={[categories()[0]?.id ?? 'assignee']}
                 >
                   <For each={categories()}>
-                    {(category) => (
-                      <Accordion.Item
-                        value={category.id}
-                        class="border-b border-edge-muted/30 last:border-b-0"
-                      >
-                        <Accordion.Header>
-                          <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
-                            <span class="font-medium">{category.label}</span>
-                            <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-[expanded]:rotate-180" />
-                          </Accordion.Trigger>
-                        </Accordion.Header>
-                        <Accordion.Content class="pb-1">
-                          <For each={category.options}>
-                            {(option) => {
-                              const active = () =>
-                                soup.filters.isActive(option.id);
-                              return (
-                                <button
-                                  type="button"
-                                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
-                                  onClick={() => toggleFilter(option.id)}
-                                >
-                                  <span
-                                    class={cn(
-                                      'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                                      active()
-                                        ? 'bg-accent border-accent'
-                                        : 'border-edge'
-                                    )}
+                    {(category) => {
+                      const activeCount = createMemo(
+                        () =>
+                          category.options.filter((o) =>
+                            soup.filters.isActive(o.id)
+                          ).length
+                      );
+                      return (
+                        <Accordion.Item
+                          value={category.id}
+                          class="border-b border-edge-muted/30 last:border-b-0"
+                        >
+                          <Accordion.Header>
+                            <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
+                              <span class="font-medium">{category.label}</span>
+                              <div class="flex items-center gap-2">
+                                <Show when={activeCount() > 0}>
+                                  <span class="group-data-[expanded]:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+                                    {activeCount()}
+                                  </span>
+                                </Show>
+                                <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-[expanded]:rotate-180" />
+                              </div>
+                            </Accordion.Trigger>
+                          </Accordion.Header>
+                          <Accordion.Content class="pb-1">
+                            <For each={category.options}>
+                              {(option) => {
+                                const active = () =>
+                                  soup.filters.isActive(option.id);
+                                return (
+                                  <button
+                                    type="button"
+                                    class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                                    onClick={() => toggleFilter(option.id)}
                                   >
-                                    <Show when={active()}>
-                                      <CheckIcon class="size-2.5 text-page" />
+                                    <span
+                                      class={cn(
+                                        'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                        active()
+                                          ? 'bg-accent border-accent'
+                                          : 'border-edge'
+                                      )}
+                                    >
+                                      <Show when={active()}>
+                                        <CheckIcon class="size-2.5 text-page" />
+                                      </Show>
+                                    </span>
+                                    <Show when={option.icon}>
+                                      {(icon) => (
+                                        <span class="size-4 flex items-center justify-center shrink-0">
+                                          {icon()()}
+                                        </span>
+                                      )}
                                     </Show>
-                                  </span>
-                                  <Show when={option.icon}>
-                                    {(icon) => (
-                                      <span class="size-4 flex items-center justify-center shrink-0">
-                                        {icon()()}
-                                      </span>
-                                    )}
-                                  </Show>
-                                  <span class={cn('flex-1 truncate')}>
-                                    {option.label}
-                                  </span>
-                                </button>
-                              );
-                            }}
-                          </For>
-                        </Accordion.Content>
-                      </Accordion.Item>
-                    )}
+                                    <span class={cn('flex-1 truncate')}>
+                                      {option.label}
+                                    </span>
+                                  </button>
+                                );
+                              }}
+                            </For>
+                          </Accordion.Content>
+                        </Accordion.Item>
+                      );
+                    }}
                   </For>
 
                   {/* Assignee section for tasks view */}
@@ -227,7 +242,14 @@ export const MobileFilterDrawer = () => {
                       <Accordion.Header>
                         <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
                           <span class="font-medium">Assignee</span>
-                          <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-[expanded]:rotate-180" />
+                          <div class="flex items-center gap-2">
+                            <Show when={assigneeFilter().length > 0}>
+                              <span class="group-data-[expanded]:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+                                {assigneeFilter().length}
+                              </span>
+                            </Show>
+                            <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-[expanded]:rotate-180" />
+                          </div>
                         </Accordion.Trigger>
                       </Accordion.Header>
                       <Accordion.Content class="pb-1">
