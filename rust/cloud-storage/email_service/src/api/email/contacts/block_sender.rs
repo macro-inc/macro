@@ -62,7 +62,7 @@ pub struct BlockSenderRequest {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx), err)]
+#[tracing::instrument(skip(ctx, link, req), fields(link_id = %link.id), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     link: Extension<Link>,

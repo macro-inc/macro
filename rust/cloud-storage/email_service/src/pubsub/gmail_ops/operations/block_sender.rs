@@ -4,15 +4,14 @@ use models_email::gmail::gmail_ops::BlockSenderPayload;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use std::result;
 
 /// Creates a filter to block a sender in Gmail.
-#[tracing::instrument(skip(ctx, link))]
+#[tracing::instrument(skip(ctx, link), err)]
 pub async fn block_sender(
     ctx: &GmailOpsContext,
     link: &Link,
     payload: &BlockSenderPayload,
-) -> result::Result<(), ProcessingError> {
+) -> Result<(), ProcessingError> {
     check_gmail_rate_limit(
         ctx,
         link.id,

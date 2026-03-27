@@ -11,7 +11,6 @@ use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
-use std::result;
 use uuid::Uuid;
 
 /// Processes a message from the gmail ops queue.
@@ -49,11 +48,11 @@ pub async fn process_message(
     }
 }
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, data), err)]
 async fn inner_process_message(
     ctx: &GmailOpsContext,
     data: &GmailOpsPubsubMessage,
-) -> result::Result<(), ProcessingError> {
+) -> Result<(), ProcessingError> {
     let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, data.link_id)
         .await
         .map_err(|e| {
@@ -110,7 +109,7 @@ fn extract_gmail_ops_message(
 pub async fn fetch_gmail_token(
     ctx: &GmailOpsContext,
     link: &Link,
-) -> result::Result<String, ProcessingError> {
+) -> Result<String, ProcessingError> {
     let gmail_access_token = crate::util::gmail::auth::fetch_token_or_delete_on_revocation(
         link,
         &ctx.redis_client,
@@ -137,7 +136,7 @@ pub async fn check_gmail_rate_limit(
     link_id: Uuid,
     operation: GmailApiOperation,
     gmail_ops_operation: GmailOpsOperation,
-) -> result::Result<(), ProcessingError> {
+) -> Result<(), ProcessingError> {
     if !ctx
         .redis_client
         .is_rate_limited(RateLimitArgs {
@@ -162,7 +161,7 @@ pub async fn check_gmail_rate_limit(
             })
             .await
             .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
+                ProcessingError::Retryable(DetailedError {
                     reason: FailureReason::SqsEnqueueFailed,
                     source: e.context("Failed to enqueue gmail ops retry message"),
                 })

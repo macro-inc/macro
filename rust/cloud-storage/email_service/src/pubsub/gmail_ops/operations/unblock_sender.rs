@@ -4,15 +4,14 @@ use models_email::gmail::gmail_ops::UnblockSenderPayload;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use std::result;
 
 /// Finds and removes a block filter for a sender in Gmail.
-#[tracing::instrument(skip(ctx, link))]
+#[tracing::instrument(skip(ctx, link), err)]
 pub async fn unblock_sender(
     ctx: &GmailOpsContext,
     link: &Link,
     payload: &UnblockSenderPayload,
-) -> result::Result<(), ProcessingError> {
+) -> Result<(), ProcessingError> {
     check_gmail_rate_limit(
         ctx,
         link.id,
@@ -35,15 +34,9 @@ pub async fn unblock_sender(
         })?;
 
     if result {
-        tracing::debug!(
-            email_address = %payload.email_address,
-            "Successfully unblocked sender in Gmail"
-        );
+        tracing::debug!("Successfully unblocked sender in Gmail");
     } else {
-        tracing::warn!(
-            email_address = %payload.email_address,
-            "No block filter found for sender in Gmail"
-        );
+        tracing::warn!("No block filter found for sender in Gmail");
     }
 
     Ok(())

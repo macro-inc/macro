@@ -4,15 +4,14 @@ use models_email::gmail::gmail_ops::DeleteLabelPayload;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use std::result;
 
 /// Deletes a label from Gmail.
-#[tracing::instrument(skip(ctx, link))]
+#[tracing::instrument(skip(ctx, link), err)]
 pub async fn delete_label(
     ctx: &GmailOpsContext,
     link: &Link,
     payload: &DeleteLabelPayload,
-) -> result::Result<(), ProcessingError> {
+) -> Result<(), ProcessingError> {
     check_gmail_rate_limit(
         ctx,
         link.id,

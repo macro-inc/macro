@@ -7,16 +7,15 @@ use models_email::gmail::operations::GmailApiOperation;
 use models_email::service;
 use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use std::result;
 
 /// Modifies labels for a single message in Gmail. Reverts DB changes on permanent failure.
 /// Transient errors (5xx, network) are retried; permanent errors (4xx) trigger revert.
-#[tracing::instrument(skip(ctx, link))]
+#[tracing::instrument(skip(ctx, link), err)]
 pub async fn modify_message_labels(
     ctx: &GmailOpsContext,
     link: &Link,
     payload: &ModifyMessageLabelsPayload,
-) -> result::Result<(), ProcessingError> {
+) -> Result<(), ProcessingError> {
     check_gmail_rate_limit(
         ctx,
         link.id,

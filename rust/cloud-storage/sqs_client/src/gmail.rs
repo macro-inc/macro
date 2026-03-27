@@ -34,7 +34,7 @@ impl SQS {
         if let Some(gmail_inbox_sync_queue) = &self.gmail_inbox_sync_queue {
             return enqueue_notification(&self.inner, gmail_inbox_sync_queue, &message).await;
         }
-        anyhow::bail!("gmail_inbox_sync__queue is not configured")
+        anyhow::bail!("gmail_inbox_sync_queue is not configured")
     }
 
     /// Sends a notification message to the Gmail retry inbox sync queue
@@ -90,13 +90,26 @@ impl SQS {
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         for chunk in entries.chunks(MAX_BATCH_SIZE) {
-            self.inner
+            let result = self
+                .inner
                 .send_message_batch()
                 .queue_url(gmail_ops_queue)
                 .set_entries(Some(chunk.to_vec()))
                 .send()
                 .await
                 .context("Failed to send gmail ops batch")?;
+
+            let failed = result.failed();
+            if !failed.is_empty() {
+                tracing::error!(
+                    failed_count = failed.len(),
+                    "Partial failure in gmail ops batch send"
+                );
+                anyhow::bail!(
+                    "Partial batch failure: {} messages failed to send",
+                    failed.len()
+                );
+            }
         }
 
         Ok(())

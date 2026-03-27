@@ -4,7 +4,7 @@ use models_email::service::pubsub::{DetailedError, ProcessingError};
 use sqs_worker::cleanup_message;
 
 /// Handles non-retryable errors by cleaning up the SQS message.
-#[tracing::instrument(skip(ctx, message))]
+#[tracing::instrument(skip(ctx, message), err)]
 pub async fn handle_non_retryable_error(
     ctx: &GmailOpsContext,
     message: &aws_sdk_sqs::types::Message,
@@ -18,7 +18,7 @@ pub async fn handle_non_retryable_error(
 }
 
 /// Handles retryable errors by leaving the message in the queue.
-#[tracing::instrument]
+#[tracing::instrument(skip(data, e), err)]
 pub async fn handle_retryable_error(
     data: &GmailOpsPubsubMessage,
     e: &DetailedError,
