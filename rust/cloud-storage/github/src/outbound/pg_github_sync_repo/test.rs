@@ -227,14 +227,21 @@ async fn test_get_user_team_ids(pool: Pool<Postgres>) {
     assert_eq!(team_ids.len(), 1);
     assert_eq!(
         team_ids[0],
-        "dddddddd-dddd-dddd-dddd-dddddddddddd".parse::<Uuid>().unwrap()
+        "dddddddd-dddd-dddd-dddd-dddddddddddd"
+            .parse::<Uuid>()
+            .unwrap()
     );
 
-    let team_ids2 = repo.get_user_team_ids("macro|user2@user.com").await.unwrap();
+    let team_ids2 = repo
+        .get_user_team_ids("macro|user2@user.com")
+        .await
+        .unwrap();
     assert_eq!(team_ids2.len(), 1);
     assert_eq!(
         team_ids2[0],
-        "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse::<Uuid>().unwrap()
+        "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+            .parse::<Uuid>()
+            .unwrap()
     );
 }
 
