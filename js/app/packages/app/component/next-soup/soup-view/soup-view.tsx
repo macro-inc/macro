@@ -647,12 +647,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
         soup.sort.setAll(initial.sort ?? []);
         setActiveTab(initial.activeTab);
         setAssigneeFilter(initial.assigneeFilter ?? []);
-        if (initial.previewEntity) {
-          soup.setPreviewEntity(initial.previewEntity);
-        }
+        soup.setPreviewEntity(initial.previewEntity);
       });
-    } else if (props.initialClientFilters) {
-      soup.filters.set(props.initialClientFilters);
+    } else {
+      soup.setPreviewEntity(undefined);
+      if (props.initialClientFilters) {
+        soup.filters.set(props.initialClientFilters);
+      }
     }
   });
 
