@@ -771,32 +771,35 @@ function MessageListImpl(props: MessageListProps) {
     on(filteredTopLevelMessages, (newFilteredMessages, oldFilteredMessages) => {
       const handle = virtualHandle();
       if (!handle) return;
-      const lastIndexInView = handle.findItemIndex(
-        handle.scrollOffset + handle.viewportSize
-      );
-      const lastItemOffset = handle.getItemOffset(
-        (oldFilteredMessages?.length ?? 0) - 1
-      );
-      const viewportSize = handle.viewportSize;
-      if (!isNearBottom() && lastItemOffset > viewportSize) {
-        const prevUnviewedMessages = unviewedMessages();
-        const messages = newFilteredMessages ?? [];
-        const newUnviewedMessages = messages
-          .slice(lastIndexInView + 1)
-          .filter(
-            (msg) =>
-              msg.sender_id !== userId() &&
-              !oldFilteredMessages?.some((m) => m.id === msg.id) &&
-              !prevUnviewedMessages?.some((m) => m.id === msg.id)
-          );
 
-        if (newUnviewedMessages.length > 0) {
-          setUnviewedMessages((prev) => [
-            ...(prev ?? []),
-            ...newUnviewedMessages,
-          ]);
-          setDismissUnviewedMessages(false);
-        }
+      // Don't track unviewed messages if we're near the bottom
+      if (isNearBottom()) return;
+
+      // Find the last visible item index
+      const bottomOfViewport = handle.scrollOffset + handle.viewportSize;
+      const lastIndexInView = handle.findItemIndex(bottomOfViewport);
+
+      // Only track if we have enough messages to scroll
+      const oldLength = oldFilteredMessages?.length ?? 0;
+      if (oldLength === 0) return;
+
+      const prevUnviewedMessages = unviewedMessages();
+      const messages = newFilteredMessages ?? [];
+      const newUnviewedMessages = messages
+        .slice(lastIndexInView + 1)
+        .filter(
+          (msg) =>
+            msg.sender_id !== userId() &&
+            !oldFilteredMessages?.some((m) => m.id === msg.id) &&
+            !prevUnviewedMessages?.some((m) => m.id === msg.id)
+        );
+
+      if (newUnviewedMessages.length > 0) {
+        setUnviewedMessages((prev) => [
+          ...(prev ?? []),
+          ...newUnviewedMessages,
+        ]);
+        setDismissUnviewedMessages(false);
       }
     })
   );
@@ -837,23 +840,36 @@ function MessageListImpl(props: MessageListProps) {
       setDismissJumpToLatest(false);
     }
 
+    // Clear unviewed messages when we scroll to see them or reach the bottom
     const messages = unviewedMessages();
-    if (messages?.length) {
-      const firstUnviewed = messages[0];
-      const firstUnviewedIndex = props
-        .orderedMessages()
-        ?.findIndex((m) => m.id === firstUnviewed.id);
 
-      if (
-        firstUnviewedIndex !== undefined &&
-        firstUnviewedIndex >= 0 &&
-        (virtualHandle()?.findItemIndex(
-          (virtualHandle()?.scrollOffset ?? 0) +
-            (virtualHandle()?.viewportSize ?? 0)
-        ) ?? 0) >= firstUnviewedIndex
-      ) {
-        setUnviewedMessages(undefined);
-      }
+    if (!messages?.length) return;
+
+    if (nearBottom) {
+      setUnviewedMessages(undefined);
+      return;
+    }
+
+    const handle = virtualHandle();
+    if (!handle) return;
+
+    const firstUnviewed = messages[0];
+    const topLevelMessages = filteredTopLevelMessages();
+    const firstUnviewedIndex = topLevelMessages.findIndex(
+      (m) => m.id === firstUnviewed.id
+    );
+
+    if (firstUnviewedIndex === -1) {
+      // Message no longer exists in the list
+      setUnviewedMessages(undefined);
+      return;
+    }
+
+    const bottomOfViewport = handle.scrollOffset + handle.viewportSize;
+    const lastVisibleIndex = handle.findItemIndex(bottomOfViewport);
+
+    if (lastVisibleIndex >= firstUnviewedIndex) {
+      setUnviewedMessages(undefined);
     }
   };
 
