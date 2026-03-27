@@ -1,7 +1,6 @@
 use axum::extract::{Path, State};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::domain::{model::RemoveUserFromTeamError, team_repo::TeamService};
 
@@ -36,7 +35,6 @@ pub struct Param {
 pub async fn handler<T: TeamService>(
     _access: TeamAccessRoleExtractor<super::middleware::OwnerRole, T>,
     State(state): State<TeamRouterState<T>>,
-    _user_context: MacroUserExtractor,
     Path(Param {
         team_id,
         remove_user_id,
