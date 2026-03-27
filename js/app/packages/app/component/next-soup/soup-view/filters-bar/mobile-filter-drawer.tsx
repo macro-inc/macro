@@ -125,7 +125,10 @@ export const MobileFilterDrawer = () => {
 
         <Drawer.Portal>
           <Drawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
-          <Drawer.Content class="fixed bottom-0 left-0 right-0 z-modal bg-menu rounded-t-lg shadow-lg flex flex-col h-[80dvh] border-l border-r border-t border-edge transition-transform duration-100 ease-out data-[closing]:ease-in pb-(--safe-bottom)">
+          <Drawer.Content
+            aria-label="Filters"
+            class="fixed bottom-0 left-0 right-0 z-modal bg-menu rounded-t-lg shadow-lg flex flex-col h-[80dvh] border-l border-r border-t border-edge transition-transform duration-100 ease-out data-[closing]:ease-in pb-(--safe-bottom)"
+          >
             {/* Drag handle */}
             <div class="flex justify-center pt-3 pb-1 shrink-0">
               <div class="w-10 h-1 rounded-full bg-edge-muted" />
@@ -177,7 +180,7 @@ export const MobileFilterDrawer = () => {
                           class="border-b border-edge-muted/30 last:border-b-0"
                         >
                           <Accordion.Header>
-                            <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
+                            <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset group">
                               <span class="font-medium">{category.label}</span>
                               <div class="flex items-center gap-2">
                                 <Show when={activeCount() > 0}>
@@ -241,7 +244,7 @@ export const MobileFilterDrawer = () => {
                       class="border-b border-edge-muted/30 last:border-b-0"
                     >
                       <Accordion.Header>
-                        <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
+                        <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset group">
                           <span class="font-medium">Assignee</span>
                           <div class="flex items-center gap-2">
                             <Show when={assigneeFilter().length > 0}>
