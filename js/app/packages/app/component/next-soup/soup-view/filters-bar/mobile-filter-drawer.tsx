@@ -198,6 +198,8 @@ export const MobileFilterDrawer = () => {
                                 return (
                                   <button
                                     type="button"
+                                    role="checkbox"
+                                    aria-checked={active()}
                                     class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
                                     onClick={() => toggleFilter(option.id)}
                                   >
@@ -258,6 +260,7 @@ export const MobileFilterDrawer = () => {
                           <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                           <input
                             type="text"
+                            aria-label="Search assignees"
                             value={assigneeSearch()}
                             onInput={(e) =>
                               setAssigneeSearch(e.currentTarget.value)
@@ -273,6 +276,8 @@ export const MobileFilterDrawer = () => {
                             return (
                               <button
                                 type="button"
+                                role="checkbox"
+                                aria-checked={active()}
                                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
                                 onClick={() => toggleAssignee(option.id)}
                               >
