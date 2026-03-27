@@ -163,6 +163,7 @@ const listStateCache = new Map<
   string,
   {
     focus: string | undefined;
+    searchText: string;
     virtualCache?: CacheSnapshot;
     scrollOffset?: number;
   }
@@ -332,6 +333,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     source,
     rows,
     searchText,
+    setSearchText,
     setQueryFilters,
     queryFilters,
     featuredIds,
@@ -686,6 +688,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (isProjectList) return;
     const virtualHandle = virtualizerHandle();
     listStateCache.set(cacheKey, {
+      searchText: searchText(),
       focus: soup.focus.id(),
       virtualCache: virtualHandle?.cache,
       scrollOffset: virtualHandle?.scrollOffset,
@@ -700,6 +703,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     const cached = listStateCache.get(cacheKey);
     if (cached) {
+      setSearchText(cached.searchText);
       soup.focus.set(cached.focus);
       virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
       registerFocusEffects(false);
