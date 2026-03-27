@@ -187,7 +187,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             },
             project_filters: { project_ids: EXCLUDE },
           },
-          clientFilters: { and: ['not-task'], or: ['document', 'file'] },
+          clientFilters: { and: ['document-or-file'] },
         };
       },
       shared: () => ({
@@ -199,10 +199,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           project_filters: { project_ids: EXCLUDE },
         },
-        clientFilters: {
-          and: ['not-task', 'shared-entity'],
-          or: ['document', 'file'],
-        },
+        clientFilters: { and: ['document-or-file', 'shared-entity'] },
       }),
       attachments: () => ({
         queryFilters: {
@@ -212,14 +209,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           project_filters: { project_ids: EXCLUDE },
         },
-        clientFilters: { and: ['not-task'], or: ['document', 'file'] },
+        clientFilters: { and: ['document-or-file'] },
       }),
       all: () => ({
         queryFilters: {
           ...QUERY_FILTERS.documentAndFile,
           project_filters: { project_ids: EXCLUDE },
         },
-        clientFilters: { and: ['not-task'], or: ['document', 'file'] },
+        clientFilters: { and: ['document-or-file'] },
       }),
     },
   },
