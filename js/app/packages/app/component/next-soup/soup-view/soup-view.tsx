@@ -89,6 +89,7 @@ import {
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
+import { SettingsButton } from '@app/component/settings/SettingsButton';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   SplitHeaderLeft,
@@ -258,6 +259,9 @@ export const SoupView = (props: SoupViewProps) => {
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
+              <Show when={isMobile()}>
+                <SettingsButton />
+              </Show>
               <Show when={!isComponentListView('search')}>
                 <CollapsibleHeaderItem
                   id="search"
