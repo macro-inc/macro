@@ -455,7 +455,7 @@ export function useHotkeyDOMScope(
   };
 
   const attachFn = (el: Element) => {
-    if (!el) return console.error('');
+    if (!el) return console.error('Trying to attach hotkeys to an element that does exist.');
     const DOMScope = hotkeyScopeTree.get(scopeId);
     // Attach this scope to the closest parent scope.
     // Note: this only works in "ideal" circumstances, where children are attached sequentially after parents. This is not always the case.
