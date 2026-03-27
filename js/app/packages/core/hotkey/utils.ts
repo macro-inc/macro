@@ -571,7 +571,8 @@ export function getScopeElement(scopeId: string): Element | null {
 }
 
 // Returns the id of the closest parent scope, or 'global' if no parent scope is found.
-export function findClosestParentScopeId(element: Element) {
+export function findClosestParentScopeId(element: Element | null | undefined) {
+  if (!element) return 'global';
   const parentElement = element.parentElement;
   if (!parentElement) return 'global';
   const closestParent = parentElement.closest('[data-hotkey-scope]');
