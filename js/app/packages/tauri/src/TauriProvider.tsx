@@ -1,4 +1,5 @@
 import { isTauri } from '@core/util/platform';
+import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
@@ -84,7 +85,11 @@ export function MaybeTauriProvider(props: { children: JSX.Element }) {
     );
   }
 
-  return props.children;
+  return (
+    <PlatformNotificationProvider>
+      {props.children}
+    </PlatformNotificationProvider>
+  );
 }
 
 /// return the value of the tauri context
