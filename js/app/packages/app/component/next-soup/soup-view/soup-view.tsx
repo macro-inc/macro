@@ -783,6 +783,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   >
                     {(row, i) => {
                       const timestamp = () => {
+                        if (row.original.sortTs) return row.original.sortTs;
+
                         const sort_ = soup.sort.active();
                         if (!sort_.length) return;
 
