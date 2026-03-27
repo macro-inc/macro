@@ -61,6 +61,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Suspense,
   Switch,
@@ -637,21 +638,23 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
   // Set initial state
-  const initial = !persistenceDisabled ? untrack(persistedState) : null;
-  if (initial) {
-    batch(() => {
-      soup.filters.set(initial.filters ?? { and: [], or: [] });
-      setQueryFilters(initial.queryFilters ?? {});
-      soup.sort.setAll(initial.sort ?? []);
-      setActiveTab(initial.activeTab);
-      setAssigneeFilter(initial.assigneeFilter ?? []);
-      if (initial.previewEntity) {
-        soup.setPreviewEntity(initial.previewEntity);
-      }
-    });
-  } else if (props.initialClientFilters) {
-    soup.filters.set(props.initialClientFilters);
-  }
+  onMount(() => {
+    const initial = !persistenceDisabled ? untrack(persistedState) : null;
+    if (initial) {
+      batch(() => {
+        soup.filters.set(initial.filters ?? { and: [], or: [] });
+        setQueryFilters(initial.queryFilters ?? {});
+        soup.sort.setAll(initial.sort ?? []);
+        setActiveTab(initial.activeTab);
+        setAssigneeFilter(initial.assigneeFilter ?? []);
+        if (initial.previewEntity) {
+          soup.setPreviewEntity(initial.previewEntity);
+        }
+      });
+    } else if (props.initialClientFilters) {
+      soup.filters.set(props.initialClientFilters);
+    }
+  });
 
   createEffect(
     on(
