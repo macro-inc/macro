@@ -128,7 +128,6 @@ function FloatingCreateButton(props: {
 export function MobileDock() {
   const { openWithSplit } = useSplitLayout();
   const location = useLocation();
-  const [moreOpen, setMoreOpen] = createSignal(false);
 
   const isActive = (id: ListView) => {
     const activeContent = globalSplitManager()?.activeSplit()?.content();
@@ -161,7 +160,6 @@ export function MobileDock() {
         icon={AnimatedInboxIcon}
         active={isActive('inbox')}
         onClick={() => {
-          setMoreOpen(false);
           navigate('inbox');
         }}
       />
@@ -174,7 +172,6 @@ export function MobileDock() {
         icon={AnimatedChannelIcon}
         active={isActive('channels')}
         onClick={() => {
-          setMoreOpen(false);
           navigate('channels');
         }}
       />
@@ -197,7 +194,6 @@ export function MobileDock() {
         icon={AnimatedSearchIcon}
         active={isActive('search')}
         onClick={() => {
-          setMoreOpen(false);
           SearchState.maybeResetState();
           SearchState.open();
         }}
