@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use url::Url;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// Wrapper for the referral code to make it type safe
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +35,7 @@ pub struct InviteToMacro {
     /// and reward them.
     pub referral_code: ReferralCode,
     /// The sender's profile picture URL, if available.
-    pub sender_profile_picture_url: Option<String>,
+    pub sender_profile_picture_url: Option<Url>,
     /// The sender's display name, if they have set one.
     pub sender_name: Option<String>,
     /// The sender's email address.
@@ -55,7 +56,7 @@ impl Notification for InviteToMacro {
 
 const MINUTES_PER_WEEK: u64 = 60 * 24 * 7;
 
-fn get_url(env: Environment, code: &ReferralCode) -> Url {
+fn signup_url(env: Environment) -> Url {
     let host = match env {
         Environment::Production => "https://macro.com",
         Environment::Develop => "https://dev.macro.com",
@@ -63,6 +64,11 @@ fn get_url(env: Environment, code: &ReferralCode) -> Url {
     };
     let mut url = Url::parse(host).expect("all the inputs are static, valid values");
     url.set_path("/app/signup");
+    url
+}
+
+fn get_url(env: Environment, code: &ReferralCode) -> Url {
+    let mut url = signup_url(env);
     url.query_pairs_mut()
         .clear()
         .append_pair("referral_code", &code.0)
@@ -101,21 +107,34 @@ impl NotificationExtEmail for InviteToMacro {
 }
 
 /// Metadata for when a user is invited to a team.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema, Template)]
 #[serde(rename_all = "camelCase")]
+#[template(path = "invite_to_team.html")]
 pub struct InviteToTeamMetadata {
     /// The name of the team being invited to
     #[serde(alias = "team_name")]
     pub team_name: String,
     /// The unique identifier of the team
     #[serde(alias = "team_id")]
-    pub team_id: String,
+    pub team_id: Uuid,
     /// The user who sent the invitation
     #[serde(alias = "invited_by")]
     #[schema(value_type = String)]
     pub invited_by: MacroUserIdStr<'static>,
     /// Role/permission level in the team
     pub role: Option<String>,
+
+    /// The sender's profile picture URL, if available.
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub sender_profile_picture_url: Option<Url>,
+}
+
+impl InviteToTeamMetadata {
+    /// Returns the signup URL for the current environment.
+    pub fn signup_url(&self) -> Url {
+        signup_url(Environment::new_or_prod())
+    }
 }
 
 impl Notification for InviteToTeamMetadata {
@@ -130,7 +149,9 @@ impl NotificationExtEmail for InviteToTeamMetadata {
                 self.invited_by.as_ref(),
                 self.team_name
             ),
-            body: "Placeholder".to_string(),
+            body: self
+                .render()
+                .expect("InviteToTeamMetadata template render failed in format_email"),
         }
     }
 

@@ -152,28 +152,15 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn send_invite_notification(
         &self,
-        team_id: &uuid::Uuid,
-        team_invite_id: &uuid::Uuid,
-        email: &str,
-        team_name: &str,
-        invited_by: &MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'_>,
+        notification: InviteToTeamMetadata,
     ) -> anyhow::Result<()> {
-        let notification = InviteToTeamMetadata {
-            invited_by: invited_by.clone(),
-            team_name: team_name.to_string(),
-            team_id: team_id.to_string(),
-            role: None,
-        };
-
-        let recipient = MacroUserIdStr::try_from_email(email)
-            .map_err(|e| anyhow::anyhow!("failed to parse email as macro user id: {}", e))?;
-
-        let entity_id = team_invite_id.to_string();
         let request = SendNotificationRequestBuilder {
-            notification_entity: EntityType::Team.with_entity_str(&entity_id),
+            notification_entity: EntityType::Team
+                .with_entity_string(notification.team_id.to_string()),
+            sender_id: Some(notification.invited_by.clone()),
             notification,
-            sender_id: Some(invited_by.clone()),
-            recipient_ids: HashSet::from([recipient]),
+            recipient_ids: HashSet::from([recipient_id]),
         }
         .into_request()
         .with_conn_gateway();
@@ -235,11 +222,15 @@ where
                 let invited_by_owned = invited_by.clone().into_owned();
                 for invite in &invited {
                     self.send_invite_notification(
-                        team_id,
-                        &invite.team_invite_id,
-                        invite.email.as_ref(),
-                        &team_name,
-                        &invited_by_owned,
+                        MacroUserIdStr::try_from_email(invite.email.as_ref())
+                            .expect("this cannot fail"),
+                        InviteToTeamMetadata {
+                            team_id: *team_id,
+                            invited_by: invited_by_owned.clone(),
+                            team_name: team_name.clone(),
+                            role: None,
+                            sender_profile_picture_url: None,
+                        },
                     )
                     .await
                     .inspect_err(

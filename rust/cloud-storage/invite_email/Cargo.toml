@@ -11,8 +11,9 @@ macro_env = { path = "../macro_env" }
 macro_user_id = { path = "../macro_user_id" }
 notification = { path = "../notification" }
 serde = { workspace = true }
-url = { workspace = true }
+url = { workspace = true, features = ["serde"] }
 utoipa = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
