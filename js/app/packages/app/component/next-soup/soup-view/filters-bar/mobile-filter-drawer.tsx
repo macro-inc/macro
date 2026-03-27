@@ -180,7 +180,7 @@ export const MobileFilterDrawer = () => {
                           class="border-b border-edge-muted/30 last:border-b-0"
                         >
                           <Accordion.Header>
-                            <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset group">
+                            <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
                               <span class="font-medium">{category.label}</span>
                               <div class="flex items-center gap-2">
                                 <Show when={activeCount() > 0}>
@@ -244,7 +244,7 @@ export const MobileFilterDrawer = () => {
                       class="border-b border-edge-muted/30 last:border-b-0"
                     >
                       <Accordion.Header>
-                        <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset group">
+                        <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
                           <span class="font-medium">Assignee</span>
                           <div class="flex items-center gap-2">
                             <Show when={assigneeFilter().length > 0}>
