@@ -637,20 +637,24 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
+  // Restore previewEntity synchronously so the first-render effect sees the
+  // correct value and avoids a transient window where previewEntity is undefined.
+  const initialPersistedState = !persistenceDisabled
+    ? untrack(persistedState)
+    : null;
+  soup.setPreviewEntity(initialPersistedState?.previewEntity);
+
   // Set initial state
   onMount(() => {
-    const initial = !persistenceDisabled ? untrack(persistedState) : null;
-    if (initial) {
+    if (initialPersistedState) {
       batch(() => {
-        soup.filters.set(initial.filters ?? { and: [], or: [] });
-        setQueryFilters(initial.queryFilters ?? {});
-        soup.sort.setAll(initial.sort ?? []);
-        setActiveTab(initial.activeTab);
-        setAssigneeFilter(initial.assigneeFilter ?? []);
-        soup.setPreviewEntity(initial.previewEntity);
+        soup.filters.set(initialPersistedState.filters ?? { and: [], or: [] });
+        setQueryFilters(initialPersistedState.queryFilters ?? {});
+        soup.sort.setAll(initialPersistedState.sort ?? []);
+        setActiveTab(initialPersistedState.activeTab);
+        setAssigneeFilter(initialPersistedState.assigneeFilter ?? []);
       });
     } else {
-      soup.setPreviewEntity(undefined);
       if (props.initialClientFilters) {
         soup.filters.set(props.initialClientFilters);
       }
