@@ -99,7 +99,7 @@ members = [
   "properties_service",
   "rate_limit",
   "referral",
-  "referral_invitation",
+  "invite_email",
   "roles_and_permissions",
   "rpc/axum_rpc",
   "rpc/axum_rpc_emit",

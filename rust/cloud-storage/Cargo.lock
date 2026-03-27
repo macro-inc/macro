@@ -5247,6 +5247,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "invite_email"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "macro_env",
+ "macro_user_id",
+ "notification",
+ "serde",
+ "serde_json",
+ "url",
+ "utoipa",
+]
+
+[[package]]
 name = "ip_extractor"
 version = "0.1.0"
 dependencies = [
@@ -6316,6 +6330,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "doppleganger",
+ "invite_email",
  "macro_user_id",
  "mention_utils",
  "model-entity",
@@ -6323,7 +6338,6 @@ dependencies = [
  "models_pagination",
  "notification",
  "paste",
- "referral_invitation",
  "rootcause",
  "serde",
  "serde_json",
@@ -8108,6 +8122,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "http-body-util",
+ "invite_email",
  "ip_extractor",
  "macro_db_migrator",
  "macro_user_id",
@@ -8118,7 +8133,6 @@ dependencies = [
  "model_user",
  "notification",
  "rate_limit",
- "referral_invitation",
  "rootcause",
  "serde",
  "serde_json",
@@ -8130,19 +8144,6 @@ dependencies = [
  "urlencoding",
  "utoipa",
  "uuid",
-]
-
-[[package]]
-name = "referral_invitation"
-version = "0.1.0"
-dependencies = [
- "askama",
- "macro_env",
- "macro_user_id",
- "notification",
- "serde",
- "serde_json",
- "url",
 ]
 
 [[package]]
