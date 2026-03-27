@@ -2068,6 +2068,79 @@
         }
       }
     },
+    "/team/{team_id}/tier": {
+      "patch": {
+        "tags": ["teams::inbound::axum_router::patch_team_user_tier"],
+        "summary": "Updates a team.",
+        "operationId": "patch_team_user_tier",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to update",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTeamUserTierRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user": {
       "post": {
         "tags": ["user::create_user"],
@@ -3321,6 +3394,21 @@
           }
         }
       },
+      "PatchTeamUserTierRequest": {
+        "type": "object",
+        "description": "Request to update a team user's tier",
+        "required": ["team_user_id", "new_tier"],
+        "properties": {
+          "new_tier": {
+            "$ref": "#/components/schemas/TeamUserTier",
+            "description": "The new tier of the team user"
+          },
+          "team_user_id": {
+            "type": "string",
+            "description": "The team user you are updating"
+          }
+        }
+      },
       "PatchUserGroupRequest": {
         "type": "object",
         "required": ["group"],
@@ -3575,6 +3663,11 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["Member", "Admin", "Owner"]
+      },
+      "TeamUserTier": {
+        "type": "string",
+        "description": "Ordered from lowest to highest tier top -> bottom",
+        "enum": ["Haiku", "Sonnet", "Opus"]
       },
       "TeamWithMembers": {
         "type": "object",
