@@ -50,7 +50,7 @@ impl SQS {
     }
 
     /// Sends a message to the Gmail operations queue
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn enqueue_gmail_ops_notification(
         &self,
         message: GmailOpsPubsubMessage,
@@ -63,7 +63,7 @@ impl SQS {
 
     /// Sends a batch of messages to the Gmail operations queue.
     /// Messages are batched into groups of up to 10 (SQS limit).
-    #[tracing::instrument(skip(self, messages), fields(message_count = messages.len()))]
+    #[tracing::instrument(skip(self, messages), fields(message_count = messages.len()), err)]
     pub async fn enqueue_gmail_ops_notifications_batch(
         &self,
         messages: Vec<GmailOpsPubsubMessage>,
@@ -116,7 +116,7 @@ impl SQS {
     }
 
     /// Sends a message to the Gmail operations retry queue
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn enqueue_gmail_ops_retry_notification(
         &self,
         message: GmailOpsPubsubMessage,

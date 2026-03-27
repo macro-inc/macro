@@ -106,6 +106,7 @@ fn extract_gmail_ops_message(
 }
 
 /// Fetches a Gmail access token for use in pubsub workers.
+#[tracing::instrument(skip(ctx, link), err)]
 pub async fn fetch_gmail_token(
     ctx: &GmailOpsContext,
     link: &Link,
@@ -131,6 +132,7 @@ pub async fn fetch_gmail_token(
 /// Uses a two-tier system to prevent rate limit backpressure:
 /// - **Primary worker**: If rate limited, enqueues to retry queue and returns non-retryable error
 /// - **Retry worker**: If rate limited, returns retryable error so it gets tried again later
+#[tracing::instrument(skip(ctx, gmail_ops_operation), err)]
 pub async fn check_gmail_rate_limit(
     ctx: &GmailOpsContext,
     link_id: Uuid,

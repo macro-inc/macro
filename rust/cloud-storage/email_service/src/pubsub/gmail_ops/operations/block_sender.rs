@@ -35,10 +35,7 @@ pub async fn block_sender(
         })?;
 
     if existing_filter.is_some() {
-        tracing::debug!(
-            email_address = %payload.email_address,
-            "Sender is already blocked, skipping"
-        );
+        tracing::debug!("Sender is already blocked, skipping");
         return Ok(());
     }
 
@@ -52,10 +49,7 @@ pub async fn block_sender(
             })
         })?;
 
-    tracing::debug!(
-        email_address = %payload.email_address,
-        "Successfully blocked sender in Gmail"
-    );
+    tracing::debug!("Successfully blocked sender in Gmail");
 
     Ok(())
 }
