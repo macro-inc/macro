@@ -108,6 +108,7 @@ export const useApplyPreset = () => {
 
   const applyTabPreset = (view: ListView, tabId: string): boolean => {
     const config = VIEW_TAB_PRESETS[view];
+    if (!config) return false;
     const resolver = config.tabs[tabId];
     if (!resolver) return false;
 
