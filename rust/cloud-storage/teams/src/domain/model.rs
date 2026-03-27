@@ -6,7 +6,18 @@ use chrono::{DateTime, Utc};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use roles_and_permissions::domain::model::{RoleId, UserRolesAndPermissionsError};
 
-#[derive(Eq, PartialEq, Debug, Clone, Hash, PartialOrd, Copy, std::cmp::Ord, serde::Serialize)]
+#[derive(
+    Eq,
+    PartialEq,
+    Debug,
+    Clone,
+    Hash,
+    PartialOrd,
+    Copy,
+    std::cmp::Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
@@ -140,6 +151,17 @@ pub struct PatchTeamRequest {
     pub name: Option<String>,
 }
 
+/// Request to update a team user's tier
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamUserTierRequest {
+    /// The team user you are updating
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub team_user_id: MacroUserIdStr<'static>,
+    /// The new tier of the team user
+    pub new_tier: TeamUserTier,
+}
+
 /// The Team struct
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -228,6 +250,9 @@ pub enum TeamError {
     /// The team invite does not exist
     #[error("The team invite does not exist")]
     TeamInviteDoesNotExist,
+    /// Bad request
+    #[error("Bad request: {0}")]
+    BadRequest(String),
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

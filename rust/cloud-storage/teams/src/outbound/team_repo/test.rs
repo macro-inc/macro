@@ -595,3 +595,80 @@ async fn test_get_user_remaining_tiers_excluding_nonexistent_team(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_team_member(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // Get existing member
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
+
+    assert_eq!(member.user_id.as_ref(), "macro|user2@user.com");
+    assert_eq!(member.team_id, team_id);
+    assert_eq!(member.role, TeamRole::Member);
+
+    // Get owner
+    let owner_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let member = team_repo.get_team_member(&team_id, &owner_id).await?;
+
+    assert_eq!(member.user_id.as_ref(), "macro|user@user.com");
+    assert_eq!(member.role, TeamRole::Owner);
+
+    // Get non-existent member
+    let missing_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let err = team_repo
+        .get_team_member(&team_id, &missing_id)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
+
+    // Patch tier to Opus
+    team_repo
+        .patch_team_tier(&team_id, &user_id, TeamUserTier::Opus)
+        .await?;
+
+    // Verify the tier was updated
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
+    assert_eq!(member.tier, TeamUserTier::Opus);
+
+    // Patch tier to Haiku
+    team_repo
+        .patch_team_tier(&team_id, &user_id, TeamUserTier::Haiku)
+        .await?;
+
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
+    assert_eq!(member.tier, TeamUserTier::Haiku);
+
+    // Patch tier for non-existent user
+    let missing_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let err = team_repo
+        .patch_team_tier(&team_id, &missing_id, TeamUserTier::Opus)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("not on team"));
+
+    Ok(())
+}

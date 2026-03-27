@@ -19,7 +19,7 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
-        ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
+        PatchTeamUserTierRequest, ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
         TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier,
         TeamWithMembers,
@@ -574,5 +574,36 @@ where
             .get_user_permissions(user_id)
             .await
             .map_err(|e| TeamError::StorageLayerError(e.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_team_user_tier(
+        &self,
+        team_id: &uuid::Uuid,
+        request: &PatchTeamUserTierRequest,
+    ) -> Result<(), TeamError> {
+        let team_member = self
+            .team_repository
+            .get_team_member(team_id, &request.team_user_id)
+            .await?;
+
+        if team_member.tier == request.new_tier {
+            return Err(TeamError::BadRequest(
+                "team tier cannot be the same as before".to_string(),
+            ));
+        }
+
+        let team_subscription_id = self.get_team_subscription(team_id).await?;
+
+        self.customer_repository
+            .update_subscription_tier(&team_subscription_id, team_member.tier, request.new_tier)
+            .await
+            .map_err(|e| TeamError::StorageLayerError(e.into()))?;
+
+        self.team_repository
+            .patch_team_tier(team_id, &request.team_user_id, request.new_tier)
+            .await?;
+
+        Ok(())
     }
 }
