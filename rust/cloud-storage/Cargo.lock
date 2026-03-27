@@ -4382,6 +4382,7 @@ dependencies = [
  "models_email",
  "regex",
  "reqwest",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",

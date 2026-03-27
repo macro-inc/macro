@@ -127,12 +127,10 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let gmail_client = Arc::new(gmail_client);
-    let gmail_label_modifier = email::outbound::GmailClientLabelModifier::new(gmail_client.clone());
     let email_service = EmailRouterState::new(EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
         (*sqs_client).clone(),
-        gmail_label_modifier,
         config.sent_undo_delay_secs,
     ));
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
