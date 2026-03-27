@@ -31,6 +31,7 @@ fn to_chat_err(e: anyhow::Error) -> ChatErr {
 }
 
 /// Postgres adapter for chat repository operations.
+#[derive(Clone)]
 pub struct PgChatRepo {
     pool: PgPool,
 }

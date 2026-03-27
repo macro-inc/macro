@@ -24,8 +24,6 @@ use tokio::sync::Semaphore;
 
 use model::document::{ContentType, FileType};
 
-pub static TEMP_FILE_PREFIX: &str = "temp_files/";
-
 #[derive(Clone, Debug)]
 pub struct S3Client {
     /// Inner S3 client

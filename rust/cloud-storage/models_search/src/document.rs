@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use item_filters::DocumentFilters;
+use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -63,6 +64,10 @@ pub struct DocumentMetadata {
 pub struct DocumentSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the document doesn't exist in the database.
     pub metadata: Option<DocumentMetadata>,
+    /// Entity properties (assignees, status, priority, etc.) for markdown documents.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub properties: Option<Vec<SoupProperty>>,
     #[serde(flatten)]
     pub extra: DocumentSearchResponseItem,
 }

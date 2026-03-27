@@ -2,8 +2,11 @@ use super::*;
 
 fn make_invite() -> InviteToMacro {
     InviteToMacro {
-        recipient_email: EmailStr::try_from("test@example.com".to_string()).unwrap(),
+        recipient_email: EmailStr::try_from("recipient@example.com".to_string()).unwrap(),
         referral_code: ReferralCode("ABC123".to_string()),
+        sender_profile_picture_url: None,
+        sender_name: Some("Test User".to_string()),
+        sender_email: Some("sender@example.com".to_string()),
     }
 }
 
@@ -30,16 +33,40 @@ fn get_url_all_environments() {
 }
 
 #[test]
-fn format_email_does_not_panic() {
+fn format_email_with_sender_name() {
     let invite = make_invite();
     let referral_url = invite.referral_url().to_string();
     let email = invite.format_email();
-    assert!(!email.subject.is_empty());
-    assert!(!email.body.is_empty());
+    assert_eq!(email.subject, "Test User has invited you to join Macro");
     assert!(
         email.body.contains(&referral_url),
         "email body should contain the referral URL"
     );
+}
+
+#[test]
+fn format_email_falls_back_to_email_when_no_name() {
+    let invite = InviteToMacro {
+        sender_name: None,
+        ..make_invite()
+    };
+    let email = invite.format_email();
+    assert_eq!(
+        email.subject,
+        "sender@example.com has invited you to join Macro"
+    );
+    assert!(email.body.contains("sender@example.com"));
+}
+
+#[test]
+fn format_email_falls_back_to_generic_when_no_name_or_email() {
+    let invite = InviteToMacro {
+        sender_name: None,
+        sender_email: None,
+        ..make_invite()
+    };
+    let email = invite.format_email();
+    assert_eq!(email.subject, "A Macro user has invited you to join Macro");
 }
 
 #[test]
@@ -61,4 +88,16 @@ fn serialization_roundtrip() {
     let json = serde_json::to_string(&invite).unwrap();
     let deserialized: InviteToMacro = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.referral_code.0, "ABC123");
+}
+
+#[test]
+fn deserialization_without_sender_email_uses_none() {
+    let json = r#"{
+        "recipient_email": "recipient@example.com",
+        "referral_code": "ABC123",
+        "sender_profile_picture_url": null,
+        "sender_name": "Test User"
+    }"#;
+    let deserialized: InviteToMacro = serde_json::from_str(json).unwrap();
+    assert!(deserialized.sender_email.is_none());
 }

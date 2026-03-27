@@ -80,7 +80,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
   return (
     <SplitHeaderLeft>
       <div class="h-full my-auto flex gap-2 justify-start items-center">
-        <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
+        <div class="ph-no-capture z-3 relative flex items-center gap-2 max-w-full h-full shrink">
           <TopIcon
             channelType={props.channelType}
             participants={props.participants}

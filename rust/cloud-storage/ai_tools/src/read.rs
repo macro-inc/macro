@@ -144,14 +144,12 @@ impl AsyncTool<Arc<ToolScribe>> for ReadThread {
         }
 
         let content = match self.content_type {
-            ContentType::Channel => self.read_channel(&scribe, &request_context).await?,
-            ContentType::ChannelMessage => {
-                self.read_channel_message(&scribe, &request_context).await?
-            }
-            ContentType::ChatThread => self.read_chat_thread(&scribe, &request_context).await?,
-            ContentType::ChatMessage => self.read_chat_messages(&scribe, &request_context).await?,
-            ContentType::EmailThread => self.read_email_thread(&scribe, &request_context).await?,
-            ContentType::EmailMessage => self.read_email_message(&scribe, &request_context).await?,
+            ContentType::Channel => self.read_channel(&scribe).await?,
+            ContentType::ChannelMessage => self.read_channel_message(&scribe).await?,
+            ContentType::ChatThread => self.read_chat_thread(&scribe).await?,
+            ContentType::ChatMessage => self.read_chat_messages(&scribe).await?,
+            ContentType::EmailThread => self.read_email_thread(&scribe).await?,
+            ContentType::EmailMessage => self.read_email_message(&scribe).await?,
             ContentType::Project => self.read_project(&scribe, &request_context).await?,
         };
 
@@ -177,7 +175,6 @@ impl ReadThread {
         Ok(self.ids[0].clone())
     }
 
-    #[allow(deprecated)]
     async fn read_project(
         &self,
         scribe: &ToolScribe,
@@ -188,26 +185,20 @@ impl ReadThread {
             internal_error: anyhow!("Bad tool args"),
         })?;
 
-        scribe
-            .document
-            .fetch_project(id.to_owned(), (*request_context.jwt).clone())
-            .content()
+        let fetcher = scribe.document.fetch_project(id.to_owned());
+        fetcher
+            .content(scribe.document.db(), request_context.user_id.clone())
             .await
             .map_err(|err| ToolCallError {
                 description: "failed to fetch project".into(),
                 internal_error: err,
             })
-            .map(|s| ReadContent::ItemPreviews {
-                formatted_preview: s.to_string(),
+            .map(|f| ReadContent::ItemPreviews {
+                formatted_preview: f.to_string(),
             })
     }
 
-    #[allow(deprecated)]
-    async fn read_channel(
-        &self,
-        scribe: &ToolScribe,
-        request_context: &RequestContext,
-    ) -> Result<ReadContent, ToolCallError> {
+    async fn read_channel(&self, scribe: &ToolScribe) -> Result<ReadContent, ToolCallError> {
         let id = self.provide_single_id()?;
 
         let since = self
@@ -216,7 +207,7 @@ impl ReadThread {
         // Get channel metadata
         let metadata = scribe
             .channel
-            .get_channel_metadata(id.as_str(), Some(&*request_context.jwt))
+            .get_channel_metadata(id.as_str())
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch channel metadata: {}", e),
@@ -226,12 +217,7 @@ impl ReadThread {
         // Get channel transcript
         let transcript = scribe
             .channel
-            .get_channel_transcript(
-                id.as_str(),
-                Some(&*request_context.jwt),
-                Some(since),
-                Some(MAX_MESSAGES),
-            )
+            .get_channel_transcript(id.as_str(), Some(since), Some(MAX_MESSAGES))
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch channel transcript: {}", e),
@@ -245,11 +231,9 @@ impl ReadThread {
         })
     }
 
-    #[allow(deprecated)]
     async fn read_channel_message(
         &self,
         scribe: &ToolScribe,
-        request_context: &RequestContext,
     ) -> Result<ReadContent, ToolCallError> {
         let mut transcripts = Vec::new();
         let mut channel_id = String::new();
@@ -258,7 +242,7 @@ impl ReadThread {
             // Get messages with context
             let transcript = match scribe
                 .channel
-                .get_message_with_context(id.as_str(), 0, 0, &request_context.jwt)
+                .get_message_with_context(id.as_str(), 0, 0)
                 .await
             {
                 Ok(t) => t,
@@ -300,16 +284,11 @@ impl ReadThread {
         })
     }
 
-    #[allow(deprecated)]
-    async fn read_chat_thread(
-        &self,
-        scribe: &ToolScribe,
-        request_context: &RequestContext,
-    ) -> Result<ReadContent, ToolCallError> {
+    async fn read_chat_thread(&self, scribe: &ToolScribe) -> Result<ReadContent, ToolCallError> {
         let id = self.provide_single_id()?;
         let history = scribe
             .chat
-            .get_chat_history(&id, &request_context.jwt)
+            .get_chat_history(&id)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch chat thread: {}", e),
@@ -319,17 +298,12 @@ impl ReadThread {
         Ok(ReadContent::Chat { history })
     }
 
-    #[allow(deprecated)]
-    async fn read_chat_messages(
-        &self,
-        scribe: &ToolScribe,
-        request_context: &RequestContext,
-    ) -> Result<ReadContent, ToolCallError> {
+    async fn read_chat_messages(&self, scribe: &ToolScribe) -> Result<ReadContent, ToolCallError> {
         let message_ids = &self.ids;
 
         let history = scribe
             .chat
-            .get_chat_history_for_messages(message_ids, &request_context.jwt)
+            .get_chat_history_for_messages(message_ids)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch chat messages: {}", e),
@@ -339,16 +313,11 @@ impl ReadThread {
         Ok(ReadContent::Chat { history })
     }
 
-    #[allow(deprecated)]
-    async fn read_email_thread(
-        &self,
-        scribe: &ToolScribe,
-        request_context: &RequestContext,
-    ) -> Result<ReadContent, ToolCallError> {
+    async fn read_email_thread(&self, scribe: &ToolScribe) -> Result<ReadContent, ToolCallError> {
         let id = self.provide_single_id()?;
         let messages = scribe
             .email
-            .get_email_messages_by_thread_id(&id, 0, 100, Some(&*request_context.jwt))
+            .get_email_messages_by_thread_id(&id, 0, 100)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch email thread messages: {}", e),
@@ -365,22 +334,13 @@ impl ReadThread {
         })
     }
 
-    #[allow(deprecated)]
-    async fn read_email_message(
-        &self,
-        scribe: &ToolScribe,
-        request_context: &RequestContext,
-    ) -> Result<ReadContent, ToolCallError> {
+    async fn read_email_message(&self, scribe: &ToolScribe) -> Result<ReadContent, ToolCallError> {
         let mut email_messages = Vec::new();
         let mut subject = None;
         let mut thread_id = String::new();
 
         for id in &self.ids {
-            let parsed_message = match scribe
-                .email
-                .get_email_message_by_id(id, Some(&*request_context.jwt))
-                .await
-            {
+            let parsed_message = match scribe.email.get_email_message_by_id(id).await {
                 Ok(msg) => msg,
                 Err(e) => {
                     tracing::warn!("failed to fetch email message {}: {}", id, e);

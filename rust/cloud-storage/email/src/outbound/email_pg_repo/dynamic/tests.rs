@@ -56,6 +56,33 @@ fn test_build_message_email_filter_importance_true_excludes_trash() {
 }
 
 #[test]
+fn test_build_message_email_filter_importance_true_includes_email_filters() {
+    let expr = Expr::Literal(EmailLiteral::Importance(true));
+    let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("FROM email_filters ef"));
+    assert!(
+        debug
+            .contains("LOWER(ef.email_domain) = LOWER(split_part(sender_c.email_address, '@', 2))")
+    );
+    assert!(debug.contains("ef.is_important = TRUE"));
+    assert!(debug.contains("ef_addr.is_important = FALSE"));
+}
+
+#[test]
+fn test_build_message_email_filter_importance_false_includes_email_filters() {
+    let expr = Expr::Literal(EmailLiteral::Importance(false));
+    let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("FROM email_filters ef"));
+    assert!(debug.contains("LOWER(ef.email_address) = LOWER(sender_c.email_address)"));
+    assert!(debug.contains("ef.is_important = FALSE"));
+    assert!(debug.contains("ef_addr.is_important = TRUE"));
+}
+
+#[test]
 fn test_build_message_email_filter_recipient() {
     let email = Email::Complete(
         EmailStr::parse_from_str("recipient@example.com")

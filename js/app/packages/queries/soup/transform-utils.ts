@@ -200,6 +200,7 @@ export const useSearchResponseItemMapper = () => {
             results: result.document_search_results,
           });
         }
+        const properties = result.properties ?? undefined;
         return {
           type: 'document',
           subType: result.sub_type === 'task' ? { type: 'task' } : null,
@@ -210,6 +211,7 @@ export const useSearchResponseItemMapper = () => {
           updatedAt: result.metadata?.updated_at,
           fileType: result.file_type || undefined,
           projectId: result.metadata?.project_id ?? undefined,
+          properties,
           search,
         };
       }
@@ -402,6 +404,7 @@ export const mapSoupPageToEntityList: (
             ...item.data,
             createdAt: item.data.createdAt,
             updatedAt: item.data.updatedAt,
+            sortTs: item.data.sortTs,
             senderEmail: item.data.senderEmail ?? undefined,
             senderName: item.data.senderName ?? undefined,
             snippet: item.data.snippet ?? undefined,

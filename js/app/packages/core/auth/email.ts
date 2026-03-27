@@ -1,7 +1,7 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { SERVER_HOSTS } from '@core/constant/servers';
 
-const GOOGLE_GMAIL_IDP = 'google_gmail';
+export const GOOGLE_GMAIL_IDP = 'google_gmail';
 type IDPName = 'google_gmail';
 
 type EmailAuthParams = {

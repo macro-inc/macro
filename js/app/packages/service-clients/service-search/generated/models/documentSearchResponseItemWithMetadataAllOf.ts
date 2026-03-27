@@ -5,7 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentSearchResponseItemWithMetadataAllOfMetadata } from './documentSearchResponseItemWithMetadataAllOfMetadata';
+import type { DocumentSearchResponseItemWithMetadataAllOfProperties } from './documentSearchResponseItemWithMetadataAllOfProperties';
 
 export type DocumentSearchResponseItemWithMetadataAllOf = {
   metadata?: DocumentSearchResponseItemWithMetadataAllOfMetadata;
+  /** Entity properties (assignees, status, priority, etc.) for markdown documents. */
+  properties?: DocumentSearchResponseItemWithMetadataAllOfProperties;
 };

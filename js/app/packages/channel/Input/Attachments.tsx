@@ -48,7 +48,7 @@ function MediaAttachmentItem(props: {
   onRemove: (attachment: InputAttachmentData) => void;
 }) {
   return (
-    <div class="relative group">
+    <div class="ph-no-capture relative group">
       <RemoveButton
         attachment={props.attachment}
         onRemove={props.onRemove}
@@ -82,7 +82,7 @@ function DocumentAttachmentItem(props: {
   onRemove: (attachment: InputAttachmentData) => void;
 }) {
   return (
-    <div class="group flex items-center px-2 py-1.5 space-x-1.5 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
+    <div class="ph-no-capture group flex items-center px-2 py-1.5 space-x-1.5 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
       <Show
         when={!props.attachment.pending}
         fallback={<SpinnerIcon class="w-4 h-4 animate-spin" />}

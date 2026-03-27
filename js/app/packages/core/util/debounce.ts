@@ -68,6 +68,37 @@ export function laggedGate(source: () => boolean, delay = 300): () => boolean {
 }
 
 /**
+ * Create a cold-start lagged gate. Like {@link laggedGate} but always starts
+ * `false`, even when the source is already `true` at creation time. The gate
+ * opens only after the source has been continuously `true` for `delay` ms.
+ * If the owning scope is disposed (e.g. component unmounts) before the delay
+ * elapses the pending timer is cancelled and the gate never opens.
+ *
+ * Signal A ##############__________######
+ * Signal B _______#######________________
+ *
+ * @param source a boolean signal
+ * @param delay the delay time in ms
+ * @returns a derived signal
+ */
+export function deferredGate(
+  source: () => boolean,
+  delay = 300
+): () => boolean {
+  const [follow, setFollow] = createSignal(false);
+  const up = solidDebounce(() => setFollow(true), delay);
+  createEffect(() => {
+    if (source()) {
+      up();
+    } else {
+      up.clear();
+      setFollow(false);
+    }
+  });
+  return follow;
+}
+
+/**
  * Create a sticky-on-true signal. A debounced view that is only debounced on
  * the falling edge. In the examples below (_) is the false state and (#) is the
  * true state. Signal B is a stickyGate on Signal A.

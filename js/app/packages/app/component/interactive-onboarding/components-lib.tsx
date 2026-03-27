@@ -161,11 +161,11 @@ export function ContinueButton(props: ContinueButtonProps) {
       ref={props.ref}
       type="button"
       class={cn(
-        'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center justify-between gap-2 bracket-never',
+        'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center justify-between gap-2 bracket-never border-none',
         {
           'bg-transparent text-ink/40 font-normal ring-1 ring-edge-muted/50':
             props.disabled,
-          'bg-accent text-panel hover:bg-accent hover:ring-2 ring-accent ring-offset-1 focus:ring-2':
+          'bg-accent text-panel hover:bg-accent hover:ring-2 ring-accent ring-offset-1 ring-offset-panel focus:ring-2':
             !props.disabled,
         }
       )}

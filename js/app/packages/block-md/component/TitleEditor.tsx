@@ -280,7 +280,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     <div class="relative">
       <div
         contentEditable={canEdit() ?? false}
-        class="text-4xl font-semibold"
+        class="ph-no-capture text-4xl font-semibold"
         classList={{
           'select-auto': !canEdit(),
         }}

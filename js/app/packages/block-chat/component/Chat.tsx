@@ -49,6 +49,7 @@ import { createEffect, createSignal, Show } from 'solid-js';
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
+  const { showPaywall } = usePaywallState();
 
   return (
     <ChatInputProvider
@@ -58,6 +59,7 @@ export function Chat(props: { data: ChatData }) {
       <ChatProvider
         chatId={props.data.chat.id}
         messages={props.data.chat.messages}
+        controllerOptions={{ onShowPaywall: showPaywall }}
       >
         <ChatInner data={props.data} loadedInputText={loadedState.input} />
       </ChatProvider>
@@ -96,16 +98,10 @@ function ChatInner(props: {
     useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
   });
 
-  // Local stream signal for registerToolHandler
-
+  // Sync isGenerating from controller phase
   createEffect(() => {
-    const chatStream = chat.stream();
-    if (!chatStream || chatStream.isDone()) {
-      input.setIsGenerating(false);
-      return;
-    }
-    input.setIsGenerating(true);
-    if (chatStream.data().length > 0) invalidateUserQuota();
+    input.setIsGenerating(chat.isGenerating());
+    if (chat.isGenerating()) invalidateUserQuota();
   });
 
   const blockHandle = blockHandleSignal.get;
@@ -123,21 +119,23 @@ function ChatInner(props: {
     if (!s) return undefined;
     return { data: s.data };
   });
-  const { showPaywall } = usePaywallState();
 
   const sendChatMessage = useSendChatMessage();
   const renameMutation = createRenameDssEntityMutation();
 
   const onSend = createCallback(async (request: ChatSendInput) => {
     const isFirstMessage = chat.messages().length === 0;
+    const optimisticId = crypto.randomUUID();
 
-    chat.addMessage({
-      id: crypto.randomUUID(),
-      content: request.content,
-      role: 'user',
-      attachments: request.attachments ?? [],
+    chat.dispatch({
+      type: 'send_started',
+      optimisticMessage: {
+        id: optimisticId,
+        content: request.content,
+        role: 'user',
+        attachments: request.attachments ?? [],
+      },
     });
-    chat.setWaitingForStream(true);
 
     if (isFirstMessage) {
       const name = deriveChatName(request.content);
@@ -154,15 +152,15 @@ function ChatInner(props: {
       chatId: chat.chatId(),
     });
 
-    chat.setWaitingForStream(false);
-
     if ('error' in result) {
-      if (result.paymentError) showPaywall();
+      chat.dispatch({
+        type: 'send_failed',
+        paymentError: result.paymentError,
+      });
       return;
     }
 
-    chat.setStream(result.stream);
-    input.setIsGenerating(true);
+    chat.attachStream(result.stream);
     invalidateUserQuota();
   });
 

@@ -34,7 +34,6 @@ use entity_access::outbound::PgAccessRepository;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
-use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
 /// No-op connection service
@@ -146,12 +145,7 @@ async fn main() {
 
     let toolset = document_toolset();
 
-    let context = RequestContext {
-        user_id,
-        // Remove this later
-        #[allow(deprecated)]
-        jwt: Arc::new(String::new()),
-    };
+    let context = RequestContext { user_id };
 
     // Create the CLI
     let cli = Cli::new(

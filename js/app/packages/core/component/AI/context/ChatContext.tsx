@@ -10,15 +10,17 @@ import type {
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
-import type { ChatMessageStream } from '@service-connection/stream';
-import { getEntityStreams } from '@service-connection/stream';
-import type { Accessor, ParentProps, Setter } from 'solid-js';
+import {
+  createChatController,
+  type ChatController,
+  type ChatControllerOptions,
+} from '@core/component/AI/state/createChatController';
+import type { Accessor, ParentProps } from 'solid-js';
 import {
   createContext,
   createEffect,
   createSignal,
   on,
-  untrack,
   useContext,
 } from 'solid-js';
 
@@ -96,16 +98,7 @@ export function useChatInputContext(): ChatInputState {
 
 // ---- Created state (only when chat exists) ----
 
-export type ChatState = {
-  chatId: Accessor<string>;
-  messages: Accessor<ChatMessageWithAttachments[]>;
-  setMessages: Setter<ChatMessageWithAttachments[]>;
-  addMessage: (msg: ChatMessageWithAttachments) => void;
-  stream: Accessor<ChatMessageStream | undefined>;
-  setStream: Setter<ChatMessageStream | undefined>;
-  waitingForStream: Accessor<boolean>;
-  setWaitingForStream: Setter<boolean>;
-};
+export type ChatState = ChatController;
 
 const ChatCtx = createContext<ChatState>();
 
@@ -113,95 +106,17 @@ export function ChatProvider(
   props: ParentProps & {
     chatId: string;
     messages?: ChatMessageWithAttachments[];
-    external?: {
-      messages: [
-        Accessor<ChatMessageWithAttachments[]>,
-        Setter<ChatMessageWithAttachments[]>,
-      ];
-      stream: [
-        Accessor<ChatMessageStream | undefined>,
-        Setter<ChatMessageStream | undefined>,
-      ];
-      waitingForStream?: [Accessor<boolean>, Setter<boolean>];
-    };
+    controllerOptions?: ChatControllerOptions;
   }
 ) {
-  let messages: Accessor<ChatMessageWithAttachments[]>;
-  let setMessages: Setter<ChatMessageWithAttachments[]>;
-  let stream: Accessor<ChatMessageStream | undefined>;
-  let setStream: Setter<ChatMessageStream | undefined>;
-  let waitingForStream: Accessor<boolean>;
-  let setWaitingForStream: Setter<boolean>;
-
-  if (props.external) {
-    [messages, setMessages] = props.external.messages;
-    [stream, setStream] = props.external.stream;
-    if (props.external.waitingForStream) {
-      [waitingForStream, setWaitingForStream] = props.external.waitingForStream;
-    } else {
-      [waitingForStream, setWaitingForStream] = createSignal(false);
-    }
-  } else {
-    const [_messages, _setMessages] = createSignal<
-      ChatMessageWithAttachments[]
-    >(props.messages ?? []);
-    const [_stream, _setStream] = createSignal<ChatMessageStream>();
-    messages = _messages;
-    setMessages = _setMessages;
-    stream = _stream;
-    setStream = _setStream;
-    [waitingForStream, setWaitingForStream] = createSignal(false);
-  }
-
-  const _setMessages = setMessages;
-  const addMessage = (msg: ChatMessageWithAttachments) => {
-    _setMessages((p) => [...p, msg]);
-  };
-
-  // --- Reconnect active streams on page refresh ---
-  // Reactive to props.chatId (ChatProvider may not remount on chat switch).
-  // Uses untrack for stream/messages to only fire on new WS streams or chatId change.
-  createEffect(() => {
-    const activeStreams = getEntityStreams('chat', props.chatId)();
-    const currentStream = untrack(stream);
-
-    for (const s of activeStreams) {
-      const sid = s.id()?.stream_id;
-      if (!sid) {
-        console.warn('reject chat stream: no id');
-        continue;
-      }
-      if (currentStream?.isDone() && currentStream?.id()?.stream_id === sid) {
-        console.warn('reject chat stream: duplicate stream');
-        continue;
-      }
-
-      const isInMessages = untrack(() => messages().some((m) => m.id === sid));
-      if (isInMessages) {
-        console.warn('reject chat stream: already has message');
-        continue;
-      }
-
-      setStream(s);
-      break;
-    }
-  });
+  const controller = createChatController(
+    props.chatId,
+    props.messages ?? [],
+    props.controllerOptions
+  );
 
   return (
-    <ChatCtx.Provider
-      value={{
-        chatId: () => props.chatId,
-        messages,
-        setMessages,
-        addMessage,
-        stream,
-        setStream,
-        waitingForStream,
-        setWaitingForStream,
-      }}
-    >
-      {props.children}
-    </ChatCtx.Provider>
+    <ChatCtx.Provider value={controller}>{props.children}</ChatCtx.Provider>
   );
 }
 

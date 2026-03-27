@@ -51,6 +51,7 @@ impl FilterVariantToSearchArgs for item_filters::DocumentFilters {
             Ok(UnifiedDocumentSearchArgs {
                 document_ids: filter_document_response.document_ids,
                 ids_only: filter_document_response.ids_only,
+                sub_types: self.sub_types.clone(),
                 ..Default::default()
             })
         }

@@ -130,9 +130,9 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
             }}
           />
           <button
-            class={`inline-block font-medium text-accent-ink hover:text-accent-ink/80 cursor-default transition 
-              ${showResendCode() ? 'opacity-100 cursor-pointer' : 'opacity-50 pointer-events-none cursor-not-allowed'} 
-              ${emailSubmission.pending || submission.pending ? 'opacity-50 cursor-not-allowed' : ''}`}
+            class={`inline-block font-medium text-accent-ink hover:text-accent-ink/80 transition
+              ${showResendCode() ? 'opacity-100' : 'opacity-50 pointer-events-none'}
+              ${emailSubmission.pending || submission.pending ? 'opacity-50 pointer-events-none' : ''}`}
             disabled={
               emailSubmission.pending || submission.pending || !showResendCode()
             }
@@ -147,7 +147,7 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
 
         <div class="border-b border-edge-muted py-4 px-6 flex flex-none justify-between items-center">
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
+            class="hover:text-accent hover:transition-none transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             onClick={resetEmailCode}
             type="button"
           >
@@ -156,7 +156,7 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
           </button>
 
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
+            class="hover:text-accent hover:transition-none transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             type="submit"
             disabled={submission.pending}
           >

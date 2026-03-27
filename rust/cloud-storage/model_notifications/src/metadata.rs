@@ -358,16 +358,12 @@ impl NotificationTitle for MentionedInDocumentCommentMetadata {
     ) -> Result<String, rootcause::Report> {
         let sender =
             sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let file_type_str = self
-            .file_type
-            .as_ref()
-            .ok_or_else(|| report!("Expected the file type to exist"))?;
         let email = sender.0.email_part();
         let sender = email.email_str();
-        let title = format!(
-            "{sender} mentioned you in {}.{}",
-            self.document_name, file_type_str
-        );
+        let title = match &self.file_type {
+            Some(ft) => format!("{sender} mentioned you in {}.{ft}", self.document_name),
+            None => format!("{sender} mentioned you in {}", self.document_name),
+        };
         Ok(title)
     }
 
@@ -743,6 +739,142 @@ impl Notification for MentionedInDocumentCommentMetadata {
 }
 
 impl NotificationExtIos for MentionedInDocumentCommentMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+    }
+}
+
+/// Notification sent when someone replies to a document comment thread.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RepliedToDocumentCommentThreadMetadata {
+    /// The name of the document.
+    pub document_name: String,
+    /// The owner of the document.
+    #[schema(value_type = String)]
+    pub owner: MacroUserIdStr<'static>,
+    /// The file type of the document.
+    pub file_type: Option<String>,
+    /// the comment id
+    pub comment_id: i64,
+    /// the thread id
+    pub thread_id: i64,
+    /// the text of the comment
+    pub text: String,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
+}
+
+impl Notification for RepliedToDocumentCommentThreadMetadata {
+    const TYPE_NAME: &'static str = "replied_to_document_comment_thread";
+}
+
+impl NotificationTitle for RepliedToDocumentCommentThreadMetadata {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let sender =
+            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
+        let email = sender.0.email_part();
+        let sender = email.email_str();
+        let title = match &self.file_type {
+            Some(ft) => format!("{sender} replied in {}.{ft}", self.document_name),
+            None => format!("{sender} replied in {}", self.document_name),
+        };
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        parse_message_plain_text(&self.text)
+    }
+}
+
+impl NotificationExtIos for RepliedToDocumentCommentThreadMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+    }
+}
+
+/// Notification sent when someone comments on a document the user owns.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentedOnDocumentMetadata {
+    /// The name of the document.
+    pub document_name: String,
+    /// The owner of the document.
+    #[schema(value_type = String)]
+    pub owner: MacroUserIdStr<'static>,
+    /// The file type of the document.
+    pub file_type: Option<String>,
+    /// the comment id
+    pub comment_id: i64,
+    /// the thread id
+    pub thread_id: i64,
+    /// the text of the comment
+    pub text: String,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
+}
+
+impl Notification for CommentedOnDocumentMetadata {
+    const TYPE_NAME: &'static str = "commented_on_document";
+}
+
+impl NotificationTitle for CommentedOnDocumentMetadata {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let sender =
+            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
+        let email = sender.0.email_part();
+        let sender = email.email_str();
+        let title = match &self.file_type {
+            Some(ft) => format!("{sender} commented on {}.{ft}", self.document_name),
+            None => format!("{sender} commented on {}", self.document_name),
+        };
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        parse_message_plain_text(&self.text)
+    }
+}
+
+impl NotificationExtIos for CommentedOnDocumentMetadata {
     type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {

@@ -27,7 +27,9 @@ impl IntoResponse for ListLabelsError {
         let message = self.to_string();
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse { message: &message }),
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
         )
             .into_response()
     }

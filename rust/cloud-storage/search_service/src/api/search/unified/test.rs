@@ -29,6 +29,7 @@ fn test_sort_unified_search_results() {
     let results: Vec<UnifiedSearchResponseItem> = vec![
         // Document with updated_at = 1000 (oldest)
         UnifiedSearchResponseItem::Document(DocumentSearchResponseItemWithMetadata {
+            properties: None,
             metadata: Some(DocumentMetadata {
                 created_at: DateTime::from_timestamp(900, 0).unwrap(),
                 updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
@@ -106,6 +107,7 @@ fn test_sort_unified_search_results() {
         }),
         // Another Document with updated_at = 2500 (second)
         UnifiedSearchResponseItem::Document(DocumentSearchResponseItemWithMetadata {
+            properties: None,
             metadata: Some(DocumentMetadata {
                 created_at: DateTime::from_timestamp(2400, 0).unwrap(),
                 updated_at: DateTime::from_timestamp(2500, 0).unwrap(),
@@ -283,6 +285,7 @@ fn test_sort_unified_search_results_with_channel() {
     let results: Vec<UnifiedSearchResponseItem> = vec![
         // Document with updated_at = 2000
         UnifiedSearchResponseItem::Document(DocumentSearchResponseItemWithMetadata {
+            properties: None,
             metadata: Some(DocumentMetadata {
                 created_at: DateTime::from_timestamp(1900, 0).unwrap(),
                 updated_at: DateTime::from_timestamp(2000, 0).unwrap(),

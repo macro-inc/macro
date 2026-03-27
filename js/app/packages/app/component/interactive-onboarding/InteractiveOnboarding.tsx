@@ -1,7 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import MacroLogo from '@core/component/MacroLogo';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { useLocation } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
   createSignal,
@@ -12,6 +12,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
+import { useTutorialCompleted } from '@core/context/user';
 import { CommandState } from '@app/component/command';
 import { resetSandbox } from './sandbox/sandbox-store';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
@@ -27,13 +28,20 @@ import {
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useHasPaidAccess } from '@core/auth/license';
 
 export default function InteractiveOnboarding() {
   const analytics = useAnalytics();
 
   const splitPanel = useSplitPanel();
   const completeTutorial = useCompleteTutorialMutation();
+  const tutorialCompleted = useTutorialCompleted();
   const location = useLocation();
+
+  const hasPaid = useHasPaidAccess();
+  const lessons = hasPaid()
+    ? LESSONS.filter((l) => l.id !== 'choose-plan')
+    : LESSONS;
 
   const testMode = new URLSearchParams(location.search).has('test');
   if (testMode) {
@@ -45,7 +53,7 @@ export default function InteractiveOnboarding() {
   const slideIndex =
     slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
 
-  const sortedLessons = [...LESSONS].sort(
+  const sortedLessons = [...lessons].sort(
     (a, b) => (a.order ?? 0) - (b.order ?? 0)
   );
   const debugCompleted =
@@ -54,9 +62,8 @@ export default function InteractiveOnboarding() {
       : undefined;
 
   const state = createOnboardingState({
-    definitions: LESSONS,
-    initialCompleted:
-      debugCompleted ?? (testMode ? new Set() : loadCompletedLessons()),
+    definitions: lessons,
+    initialCompleted: debugCompleted ?? loadCompletedLessons(),
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
@@ -70,6 +77,21 @@ export default function InteractiveOnboarding() {
       next: { type: 'component', id: 'unified-list' },
     });
   };
+
+  // Redirect away if the backend already marks the tutorial as complete
+  // before the user starts. We set tutorialComplete early (after the invite
+  // step) so we track whether the flow has started to avoid a mid-flow redirect.
+  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
+  const navigate = useNavigate();
+  createEffect(() => {
+    if (tutorialCompleted() && !onboardingStarted() && !testMode) {
+      if (splitPanel) {
+        navigateAway();
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
+  });
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
@@ -89,6 +111,7 @@ export default function InteractiveOnboarding() {
       state: 'completed',
     });
 
+    setOnboardingStarted(true);
     state.completeLesson(current.definition.id);
     if (!testMode) {
       saveCompletedLesson(current.definition.id);
@@ -109,7 +132,11 @@ export default function InteractiveOnboarding() {
       state: 'skipped',
     });
 
+    setOnboardingStarted(true);
     state.skipLesson(current.definition.id);
+    if (!testMode) {
+      saveCompletedLesson(current.definition.id);
+    }
 
     setReadyToContinue(false);
     setContinueLabel(undefined);
@@ -205,13 +232,23 @@ export default function InteractiveOnboarding() {
     })
   );
 
+  // Mark tutorial complete on the backend once the email-invite lesson is
+  // completed or skipped — before the paywall step.
+  createEffect(() => {
+    const invite = state
+      .lessons()
+      .find((l) => l.definition.id === 'email-invite');
+    if (invite && (invite.completed || invite.skipped) && !testMode) {
+      completeTutorial.mutate(undefined);
+    }
+  });
+
   createEffect(
     on(
       () => state.isFinished(),
       (finished) => {
         if (finished && !testMode) {
           analytics.track('onboarding_completed');
-          completeTutorial.mutate(undefined);
           navigateAway();
         }
       }

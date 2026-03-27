@@ -27,8 +27,6 @@ use soup::domain::service::SoupImpl;
 use soup::inbound::toolset::{SoupToolContext, soup_toolset};
 use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::PgPool;
-use std::sync::Arc;
-
 #[tokio::main]
 async fn main() {
     // Get database URL from environment
@@ -75,10 +73,7 @@ async fn main() {
     // Create the soup toolset
     let toolset = soup_toolset();
 
-    let context = RequestContext {
-        user_id,
-        jwt: Arc::new(String::new()),
-    };
+    let context = RequestContext { user_id };
 
     // Create the CLI
     let cli = Cli::new(

@@ -40,7 +40,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to remove unsubscribe item",
+                message: "unable to remove unsubscribe item".into(),
             }),
         )
             .into_response()

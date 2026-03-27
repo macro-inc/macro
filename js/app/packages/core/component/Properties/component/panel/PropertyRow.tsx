@@ -20,7 +20,7 @@ export const PropertyRow: Component<PropertyRowProps> = (props) => {
           withPin={props.withPin}
         />
       </div>
-      <div class="flex items-start min-w-0">
+      <div class="ph-no-capture flex items-start min-w-0">
         <PropertyValue property={props.property} onEdit={props.onValueClick} />
       </div>
     </>

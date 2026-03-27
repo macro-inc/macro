@@ -219,10 +219,14 @@ impl From<SoupErr> for SoupHandlerErr {
 
 impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
+        let status_code = match &self {
+            SoupHandlerErr::ExpandErr(_) => StatusCode::BAD_REQUEST,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
         (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            status_code,
             Json(ErrorResponse {
-                message: &self.to_string(),
+                message: self.to_string().into(),
             }),
         )
             .into_response()

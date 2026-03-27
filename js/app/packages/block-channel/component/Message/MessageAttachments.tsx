@@ -21,7 +21,7 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
   return (
     <div
       class={cn(
-        'allow-css-brackets mb-2',
+        'ph-no-capture allow-css-brackets mb-2',
         (!(
           props.documentAttachments()?.length > 0 ||
           props.imageAttachments()?.length > 0 ||

@@ -161,6 +161,7 @@ export function Account() {
         </Show>
         <TabContentRow isLoading={!userId()} text="First Name" subtext={''}>
           <EditableField
+              class="ph-no-capture"
             value={firstName()}
             onSave={(newValue: string) => {
               setUpdatedFirstName(newValue);
@@ -172,6 +173,7 @@ export function Account() {
         </TabContentRow>
         <TabContentRow isLoading={!userId()} text="Last Name" subtext={''}>
           <EditableField
+              class="ph-no-capture"
             value={lastName()}
             onSave={(newValue: string) => {
               setUpdatedLastName(newValue);
@@ -182,6 +184,7 @@ export function Account() {
           />
         </TabContentRow>
         <TabContentRow
+          class="ph-no-capture"
           isLoading={!email()}
           text="Email"
           subtext={email() ?? ''}

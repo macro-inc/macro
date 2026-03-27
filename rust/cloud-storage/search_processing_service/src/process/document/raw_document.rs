@@ -2,14 +2,15 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use chrono::Utc;
-use model::document::{
-    CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
-    build_cloud_storage_bucket_document_key, build_extensionless_document_key,
-};
-use model_file_type::FileAssociation;
+use model::document::{DocumentMetadata, FileType};
 use models_search::document::MarkdownParseResult;
+use models_search::unified::is_searchable_association;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
+};
+use s3_key::{
+    CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
+    build_docx_to_pdf_converted_document_key,
 };
 
 use crate::{
@@ -69,18 +70,9 @@ pub async fn update_search_with_raw_document(
     document_storage_bucket: &str,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    // Early exit if we do not support search on the file type
-    // TODO: support other documents
-    match search_extractor_message.file_type.macro_app_path() {
-        FileAssociation::Pdf(_)
-        | FileAssociation::Write(_)
-        | FileAssociation::Code(_)
-        | model_file_type::FileAssociation::Canvas(_)
-        | model_file_type::FileAssociation::Md(_) => {}
-        _ => {
-            tracing::warn!("unsupported file type");
-            return Ok(());
-        }
+    if !is_searchable_association(&search_extractor_message.file_type.macro_app_path()) {
+        tracing::warn!("unsupported file type");
+        return Ok(());
     }
 
     // This ensures we only process the latest version
@@ -96,7 +88,10 @@ pub async fn update_search_with_raw_document(
     };
 
     let document_name = document_info.document_name;
+    let sub_type = document_info.sub_type.map(|st| st.to_string());
 
+    // TODO: this is hacky, update the search event message to use the correctly serialized
+    // document key parts from the s3_key crate
     let document_version_id = match search_extractor_message.file_type {
         // For static/converted files, we want to use the version from the search extractor message since
         // that is what is in s3 and document saves don't change the actual file in s3.
@@ -121,41 +116,25 @@ pub async fn update_search_with_raw_document(
             .as_str(),
     )?;
 
-    // This is a check to see if the document version id in the message matches the document version
-    if let Some(search_message_document_version_id) =
-        search_extractor_message.document_version_id.as_ref()
-        && !search_message_document_version_id.eq(&document_version_id)
+    let key = if document_version_id == CONVERTED_DOCUMENT_FILE_NAME {
+        build_docx_to_pdf_converted_document_key(
+            &search_extractor_message.user_id,
+            &search_extractor_message.document_id,
+        )
+    } else if let Some(msg_version_id) = search_extractor_message.document_version_id.as_ref()
+        && msg_version_id != &document_version_id
     {
-        if search_message_document_version_id.eq(CONVERTED_DOCUMENT_FILE_NAME) {
-            tracing::debug!("document is a convert document, continue");
-        } else {
-            tracing::debug!(
-                search_message_document_version_id = search_message_document_version_id,
-                document_version_id = document_version_id,
-                "document version is not latest, skipping"
-            );
-            return Ok(());
-        }
-    }
-
-    // Try extensionless key first, fall back to legacy key with extension
-    // document_version_id will be "converted" or document version id
-    let extensionless_key = build_extensionless_document_key(
-        &search_extractor_message.user_id,
-        &search_extractor_message.document_id,
-        &document_version_id,
-    );
-    let key = if s3_client
-        .exists(document_storage_bucket, &extensionless_key)
-        .await?
-    {
-        extensionless_key
+        tracing::debug!(
+            msg_version_id,
+            document_version_id,
+            "document version is not latest, skipping"
+        );
+        return Ok(());
     } else {
         build_cloud_storage_bucket_document_key(
             &search_extractor_message.user_id,
             &search_extractor_message.document_id,
-            document_version_id,
-            Some(search_extractor_message.file_type.as_str()),
+            &document_version_id,
         )
     };
 
@@ -190,6 +169,7 @@ pub async fn update_search_with_raw_document(
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
+                    sub_type: sub_type.clone(),
                 })
                 .collect()
         }
@@ -205,6 +185,7 @@ pub async fn update_search_with_raw_document(
                 owner_id: search_extractor_message.user_id.clone(),
                 file_type: file_type.to_string(),
                 updated_at_seconds: updated_at,
+                sub_type: sub_type.clone(),
             }]
         }
         FileType::Md => {
@@ -224,6 +205,7 @@ pub async fn update_search_with_raw_document(
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
+                    sub_type: sub_type.clone(),
                 })
                 .collect::<Vec<UpsertDocumentArgs>>()
         }
@@ -241,6 +223,7 @@ pub async fn update_search_with_raw_document(
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
+                    sub_type: sub_type.clone(),
                 }]
             }
         }
@@ -264,6 +247,7 @@ fn generate_upserts(
             .as_str(),
     )?;
     let document_name = document_info.document_name;
+    let sub_type = document_info.sub_type.map(|st| st.to_string());
 
     let upserts = result
         .into_iter()
@@ -276,6 +260,7 @@ fn generate_upserts(
             owner_id: document_info.owner.to_string(),
             file_type: file_type.to_string(),
             updated_at_seconds: updated_at,
+            sub_type: sub_type.clone(),
         })
         .collect::<Vec<UpsertDocumentArgs>>();
 
@@ -383,5 +368,43 @@ mod tests {
 
         assert!(!upserts.is_empty());
         assert_eq!(upserts.len(), 2);
+        assert_eq!(upserts[0].sub_type, None);
+    }
+
+    #[tokio::test]
+    async fn test_generate_upsert_with_sub_type() {
+        use document_sub_type::DocumentSubType;
+
+        let document_info = DocumentMetadata {
+            document_id: "BBB".to_string(),
+            document_version_id: 0,
+            owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
+            document_name: "test_task".to_string(),
+            file_type: Some("md".to_string()),
+            sha: None,
+            project_id: None,
+            project_name: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            document_bom: None,
+            modification_data: None,
+            created_at: None,
+            updated_at: None,
+            sub_type: Some(DocumentSubType::Task),
+            deleted_at: None,
+        };
+
+        let markdown_result = vec![MarkdownParseResult {
+            node_id: "node1".to_string(),
+            raw_content: "# Task content".to_string(),
+            content: "Task content".to_string(),
+        }];
+
+        let upserts =
+            generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
+
+        assert_eq!(upserts.len(), 1);
+        assert_eq!(upserts[0].sub_type, Some("task".to_string()));
     }
 }

@@ -112,7 +112,7 @@ pub async fn list_user_notifications<
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to get notifications",
+                    message: "failed to get notifications".into(),
                 }),
             )
         })?;
@@ -172,7 +172,7 @@ pub async fn bulk_get_by_event_item_ids<
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to get notifications",
+                    message: "failed to get notifications".into(),
                 }),
             )
         })?;
@@ -273,7 +273,7 @@ async fn bulk_update<S: NotificationReader>(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to update notifications",
+                    message: "failed to update notifications".into(),
                 }),
             )
         })?;
@@ -319,7 +319,7 @@ pub async fn get_by_event_item_id<S: NotificationReader, T: Serialize + Deserial
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to get notifications",
+                    message: "failed to get notifications".into(),
                 }),
             )
         })?;
@@ -363,7 +363,7 @@ pub async fn get_notification_by_id<
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to get notification",
+                    message: "failed to get notification".into(),
                 }),
             )
         })?;
@@ -372,7 +372,7 @@ pub async fn get_notification_by_id<
         return Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
-                message: "notification not found",
+                message: "notification not found".into(),
             }),
         ));
     };
@@ -409,7 +409,7 @@ pub async fn delete_notification<S: NotificationReader>(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to delete notification",
+                    message: "failed to delete notification".into(),
                 }),
             )
         })?;
@@ -444,7 +444,7 @@ pub async fn bulk_delete_notifications<S: NotificationReader>(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to delete notifications",
+                    message: "failed to delete notifications".into(),
                 }),
             )
         })?;

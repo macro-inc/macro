@@ -150,7 +150,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
 
         <div class="border-b border-edge-muted py-4 px-6 flex flex-none justify-between items-center">
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
+            class="hover:text-accent hover:transition-none transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             onClick={() => {
               if (isTouchDevice()) return;
               handleBack();
@@ -169,7 +169,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
           </button>
 
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
+            class="hover:text-accent hover:transition-none transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             type="submit"
             disabled={submission.pending}
             onClick={(e) => {

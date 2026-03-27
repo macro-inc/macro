@@ -23,6 +23,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { SearchState } from './mobileSearchState';
 import { runCreateAction, setCreateMenuOpen } from '../Launcher';
 import { useLocation } from '@solidjs/router';
+import { useAnalytics } from '@app/component/analytics-context';
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
@@ -55,7 +56,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
       onTouchMove={props.onTouchMove}
       onTouchEnd={props.onTouchEnd}
       class={cn(
-        'flex flex-col items-center justify-center flex-1 py-3 bg-page border-t border-edge-muted',
+        'flex flex-col items-center justify-center flex-1 pt-3 pb-2 bg-page border-t border-edge-muted',
         props.active && 'text-accent'
       )}
     >
@@ -127,6 +128,7 @@ function FloatingCreateButton(props: {
 export function MobileDock() {
   const { openWithSplit } = useSplitLayout();
   const location = useLocation();
+  const [moreOpen, setMoreOpen] = createSignal(false);
 
   const isActive = (id: ListView) => {
     const activeContent = globalSplitManager()?.activeSplit()?.content();
@@ -158,7 +160,10 @@ export function MobileDock() {
       <MobileDockButton
         icon={AnimatedInboxIcon}
         active={isActive('inbox')}
-        onClick={() => navigate('inbox')}
+        onClick={() => {
+          setMoreOpen(false);
+          navigate('inbox');
+        }}
       />
       <MobileDockButton
         icon={AnimatedEmailIcon}
@@ -168,7 +173,10 @@ export function MobileDock() {
       <MobileDockButton
         icon={AnimatedChannelIcon}
         active={isActive('channels')}
-        onClick={() => navigate('channels')}
+        onClick={() => {
+          setMoreOpen(false);
+          navigate('channels');
+        }}
       />
       <MobileDockButton
         icon={AnimatedTaskIcon}
@@ -189,6 +197,7 @@ export function MobileDock() {
         icon={AnimatedSearchIcon}
         active={isActive('search')}
         onClick={() => {
+          setMoreOpen(false);
           SearchState.maybeResetState();
           SearchState.open();
         }}

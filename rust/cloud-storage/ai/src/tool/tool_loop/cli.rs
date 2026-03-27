@@ -26,7 +26,6 @@
 //!         Model::Claude35Sonnet,
 //!         || RequestContext {
 //!             user_id: Arc::new(MacroUserIdStr::try_from_email("user@example.com").unwrap()),
-//!             jwt: Arc::new(String::new()),
 //!         },
 //!     );
 //!     cli.run().await;
@@ -76,10 +75,8 @@ impl Default for Cli<(), fn() -> RequestContext> {
             service_context: (),
             system_prompt: CLI_PROMPT.to_string(),
             model: Model::Claude45Opus,
-            #[allow(deprecated)]
             request_context_fn: || RequestContext {
                 user_id: MacroUserIdStr::try_from_email("cli@localhost").expect("valid email"),
-                jwt: Arc::new(String::new()),
             },
         }
     }

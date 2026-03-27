@@ -15,6 +15,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -22,6 +23,7 @@ import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import CheckIcon from '@icon/regular/check.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
+import ProhibitIcon from '@icon/regular/prohibit.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import {
   EmailPropertiesButton,
@@ -76,16 +78,19 @@ export function TopBar(props: {
     const toastId = toast.success(
       'Moved to Trash',
       undefined,
-      {
-        text: 'Undo',
-        onClick: () => {
-          if (toastId != null) toast.dismiss(toastId);
-          handle.undo().then(
-            () => toast.success('Restored from Trash'),
-            () => toast.failure('Failed to restore from Trash')
-          );
+      [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Restored from Trash'),
+              () => toast.failure('Failed to restore from Trash')
+            );
+          },
         },
-      },
+      ],
       10_000
     );
 
@@ -115,6 +120,12 @@ export function TopBar(props: {
       condition: isOwnThread,
     },
     {
+      label: 'Block Sender',
+      icon: ProhibitIcon,
+      action: () => emailCtx.blockSender(),
+      condition: isOwnThread,
+    },
+    {
       label: 'Properties',
       icon: TagIcon,
       action: propertiesControl.toggle,
@@ -134,6 +145,7 @@ export function TopBar(props: {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
+          class="ph-no-capture"
           iconType={isInvite() ? 'emailInvite' : 'email'}
           label={isMobile() ? '' : props.title}
           badges={

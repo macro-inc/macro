@@ -7,56 +7,51 @@
   <head>
     <title>You're Invited to Macro</title>
     <!--[if !mso]><!-->
-      <meta
-        http-equiv="X-UA-Compatible"
-        content="IE=edge"
-      >
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <!--<![endif]-->
-    <meta
-      content="text/html; charset=UTF-8"
-      http-equiv="Content-Type"
-    >
-    <meta
-      content="width=device-width, initial-scale=1"
-      name="viewport"
-    >
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
     <!--[if mso]>
-    <noscript>
-    <xml>
-    <o:OfficeDocumentSettings>
-      <o:AllowPNG/>
-      <o:PixelsPerInch>96</o:PixelsPerInch>
-    </o:OfficeDocumentSettings>
-    </xml>
-    </noscript>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings>
+            <o:AllowPNG />
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
     <![endif]-->
     <!--[if lte mso 11]>
-    <style type="text/css">
-      .mj-outlook-group-fix { width:100% !important; }
-    </style>
+      <style type="text/css">
+        .mj-outlook-group-fix {
+          width: 100% !important;
+        }
+      </style>
     <![endif]-->
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,500&display=swap" rel="stylesheet">
+      
     <style type="text/css">
       @font-face {
-        font-family: 'Berkeley Mono';
-        src: url('https://pub-4030931feb3e4212b2ac93166a411ea7.r2.dev/berkley.woff2') format('woff2');
+        font-family: "Berkeley Mono";
+        src: url("https://pub-4030931feb3e4212b2ac93166a411ea7.r2.dev/berkley.woff2")
+          format("woff2");
         font-display: fallback;
       }
 
-      #outlook a{
+      #outlook a {
         padding: 0;
       }
 
-      img{
+      img {
         -ms-interpolation-mode: bicubic;
         text-decoration: none;
         line-height: 100%;
         outline: none;
         height: auto;
-        border:0;
-      }
-
-      .berkeley-font {
-        font-family: 'Berkeley Mono', 'Courier New', Courier, monospace !important;
+        border: 0;
       }
     </style>
   </head>
@@ -69,20 +64,14 @@
       margin: 0;
     "
   >
-    <div
-      class="berkeley-font"
-      style="
-        box-sizing: border-box;
-        padding: 60px 20px;
-        width: 100%;
-      "
-    >
+    <div style="box-sizing: border-box; padding: 60px 20px; width: 100%">
       <div
-        class="berkeley-font"
         style="
-          font-family: 'Berkeley Mono', 'Courier New', Courier, monospace;
-          background-color: #111;
-          border: 1px solid #444;
+          font-family:
+            &quot;Berkeley Mono&quot;, &quot;Courier New&quot;, Courier,
+            monospace;
+          background-color: #fcfcfc;
+          border: 1px solid #e0e0e0;
           box-sizing: border-box;
           border-radius: 4px;
           max-width: 570px;
@@ -93,53 +82,98 @@
           width: 100%;
         "
       >
-        <div
-          class="berkeley-font"
+        <table
+          cellpadding="0"
+          cellspacing="0"
           style="
-            font-family: 'Berkeley Mono', 'Courier New', Courier, monospace;
-            background-color: #222;
+            font-family: &quot;Inter&quot;, sans-serif;
+            background-color: #f5f5f5;
+            color: #090909;
             box-sizing: border-box;
-            line-height: 60px;
-            font-size: 17px;
-            padding: 0 20px;
-            height: 60px;
+            font-size: 18px;
+            padding: 10px 20px;
             width: 100%;
+            border: none;
           "
         >
+          <tbody>
+            <tr>
+              {% if let Some(url) = sender_profile_picture_url %}
+              <td
+                style="
+                  vertical-align: middle;
+                  width: 40px;
+                  min-width: 40px;
+                  padding-right: 8px;
+                "
+              >
+                <div
+                  style="
+                    border: 1px solid #e0e0e0;
+                    box-sizing: border-box;
+                    border-radius: 20px;
+                    overflow: clip;
+                    height: 40px;
+                    width: 40px;
+                  "
+                >
+                  <img
+                    src="{{ url }}"
+                    alt=""
+                    style="
+                      width: 100%;
+                      height: 100%;
+                      object-fit: cover;
+                      display: block;
+                    "
+                  />
+                </div>
+              </td>
+              {% endif %}
+              <td style="vertical-align: middle; line-height: 1.2">
+                {% if let Some(name) = sender_name %}{{ name }}{% else %}{% if let Some(email) = sender_email %}<span
+                  style="
+                    color: #626262;
+                    font-family:
+                      &quot;Berkeley Mono&quot;, &quot;Courier New&quot;,
+                      Courier, monospace;
+                  "
+                  >&lt;{{ email }}&gt;</span
+                >{% else %}A Macro user{% endif %}{% endif %} has invited you to Macro
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <hr style="border: none; border-top: 1px dashed #e0e0e0; margin: 0" />
+        <div style="box-sizing: border-box; padding: 20px">
           <div
             style="
-              border: 1px solid #444;
-              vertical-align: middle;
-              box-sizing: border-box;
-              display: inline-block;
-              border-radius: 20px;
-              margin-right: 3px;
-              overflow: clip;
-              height: 40px;
-              width: 40px;
+              color: #090909;
+              font-size: 16px;
+              font-family: &quot;Inter&quot;, sans-serif;
+              line-height: 1.4;
             "
           >
-            <!--user-profile-icon-->
-          </div>
-          User has invited you to Macro
-        </div>
-        <hr
-          style="
-            border: none;
-            border-top: 1px dashed #444;
-            margin: 0;
-          "
-        />
-        <div
-          class="berkeley-font"
-          style="
-            font-family: 'Berkeley Mono', 'Courier New', Courier, monospace;
-            box-sizing: border-box;
-            padding: 20px;
-          "
-        >
-          <div>
-            User has invited you to join them on Macro. Collaborate on documents. Stay in sync with tasks. Search over everything. AI Assistance with anything.
+            {% if let Some(name) = sender_name %}{{ name }}{% if let Some(email) = sender_email %}
+            <span
+              style="
+                color: #626262;
+                font-family:
+                  &quot;Berkeley Mono&quot;, &quot;Courier New&quot;, Courier,
+                  monospace;
+              "
+              >&lt;{{ email }}&gt;</span
+            >{% endif %}{% else %}{% if let Some(email) = sender_email %}<span
+              style="
+                color: #626262;
+                font-family:
+                  &quot;Berkeley Mono&quot;, &quot;Courier New&quot;, Courier,
+                  monospace;
+              "
+              >&lt;{{ email }}&gt;</span
+            >{% else %}A Macro user{% endif %}{% endif %} has invited you to join them on Macro. Collaborate on
+            documents. Stay in sync with tasks. Search over everything. AI
+            Assistance with anything.
           </div>
 
           <table
@@ -162,21 +196,24 @@
                   "
                 >
                   <a
-                    class="berkeley-font"
                     style="
-                      font-family: 'Berkeley Mono', 'Courier New', Courier, monospace;
-                      background-color: #f04;
+                      font-family:
+                        &quot;Berkeley Mono&quot;, &quot;Courier New&quot;,
+                        Courier, monospace;
+                      background-color: #ff8f00;
                       text-decoration: none;
                       display: inline-block;
                       white-space: nowrap;
+                      border-radius: 2px;
                       width: min-content;
-                      padding: 2px 10px;
-                      color: #111;
+                      padding: 4px 10px;
+                      color: #090909;
                     "
                     href="{{ referral_url() }}"
                     target="_blank"
                   >
-                    Join User
+                    Join {% if let Some(name) = sender_name %}{{ name }}{% else
+                    %}{% if let Some(email) = sender_email %}{{ email }}{% else %}Macro{% endif %}{% endif %}
                   </a>
                 </td>
                 <td
@@ -187,7 +224,17 @@
                     width: 50%;
                   "
                 >
-                  <!--macro-logo-anim-->
+                  <img
+                    src="https://static-file-service.macro.com/file/b911aba9-94a6-435c-aa16-8404739f13b0"
+                    alt="Macro"
+                    style="
+                      -ms-interpolation-mode: bicubic;
+                      line-height: 100%;
+                      outline: none;
+                      width: 60px;
+                      border: 0;
+                    "
+                  />
                 </td>
               </tr>
             </tbody>

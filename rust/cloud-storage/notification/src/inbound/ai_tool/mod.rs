@@ -53,11 +53,8 @@ where
 {
     AsyncToolSet::new()
         .add_tool::<ListNotifications, NotificationToolContext<T>>()
-        .expect("failed to add ListNotifications tool")
         .add_tool::<MarkNotificationsSeen, NotificationToolContext<T>>()
-        .expect("failed to add MarkNotificationsSeen tool")
         .add_tool::<MarkNotificationsDone, NotificationToolContext<T>>()
-        .expect("failed to add MarkNotificationsDone tool")
 }
 
 /// List the current user's active notifications.

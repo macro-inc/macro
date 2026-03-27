@@ -5,17 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { EntityFilters } from './entityFilters';
 import type { MatchType } from './matchType';
 import type { SearchOn } from './searchOn';
-import type { UnifiedSearchIndex } from './unifiedSearchIndex';
 import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
-import type { UnifiedSearchRequestFilters } from './unifiedSearchRequestFilters';
 
 export interface UnifiedSearchRequest {
   collapse?: UnifiedSearchRequestCollapse;
-  filters?: UnifiedSearchRequestFilters;
-  /** Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all. */
-  include?: UnifiedSearchIndex[];
+  /** Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search. */
+  filters?: EntityFilters;
   /** How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field. */
   match_type: MatchType;
   /** The search query string. Must be at least 3 characters. */

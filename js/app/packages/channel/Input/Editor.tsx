@@ -9,7 +9,10 @@ export function Editor(props: JSX.HTMLAttributes<HTMLDivElement>) {
 
   return (
     <div
-      class={cn('min-h-6 text-sm whitespace-pre-wrap break-words', local.class)}
+      class={cn(
+        'ph-no-capture min-h-6 text-sm whitespace-pre-wrap break-words',
+        local.class
+      )}
       data-input-editor
       {...rest}
     >

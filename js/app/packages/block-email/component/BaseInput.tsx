@@ -1,6 +1,7 @@
 import { fileSelector } from '@core/directive/fileSelector';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
   MACRO_EMAIL_SIGNATURE,
   MAX_ATTACHMENTS_BYTES_SIZE,
@@ -24,6 +25,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
@@ -141,6 +143,7 @@ const getRecipientDisplayName = (item: EmailRecipient): string => {
 };
 
 // Shared constants for recipient display - used in both measurement and rendering
+const MAX_VISIBLE_RECIPIENTS = 3;
 const RECIPIENT_SEPARATOR = ',\u00A0'; // comma + non-breaking space
 const MORE_SUFFIX_TEMPLATE = '+99 more'; // worst-case for measurement
 
@@ -267,7 +270,8 @@ function TruncatedRecipientList(props: {
     let usedWidth = 0;
     let count = 0;
 
-    for (let i = 0; i < recipients.length; i++) {
+    const maxRecipients = Math.min(recipients.length, MAX_VISIBLE_RECIPIENTS);
+    for (let i = 0; i < maxRecipients; i++) {
       const { recipient, prefix } = recipients[i];
       const displayName = getRecipientDisplayName(recipient);
       // Show separator if not the last recipient OR if there will be hidden recipients
@@ -547,13 +551,16 @@ export function BaseInput(props: {
         'Email sent',
         undefined,
         draftId
-          ? {
-              text: 'Undo',
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                void undoSend(draftId);
+          ? [
+              {
+                label: 'Undo',
+                icon: ArrowCounterClockwise,
+                onClick: () => {
+                  if (toastId != null) toast.dismiss(toastId);
+                  void undoSend(draftId);
+                },
               },
-            }
+            ]
           : undefined,
         10_000
       );
@@ -1017,18 +1024,17 @@ export function BaseInput(props: {
 
     // If not already in To or CC, add user to CC
     if (!isInTo && !isInCc) {
-      // Find the user in recipient options
-      const userOption = ctx.recipientOptions().find((recipient) => {
-        const email = recipient.data.email;
-        if (!email) return false;
-        return email === mentionEmail;
-      });
+      // Find the user in recipient options, or construct from mention data
+      const userOption =
+        ctx.recipientOptions().find((recipient) => {
+          const email = recipient.data.email;
+          if (!email) return false;
+          return email === mentionEmail;
+        }) ?? convertContactInfoToEmailRecipient({ email: mentionEmail });
 
-      if (userOption) {
-        // Add to CC recipients
-        form().setRecipients('cc', [...form().recipients().cc, userOption]);
-        toast.success(`${mentionEmail} added to CC`);
-      }
+      // Add to CC recipients
+      form().setRecipients('cc', [...form().recipients().cc, userOption]);
+      toast.success(`${mentionEmail} added to CC`);
     }
   };
 
@@ -1476,7 +1482,7 @@ export function BaseInput(props: {
               setEditor(editor);
               form().setCapturedEditor(editor);
             }}
-            class={`cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
+            class={`ph-no-capture cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
             editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
             initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
@@ -1514,7 +1520,7 @@ export function BaseInput(props: {
               );
             }}
           />
-          <div class="flex gap-1 flex-wrap w-full py-2">
+          <div class="ph-no-capture flex gap-1 flex-wrap w-full py-2">
             <For each={form().attachments.list()}>
               {(attachment) => (
                 <Switch>

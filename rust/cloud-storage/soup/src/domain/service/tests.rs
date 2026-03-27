@@ -115,6 +115,29 @@ impl EmailService for NoopEmailService {
     ) -> Result<Option<String>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
+
+    async fn upsert_email_filter(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::UpsertEmailFilterInput,
+    ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn delete_email_filter(
+        &self,
+        _link: &email::domain::models::Link,
+        _filter_id: Uuid,
+    ) -> Result<bool, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn list_email_filters(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::EmailFilter>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
 }
 
 struct NoopCommsService;

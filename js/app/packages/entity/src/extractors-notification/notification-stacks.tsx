@@ -95,7 +95,7 @@ function NotificationStackRow(props: {
           <div class="flex-shrink-0">
             <NotificationSenderIcon stack={props.stack} size="xs" />
           </div>
-          <span class="truncate min-w-0">
+          <span class="ph-no-capture truncate min-w-0">
             <NotificationDescription stack={props.stack} />
           </span>
           <span class="text-ink-extra-muted/50 flex-shrink-0">
@@ -112,7 +112,7 @@ function NotificationStackRow(props: {
             </Button>
           </div>
         </div>
-        <div class="mt-1 truncate min-w-0 overflow-hidden">
+        <div class="ph-no-capture mt-1 truncate min-w-0 overflow-hidden">
           <NotificationContent stack={props.stack} />
         </div>
       </div>

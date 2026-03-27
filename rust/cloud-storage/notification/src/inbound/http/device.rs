@@ -36,7 +36,7 @@ async fn register_device<S: NotificationReader>(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to register device",
+                    message: "unable to register device".into(),
                 }),
             )
         })?;
@@ -60,7 +60,7 @@ async fn unregister_device<S: NotificationReader>(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "device not found",
+                    message: "device not found".into(),
                 }),
             )
         })?;

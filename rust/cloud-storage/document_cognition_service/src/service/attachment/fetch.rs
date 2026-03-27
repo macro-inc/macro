@@ -3,6 +3,7 @@ use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
 use ai::types::{Attachment, ImageData};
 use ai_format::document::Document;
 use ai_tools::read::EmailMessage;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     chat::{AttachmentType, ChatAttachmentWithName},
     document::FileTypeExt,
@@ -16,6 +17,7 @@ pub async fn fetchium(
     scribe: Arc<DcsScribe>,
     attachments: Vec<ChatAttachmentWithName>,
     jwt: &str,
+    user_id: MacroUserIdStr<'static>,
 ) -> Result<Vec<Attachment>, anyhow::Error> {
     // --- closure to fetch single attachment ---
     #[tracing::instrument(err, skip(scribe))]
@@ -23,14 +25,15 @@ pub async fn fetchium(
         attachment: ChatAttachmentWithName,
         scribe: Arc<DcsScribe>,
         jwt: &str,
+        user_id: MacroUserIdStr<'static>,
     ) -> Result<Attachment, anyhow::Error> {
         match attachment.attachment_type {
             AttachmentType::Project => {
                 // fetch id's of stuff in folder
                 let project_items = scribe
                     .document
-                    .fetch_project(attachment.attachment_id.clone(), jwt.to_owned())
-                    .content()
+                    .fetch_project(attachment.attachment_id.clone())
+                    .content(scribe.document.db(), user_id)
                     .await?
                     .to_string();
                 Ok(Attachment::Text(
@@ -59,7 +62,6 @@ pub async fn fetchium(
                     .channel
                     .get_channel_transcript(
                         attachment.attachment_id.as_str(),
-                        None,
                         None,
                         Some(CHANNEL_TRANSCRIPT_MAX_MESSAGES),
                     )
@@ -98,7 +100,6 @@ pub async fn fetchium(
                         &attachment.attachment_id,
                         0,
                         EMAIL_THREAD_MESSAGE_LIMIT,
-                        None,
                     )
                     .await?;
 
@@ -137,7 +138,7 @@ pub async fn fetchium(
 
     let futures = attachments
         .into_iter()
-        .map(|attachment| fetchington(attachment, scribe.clone(), jwt));
+        .map(|attachment| fetchington(attachment, scribe.clone(), jwt, user_id.clone()));
 
     let results = futures::future::try_join_all(futures).await.inspect_err(
         |err| tracing::error!(error=?err, "failed to fetch one or more attachments"),

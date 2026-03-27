@@ -29,6 +29,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 ] }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
+s3_key = { path = "../s3_key" }
 nix = { version = "0.29.0", features = ["process", "signal"] }
 remote_env_var = { path = "../remote_env_var" }
 rs-libreoffice-bindings = "0.0.7"

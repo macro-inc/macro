@@ -91,6 +91,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true }
 model = { path = "../model" }
+s3_key = { path = "../s3_key" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 model_user = { path = "../model_user", features = ["axum"] }

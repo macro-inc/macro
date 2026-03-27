@@ -6,12 +6,13 @@ use axum::{
 use futures::StreamExt;
 use macro_user_id::cowlike::CowLike;
 use model::{
-    document::{BasicDocument, build_extensionless_document_key},
+    document::BasicDocument,
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
 };
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use reqwest::StatusCode;
+use s3_key::build_cloud_storage_bucket_document_key;
 
 const ONBOARDING_FOLDER_NAME: &str = "ONBOARDING_DOCUMENTS";
 const PROJECT_NAME: &str = "Starter Docs";
@@ -50,7 +51,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to get folder content names",
+                    message: "failed to get folder content names".into(),
                 }),
             )
                 .into_response()
@@ -67,7 +68,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "unable to start transaction",
+                message: "unable to start transaction".into(),
             }),
         )
             .into_response()
@@ -91,7 +92,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to create project",
+                    message: "failed to create project".into(),
                 }),
             )
                 .into_response()
@@ -114,7 +115,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "failed to create onboarding documents",
+                    message: "failed to create onboarding documents".into(),
                 }),
             )
                 .into_response()
@@ -128,7 +129,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to fill markdown template",
+                message: "failed to fill markdown template".into(),
             }),
         )
             .into_response()
@@ -140,7 +141,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to fill canvas template",
+                message: "failed to fill canvas template".into(),
             }),
         )
             .into_response()
@@ -168,7 +169,7 @@ pub async fn handler(
                     None => format!("{ONBOARDING_FOLDER_NAME}/{}", uri_document_name),
                 };
 
-                let target_key = build_extensionless_document_key(
+                let target_key = build_cloud_storage_bucket_document_key(
                     user_id.as_ref(),
                     &document.document_id,
                     document.document_version_id,
@@ -205,7 +206,7 @@ pub async fn handler(
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to copy documents",
+                message: "failed to copy documents".into(),
             }),
         )
             .into_response());
@@ -224,7 +225,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to set onboarding status",
+                message: "failed to set onboarding status".into(),
             }),
         )
             .into_response()
@@ -238,7 +239,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to commit transaction",
+                message: "failed to commit transaction".into(),
             }),
         )
             .into_response()

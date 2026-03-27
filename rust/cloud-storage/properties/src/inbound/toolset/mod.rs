@@ -43,7 +43,5 @@ where
 {
     AsyncToolSet::new()
         .add_tool::<GetEntityProperties, PropertiesToolContext<T>>()
-        .expect("failed to add GetEntityProperties tool")
         .add_tool::<SetEntityProperty, PropertiesToolContext<T>>()
-        .expect("failed to add SetEntityProperty tool")
 }

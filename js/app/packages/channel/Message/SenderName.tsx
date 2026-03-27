@@ -16,7 +16,7 @@ export function SenderName(props: SenderNameProps) {
 
   return (
     <Show when={!props.hidden}>
-      <span class={cn('text-sm font-semibold truncate', props.class)}>
+      <span class={cn('text-sm font-medium truncate', props.class)}>
         {displayName()}
       </span>
     </Show>

@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { createPersistenceKey, setupQueryPersistence } from './persistence';
+import { setupQueryPersistence } from './persistence';
 import { createQueryPersistenceScopes } from './persistence-scopes';
 import { initSoupNormalizer } from './soup/cache';
 
@@ -15,12 +15,6 @@ export const queryClient = new QueryClient({
 });
 
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
-
-// Clean up orphaned v0 databases from the old whole-cache persistence format
-try {
-  indexedDB.deleteDatabase(createPersistenceKey('channels', 0));
-  indexedDB.deleteDatabase(createPersistenceKey('email-threads', 0));
-} catch {}
 
 setupQueryPersistence({
   queryClient,

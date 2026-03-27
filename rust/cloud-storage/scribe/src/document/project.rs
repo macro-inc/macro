@@ -1,11 +1,11 @@
 use anyhow::Result;
-use document_storage_service_client::DocumentStorageServiceClient;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::item::{Item, ItemWithUserAccessLevel};
-use model::project::response::GetProjectContentResponse;
-use std::sync::Arc;
+use models_permissions::share_permission::access_level::AccessLevel;
+use sqlx::{Pool, Postgres};
 
 #[derive(Debug, Clone)]
-pub struct ScribeProjectPreview(pub GetProjectContentResponse);
+pub struct ScribeProjectPreview(pub Vec<ItemWithUserAccessLevel>);
 
 pub fn format_item_with_access(
     item: &ItemWithUserAccessLevel,
@@ -39,7 +39,7 @@ pub fn format_item_with_access(
 
 impl std::fmt::Display for ScribeProjectPreview {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, item) in self.0.data.iter().enumerate() {
+        for (i, item) in self.0.iter().enumerate() {
             writeln!(f, "{}.", i)?;
             format_item_with_access(item, f)?;
         }
@@ -48,34 +48,34 @@ impl std::fmt::Display for ScribeProjectPreview {
 }
 
 pub struct ProjectFetcher<Content> {
-    inner_dss: Arc<DocumentStorageServiceClient>,
     pub content: Content,
     pub id: String,
-    pub jwt: String,
 }
 
 pub type NoData = ();
 
 impl ProjectFetcher<NoData> {
-    pub fn new(client: Arc<DocumentStorageServiceClient>, id: String, jwt: String) -> Self {
-        Self {
-            content: (),
-            id,
-            jwt,
-            inner_dss: client,
-        }
+    pub fn new(id: String) -> Self {
+        Self { content: (), id }
     }
 
-    pub async fn content(&mut self) -> Result<ProjectFetcher<ScribeProjectPreview>> {
-        self.inner_dss
-            .get_project(&self.id, &self.jwt)
-            .await
-            .map(|response| ProjectFetcher {
-                content: ScribeProjectPreview(response),
-                id: self.id.clone(),
-                inner_dss: self.inner_dss.clone(),
-                jwt: self.jwt.clone(),
-            })
+    pub async fn content(
+        &self,
+        db: &Pool<Postgres>,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<ProjectFetcher<ScribeProjectPreview>> {
+        let items = macro_db_client::projects::get_project::get_project_content_v2(
+            db,
+            &self.id,
+            user_id,
+            AccessLevel::View,
+        )
+        .await?;
+
+        Ok(ProjectFetcher {
+            content: ScribeProjectPreview(items),
+            id: self.id.clone(),
+        })
     }
 }
 

@@ -36,14 +36,12 @@ async fn handler(
 ) -> Result<(), Error> {
     let key = event.payload.detail.object.key;
 
-    if !key.starts_with("extract/") {
-        tracing::warn!("Skipping object that doesn't start with extract/: {}", key);
-        return Err(Error::from(
-            "Skipping object that doesn't start with extract/: {}",
-        ));
-    }
+    let staging_key = s3_key::BulkUploadStagingKey::from_s3_key(&key).map_err(|e| {
+        tracing::warn!(error=?e, key=%key, "skipping non-extract key");
+        Error::from("key is not a bulk upload staging key")
+    })?;
 
-    let upload_request_id = key.trim_start_matches("extract/");
+    let upload_request_id = staging_key.request_id.as_str();
 
     tracing::info!("Processing request: {}", upload_request_id);
 
@@ -74,7 +72,7 @@ async fn handler(
     sqs_client
         .enqueue_upload_extractor_unzip(
             upload_request_id,
-            key.as_str(),
+            &staging_key.to_key(),
             bulk_upload_request.user_id.as_str(),
             &bulk_upload_request.name,
             &bulk_upload_request.parent_id,

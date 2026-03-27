@@ -1,6 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { beveledCorners } from '../signal/beveledCorners';
 import { toast } from '@core/component/Toast/Toast';
 import { isOk } from '@core/util/maybeResult';
 import IconCheck from '@icon/regular/check.svg';

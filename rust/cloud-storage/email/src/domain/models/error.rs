@@ -44,4 +44,7 @@ pub enum EmailErr {
     /// The caller does not have permission to perform this action.
     #[error("You do not have permission to perform this action")]
     Unauthorized,
+    /// Invalid email filter input.
+    #[error("{0}")]
+    InvalidEmailFilter(String),
 }

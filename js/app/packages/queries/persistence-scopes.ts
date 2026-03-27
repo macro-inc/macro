@@ -6,9 +6,6 @@ import { createPerQueryIDBStore } from './persistence/per-query-idb';
 const persistedChannelQueryPrefixes = [
   channelKeys.withID._def,
   channelKeys.mentions._def,
-  channelKeys.attachments._def,
-  channelKeys.participants._def,
-  channelKeys.threadReplies._def,
   channelKeys.activity.queryKey,
   channelKeys.listChannels.queryKey,
 ] as const;

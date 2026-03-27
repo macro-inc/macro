@@ -43,7 +43,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to parse user id",
+                        message: "unable to parse user id".into(),
                     }),
                 )
                     .into_response()
@@ -62,7 +62,7 @@ pub async fn handler(
         Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "no permissions were found for user",
+                message: "no permissions were found for user".into(),
             }),
         )
             .into_response())

@@ -58,7 +58,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to get identity provider id by name",
+                        message: "unable to get identity provider id by name".into(),
                     }),
                 )
                     .into_response()
@@ -68,7 +68,7 @@ pub async fn handler(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "missing idp_name or idp_id",
+                message: "missing idp_name or idp_id".into(),
             }),
         )
             .into_response());
@@ -85,7 +85,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "unable to fetch links",
+                        message: "unable to fetch links".into(),
                     }),
                 )
                     .into_response()

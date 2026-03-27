@@ -4,15 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { NewEmailMetadata } from './newEmailMetadata';
 import type { NotifEventOneOfOnesevenTag } from './notifEventOneOfOnesevenTag';
-import type { TaskAssignedMetadata } from './taskAssignedMetadata';
 
 /**
- * A user was assigned to a task.
+ * A new email has been sent to the user.
  */
 export type NotifEventOneOfOneseven = {
-  /** A user was assigned to a task. */
-  content: TaskAssignedMetadata;
+  /** A new email has been sent to the user. */
+  content: NewEmailMetadata;
   tag: NotifEventOneOfOnesevenTag;
 };

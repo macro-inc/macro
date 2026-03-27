@@ -141,6 +141,11 @@ async function createDocumentIndex(opensearchClient: Client) {
               index: false,
               doc_values: true,
             },
+            sub_type: {
+              type: 'keyword',
+              index: true,
+              doc_values: true,
+            },
           },
         },
       },

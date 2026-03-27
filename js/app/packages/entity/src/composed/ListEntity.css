@@ -1,0 +1,30 @@
+/* Variables for x-axis alignment of mobile soup inbox Entities */
+.soup-list-entity {
+  --soup-inbox-unread-indicator-diameter: 11px;
+  --soup-inbox-unread-indicator-padding-x: 8px;
+  --soup-inbox-unread: calc(
+    var(--soup-inbox-unread-indicator-diameter) +
+      var(--soup-inbox-unread-indicator-padding-x) * 2
+  );
+  --soup-inbox-icon-diameter: 44px;
+  --soup-inbox-icon-factor: 0.5454;
+  --soup-inbox-icon-padding-r: 12px;
+  --soup-inbox-left-of-content: calc(
+    var(--soup-inbox-unread) + var(--soup-inbox-icon-diameter) +
+      var(--soup-inbox-icon-padding-r)
+  );
+
+  --soup-stack-icon-diameter: 24px;
+  --soup-stack-row-padding-l: calc(
+    var(--soup-inbox-unread) + 0.5 * var(--soup-inbox-icon-diameter)
+  );
+  --soup-stack-row-border-l: 2px;
+  --soup-stack-header-icon-padding-l: calc(
+    var(--soup-inbox-unread) + 0.5 * var(--soup-inbox-icon-diameter) - 0.5 *
+      var(--soup-stack-icon-diameter) - var(--soup-stack-row-padding-l)
+  );
+  --soup-stack-row-unread-column-width: calc(
+    var(--soup-inbox-left-of-content) - var(--soup-stack-row-padding-l) -
+      var(--soup-stack-row-border-l)
+  );
+}

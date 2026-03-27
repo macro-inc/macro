@@ -36,8 +36,6 @@ scribe = { path = "../scribe" }
 search_service_client = { path = "../search_service_client" }
 email_service_client = { path = "../email_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
-comms_service_client = { path = "../comms_service_client" }
-document_cognition_service_client = { path = "../document_cognition_service_client" }
 static_file_service_client = { path = "../static_file_service_client" }
 sync_service_client = { path = "../sync_service_client" }
 soup = { path = "../soup", features = ["all"] }

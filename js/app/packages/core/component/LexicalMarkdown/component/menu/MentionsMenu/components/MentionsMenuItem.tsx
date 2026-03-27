@@ -86,7 +86,7 @@ export function MentionsMenuItem(props: {
     >
       <div class="mr-2">{icon()}</div>
       <span
-        class="text-ink text-xs sm:text-sm font-medium grow overflow-hidden text-nowrap"
+        class="ph-no-capture text-ink text-xs sm:text-sm font-medium grow overflow-hidden text-nowrap"
         style={{ 'text-overflow': 'ellipsis' }}
       >
         {name()}

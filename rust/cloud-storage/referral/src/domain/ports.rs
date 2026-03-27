@@ -7,6 +7,7 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
+use std::future::Future;
 
 use crate::domain::models::{ReferralCode, ReferralError};
 
@@ -51,6 +52,13 @@ pub trait ReferralRepo: Send + Sync + 'static {
         &self,
         referral_code: &ReferralCode,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Gets the sender's profile picture URL and display name in a single query.
+    /// Returns `(profile_picture_url, display_name)`, either of which may be `None`.
+    fn get_sender_info<'a>(
+        &self,
+        user_id: &MacroUserId<Lowercase<'a>>,
+    ) -> impl Future<Output = Result<(Option<String>, Option<String>), Self::Err>> + Send;
 }
 
 /// Repository to handle applying discounts to the referrer when a referral is

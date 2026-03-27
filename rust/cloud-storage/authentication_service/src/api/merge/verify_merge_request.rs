@@ -58,7 +58,7 @@ pub async fn handler(
                 (
                     StatusCode::NOT_FOUND,
                     Json(ErrorResponse {
-                        message: "account merge request not found",
+                        message: "account merge request not found".into(),
                     }),
                 )
                     .into_response()
@@ -67,7 +67,7 @@ pub async fn handler(
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "failed to get account merge request",
+                        message: "failed to get account merge request".into(),
                     }),
                 )
                     .into_response()
@@ -99,7 +99,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to begin transaction",
+                message: "failed to begin transaction".into(),
             }),
         )
             .into_response()
@@ -117,7 +117,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to merge accounts",
+                message: "failed to merge accounts".into(),
             }),
         )
             .into_response()
@@ -180,7 +180,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "failed to commit transaction",
+                message: "failed to commit transaction".into(),
             }),
         )
             .into_response()

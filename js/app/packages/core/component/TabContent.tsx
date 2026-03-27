@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 
 interface TabContentProps {
@@ -27,6 +28,7 @@ interface TabContentRowProps {
   subtext: string | JSX.Element;
   subtext2?: string;
   isLoading?: boolean;
+  class?: string;
 }
 
 export function TabContentRow(props: ParentProps<TabContentRowProps>) {
@@ -39,7 +41,9 @@ export function TabContentRow(props: ParentProps<TabContentRowProps>) {
           <div class="animate-pulse bg-ink-extra-muted rounded max-w-[100px] min-h-[20px] leading-5"></div>
         }
       >
-        <div class="text-ink-muted text-xs leading-5">{props.subtext}</div>
+        <div class={cn('text-ink-muted text-xs leading-5', props.class)}>
+          {props.subtext}
+        </div>
         {props.children}
       </Show>
     </div>

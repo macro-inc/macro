@@ -245,6 +245,17 @@ impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
     }
 }
 
+/// A notification type that a user has disabled.
+///
+/// Presence of a row means the user has opted out of this type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisabledNotificationType {
+    /// The user who disabled this type.
+    pub user_id: MacroUserIdStr<'static>,
+    /// The notification event type (e.g. "channel_message_send").
+    pub notification_event_type: String,
+}
+
 /// Trait that all notification types must implement.
 pub trait Notification: Serialize + DeserializeOwned + Send + Sync + 'static {
     /// The type name of this notification.

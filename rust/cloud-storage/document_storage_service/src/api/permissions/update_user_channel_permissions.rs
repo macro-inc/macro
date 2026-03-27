@@ -22,7 +22,7 @@ pub async fn handler(
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                message: "invalid channel id format",
+                message: "invalid channel id format".into(),
             }),
         )
             .into_response()
@@ -38,7 +38,7 @@ pub async fn handler(
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
-                            message: "failed to add permissions for channel users",
+                            message: "failed to add permissions for channel users".into(),
                         }),
                     )
                         .into_response()
@@ -52,7 +52,7 @@ pub async fn handler(
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
-                            message: "failed to remove permissions for channel users",
+                            message: "failed to remove permissions for channel users".into(),
                         }),
                     )
                         .into_response()

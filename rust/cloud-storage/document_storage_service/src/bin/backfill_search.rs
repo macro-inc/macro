@@ -3,6 +3,7 @@
 /// - DATABASE_URL
 /// - SEARCH_EVENT_QUEUE
 use anyhow::Context;
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use macro_entrypoint::MacroEntrypoint;
 use model::document::FileType;
@@ -13,6 +14,15 @@ struct Args {
     /// Comma separated list of file types to process
     #[arg(long = "file_types", short = 'f')]
     file_types: Option<String>,
+    /// Filter to only documents with this sub type (e.g. "task")
+    #[arg(long = "sub_type", short = 's')]
+    sub_type: Option<String>,
+    /// Only include documents created after this time (ISO 8601, e.g. "2026-03-24T00:00:00Z")
+    #[arg(long = "created_after")]
+    created_after: Option<DateTime<Utc>>,
+    /// Only include documents created before this time (ISO 8601, e.g. "2026-03-25T00:00:00Z")
+    #[arg(long = "created_before")]
+    created_before: Option<DateTime<Utc>>,
 }
 
 #[tokio::main]
@@ -24,8 +34,13 @@ async fn main() -> anyhow::Result<()> {
     let file_types: Option<Vec<String>> = args
         .file_types
         .map(|s| s.split(',').map(|s| s.to_string()).collect());
+    let sub_type = args.sub_type;
+    let created_after = args.created_after;
+    let created_before = args.created_before;
 
-    println!("Starting backfill_search with {file_types:?}");
+    println!(
+        "Starting backfill_search with file_types={file_types:?} sub_type={sub_type:?} created_after={created_after:?} created_before={created_before:?}"
+    );
 
     let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL not set")?;
     let db = PgPoolOptions::new()
@@ -53,6 +68,9 @@ async fn main() -> anyhow::Result<()> {
             limit,
             offset,
             &file_types,
+            &sub_type,
+            &created_after,
+            &created_before,
         )
         .await
         .context("Failed to get documents")?;
@@ -61,6 +79,9 @@ async fn main() -> anyhow::Result<()> {
             tracing::trace!("no more documents to process");
             break;
         }
+
+        let first_created = documents.first().and_then(|d| d.created_at);
+        let last_created = documents.last().and_then(|d| d.created_at);
 
         total += documents.len();
 
@@ -79,7 +100,12 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?;
 
-        println!("completed offset {offset} documents");
+        println!(
+            "completed batch: offset={offset} count={} created_at=[{} .. {}]",
+            documents.len(),
+            first_created.map_or("N/A".to_string(), |t| t.to_rfc3339()),
+            last_created.map_or("N/A".to_string(), |t| t.to_rfc3339()),
+        );
 
         offset += limit;
     }

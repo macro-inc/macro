@@ -117,7 +117,7 @@ export function AttachMenu(props: AttachMenuProps) {
   return (
     <Show when={props.open}>
       <div
-        class="fixed inset-0 bg-transparent z-item-options-menu"
+        class="ph-no-capture fixed inset-0 bg-transparent z-item-options-menu"
         onPointerDown={handleOverlayClick}
       >
         <div

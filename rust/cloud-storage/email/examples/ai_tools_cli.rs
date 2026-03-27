@@ -97,10 +97,7 @@ async fn main() {
     let toolset = email_toolset();
 
     #[expect(deprecated)]
-    let context = RequestContext {
-        user_id,
-        jwt: Arc::new(String::new()),
-    };
+    let context = RequestContext { user_id };
 
     let cli = Cli::new(
         toolset,

@@ -30,8 +30,6 @@ use macro_middleware::cloud_storage::ensure_access::chat::ChatAccessLevelExtract
 use model::user::axum_extractor::MacroUserExtractor;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::Arc;
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "lowercase")]
 pub enum ToolPostRequest {
@@ -165,10 +163,8 @@ pub async fn handler(
                 properties_tool_context: state.properties_tool_context.clone(),
             };
 
-            #[expect(deprecated)]
             let request_context = RequestContext {
                 user_id: user.macro_user_id,
-                jwt: Arc::new(String::new()),
             };
 
             let tool_result = toolset

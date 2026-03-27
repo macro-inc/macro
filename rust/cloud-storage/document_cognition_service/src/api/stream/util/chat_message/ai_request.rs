@@ -7,6 +7,7 @@ use crate::model::chats::ChatResponse;
 
 use ai::types::{ChatCompletionRequest, MessageBuilder, RequestBuilder};
 use anyhow::{Context, Result};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
 // fetch documents then build request
@@ -18,11 +19,13 @@ pub async fn build_chat_completion_request(
     static_system_prompt: &str,
     jwt: &str,
     user_memory: Option<&str>,
+    user_id: MacroUserIdStr<'static>,
 ) -> Result<ChatCompletionRequest> {
     let attachments = fetch::fetchium(
         ctx.scribe.clone(),
         incoming_message.attachments.clone().unwrap_or_default(),
         jwt,
+        user_id,
     )
     .await
     .context("failed to fetch attachment content")?;

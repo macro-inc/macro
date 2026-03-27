@@ -7,7 +7,6 @@ use ai_toolset::RequestContext;
 use chrono::Utc;
 use futures::stream::StreamExt;
 use serde::Deserialize;
-use std::sync::Arc;
 
 static GENERATION_MODEL: Model = Model::Claude46Opus;
 static JUDGE_MODEL: Model = Model::Claude46Sonnet;
@@ -158,8 +157,6 @@ where
 
         let request_context = RequestContext {
             user_id: user.clone(),
-            #[allow(deprecated)]
-            jwt: Arc::new("fake_jwt".into()),
         };
 
         {

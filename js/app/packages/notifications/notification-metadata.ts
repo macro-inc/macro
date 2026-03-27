@@ -8,6 +8,8 @@ export function getNotificationAction(n: UnifiedNotification): string {
     .with('channel_mention', () => 'mentioned you in')
     .with('document_mention', () => 'sent a document')
     .with('mentioned_in_document_comment', () => 'mentioned you in')
+    .with('replied_to_document_comment_thread', () => 'replied in')
+    .with('commented_on_document', () => 'commented on')
     .with('channel_message_send', () => 'sent a message in')
     .with('ai_response', () => 'AI responded')
     .with('channel_message_reply', () => 'replied in')
@@ -29,6 +31,11 @@ export function getNotificationTargetName(
       { tag: 'mentioned_in_document_comment' },
       (m) => m.content.documentName
     )
+    .with(
+      { tag: 'replied_to_document_comment_thread' },
+      (m) => m.content.documentName
+    )
+    .with({ tag: 'commented_on_document' }, (m) => m.content.documentName)
     .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
     .with({ tag: 'channel_mention' }, () => undefined)
@@ -50,6 +57,8 @@ export function getNotificationContent(
     .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
     .with({ tag: 'document_mention' }, (m) => m.content.documentName)
     .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text)
+    .with({ tag: 'replied_to_document_comment_thread' }, (m) => m.content.text)
+    .with({ tag: 'commented_on_document' }, (m) => m.content.text)
     .with({ tag: 'new_email' }, (m) => m.content.subject)
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
     .with({ tag: 'channel_invite' }, () => undefined)
@@ -77,6 +86,8 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
     .with({ tag: 'task_assigned' }, () => true)
     .with({ tag: 'document_mention' }, () => true)
     .with({ tag: 'mentioned_in_document_comment' }, () => true)
+    .with({ tag: 'replied_to_document_comment_thread' }, () => true)
+    .with({ tag: 'commented_on_document' }, () => true)
     .with({ tag: 'channel_invite' }, () => true)
     .with({ tag: 'invite_to_team' }, () => true)
     .exhaustive();

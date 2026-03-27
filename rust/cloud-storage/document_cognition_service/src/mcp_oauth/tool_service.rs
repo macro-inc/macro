@@ -90,11 +90,7 @@ where
         let user_id = MacroUserIdStr::try_from(identity.user_id.clone())
             .map_err(|e| rmcp::ErrorData::internal_error(format!("invalid user id: {e}"), None))?;
 
-        #[allow(deprecated)]
-        let request_context = RequestContext {
-            jwt: Arc::new(identity.jwt.clone()),
-            user_id,
-        };
+        let request_context = RequestContext { user_id };
 
         let arguments = request
             .arguments

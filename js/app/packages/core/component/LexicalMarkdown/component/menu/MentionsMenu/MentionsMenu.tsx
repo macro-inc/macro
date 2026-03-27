@@ -641,6 +641,7 @@ function VirtualizedItemList(props: {
               <Show when={item()}>
                 {(currentItem) => (
                   <div
+                    class="ph-no-capture"
                     style={{
                       position: 'absolute',
                       top: 0,

@@ -177,8 +177,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 .with_macro_db(pool.clone())
                 .build(),
         )
-        .with_channel_client_and_db(comms_service_client.clone(), pool.clone())
-        .with_dcs_client(document_cognition_service_client)
+        .with_channel_client(pool.clone())
+        .with_dcs_client(pool.clone())
         .with_email_client(email_service_client)
         .with_static_file_client(static_file_service_client.clone());
 

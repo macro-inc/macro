@@ -401,9 +401,10 @@ export const createSoupFilters = (
       predicate: (entity) => !taskFilter(entity),
     },
     {
-      id: 'task-not-completed',
-      label: 'Not Completed',
-      predicate: (entity) => taskFilter(entity) && !isCompleted(entity),
+      id: 'active-task',
+      label: 'Task active',
+      predicate: (entity) =>
+        taskFilter(entity) && !isCompleted(entity) && !isCanceled(entity),
     },
     ...TASK_STATUS_FILTERS,
     ...TASK_PRIORITY_FILTERS,
@@ -421,9 +422,9 @@ export const createSoupFilters = (
  */
 export const SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
   { id: 'focus', allowMultiple: false },
-  { id: 'entity-type', allowMultiple: false },
+  { id: 'entity-type', allowMultiple: true },
 ];
 
 type SoupFilter = ReturnType<typeof createSoupFilters>[number];
 
-export type FilterID = Extract<SoupFilter, { id: string & {} }>['id'];
+export type FilterID = Extract<SoupFilter, { id: string }>['id'];

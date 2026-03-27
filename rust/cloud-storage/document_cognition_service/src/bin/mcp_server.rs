@@ -15,7 +15,6 @@ use dashmap::DashMap;
 use document_cognition_service::mcp_oauth::{
     mcp_router, state::OAuthState, tool_service::AuthenticatedToolService,
 };
-use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
@@ -121,8 +120,6 @@ async fn main() -> anyhow::Result<()> {
     let document_storage_client =
         DocumentStorageServiceClient::new(internal_auth_key.as_ref().to_string(), dss_url.clone());
 
-    let comms_service_client = comms_service_client::CommsServiceClient::new(dss_url.clone());
-
     let sync_service_auth_key = if is_local() {
         env_vars.sync_service_auth_key.as_ref().to_owned()
     } else {
@@ -144,14 +141,6 @@ async fn main() -> anyhow::Result<()> {
     let email_service_client = Arc::new(EmailServiceClient::new(
         internal_auth_key.as_ref().to_string(),
         env_vars.email_service_url.as_ref().to_owned(),
-    ));
-
-    // DCS URL for scribe loopback — just use localhost on port 8080
-    let dcs_url = std::env::var("DOCUMENT_COGNITION_SERVICE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
-    let document_cognition_service_client = Arc::new(DocumentCognitionServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
-        dcs_url,
     ));
 
     let static_file_service_client =
@@ -264,8 +253,8 @@ async fn main() -> anyhow::Result<()> {
                         .with_macro_db(db.clone())
                         .build(),
                 )
-                .with_channel_client_and_db(comms_service_client, db.clone())
-                .with_dcs_client(document_cognition_service_client)
+                .with_channel_client(db.clone())
+                .with_dcs_client(db.clone())
                 .with_email_client(email_service_client)
                 .with_static_file_client(static_file_service_client),
         ),

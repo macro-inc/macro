@@ -6,6 +6,7 @@ import {
   type EntityData,
 } from '@entity';
 import { useUserId } from '@core/context/user';
+import { ENABLE_CLIENT_EMAIL_SIGNAL_FILTER } from '@core/constant/featureFlags';
 
 const PRIORITY_LABELS = [
   {
@@ -149,6 +150,7 @@ export function signalFilter(entity: EntityData): boolean {
       return true;
     }
     case 'email':
+      if (!ENABLE_CLIENT_EMAIL_SIGNAL_FILTER) return true;
       return isSignalEmail(entity) || entity.isDraft;
     case 'project':
       return true;
@@ -160,6 +162,8 @@ export function signalFilter(entity: EntityData): boolean {
  * Returns the opposite of signal filter.
  */
 export function noiseFilter(entity: EntityData): boolean {
+  if (entity.type === 'email' && !ENABLE_CLIENT_EMAIL_SIGNAL_FILTER)
+    return true;
   return !signalFilter(entity);
 }
 
@@ -173,6 +177,7 @@ export function noiseFilter(entity: EntityData): boolean {
  */
 export function explicitNoiseFilter(entity: EntityData): boolean {
   if (entity.type === 'email') {
+    if (!ENABLE_CLIENT_EMAIL_SIGNAL_FILTER) return false;
     return isNoiseEmail(entity);
   }
   // Non-email items are never explicit noise

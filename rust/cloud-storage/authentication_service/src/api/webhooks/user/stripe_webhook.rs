@@ -37,7 +37,7 @@ pub async fn handler(
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "Missing Stripe-Signature header",
+                    message: "Missing Stripe-Signature header".into(),
                 }),
             )
                 .into_response()
@@ -48,7 +48,7 @@ pub async fn handler(
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "Invalid webhook payload encoding",
+                message: "Invalid webhook payload encoding".into(),
             }),
         )
             .into_response()
@@ -65,7 +65,7 @@ pub async fn handler(
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "failed to construct stripe event",
+                message: "failed to construct stripe event".into(),
             }),
         )
             .into_response()
@@ -363,12 +363,18 @@ async fn handle_team_subscription_event(
     team_id: &uuid::Uuid,
     tracking_data: SubscriptionTrackingData,
 ) -> anyhow::Result<()> {
+    tracing::trace!("handling team subscription");
+
     if subscription_status == "trialing" {
         anyhow::bail!("unexpected trialing status for team subscription");
     }
 
     match subscription_status {
         "active" => {
+            ctx.teams_service
+                .restore_permissions_for_team_members(team_id)
+                .await?;
+
             track_stripe_subscription(ctx.analytics_client.clone(), subscription_id, tracking_data);
             Ok(())
         }

@@ -1,11 +1,15 @@
 use macro_db_client::document::get_document_history::DocumentHistoryInfo;
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_value::PropertyValue;
+use models_properties::{DataType, shared::PropertyOwner};
+use models_soup::SoupProperty;
 use opensearch_client::search::model::Highlight;
 
 use super::*;
 
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new());
+    let result = construct_search_result(vec![], HashMap::new(), HashMap::new());
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -50,7 +54,8 @@ fn test_construct_search_result_single_document() {
         },
     );
 
-    let result = construct_search_result(search_results, document_histories).unwrap();
+    let result =
+        construct_search_result(search_results, document_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -140,7 +145,8 @@ fn test_construct_search_result_multiple_nodes_same_document() {
         },
     );
 
-    let result = construct_search_result(search_results, document_histories).unwrap();
+    let result =
+        construct_search_result(search_results, document_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -216,7 +222,7 @@ fn test_document_history_timestamps() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied from the document history
     assert_eq!(result.len(), 1);
@@ -250,7 +256,7 @@ fn test_document_history_missing_entry() {
     document_histories.insert("22222222-2222-2222-2222-222222222222".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // Documents without history info should not return
     assert_eq!(result.len(), 0);
@@ -281,7 +287,7 @@ fn test_document_history_null_viewed_at() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
@@ -333,7 +339,7 @@ fn test_document_history_multiple_documents() {
     document_histories.insert("22222222-2222-2222-2222-222222222222".to_string(), history2);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied correctly for both documents
     assert_eq!(result.len(), 2);
@@ -391,7 +397,7 @@ fn test_document_history_partial_missing_entries() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
 
     // We should have 2 results - one with real data, one not found
     assert_eq!(result.len(), 1);
@@ -436,7 +442,8 @@ fn test_document_history_deleted() {
         },
     );
 
-    let result = construct_search_result(input_deleted, document_histories).unwrap();
+    let result =
+        construct_search_result(input_deleted, document_histories, HashMap::new()).unwrap();
 
     // Deleted document should be returned with metadata including deleted_at
     assert_eq!(result.len(), 1);
@@ -454,8 +461,12 @@ fn test_document_history_deleted() {
 
     let document_histories_not_found = HashMap::new(); // No entry = not found
 
-    let result_not_found =
-        construct_search_result(input_not_found, document_histories_not_found).unwrap();
+    let result_not_found = construct_search_result(
+        input_not_found,
+        document_histories_not_found,
+        HashMap::new(),
+    )
+    .unwrap();
 
     // Document not in DB should not be returned
     assert_eq!(result_not_found.len(), 0);
@@ -587,9 +598,12 @@ fn test_sort_stability() {
         );
     }
 
-    let result1 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
-    let result2 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
-    let result3 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
+    let result1 =
+        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
+    let result2 =
+        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
+    let result3 =
+        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);
@@ -613,4 +627,91 @@ fn test_sort_stability() {
         ],
         "Results should preserve original search result order"
     );
+}
+
+fn make_test_soup_property(name: &str) -> SoupProperty {
+    SoupProperty {
+        definition: PropertyDefinition {
+            id: Uuid::new_v4(),
+            owner: PropertyOwner::System,
+            display_name: name.to_string(),
+            data_type: DataType::Entity,
+            is_multi_select: true,
+            specific_entity_type: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            is_system: true,
+            is_metadata: false,
+        },
+        value: Some(PropertyValue::EntityRef(vec![])),
+    }
+}
+
+#[test]
+fn test_properties_enrichment_with_properties() {
+    let doc_id = "11111111-1111-1111-1111-111111111111";
+    let input = vec![create_test_document_response(doc_id, "node_1", None)];
+
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    document_histories.insert(
+        doc_id.to_string(),
+        DocumentHistoryInfo {
+            item_id: doc_id.to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            file_type: Some("md".to_string()),
+            file_name: "Test Task".to_string(),
+            owner: "user1".to_string(),
+            deleted_at: None,
+            sub_type: Some(document_sub_type::DocumentSubType::Task),
+        },
+    );
+
+    let mut properties_map = HashMap::new();
+    properties_map.insert(
+        doc_id.to_string(),
+        vec![make_test_soup_property("Assignees")],
+    );
+
+    let result = construct_search_result(input, document_histories, properties_map).unwrap();
+
+    assert_eq!(result.len(), 1);
+    let props = result[0]
+        .properties
+        .as_ref()
+        .expect("properties should be Some");
+    assert_eq!(props.len(), 1);
+    assert_eq!(props[0].definition.display_name, "Assignees");
+}
+
+#[test]
+fn test_properties_enrichment_empty_map() {
+    let doc_id = "11111111-1111-1111-1111-111111111111";
+    let input = vec![create_test_document_response(doc_id, "node_1", None)];
+
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    document_histories.insert(
+        doc_id.to_string(),
+        DocumentHistoryInfo {
+            item_id: doc_id.to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            file_type: Some("md".to_string()),
+            file_name: "Test Task".to_string(),
+            owner: "user1".to_string(),
+            deleted_at: None,
+            sub_type: Some(document_sub_type::DocumentSubType::Task),
+        },
+    );
+
+    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert!(result[0].properties.is_none());
 }

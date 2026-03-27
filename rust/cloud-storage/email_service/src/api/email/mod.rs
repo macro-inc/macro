@@ -7,6 +7,7 @@ pub(crate) mod attachments;
 pub(crate) mod backfill;
 pub(crate) mod contacts;
 pub(crate) mod drafts;
+pub(crate) mod filters;
 pub(crate) mod init;
 pub(crate) mod labels;
 pub(crate) mod links;
@@ -24,6 +25,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/messages", messages::router(state.clone()))
         .nest("/links", links::router())
         .nest("/contacts", contacts::router(state.clone()))
+        .nest("/filters", filters::router())
         .nest("/backfill", backfill::router(state.clone()))
         .nest("/settings", settings::router(state.clone()))
         .nest("/sync", sync::router(state.clone()))

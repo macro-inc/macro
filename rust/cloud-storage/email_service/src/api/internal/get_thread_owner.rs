@@ -21,7 +21,7 @@ pub async fn handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to get owner for thread",
+                    message: "unable to get owner for thread".into(),
                 }),
             )
                 .into_response()
@@ -30,7 +30,7 @@ pub async fn handler(
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: "thread not found",
+                    message: "thread not found".into(),
                 }),
             )
                 .into_response()
@@ -40,7 +40,7 @@ pub async fn handler(
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "invalid macro user id",
+                    message: "invalid macro user id".into(),
                 }),
             )
                 .into_response()

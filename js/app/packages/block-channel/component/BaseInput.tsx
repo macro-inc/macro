@@ -496,7 +496,7 @@ export function BaseInput(props: BaseInputProps) {
         />
       </Show>
       <div
-        class="transition-all duration-150 px-3 pt-2 pb-2 @min-[40rem]:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm mobile:text-base"
+        class="ph-no-capture transition-all duration-150 px-3 pt-2 pb-2 @min-[40rem]:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm mobile:text-base"
         onClick={(e) => {
           e.stopPropagation();
           focusMarkdownArea();
@@ -539,7 +539,7 @@ export function BaseInput(props: BaseInputProps) {
         />
       </div>
       <Show when={videoAttachments()?.length > 0}>
-        <div class="flex flex-row w-full px-2 py-1 gap-2 flex-wrap">
+        <div class="ph-no-capture flex flex-row w-full px-2 py-1 gap-2 flex-wrap">
           <For each={videoAttachments()}>
             {(attachment) => (
               <Attachment attachment={attachment} remove={removeAttachment} />
@@ -548,7 +548,7 @@ export function BaseInput(props: BaseInputProps) {
         </div>
       </Show>
       <Show when={imageAttachments()?.length > 0}>
-        <div class="flex flex-row w-full px-2 py-1 gap-2 flex-wrap">
+        <div class="ph-no-capture flex flex-row w-full px-2 py-1 gap-2 flex-wrap">
           <For each={imageAttachments()}>
             {(attachment) => (
               <Attachment attachment={attachment} remove={removeAttachment} />
@@ -557,7 +557,7 @@ export function BaseInput(props: BaseInputProps) {
         </div>
       </Show>
       <Show when={documentAttachments()?.length > 0}>
-        <div class="flex flex-row w-full px-2 py-1 gap-2 flex-wrap">
+        <div class="ph-no-capture flex flex-row w-full px-2 py-1 gap-2 flex-wrap">
           <For each={documentAttachments()}>
             {(attachment) => (
               <Attachment attachment={attachment} remove={removeAttachment} />

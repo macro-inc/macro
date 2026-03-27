@@ -87,7 +87,7 @@ pub(in crate::api) async fn handler(
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: "unable to deserialize state",
+                message: "unable to deserialize state".into(),
             }),
         )
             .into_response()
@@ -102,7 +102,7 @@ pub(in crate::api) async fn handler(
         _ => Err((
             StatusCode::NOT_IMPLEMENTED,
             Json(ErrorResponse {
-                message: "oauth2 callback not implemented for this provider",
+                message: "oauth2 callback not implemented for this provider".into(),
             }),
         )
             .into_response()),

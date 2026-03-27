@@ -75,16 +75,18 @@ async fn test_get_team_subscription_id(pool: Pool<Postgres>) -> anyhow::Result<(
 async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
-    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
-    let result = team_repo.create_team(&user_id, "team1").await?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let result = team_repo
+        .create_team(&user_id, "team1", &TeamUserTier::Sonnet)
+        .await?;
 
     assert!(!result.id.to_string().is_empty());
     assert_eq!(result.name, "team1");
-    assert_eq!(result.owner_id, "macro|user@user.com");
+    assert_eq!(result.owner_id.0.as_ref(), "macro|user3@user.com");
 
     // Create team with too large a name
     let err = team_repo
-        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000")
+        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", &TeamUserTier::Sonnet)
         .await
         .err()
         .unwrap();
@@ -345,20 +347,58 @@ async fn test_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_accept_team_invite_uses_invite_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    // Invite 22222222... has tier = 'opus' in the fixture
+    let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+
+    let team_member = team_repo
+        .accept_team_invite(&team_invite_id, &user_id)
+        .await?;
+
+    assert_eq!(team_member.tier, TeamUserTier::Opus);
+
+    // Verify the tier persisted in team_user table
+    let row = sqlx::query!(
+        r#"
+        SELECT tier as "tier!: TeamUserTier"
+        FROM team_user
+        WHERE team_id = $1 AND user_id = $2
+        "#,
+        &team_member.team_id,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(row.tier, TeamUserTier::Opus);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_is_user_member_of_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
+    // user@user.com is an owner on team1
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
-
     let is_member = team_repo.is_user_member_of_team(&user_id).await?;
-
-    assert!(!is_member);
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
-
-    let is_member = team_repo.is_user_member_of_team(&user_id).await?;
-
     assert!(is_member);
+
+    // user2@user.com is a member of team1
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
+    let is_member = team_repo.is_user_member_of_team(&user_id).await?;
+    assert!(is_member);
+
+    // user3@user.com is not in any team
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let is_member = team_repo.is_user_member_of_team(&user_id).await?;
+    assert!(!is_member);
 
     Ok(())
 }
@@ -374,17 +414,18 @@ async fn test_get_team_members(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let members = team_repo.get_team_members(&team_id).await?;
 
-    assert_eq!(members.len(), 1);
+    assert_eq!(members.len(), 2);
 
-    let results = vec![("macro|user2@user.com", TeamRole::Member)];
+    let expected = vec!["macro|user2@user.com", "macro|user@user.com"];
 
-    assert_eq!(
-        members
-            .iter()
-            .map(|m| (m.user_id.as_ref(), m.role))
-            .collect::<Vec<_>>(),
-        results
-    );
+    let mut results = members
+        .iter()
+        .map(|m| m.user_id.as_ref())
+        .collect::<Vec<&str>>();
+
+    results.sort();
+
+    assert_eq!(results, expected);
 
     Ok(())
 }
@@ -393,42 +434,115 @@ async fn test_get_team_members(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
-async fn test_bulk_is_member_of_other_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn test_bump_seat_count_positive(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let mut transaction = pool.begin().await?;
+    TeamRepositoryImpl::bump_seat_count(&mut transaction, &team_id, 2).await?;
+    transaction.commit().await?;
+
+    let row = sqlx::query!(r#"SELECT seat_count FROM team WHERE id = $1"#, &team_id,)
+        .fetch_one(&pool)
+        .await?;
+
+    assert_eq!(row.seat_count, 5); // 3 + 2
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_bump_seat_count_negative(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let mut transaction = pool.begin().await?;
+    TeamRepositoryImpl::bump_seat_count(&mut transaction, &team_id, -1).await?;
+    transaction.commit().await?;
+
+    let row = sqlx::query!(r#"SELECT seat_count FROM team WHERE id = $1"#, &team_id,)
+        .fetch_one(&pool)
+        .await?;
+
+    assert_eq!(row.seat_count, 2); // 3 - 1
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_team_member(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
-    let ignore_team_ids = vec![macro_uuid::string_to_uuid(
-        "11111111-1111-1111-1111-111111111111",
-    )?];
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
-    let users = vec![
-        MacroUserIdStr::parse_from_str("macro|user@user.com")?,
-        MacroUserIdStr::parse_from_str("macro|user2@user.com")?,
-    ];
+    // Get existing member
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
 
-    let ignore_team_ids = non_empty::NonEmpty::new(ignore_team_ids.as_slice())?;
-    let users = non_empty::NonEmpty::new(users.as_slice())?;
+    assert_eq!(member.user_id.as_ref(), "macro|user2@user.com");
+    assert_eq!(member.team_id, team_id);
+    assert_eq!(member.role, TeamRole::Member);
 
-    let result = team_repo
-        .bulk_is_member_of_other_team(ignore_team_ids, users)
+    // Get owner
+    let owner_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let member = team_repo.get_team_member(&team_id, &owner_id).await?;
+
+    assert_eq!(member.user_id.as_ref(), "macro|user@user.com");
+    assert_eq!(member.role, TeamRole::Owner);
+
+    // Get non-existent member
+    let missing_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let err = team_repo
+        .get_team_member(&team_id, &missing_id)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
+
+    // Patch tier to Opus
+    team_repo
+        .patch_team_tier(&team_id, &user_id, TeamUserTier::Opus)
         .await?;
 
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].as_ref(), "macro|user2@user.com");
+    // Verify the tier was updated
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
+    assert_eq!(member.tier, TeamUserTier::Opus);
 
-    let ignore_team_ids = vec![macro_uuid::string_to_uuid(
-        "33333333-3333-3333-3333-333333333333",
-    )?];
-
-    let users = vec![MacroUserIdStr::parse_from_str("macro|user4@user.com")?];
-
-    let ignore_team_ids = non_empty::NonEmpty::new(ignore_team_ids.as_slice())?;
-    let users = non_empty::NonEmpty::new(users.as_slice())?;
-
-    let result = team_repo
-        .bulk_is_member_of_other_team(ignore_team_ids, users)
+    // Patch tier to Haiku
+    team_repo
+        .patch_team_tier(&team_id, &user_id, TeamUserTier::Haiku)
         .await?;
 
-    assert!(result.is_empty());
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
+    assert_eq!(member.tier, TeamUserTier::Haiku);
+
+    // Patch tier for non-existent user
+    let missing_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let err = team_repo
+        .patch_team_tier(&team_id, &missing_id, TeamUserTier::Opus)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("member not found"));
 
     Ok(())
 }

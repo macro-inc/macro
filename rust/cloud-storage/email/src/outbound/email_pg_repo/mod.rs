@@ -1,9 +1,9 @@
 use crate::domain::{
     models::{
-        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailThreadPreview,
-        Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
-        PreviewCursorQuery, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, ThreadRow,
-        UpsertedContacts, UserProvider,
+        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailFilter,
+        EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
+        ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo,
+        ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
     ports::{EmailRepo, RecipientsByMessageId},
 };
@@ -17,6 +17,7 @@ mod contact;
 mod db_types;
 mod draft;
 mod dynamic;
+mod email_filter;
 mod label;
 mod link;
 mod message;
@@ -255,5 +256,41 @@ impl EmailRepo for EmailPgRepo {
 
     async fn get_thread_project_id(&self, thread_id: Uuid) -> Result<Option<String>, Self::Err> {
         thread::get_thread_project_id(&self.pool, thread_id).await
+    }
+
+    async fn upsert_email_filter(
+        &self,
+        link_id: Uuid,
+        input: UpsertEmailFilterInput,
+    ) -> Result<EmailFilter, Self::Err> {
+        if let Some(address) = &input.email_address {
+            email_filter::upsert_email_filter_by_address(
+                &self.pool,
+                link_id,
+                address,
+                input.is_important,
+            )
+            .await
+        } else if let Some(domain) = &input.email_domain {
+            email_filter::upsert_email_filter_by_domain(
+                &self.pool,
+                link_id,
+                domain,
+                input.is_important,
+            )
+            .await
+        } else {
+            unreachable!(
+                "UpsertEmailFilterInput must have either email_address or email_domain; validated by service layer"
+            )
+        }
+    }
+
+    async fn delete_email_filter(&self, filter_id: Uuid, link_id: Uuid) -> Result<bool, Self::Err> {
+        email_filter::delete_email_filter(&self.pool, filter_id, link_id).await
+    }
+
+    async fn list_email_filters(&self, link_id: Uuid) -> Result<Vec<EmailFilter>, Self::Err> {
+        email_filter::list_email_filters(&self.pool, link_id).await
     }
 }

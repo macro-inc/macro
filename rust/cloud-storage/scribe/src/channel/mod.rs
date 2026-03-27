@@ -1,19 +1,16 @@
 mod client;
 pub use client::ChannelClient;
-use comms_service_client::CommsServiceClient;
 use sqlx::{Pool, Postgres};
 
 use crate::client::ScribeClient;
-use std::sync::Arc;
 
 impl<D, C, A, E, S> ScribeClient<D, C, A, E, S> {
-    /// Configure the channel client with both HTTP client and database pool for internal operations
-    pub fn with_channel_client_and_db<T: Into<Arc<CommsServiceClient>>>(
+    /// Configure the channel client with a database pool for direct DB operations
+    pub fn with_channel_client(
         self,
-        channel_client: T,
         db: Pool<Postgres>,
     ) -> ScribeClient<D, ChannelClient, A, E, S> {
-        let client = ChannelClient::new_with_db(channel_client.into(), db);
+        let client = ChannelClient::new(db);
         ScribeClient {
             document: self.document,
             channel: client,

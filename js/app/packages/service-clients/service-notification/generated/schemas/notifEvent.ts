@@ -14,6 +14,8 @@ import type { NotifEventOneOfOneseven } from './notifEventOneOfOneseven';
 import type { NotifEventOneOfOnethree } from './notifEventOneOfOnethree';
 import type { NotifEventOneOfSeven } from './notifEventOneOfSeven';
 import type { NotifEventOneOfThree } from './notifEventOneOfThree';
+import type { NotifEventOneOfTwoone } from './notifEventOneOfTwoone';
+import type { NotifEventOneOfTwothree } from './notifEventOneOfTwothree';
 
 /**
  * Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`
@@ -33,4 +35,6 @@ export type NotifEvent =
   | NotifEventOneOfOnethree
   | NotifEventOneOfOnefive
   | NotifEventOneOfOneseven
-  | NotifEventOneOfOnenine;
+  | NotifEventOneOfOnenine
+  | NotifEventOneOfTwoone
+  | NotifEventOneOfTwothree;

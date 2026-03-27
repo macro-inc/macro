@@ -38,7 +38,7 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
           size="xs"
         />
       </Show>
-      <div class="truncate ml-1">{props.attachment.fileName}</div>
+      <div class="ph-no-capture truncate ml-1">{props.attachment.fileName}</div>
       <Show when={props.removable}>
         <div
           class="ml-auto p-2 hover:text-failure"

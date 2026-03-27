@@ -1,11 +1,12 @@
 import { cornerClip } from '@core/util/clipPath';
 import { createMemo, splitProps, type JSX } from 'solid-js';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { beveledCorners } from '../signal/beveledCorners';
 import { cn } from '@ui/utils/classname';
 
 export type ClippedPanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
   active?: boolean;
   edgeColor?: JSX.CSSProperties['color'];
+  highlightColor?: JSX.CSSProperties['color'];
   /**
    * When provided, this overrides all corner behavior:
    * - bypasses clip-path (no corner clipping)
@@ -23,6 +24,7 @@ export function ClippedPanel(props: ClippedPanelProps) {
   const [local, rest] = splitProps(props, [
     'active',
     'edgeColor',
+    'highlightColor',
     'cornerRadius',
     'tr',
     'tl',
@@ -34,9 +36,8 @@ export function ClippedPanel(props: ClippedPanelProps) {
 
   const outerBgImage = createMemo(() => {
     const edge = local.edgeColor || 'var(--color-edge-muted)';
-    return `linear-gradient(${
-      local.active ? `var(--color-accent), ${edge} 80%` : edge
-    } )`;
+    const hl = local.highlightColor || 'var(--color-accent)';
+    return `linear-gradient(${local.active ? `${hl}, ${edge} 80%` : edge} )`;
   });
 
   const useCornerRadiusOverride = createMemo(() => local.cornerRadius != null);

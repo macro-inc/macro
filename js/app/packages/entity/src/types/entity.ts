@@ -15,6 +15,7 @@ export type EntityBase = {
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;
+  sortTs?: DateValue | null;
 };
 
 export type ChannelEntity = EntityBase & {
@@ -53,6 +54,7 @@ export type BaseDocumentEntity = EntityBase & {
   fileType?: string;
   projectId?: string;
   subType?: SubType;
+  properties?: SoupProperty[];
 };
 
 export type TaskEntity = EntityBase & {

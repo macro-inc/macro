@@ -167,7 +167,7 @@ export function MobileSearchInner() {
       {/* Search Input */}
       <div class="flex items-center gap-2 bg-page px-2 border-t border-edge-muted">
         <button
-          class="text-ink-muted flex flex-col items-center justify-center pl-2 py-3"
+          class="text-ink-muted flex flex-col items-center justify-center pl-2 pt-3 pb-2"
           onClick={handleBack}
           title="Back (Esc)"
         >
@@ -176,7 +176,7 @@ export function MobileSearchInner() {
         <input
           ref={(el) => setTimeout(() => el.focus(), 50)} // setTimeout needed: iOS only allows focus() within the user gesture window
           type="text"
-          class="py-3 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
+          class="pt-3 pb-2 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
           placeholder={'Search...'}
           value={SearchState.query()}
           onInput={(e) => SearchState.setQuery(e.currentTarget.value)}

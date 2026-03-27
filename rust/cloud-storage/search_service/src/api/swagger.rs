@@ -3,6 +3,10 @@ use utoipa::OpenApi;
 
 use crate::api::search;
 
+use item_filters::{
+    ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, NotificationFilters,
+    ProjectFilters, PropertyFilter, SharedEmailFilter, TaskFilters,
+};
 use model::{document::FileType, response::EmptyResponse};
 use models_search::channel::{
     ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResult,
@@ -21,8 +25,8 @@ use models_search::email::{
     SimpleEmailSearchResponse, SimpleEmailSearchResponseItem,
 };
 use models_search::unified::{
-    SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchFilters,
-    UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
+    SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchRequest,
+    UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
 
 use models_search::project::{
@@ -64,7 +68,11 @@ use models_search::{MatchType, SearchHighlight};
                         ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResult,
 
                         // Unified
-                        UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponseItem, UnifiedSearchResponse, UnifiedSearchFilters,
+                        UnifiedSearchRequest, UnifiedSearchResponseItem, UnifiedSearchResponse,
+
+                        // Entity filters (shared with soup)
+                        EntityFilters, DocumentFilters, ChatFilters, EmailFilters, ChannelFilters, ProjectFilters,
+                        PropertyFilter, NotificationFilters, TaskFilters, SharedEmailFilter,
 
                         // Project
                         ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem, ProjectSearchResult, ProjectSearchMetadata,

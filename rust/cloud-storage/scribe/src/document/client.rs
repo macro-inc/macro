@@ -61,8 +61,13 @@ impl DocumentClient {
         .with_jwt_token(jwt_token)
     }
 
-    pub fn fetch_project(&self, id: String, jwt: String) -> ProjectFetcher<()> {
-        ProjectFetcher::new(self.dss_client.clone(), id, jwt)
+    pub fn fetch_project(&self, id: String) -> ProjectFetcher<()> {
+        ProjectFetcher::new(id)
+    }
+
+    /// Get the database pool for direct DB access
+    pub fn db(&self) -> &Pool<Postgres> {
+        &self.macro_db
     }
 }
 

@@ -232,12 +232,15 @@ function FullChatInner() {
   const [debugStream, _setDebugStream] = createSignal<ChatMessageStream>();
 
   const onSend = async (input: ChatSendInput) => {
-    chat.addMessage({
-      attachments: input.attachments,
-      content: input.content,
-      role: 'user',
-      id: '',
-    });
+    chat.setMessages((p) => [
+      ...p,
+      {
+        attachments: input.attachments,
+        content: input.content,
+        role: 'user',
+        id: '',
+      },
+    ]);
     const response = await cognitionApiServiceClient.sendStreamChatMessage({
       content: input.content,
       model: input.model,

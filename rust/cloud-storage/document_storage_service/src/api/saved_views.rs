@@ -48,7 +48,7 @@ impl IntoResponse for SavedViewErr {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: &self.to_string(),
+                        message: self.to_string().into(),
                     }),
                 )
                     .into_response()
@@ -56,20 +56,24 @@ impl IntoResponse for SavedViewErr {
             SavedViewErr::Unauthorized => (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
-                    message: &self.to_string(),
+                    message: self.to_string().into(),
                 }),
             )
                 .into_response(),
             SavedViewErr::NotFound => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    message: &self.to_string(),
+                    message: self.to_string().into(),
                 }),
             )
                 .into_response(),
-            SavedViewErr::BadRequest(message) => {
-                (StatusCode::BAD_REQUEST, Json(ErrorResponse { message })).into_response()
-            }
+            SavedViewErr::BadRequest(message) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: (*message).into(),
+                }),
+            )
+                .into_response(),
         }
     }
 }

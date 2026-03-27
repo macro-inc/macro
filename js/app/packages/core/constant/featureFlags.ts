@@ -296,3 +296,8 @@ export const ENABLE_PROXY_EMAIL_IMAGES = resolveFeatureFlag(
   'ENABLE_PROXY_EMAIL_IMAGES',
   true
 );
+
+export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
+  'ENABLE_CLIENT_EMAIL_SIGNAL_FILTER',
+  false
+);
