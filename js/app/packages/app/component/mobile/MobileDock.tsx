@@ -72,14 +72,6 @@ function MobileDockButton(props: MobileDockButtonProps) {
 
 type IconComponent = MobileDockButtonProps['icon'];
 
-const VIEW_CREATE_ACTIONS: Partial<Record<ListView, () => void>> = {
-  agents: () => runCreateAction('chat'),
-  mail: () => runCreateAction('email'),
-  documents: () => setCreateMenuOpen(true),
-  tasks: () => runCreateAction('task'),
-  channels: () => runCreateAction('channel'),
-};
-
 const VIEW_CREATE_ICONS: Partial<Record<ListView, IconComponent>> = {
   agents: AnimatedStarIcon,
   mail: AnimatedEmailIcon,
@@ -92,12 +84,54 @@ const VIEW_CREATE_ICONS: Partial<Record<ListView, IconComponent>> = {
 function FloatingCreateButton(props: {
   activeView: () => ListView | undefined;
 }) {
+  const analytics = useAnalytics();
   const [animating, setAnimating] = createSignal(false);
+
+  const VIEW_CREATE_ACTIONS: Partial<Record<ListView, () => void>> = {
+    agents: () => {
+      analytics.track('create_entity', {
+        entityType: 'chat',
+        source: 'mobile_dock',
+      });
+      runCreateAction('chat');
+    },
+    mail: () => {
+      analytics.track('create_entity', {
+        entityType: 'email',
+        source: 'mobile_dock',
+      });
+      runCreateAction('email');
+    },
+    documents: () => {
+      analytics.track('create_menu_open', { from: 'mobile_dock' });
+      setCreateMenuOpen(true);
+    },
+    tasks: () => {
+      analytics.track('create_entity', {
+        entityType: 'task',
+        source: 'mobile_dock',
+      });
+      runCreateAction('task');
+    },
+    channels: () => {
+      analytics.track('create_entity', {
+        entityType: 'channel',
+        source: 'mobile_dock',
+      });
+      runCreateAction('channel');
+    },
+  };
 
   const createAction = createMemo(() => {
     const view = props.activeView();
     if (!view || view === 'search') return undefined;
-    return VIEW_CREATE_ACTIONS[view] ?? (() => setCreateMenuOpen(true));
+    return (
+      VIEW_CREATE_ACTIONS[view] ??
+      (() => {
+        analytics.track('create_menu_open', { from: 'mobile_dock' });
+        setCreateMenuOpen(true);
+      })
+    );
   });
 
   const createIcon = createMemo<IconComponent>(() => {
