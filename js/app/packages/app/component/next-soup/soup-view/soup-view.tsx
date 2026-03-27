@@ -654,13 +654,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (initialPersistedState) {
       const isStale =
         (initialPersistedState.version ?? 0) < PERSISTED_STATE_VERSION;
-      if (
+      const applied =
         isStale &&
         isListViewID(contentId) &&
-        initialPersistedState.activeTab
-      ) {
+        initialPersistedState.activeTab &&
         applyTabPreset(contentId, initialPersistedState.activeTab);
-      } else {
+      if (!applied) {
         batch(() => {
           soup.filters.set(
             isStale
