@@ -563,19 +563,6 @@ function MessageListImpl(props: MessageListProps) {
     return out;
   });
 
-  const [isPrepend, setIsPrepend] = createSignal(false);
-
-  createEffect(
-    on(
-      () => props.messages,
-      () => {
-        props.messages;
-        setIsPrepend(true);
-      },
-      { defer: true }
-    )
-  );
-
   createEffect(
     on(flattenedThreaded, (flat, prev) => {
       const oldFlat = prev;
@@ -646,11 +633,6 @@ function MessageListImpl(props: MessageListProps) {
       return { id: message.id, message, children };
     }
   );
-
-  createEffect(() => {
-    threadRows();
-    setIsPrepend(false);
-  });
 
   // Ensure thread view store store reflects drafts. Only sets when no entry exists to avoid overriding user actions.
   createEffect(() => {
@@ -1026,10 +1008,9 @@ function MessageListImpl(props: MessageListProps) {
                 'overflow-anchor': 'none',
                 display: 'flex',
               }}
-              class="scrollbar-hidden [&>div]:mb-auto"
+              class="scrollbar-hidden"
               data-channel-message-list
               data={threadRows()}
-              shift={isPrepend()}
               itemSize={BASE_ITEM_SIZE}
               bufferSize={10 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}
