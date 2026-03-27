@@ -241,6 +241,9 @@ pub enum TeamError {
     /// The team does not exist
     #[error("The team does not exist")]
     TeamDoesNotExist,
+    /// Team member was not found
+    #[error("Team member not found for team {0}")]
+    TeamMemberNotFound(uuid::Uuid),
     /// The subscription does not exist
     #[error("No subscription")]
     NoSubscription,

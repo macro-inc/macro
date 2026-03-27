@@ -121,16 +121,23 @@ impl IntoResponse for TeamError {
                     message: "team does not exist".into(),
                 }),
             ),
+            TeamError::TeamMemberNotFound(_) => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            ),
+
             TeamError::TeamInviteDoesNotExist => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "team invite does not exist".into(),
                 }),
             ),
-            TeamError::BadRequest(message) => (
+            TeamError::BadRequest(_) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: message.into(),
+                    message: self.to_string().into(),
                 }),
             ),
             _ => (

@@ -277,24 +277,15 @@ where
                 .decrease_subscription_quantity(&subscription_id, tier)
                 .await?;
 
-            let remaining_tiers = self
-                .team_repository
-                .get_user_remaining_tiers(user_id, team_id)
-                .await?;
+            let roles_to_remove = vec![RoleId::TeamSubscriber, RoleId::from(tier)];
 
-            let mut roles_to_remove = vec![];
-            if remaining_tiers.is_empty() {
-                roles_to_remove.push(RoleId::TeamSubscriber);
-            }
-            if !remaining_tiers.contains(&tier) {
-                roles_to_remove.push(RoleId::from(tier));
-            }
-            if let Ok(roles) = non_empty::NonEmpty::new(roles_to_remove.as_slice()) {
-                self.user_roles_and_permissions_service
-                    .dangerous_remove_roles_from_user(user_id, &roles)
-                    .await
-                    .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
-            }
+            self.user_roles_and_permissions_service
+                .dangerous_remove_roles_from_user(
+                    user_id,
+                    &non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap(),
+                )
+                .await
+                .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
         }
 
         tier.map(|_| ())
@@ -383,6 +374,7 @@ where
         team_invite_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamMember<'_>, JoinTeamError> {
+        // This will fail if the user is already in another team
         let team_member = self
             .team_repository
             .accept_team_invite(team_invite_id, user_id)
@@ -424,26 +416,16 @@ where
             return Ok(());
         }
 
-        // For each member, check remaining tiers and remove roles accordingly
         for member in members {
-            let remaining_tiers = self
-                .team_repository
-                .get_user_remaining_tiers(&member.user_id, team_id)
-                .await?;
+            let roles_to_remove = vec![RoleId::TeamSubscriber, RoleId::from(member.tier)];
 
-            let mut roles_to_remove = vec![];
-            if remaining_tiers.is_empty() {
-                roles_to_remove.push(RoleId::TeamSubscriber);
-            }
-            if !remaining_tiers.contains(&member.tier) {
-                roles_to_remove.push(RoleId::from(member.tier));
-            }
-            if let Ok(roles) = non_empty::NonEmpty::new(roles_to_remove.as_slice()) {
-                self.user_roles_and_permissions_service
-                    .dangerous_remove_roles_from_user(&member.user_id, &roles)
-                    .await
-                    .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
-            }
+            self.user_roles_and_permissions_service
+                .dangerous_remove_roles_from_user(
+                    &member.user_id,
+                    &non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap(),
+                )
+                .await
+                .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
         }
 
         Ok(())
@@ -595,14 +577,33 @@ where
 
         let team_subscription_id = self.get_team_subscription(team_id).await?;
 
+        self.team_repository
+            .patch_team_tier(team_id, &request.team_user_id, request.new_tier)
+            .await?;
+
+        // ensure team member has old tier removed
+        self.user_roles_and_permissions_service
+            .dangerous_remove_roles_from_user(
+                &request.team_user_id,
+                &non_empty::NonEmpty::new(vec![RoleId::from(team_member.tier)].as_slice()).unwrap(),
+            )
+            .await
+            .map_err(|e| TeamError::StorageLayerError(e.into()))?;
+
+        // ensure team member has new tier added
+        self.user_roles_and_permissions_service
+            .dangerous_upsert_roles_for_user(
+                &request.team_user_id,
+                non_empty::NonEmpty::new(vec![RoleId::from(request.new_tier)].as_slice()).unwrap(),
+            )
+            .await
+            .map_err(|e| TeamError::StorageLayerError(e.into()))?;
+
+        // TODO: handle fallback on stripe failure
         self.customer_repository
             .update_subscription_tier(&team_subscription_id, team_member.tier, request.new_tier)
             .await
             .map_err(|e| TeamError::StorageLayerError(e.into()))?;
-
-        self.team_repository
-            .patch_team_tier(team_id, &request.team_user_id, request.new_tier)
-            .await?;
 
         Ok(())
     }

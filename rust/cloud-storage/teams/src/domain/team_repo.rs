@@ -112,14 +112,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
-    /// Gets the set of tiers a user has across all their teams,
-    /// excluding a specific team.
-    fn get_user_remaining_tiers(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        exclude_team_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<HashSet<TeamUserTier>, TeamError>> + Send;
-
     /// Gets the members of the team.
     /// This does not include the team owner.
     fn get_team_members(
