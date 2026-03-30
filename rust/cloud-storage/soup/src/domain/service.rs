@@ -1,6 +1,6 @@
 use crate::domain::{
     models::{
-        AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, SimpleQueryInner,
+        AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, IntoSoupReqAst, SimpleQueryInner,
         SimpleSortQuery, SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
@@ -30,6 +30,7 @@ use models_soup::{
     },
     item::SoupItem,
 };
+use serde::Serialize;
 use std::cmp::Ordering;
 use uuid::Uuid;
 
@@ -351,8 +352,12 @@ where
     V: EmailService,
     C: ChannelsService,
 {
-    #[tracing::instrument(err, skip(self))]
-    async fn get_user_soup(&self, req: SoupRequest<EntityFilters>) -> Result<SoupOutput, SoupErr> {
+    #[tracing::instrument(err, skip(self, req))]
+    async fn get_user_soup<R>(&self, req: SoupRequest<R>) -> Result<SoupOutput<R>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
         let entity_filter = req.filters().clone();
         let req = req.into_ast()?;
         let limit = req.limit.clamp(20, 500);
