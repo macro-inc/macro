@@ -280,4 +280,3 @@ impl IntoResponse for RemoveUserFromTeamError {
         .into_response()
     }
 }
-
