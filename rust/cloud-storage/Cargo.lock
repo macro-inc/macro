@@ -10075,6 +10075,7 @@ dependencies = [
  "non_empty",
  "notification",
  "roles_and_permissions",
+ "rootcause",
  "serde",
  "sqlx",
  "thiserror 2.0.17",

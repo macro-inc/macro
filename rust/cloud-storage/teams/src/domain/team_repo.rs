@@ -60,6 +60,12 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
+    /// Marks the given team invites as sent by updating their last_sent_at timestamp.
+    fn mark_invites_sent(
+        &self,
+        invite_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
     /// Removes user from a team.
     fn remove_user_from_team(
         &self,

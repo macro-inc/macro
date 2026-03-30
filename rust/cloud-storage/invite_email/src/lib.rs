@@ -166,6 +166,7 @@ impl NotificationExtEmail for InviteToTeamMetadata {
     fn rate_limit_key(&self) -> RateLimitKey {
         RateLimitKey::builder(&Self::TYPE_NAME)
             .append(&self.team_id)
+            .append(&self.invited_by.as_ref())
             .finish()
     }
 }

@@ -1,5 +1,8 @@
 //! Contains the service logic for teams
 
+#[cfg(test)]
+mod test;
+
 use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Context;
@@ -153,11 +156,12 @@ where
     async fn send_invite_notification(
         &self,
         recipient_id: MacroUserIdStr<'_>,
+        team_invite_id: uuid::Uuid,
         notification: InviteToTeamMetadata,
     ) -> anyhow::Result<()> {
         let request = SendNotificationRequestBuilder {
             notification_entity: EntityType::Team
-                .with_entity_string(notification.team_id.to_string()),
+                .with_entity_string(team_invite_id.to_string()),
             sender_id: Some(notification.invited_by.clone()),
             notification,
             recipient_ids: HashSet::from([recipient_id]),
@@ -221,23 +225,38 @@ where
 
             if let Some(team_name) = team_name {
                 let invited_by_owned = invited_by.clone().into_owned();
+                let mut sent_invite_ids = Vec::new();
                 for invite in &invited {
-                    self.send_invite_notification(
-                        MacroUserIdStr::try_from_email(invite.email.as_ref())
-                            .expect("this cannot fail"),
-                        InviteToTeamMetadata {
-                            team_id: *team_id,
-                            invited_by: invited_by_owned.clone(),
-                            team_name: team_name.clone(),
-                            role: None,
-                            sender_profile_picture_url: None,
-                        },
-                    )
-                    .await
-                    .inspect_err(
-                        |e| tracing::error!(error=?e, "unable to send invite notification"),
-                    )
-                    .ok();
+                    if self
+                        .send_invite_notification(
+                            MacroUserIdStr::try_from_email(invite.email.as_ref())
+                                .expect("this cannot fail"),
+                            invite.team_invite_id,
+                            InviteToTeamMetadata {
+                                team_id: *team_id,
+                                invited_by: invited_by_owned.clone(),
+                                team_name: team_name.clone(),
+                                role: None,
+                                sender_profile_picture_url: None,
+                            },
+                        )
+                        .await
+                        .inspect_err(
+                            |e| tracing::error!(error=?e, "unable to send invite notification"),
+                        )
+                        .is_ok()
+                    {
+                        sent_invite_ids.push(invite.team_invite_id);
+                    }
+                }
+                if !sent_invite_ids.is_empty() {
+                    self.team_repository
+                        .mark_invites_sent(&sent_invite_ids)
+                        .await
+                        .inspect_err(
+                            |e| tracing::error!(error=?e, "unable to mark invites as sent"),
+                        )
+                        .ok();
                 }
             }
         }

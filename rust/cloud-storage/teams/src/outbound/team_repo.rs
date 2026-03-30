@@ -301,12 +301,11 @@ impl TeamRepository for TeamRepositoryImpl {
         // Also re-send existing invites whose rate limit window has passed
         let resent_invites: Vec<(uuid::Uuid, uuid::Uuid, String)> = sqlx::query!(
             r#"
-            UPDATE team_invite
-            SET last_sent_at = NOW()
+            SELECT id, team_id, email
+            FROM team_invite
             WHERE team_id = $1
               AND email = ANY($2::text[])
               AND last_sent_at < NOW() - INTERVAL '5 minutes'
-            RETURNING id, team_id, email
             "#,
             team_id,
             &email_strings[..],
@@ -336,6 +335,21 @@ impl TeamRepository for TeamRepositoryImpl {
         transaction.commit().await?;
 
         Ok(all_invites)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn mark_invites_sent(&self, invite_ids: &[uuid::Uuid]) -> Result<(), TeamError> {
+        sqlx::query!(
+            r#"
+            UPDATE team_invite
+            SET last_sent_at = NOW()
+            WHERE id = ANY($1::uuid[])
+            "#,
+            invite_ids,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
