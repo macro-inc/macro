@@ -2,6 +2,7 @@
 //!
 //! Provides the following route(s):
 //! - `GET /install-sync` - redirects to the github sync app installation page
+//! - `GET /sync-redirect` - callback after github app installation, redirects to the app
 //! - `POST /webhook` - github event webhook handler
 
 #[cfg(test)]
@@ -44,6 +45,10 @@ where
     Router::new()
         .route("/install-sync", axum::routing::get(install_sync_handler))
         .route(
+            "/sync-redirect",
+            axum::routing::get(sync_redirect_handler::<T>),
+        )
+        .route(
             "/webhook",
             axum::routing::post(github_webhook_event_handler),
         )
@@ -64,6 +69,43 @@ pub async fn install_sync_handler<T: GithubSyncService>(
     State(ctx): State<GithubSyncRouterState<T>>,
 ) -> Redirect {
     let url = ctx.service.get_github_sync_app_url();
+    Redirect::temporary(url)
+}
+
+/// Query params received from the GitHub App installation callback.
+#[derive(serde::Deserialize)]
+pub struct SyncRedirectParams {
+    /// The OAuth authorization code from GitHub (unused for now).
+    #[allow(dead_code)]
+    pub code: String,
+    /// The GitHub App installation ID (unused for now).
+    #[allow(dead_code)]
+    pub installation_id: String,
+}
+
+/// Callback after a user installs the GitHub App. Redirects to the main app.
+#[utoipa::path(
+    get,
+    path = "/github/sync-redirect",
+    operation_id = "sync_redirect",
+    params(
+        ("code" = String, Query, description = "OAuth authorization code from GitHub"),
+        ("installation_id" = String, Query, description = "GitHub App installation ID"),
+    ),
+    responses(
+        (status = 307, description = "Redirects to the main application"),
+    )
+)]
+#[tracing::instrument(skip_all)]
+pub async fn sync_redirect_handler<T: GithubSyncService>(
+    axum::extract::Query(_params): axum::extract::Query<SyncRedirectParams>,
+) -> Redirect {
+    let url = match macro_env::Environment::new_or_prod() {
+        macro_env::Environment::Production => "https://macro.com/app",
+        macro_env::Environment::Develop => "https://dev.macro.com/app",
+        macro_env::Environment::Local => "http://localhost:3000/app",
+    };
+
     Redirect::temporary(url)
 }
 
