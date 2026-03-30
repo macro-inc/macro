@@ -71,6 +71,7 @@ type ComposeEmailInputProps = {
   onContentChange?: (content: string) => void;
   sendTime?: Date | null;
   onSendTimeChange?: (date: Date | null) => void;
+  scheduleSendDisabled?: boolean;
   mobileScrollRef?: Accessor<HTMLElement | undefined>;
 };
 
@@ -339,6 +340,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                   <EmailDateSelector
                     sendTime={props.sendTime}
                     onSendTimeChange={props.onSendTimeChange}
+                    disabled={props.scheduleSendDisabled}
                     compact
                   />
                 </Show>
@@ -406,6 +408,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               <EmailDateSelector
                 sendTime={props.sendTime}
                 onSendTimeChange={props.onSendTimeChange}
+                disabled={props.scheduleSendDisabled}
               />
             </Show>
             <Show when={props.hasDraft && !props.isDraftSaving}>

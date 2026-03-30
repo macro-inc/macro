@@ -42,6 +42,7 @@ type DateSelectorProps = {
   withTime?: boolean;
   /** Render content inline instead of in a portal (avoids keyboard positioning issues on mobile) */
   disablePortal?: boolean;
+  disabled?: boolean;
   trigger?:
     | JSX.Element
     | ((props: { selectedDate: Date | null }) => JSX.Element);
@@ -264,6 +265,7 @@ export const DateSelector = (props: DateSelectorProps) => {
   return (
     <Combobox<DateSelectorOption>
       open={isOpen()}
+      disabled={props.disabled}
       multiple={false}
       value={selectedOption()}
       options={options()}

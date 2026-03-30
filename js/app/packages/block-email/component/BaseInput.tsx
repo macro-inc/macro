@@ -81,6 +81,7 @@ import {
   For,
   type JSX,
   Match,
+  on,
   onCleanup,
   onMount,
   type Setter,
@@ -646,7 +647,10 @@ export function BaseInput(props: {
       !hasDraftContent(
         prepared.bodyText,
         form().subject(),
-        form().attachments.list().length
+        form().attachments.list().length,
+        form().recipients().to.length +
+          form().recipients().cc.length +
+          form().recipients().bcc.length
       )
     ) {
       return null;
@@ -1225,6 +1229,23 @@ export function BaseInput(props: {
     }
   };
 
+  // Unschedule when all recipients are removed
+  const totalRecipientCount = () => {
+    const r = form().recipients();
+    return r.to.length + r.cc.length + r.bcc.length;
+  };
+  createEffect(
+    on(
+      totalRecipientCount,
+      (count) => {
+        if (count === 0 && form().sendTime()) {
+          handleSendTimeChange(null);
+        }
+      },
+      { defer: true }
+    )
+  );
+
   const isDraftSaving = () => saveDraftMutation.isPending;
   const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
 
@@ -1629,6 +1650,11 @@ export function BaseInput(props: {
               <EmailDateSelector
                 sendTime={form().sendTime() ?? null}
                 onSendTimeChange={handleSendTimeChange}
+                disabled={
+                  form().recipients().to.length === 0 &&
+                  form().recipients().cc.length === 0 &&
+                  form().recipients().bcc.length === 0
+                }
                 disablePortal={isMobile()}
               />
             </Show>

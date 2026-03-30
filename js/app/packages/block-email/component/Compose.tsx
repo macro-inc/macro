@@ -28,9 +28,11 @@ import {
 } from '@queries/email/thread';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   type JSX,
+  on,
   onMount,
   Show,
   Suspense,
@@ -273,7 +275,10 @@ export function EmailCompose(props: EmailComposeProps) {
       !hasDraftContent(
         prepared.bodyText,
         form.subject(),
-        form.attachments.list().length
+        form.attachments.list().length,
+        form.recipients().to.length +
+          form.recipients().cc.length +
+          form.recipients().bcc.length
       )
     ) {
       return null;
@@ -733,6 +738,23 @@ export function EmailCompose(props: EmailComposeProps) {
     }
   };
 
+  // Unschedule when all recipients are removed
+  const totalRecipientCount = () => {
+    const r = form.recipients();
+    return r.to.length + r.cc.length + r.bcc.length;
+  };
+  createEffect(
+    on(
+      totalRecipientCount,
+      (count) => {
+        if (count === 0 && form.sendTime()) {
+          handleSendTimeChange(null);
+        }
+      },
+      { defer: true }
+    )
+  );
+
   const resetState = () => {
     clearEmailBody(editor());
     setContent('');
@@ -1051,6 +1073,11 @@ export function EmailCompose(props: EmailComposeProps) {
                   attachments={form.attachments.list()}
                   sendTime={form.sendTime()}
                   onSendTimeChange={handleSendTimeChange}
+                  scheduleSendDisabled={
+                    form.recipients().to.length === 0 &&
+                    form.recipients().cc.length === 0 &&
+                    form.recipients().bcc.length === 0
+                  }
                   onSubmit={() => void onSubmit()}
                   isSubmitting={sendMutation.isPending}
                   isDraftSaving={laggedIsDraftSaving()}
