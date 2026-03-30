@@ -163,6 +163,7 @@ where
             recipient_ids: HashSet::from([recipient_id]),
         }
         .into_request()
+        .with_email()
         .with_conn_gateway();
 
         self.notification_ingress
