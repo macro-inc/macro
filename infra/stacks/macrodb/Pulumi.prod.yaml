@@ -17,4 +17,4 @@ config:
   macrodb:security_group_ids: sg-0997207417c39f5b3
   macrodb:backup_retention_days: 6
   macrodb:read_replica_enabled: true
-  macrodb:read_replica_instance_size: db.t4g.small
+  macrodb:read_replica_instance_size: db.t4g.medium
