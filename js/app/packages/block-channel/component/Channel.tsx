@@ -2,7 +2,6 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
-import { withAnalytics } from '@coparse/analytics';
 import type { EntityDragEvent } from '@entity';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
