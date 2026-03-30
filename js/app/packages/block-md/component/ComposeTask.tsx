@@ -59,6 +59,7 @@ import {
 } from '../util/taskComposerStorage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import CheckIcon from '@icon/regular/check.svg'
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -333,6 +334,10 @@ export function ComposeTask(props: ComposeTaskProps) {
       <EntityIcon targetType="task" class={p.class} />
     );
 
+    // Auto-copy link to clipboard
+    const url = buildSimpleEntityUrl({ type: 'task', id: documentId }, {});
+    navigator.clipboard.writeText(url);
+
     toast.custom(
       {
         title:
@@ -340,13 +345,17 @@ export function ComposeTask(props: ComposeTaskProps) {
           itemToSafeName({ type: 'document', subType: { type: 'task' } }),
         icon: TaskEntityIcon,
         color: 'var(--color-task)',
-        children: (
+        content: () => (
           <div class="text-xs text-ink-extra-muted line-clamp-2 mb-4">
             <StaticMarkdown
               markdown={taskContent}
               theme={unifiedListMarkdownTheme}
               singleLine
             />
+            <div class="bg-hover/50 flex items-center gap-1 rounded-xs p-1">
+              <CheckIcon class="size-3" />
+              <span>Link copied to clipboard</span>
+            </div>
           </div>
         ),
         actions: [
@@ -374,10 +383,6 @@ export function ComposeTask(props: ComposeTaskProps) {
             label: 'Copy Link',
             icon: LinkIcon,
             onClick: () => {
-              const url = buildSimpleEntityUrl(
-                { type: 'task', id: documentId },
-                {}
-              );
               navigator.clipboard.writeText(url);
             },
           },

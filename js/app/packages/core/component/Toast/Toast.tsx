@@ -122,7 +122,7 @@ export interface ToastAction {
  */
 export interface CustomToastConfig {
   title: string;
-  children?: JSX.Element;
+  content?: () => JSX.Element;
   icon?: Component<{ class?: string }>;
   /** Any CSS color value, e.g. 'var(--color-success)' or '#ff6600' */
   color?: string;
@@ -341,8 +341,8 @@ function ToastContent(props: {
                     </Button>
                   </Toast.CloseButton>
                 </div>
-                <Show when={customConfig().children}>
-                  <div class="my-2 ml-7">{customConfig().children}</div>
+                <Show when={customConfig().content}>
+                  <div class="my-2 ml-7">{customConfig().content?.()}</div>
                 </Show>
                 <Show when={customConfig().actions?.length}>
                   <ActionsRow actions={customConfig().actions!} />
