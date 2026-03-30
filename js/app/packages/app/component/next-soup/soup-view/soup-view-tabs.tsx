@@ -213,7 +213,7 @@ export const MobileSoupViewTabs = () => {
 
   return (
     <Switch>
-      <For each={Object.keys(VIEW_TAB_LISTS)}>
+      <For each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}>
         {(v) => (
           <Match when={listView() === v}>
             <MobileViewTabs view={v} />

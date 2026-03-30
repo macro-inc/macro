@@ -6,7 +6,6 @@ import type { ListView } from '@app/constants/list-views';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
-import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { isMobile } from '@core/mobile/isMobile';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { Button } from './button';
