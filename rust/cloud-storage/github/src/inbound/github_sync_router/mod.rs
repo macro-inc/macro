@@ -13,6 +13,7 @@ use axum::{
     extract::{FromRequest, Request, State},
     response::Redirect,
 };
+use macro_env::ext::frontend_url::FrontendUrl;
 use reqwest::StatusCode;
 use std::sync::Arc;
 
@@ -100,13 +101,11 @@ pub struct SyncRedirectParams {
 pub async fn sync_redirect_handler<T: GithubSyncService>(
     axum::extract::Query(_params): axum::extract::Query<SyncRedirectParams>,
 ) -> Redirect {
-    let url = match macro_env::Environment::new_or_prod() {
-        macro_env::Environment::Production => "https://macro.com/app",
-        macro_env::Environment::Develop => "https://dev.macro.com/app",
-        macro_env::Environment::Local => "http://localhost:3000/app",
-    };
-
-    Redirect::temporary(url)
+    Redirect::temporary(
+        macro_env::Environment::new_or_prod()
+            .get_frontend_url()
+            .as_str(),
+    )
 }
 
 /// Extractor that validates an incoming GitHub webhook event.
