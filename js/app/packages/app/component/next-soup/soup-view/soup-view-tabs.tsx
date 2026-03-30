@@ -260,7 +260,10 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
       }
     }
     const id = closest?.dataset.tabId;
-    if (id) setScrollActiveId(id);
+    if (id && scrollActiveId() !== id) {
+      impactFeedback('light');
+      setScrollActiveId(id);
+    }
   };
 
   const updateSpacer = () => {
@@ -282,7 +285,6 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   const handleTouchEnd = () => {
     const id = scrollActiveId();
     if (id) {
-      impactFeedback('light');
       applyTabPreset(props.view, id);
     }
   };
