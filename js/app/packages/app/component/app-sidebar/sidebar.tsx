@@ -1,3 +1,4 @@
+import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -41,6 +42,11 @@ import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import {
+  InviteModal,
+  setInviteModalOpen,
+} from '@app/component/app-sidebar/invite-modal';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 
 interface SidebarItem {
   id: ListView;
@@ -190,6 +196,17 @@ export const registerSidebarHotkeys = ({
   });
 
   registerHotkey({
+    scopeId: 'global',
+    hotkeyToken: TOKENS.global.inviteTeam,
+    description: 'Invite team',
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      setInviteModalOpen(true);
+      return true;
+    },
+  });
+
+  registerHotkey({
     hotkey: 'cmd+.',
     scopeId: 'global',
     hotkeyToken: TOKENS.global.toggleSidebar,
@@ -240,7 +257,7 @@ export const registerSidebarHotkeys = ({
 
 type SidebarActionButtonProps = {
   label: string;
-  hotkeyToken: HotkeyToken;
+  hotkeyToken?: HotkeyToken;
   /** Whether the sidebar is currently in slim (icon-only) mode. */
   isSlim: () => boolean;
   onClick: () => void;
@@ -287,9 +304,13 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
         {props.label}
       </span>
-      <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
-        <Hotkey token={props.hotkeyToken} class="flex gap-1" />
-      </div>
+      <Show when={props.hotkeyToken}>
+        {(token) => (
+          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+            <Hotkey token={token()} class="flex gap-1" />
+          </div>
+        )}
+      </Show>
     </Button>
   );
 };
@@ -444,6 +465,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class=" w-full px-2 flex flex-col">
+        <Show when={DEV_MODE_ENV}>
+          <SidebarActionButton
+            label="Invite Team"
+            isSlim={isSlim}
+            onClick={() => setInviteModalOpen(true)}
+            icon={AnimatedUsersIcon}
+          />
+        </Show>
+
         <SidebarActionButton
           label="New Split"
           hotkeyToken={TOKENS.global.createNewSplit}
@@ -469,6 +499,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           icon={AnimatedGearIcon}
         />
       </div>
+      <InviteModal />
     </div>
   );
 };
