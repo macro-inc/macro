@@ -44,7 +44,7 @@ import { createHeaderCollapser } from './utils/createHeaderCollapser';
 import { registerSplitHotkeys } from './registerSplitHotkeys';
 import { isListViewID } from '@app/constants/list-views';
 import { isMobile } from '@core/mobile/isMobile';
-import { isSidebarVisible } from '@app/component/Layout';
+import { isSidebarVisible } from '@app/component/sidebarVisibility';
 
 type SplitLayoutContainerProps = {
   pairs: string[];

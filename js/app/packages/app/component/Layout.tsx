@@ -13,14 +13,12 @@ import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import {
-  createContext,
   createEffect,
   createMemo,
   createSignal,
   onMount,
   Show,
   Suspense,
-  useContext,
 } from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
@@ -41,6 +39,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { MobileDock } from './mobile/MobileDock';
 import { MobileSearchOuter } from './mobile/MobileSearch';
 import { makePersisted } from '@solid-primitives/storage';
+import {
+  SidebarVisibilityContext,
+  isSidebarVisible,
+} from '@app/component/sidebarVisibility';
+export { SidebarVisibilityContext, isSidebarVisible };
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -58,11 +61,6 @@ export const [sidebarState, setSidebarState] = makePersisted(
     name: 'sidebar-state',
   }
 );
-
-export const SidebarVisibilityContext = createContext<() => boolean>(
-  () => false
-);
-export const isSidebarVisible = () => useContext(SidebarVisibilityContext)();
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
