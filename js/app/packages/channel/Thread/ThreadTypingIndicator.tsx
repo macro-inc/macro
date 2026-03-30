@@ -21,9 +21,11 @@ export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
   const isActive = () => typingUsers().length > 0;
 
   return (
-    <Show when={isActive()}>
-      <ThreadTypingIndicatorContent text={typingText()} />
-    </Show>
+    <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)] min-h-7">
+      <Show when={isActive()}>
+        <ThreadTypingIndicatorContent text={typingText()} />
+      </Show>
+    </div>
   );
 }
 
@@ -35,13 +37,13 @@ function ThreadTypingIndicatorContent(
   props: ThreadTypingIndicatorContentProps
 ) {
   return (
-    <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)] min-h-7">
+    <>
       <ThreadTypingIndicatorConnector />
       <div class="text-xs text-panel uppercase font-mono px-1 py-0.5 my-1 bg-edge flex items-center gap-1">
         <ThreadTypingIndicatorDots />
         <span>{props.text}</span>
       </div>
-    </div>
+    </>
   );
 }
 
