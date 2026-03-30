@@ -12,7 +12,16 @@ import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
-import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
+import {
+  createContext,
+  createEffect,
+  createMemo,
+  createSignal,
+  onMount,
+  Show,
+  Suspense,
+  useContext,
+} from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
@@ -50,7 +59,29 @@ export const [sidebarState, setSidebarState] = makePersisted(
   }
 );
 
+export const SidebarVisibilityContext = createContext<() => boolean>(
+  () => false
+);
+export const isSidebarVisible = () => useContext(SidebarVisibilityContext)();
+
 export function Layout(props: RouteSectionProps) {
+  const isAuthenticated = useIsAuthenticated();
+  const location = useLocation();
+  const sidebarVisible = createMemo(
+    () =>
+      !isMobile() &&
+      isAuthenticated() === true &&
+      !AUTH_URLS.includes(location.pathname)
+  );
+
+  return (
+    <SidebarVisibilityContext.Provider value={sidebarVisible}>
+      <LayoutInner {...props} />
+    </SidebarVisibilityContext.Provider>
+  );
+}
+
+function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
@@ -136,13 +167,7 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow-1 flex">
-        <Show
-          when={
-            !isMobile() &&
-            isAuthenticated() &&
-            !AUTH_URLS.includes(location.pathname)
-          }
-        >
+        <Show when={isSidebarVisible()}>
           <AppSidebar
             sidebarState={sidebarState()}
             onOpenChange={(open) => {

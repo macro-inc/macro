@@ -44,6 +44,7 @@ import { createHeaderCollapser } from './utils/createHeaderCollapser';
 import { registerSplitHotkeys } from './registerSplitHotkeys';
 import { isListViewID } from '@app/constants/list-views';
 import { isMobile } from '@core/mobile/isMobile';
+import { isSidebarVisible } from '@app/component/Layout';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -308,7 +309,10 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div class="size-full p-2 pl-0 mobile:p-0">
+      <div
+        class="size-full p-2 mobile:p-0"
+        classList={{ 'pl-0': isSidebarVisible() }}
+      >
         <Resize.Zone
           direction="horizontal"
           gutter={4}
