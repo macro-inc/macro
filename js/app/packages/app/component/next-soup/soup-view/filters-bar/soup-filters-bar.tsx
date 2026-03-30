@@ -76,41 +76,34 @@ export const SoupFiltersBar = () => {
         </div>
       </Match>
       <Match when={true}>
-        <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted/50 w-full">
-          <Show
-            when={isMobile()}
-            fallback={
-              <>
-                <UnifiedFilterDropdown />
-                <ActiveFilterChips
-                  filters={activeFiltersList()}
-                  onRemove={removeFilter}
-                  onReplace={replaceFilter}
-                  onClearAll={resetToTabDefaults}
-                  isOptionActive={isOptionActive}
-                />
-              </>
-            }
-          >
-            <MobileFilterDrawer />
-          </Show>
-          <div class="flex-1" />
-          <Tooltip
-            tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
-          >
-            <Button
-              variant={soup.previewEntity() ? 'primary' : 'ghost'}
-              size="sm"
-              class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
-              onClick={togglePreview}
-              onMouseEnter={() => setPreviewBtnHovering(true)}
-              onMouseLeave={() => setPreviewBtnHovering(false)}
+        <Show when={!isMobile()}>
+          <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted/50 w-full">
+            <UnifiedFilterDropdown />
+            <ActiveFilterChips
+              filters={activeFiltersList()}
+              onRemove={removeFilter}
+              onReplace={replaceFilter}
+              onClearAll={resetToTabDefaults}
+              isOptionActive={isOptionActive}
+            />
+            <div class="flex-1" />
+            <Tooltip
+              tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
             >
-              <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
-            </Button>
-          </Tooltip>
-          <SoupViewContextSort />
-        </div>
+              <Button
+                variant={soup.previewEntity() ? 'primary' : 'ghost'}
+                size="sm"
+                class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
+                onClick={togglePreview}
+                onMouseEnter={() => setPreviewBtnHovering(true)}
+                onMouseLeave={() => setPreviewBtnHovering(false)}
+              >
+                <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
+              </Button>
+            </Tooltip>
+            <SoupViewContextSort />
+          </div>
+        </Show>
       </Match>
     </Switch>
   );
