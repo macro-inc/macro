@@ -106,7 +106,7 @@ const opensearchDomain = new aws.opensearch.Domain(
     domainEndpointOptions: {
       enforceHttps: true,
     },
-    engineVersion: 'OpenSearch_2.19', // specify the desired OpenSearch version
+    engineVersion: 'OpenSearch_3.5', // specify the desired OpenSearch version
     clusterConfig: {
       instanceType: stack === 'prod' ? 'r7g.large.search' : 'r7g.medium.search', // TODO: we may need to bump the instance type for prod.
       // the instance count needs to be multiples of 3 for multiAzWithStandbyEnabled and 2 for !multiAzWithStandbyEnabled
