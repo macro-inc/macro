@@ -613,7 +613,7 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Page size (1-100, default 50)",
+            "description": "Page size (1-500, default 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -5009,6 +5009,7 @@
           "id",
           "channel_id",
           "message_id",
+          "sender_id",
           "entity_type",
           "entity_id",
           "created_at"
@@ -5046,6 +5047,10 @@
             "type": "string",
             "format": "uuid",
             "description": "Message id this attachment belongs to."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "The user who sent the message containing this attachment."
           },
           "width": {
             "type": ["integer", "null"],

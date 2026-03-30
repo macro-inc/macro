@@ -824,7 +824,7 @@ export const getChannelAttachmentsQueryParams = zod.object({
     .number()
     .min(getChannelAttachmentsQueryLimitMin)
     .optional()
-    .describe('Page size (1-100, default 50)'),
+    .describe('Page size (1-500, default 50)'),
   cursor: zod.string().optional().describe('Base64 encoded cursor value'),
 });
 
@@ -847,6 +847,11 @@ export const getChannelAttachmentsResponse = zod
               .string()
               .uuid()
               .describe('Message id this attachment belongs to.'),
+            sender_id: zod
+              .string()
+              .describe(
+                'The user who sent the message containing this attachment.'
+              ),
             width: zod.number().nullish().describe('Width (for images).'),
           })
           .describe('A channel-level attachment.')
