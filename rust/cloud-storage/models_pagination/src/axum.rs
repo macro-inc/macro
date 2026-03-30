@@ -1,6 +1,6 @@
 use crate::{Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithValAndFilter, Sortable};
 use axum::Json;
-use axum::extract::{FromRequestParts, Query};
+use axum::extract::{FromRequestParts, OptionalFromRequestParts, Query};
 use axum::http::{StatusCode, request::Parts};
 use axum::response::IntoResponse;
 use model_error_response::ErrorResponse;
@@ -8,33 +8,20 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-/// An enum which denotes either the client did not provide a cursor value
-/// or the cursor was provided and parsed.
-/// Provided but invalid cursors will be rejected as 400
-// TODO: in axum 0.8 there is OptionalFromRequestParts which is preferable to this
-#[derive(Debug)]
-pub enum CursorExtractor<Id, S: Sortable, F> {
-    /// the client provided a valid parsed cursor
-    Some(Cursor<Id, CursorVal<S>, F>),
-    /// the client did not provide a cursor param
-    None,
+/// Extension trait adding `into_query` to `Option<CursorWithValAndFilter<...>>`
+/// for convenient conversion from an optional extracted cursor to a pagination query.
+pub trait CursorOptionExt<Id, S: Sortable, F> {
+    /// Convert into a [Query] by supplying a fallback sort and filter.
+    fn into_query(self, sort: S, filter: F) -> crate::cursor::Query<Id, S, F>;
 }
 
-impl<Id, S: Sortable, F> CursorExtractor<Id, S, F> {
-    /// convert self into an [Option]CursorWithVal
-    pub fn into_option(self) -> Option<CursorWithValAndFilter<Id, S, F>> {
-        match self {
-            CursorExtractor::Some(parsed_cursor) => Some(parsed_cursor),
-            CursorExtractor::None => None,
-        }
-    }
-    /// convert self into a [Query] by supplying a fallback
-    pub fn into_query(self, sort: S, filter: F) -> crate::cursor::Query<Id, S, F> {
-        crate::cursor::Query::new(self.into_option(), sort, filter)
+impl<Id, S: Sortable, F> CursorOptionExt<Id, S, F> for Option<CursorWithValAndFilter<Id, S, F>> {
+    fn into_query(self, sort: S, filter: F) -> crate::cursor::Query<Id, S, F> {
+        crate::cursor::Query::new(self, sort, filter)
     }
 }
 
-/// represents an error that can occur while extracting a [CursorExtractor]
+/// represents an error that can occur while extracting a cursor
 /// from the axum request parts
 #[derive(Debug, Error)]
 pub enum CursorExtractErr {
@@ -112,7 +99,7 @@ where
         .map_err(CursorExtractErr::DecodeErr)
 }
 
-impl<S, Id, Sort, F> FromRequestParts<S> for CursorExtractor<Id, Sort, F>
+impl<S, Id, Sort, F> OptionalFromRequestParts<S> for Cursor<Id, CursorVal<Sort>, F>
 where
     S: Send + Sync,
     Sort: Sortable + DeserializeOwned,
@@ -123,7 +110,10 @@ where
     type Rejection = CursorExtractErr;
 
     #[tracing::instrument(err, skip(parts, state))]
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
         #[derive(Deserialize)]
         struct Params {
             cursor: Option<String>,
@@ -133,7 +123,7 @@ where
             .map_err(|_| CursorExtractErr::InvalidQueryParamsErr)?;
 
         let Some(cursor) = cursor else {
-            return Ok(CursorExtractor::None);
+            return Ok(None);
         };
 
         let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
@@ -141,7 +131,7 @@ where
 
         let decoded = decode_cursor(encoded)?;
 
-        Ok(CursorExtractor::Some(decoded))
+        Ok(Some(decoded))
     }
 }
 
@@ -154,29 +144,7 @@ pub enum BidirectionalCursor<Id, S: Sortable, F> {
     Previous(Cursor<Id, CursorVal<S>, F>),
 }
 
-/// An enum which denotes either the client did not provide cursor params
-/// or exactly one cursor direction was provided and parsed.
-/// Provided but invalid cursors will be rejected as 400.
-// TODO: in axum 0.8 there is OptionalFromRequestParts which is preferable to this
-#[derive(Debug)]
-pub enum BidirectionalCursorExtractor<Id, S: Sortable, F> {
-    /// The client provided a valid parsed cursor.
-    Some(BidirectionalCursor<Id, S, F>),
-    /// The client did not provide cursor params.
-    None,
-}
-
-impl<Id, S: Sortable, F> BidirectionalCursorExtractor<Id, S, F> {
-    /// convert self into an optional [BidirectionalCursor]
-    pub fn into_option(self) -> Option<BidirectionalCursor<Id, S, F>> {
-        match self {
-            BidirectionalCursorExtractor::Some(parsed_cursor) => Some(parsed_cursor),
-            BidirectionalCursorExtractor::None => None,
-        }
-    }
-}
-
-impl<S, Id, Sort, F> FromRequestParts<S> for BidirectionalCursorExtractor<Id, Sort, F>
+impl<S, Id, Sort, F> OptionalFromRequestParts<S> for BidirectionalCursor<Id, Sort, F>
 where
     S: Send + Sync,
     Sort: Sortable + DeserializeOwned,
@@ -187,7 +155,10 @@ where
     type Rejection = CursorExtractErr;
 
     #[tracing::instrument(err, skip(parts, state))]
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
         #[derive(Deserialize)]
         struct Params {
             cursor: Option<String>,
@@ -206,19 +177,15 @@ where
                 let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
                     Base64Str::new_from_string(cursor);
                 let decoded = decode_cursor(encoded)?;
-                Ok(BidirectionalCursorExtractor::Some(
-                    BidirectionalCursor::Next(decoded),
-                ))
+                Ok(Some(BidirectionalCursor::Next(decoded)))
             }
             (None, Some(previous_cursor)) => {
                 let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
                     Base64Str::new_from_string(previous_cursor);
                 let decoded = decode_cursor(encoded)?;
-                Ok(BidirectionalCursorExtractor::Some(
-                    BidirectionalCursor::Previous(decoded),
-                ))
+                Ok(Some(BidirectionalCursor::Previous(decoded)))
             }
-            (None, None) => Ok(BidirectionalCursorExtractor::None),
+            (None, None) => Ok(None),
         }
     }
 }

@@ -22,7 +22,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
-    CursorExtractor, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod, TypeEraseCursor,
+    CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
+    TypeEraseCursor,
 };
 use models_soup::item::SoupItem;
 use serde::{Deserialize, Serialize};
@@ -134,11 +135,9 @@ where
 
         let cursor = match cursor {
             Either::E1(l) => l
-                .into_option()
                 .map(SoupQuery::new_cursor_simple)
                 .unwrap_or_else(create_fallback),
             Either::E2(r) => r
-                .into_option()
                 .map(SoupQuery::new_cursor_frecency)
                 .unwrap_or_else(create_fallback),
         };
@@ -291,8 +290,8 @@ pub struct PostSoupRequest {
 }
 
 type SoupCursor = axum_extra::either::Either<
-    CursorExtractor<Uuid, SimpleSortMethod, EntityFilters>,
-    CursorExtractor<Uuid, Frecency, EntityFilters>,
+    Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilters>>,
+    Option<CursorWithValAndFilter<Uuid, Frecency, EntityFilters>>,
 >;
 
 /// Gets the items the user has access to

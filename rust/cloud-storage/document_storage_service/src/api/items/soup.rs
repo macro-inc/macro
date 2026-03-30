@@ -18,7 +18,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model::response::GenericErrorResponse;
 use model::user::UserContext;
-use models_pagination::CursorExtractor;
+use models_pagination::CursorWithVal;
 use models_pagination::CursorVal;
 use models_pagination::CursorWithVal;
 use models_pagination::Frecency;
@@ -72,13 +72,13 @@ pub async fn soup_handler(
     State(frecency_interface): State<FrecencyQueryServiceImpl<FrecencyPgStorage>>,
     Extension(user_context): Extension<UserContext>,
     Query(params): Query<Params>,
-    cursor: CursorExtractor<String, SimpleSortMethod>,
+    cursor: Option<CursorWithVal<String, SimpleSortMethod>>,
 ) -> Result<Json<PaginatedOpaqueCursor<FrecencySoupItem>>, SoupHandlerErr> {
     SoupImpl {
         soup_storage: pg,
         frecency_interface,
     }
-    .handle_soup_request(user_context, params, cursor.into_option())
+    .handle_soup_request(user_context, params, cursor)
     .await
     .map(Json)
 }
