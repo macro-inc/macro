@@ -287,13 +287,15 @@ export function Channel(props: ChannelProps) {
                   const message = () => messageById().get(item.id);
                   const state = threadManager.getOrCreateThreadState(item.id);
                   const keys = () => messageIndex().keys;
+                  const isNewestThread = () =>
+                    item.id === keys().at(keys().length - 1);
                   return (
                     <Show when={message()}>
                       {(m) => (
                         <ChannelThread
                           data={m}
                           channelId={() => props.channelId}
-                          isNewestThread={item.id === keys()[keys().length - 1]}
+                          isNewestThread={isNewestThread()}
                           getMessageActions={getMessageActions}
                           targetReplyId={targetMessageController.pendingTargetReplyId()}
                           highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
