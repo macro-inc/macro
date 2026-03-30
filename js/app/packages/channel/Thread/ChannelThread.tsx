@@ -8,6 +8,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
 import type { ApiThreadReply } from '@service-comms/client';
+import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
@@ -240,6 +241,12 @@ export function ChannelThread(props: ThreadProps) {
                 </Thread.RepliesContainer>
               </DebugSuspense>
             </div>
+          </Show>
+          <Show when={props.isNewestThread}>
+            <ThreadTypingIndicator
+              channelId={props.channelId()}
+              threadId={null}
+            />
           </Show>
         </div>
       </Thread.Row>
