@@ -24,6 +24,7 @@ import { match } from 'ts-pattern';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { Button } from '@ui/components/Button';
 import type { DateValue } from '@core/util/date';
 import { UserIcon } from '@core/component/UserIcon';
 
@@ -177,9 +178,10 @@ function LoadMoreButton(props: {
   isFetching: Accessor<boolean>;
 }) {
   return (
-    <button
-      type="button"
-      class="flex items-center justify-center gap-2 w-full py-2 text-xs font-medium text-accent hover:text-accent/80 transition-colors rounded-md hover:bg-hover/30"
+    <Button
+      variant="secondary"
+      size="sm"
+      class="w-full"
       onClick={() => props.onLoadMore()}
       disabled={props.isFetching()}
     >
@@ -194,7 +196,7 @@ function LoadMoreButton(props: {
       >
         Load more
       </Show>
-    </button>
+    </Button>
   );
 }
 
@@ -305,7 +307,7 @@ function MediaSection(props: {
         <Show when={hiddenCount() > 0}>
           <button
             type="button"
-            class="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80 transition-colors"
+            class="flex items-center gap-1 text-xs font-medium text-ink-muted/70 hover:text-ink-muted transition-colors"
             onClick={() => setExpanded((prev) => !prev)}
           >
             {expanded() ? 'Show less' : 'See all'}
