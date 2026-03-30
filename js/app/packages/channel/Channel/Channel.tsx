@@ -7,15 +7,15 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  Match,
   on,
   onMount,
-  Switch,
+  Show,
   type Accessor,
 } from 'solid-js';
 import { useBeforeLeave } from '@solidjs/router';
 import {
   defaultThreadListTargetFromMessage,
+  ThreadList,
   type ThreadListNavigation,
   type ThreadListScrollState,
   type ThreadListScrollTarget,
@@ -31,7 +31,13 @@ import {
 } from '@queries/channel/message';
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
-import { createInputAttachmentTracker, type InputSnapshot } from '../Input';
+import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
+import { ChannelThread } from '../Thread';
+import {
+  ChannelInput,
+  createInputAttachmentTracker,
+  type InputSnapshot,
+} from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
@@ -40,8 +46,12 @@ import {
   useUpdateChannelsActivityMutation,
 } from '@queries/channel/activity';
 import { createChannelDragState } from './create-channel-drag-state';
+import { ChannelDropZone } from './ChannelDropZone';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
-import { makeAttachmentTrackerPersistenceKey } from '@channel/Input/utils/persistence';
+import {
+  makeAttachmentTrackerPersistenceKey,
+  makeInputValuePersistenceKey,
+} from '@channel/Input/utils/persistence';
 import { createStickyScrollEffect } from './sticky-scroll';
 import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
@@ -59,15 +69,9 @@ import { resetKeyboardModality } from './util';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import { DEFAULT_CHANNEL_TAB, type ChannelTabId } from './channel-tabs';
-import { ChannelMessagesTab } from './ChannelMessagesTab';
-import { ChannelAttachmentsTab } from './ChannelAttachmentsTab';
-import { ChannelTabPlaceholder } from './ChannelTabPlaceholder';
 
 type ChannelProps = {
   channelId: string;
-  activeTab?: ChannelTabId;
-  onTabChange?: (value: ChannelTabId) => void;
   targetMessageId?: string | undefined;
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
@@ -91,7 +95,6 @@ export function Channel(props: ChannelProps) {
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
   let messageListElement: HTMLDivElement | undefined;
-  const activeTab = () => props.activeTab ?? DEFAULT_CHANNEL_TAB;
 
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,
@@ -234,7 +237,6 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    props.onTabChange?.(DEFAULT_CHANNEL_TAB);
     if (messageListElement) {
       resetKeyboardModality(messageListElement);
     }
@@ -253,80 +255,122 @@ export function Channel(props: ChannelProps) {
   return (
     <DebugSuspense name="Channel.root">
       <StaticMarkdownContext>
-        <Switch>
-          <Match when={activeTab() === 'messages'}>
-            <ChannelMessagesTab
-              channelId={props.channelId}
-              messageIndexKeys={() => messageIndex().keys}
-              messageById={messageById}
-              initialScrollTarget={threadListInitialScrollTarget()}
-              shift={shift}
-              isPrepending={threadPaginator.isPrepending}
-              onScrollNearTop={threadPaginator.shiftPaginate}
-              onScrollNearBottom={threadPaginator.prependPaginate}
-              onNavigationReady={setThreadListNavigation}
-              onScrollStateChange={setThreadListScrollState}
-              threadListNavigation={threadListNavigation}
-              threadListScrollState={threadListScrollState}
-              threadManager={threadManager}
-              listMetaByMessageId={listMetaByMessageId}
-              getMessageActions={getMessageActions}
-              pendingTargetReplyId={
-                targetMessageController.pendingTargetReplyId
-              }
-              activeTargetMessageReplyId={
-                targetMessageController.activeTargetMessageReplyId
-              }
-              completePendingReplyScroll={
-                targetMessageController.completePendingReplyScroll
-              }
-              highlightedMessageId={
-                targetMessageController.highlightedMessageId
-              }
-              messageEditor={messageEditor}
-              dismissNewMessages={activityTracker.dismissNewMessages}
-              isNewMessage={activityTracker.isNewMessage}
-              selectedMessageId={selection.selectedId}
-              messageListScopeId={messageListScopeId}
-              dragState={dragState}
-              attachMessageListRef={(element) => {
+        <ChannelDropZone dragState={dragState}>
+          <Show when={messages().length > 0}>
+            <div
+              class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
+              ref={(element) => {
                 messageListElement = element;
                 attachMessageListRef(element);
               }}
-              attachInputRef={attachInputRef}
-              attachmentTracker={attachmentTracker}
-              participants={participants.users}
-              onInputReady={(handle) => {
-                dragState.setAttachFilesToChannel(handle.attachFiles);
+              tabIndex={-1}
+              data-channel-message-list
+              data-channel-nav="keyboard"
+              onMouseMove={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.channelNav !== 'mouse') {
+                  el.dataset.channelNav = 'mouse';
+                }
               }}
-              onInputChange={(snapshot) =>
-                void setChannelInputSnapshot(snapshot)
-              }
-              onSend={onSend}
-              onStartTyping={() =>
-                typingMutation.mutate({
+            >
+              <ThreadList
+                keys={() => messageIndex().keys}
+                initialScrollTarget={threadListInitialScrollTarget()}
+                shift={shift}
+                prepend={threadPaginator.isPrepending}
+                onScrollNearTop={threadPaginator.shiftPaginate}
+                onScrollNearBottom={threadPaginator.prependPaginate}
+                onNavigationReady={setThreadListNavigation}
+                onScrollStateChange={setThreadListScrollState}
+              >
+                {(item) => {
+                  const message = () => messageById().get(item.id);
+                  const state = threadManager.getOrCreateThreadState(item.id);
+                  const isNewestThread = () =>
+                    item.id === messageIndex().keys.at(-1);
+                  return (
+                    <Show when={message()}>
+                      {(m) => (
+                        <ChannelThread
+                          data={m}
+                          channelId={() => props.channelId}
+                          isNewestThread={isNewestThread()}
+                          getMessageActions={getMessageActions}
+                          targetReplyId={targetMessageController.pendingTargetReplyId()}
+                          highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          onTargetReplyScrolled={(replyId) => {
+                            targetMessageController.completePendingReplyScroll(
+                              m().id,
+                              replyId
+                            );
+                          }}
+                          highlighted={
+                            m().id ===
+                            targetMessageController.highlightedMessageId()
+                          }
+                          isExpanded={state.isExpanded}
+                          setIsExpanded={state.setIsExpanded}
+                          isReplying={state.isReplying}
+                          setIsReplying={state.setIsReplying}
+                          replyInputState={state.replyInputState}
+                          setReplyInputState={state.setReplyInputState}
+                          listMeta={listMetaByMessageId()[item.id]}
+                          messageEditor={messageEditor}
+                          threadActions={{
+                            onDismissNewMessages:
+                              activityTracker.dismissNewMessages,
+                          }}
+                          isNewMessage={activityTracker.isNewMessage}
+                          selectedMessageId={selection.selectedId}
+                          messageListScopeId={messageListScopeId}
+                        />
+                      )}
+                    </Show>
+                  );
+                }}
+              </ThreadList>
+              <ScrollToBottomOverlay
+                navigation={threadListNavigation}
+                scrollState={threadListScrollState}
+              />
+            </div>
+          </Show>
+          <DebugSuspense name="Channel.input">
+            <div class="pb-2 w-full flex justify-center" ref={attachInputRef}>
+              <ChannelInput
+                input={{
+                  mode: 'channel',
+                  id: `channel-input-${props.channelId}`,
+                  placeholder: 'Message channel',
+                  isDraggingOverChannel: dragState.isDraggingOverChannel(),
+                  isValidChannelDrag: dragState.isValidChannelDrag(),
+                }}
+                participants={participants.users}
+                attachmentTracker={attachmentTracker}
+                persistenceKey={makeInputValuePersistenceKey({
                   channelId: props.channelId,
-                  action: 'start',
-                })
-              }
-              onStopTyping={() =>
-                typingMutation.mutate({
-                  channelId: props.channelId,
-                  action: 'stop',
-                })
-              }
-            />
-          </Match>
-          <Match when={activeTab() === 'attachments'}>
-            <ChannelAttachmentsTab />
-          </Match>
-          <Match when={activeTab() === 'participants'}>
-            <ChannelTabPlaceholder label="Participants" />
-          </Match>
-          <Match when={activeTab() === 'new'}>
-            <ChannelTabPlaceholder label="New" />
-          </Match>
-        </Switch>
+                })}
+                onReady={(handle) => {
+                  dragState.setAttachFilesToChannel(handle.attachFiles);
+                }}
+                onChange={(snapshot) => void setChannelInputSnapshot(snapshot)}
+                onSend={onSend}
+                onStartTyping={() =>
+                  typingMutation.mutate({
+                    channelId: props.channelId,
+                    action: 'start',
+                  })
+                }
+                onStopTyping={() =>
+                  typingMutation.mutate({
+                    channelId: props.channelId,
+                    action: 'stop',
+                  })
+                }
+              />
+            </div>
+          </DebugSuspense>
+        </ChannelDropZone>
       </StaticMarkdownContext>
     </DebugSuspense>
   );

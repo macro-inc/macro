@@ -4,7 +4,7 @@ import {
 } from '@channel/Channel/Channel';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
-import { Suspense } from 'solid-js';
+import { createSignal, Match, Suspense, Switch } from 'solid-js';
 import { blockHandleSignal } from '@core/signal/load';
 import { createMethodRegistration } from '@core/orchestrator';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -12,12 +12,13 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { ChannelTopLeft } from './Top';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
-import { createSignal } from 'solid-js';
 import {
   CHANNEL_TABS,
   DEFAULT_CHANNEL_TAB,
   type ChannelTabId,
 } from '@channel/Channel/channel-tabs';
+import { ChannelAttachmentsTab } from '@channel/Channel/ChannelAttachmentsTab';
+import { ChannelTabPlaceholder } from '@channel/Channel/ChannelTabPlaceholder';
 
 function NewTop(props: {
   channelId: string;
@@ -65,6 +66,7 @@ export function NewChannelBlockAdapter() {
         const messageReplyId = threadId ? messageId : threadId;
 
         if (topLevelMessageId && handle) {
+          setActiveTab(DEFAULT_CHANNEL_TAB);
           handle.goToMessage(topLevelMessageId, messageReplyId);
         }
       },
@@ -73,12 +75,20 @@ export function NewChannelBlockAdapter() {
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <NewChannel
-        channelId={channelId}
-        activeTab={activeTab()}
-        onTabChange={setActiveTab}
-        onHandleReady={onChannelReady}
-      />
+      <Switch>
+        <Match when={activeTab() === 'messages'}>
+          <NewChannel channelId={channelId} onHandleReady={onChannelReady} />
+        </Match>
+        <Match when={activeTab() === 'attachments'}>
+          <ChannelAttachmentsTab />
+        </Match>
+        <Match when={activeTab() === 'participants'}>
+          <ChannelTabPlaceholder label="Participants" />
+        </Match>
+        <Match when={activeTab() === 'new'}>
+          <ChannelTabPlaceholder label="New" />
+        </Match>
+      </Switch>
       <NewTop
         channelId={channelId}
         activeTab={activeTab()}
