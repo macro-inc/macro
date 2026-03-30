@@ -17,7 +17,7 @@ import {
   DEFAULT_CHANNEL_TAB,
   type ChannelTabId,
 } from '@channel/Channel/channel-tabs';
-import { ChannelAttachmentsTab } from '@channel/Channel/ChannelAttachmentsTab';
+import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 
 function NewTop(props: {
   channelId: string;

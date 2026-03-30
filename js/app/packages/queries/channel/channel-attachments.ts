@@ -22,7 +22,7 @@ export function channelAttachmentsQueryOptions(channelId: string) {
         async () =>
           await commsServiceClient.getChannelAttachments({
             channel_id: channelId,
-            limit: 200,
+            limit: 100,
             cursor: pageParam,
           })
       );
