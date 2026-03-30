@@ -49,8 +49,10 @@ pub enum DocumentKey {
     },
 }
 
-fn is_hex(s: &str) -> bool {
-    !s.is_empty() && s.bytes().all(|b| b.is_ascii_hexdigit())
+const SHA256_HEX_LEN: usize = 64;
+
+fn is_sha256_hex(s: &str) -> bool {
+    s.len() == SHA256_HEX_LEN && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 impl DocumentKey {
@@ -92,7 +94,7 @@ impl DocumentKey {
                     })
                 }
             }
-            1 if is_hex(split[0]) => Ok(Self::BomPart {
+            1 if is_sha256_hex(split[0]) => Ok(Self::BomPart {
                 sha: split[0].to_string(),
             }),
             n => anyhow::bail!(
