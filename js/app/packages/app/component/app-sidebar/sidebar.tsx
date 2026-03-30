@@ -204,29 +204,32 @@ export const registerSidebarHotkeys = ({
 
   // Register navigation shortcuts in the global GO_TO command scope
   for (const link of SIDEBAR_LINKS) {
+    const openSidebarView = (e?: KeyboardEvent) => {
+      e?.preventDefault();
+      if (hotkeyVisible()) {
+        resetHotkeysState();
+        debounceResetHotkeysState.clear();
+      }
+      openWithSplit(
+        {
+          type: 'component',
+          id: link.id,
+        },
+        {
+          preferNewSplit: e?.shiftKey,
+          mergeHistory: false,
+          allowDuplicate: true,
+        }
+      );
+      return true;
+    };
+
     registerHotkey({
       hotkey: link.hotkey,
       scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
       description: `Go to ${link.label}`,
-      keyDownHandler: (e) => {
-        e?.preventDefault();
-        if (hotkeyVisible()) {
-          resetHotkeysState();
-          debounceResetHotkeysState.clear();
-        }
-        openWithSplit(
-          {
-            type: 'component',
-            id: link.id,
-          },
-          {
-            preferNewSplit: e?.shiftKey,
-            mergeHistory: false,
-            allowDuplicate: true,
-          }
-        );
-        return true;
-      },
+      keyDownHandler: openSidebarView,
+      icon: link.icon,
     });
   }
 };
