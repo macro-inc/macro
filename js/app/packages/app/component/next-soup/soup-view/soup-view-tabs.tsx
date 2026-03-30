@@ -12,7 +12,7 @@ import { useUserContext } from '@core/context/user';
 import {
   SegmentedControl,
   type SegmentedControlItem,
-} from '@app/component/next-soup/SegmentedControl';
+} from '@core/component/SegmentedControl';
 import { batch, createMemo, For, Match, Switch } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';

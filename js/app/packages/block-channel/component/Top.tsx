@@ -36,7 +36,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import {
   SegmentedControl,
   type SegmentedControlItem,
-} from '@app/component/next-soup/SegmentedControl';
+} from '@core/component/SegmentedControl';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 
 type TopIconProps = {
