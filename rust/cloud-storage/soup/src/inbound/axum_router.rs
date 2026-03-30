@@ -179,6 +179,7 @@ where
     Router::new()
         .route("/soup", get(get_soup_handler))
         .route("/soup", post(post_soup_handler))
+        .route("/soup/ast", post(post_soup_ast_handler))
         .with_state(state)
 }
 

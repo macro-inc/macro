@@ -183,6 +183,7 @@ use utoipa::OpenApi;
         // items
         soup::inbound::axum_router::get_soup_handler,
         soup::inbound::axum_router::post_soup_handler,
+        soup::inbound::axum_router::post_soup_ast_handler,
 
         // channels
         channels::inbound::axum_router::get_channel_messages_handler,

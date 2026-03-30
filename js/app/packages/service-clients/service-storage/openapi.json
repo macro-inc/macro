@@ -3103,6 +3103,55 @@
         }
       }
     },
+    "/items/soup/ast": {
+      "post": {
+        "tags": ["soup::inbound::axum_router"],
+        "operationId": "post_items_soup_ast",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostSoupAstRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -7000,6 +7049,30 @@
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
       },
+      "EntityFilterAst": {
+        "type": "object",
+        "description": "Describes a bundle of filters that should be applied across different entity types",
+        "properties": {
+          "cf": {
+            "description": "the filters that should be applied to the chat entity"
+          },
+          "chanf": {
+            "description": "the filters taht should be applied to the channel entity"
+          },
+          "df": {
+            "description": "the filters that should be applied to the document entity"
+          },
+          "ef": {
+            "description": "the filters that should be applied to the email entity"
+          },
+          "pf": {
+            "description": "the filters that should be applied to the project entity"
+          },
+          "propf": {
+            "description": "the filters that should be applied based on entity properties"
+          }
+        }
+      },
       "EntityFilters": {
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
@@ -8826,6 +8899,25 @@
             "description": "The pin index"
           }
         }
+      },
+      "PostSoupAstRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EntityFilterAst"
+          },
+          {
+            "$ref": "#/components/schemas/Params"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "emailView": {
+                "type": "string",
+                "description": "the view of specific emails to display"
+              }
+            }
+          }
+        ]
       },
       "PostSoupRequest": {
         "allOf": [

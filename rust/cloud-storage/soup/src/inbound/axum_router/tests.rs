@@ -64,10 +64,7 @@ impl MockSoup {
 }
 
 impl SoupService for MockSoup {
-    async fn get_user_soup<T>(
-        &self,
-        req: SoupRequest<T>,
-    ) -> Result<SoupOutput<T>, SoupErr>
+    async fn get_user_soup<T>(&self, req: SoupRequest<T>) -> Result<SoupOutput<T>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
