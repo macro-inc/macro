@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, message_id, entity_type, entity_id,\n                width AS \"width?\", height AS \"height?\", created_at\n            FROM comms_attachments\n            WHERE channel_id = $1\n              AND ($2::timestamptz IS NULL OR (created_at, id) < ($2, $3))\n            ORDER BY created_at DESC, id DESC\n            LIMIT $4\n            ",
+  "query": "\n            SELECT a.id, a.channel_id, a.message_id, m.sender_id,\n                a.entity_type, a.entity_id,\n                a.width AS \"width?\", a.height AS \"height?\", a.created_at\n            FROM comms_attachments a\n            JOIN comms_messages m ON m.id = a.message_id\n            WHERE a.channel_id = $1\n              AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))\n            ORDER BY a.created_at DESC, a.id DESC\n            LIMIT $4\n            ",
   "describe": {
     "columns": [
       {
@@ -20,26 +20,31 @@
       },
       {
         "ordinal": 3,
+        "name": "sender_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "entity_type",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "entity_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "width?",
         "type_info": "Int4"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "height?",
         "type_info": "Int4"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -58,10 +63,11 @@
       false,
       false,
       false,
+      false,
       true,
       true,
       false
     ]
   },
-  "hash": "935a3a59b6f7df8eac7cb9ba86bdde343a009e04e6735d3c0f8fb26dfbab4213"
+  "hash": "24699ee15071155de425d4228c9a5ae5feeab0bd3eed5a659795ea3a07c96ba9"
 }
