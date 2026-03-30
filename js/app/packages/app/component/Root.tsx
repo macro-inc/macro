@@ -153,14 +153,15 @@ const rootPreload: RoutePreloadFunc = async (args) => {
 };
 
 function BasePathComponent() {
+  const analytics = useAnalytics();
+
   const [searchParams] = useSearchParams();
+
   const subscriptionSuccess = searchParams.subscriptionSuccess;
   const type = searchParams.type;
   if (subscriptionSuccess === 'true') {
     toast.success('Your plan has been activated!');
-    track(TrackingEvents.SUBSCRIPTION.SUCCESS, {
-      type: type ?? undefined,
-    });
+    analytics.track('subscription_success', { type });
     // Invalidate user info to refresh trial status and subscription data
     invalidateUserInfo();
   }
