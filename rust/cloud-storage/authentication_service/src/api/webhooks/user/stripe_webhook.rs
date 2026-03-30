@@ -474,6 +474,16 @@ fn track_stripe_subscription(
                         Ok(()) => tracing::info!("tracked Meta purchase event"),
                         Err(e) => tracing::warn!(error = ?e, "failed to track Meta purchase event"),
                     }
+
+                    match client
+                        .track_posthog(&data.email, "subscription_created", &event)
+                        .await
+                    {
+                        Ok(()) => tracing::info!("tracked PostHog subscription_created event"),
+                        Err(e) => {
+                            tracing::warn!(error = ?e, "failed to track PostHog subscription_created event")
+                        }
+                    }
                 }
                 ("canceled", _) => {
                     if let Some(ref ga_client_id) = data.ga_client_id {
@@ -497,6 +507,16 @@ fn track_stripe_subscription(
                     {
                         Ok(()) => tracing::info!("tracked Meta cancel event"),
                         Err(e) => tracing::warn!(error = ?e, "failed to track Meta cancel event"),
+                    }
+
+                    match client
+                        .track_posthog(&data.email, "subscription_canceled", &event)
+                        .await
+                    {
+                        Ok(()) => tracing::info!("tracked PostHog subscription_canceled event"),
+                        Err(e) => {
+                            tracing::warn!(error = ?e, "failed to track PostHog subscription_canceled event")
+                        }
                     }
                 }
                 _ => {
