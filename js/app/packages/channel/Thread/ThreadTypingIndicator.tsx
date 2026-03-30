@@ -30,7 +30,9 @@ type ThreadTypingIndicatorContentProps = {
   text: string;
 };
 
-function ThreadTypingIndicatorContent(props: ThreadTypingIndicatorContentProps) {
+function ThreadTypingIndicatorContent(
+  props: ThreadTypingIndicatorContentProps
+) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)] min-h-7">
       <ThreadTypingIndicatorConnector />
