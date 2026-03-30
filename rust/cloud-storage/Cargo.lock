@@ -1815,6 +1815,7 @@ dependencies = [
  "model",
  "model_user",
  "models_permissions",
+ "roles_and_permissions",
  "serde",
  "serde_json",
  "sqlx",

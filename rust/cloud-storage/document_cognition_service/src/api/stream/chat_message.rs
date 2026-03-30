@@ -6,7 +6,6 @@ use super::util::chat_permissions;
 use crate::api::context::ApiContext;
 use crate::api::utils::log;
 use crate::core::constants::DEFAULT_CHAT_NAME;
-use crate::core::model::FALLBACK_MODEL;
 use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
 use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
@@ -20,6 +19,7 @@ use axum::extract::{Extension, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
+use chat::inbound::ChatModelAccess;
 use futures::StreamExt;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -29,9 +29,7 @@ use model::user::UserContext;
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
-use roles_and_permissions::domain::model::PermissionId;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 use stream::domain::{StreamId, StreamRepoExt};
@@ -127,12 +125,14 @@ impl IntoResponse for ChatMessageError {
         (status = 200, description = "Stream initiated successfully", body = SendChatMessageResponse),
         (status = 400, description = "Bad request", body = ChatMessageError),
         (status = 401, description = "Unauthorized"),
+        (status = 402, description = "Payment required — user lacks access to the requested model"),
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
+#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
+    model_access: ChatModelAccess,
     Extension(user_context): Extension<UserContext>,
     Extension(bearer): Extension<BearerToken>,
     Json(request): Json<HttpSendChatMessageRequest>,
@@ -204,13 +204,7 @@ pub async fn send_chat_message(
         }
     };
 
-    let model = resolve_model_from_permissions(&user_context.permissions).ok_or_else(|| {
-        ChatMessageError {
-            error: "AI features require a paid subscription".to_string(),
-            stream_id: Some(stream_id.clone()),
-            status: Some(StatusCode::PAYMENT_REQUIRED),
-        }
-    })?;
+    let model = model_access.model();
 
     // Convert HTTP request to internal payload for existing functions
     let payload = SendChatMessagePayload {
@@ -566,20 +560,4 @@ fn stream_and_save_message(
         Box::pin(payload_stream),
         Some(std::time::Duration::from_secs(30 * 60)),
     );
-}
-
-/// Returns the best AI model the user has permission to use, or `None` if
-/// the user has no AI permissions (free tier).
-fn resolve_model_from_permissions(permissions: &Option<HashSet<String>>) -> Option<Model> {
-    let perms = permissions.as_ref()?;
-
-    if perms.contains(&PermissionId::WriteOpus.to_string()) {
-        Some(Model::Claude46Opus)
-    } else if perms.contains(&PermissionId::WriteSonnet.to_string()) {
-        Some(Model::Claude46Sonnet)
-    } else if perms.contains(&PermissionId::WriteHaiku.to_string()) {
-        Some(FALLBACK_MODEL)
-    } else {
-        None
-    }
 }
