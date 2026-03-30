@@ -479,7 +479,7 @@ fn track_stripe_subscription(
                 ("canceled", _) => {
                     if let Some(ref ga_client_id) = data.ga_client_id {
                         let _ = client.track_ga(ga_client_id, "refund", &event)
-                            .await 
+                            .await
                             .inspect_err(|e| tracing::warn!(error = ?e, "failed to track GA refund event"));
                     } else {
                         tracing::debug!("skipping GA refund tracking: no ga_client_id");
