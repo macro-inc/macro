@@ -12,8 +12,10 @@ import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
@@ -71,6 +73,10 @@ function SoupChatInputInner() {
     // Create a new persistent chat
     const response = await cognitionApiServiceClient.createChat({});
     if (isErr(response)) {
+      if (isPaymentError(response)) {
+        const { showPaywall } = usePaywallState();
+        showPaywall(PaywallKey.CHAT_LIMIT);
+      }
       return;
     }
     const [, { id: chatId }] = response;

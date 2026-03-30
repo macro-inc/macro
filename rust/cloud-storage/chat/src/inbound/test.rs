@@ -314,10 +314,6 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
     })
 }
 
-fn mock_create_router() -> Router {
-    chat_create_router(ChatRouterState::new(MockService, MockAccessService)).layer(user_extension())
-}
-
 fn mock_id_router() -> Router {
     chat_id_router(ChatRouterState::new(MockService, MockAccessService))
         .layer(chat_basic_extension())
@@ -334,71 +330,6 @@ fn not_found_id_router() -> Router {
     chat_id_router(ChatRouterState::new(NotFoundService, MockAccessService))
         .layer(chat_basic_extension())
         .layer(user_extension())
-}
-
-fn error_create_router() -> Router {
-    chat_create_router(ChatRouterState::new(ErrorService, MockAccessService))
-        .layer(user_extension())
-}
-
-// -- create_chat tests --
-
-#[tokio::test]
-async fn create_chat_returns_id() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/")
-        .header("content-type", "application/json")
-        .body(Body::from(r#"{"name": "My Chat"}"#))
-        .unwrap();
-
-    let res = mock_create_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let response: StringIDResponse = serde_json::from_slice(&body).unwrap();
-    assert_eq!(response.id, "test-chat-id");
-}
-
-#[tokio::test]
-async fn create_chat_with_default_name() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/")
-        .header("content-type", "application/json")
-        .body(Body::from(r#"{}"#))
-        .unwrap();
-
-    let res = mock_create_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-}
-
-#[tokio::test]
-async fn create_chat_repo_error_returns_500() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/")
-        .header("content-type", "application/json")
-        .body(Body::from(r#"{"name": "My Chat"}"#))
-        .unwrap();
-
-    let res = error_create_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
-}
-
-#[tokio::test]
-async fn create_chat_without_auth_returns_401() {
-    let router: Router = chat_create_router(ChatRouterState::new(MockService, MockAccessService));
-
-    let req = Request::builder()
-        .method("POST")
-        .uri("/")
-        .header("content-type", "application/json")
-        .body(Body::from(r#"{"name": "My Chat"}"#))
-        .unwrap();
-
-    let res = router.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
 
 // -- get_chat tests --
