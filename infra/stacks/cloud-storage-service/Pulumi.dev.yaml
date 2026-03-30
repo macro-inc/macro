@@ -14,6 +14,6 @@ config:
   cloud-storage-service:opensearch_password_key: macro-opensearch-password-dev
   cloud-storage-service:macro_cache_secret_key: macro-cache-dev
   cloud-storage-service:github_webhook_secret_key: github-webhook-secret-dev
-  cloud-storage-service:github_sync_app_url: https://github.com/apps/dev-macro-sync
+  cloud-storage-service:github_sync_app_url: https://github.com/apps/dev-macro-app
   cloud-storage-service:github_sync_app_pem: github-sync-app-pem-dev
-  cloud-storage-service:github_sync_app_client_id: Iv23livpJoVJw98dlKCk
+  cloud-storage-service:github_sync_app_client_id: Iv23lipL80fCypV6UZa1
