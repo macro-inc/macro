@@ -80,7 +80,7 @@ export function NewChannelBlockAdapter() {
           <NewChannel channelId={channelId} onHandleReady={onChannelReady} />
         </Match>
         <Match when={activeTab() === 'attachments'}>
-          <ChannelAttachmentsTab />
+          <ChannelAttachmentsTab channelId={channelId} />
         </Match>
         <Match when={activeTab() === 'participants'}>
           <ChannelTabPlaceholder label="Participants" />
