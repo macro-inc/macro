@@ -12,8 +12,18 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { ChannelTopLeft } from './Top';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { createSignal } from 'solid-js';
+import {
+  CHANNEL_TABS,
+  DEFAULT_CHANNEL_TAB,
+  type ChannelTabId,
+} from '@channel/Channel/channel-tabs';
 
-function NewTop(props: { channelId: string }) {
+function NewTop(props: {
+  channelId: string;
+  activeTab: ChannelTabId;
+  onTabChange: (value: ChannelTabId) => void;
+}) {
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
@@ -27,6 +37,9 @@ function NewTop(props: { channelId: string }) {
         channelType={channelType()!}
         participants={participants() ?? []}
         channelName={channelName() ?? 'New Channel'}
+        tabs={CHANNEL_TABS}
+        activeTab={props.activeTab}
+        onTabChange={props.onTabChange}
       />
     </Suspense>
   );
@@ -36,6 +49,8 @@ export function NewChannelBlockAdapter() {
   useBlockEntityCommands();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
+  const [activeTab, setActiveTab] =
+    createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);
 
   const onChannelReady = (handle: ChannelHandle) => {
     createMethodRegistration(blockHandle, {
@@ -58,8 +73,17 @@ export function NewChannelBlockAdapter() {
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <NewChannel channelId={channelId} onHandleReady={onChannelReady} />
-      <NewTop channelId={channelId} />
+      <NewChannel
+        channelId={channelId}
+        activeTab={activeTab()}
+        onTabChange={setActiveTab}
+        onHandleReady={onChannelReady}
+      />
+      <NewTop
+        channelId={channelId}
+        activeTab={activeTab()}
+        onTabChange={setActiveTab}
+      />
     </EntityPermissionsGate>
   );
 }
