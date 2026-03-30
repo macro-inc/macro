@@ -45,7 +45,7 @@ const database = new aws.rds.Instance(
     engineVersion: config.require('engine_version'),
     instanceClass: config.require('instance_size'),
     storageType: config.require('storage_type'),
-    iops: config.getNumber('storage_iops'), // this may be undefined to allow for default iops configuration 
+    iops: config.getNumber('storage_iops'), // this may be undefined to allow for default iops configuration
     storageThroughput: config.getNumber('storage_throughput'),
     allocatedStorage: config.requireNumber('allocated_storage'),
     maxAllocatedStorage: config.requireNumber('max_allocated_storage'),
