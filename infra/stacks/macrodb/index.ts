@@ -82,3 +82,48 @@ const database = new aws.rds.Instance(
 );
 
 export const endpoint = database.endpoint;
+
+// ---- Read Replica ----
+
+const enableReadReplica = config.getBoolean('read_replica_enabled') ?? false;
+
+const readReplica = enableReadReplica
+  ? new aws.rds.Instance(
+      'read-replica',
+      {
+        applyImmediately: stack !== 'prod',
+        identifier: `macro-db-${stack}-read-replica`,
+        replicateSourceDb: database.identifier,
+        instanceClass: config.require('read_replica_instance_size'),
+        storageType: config.require('storage_type'),
+        iops: config.getNumber('storage_iops'),
+        storageThroughput: config.getNumber('storage_throughput'),
+        caCertIdentifier: config.require('ca_cert_identifier'),
+        kmsKeyId: config.require('kms_key_id'),
+        storageEncrypted: true,
+        performanceInsightsEnabled: true,
+        performanceInsightsRetentionPeriod: config.requireNumber(
+          'performance_insights_retention_days'
+        ),
+        performanceInsightsKmsKeyId: config.require(
+          'performance_insights_kms_key_id'
+        ),
+        publiclyAccessible: true,
+        vpcSecurityGroupIds: [
+          ...config.require('security_group_ids').split(','),
+        ],
+        parameterGroupName: pulumi.interpolate`${parameterGroup.name}`,
+        enabledCloudwatchLogsExports:
+          stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
+        skipFinalSnapshot: true,
+        deletionProtection: stack === 'prod',
+        tags: {
+          ...tags,
+          role: 'read-replica',
+        },
+      },
+      { dependsOn: [database] }
+    )
+  : undefined;
+
+export const readReplicaEndpoint = readReplica?.endpoint;
