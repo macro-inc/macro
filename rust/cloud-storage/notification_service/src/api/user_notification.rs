@@ -236,7 +236,8 @@ where
 
             (err_str.contains("channel_message_document")
                 || err_str.contains("missing field `toEmail`")
-                || err_str.contains("missing field `sender`"))
+                || err_str.contains("missing field `sender`")
+                || err_str.contains("missing field `threadId`"))
             .then_some(uuid)
         }
 
