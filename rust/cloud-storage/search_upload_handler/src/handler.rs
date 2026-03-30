@@ -29,7 +29,7 @@ pub async fn handler(
     let document_key = match DocumentKey::from_s3_key(&key) {
         Ok(key) => key,
         Err(e) => {
-            tracing::warn!(error=?e, "unable to parse key");
+            tracing::warn!(error=?e, key=%key, "unable to parse key");
             return Ok(());
         }
     };

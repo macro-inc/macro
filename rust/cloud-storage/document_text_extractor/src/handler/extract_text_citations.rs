@@ -151,7 +151,7 @@ pub async fn extract_text_from_document(
     db: Arc<service::db::DB>,
 ) -> Result<Option<DocumentKey>, Error> {
     let document_key = DocumentKey::from_s3_key(key).map_err(|e| {
-        tracing::error!(error=?e, "invalid key format");
+        tracing::error!(error=?e, key=%key, "invalid key format");
         Error::from("invalid key format")
     })?;
 

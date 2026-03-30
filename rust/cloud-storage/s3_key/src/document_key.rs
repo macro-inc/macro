@@ -82,7 +82,7 @@ impl DocumentKey {
                     })
                 }
             }
-            n => anyhow::bail!("invalid key format: expected 2 or 3 segments, got {n}"),
+            n => anyhow::bail!("invalid key format: expected 2 or 3 segments, got {n} for key '{key}'"),
         }
     }
 
