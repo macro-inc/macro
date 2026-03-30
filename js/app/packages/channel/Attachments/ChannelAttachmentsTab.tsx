@@ -35,7 +35,7 @@ import { ThumbnailSkeleton, DocumentRowSkeleton } from './Skeletons';
 const MEDIA_SKELETON_COUNT = 6;
 const DOCUMENT_SKELETON_COUNT = 6;
 
-function PhotosAndVideos(props: {
+function MediaGallery(props: {
   attachments: Accessor<ApiChannelAttachment[]>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
@@ -53,31 +53,27 @@ function PhotosAndVideos(props: {
     onCleanup(() => observer.disconnect());
   };
 
-  const rowLimit = createMemo(() => itemsPerRow(containerWidth()));
+  const rowLimit = () => itemsPerRow(containerWidth());
   const allMedia = createMemo(() =>
     props.attachments().filter(isMediaAttachment)
   );
   const visibleMedia = createMemo(() =>
     expanded() ? allMedia() : allMedia().slice(0, rowLimit())
   );
-  const hiddenCount = createMemo(() =>
-    Math.max(0, allMedia().length - rowLimit())
-  );
+  const hiddenCount = () => Math.max(0, allMedia().length - rowLimit());
   const visibleImages = createMemo(() =>
     visibleMedia().filter((a) => a.entity_type === STATIC_IMAGE)
   );
-  const visibleVideos = createMemo(() =>
-    visibleMedia().filter((a) => a.entity_type === STATIC_VIDEO)
-  );
-  const imagePreviewData = createMemo(() =>
+  const visibleVideos = () =>
+    visibleMedia().filter((a) => a.entity_type === STATIC_VIDEO);
+  const imagePreviewData = () =>
     visibleImages().map((a) => ({
       id: a.entity_id,
       width: THUMB_SIZE,
       height: THUMB_SIZE,
-    }))
-  );
-  const imageAttachmentIds = createMemo(() => visibleImages().map((a) => a.id));
-  const hasMedia = createMemo(() => allMedia().length > 0);
+    }));
+  const imageAttachmentIds = () => visibleImages().map((a) => a.id);
+  const hasMedia = () => allMedia().length > 0;
 
   return (
     <div class="flex flex-col">
@@ -140,7 +136,7 @@ function PhotosAndVideos(props: {
   );
 }
 
-function Documents(props: {
+function AttachmentEntityList(props: {
   attachments: Accessor<ApiChannelAttachment[]>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
@@ -149,13 +145,13 @@ function Documents(props: {
   const documentAttachments = createMemo(() =>
     props.attachments().filter(isDocumentAttachment)
   );
-  const hasDocuments = createMemo(() => documentAttachments().length > 0);
-  const filters = createMemo(() =>
-    buildAttachmentEntityFilters(documentAttachments())
-  );
+  const hasDocuments = () => documentAttachments().length > 0;
 
   const soupQuery = useSoupItemsQuery(
-    () => ({ params: { limit: 500 }, body: filters() }),
+    () => ({
+      params: { limit: 500 },
+      body: buildAttachmentEntityFilters(documentAttachments()),
+    }),
     () => ({ enabled: hasDocuments() })
   );
 
@@ -165,7 +161,7 @@ function Documents(props: {
     return map;
   });
 
-  const sortedEntities = createMemo(() => {
+  const sortedEntities = () => {
     const entities = soupQuery.data ?? [];
     const lookup = attachmentByEntityId();
     return [...entities].sort((a, b) => {
@@ -173,7 +169,7 @@ function Documents(props: {
       const bTime = lookup.get(b.id)?.created_at ?? '';
       return bTime.localeCompare(aTime);
     });
-  });
+  };
 
   const { replaceOrInsertSplit } = useSplitLayout();
   const handleEntityClick = (entity: EntityData) =>
@@ -262,13 +258,13 @@ function AttachmentsTabContent(props: { channelId: string }) {
   return (
     <div class="relative flex-1 min-h-0 overflow-y-auto">
       <div class="macro-message-width macro-message-padding mx-auto w-full py-4 flex flex-col gap-6">
-        <PhotosAndVideos
+        <MediaGallery
           attachments={allAttachments}
           hasNextPage={hasNextPage}
           isFetchingNextPage={isFetchingNextPage}
           onLoadMore={loadMore}
         />
-        <Documents
+        <AttachmentEntityList
           attachments={allAttachments}
           hasNextPage={hasNextPage}
           isFetchingNextPage={isFetchingNextPage}
