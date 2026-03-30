@@ -187,6 +187,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                             "match_phrase_prefix": {
                                 "content": {
                                     "query": "test",
+                                    "max_expansions": 256
                                 }
                             }
                         },
@@ -231,6 +232,7 @@ fn test_build_must_term_query() -> anyhow::Result<()> {
         "match_phrase_prefix": {
             "content": {
                 "query": "test",
+                "max_expansions": 256
             }
         }
     });
@@ -274,31 +276,18 @@ fn test_build_must_term_query_multiple_terms() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_build_must_term_query_term_with_short_last_word() -> anyhow::Result<()> {
+fn test_build_must_term_query_short_last_word_no_wildcard() -> anyhow::Result<()> {
     let terms = vec!["test Ab".to_string()];
     let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms).match_type("partial");
 
     let terms_must_vec = builder.build_must_term_query()?;
 
     let expected = serde_json::json!({
-        "bool": {
-            "must": [
-                {
-                    "match_phrase_prefix": {
-                        "content": {
-                            "query": "test",
-                        }
-                    }
-                },
-                {
-                    "wildcard": {
-                        "content": {
-                            "case_insensitive": true,
-                            "value": "*ab*",
-                        }
-                    }
-                }
-            ]
+        "match_phrase_prefix": {
+            "content": {
+                "query": "test Ab",
+                "max_expansions": 256
+            }
         }
     });
 
