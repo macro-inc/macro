@@ -155,7 +155,12 @@ pub async fn extract_text_from_document(
         Error::from("invalid key format")
     })?;
 
-    let document_id = document_key.document_id();
+    if document_key.is_bom_part() {
+        tracing::trace!("skipping bom part key");
+        return Ok(None);
+    }
+
+    let document_id = document_key.document_id().expect("document key has id");
 
     let file_type = if document_key.is_converted_pdf() {
         Some(model::document::FileType::Pdf)

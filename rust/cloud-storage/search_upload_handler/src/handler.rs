@@ -34,12 +34,12 @@ pub async fn handler(
         }
     };
 
-    if document_key.is_temp() {
-        tracing::trace!("skipping temp file");
+    if document_key.is_temp() || document_key.is_bom_part() {
+        tracing::trace!("skipping non-document key");
         return Ok(());
     }
 
-    let document_id = document_key.document_id();
+    let document_id = document_key.document_id().expect("document key has id");
 
     tracing::trace!(?document_key, "processing document key");
 

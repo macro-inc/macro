@@ -63,6 +63,27 @@ fn test_invalid_key_format() {
 }
 
 #[test]
+fn test_bom_part_key() {
+    let key = DocumentKey::from_s3_key(
+        "7b5ce90c96ec3c24d8764ba75076bc0c2c5256b2d44e71cf9a8f001ea21ed678",
+    )
+    .unwrap();
+    assert_eq!(
+        key,
+        DocumentKey::BomPart {
+            sha: "7b5ce90c96ec3c24d8764ba75076bc0c2c5256b2d44e71cf9a8f001ea21ed678".to_string(),
+        }
+    );
+    assert!(key.is_bom_part());
+    assert_eq!(key.document_id(), None);
+    assert_eq!(key.version_id_string(), None);
+    assert_eq!(
+        key.to_key(),
+        "7b5ce90c96ec3c24d8764ba75076bc0c2c5256b2d44e71cf9a8f001ea21ed678"
+    );
+}
+
+#[test]
 fn test_invalid_version_id() {
     assert!(DocumentKey::from_s3_key("user123/doc456/not_a_number").is_err());
     assert!(DocumentKey::from_s3_key("user123/doc456/abc.pdf").is_err());
@@ -76,13 +97,13 @@ fn test_invalid_temp_file_extension() {
 #[test]
 fn test_document_id_accessor() {
     let versioned = DocumentKey::from_s3_key("user/doc1/1").unwrap();
-    assert_eq!(versioned.document_id(), "doc1");
+    assert_eq!(versioned.document_id(), Some("doc1"));
 
     let converted = DocumentKey::from_s3_key("user/doc2/converted.pdf").unwrap();
-    assert_eq!(converted.document_id(), "doc2");
+    assert_eq!(converted.document_id(), Some("doc2"));
 
     let temp = DocumentKey::from_s3_key("temp_files/doc3.docx").unwrap();
-    assert_eq!(temp.document_id(), "doc3");
+    assert_eq!(temp.document_id(), Some("doc3"));
 }
 
 #[test]
