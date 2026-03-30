@@ -6,15 +6,21 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
-import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
-import { VideoPreview } from '@core/component/VideoPreview';
+import { Dialog } from '@kobalte/core/dialog';
+import { STATIC_IMAGE } from '@core/store/cacheChannelInput';
+import { Lightbox } from '@core/component/Lightbox';
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { SERVER_HOSTS } from '@core/constant/servers';
 import type { ApiChannelAttachment } from '@service-comms/client';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import PlayIcon from '@icon/fill/play-fill.svg';
 import { THUMB_SIZE, isMediaAttachment, itemsPerRow } from './attachment-utils';
 import { SectionHeader, LoadMoreButton } from './SectionHeader';
 
-const THUMB_GAP = 6;
+const IMAGE_THUMB_CLASS =
+  'size-23 object-cover rounded-2xl border border-edge hover:opacity-80 select-none cursor-pointer';
+const VIDEO_THUMB_CLASS =
+  'size-23 overflow-hidden rounded-2xl border border-edge bg-menu select-none relative cursor-pointer group';
 
 export function MediaGallery(props: {
   attachments: Accessor<ApiChannelAttachment[]>;
@@ -24,6 +30,7 @@ export function MediaGallery(props: {
 }) {
   const [expanded, setExpanded] = createSignal(false);
   const [containerWidth, setContainerWidth] = createSignal(0);
+  const [lightboxIndex, setLightboxIndex] = createSignal(0);
 
   const observeGrid = (el: HTMLDivElement) => {
     const observer = new ResizeObserver((entries) => {
@@ -37,28 +44,30 @@ export function MediaGallery(props: {
   const allMedia = createMemo(() =>
     props.attachments().filter(isMediaAttachment)
   );
-  const allImages = createMemo(() =>
-    allMedia().filter((a) => a.entity_type === STATIC_IMAGE)
-  );
-  const allVideos = () =>
-    allMedia().filter((a) => a.entity_type === STATIC_VIDEO);
 
-  const imagePreviewData = () =>
-    allImages().map((a) => ({
-      id: a.entity_id,
-      width: THUMB_SIZE,
-      height: THUMB_SIZE,
-    }));
-  const imageAttachmentIds = () => allImages().map((a) => a.id);
+  const imageIds = createMemo(() =>
+    allMedia()
+      .filter((a) => a.entity_type === STATIC_IMAGE)
+      .map((a) => a.entity_id)
+  );
+
+  const imageIndexOf = (entityId: string) => imageIds().indexOf(entityId);
+
+  const getImageUrl = (id: string) =>
+    `${SERVER_HOSTS['static-file']}/file/${id}`;
+
+  const currentImageUrl = () => {
+    const id = imageIds()[lightboxIndex()];
+    return id ? getImageUrl(id) : undefined;
+  };
+
+  const hasPrevious = () => lightboxIndex() > 0;
+  const hasNext = () => lightboxIndex() < imageIds().length - 1;
 
   const rowLimit = () => itemsPerRow(containerWidth());
   const hasMedia = () => allMedia().length > 0;
   const hiddenCount = () => Math.max(0, allMedia().length - rowLimit());
-
-  const collapsedMaxHeight = () => {
-    const rows = 1;
-    return rows * THUMB_SIZE + (rows - 1) * THUMB_GAP;
-  };
+  const collapsedMaxHeight = () => THUMB_SIZE;
 
   return (
     <div class="flex flex-col">
@@ -88,35 +97,82 @@ export function MediaGallery(props: {
       </Show>
 
       <Show when={hasMedia()}>
-        <div
-          class="flex flex-row flex-wrap gap-1.5 pt-3 overflow-hidden transition-[max-height] duration-200"
-          style={{
-            'max-height': expanded()
-              ? 'none'
-              : `${collapsedMaxHeight() + 12}px`,
+        <Dialog
+          onOpenChange={(open) => {
+            if (!open) setLightboxIndex(0);
           }}
-          ref={observeGrid}
         >
-          <Show when={allImages().length > 0}>
-            <ImageGalleryPreview
-              images={imagePreviewData()}
-              attachmentIds={imageAttachmentIds()}
-              variant="small"
-              square
-              wrapperClass="contents"
+          <div
+            class="flex flex-row flex-wrap gap-1.5 pt-3 overflow-hidden transition-[max-height] duration-200"
+            style={{
+              'max-height': expanded()
+                ? 'none'
+                : `${collapsedMaxHeight() + 12}px`,
+            }}
+            ref={observeGrid}
+          >
+            <For each={allMedia()}>
+              {(attachment) =>
+                attachment.entity_type === STATIC_IMAGE ? (
+                  <Dialog.Trigger
+                    class="flex"
+                    onClick={() =>
+                      setLightboxIndex(imageIndexOf(attachment.entity_id))
+                    }
+                  >
+                    <img
+                      class={IMAGE_THUMB_CLASS}
+                      src={getImageUrl(attachment.entity_id)}
+                      alt="preview"
+                      width={THUMB_SIZE}
+                      height={THUMB_SIZE}
+                      loading="lazy"
+                    />
+                  </Dialog.Trigger>
+                ) : (
+                  <div
+                    class={VIDEO_THUMB_CLASS}
+                    onClick={() =>
+                      window.open(
+                        staticFileIdEndpoint(attachment.entity_id),
+                        '_blank'
+                      )
+                    }
+                  >
+                    <video
+                      class="size-full object-cover"
+                      preload="metadata"
+                      playsinline
+                      muted
+                      src={staticFileIdEndpoint(attachment.entity_id)}
+                    />
+                    <div class="absolute inset-0 flex items-center justify-center bg-ink/20 group-hover:bg-ink/30 transition-colors">
+                      <PlayIcon class="size-5 text-page drop-shadow" />
+                    </div>
+                  </div>
+                )
+              }
+            </For>
+          </div>
+          <Dialog.Portal>
+            <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+            <Lightbox
+              src={currentImageUrl}
+              imageId={() => imageIds()[lightboxIndex()] ?? ''}
+              onPrevious={
+                hasPrevious() ? () => setLightboxIndex((i) => i - 1) : undefined
+              }
+              onNext={
+                hasNext() ? () => setLightboxIndex((i) => i + 1) : undefined
+              }
+              indexLabel={
+                imageIds().length > 1
+                  ? () => `${lightboxIndex() + 1}/${imageIds().length}`
+                  : undefined
+              }
             />
-          </Show>
-          <For each={allVideos()}>
-            {(video) => (
-              <VideoPreview
-                id={video.entity_id}
-                variant="small"
-                width={video.width ?? undefined}
-                height={video.height ?? undefined}
-              />
-            )}
-          </For>
-        </div>
+          </Dialog.Portal>
+        </Dialog>
       </Show>
 
       <Show when={expanded() && props.hasNextPage()}>
