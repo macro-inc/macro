@@ -1,14 +1,9 @@
-import { withAnalytics } from '@coparse/analytics';
-
-const { track, TrackingEvents } = withAnalytics();
-
 const frameTitle = 'printf';
 let frame = document.createElement('iframe');
 let src = '';
 
 export async function doPrint(blob?: Blob | null) {
   if (!blob) return console.error('No blob to print');
-  track(TrackingEvents.BLOCKPDF.FILEMENU.PRINT);
   // workaround to make this fn idempotent
   frame.remove();
   URL.revokeObjectURL(src);

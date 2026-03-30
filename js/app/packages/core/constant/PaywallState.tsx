@@ -1,7 +1,4 @@
-import { withAnalytics } from '@coparse/analytics';
 import { createSignal } from 'solid-js';
-
-const { track, TrackingEvents } = withAnalytics();
 
 export const DAILY_LIMIT = 5;
 
@@ -47,9 +44,6 @@ export const usePaywallState = () => {
     if (errorKey) {
       setPaywallKey(errorKey);
     }
-    track(TrackingEvents.PAYWALL.SHOW, {
-      type: errorKey,
-    });
     setPaywallOpen(true);
   };
 

@@ -2,8 +2,6 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import type { EntityDragEvent } from '@entity';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -110,7 +108,6 @@ export function Channel(props: {
       activityType: 'view',
     });
 
-  const { track } = withAnalytics();
   let containerRef!: HTMLDivElement;
   const [searchParams] = useSearchParams();
   const [channelInputAttachmentsStore, setChannelInputAttachmentsStore] =
@@ -167,8 +164,6 @@ export function Channel(props: {
   onMount(() => {
     updateActivityOnOpen();
 
-    track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
-
     const STALE_THRESHOLD_MS = 1_000;
     const age = Date.now() - channelQuery.dataUpdatedAt;
     if (age > STALE_THRESHOLD_MS) {
@@ -206,10 +201,6 @@ export function Channel(props: {
   onDragEnd((event: EntityDragEvent) => {
     if (!event.droppable) return;
     if (event.droppable?.id !== 'channel-input-' + props.channelId) return;
-    if (event.droppable.node === containerRef) {
-      const { track, TrackingEvents } = withAnalytics();
-      track(TrackingEvents.BLOCKCHANNEL.ATTACHMENT.DRAG);
-    }
     const draggableId = event.draggable?.data.id;
     const draggableName = event.draggable?.data.name;
     const blockName = fileTypeToBlockName(

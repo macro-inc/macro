@@ -1,5 +1,4 @@
 import { createNumericParser } from '@block-canvas/util/parse';
-import { withAnalytics } from '@coparse/analytics';
 import {
   useBlockId,
   useBlockNestedContext,
@@ -39,8 +38,6 @@ import { Loading } from './Loading';
 import { ModalsProvider } from './ModalsProvider';
 import { ToolBar } from './ToolBar';
 import { TopBar } from './TopBar';
-
-const { track, TrackingEvents } = withAnalytics();
 
 const LoadingView = () => (
   <div class="w-full h-full flex items-center justify-center">
@@ -178,7 +175,6 @@ export default function BlockCanvas(props: BlockCanvasProps) {
       return;
     }
     parseCanvasFile(file);
-    track(TrackingEvents.BLOCKCANVAS.OPEN);
   });
 
   const [urlSearchParams] = useSearchParams();

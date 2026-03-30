@@ -82,6 +82,11 @@ pub struct Config {
     /// Meta test event code for testing (optional)
     pub meta_test_event_code: Option<String>,
 
+    /// PostHog API key (optional)
+    pub posthog_api_key: Option<String>,
+    /// PostHog host (optional)
+    pub posthog_host: Option<String>,
+
     /// The stripe price ids
     pub stripe_price_ids: StripePriceIds,
 }
@@ -164,6 +169,10 @@ impl Config {
         let meta_access_token = std::env::var("META_ACCESS_TOKEN").ok();
         let meta_test_event_code = std::env::var("META_TEST_EVENT_CODE").ok();
 
+        // PostHog configuration
+        let posthog_api_key = std::env::var("POSTHOG_API_KEY").ok();
+        let posthog_host = std::env::var("POSTHOG_HOST").ok();
+
         let stripe_price_ids = StripePriceIds::new()?;
 
         Ok(Config {
@@ -194,6 +203,8 @@ impl Config {
             meta_pixel_id,
             meta_access_token,
             meta_test_event_code,
+            posthog_api_key,
+            posthog_host,
             stripe_price_ids,
         })
     }

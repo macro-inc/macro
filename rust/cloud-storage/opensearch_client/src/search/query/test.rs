@@ -48,29 +48,16 @@ fn test_query_key_create_query() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_query_key_short_last_word() -> anyhow::Result<()> {
+fn test_query_key_create_query_partial() -> anyhow::Result<()> {
     let field = "test";
     let term = "test Ab";
 
     let expected = serde_json::json!({
-        "bool": {
-            "must": [
-                {
-                    "match_phrase_prefix": {
-                        "test": {
-                            "query": "test",
-                        }
-                    }
-                },
-                {
-                    "wildcard": {
-                        "test": {
-                            "case_insensitive": true,
-                            "value": "*ab*",
-                        }
-                    }
-                }
-            ]
+        "match_phrase_prefix": {
+            "test": {
+                "query": "test Ab",
+                "max_expansions": 256
+            }
         }
     });
 
@@ -111,6 +98,7 @@ fn test_generate_terms_must_query() -> anyhow::Result<()> {
                     "match_phrase_prefix": {
                         "test": {
                             "query": "test",
+                            "max_expansions": 256
                         }
                     }
                 },
@@ -118,6 +106,7 @@ fn test_generate_terms_must_query() -> anyhow::Result<()> {
                     "match_phrase_prefix": {
                         "test": {
                             "query": "test2",
+                            "max_expansions": 256
                         }
                     }
                 }

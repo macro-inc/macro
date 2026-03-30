@@ -1,6 +1,6 @@
 //! Domain models for the referral crate.
 
-pub use referral_invitation::{InviteToMacro, ReferralCode};
+pub use invite_email::{InviteToMacro, ReferralCode};
 
 use macro_uuid::ShortUuidConverter;
 use rate_limit::RateLimitExceeded;

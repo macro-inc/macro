@@ -1,5 +1,4 @@
 import { clamp } from '@block-canvas/util/math';
-import { withAnalytics } from '@coparse/analytics';
 import { LoadErrors } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { staticFileIdEndpoint } from '@core/constant/servers';
@@ -126,8 +125,6 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
       transform: `scaleX(${props.node.flipX ? '-1' : '1'}) scaleY(${props.node.flipY ? '-1' : '1'})`,
     };
   });
-
-  const { track, TrackingEvents } = withAnalytics();
 
   const [url, setUrl] = createSignal('');
   const [error, setError] = createSignal<
@@ -361,9 +358,6 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
               ...imageFlip(),
             }}
             src={url()}
-            onError={(e) => {
-              track(TrackingEvents.BLOCKVIDEO.PLAYBACK.ERROR, { error: e });
-            }}
             controls={false}
             onplay={() => {
               setShowVideoControls(() => true);

@@ -1,5 +1,4 @@
 import { ZOOM_TARGETS } from '@block-canvas/constants';
-import { withAnalytics } from '@coparse/analytics';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import Tooltip from '@corvu/tooltip';
 import Minus from '@icon/regular/minus.svg';
@@ -7,8 +6,6 @@ import Plus from '@icon/regular/plus.svg';
 import { onMount, Show } from 'solid-js';
 import { useToolManager } from '../signal/toolManager';
 import { useRenderState } from '../store/RenderState';
-
-const { track, TrackingEvents } = withAnalytics();
 
 const nextInList = (list: number[], current: number, larger = true) => {
   if (larger) {
@@ -54,7 +51,6 @@ export function ZoomWidget() {
 
   const resetZoom = () => {
     animateTo({ scale: 1 }, 200, true);
-    track(TrackingEvents.BLOCKCANVAS.RESETZOOM);
   };
 
   onMount(() => {

@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 default = ["inbound", "outbound", "ports"]
-inbound = ["dep:axum", "dep:model_user", "entity_access/inbound", "ports"]
+inbound = ["dep:axum", "dep:model_user", "dep:roles_and_permissions", "entity_access/inbound", "ports"]
 outbound = [
   "dep:macro_share_permissions",
   "dep:macro_uuid",
@@ -34,6 +34,7 @@ unicode-segmentation = { workspace = true }
 # Inbound (HTTP handlers)
 axum = { workspace = true, optional = true }
 model_user = { path = "../model_user", optional = true }
+roles_and_permissions = { path = "../roles_and_permissions", optional = true, default-features = false }
 utoipa = { workspace = true }
 
 # Outbound (database adapters)

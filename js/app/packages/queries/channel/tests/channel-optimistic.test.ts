@@ -14,11 +14,6 @@ vi.mock('../../client', () => ({
   },
 }));
 
-vi.mock('@coparse/analytics', () => ({
-  TrackingEvents: { BLOCKCHANNEL: { MESSAGE: { SEND: 'test' } } },
-  withAnalytics: () => ({ track: vi.fn() }),
-}));
-
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
 }));

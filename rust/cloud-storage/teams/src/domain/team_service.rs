@@ -1,5 +1,8 @@
 //! Contains the service logic for teams
 
+#[cfg(test)]
+mod test;
+
 use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Context;
@@ -19,7 +22,7 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
-        PatchTeamUserTierRequest, ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
+        PatchTeamUserTierRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
         TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier,
         TeamWithMembers,
@@ -152,30 +155,18 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn send_invite_notification(
         &self,
-        team_id: &uuid::Uuid,
-        team_invite_id: &uuid::Uuid,
-        email: &str,
-        team_name: &str,
-        invited_by: &MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'_>,
+        team_invite_id: uuid::Uuid,
+        notification: InviteToTeamMetadata,
     ) -> anyhow::Result<()> {
-        let notification = InviteToTeamMetadata {
-            invited_by: invited_by.clone(),
-            team_name: team_name.to_string(),
-            team_id: team_id.to_string(),
-            role: None,
-        };
-
-        let recipient = MacroUserIdStr::try_from_email(email)
-            .map_err(|e| anyhow::anyhow!("failed to parse email as macro user id: {}", e))?;
-
-        let entity_id = team_invite_id.to_string();
         let request = SendNotificationRequestBuilder {
-            notification_entity: EntityType::Team.with_entity_str(&entity_id),
+            notification_entity: EntityType::Team.with_entity_string(team_invite_id.to_string()),
+            sender_id: Some(notification.invited_by.clone()),
             notification,
-            sender_id: Some(invited_by.clone()),
-            recipient_ids: HashSet::from([recipient]),
+            recipient_ids: HashSet::from([recipient_id]),
         }
         .into_request()
+        .with_email()
         .with_conn_gateway();
 
         self.notification_ingress
@@ -233,19 +224,38 @@ where
 
             if let Some(team_name) = team_name {
                 let invited_by_owned = invited_by.clone().into_owned();
+                let mut sent_invite_ids = Vec::new();
                 for invite in &invited {
-                    self.send_invite_notification(
-                        team_id,
-                        &invite.team_invite_id,
-                        invite.email.as_ref(),
-                        &team_name,
-                        &invited_by_owned,
-                    )
-                    .await
-                    .inspect_err(
-                        |e| tracing::error!(error=?e, "unable to send invite notification"),
-                    )
-                    .ok();
+                    if self
+                        .send_invite_notification(
+                            MacroUserIdStr::try_from_email(invite.email.as_ref())
+                                .expect("this cannot fail"),
+                            invite.team_invite_id,
+                            InviteToTeamMetadata {
+                                team_id: *team_id,
+                                invited_by: invited_by_owned.clone(),
+                                team_name: team_name.clone(),
+                                role: None,
+                                sender_profile_picture_url: None,
+                            },
+                        )
+                        .await
+                        .inspect_err(
+                            |e| tracing::error!(error=?e, "unable to send invite notification"),
+                        )
+                        .is_ok()
+                    {
+                        sent_invite_ids.push(invite.team_invite_id);
+                    }
+                }
+                if !sent_invite_ids.is_empty() {
+                    self.team_repository
+                        .mark_invites_sent(&sent_invite_ids)
+                        .await
+                        .inspect_err(
+                            |e| tracing::error!(error=?e, "unable to mark invites as sent"),
+                        )
+                        .ok();
                 }
             }
         }
@@ -488,54 +498,6 @@ where
         req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
         self.team_repository.patch_team(team_id, req).await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn reinvite_to_team(
-        &self,
-        team_invite_id: &uuid::Uuid,
-        invited_by: &MacroUserIdStr<'_>,
-    ) -> Result<TeamInviteDetails, ReinviteError> {
-        let invite = self
-            .team_repository
-            .get_team_invite_details_by_id(team_invite_id)
-            .await
-            .map_err(|e| match e {
-                TeamError::TeamInviteDoesNotExist => ReinviteError::InviteNotFound,
-                other => ReinviteError::StorageLayerError(other.into()),
-            })?;
-
-        // Rate limit: must wait 5 minutes between reinvites
-        let five_minutes_ago = chrono::Utc::now() - chrono::Duration::minutes(5);
-        if invite.last_sent_at > five_minutes_ago {
-            return Err(ReinviteError::TooManyRequests);
-        }
-
-        self.team_repository
-            .update_team_invite_last_sent_at(team_invite_id)
-            .await
-            .map_err(|e| ReinviteError::StorageLayerError(e.into()))?;
-
-        // Send notification
-        let team_name = self
-            .team_repository
-            .get_team_name(&invite.team_id)
-            .await
-            .map_err(|e| ReinviteError::StorageLayerError(e.into()))?;
-
-        let invited_by = invited_by.clone().into_owned();
-        self.send_invite_notification(
-            &invite.team_id,
-            team_invite_id,
-            &invite.email,
-            &team_name,
-            &invited_by,
-        )
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "unable to send reinvite notification"))
-        .ok();
-
-        Ok(invite)
     }
 
     #[tracing::instrument(skip(self), err)]

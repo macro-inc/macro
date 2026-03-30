@@ -2,6 +2,7 @@
 //!
 //! Provides the following route(s):
 //! - `GET /install-sync` - redirects to the github sync app installation page
+//! - `GET /sync-redirect` - callback after github app installation, redirects to the app
 //! - `POST /webhook` - github event webhook handler
 
 #[cfg(test)]
@@ -12,6 +13,7 @@ use axum::{
     extract::{FromRequest, Request, State},
     response::Redirect,
 };
+use macro_env::ext::frontend_url::FrontendUrl;
 use reqwest::StatusCode;
 use std::sync::Arc;
 
@@ -44,6 +46,10 @@ where
     Router::new()
         .route("/install-sync", axum::routing::get(install_sync_handler))
         .route(
+            "/sync-redirect",
+            axum::routing::get(sync_redirect_handler::<T>),
+        )
+        .route(
             "/webhook",
             axum::routing::post(github_webhook_event_handler),
         )
@@ -65,6 +71,41 @@ pub async fn install_sync_handler<T: GithubSyncService>(
 ) -> Redirect {
     let url = ctx.service.get_github_sync_app_url();
     Redirect::temporary(url)
+}
+
+/// Query params received from the GitHub App installation callback.
+#[derive(serde::Deserialize)]
+pub struct SyncRedirectParams {
+    /// The OAuth authorization code from GitHub (unused for now).
+    #[allow(dead_code)]
+    pub code: String,
+    /// The GitHub App installation ID (unused for now).
+    #[allow(dead_code)]
+    pub installation_id: String,
+}
+
+/// Callback after a user installs the GitHub App. Redirects to the main app.
+#[utoipa::path(
+    get,
+    path = "/github/sync-redirect",
+    operation_id = "sync_redirect",
+    params(
+        ("code" = String, Query, description = "OAuth authorization code from GitHub"),
+        ("installation_id" = String, Query, description = "GitHub App installation ID"),
+    ),
+    responses(
+        (status = 307, description = "Redirects to the main application"),
+    )
+)]
+#[tracing::instrument(skip_all)]
+pub async fn sync_redirect_handler<T: GithubSyncService>(
+    axum::extract::Query(_params): axum::extract::Query<SyncRedirectParams>,
+) -> Redirect {
+    Redirect::temporary(
+        macro_env::Environment::new_or_prod()
+            .get_frontend_url()
+            .as_str(),
+    )
 }
 
 /// Extractor that validates an incoming GitHub webhook event.

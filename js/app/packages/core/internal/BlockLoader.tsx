@@ -1,4 +1,3 @@
-import { type AllTrackingEventValues, withAnalytics } from '@coparse/analytics';
 import type { OwnedBlockHandle } from '@core/orchestrator';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
@@ -31,19 +30,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
-const { track, TrackingEvents } = withAnalytics();
-
-const blockOpenEvents: Partial<Record<BlockName, AllTrackingEventValues>> = {
-  canvas: TrackingEvents.BLOCKCANVAS.OPEN,
-  md: TrackingEvents.BLOCKMARKDOWN.OPEN,
-  code: TrackingEvents.BLOCKCODE.OPEN,
-  image: TrackingEvents.BLOCKIMAGE.OPEN,
-  pdf: TrackingEvents.BLOCKPDF.OPEN,
-  write: TrackingEvents.BLOCKWRITER.OPEN,
-  chat: TrackingEvents.BLOCKCHAT.OPEN,
-  unknown: TrackingEvents.BLOCKUNKNOWN.OPEN,
-  video: TrackingEvents.BLOCKVIDEO.OPEN,
-} as const;
 
 export type BlockLoaderProps<
   D extends ObjectLike | FileOrTextLike,
@@ -148,12 +134,6 @@ Check that the load function does not return a preload source when the intent is
           client: useQueryClient,
         });
       });
-
-      // for analytics
-      const blockOpenEvent = blockOpenEvents[data.__block];
-      if (blockOpenEvent) {
-        track(blockOpenEvent);
-      }
 
       analytics.pageView(data.__block);
     }

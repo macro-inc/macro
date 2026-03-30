@@ -5,12 +5,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InviteToTeamMetadataRole } from './inviteToTeamMetadataRole';
+import type { InviteToTeamMetadataSenderProfilePictureUrl } from './inviteToTeamMetadataSenderProfilePictureUrl';
 
+/**
+ * Metadata for when a user is invited to a team.
+ */
 export interface InviteToTeamMetadata {
   /** The user who sent the invitation */
   invitedBy: string;
   /** Role/permission level in the team */
   role?: InviteToTeamMetadataRole;
+  /** The sender's profile picture URL, if available. */
+  senderProfilePictureUrl?: InviteToTeamMetadataSenderProfilePictureUrl;
   /** The unique identifier of the team */
   teamId: string;
   /** The name of the team being invited to */

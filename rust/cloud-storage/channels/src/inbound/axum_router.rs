@@ -277,7 +277,7 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAc
     path = "/channels/{channel_id}/attachments",
     params(
         ("channel_id" = Uuid, Path, description = "Channel ID"),
-        ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
+        ("limit" = Option<u16>, Query, description = "Page size (1-500, default 50)"),
         ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value"),
     ),
     responses(
@@ -538,6 +538,8 @@ pub struct ApiChannelAttachment {
     channel_id: Uuid,
     /// Message id this attachment belongs to.
     message_id: Uuid,
+    /// The user who sent the message containing this attachment.
+    sender_id: String,
     /// Type of entity.
     entity_type: String,
     /// Entity id.
@@ -556,6 +558,7 @@ impl From<ChannelAttachment> for ApiChannelAttachment {
             id: a.id,
             channel_id: a.channel_id,
             message_id: a.message_id,
+            sender_id: a.sender_id,
             entity_type: a.entity_type,
             entity_id: a.entity_id,
             width: a.width,

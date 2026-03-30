@@ -29,17 +29,17 @@ pub async fn handler(
     let document_key = match DocumentKey::from_s3_key(&key) {
         Ok(key) => key,
         Err(e) => {
-            tracing::warn!(error=?e, "unable to parse key");
+            tracing::warn!(error=?e, key=%key, "unable to parse key");
             return Ok(());
         }
     };
 
-    if document_key.is_temp() {
-        tracing::trace!("skipping temp file");
+    if document_key.is_temp() || document_key.is_bom_part() {
+        tracing::trace!("skipping non-document key");
         return Ok(());
     }
 
-    let document_id = document_key.document_id();
+    let document_id = document_key.document_id().expect("document key has id");
 
     tracing::trace!(?document_key, "processing document key");
 

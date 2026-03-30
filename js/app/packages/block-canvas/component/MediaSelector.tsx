@@ -4,7 +4,6 @@ import {
 } from '@block-canvas/signal/fileDrop';
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { vec2 } from '@block-canvas/util/vector2';
-import { withAnalytics } from '@coparse/analytics';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -48,7 +47,6 @@ function ItemOption(props: { media: MediaItem }) {
   const setSelectedImage = selectedImageSignal.set;
   const toolManager = useToolManager();
   const select = useSelect();
-  const { track, TrackingEvents } = withAnalytics();
 
   const selectItem = (e: MouseEvent | TouchEvent) => {
     e.stopPropagation();
@@ -57,9 +55,6 @@ function ItemOption(props: { media: MediaItem }) {
     setSelectedImage({
       type: props.media.fileType,
       id: props.media.id,
-    });
-    track(TrackingEvents.BLOCKCANVAS.IMAGES.DSSIMAGE, {
-      method: 'dropdown click',
     });
     toolManager.setSelectedTool(Tools.Image);
   };
@@ -84,7 +79,6 @@ export function MediaSelector() {
     : ['image'];
   const historyQuery = useHistoryQuery();
   //const copiedFileID = copiedFile();
-  const { track, TrackingEvents } = withAnalytics();
   const select = useSelect();
   const { handleFileDrop } = useCanvasFileDrop();
   const [isDragging, setIsDragging] = canvasDraggingSignal;
@@ -161,9 +155,6 @@ export function MediaSelector() {
               onDragStart: () => setIsDragging(true),
               onDragEnd: () => setIsDragging(false),
               onDrop: (files) => {
-                track(TrackingEvents.BLOCKCANVAS.IMAGES.STATICIMAGE, {
-                  method: 'drag to dropdown',
-                });
                 handleFileDrop(files, centerVec());
                 setImageSelectorOpen(false);
               },
@@ -197,9 +188,6 @@ export function MediaSelector() {
                     acceptedFileExtensions: acceptedFileExtensions,
                     acceptedMimeTypes: acceptedMimeTypes,
                     onSelect: (files: File[]) => {
-                      track(TrackingEvents.BLOCKCANVAS.IMAGES.STATICIMAGE, {
-                        method: 'click dropdown button',
-                      });
                       handleFileDrop(files, centerVec());
                       setImageSelectorOpen(false);
                     },

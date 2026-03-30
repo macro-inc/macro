@@ -1,11 +1,11 @@
 #![deny(missing_docs)]
-//! Analytics client for tracking events to GA and Meta.
+//! Analytics client for tracking events to GA, Meta, and PostHog.
 
 mod providers;
 
 pub use providers::{MetaActionSource, MetaUserData};
 
-use providers::{GoogleAnalyticsProvider, MetaProvider};
+use providers::{GoogleAnalyticsProvider, MetaProvider, PostHogProvider};
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -29,6 +29,15 @@ pub struct MetaConfig {
     pub test_event_code: Option<String>,
 }
 
+/// Configuration for PostHog.
+#[derive(Clone)]
+pub struct PostHogConfig {
+    /// PostHog project API key
+    pub api_key: String,
+    /// PostHog host
+    pub host: String,
+}
+
 /// Configuration for the analytics client.
 #[derive(Clone, Default)]
 pub struct AnalyticsClientConfig {
@@ -36,13 +45,16 @@ pub struct AnalyticsClientConfig {
     pub google_analytics: Option<GoogleAnalyticsConfig>,
     /// Meta Conversions API configuration (optional)
     pub meta: Option<MetaConfig>,
+    /// PostHog configuration (optional)
+    pub posthog: Option<PostHogConfig>,
 }
 
-/// Analytics client for tracking events to GA and Meta.
+/// Analytics client for tracking events to GA, Meta, and PostHog.
 #[derive(Clone)]
 pub struct AnalyticsClient {
     google: Option<Arc<GoogleAnalyticsProvider>>,
     meta: Option<Arc<MetaProvider>>,
+    posthog: Option<Arc<PostHogProvider>>,
 }
 
 impl AnalyticsClient {
@@ -60,7 +72,15 @@ impl AnalyticsClient {
             ))
         });
 
-        Self { google, meta }
+        let posthog = config
+            .posthog
+            .map(|c| Arc::new(PostHogProvider::new(c.api_key, c.host)));
+
+        Self {
+            google,
+            meta,
+            posthog,
+        }
     }
 
     /// Creates a no-op analytics client (no providers configured).
@@ -68,6 +88,7 @@ impl AnalyticsClient {
         Self {
             google: None,
             meta: None,
+            posthog: None,
         }
     }
 
@@ -114,6 +135,31 @@ impl AnalyticsClient {
                 .await?;
         } else {
             tracing::warn!("meta not configured")
+        }
+
+        Ok(())
+    }
+
+    /// Tracks an event to PostHog.
+    ///
+    /// Returns `Ok(())` if PostHog is not configured (no-op).
+    ///
+    /// - `distinct_id`: Unique identifier for the user (e.g., email or user ID)
+    /// - `event_name`: Name of the event (e.g., "subscription_created")
+    /// - `properties`: Additional event properties
+    #[tracing::instrument(skip(self, properties), err)]
+    pub async fn track_posthog(
+        &self,
+        distinct_id: &str,
+        event_name: &str,
+        properties: impl Serialize,
+    ) -> Result<(), reqwest::Error> {
+        if let Some(ref provider) = self.posthog {
+            provider
+                .capture(distinct_id, event_name, properties)
+                .await?;
+        } else {
+            tracing::warn!("posthog not configured")
         }
 
         Ok(())

@@ -200,8 +200,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           <div class="mobile:hidden">
             <SplitCloseButton />
           </div>
-          <SplitBackButton />
-          <SplitForwardButton />
+          <Show when={!(isMobile() && isListViewID(panel.handle.content().id))}>
+            <SplitBackButton />
+            <SplitForwardButton />
+          </Show>
         </div>
         <div
           class="relative min-w-0 h-full grow shrink pl-2 flex items-center gap-0.5"

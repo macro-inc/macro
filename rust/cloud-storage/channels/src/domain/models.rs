@@ -131,6 +131,8 @@ pub struct ChannelAttachment {
     pub channel_id: Uuid,
     /// Message this attachment is on.
     pub message_id: Uuid,
+    /// The user who sent the message containing this attachment.
+    pub sender_id: String,
     /// Type of attached entity (e.g. "document").
     pub entity_type: String,
     /// Id of the attached entity.

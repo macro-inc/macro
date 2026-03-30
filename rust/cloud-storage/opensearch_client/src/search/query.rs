@@ -5,7 +5,6 @@ use std::borrow::Cow;
 use crate::{Result, error::OpensearchClientError};
 
 use opensearch_query_builder::*;
-use unicode_segmentation::UnicodeSegmentation;
 
 /// Containing keys for the title and content fields
 pub struct Keys<'a> {
@@ -26,10 +25,7 @@ pub enum QueryKey {
     Regexp,
 }
 
-/// Validates that the last term lenght is >= 3 graphemes
-fn validate_last_term_length(term: &str) -> bool {
-    UnicodeSegmentation::graphemes(term, true).count() >= 3
-}
+const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 pub(crate) struct CreateQueryParams<'a> {
     /// The query key to use
@@ -41,7 +37,6 @@ pub(crate) struct CreateQueryParams<'a> {
 }
 
 /// Creates a query for a given term
-/// Fixes https://linear.app/macro-eng/issue/M-5094/unified-search-match-prefix-on-phrase-should-not-constrain-terms
 pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
     let CreateQueryParams {
         query_key,
@@ -49,53 +44,14 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
         term,
     } = params;
 
-    // We need to create a more complex combo query if the last word in a term is less than 3 characters.
-    let mut terms = term.split(' ').collect::<Vec<_>>();
-    let last_term = terms.last().unwrap_or(&"");
-    let is_last_term_long_enough = validate_last_term_length(last_term);
-
-    if !last_term.is_empty() && !is_last_term_long_enough && terms.len() > 1 {
-        tracing::trace!("last value in term has length less than 3, building combo query");
-
-        let last_part_of_term = terms.pop().unwrap();
-        let first_part_of_term = terms.join(" ");
-        let wildcard_pattern = format!("*{}*", last_part_of_term.to_lowercase());
-
-        let first_term_query = match query_key {
-            QueryKey::MatchPhrase => {
-                QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), first_part_of_term))
-            }
-            QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
-                MatchPhrasePrefixQuery::new(field.to_string(), first_part_of_term),
-            ),
-            QueryKey::Regexp => {
-                QueryType::Regexp(RegexpQuery::new(field.to_string(), first_part_of_term))
-            }
-        };
-
-        let second_term_query = QueryType::WildCard(WildcardQuery::new(
-            field.to_string(),
-            wildcard_pattern,
-            true,
-            None,
-        ));
-
-        let mut bool_query = QueryType::bool_query();
-
-        bool_query.must(first_term_query);
-        bool_query.must(second_term_query);
-
-        return bool_query.build().into();
-    }
-
     match query_key {
         QueryKey::MatchPhrase => {
             QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), term.to_string()))
         }
-        QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(MatchPhrasePrefixQuery::new(
-            field.to_string(),
-            term.to_string(),
-        )),
+        QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
+            MatchPhrasePrefixQuery::new(field.to_string(), term.to_string())
+                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
+        ),
         QueryKey::Regexp => {
             QueryType::Regexp(RegexpQuery::new(field.to_string(), term.to_string()))
         }

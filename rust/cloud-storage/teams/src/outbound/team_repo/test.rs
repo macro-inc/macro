@@ -132,6 +132,233 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Re-inviting an already-invited user within the 5-minute window should not
+/// return them (rate limited), so the result should be empty.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_invite_existing_user_within_rate_limit(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // invite@macro.com already has an invite with last_sent_at = NOW() in the fixture
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+
+    // Rate limit blocks re-send, no new invite created either
+    assert!(invited.is_empty());
+
+    Ok(())
+}
+
+/// Re-inviting an already-invited user after the 5-minute window has passed
+/// should return them (re-sent).
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_invite_existing_user_after_rate_limit(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // Push last_sent_at back 10 minutes so the rate limit window has passed
+    sqlx::query!(
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        &team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+
+    assert_eq!(invited.len(), 1);
+    assert_eq!(invited[0].email.as_ref(), "invite@macro.com");
+
+    Ok(())
+}
+
+/// Inviting a mix of new users and existing users (past rate limit) should
+/// return both.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_invite_mix_new_and_existing(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // Push existing invite past the rate limit window
+    sqlx::query!(
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        &team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let invites = vec![
+        Email::parse_from_str("brand-new@macro.com")?.lowercase(),
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+
+    assert_eq!(invited.len(), 2);
+
+    let emails: Vec<&str> = invited.iter().map(|i| i.email.as_ref()).collect();
+    assert!(emails.contains(&"brand-new@macro.com"));
+    assert!(emails.contains(&"invite@macro.com"));
+
+    Ok(())
+}
+
+/// Re-inviting updates last_sent_at (via mark_invites_sent) so a second
+/// immediate re-invite is rate limited.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // Push past rate limit
+    sqlx::query!(
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        &team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    // First re-invite should succeed
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+    assert_eq!(invited.len(), 1);
+
+    // Mark the invite as sent (simulating successful notification delivery)
+    let sent_ids: Vec<uuid::Uuid> = invited.iter().map(|i| i.team_invite_id).collect();
+    team_repo.mark_invites_sent(&sent_ids).await?;
+
+    // Second immediate re-invite should be rate limited
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+    assert!(invited.is_empty());
+
+    Ok(())
+}
+
+/// invite_users_to_team does NOT update last_sent_at by itself; without a
+/// subsequent mark_invites_sent call, the invite remains eligible for resend.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // Push past rate limit
+    sqlx::query!(
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        &team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    // First re-invite returns the invite
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+    assert_eq!(invited.len(), 1);
+
+    // Do NOT call mark_invites_sent (simulating failed notification delivery)
+
+    // Second re-invite should still return the invite because last_sent_at was not updated
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+    assert_eq!(invited.len(), 1);
+
+    Ok(())
+}
+
+/// mark_invites_sent updates last_sent_at for the specified invite IDs.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let invite_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // Push last_sent_at back so it's past the rate limit
+    sqlx::query!(
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE id = $1"#,
+        &invite_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    // Verify the invite is past rate limit by reading last_sent_at
+    let before = sqlx::query!(
+        r#"SELECT last_sent_at FROM team_invite WHERE id = $1"#,
+        &invite_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    team_repo.mark_invites_sent(&[invite_id]).await?;
+
+    let after = sqlx::query!(
+        r#"SELECT last_sent_at FROM team_invite WHERE id = $1"#,
+        &invite_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    // last_sent_at should have been updated to a more recent timestamp
+    assert!(after.last_sent_at > before.last_sent_at);
+
+    // The invite should now be rate limited
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+    assert!(invited.is_empty());
+
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))

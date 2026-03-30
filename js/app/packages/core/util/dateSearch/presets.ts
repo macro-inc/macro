@@ -27,6 +27,14 @@ export const DATE_PRESETS: DatePreset[] = [
     category: 'quick',
   },
   {
+    id: 'yesterday',
+    label: 'Yesterday',
+    shortLabel: 'Yest',
+    keywords: ['yesterday', 'yest'],
+    getDate: (baseDate = new Date()) => addDays(endOfDay(baseDate), -1),
+    category: 'quick',
+  },
+  {
     id: 'in-2-days',
     label: 'In 2 days',
     shortLabel: '2d',

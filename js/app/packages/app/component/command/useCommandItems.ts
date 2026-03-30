@@ -17,6 +17,8 @@ import {
 import { activeScope } from '@core/hotkey/state';
 import { CommandState } from './state';
 import { HotkeyTags } from '@core/hotkey/constants';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import type { HotkeySequenceStep } from '@core/component/Tooltip';
 
 /** Command item type - local to command menu, not part of quickAccess */
 type CommandItem = {
@@ -27,6 +29,8 @@ type CommandItem = {
   sortTimestamp: number;
   timestamps: Record<string, never>;
   data: HotkeyCommand;
+  displayHotkey?: string;
+  displayHotkeySequence?: HotkeySequenceStep[];
 };
 
 /** Combined item type for command menu (quickAccess items + commands) */
@@ -60,7 +64,15 @@ function createSearchConfig(hasQuery: boolean) {
  * Deduplicates commands by description since commands with multiple hotkeys
  * (e.g., ['delete', 'backspace']) appear multiple times in the command list.
  */
-function commandsToItems(commands: CommandWithInfo[]): CommandItem[] {
+function commandsToItems(
+  commands: CommandWithInfo[],
+  options?: {
+    displayHotkey?: (command: CommandWithInfo) => string | undefined;
+    displayHotkeySequence?: (
+      command: CommandWithInfo
+    ) => HotkeySequenceStep[] | undefined;
+  }
+): CommandItem[] {
   const seen = new Set<string>();
   const dedupedCommands = commands.filter((command) => {
     const description =
@@ -89,6 +101,8 @@ function commandsToItems(commands: CommandWithInfo[]): CommandItem[] {
       sortTimestamp: 0,
       timestamps: {},
       data: command,
+      displayHotkey: options?.displayHotkey?.(command),
+      displayHotkeySequence: options?.displayHotkeySequence?.(command),
     };
   });
 }
@@ -110,6 +124,13 @@ function useCommandsList(): () => CommandItem[] {
     hideCommandsWithoutHotkeys: false,
     ignoreInputFocused: true,
   });
+  const goToCommands = getActiveCommandsFromScope(GO_TO_COMMAND_SCOPE, {
+    sortByScopeLevel: false,
+    hideShadowedCommands: false,
+    hideCommandsWithoutHotkeys: false,
+    limitToCurrentScope: true,
+    ignoreInputFocused: true,
+  });
 
   return createMemo(() => {
     // If we're in a command scope (multi-stage command), show those commands instead
@@ -126,8 +147,19 @@ function useCommandsList(): () => CommandItem[] {
       return commandsToItems(selectionCommands);
     }
 
-    // Use the commands captured at mount time
-    return commandsToItems(capturedCommands);
+    // Include sidebar go-to commands in the main command menu with their
+    // leader-key sequence rendered as a display-only shortcut.
+    return [
+      ...commandsToItems(capturedCommands),
+      ...commandsToItems(goToCommands, {
+        displayHotkeySequence: (command) => {
+          const hotkey = command.hotkeys?.[0];
+          return hotkey
+            ? [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: hotkey }]
+            : undefined;
+        },
+      }),
+    ];
   });
 }
 

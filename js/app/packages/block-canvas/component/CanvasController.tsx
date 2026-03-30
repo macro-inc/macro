@@ -1,5 +1,4 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
-import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import type { EntityDragEvent } from '@entity';
@@ -781,7 +780,6 @@ export function CanvasController(props: ParentProps) {
   const centerVec = createMemo(() => {
     return vec2(viewBox().x + viewBox().w / 2, viewBox().y + viewBox().h / 2);
   });
-  const { track, TrackingEvents } = withAnalytics();
   const highestOrder = highestOrderSignal.get;
 
   const droppable = createDroppable('canvas-input-' + _id);
@@ -813,9 +811,6 @@ export function CanvasController(props: ParentProps) {
 
   const attachImageOnDrag = (event: EntityDragEvent) => {
     if (!event.droppable) return;
-    track(TrackingEvents.BLOCKCANVAS.IMAGES.DSSIMAGE, {
-      method: 'drag from sidebar',
-    });
     nodes.createNode(
       {
         type: 'image',
@@ -839,9 +834,6 @@ export function CanvasController(props: ParentProps) {
 
   const attachVideoOnDrag = (event: EntityDragEvent) => {
     if (!event.droppable) return;
-    track(TrackingEvents.BLOCKCANVAS.VIDEOS.DSSVIDEO, {
-      method: 'drag from sidebar',
-    });
 
     nodes.createNode(
       {
@@ -867,7 +859,6 @@ export function CanvasController(props: ParentProps) {
 
   const attachFileOnDrag = async (event: EntityDragEvent, id: string) => {
     if (!event.droppable) return;
-    track(TrackingEvents.BLOCKCANVAS.FILES.SIDEBARDND);
 
     const entityType = event.draggable.data.type;
 
@@ -997,9 +988,6 @@ export function CanvasController(props: ParentProps) {
         onDragStart: () => setIsDragging(true),
         onDragEnd: () => setIsDragging(false),
         onDrop: (files) => {
-          track(TrackingEvents.BLOCKCANVAS.IMAGES.STATICIMAGE, {
-            method: 'drag to canvas',
-          });
           handleFileDrop(files);
         },
         onMouseUp: handleMouseUp,

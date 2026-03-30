@@ -132,7 +132,7 @@ fn to_typed_row_new_email() {
 fn to_typed_row_invite_to_team() {
     let metadata = serde_json::json!({
         "teamName": "Engineering",
-        "teamId": "team-1",
+        "teamId": "00000000-0000-0000-0000-000000000001",
         "invitedBy": "macro|admin@example.com",
         "role": null
     });

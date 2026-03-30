@@ -1,19 +1,16 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { ModalsProvider } from './ModalsProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
 import { InstructionsTopBar, TopBar } from './TopBar';
-
-const { track, TrackingEvents } = withAnalytics();
 
 export default function BlockMarkdown() {
   useBlockEntityCommands();
@@ -24,11 +21,6 @@ export default function BlockMarkdown() {
   const isInstructionsMd = () => {
     return blockId === instructionsMdId.data;
   };
-
-  // Set initial data.
-  onMount(() => {
-    track(TrackingEvents.BLOCKMARKDOWN.OPEN);
-  });
 
   createEffect(() => {
     const el = scrollRef();

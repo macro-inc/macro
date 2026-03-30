@@ -120,7 +120,8 @@ impl<
         let notification = InviteToMacro {
             recipient_email: recipient.clone(),
             referral_code,
-            sender_profile_picture_url,
+            sender_profile_picture_url: sender_profile_picture_url
+                .and_then(|s| url::Url::parse(&s).ok()),
             sender_name,
             sender_email,
         };

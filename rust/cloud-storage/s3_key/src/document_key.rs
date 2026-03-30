@@ -18,6 +18,7 @@ pub const DOCX_EXTENSION: &str = "docx";
 /// - `Versioned`: `{user_id}/{document_id}/{version_id}` — a specific document version
 /// - `ConvertedPdf`: `{user_id}/{document_id}/converted.pdf` — a DOCX converted to PDF
 /// - `TempDocx`: `temp_files/{document_id}.docx` — a temporary DOCX export
+/// - `BomPart`: `{sha}` — a content-addressable BOM part from DOCX uploads
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum DocumentKey {
     /// A versioned document: `{user_id}/{document_id}/{version_id}`
@@ -41,6 +42,17 @@ pub enum DocumentKey {
         /// The document ID.
         document_id: String,
     },
+    /// A content-addressable BOM part from DOCX uploads: `{sha}`
+    BomPart {
+        /// The SHA hash of the BOM part.
+        sha: String,
+    },
+}
+
+const SHA256_HEX_LEN: usize = 64;
+
+fn is_sha256_hex(s: &str) -> bool {
+    s.len() == SHA256_HEX_LEN && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 impl DocumentKey {
@@ -82,16 +94,22 @@ impl DocumentKey {
                     })
                 }
             }
-            n => anyhow::bail!("invalid key format: expected 2 or 3 segments, got {n}"),
+            1 if is_sha256_hex(split[0]) => Ok(Self::BomPart {
+                sha: split[0].to_string(),
+            }),
+            n => anyhow::bail!(
+                "invalid key format: expected 2 or 3 segments, got {n} for key '{key}'"
+            ),
         }
     }
 
-    /// Returns the document ID for all key variants.
-    pub fn document_id(&self) -> &str {
+    /// Returns the document ID for document key variants. Returns `None` for `BomPart`.
+    pub fn document_id(&self) -> Option<&str> {
         match self {
             Self::Versioned { document_id, .. }
             | Self::ConvertedPdf { document_id, .. }
-            | Self::TempDocx { document_id } => document_id,
+            | Self::TempDocx { document_id } => Some(document_id),
+            Self::BomPart { .. } => None,
         }
     }
 
@@ -103,6 +121,11 @@ impl DocumentKey {
     /// Returns `true` if this is a temporary DOCX export key.
     pub fn is_temp(&self) -> bool {
         matches!(self, Self::TempDocx { .. })
+    }
+
+    /// Returns `true` if this is a BOM part key.
+    pub fn is_bom_part(&self) -> bool {
+        matches!(self, Self::BomPart { .. })
     }
 
     /// Returns `true` if this is a converted DOCX-to-PDF key.
@@ -119,7 +142,7 @@ impl DocumentKey {
         match self {
             Self::Versioned { version_id, .. } => Some(version_id.to_string()),
             Self::ConvertedPdf { .. } => Some(CONVERTED_DOCUMENT_FILE_NAME.to_string()),
-            Self::TempDocx { .. } => None,
+            Self::TempDocx { .. } | Self::BomPart { .. } => None,
         }
     }
 
@@ -136,6 +159,7 @@ impl DocumentKey {
                 document_id,
             } => build_docx_to_pdf_converted_document_key(user_id, document_id),
             Self::TempDocx { document_id } => build_temp_docx_key(document_id),
+            Self::BomPart { sha } => sha.clone(),
         }
     }
 }

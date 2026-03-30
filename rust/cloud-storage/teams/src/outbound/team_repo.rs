@@ -298,25 +298,58 @@ impl TeamRepository for TeamRepositoryImpl {
     .fetch_all(&mut *transaction)
     .await?;
 
-        // Convert returned emails back to Email type
-        let created_emails: Vec<TeamInvite<'static>> = invites
-            .into_iter()
-            .filter_map(|(id, team_id, email)| {
-                let email = Email::parse_from_str(&email)
-                    .ok()
-                    .map(|e| e.into_owned().lowercase());
+        // Also re-send existing invites whose rate limit window has passed
+        let resent_invites: Vec<(uuid::Uuid, uuid::Uuid, String)> = sqlx::query!(
+            r#"
+            SELECT id, team_id, email
+            FROM team_invite
+            WHERE team_id = $1
+              AND email = ANY($2::text[])
+              AND last_sent_at < NOW() - INTERVAL '5 minutes'
+            "#,
+            team_id,
+            &email_strings[..],
+        )
+        .map(|r| (r.id, r.team_id, r.email))
+        .fetch_all(&mut *transaction)
+        .await?;
 
-                email.map(|email| TeamInvite {
+        let to_email = |id: uuid::Uuid, team_id: uuid::Uuid, email: String| {
+            Email::parse_from_str(&email)
+                .ok()
+                .map(|e| e.into_owned().lowercase())
+                .map(|email| TeamInvite {
                     team_id,
                     team_invite_id: id,
                     email,
                 })
-            })
+        };
+
+        // Combine new invites and resent invites
+        let all_invites: Vec<TeamInvite<'static>> = invites
+            .into_iter()
+            .chain(resent_invites)
+            .filter_map(|(id, team_id, email)| to_email(id, team_id, email))
             .collect();
 
         transaction.commit().await?;
 
-        Ok(created_emails)
+        Ok(all_invites)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn mark_invites_sent(&self, invite_ids: &[uuid::Uuid]) -> Result<(), TeamError> {
+        sqlx::query!(
+            r#"
+            UPDATE team_invite
+            SET last_sent_at = NOW()
+            WHERE id = ANY($1::uuid[])
+            "#,
+            invite_ids,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -851,64 +884,6 @@ impl TeamRepository for TeamRepositoryImpl {
             .execute(&self.pool)
             .await?;
         }
-
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_team_invite_details_by_id(
-        &self,
-        invite_id: &uuid::Uuid,
-    ) -> Result<TeamInviteDetails, TeamError> {
-        let invite = sqlx::query!(
-            r#"
-            SELECT
-                id,
-                email,
-                team_id,
-                team_role as "team_role!: TeamRole",
-                invited_by,
-                created_at as "created_at!: chrono::DateTime<chrono::Utc>",
-                last_sent_at as "last_sent_at!: chrono::DateTime<chrono::Utc>"
-            FROM team_invite
-            WHERE id = $1
-            "#,
-            invite_id,
-        )
-        .map(|row| TeamInviteDetails {
-            id: row.id,
-            email: row.email,
-            team_id: row.team_id,
-            team_role: row.team_role,
-            invited_by: row.invited_by,
-            created_at: row.created_at,
-            last_sent_at: row.last_sent_at,
-        })
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::RowNotFound => TeamError::TeamInviteDoesNotExist,
-            _ => e.into(),
-        })?;
-
-        Ok(invite)
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn update_team_invite_last_sent_at(
-        &self,
-        invite_id: &uuid::Uuid,
-    ) -> Result<(), TeamError> {
-        sqlx::query!(
-            r#"
-            UPDATE team_invite
-            SET last_sent_at = NOW()
-            WHERE id = $1
-            "#,
-            invite_id,
-        )
-        .execute(&self.pool)
-        .await?;
 
         Ok(())
     }

@@ -786,6 +786,9 @@
           "401": {
             "description": "Unauthorized"
           },
+          "402": {
+            "description": "Payment required — user lacks access to the requested model"
+          },
           "403": {
             "description": "Forbidden"
           }

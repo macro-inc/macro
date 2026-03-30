@@ -75,6 +75,7 @@ export const TOKENS = {
     toggleSettings: 'global.toggleSettings',
     createNewSplit: 'global.createNewSplit',
     toggleVisor: 'global.toggleVisor',
+    inviteTeam: 'global.inviteTeam',
   },
 
   // email

@@ -1,17 +1,21 @@
+import { EmailCompose } from '@block-email/component/compose/Compose';
 import {
   EmailProvider,
   useEmailContext,
 } from '@block-email/component/EmailContext';
+import { EmailInput } from '@block-email/component/EmailInput';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
+import { useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
-import { useUserContext } from '@core/context/user';
 import {
   type Accessor,
   createEffect,
@@ -23,7 +27,6 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-import { isMobile } from '@core/mobile/isMobile';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { scrollToMessage } from '../util/scrollToMessage';
@@ -31,9 +34,6 @@ import { EmailFormContextProvider } from './EmailFormContext';
 import { MessageList } from './MessageList';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
-import { EmailCompose } from '@block-email/component/Compose';
-import { EmailInput } from '@block-email/component/EmailInput';
-import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 const SCROLL_ANIMATION_MS = 1000;
@@ -209,7 +209,9 @@ function EmailContent(props: EmailViewProps) {
       // Check if there is an unread message
       if (lastUnreadMessageId_) {
         setTimeout(() =>
-          performScrollToMessage(lastUnreadMessageId_!, { behavior: 'instant' })
+          performScrollToMessage(lastUnreadMessageId_!, {
+            behavior: 'instant',
+          })
         );
         context.messages.setFocused(lastUnreadMessageId_!);
       } else {
