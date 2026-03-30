@@ -1,6 +1,7 @@
 import { getTypingUsersForChannel } from '@queries/channel/typing';
 import { idToDisplayName } from '@core/user';
 import { createMemo, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 
 type ThreadTypingIndicatorProps = {
   channelId: string;
@@ -69,14 +70,13 @@ function ThreadTypingIndicatorDots() {
 }
 
 function getThreadTypingIndicatorText(userIds: string[]): string {
-  switch (userIds.length) {
-    case 0:
-      return '';
-    case 1:
-      return `${idToDisplayName(userIds[0])} is typing`;
-    case 2:
-      return `${idToDisplayName(userIds[0])} and ${idToDisplayName(userIds[1])} are typing`;
-    default:
-      return 'Multiple people are typing';
-  }
+  return match(userIds.length)
+    .with(0, () => '')
+    .with(1, () => `${idToDisplayName(userIds[0])} is typing`)
+    .with(
+      2,
+      () =>
+        `${idToDisplayName(userIds[0])} and ${idToDisplayName(userIds[1])} are typing`
+    )
+    .otherwise(() => 'Multiple people are typing');
 }

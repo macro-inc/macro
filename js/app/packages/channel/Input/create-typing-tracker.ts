@@ -15,8 +15,6 @@ type TypingTrackerCallbacks = {
  *    until after the user goes idle (stop fires first).
  * - `onStopTyping` fires after `INACTIVITY_TIMEOUT_MS` of inactivity,
  *    or immediately when `stop()` is called (e.g. on send / close).
- *
- * Call `onCleanup` in Solid lifecycle to clear pending timers.
  */
 export function createTypingTracker(callbacks: TypingTrackerCallbacks) {
   let isTyping = false;

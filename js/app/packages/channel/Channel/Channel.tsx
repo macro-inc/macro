@@ -286,9 +286,8 @@ export function Channel(props: ChannelProps) {
                 {(item) => {
                   const message = () => messageById().get(item.id);
                   const state = threadManager.getOrCreateThreadState(item.id);
-                  const keys = () => messageIndex().keys;
                   const isNewestThread = () =>
-                    item.id === keys().at(keys().length - 1);
+                    item.id === messageIndex().keys.at(-1);
                   return (
                     <Show when={message()}>
                       {(m) => (
