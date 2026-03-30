@@ -74,8 +74,6 @@ pub async fn handler(
             .into_response());
     };
 
-    let email = user_context.user_id.replace("macro|", "");
-
     let links = ctx
             .auth_client
             .get_links(&user_context.fusion_user_id, Some(idp_id.clone()))
@@ -91,14 +89,10 @@ pub async fn handler(
                     .into_response()
             })?;
 
-    // a fusionauth user can have multiple links to the same identity provider with different email
-    // addresses, but can only have one link with a given email
-    let link = links.into_iter().find(|l| l.display_name == email);
-
     Ok((
         StatusCode::OK,
         Json(UserLinkResponse {
-            link_exists: link.is_some(),
+            link_exists: !links.is_empty(),
         }),
     )
         .into_response())

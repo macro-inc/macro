@@ -1,12 +1,12 @@
 use doppleganger::Doppleganger;
+pub use invite_email::InviteToTeamMetadata;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
-use notification::domain::models::Notification;
 use notification::domain::models::{
-    NotifCollapseKey, NotificationExtIos,
+    NotifCollapseKey, Notification, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
 };
 use rootcause::Report;
@@ -119,23 +119,6 @@ pub struct ItemSharedMetadata {
     /// Permission level granted (read, write, admin, etc.)
     #[serde(alias = "permission_level")]
     pub permission_level: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct InviteToTeamMetadata {
-    /// The name of the team being invited to
-    #[serde(alias = "team_name")]
-    pub team_name: String,
-    /// The unique identifier of the team
-    #[serde(alias = "team_id")]
-    pub team_id: String,
-    /// The user who sent the invitation
-    #[serde(alias = "invited_by")]
-    #[schema(value_type = String)]
-    pub invited_by: MacroUserIdStr<'static>,
-    /// Role/permission level in the team
-    pub role: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -261,10 +244,6 @@ impl notification::domain::models::Notification for ChannelReplyMetadata {
 
 impl notification::domain::models::Notification for DocumentMentionMetadata {
     const TYPE_NAME: &'static str = "document_mention";
-}
-
-impl notification::domain::models::Notification for InviteToTeamMetadata {
-    const TYPE_NAME: &'static str = "invite_to_team";
 }
 
 pub trait NotificationTitle {
@@ -410,25 +389,6 @@ impl NotificationTitle for ChannelInviteMetadata {
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
         Ok("Open macro to continue".to_string())
-    }
-}
-
-impl NotificationTitle for InviteToTeamMetadata {
-    fn format_title(
-        &self,
-        _sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report> {
-        let email = self.invited_by.email_part();
-        let sender = email.email_str();
-
-        Ok(format!("{sender} invited you to join a team"))
-    }
-
-    fn format_body(
-        &self,
-        _sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report> {
-        Ok(self.team_name.clone())
     }
 }
 

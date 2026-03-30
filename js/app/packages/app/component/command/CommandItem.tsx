@@ -1,6 +1,7 @@
 import { Hotkey } from '@core/component/Hotkey';
 import { hasValidHotkey } from '@core/hotkey/utils';
-import { Match, Show, Switch } from 'solid-js';
+import type { HotkeySequenceStep } from '@core/component/Tooltip';
+import { For, Match, Show, Switch } from 'solid-js';
 import {
   isCommandItem,
   isEntityItem,
@@ -20,28 +21,62 @@ export interface CommandItemProps {
 }
 
 function CommandItemHotkey(props: { item: CommandMenuItem }) {
-  const command = () => (isCommandItem(props.item) ? props.item.data : null);
+  const commandItem = () => (isCommandItem(props.item) ? props.item : null);
+  const command = () => commandItem()?.data ?? null;
   const token = () => command()?.hotkeyToken;
+  const sequence = () => commandItem()?.displayHotkeySequence;
 
   const shortcut = () => {
-    const cmd = command();
+    const item = commandItem();
+    const cmd = item?.data;
     if (!cmd) return undefined;
     if (hasValidHotkey(token())) return undefined;
-    return cmd.hotkeys?.[0];
+    return item?.displayHotkey ?? cmd.hotkeys?.[0];
   };
 
-  const hasHotkey = () => hasValidHotkey(token()) || Boolean(shortcut());
+  const hasHotkey = () =>
+    hasValidHotkey(token()) ||
+    Boolean(shortcut()) ||
+    Boolean(sequence()?.length);
+
+  const StepHotkey = (step: HotkeySequenceStep) => (
+    <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
+      <Hotkey
+        token={step.token}
+        shortcut={step.shortcut}
+        class="flex gap-1 items-center"
+      />
+    </div>
+  );
 
   return (
     <Show when={hasHotkey()}>
       <div class="pr-2 flex items-center justify-center text-[0.75rem] font-medium text-ink-extra-muted">
-        <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
-          <Hotkey
-            token={token()}
-            shortcut={shortcut()}
-            class="flex gap-1 items-center"
-          />
-        </div>
+        <Show
+          when={sequence()?.length}
+          fallback={
+            <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
+              <Hotkey
+                token={token()}
+                shortcut={shortcut()}
+                class="flex gap-1 items-center"
+              />
+            </div>
+          }
+        >
+          <div class="flex items-center gap-1">
+            <For each={sequence()}>
+              {(step, index) => (
+                <>
+                  {StepHotkey(step)}
+                  <Show when={index() < (sequence()?.length ?? 0) - 1}>
+                    <span class="text-ink-extra-muted">then</span>
+                  </Show>
+                </>
+              )}
+            </For>
+          </div>
+        </Show>
       </div>
     </Show>
   );

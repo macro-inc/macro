@@ -1,19 +1,19 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { getDefaultListViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
+import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
-import type { ViewId } from '@core/types/view';
-import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
-import { EmailCompose } from '../../../block-email/component/Compose';
-import { SettingsPanelComponentWrapper } from '../settings/Settings';
-import NotificationRoute from '@notifications/components/NotificationRoute';
-import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
-import { getDefaultListViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import { useUserContext } from '@core/context/user';
-import { useSplitPanelOrThrow } from './layoutUtils';
+import type { ViewId } from '@core/types/view';
+import NotificationRoute from '@notifications/components/NotificationRoute';
+import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
+import { EmailCompose } from '../../../block-email/component/compose/Compose';
+import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import type { SplitContent } from './layoutManager';
-import { useAnalytics } from '@app/component/analytics-context';
+import { useSplitPanelOrThrow } from './layoutUtils';
 
 function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();

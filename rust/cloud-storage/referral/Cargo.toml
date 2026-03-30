@@ -36,7 +36,7 @@ macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 notification = { path = "../notification" }
 rate_limit = { path = "../rate_limit", features = ["axum"] }
-referral_invitation = { path = "../referral_invitation" }
+invite_email = { path = "../invite_email" }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
@@ -54,6 +54,7 @@ async-stripe = { workspace = true, default-features = false, features = [
   "runtime-tokio-hyper",
 ], optional = true } # Outbound dependencies
 sqlx = { workspace = true, optional = true }
+url = { workspace = true }
 urlencoding = { workspace = true }
 
 [dev-dependencies]

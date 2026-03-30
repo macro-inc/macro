@@ -24,8 +24,6 @@ pub mod middleware;
 pub mod patch_team;
 /// Patch a team users tier.
 pub mod patch_team_user_tier;
-/// Reinvite a user to a team.
-pub mod reinvite_to_team;
 /// Reject a team invitation.
 pub mod reject_invitation;
 /// Remove a user from a team.
@@ -46,7 +44,7 @@ use model_error_response::ErrorResponse;
 
 use crate::domain::{
     model::{
-        CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, ReinviteError,
+        CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
         RemoveTeamInviteError, RemoveUserFromTeamError, TeamError,
     },
     team_repo::TeamService,
@@ -91,10 +89,6 @@ where
         .route("/{team_id}", delete(delete_team::handler::<T>))
         .route("/{team_id}/invites", get(get_team_invites::handler::<T>))
         .route("/{team_id}/invite", post(invite_to_team::handler::<T>))
-        .route(
-            "/{team_id}/reinvite/{team_invite_id}",
-            post(reinvite_to_team::handler::<T>),
-        )
         .route(
             "/join/{team_invite_id}",
             delete(reject_invitation::handler::<T>),
@@ -280,32 +274,6 @@ impl IntoResponse for RemoveUserFromTeamError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "unable to remove user from team".into(),
-                }),
-            ),
-        }
-        .into_response()
-    }
-}
-
-impl IntoResponse for ReinviteError {
-    fn into_response(self) -> Response {
-        match self {
-            ReinviteError::TooManyRequests => (
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(ErrorResponse {
-                    message: "team invite has not been sent in the last 5 minutes".into(),
-                }),
-            ),
-            ReinviteError::InviteNotFound => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: "team invite does not exist".into(),
-                }),
-            ),
-            ReinviteError::StorageLayerError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "internal server error".into(),
                 }),
             ),
         }

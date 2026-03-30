@@ -1409,6 +1409,7 @@
       },
       "InviteToTeamMetadata": {
         "type": "object",
+        "description": "Metadata for when a user is invited to a team.",
         "required": ["teamName", "teamId", "invitedBy"],
         "properties": {
           "invitedBy": {
@@ -1419,8 +1420,13 @@
             "type": ["string", "null"],
             "description": "Role/permission level in the team"
           },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "The sender's profile picture URL, if available."
+          },
           "teamId": {
             "type": "string",
+            "format": "uuid",
             "description": "The unique identifier of the team"
           },
           "teamName": {

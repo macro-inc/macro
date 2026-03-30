@@ -17,6 +17,7 @@ import { type JSX, Show } from 'solid-js';
 import { Stage } from './Shared';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { useAnalytics } from '@app/component/analytics-context';
+import type { AnalyticsProvider } from '@app/lib/analytics';
 
 function LoginOption(props: {
   icon: JSX.Element;
@@ -55,6 +56,9 @@ export function LoginOptions(props: {
 
   const startSsoLogin = async (idp_name: string) => {
     const analyticsEvent = props.signupMode ? 'sign_up' : 'login';
+    const analyticsProviders: AnalyticsProvider[] = props.signupMode
+      ? ['ga', 'meta-pixel', 'posthog']
+      : ['posthog'];
 
     const authUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
     authUrl.searchParams.set('idp_name', idp_name);
@@ -103,9 +107,13 @@ export function LoginOptions(props: {
         invalidateAllAfterLogin();
       }
 
-      analytics.track(analyticsEvent, {
-        method: idp_name,
-      });
+      analytics.track(
+        analyticsEvent,
+        {
+          method: idp_name,
+        },
+        analyticsProviders
+      );
 
       return;
     }
@@ -121,9 +129,13 @@ export function LoginOptions(props: {
       authUrl.searchParams.set('original_url', window.location.href);
     }
 
-    analytics.track(analyticsEvent, {
-      method: idp_name,
-    });
+    analytics.track(
+      analyticsEvent,
+      {
+        method: idp_name,
+      },
+      analyticsProviders
+    );
 
     window.location.href = authUrl.toString();
   };

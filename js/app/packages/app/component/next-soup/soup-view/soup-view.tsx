@@ -86,9 +86,11 @@ import type { FilterID } from '@app/component/next-soup/filters';
 import {
   SoupViewTabs,
   CollapsedSoupViewTabs,
+  MobileSoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
+import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { SettingsButton } from '@app/component/settings/SettingsButton';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
@@ -238,17 +240,20 @@ export const SoupView = (props: SoupViewProps) => {
                   </h1>
                 </Show>
                 <Show when={!narrowSearchExpanded()}>
-                  <CollapsibleHeaderItem
-                    id="tabs"
-                    priority={1}
-                    expanded={
-                      <div classList={{ 'pr-1': isMobile() }}>
-                        <SoupViewTabs />
-                      </div>
-                    }
-                    collapsed={<CollapsedSoupViewTabs />}
-                  />
-                  <SoupViewCreateButton />
+                  <Show when={!isMobile()}>
+                    <CollapsibleHeaderItem
+                      id="tabs"
+                      priority={1}
+                      expanded={<SoupViewTabs />}
+                      collapsed={<CollapsedSoupViewTabs />}
+                    />
+                  </Show>
+                  <Show when={!isMobile()}>
+                    <SoupViewCreateButton />
+                  </Show>
+                  <Show when={isMobile()}>
+                    <MobileFilterDrawer />
+                  </Show>
                 </Show>
                 <Show when={narrowSearchExpanded()}>
                   <div class="flex-1 min-w-0">
@@ -262,7 +267,7 @@ export const SoupView = (props: SoupViewProps) => {
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
-              <Show when={isMobile()}>
+              <Show when={isMobile() && !narrowSearchExpanded()}>
                 <SettingsButton />
               </Show>
               <Show when={!isComponentListView('search')}>
@@ -289,7 +294,7 @@ export const SoupView = (props: SoupViewProps) => {
                           class="p-1 rounded-xs"
                           onClick={() => setNarrowSearchExpanded(true)}
                         >
-                          <SearchIcon class="size-4" />
+                          <SearchIcon class="size-4 touch:size-6" />
                         </Button>
                       </Tooltip>
                     </Show>
@@ -316,6 +321,9 @@ export const SoupView = (props: SoupViewProps) => {
               </SoupViewFileDropzone>
             </Suspense>
           </div>
+          <Show when={isMobile()}>
+            <MobileSoupViewTabs />
+          </Show>
         </div>
         <Suspense>
           <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>

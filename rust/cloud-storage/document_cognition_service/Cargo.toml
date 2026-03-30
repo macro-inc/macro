@@ -97,6 +97,7 @@ models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
 regex = { workspace = true }
 reqwest.workspace = true
+roles_and_permissions = { path = "../roles_and_permissions", default-features = false }
 rmcp = { version = "1.2.0", features = ["transport-streamable-http-server"] }
 schemars = { workspace = true }
 scribe = { path = "../scribe", features = [

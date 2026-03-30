@@ -91,6 +91,7 @@ struct ChannelAttachmentRow {
     id: Uuid,
     channel_id: Uuid,
     message_id: Uuid,
+    sender_id: String,
     entity_type: String,
     entity_id: String,
     width: Option<i32>,
@@ -428,12 +429,14 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         let rows = sqlx::query_as!(
             ChannelAttachmentRow,
             r#"
-            SELECT id, channel_id, message_id, entity_type, entity_id,
-                width AS "width?", height AS "height?", created_at
-            FROM comms_attachments
-            WHERE channel_id = $1
-              AND ($2::timestamptz IS NULL OR (created_at, id) < ($2, $3))
-            ORDER BY created_at DESC, id DESC
+            SELECT a.id, a.channel_id, a.message_id, m.sender_id,
+                a.entity_type, a.entity_id,
+                a.width AS "width?", a.height AS "height?", a.created_at
+            FROM comms_attachments a
+            JOIN comms_messages m ON m.id = a.message_id
+            WHERE a.channel_id = $1
+              AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))
+            ORDER BY a.created_at DESC, a.id DESC
             LIMIT $4
             "#,
             channel_id,
@@ -450,6 +453,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 id: r.id,
                 channel_id: r.channel_id,
                 message_id: r.message_id,
+                sender_id: r.sender_id,
                 entity_type: r.entity_type,
                 entity_id: r.entity_id,
                 width: r.width,

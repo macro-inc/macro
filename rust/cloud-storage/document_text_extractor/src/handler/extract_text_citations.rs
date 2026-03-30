@@ -151,11 +151,16 @@ pub async fn extract_text_from_document(
     db: Arc<service::db::DB>,
 ) -> Result<Option<DocumentKey>, Error> {
     let document_key = DocumentKey::from_s3_key(key).map_err(|e| {
-        tracing::error!(error=?e, "invalid key format");
+        tracing::error!(error=?e, key=%key, "invalid key format");
         Error::from("invalid key format")
     })?;
 
-    let document_id = document_key.document_id();
+    if document_key.is_bom_part() {
+        tracing::trace!("skipping bom part key");
+        return Ok(None);
+    }
+
+    let document_id = document_key.document_id().expect("document key has id");
 
     let file_type = if document_key.is_converted_pdf() {
         Some(model::document::FileType::Pdf)

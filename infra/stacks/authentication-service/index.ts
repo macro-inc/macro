@@ -162,6 +162,11 @@ const META_PIXEL_ID = config.require('meta_pixel_id');
 //   .getSecretVersionOutput({ secretId: config.require('meta_access_token') })
 //   .apply((secret) => secret.secretString);
 
+const POSTHOG_HOST = config.require('posthog_host');
+const POSTHOG_API_KEY: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('posthog_api_key') })
+  .apply((secret) => secret.secretString);
+
 const secretKeyArns = [
   pulumi.interpolate`${jwtSecretKeyArn}`,
   pulumi.interpolate`${fusionauthApiKeySecretKeyArn}`,
@@ -367,6 +372,14 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'META_PIXEL_ID',
       value: META_PIXEL_ID,
+    },
+    {
+      name: 'POSTHOG_HOST',
+      value: POSTHOG_HOST,
+    },
+    {
+      name: 'POSTHOG_API_KEY',
+      value: pulumi.interpolate`${POSTHOG_API_KEY}`,
     },
   ],
 });

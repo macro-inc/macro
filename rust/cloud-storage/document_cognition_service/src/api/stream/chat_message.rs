@@ -6,7 +6,6 @@ use super::util::chat_permissions;
 use crate::api::context::ApiContext;
 use crate::api::utils::log;
 use crate::core::constants::DEFAULT_CHAT_NAME;
-use crate::core::model::FALLBACK_MODEL;
 use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
 use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
@@ -20,6 +19,7 @@ use axum::extract::{Extension, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
+use chat::inbound::ChatModelAccess;
 use futures::StreamExt;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -96,6 +96,8 @@ pub struct SendChatMessageResponse {
 pub struct ChatMessageError {
     pub error: String,
     pub stream_id: Option<String>,
+    #[serde(skip)]
+    pub status: Option<StatusCode>,
 }
 
 impl fmt::Display for ChatMessageError {
@@ -106,7 +108,8 @@ impl fmt::Display for ChatMessageError {
 
 impl IntoResponse for ChatMessageError {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::BAD_REQUEST, Json(self)).into_response()
+        let status = self.status.unwrap_or(StatusCode::BAD_REQUEST);
+        (status, Json(self)).into_response()
     }
 }
 
@@ -122,12 +125,14 @@ impl IntoResponse for ChatMessageError {
         (status = 200, description = "Stream initiated successfully", body = SendChatMessageResponse),
         (status = 400, description = "Bad request", body = ChatMessageError),
         (status = 401, description = "Unauthorized"),
+        (status = 402, description = "Payment required — user lacks access to the requested model"),
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
+#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
+    model_access: ChatModelAccess,
     Extension(user_context): Extension<UserContext>,
     Extension(bearer): Extension<BearerToken>,
     Json(request): Json<HttpSendChatMessageRequest>,
@@ -145,6 +150,7 @@ pub async fn send_chat_message(
         MacroUserIdStr::try_from(user_context.user_id.clone()).map_err(|_| ChatMessageError {
             error: "Invalid user ID".to_string(),
             stream_id: Some(stream_id.clone()),
+            status: None,
         })?;
     let user_id = Arc::new(user_id);
 
@@ -171,6 +177,7 @@ pub async fn send_chat_message(
                         return Err(ChatMessageError {
                             error: format!("Permission check failed: {:?}", e),
                             stream_id: Some(stream_id),
+                            status: None,
                         });
                     }
                     Ok(access) => match access {
@@ -178,6 +185,7 @@ pub async fn send_chat_message(
                             return Err(ChatMessageError {
                                 error: "Insufficient permissions to send messages".to_string(),
                                 stream_id: Some(stream_id),
+                                status: None,
                             });
                         }
                         _ => (),
@@ -196,11 +204,7 @@ pub async fn send_chat_message(
         }
     };
 
-    let model = if request.model == Model::Claude45Opus {
-        Model::Claude45Opus
-    } else {
-        FALLBACK_MODEL
-    };
+    let model = model_access.model();
 
     // Convert HTTP request to internal payload for existing functions
     let payload = SendChatMessagePayload {
@@ -225,6 +229,7 @@ pub async fn send_chat_message(
                 ChatMessageError {
                     error: "Failed to store message".to_string(),
                     stream_id: Some(stream_id.clone()),
+                    status: None,
                 }
             })?;
 
@@ -254,6 +259,7 @@ pub async fn send_chat_message(
         ChatMessageError {
             error: "Failed to build request".to_string(),
             stream_id: Some(stream_id.clone()),
+            status: None,
         }
     })?;
 
@@ -317,6 +323,7 @@ async fn create_new_chat(
         ChatMessageError {
             error: "Failed to create chat".to_string(),
             stream_id: Some(stream_id.to_string()),
+            status: None,
         }
     })?;
 
@@ -328,6 +335,7 @@ async fn create_new_chat(
             ChatMessageError {
                 error: "Failed to get chat".to_string(),
                 stream_id: Some(stream_id.to_string()),
+                status: None,
             }
         })?;
 

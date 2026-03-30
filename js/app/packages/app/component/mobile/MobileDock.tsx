@@ -1,4 +1,3 @@
-import './MobileDock.css';
 import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
 import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
@@ -143,7 +142,7 @@ function FloatingCreateButton(props: {
     <Show when={createAction()}>
       <button
         type="button"
-        class="absolute bottom-full right-4 mb-3 w-11 h-11 rounded-full bg-page text-accent flex items-center justify-center shadow-lg"
+        class="absolute bottom-full right-4 mb-14 w-11 h-11 rounded-full bg-page text-accent flex items-center justify-center shadow-lg"
         onPointerDown={() => {
           impactFeedback('light');
           setAnimating(true);

@@ -52,9 +52,9 @@ pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
         SortType::ScriptSort(ScriptSort::new(
             Script::new(
                 r#"if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
-                    return doc['sent_at_seconds'].value.millis;
+                    return doc['sent_at_seconds'].value.toInstant().toEpochMilli();
                 } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
-                    return doc['updated_at_seconds'].value.millis;
+                    return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
                 } else {
                     return 0L;
                 }"#,

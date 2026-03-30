@@ -24,6 +24,15 @@ import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { UserIcon } from '@core/component/UserIcon';
+import {
+  DEFAULT_SORT_OPTIONS,
+  TASK_SORT_OPTIONS,
+  DOCUMENT_SORT_OPTIONS,
+  EMAIL_SORT_OPTIONS,
+  CHANNEL_SORT_OPTIONS,
+  type SystemSortOption,
+  type SortOption,
+} from '@app/component/next-soup/soup-view/sort-options';
 
 export const MobileFilterDrawer = () => {
   const {
@@ -56,7 +65,29 @@ export const MobileFilterDrawer = () => {
 
   const isTasksView = () => currentView() === 'tasks';
 
-  const hasFiltersOrCategories = () => categories().length > 0 || isTasksView();
+  const VIEW_SORT_OPTIONS: Partial<Record<ListView, SortOption[]>> = {
+    inbox: DEFAULT_SORT_OPTIONS,
+    agents: DEFAULT_SORT_OPTIONS,
+    mail: EMAIL_SORT_OPTIONS,
+    documents: DOCUMENT_SORT_OPTIONS,
+    tasks: TASK_SORT_OPTIONS,
+    channels: CHANNEL_SORT_OPTIONS,
+    folders: DEFAULT_SORT_OPTIONS,
+  };
+
+  const sortOptions = createMemo(() => {
+    const view = currentView();
+    if (!view) return [];
+    return VIEW_SORT_OPTIONS[view] ?? [];
+  });
+
+  const activeSort = createMemo(
+    () => (soup.sort.active()[0]?.id as SystemSortOption) ?? 'updated_at'
+  );
+  const setSort = (value: SystemSortOption) => soup.sort.setAll([value]);
+
+  const hasFiltersOrCategories = () =>
+    categories().length > 0 || isTasksView() || sortOptions().length > 0;
 
   const toggleFilter = (optionId: FilterOption['id']) => {
     soup.filters.toggle({ or: [optionId] });
@@ -110,14 +141,14 @@ export const MobileFilterDrawer = () => {
       >
         <Drawer.Trigger
           as={Button}
-          variant="secondary"
+          aria-label="Open filters"
+          variant="ghost"
           size="sm"
-          class="rounded-xs [&_svg]:size-4 relative"
+          class="rounded-xs [&_svg]:size-6 relative"
         >
           <SlidersHorizontalIcon />
-          <span class="font-medium">Filter</span>
           <Show when={activeCount() > 0}>
-            <span class="absolute -top-1 -right-1 size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+            <span class="absolute -top-0.5 right-0 translate-x-1/2 size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
               {activeCount()}
             </span>
           </Show>
@@ -161,11 +192,69 @@ export const MobileFilterDrawer = () => {
                 ref={setScrollRef}
                 class="overflow-y-auto scrollbar-hidden h-full pb-1"
               >
+                {/* Sort section */}
+                <Show when={sortOptions().length > 0}>
+                  <div class="px-4 pb-2 border-b border-edge-muted/30">
+                    <span
+                      id="sort-section-label"
+                      class="text-xs font-medium text-ink-muted uppercase tracking-wide"
+                    >
+                      Sort
+                    </span>
+                  </div>
+                  <div role="radiogroup" aria-labelledby="sort-section-label">
+                    <For each={sortOptions()}>
+                      {(option) => {
+                        const active = () => activeSort() === option.value;
+                        return (
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={active()}
+                            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                            onClick={() => setSort(option.value)}
+                          >
+                            <Show when={option.icon}>
+                              {(icon) => (
+                                <span class="size-4 flex items-center justify-center shrink-0 text-ink-muted">
+                                  {icon()()}
+                                </span>
+                              )}
+                            </Show>
+                            <span
+                              class={cn(
+                                'flex-1 truncate',
+                                active()
+                                  ? 'text-ink font-medium'
+                                  : 'text-ink-muted'
+                              )}
+                            >
+                              {option.label}
+                            </span>
+                            <Show when={active()}>
+                              <CheckIcon class="size-3.5 text-accent shrink-0" />
+                            </Show>
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </Show>
+
                 <Accordion
                   multiple
                   collapsible
                   defaultValue={[categories()[0]?.id ?? 'assignee']}
                 >
+                  {/* Filter section */}
+                  <Show when={categories().length > 0 || isTasksView()}>
+                    <div class="px-4 pt-4 pb-2 border-b border-edge-muted/30">
+                      <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
+                        Filters
+                      </span>
+                    </div>
+                  </Show>
+
                   <For each={categories()}>
                     {(category) => {
                       const activeCount = createMemo(

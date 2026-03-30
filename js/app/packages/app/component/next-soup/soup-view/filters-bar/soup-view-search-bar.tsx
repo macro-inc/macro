@@ -129,7 +129,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           <Show when={searchText() || props.onDismiss}>
             <button
               type="button"
-              class="ml-auto size-4 shrink-0 hover:opacity-60"
+              class="ml-auto size-4 mobile:size-6 shrink-0 hover:opacity-60"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -137,7 +137,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 props.onDismiss?.();
               }}
             >
-              <XIcon class="size-4" />
+              <XIcon class="size-4 mobile:size-6" />
             </button>
           </Show>
         </div>

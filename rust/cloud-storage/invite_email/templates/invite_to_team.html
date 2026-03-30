@@ -1,0 +1,229 @@
+<!doctype html>
+<html
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns="http://www.w3.org/1999/xhtml"
+>
+  <head>
+    <title>You're Invited to Join {{ team_name }} on Macro</title>
+    <!--[if !mso]><!-->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <!--<![endif]-->
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <!--[if mso]>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings>
+            <o:AllowPNG />
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
+    <![endif]-->
+    <!--[if lte mso 11]>
+      <style type="text/css">
+        .mj-outlook-group-fix {
+          width: 100% !important;
+        }
+      </style>
+    <![endif]-->
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,500&display=swap" rel="stylesheet">
+      
+    <style type="text/css">
+      @font-face {
+        font-family: "Berkeley Mono";
+        src: url("https://pub-4030931feb3e4212b2ac93166a411ea7.r2.dev/berkley.woff2")
+          format("woff2");
+        font-display: fallback;
+      }
+
+      #outlook a {
+        padding: 0;
+      }
+
+      img {
+        -ms-interpolation-mode: bicubic;
+        text-decoration: none;
+        line-height: 100%;
+        outline: none;
+        height: auto;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body
+    style="
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      word-spacing: normal;
+      padding: 0;
+      margin: 0;
+    "
+  >
+    <div style="box-sizing: border-box; padding: 60px 20px; width: 100%">
+      <div
+        style="
+          font-family:
+            &quot;Berkeley Mono&quot;, &quot;Courier New&quot;, Courier,
+            monospace;
+          background-color: #fcfcfc;
+          border: 1px solid #e0e0e0;
+          box-sizing: border-box;
+          border-radius: 4px;
+          max-width: 570px;
+          font-size: 15px;
+          margin: 0 auto;
+          overflow: clip;
+          color: #999;
+          width: 100%;
+        "
+      >
+        <table
+          cellpadding="0"
+          cellspacing="0"
+          style="
+            font-family: &quot;Inter&quot;, sans-serif;
+            background-color: #f5f5f5;
+            color: #090909;
+            box-sizing: border-box;
+            font-size: 18px;
+            padding: 10px 20px;
+            width: 100%;
+            border: none;
+          "
+        >
+          <tbody>
+            <tr>
+              {% if let Some(url) = sender_profile_picture_url %}
+              <td
+                style="
+                  vertical-align: middle;
+                  width: 40px;
+                  min-width: 40px;
+                  padding-right: 8px;
+                "
+              >
+                <div
+                  style="
+                    border: 1px solid #e0e0e0;
+                    box-sizing: border-box;
+                    border-radius: 20px;
+                    overflow: clip;
+                    height: 40px;
+                    width: 40px;
+                  "
+                >
+                  <img
+                    src="{{ url }}"
+                    alt=""
+                    style="
+                      width: 100%;
+                      height: 100%;
+                      object-fit: cover;
+                      display: block;
+                    "
+                  />
+                </div>
+              </td>
+              {% endif %}
+              <td style="vertical-align: middle; line-height: 1.2">
+                <span
+                  style="
+                    color: #626262;
+                    font-family:
+                      &quot;Berkeley Mono&quot;, &quot;Courier New&quot;,
+                      Courier, monospace;
+                  "
+                  >{{ invited_by }}</span
+                > has invited you to the <strong>{{ team_name }}</strong> team
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <hr style="border: none; border-top: 1px dashed #e0e0e0; margin: 0" />
+        <div style="box-sizing: border-box; padding: 20px">
+          <div
+            style="
+              color: #090909;
+              font-size: 16px;
+              font-family: &quot;Inter&quot;, sans-serif;
+              line-height: 1.4;
+            "
+          >
+            You've been invited to join the <strong>{{ team_name }}</strong> team on Macro.{% if let Some(r) = role %}
+            Your role will be <strong>{{ r }}</strong>.{% endif %}
+            Collaborate on documents. Stay in sync with tasks. Search over
+            everything. AI Assistance with anything.
+          </div>
+
+          <table
+            style="
+              mso-table-lspace: 0pt;
+              mso-table-rspace: 0pt;
+              border: none;
+              width: 100%;
+            "
+            cellpadding="0"
+            cellspacing="0"
+          >
+            <tbody>
+              <tr>
+                <td
+                  style="
+                    vertical-align: bottom;
+                    padding: 20px 0 0 0;
+                    width: 50%;
+                  "
+                >
+                  <a
+                    style="
+                      font-family:
+                        &quot;Berkeley Mono&quot;, &quot;Courier New&quot;,
+                        Courier, monospace;
+                      background-color: #ff8f00;
+                      text-decoration: none;
+                      display: inline-block;
+                      white-space: nowrap;
+                      border-radius: 2px;
+                      width: min-content;
+                      padding: 4px 10px;
+                      color: #090909;
+                    "
+                    href="{{ signup_url() }}"
+                    target="_blank"
+                  >
+                    Join {{ team_name }}
+                  </a>
+                </td>
+                <td
+                  style="
+                    vertical-align: top;
+                    text-align: right;
+                    padding: 0;
+                    width: 50%;
+                  "
+                >
+                  <img
+                    src="https://static-file-service.macro.com/file/b911aba9-94a6-435c-aa16-8404739f13b0"
+                    alt="Macro"
+                    style="
+                      -ms-interpolation-mode: bicubic;
+                      line-height: 100%;
+                      outline: none;
+                      width: 60px;
+                      border: 0;
+                    "
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

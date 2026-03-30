@@ -6,7 +6,7 @@ import {
 import { PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 
-type AnalyticsProvider = 'ga' | 'meta-pixel' | 'posthog';
+export type AnalyticsProvider = 'ga' | 'meta-pixel' | 'posthog';
 
 const DEFAULT_ANALYTICS_PROVIDERS: AnalyticsProvider[] = ['posthog'];
 

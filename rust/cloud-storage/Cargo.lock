@@ -1815,6 +1815,7 @@ dependencies = [
  "model",
  "model_user",
  "models_permissions",
+ "roles_and_permissions",
  "serde",
  "serde_json",
  "sqlx",
@@ -2931,6 +2932,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rmcp",
+ "roles_and_permissions",
  "schemars",
  "scribe",
  "search_service_client",
@@ -5247,6 +5249,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "invite_email"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "macro_env",
+ "macro_user_id",
+ "notification",
+ "serde",
+ "serde_json",
+ "url",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "ip_extractor"
 version = "0.1.0"
 dependencies = [
@@ -6316,6 +6333,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "doppleganger",
+ "invite_email",
  "macro_user_id",
  "mention_utils",
  "model-entity",
@@ -6323,7 +6341,6 @@ dependencies = [
  "models_pagination",
  "notification",
  "paste",
- "referral_invitation",
  "rootcause",
  "serde",
  "serde_json",
@@ -8108,6 +8125,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "http-body-util",
+ "invite_email",
  "ip_extractor",
  "macro_db_migrator",
  "macro_user_id",
@@ -8118,7 +8136,6 @@ dependencies = [
  "model_user",
  "notification",
  "rate_limit",
- "referral_invitation",
  "rootcause",
  "serde",
  "serde_json",
@@ -8127,22 +8144,10 @@ dependencies = [
  "tokio",
  "tower 0.5.2",
  "tracing",
+ "url",
  "urlencoding",
  "utoipa",
  "uuid",
-]
-
-[[package]]
-name = "referral_invitation"
-version = "0.1.0"
-dependencies = [
- "askama",
- "macro_env",
- "macro_user_id",
- "notification",
- "serde",
- "serde_json",
- "url",
 ]
 
 [[package]]
@@ -10072,7 +10077,9 @@ dependencies = [
  "non_empty",
  "notification",
  "roles_and_permissions",
+ "rootcause",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",

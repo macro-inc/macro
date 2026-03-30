@@ -514,14 +514,21 @@ export function prepareEmailBody(
 export function hasDraftContent(
   bodyText: string,
   subject: string | undefined,
-  attachmentCount: number
+  attachmentCount: number,
+  recipientCount?: number
 ): boolean {
   const hasBody = bodyText.trim() !== '';
   const hasAttachments = attachmentCount > 0;
+  const hasRecipients = (recipientCount ?? 0) > 0;
   const trimmedSubject = subject?.trim() ?? '';
   const hasSubject = trimmedSubject.length > 0;
   const subjectIsAutoFilled = /^(Re|Fwd?):/i.test(trimmedSubject);
-  return hasBody || hasAttachments || (hasSubject && !subjectIsAutoFilled);
+  return (
+    hasBody ||
+    hasAttachments ||
+    hasRecipients ||
+    (hasSubject && !subjectIsAutoFilled)
+  );
 }
 
 export function prepareMacroBody(bodyMacro: string): string {
