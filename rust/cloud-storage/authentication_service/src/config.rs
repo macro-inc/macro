@@ -84,7 +84,7 @@ pub struct Config {
 
     /// PostHog API key (optional)
     pub posthog_api_key: Option<String>,
-    /// PostHog host (optional, defaults to "https://app.posthog.com")
+    /// PostHog host (optional)
     pub posthog_host: Option<String>,
 
     /// The stripe price ids
