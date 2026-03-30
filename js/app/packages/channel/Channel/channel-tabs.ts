@@ -1,8 +1,6 @@
 export const CHANNEL_TABS = [
   { value: 'messages', label: 'Messages' },
   { value: 'attachments', label: 'Attachments' },
-  { value: 'participants', label: 'Participants' },
-  { value: 'new', label: 'New' },
 ] as const;
 
 export type ChannelTabId = (typeof CHANNEL_TABS)[number]['value'];

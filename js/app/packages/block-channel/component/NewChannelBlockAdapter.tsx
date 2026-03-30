@@ -18,7 +18,6 @@ import {
   type ChannelTabId,
 } from '@channel/Channel/channel-tabs';
 import { ChannelAttachmentsTab } from '@channel/Channel/ChannelAttachmentsTab';
-import { ChannelTabPlaceholder } from '@channel/Channel/ChannelTabPlaceholder';
 
 function NewTop(props: {
   channelId: string;
@@ -75,25 +74,21 @@ export function NewChannelBlockAdapter() {
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <Switch>
-        <Match when={activeTab() === 'messages'}>
-          <NewChannel channelId={channelId} onHandleReady={onChannelReady} />
-        </Match>
-        <Match when={activeTab() === 'attachments'}>
-          <ChannelAttachmentsTab channelId={channelId} />
-        </Match>
-        <Match when={activeTab() === 'participants'}>
-          <ChannelTabPlaceholder label="Participants" />
-        </Match>
-        <Match when={activeTab() === 'new'}>
-          <ChannelTabPlaceholder label="New" />
-        </Match>
-      </Switch>
-      <NewTop
-        channelId={channelId}
-        activeTab={activeTab()}
-        onTabChange={setActiveTab}
-      />
+      <div class="relative h-full flex flex-col">
+        <Switch>
+          <Match when={activeTab() === 'messages'}>
+            <NewChannel channelId={channelId} onHandleReady={onChannelReady} />
+          </Match>
+          <Match when={activeTab() === 'attachments'}>
+            <ChannelAttachmentsTab channelId={channelId} />
+          </Match>
+        </Switch>
+        <NewTop
+          channelId={channelId}
+          activeTab={activeTab()}
+          onTabChange={setActiveTab}
+        />
+      </div>
     </EntityPermissionsGate>
   );
 }
