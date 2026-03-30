@@ -34,7 +34,7 @@ pub struct MetaConfig {
 pub struct PostHogConfig {
     /// PostHog project API key
     pub api_key: String,
-    /// PostHog host (e.g., "https://app.posthog.com" or self-hosted URL)
+    /// PostHog host
     pub host: String,
 }
 
@@ -155,7 +155,9 @@ impl AnalyticsClient {
         properties: impl Serialize,
     ) -> Result<(), reqwest::Error> {
         if let Some(ref provider) = self.posthog {
-            provider.capture(distinct_id, event_name, properties).await?;
+            provider
+                .capture(distinct_id, event_name, properties)
+                .await?;
         } else {
             tracing::warn!("posthog not configured")
         }

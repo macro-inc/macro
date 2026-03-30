@@ -14,7 +14,7 @@ impl PostHogProvider {
     /// Creates a new PostHog provider.
     ///
     /// - `api_key`: PostHog project API key
-    /// - `host`: PostHog host (e.g., "https://app.posthog.com" or self-hosted URL)
+    /// - `host`: PostHog host
     pub fn new(api_key: String, host: String) -> Self {
         Self {
             client: reqwest::Client::new(),

@@ -224,7 +224,7 @@ async fn main() -> anyhow::Result<()> {
                 host: config
                     .posthog_host
                     .clone()
-                    .unwrap_or_else(|| "https://app.posthog.com".to_string()),
+                    .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
             }
         }),
     });
