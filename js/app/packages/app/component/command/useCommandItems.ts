@@ -155,10 +155,7 @@ function useCommandsList(): () => CommandItem[] {
         displayHotkeySequence: (command) => {
           const hotkey = command.hotkeys?.[0];
           return hotkey
-            ? [
-                { shortcut: GO_TO_LEADER_KEY },
-                { shortcut: hotkey },
-              ]
+            ? [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: hotkey }]
             : undefined;
         },
       }),
