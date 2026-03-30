@@ -141,6 +141,7 @@ export const MobileFilterDrawer = () => {
       >
         <Drawer.Trigger
           as={Button}
+          aria-label="Open filters"
           variant="ghost"
           size="sm"
           class="rounded-xs [&_svg]:size-6 relative"
@@ -194,45 +195,50 @@ export const MobileFilterDrawer = () => {
                 {/* Sort section */}
                 <Show when={sortOptions().length > 0}>
                   <div class="px-4 pb-2 border-b border-edge-muted/30">
-                    <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
+                    <span
+                      id="sort-section-label"
+                      class="text-xs font-medium text-ink-muted uppercase tracking-wide"
+                    >
                       Sort
                     </span>
                   </div>
-                  <For each={sortOptions()}>
-                    {(option) => {
-                      const active = () => activeSort() === option.value;
-                      return (
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={active()}
-                          class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
-                          onClick={() => setSort(option.value)}
-                        >
-                          <Show when={option.icon}>
-                            {(icon) => (
-                              <span class="size-4 flex items-center justify-center shrink-0 text-ink-muted">
-                                {icon()()}
-                              </span>
-                            )}
-                          </Show>
-                          <span
-                            class={cn(
-                              'flex-1 truncate',
-                              active()
-                                ? 'text-ink font-medium'
-                                : 'text-ink-muted'
-                            )}
+                  <div role="radiogroup" aria-labelledby="sort-section-label">
+                    <For each={sortOptions()}>
+                      {(option) => {
+                        const active = () => activeSort() === option.value;
+                        return (
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={active()}
+                            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                            onClick={() => setSort(option.value)}
                           >
-                            {option.label}
-                          </span>
-                          <Show when={active()}>
-                            <CheckIcon class="size-3.5 text-accent shrink-0" />
-                          </Show>
-                        </button>
-                      );
-                    }}
-                  </For>
+                            <Show when={option.icon}>
+                              {(icon) => (
+                                <span class="size-4 flex items-center justify-center shrink-0 text-ink-muted">
+                                  {icon()()}
+                                </span>
+                              )}
+                            </Show>
+                            <span
+                              class={cn(
+                                'flex-1 truncate',
+                                active()
+                                  ? 'text-ink font-medium'
+                                  : 'text-ink-muted'
+                              )}
+                            >
+                              {option.label}
+                            </span>
+                            <Show when={active()}>
+                              <CheckIcon class="size-3.5 text-accent shrink-0" />
+                            </Show>
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
                 </Show>
 
                 <Accordion
