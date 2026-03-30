@@ -4,7 +4,9 @@ config:
   macrodb:parameter_group_family: postgres14
   macrodb:engine_version: 14.17
   macrodb:instance_size: db.t4g.xlarge
-  macrodb:storage_type: gp2
+  macrodb:storage_type: gp3
+  macrodb:storage_iops: 12000
+  macrodb:storage_throughput: 500
   macrodb:allocated_storage: 1500
   macrodb:max_allocated_storage: 2000
   macrodb:ca_cert_identifier: rds-ca-rsa2048-g1
