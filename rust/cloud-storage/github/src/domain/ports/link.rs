@@ -45,6 +45,12 @@ pub trait GithubRepo: Send + Sync + 'static {
         &self,
         in_progress_link_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Deletes the github link from the repo
+    fn delete_github_link(
+        &self,
+        link_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Repository for handling github oauth related actions.
@@ -93,6 +99,13 @@ pub trait Auth: Send + Sync + 'static {
         access_token: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Deletes the github link for a auth user
+    fn delete_user_link(
+        &self,
+        github_link: &GithubLink,
+        github_idp_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Retreives the users github access token
     fn retreive_access_token(
         &self,
@@ -121,4 +134,16 @@ pub trait GithubLinkService: Send + Sync + 'static {
         redirect_uri: &str,
         code: &str,
     ) -> impl Future<Output = Result<GithubLink, GithubError>> + Send;
+
+    /// Gets a users github link
+    fn get_user_link(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> impl Future<Output = Result<GithubLink, GithubError>> + Send;
+
+    /// Deletes the link for the user
+    fn delete_user_link(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
 }

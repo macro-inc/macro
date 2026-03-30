@@ -8,7 +8,10 @@ use fusionauth::{
 use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 
-use crate::domain::{models::GithubAccessToken, ports::Auth};
+use crate::domain::{
+    models::{GithubAccessToken, GithubLink},
+    ports::Auth,
+};
 
 /// TTL for github tokens: 1 day
 const TTL_SECONDS: u64 = 60 * 60 * 24;
@@ -99,5 +102,22 @@ impl Auth for GithubAuthImpl {
             .await?;
 
         Ok(GithubAccessToken::new(link.token.clone()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_user_link(
+        &self,
+        github_link: &GithubLink,
+        github_idp_id: &str,
+    ) -> Result<(), Self::Err> {
+        self.fusionauth_client
+            .unlink_user(
+                &github_link.fusionauth_user_id.to_string(),
+                github_idp_id,
+                &github_link.github_user_id,
+            )
+            .await?;
+
+        Ok(())
     }
 }

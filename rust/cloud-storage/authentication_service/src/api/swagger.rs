@@ -68,6 +68,7 @@ use model::user::{
                 /// /link
                 link::create_in_progress_link::handler,
                 link::github::init_github_link_handler,
+                link::github::delete_github_link_handler,
 
                 /// /oauth
                 oauth::oauth_redirect::handler,

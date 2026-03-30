@@ -165,4 +165,19 @@ impl GithubRepo for PgGithubRepo {
 
         Ok(())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_github_link(&self, link_id: &uuid::Uuid) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM github_links
+            WHERE id = $1
+            "#,
+            link_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }

@@ -6,10 +6,14 @@ use axum::{
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
 use macro_middleware::tracking::ClientIp;
+use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::api::{context::ApiContext, oauth2::OAuthState};
 
-use model::{response::ErrorResponse, user::UserContext};
+use model::{
+    response::{EmptyResponse, ErrorResponse},
+    user::UserContext,
+};
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct InitGithubLinkResponse {
@@ -128,4 +132,29 @@ pub async fn init_github_link_handler(
         authorization_url,
         link_id,
     }))
+}
+
+/// Deletes a github link for a user
+#[utoipa::path(
+        delete,
+        operation_id = "delete_github_link",
+        path = "/link/github",
+        responses(
+            (status = 200, body=EmptyResponse),
+            (status = 400, body=ErrorResponse),
+            (status = 401, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
+        )
+    )]
+#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context, user_id=%user_context.macro_user_id), err)]
+pub async fn delete_github_link_handler(
+    State(ctx): State<ApiContext>,
+    ip_context: ClientIp,
+    user_context: MacroUserExtractor,
+) -> Result<Json<EmptyResponse>, InitGithubLinkError> {
+    ctx.github_link_service
+        .delete_user_link(&user_context.macro_user_id)
+        .await?;
+
+    Ok(Json(EmptyResponse::default()))
 }

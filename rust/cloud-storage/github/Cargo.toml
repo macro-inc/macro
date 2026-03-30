@@ -33,6 +33,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 hex = { workspace = true }
 hmac = "0.12.1"
 jsonwebtoken = { workspace = true }
+macro_env = { path = "../macro_env", features = ["frontend_url"] }
 regex = { workspace = true }
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -44,7 +45,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true, optional = true }
 uuid = { workspace = true }
-macro_env = { path = "../macro_env" }
 
 fusionauth = { path = "../fusionauth", optional = true }
 macro_user_id = { path = "../macro_user_id" }
