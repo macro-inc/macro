@@ -14,7 +14,6 @@ import TextAa from '@icon/regular/text-aa.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
 import { useUserId } from '@core/context/user';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
@@ -50,8 +49,6 @@ import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { isMobile } from '@core/mobile/isMobile';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 
 false && fileFolderDrop;
 
@@ -321,6 +318,16 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           fallback={
             <SplitHeaderRight>
               <div class="flex items-center pl-2">
+                <Show when={props.hasDraft}>
+                  <Button
+                    onclick={props.onDraftDeletePress}
+                    tooltip="Delete draft"
+                    class="aspect-square p-1"
+                    disabled={props.disabled}
+                  >
+                    <Trash />
+                  </Button>
+                </Show>
                 <div class="relative" ref={attachButtonRef}>
                   <Button
                     ref={(el) =>
@@ -350,6 +357,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                   }
                 >
                   <Button
+                    class="ml-8"
                     disabled={
                       props.isSubmitting || props.disabled || !!props.sendTime
                     }
@@ -360,20 +368,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                     <PaperPlane class="size-4.5 text-accent" />
                   </Button>
                 </Tooltip>
-                <DropdownMenu placement="bottom-end">
-                  <DropdownMenu.Trigger as={Button} class="aspect-square p-1">
-                    <DotsThreeIcon class="h-4.5" />
-                  </DropdownMenu.Trigger>
-                  <DropdownMenu.Portal>
-                    <DropdownMenuContent>
-                      <MenuItem
-                        text="Delete Draft"
-                        disabled={!props.hasDraft}
-                        onClick={props.onDraftDeletePress}
-                      />
-                    </DropdownMenuContent>
-                  </DropdownMenu.Portal>
-                </DropdownMenu>
               </div>
             </SplitHeaderRight>
           }

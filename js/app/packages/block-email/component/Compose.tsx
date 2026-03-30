@@ -644,14 +644,14 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
-    if (!data.raw.trim()) {
+    if (!data.raw.trim() && !isMobile()) {
       setValidationError(
         new EmailComposeError('no_message', 'Please enter a message')
       );
       return;
     }
 
-    if (!form.subject()?.trim()) {
+    if (!form.subject()?.trim() && !isMobile()) {
       setValidationError(
         new EmailComposeError('no_subject', 'Please enter a subject')
       );
