@@ -59,7 +59,7 @@ import {
 } from '../util/taskComposerStorage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import CheckIcon from '@icon/regular/check.svg'
+import CheckIcon from '@icon/regular/check.svg';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -325,7 +325,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     },
   };
 
-  const showTaskCreatedToast = (
+  const showTaskCreatedToast = async (
     documentId: string,
     taskTitle: string,
     taskContent: string
@@ -336,7 +336,13 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     // Auto-copy link to clipboard
     const url = buildSimpleEntityUrl({ type: 'task', id: documentId }, {});
-    navigator.clipboard.writeText(url);
+    let linkCopied = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      linkCopied = true;
+    } catch {
+      toast.failure('Failed to copy link to clipboard');
+    }
 
     toast.custom(
       {
@@ -352,10 +358,12 @@ export function ComposeTask(props: ComposeTaskProps) {
               theme={unifiedListMarkdownTheme}
               singleLine
             />
-            <div class="bg-hover/50 flex items-center gap-1 rounded-xs p-1">
-              <CheckIcon class="size-3" />
-              <span>Link copied to clipboard</span>
-            </div>
+            <Show when={linkCopied}>
+              <div class="bg-hover/50 flex items-center gap-1 rounded-xs p-1">
+                <CheckIcon class="size-3" />
+                <span>Link copied to clipboard</span>
+              </div>
+            </Show>
           </div>
         ),
         actions: [
