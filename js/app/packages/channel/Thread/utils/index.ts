@@ -24,5 +24,3 @@ export {
   hasReactionFromUser,
   buildMessageLink,
 } from './message-actions';
-
-export { getThreadTypingIndicatorText } from './thread-typing-indicator';
