@@ -5,6 +5,7 @@ import {
   For,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import {
   flattenAttachments,
@@ -24,6 +25,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import type { DateValue } from '@core/util/date';
+import { UserIcon } from '@core/component/UserIcon';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -134,6 +136,7 @@ function getEntityClickContent(entity: EntityData) {
 function AttachmentEntityRow(props: {
   entity: EntityData;
   timestamp?: DateValue | null;
+  senderId?: string;
   onClick?: () => void;
 }) {
   return (
@@ -148,6 +151,13 @@ function AttachmentEntityRow(props: {
       <span class="ph-no-capture font-semibold truncate flex-1">
         <Entity.Title entity={props.entity} />
       </span>
+      <Show when={props.senderId}>
+        {(id) => (
+          <div class="shrink-0">
+            <UserIcon id={id()} size="xs" suppressClick showTooltip />
+          </div>
+        )}
+      </Show>
       <span class="text-xs font-mono text-ink-extra-muted uppercase font-light shrink-0">
         <Entity.Timestamp
           entity={props.entity}
@@ -189,12 +199,52 @@ function LoadMoreButton(props: {
 }
 
 // ---------------------------------------------------------------------------
+// Skeletons
+// ---------------------------------------------------------------------------
+
+const MEDIA_SKELETON_COUNT = 6;
+const DOCUMENT_SKELETON_COUNT = 6;
+
+function MediaSkeleton() {
+  return (
+    <div class="flex flex-row flex-wrap gap-1.5">
+      <For each={Array.from({ length: MEDIA_SKELETON_COUNT })}>
+        {() => (
+          <div class="size-23 rounded-2xl border border-edge bg-edge/50 animate-pulse" />
+        )}
+      </For>
+    </div>
+  );
+}
+
+function DocumentRowSkeleton() {
+  return (
+    <div class="flex items-center gap-2 min-h-10 px-2">
+      <div class="size-4 rounded bg-edge/50 animate-pulse shrink-0" />
+      <div class="h-3.5 rounded bg-edge/50 animate-pulse w-48" />
+      <div class="flex-1" />
+      <div class="h-3 w-16 rounded bg-edge/50 animate-pulse shrink-0" />
+      <div class="h-3 w-12 rounded bg-edge/50 animate-pulse shrink-0" />
+    </div>
+  );
+}
+
+function DocumentsSkeleton() {
+  return (
+    <div>
+      <For each={Array.from({ length: DOCUMENT_SKELETON_COUNT })}>
+        {() => <DocumentRowSkeleton />}
+      </For>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // MediaSection
 // ---------------------------------------------------------------------------
 
 function MediaSection(props: {
   attachments: Accessor<ApiChannelAttachment[]>;
-  isLoading: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
   onLoadMore: () => void;
@@ -249,11 +299,9 @@ function MediaSection(props: {
   const showLoadMore = createMemo(() => expanded() && props.hasNextPage());
 
   return (
-    <div class="flex flex-col gap-3">
-      <div class="flex items-center justify-between">
-        <h3 class="text-xs font-medium text-ink-muted uppercase tracking-wide">
-          Photos and videos
-        </h3>
+    <div class="flex flex-col">
+      <div class="flex items-center justify-between px-2 py-1.5">
+        <h3 class="text-xs font-medium text-ink-muted/70">Photos and videos</h3>
         <Show when={hiddenCount() > 0}>
           <button
             type="button"
@@ -268,19 +316,16 @@ function MediaSection(props: {
           </button>
         </Show>
       </div>
+      <div class="border-b border-edge-muted/50" />
 
-      <Show when={props.isLoading()}>
-        <div class="text-sm text-ink-faint">Loading...</div>
-      </Show>
-
-      <Show when={!props.isLoading() && !hasMedia()}>
-        <div class="text-sm text-ink-faint">
+      <Show when={!hasMedia()}>
+        <div class="text-sm text-ink-faint px-2 py-3">
           No photos or videos in this channel yet.
         </div>
       </Show>
 
-      <Show when={!props.isLoading() && hasMedia()}>
-        <div class="flex flex-row flex-wrap gap-1.5" ref={observeGrid}>
+      <Show when={hasMedia()}>
+        <div class="flex flex-row flex-wrap gap-1.5 pt-3" ref={observeGrid}>
           <Show when={visibleImages().length > 0}>
             <ImageGalleryPreview
               images={imagePreviewData()}
@@ -320,7 +365,6 @@ function MediaSection(props: {
 
 function DocumentsSection(props: {
   attachments: Accessor<ApiChannelAttachment[]>;
-  isLoading: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
   onLoadMore: () => void;
@@ -368,43 +412,40 @@ function DocumentsSection(props: {
     replaceOrInsertSplit(content);
   };
 
-  const isLoading = () =>
-    props.isLoading() || (hasDocuments() && soupQuery.isLoading);
-
   return (
-    <div class="flex flex-col gap-3">
-      <h3 class="text-xs font-medium text-ink-muted uppercase tracking-wide shrink-0">
+    <div class="flex flex-col">
+      <h3 class="text-xs font-medium text-ink-muted/70 px-2 py-1.5 shrink-0">
         Documents
       </h3>
+      <div class="border-b border-edge-muted/50" />
 
-      <Show when={isLoading()}>
-        <div class="text-sm text-ink-faint">Loading...</div>
-      </Show>
-
-      <Show when={!isLoading() && sortedEntities().length === 0}>
-        <div class="text-sm text-ink-faint">
+      <Show when={!hasDocuments()}>
+        <div class="text-sm text-ink-faint px-2 py-3">
           No documents in this channel yet.
         </div>
       </Show>
 
-      <Show when={!isLoading() && sortedEntities().length > 0}>
-        <div>
-          <For each={sortedEntities()}>
-            {(entity) => {
-              const attachment = attachmentByEntityId().get(entity.id);
-              return (
-                <AttachmentEntityRow
-                  entity={entity}
-                  timestamp={attachment?.created_at}
-                  onClick={() => handleEntityClick(entity)}
-                />
-              );
-            }}
-          </For>
-        </div>
+      <Show when={hasDocuments()}>
+        <Suspense fallback={<DocumentsSkeleton />}>
+          <div>
+            <For each={sortedEntities()}>
+              {(entity) => {
+                const attachment = attachmentByEntityId().get(entity.id);
+                return (
+                  <AttachmentEntityRow
+                    entity={entity}
+                    timestamp={attachment?.created_at}
+                    senderId={attachment?.sender_id}
+                    onClick={() => handleEntityClick(entity)}
+                  />
+                );
+              }}
+            </For>
+          </div>
+        </Suspense>
       </Show>
 
-      <Show when={!isLoading() && hasDocuments() && props.hasNextPage()}>
+      <Show when={hasDocuments() && props.hasNextPage()}>
         <LoadMoreButton
           onLoadMore={props.onLoadMore}
           isFetching={props.isFetchingNextPage}
@@ -418,7 +459,32 @@ function DocumentsSection(props: {
 // ChannelAttachmentsTab
 // ---------------------------------------------------------------------------
 
-export function ChannelAttachmentsTab(props: { channelId: string }) {
+function AttachmentsTabSkeleton() {
+  return (
+    <div class="relative flex-1 min-h-0 overflow-y-auto">
+      <div class="macro-message-width macro-message-padding mx-auto w-full py-4 flex flex-col gap-6">
+        <div class="flex flex-col">
+          <h3 class="text-xs font-medium text-ink-muted/70 px-2 py-1.5">
+            Photos and videos
+          </h3>
+          <div class="border-b border-edge-muted/50" />
+          <div class="pt-3">
+            <MediaSkeleton />
+          </div>
+        </div>
+        <div class="flex flex-col">
+          <h3 class="text-xs font-medium text-ink-muted/70 px-2 py-1.5">
+            Documents
+          </h3>
+          <div class="border-b border-edge-muted/50" />
+          <DocumentsSkeleton />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AttachmentsTabContent(props: { channelId: string }) {
   const attachmentsQuery = useChannelAttachmentsQuery(() => props.channelId);
 
   const allAttachments = createMemo(() =>
@@ -427,7 +493,6 @@ export function ChannelAttachmentsTab(props: { channelId: string }) {
     )
   );
 
-  const isInitialLoading = () => attachmentsQuery.isLoading;
   const hasNextPage = () => !!attachmentsQuery.hasNextPage;
   const isFetchingNextPage = () => attachmentsQuery.isFetchingNextPage;
   const loadMore = () => attachmentsQuery.fetchNextPage();
@@ -437,19 +502,25 @@ export function ChannelAttachmentsTab(props: { channelId: string }) {
       <div class="macro-message-width macro-message-padding mx-auto w-full py-4 flex flex-col gap-6">
         <MediaSection
           attachments={allAttachments}
-          isLoading={isInitialLoading}
           hasNextPage={hasNextPage}
           isFetchingNextPage={isFetchingNextPage}
           onLoadMore={loadMore}
         />
         <DocumentsSection
           attachments={allAttachments}
-          isLoading={isInitialLoading}
           hasNextPage={hasNextPage}
           isFetchingNextPage={isFetchingNextPage}
           onLoadMore={loadMore}
         />
       </div>
     </div>
+  );
+}
+
+export function ChannelAttachmentsTab(props: { channelId: string }) {
+  return (
+    <Suspense fallback={<AttachmentsTabSkeleton />}>
+      <AttachmentsTabContent channelId={props.channelId} />
+    </Suspense>
   );
 }
