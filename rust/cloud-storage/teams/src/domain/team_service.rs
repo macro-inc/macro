@@ -160,8 +160,7 @@ where
         notification: InviteToTeamMetadata,
     ) -> anyhow::Result<()> {
         let request = SendNotificationRequestBuilder {
-            notification_entity: EntityType::Team
-                .with_entity_string(team_invite_id.to_string()),
+            notification_entity: EntityType::Team.with_entity_string(team_invite_id.to_string()),
             sender_id: Some(notification.invited_by.clone()),
             notification,
             recipient_ids: HashSet::from([recipient_id]),

@@ -2,14 +2,14 @@ use std::{
     collections::HashSet,
     future::Future,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use notification::domain::{
-    models::{request::SendNotificationRequest, Notification, NotificationResult},
+    models::{Notification, NotificationResult, request::SendNotificationRequest},
     service::{NotificationIngress, SendNotificationError},
 };
 use roles_and_permissions::domain::{
@@ -127,10 +127,7 @@ impl TeamRepository for MockTeamRepository {
         async { unimplemented!() }
     }
 
-    fn delete_team(
-        &self,
-        _: &uuid::Uuid,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send {
+    fn delete_team(&self, _: &uuid::Uuid) -> impl Future<Output = Result<(), TeamError>> + Send {
         async { unimplemented!() }
     }
 
@@ -390,8 +387,9 @@ impl NotificationIngress for MockNotificationIngress {
     >(
         &'a self,
         _req: SendNotificationRequest<'a, T, U>,
-    ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, rootcause::Report<SendNotificationError>>>
-           + Send {
+    ) -> impl Future<
+        Output = Result<Option<NotificationResult<'a>>, rootcause::Report<SendNotificationError>>,
+    > + Send {
         let index = self.call_count.fetch_add(1, Ordering::SeqCst);
         let should_fail = self.fail_indices.contains(&index);
         async move {

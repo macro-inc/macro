@@ -51,6 +51,7 @@ export * from './getNotificationTypePreferencesResponse';
 export * from './getTypedNotificationsByEventItemIdParams';
 export * from './inviteToTeamMetadata';
 export * from './inviteToTeamMetadataRole';
+export * from './inviteToTeamMetadataSenderProfilePictureUrl';
 export * from './itemSharedMetadata';
 export * from './itemSharedMetadataItemName';
 export * from './itemSharedMetadataPermissionLevel';
