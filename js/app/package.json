@@ -15,7 +15,7 @@
 		"gen-tools": "bun scripts/generate-dcs-tools.ts",
 		"check": "tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
 		"preview": "cd packages/app && bun run --bun preview:dev",
-		"lint": "bunx --bun biome lint --skip=nursery/noImportCycles",
+		"lint": "bunx --bun biome lint --skip=suspicious/noImportCycles",
 		"format": "bunx --bun biome format --write",
 		"fix": "bunx --bun biome lint --write",
 		"clean": "bun scripts/clean-env.js",
