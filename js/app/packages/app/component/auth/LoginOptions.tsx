@@ -17,7 +17,7 @@ import { type JSX, Show } from 'solid-js';
 import { Stage } from './Shared';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { useAnalytics } from '@app/component/analytics-context';
-import { AnalyticsProvider } from '@app/lib/analytics';
+import type { AnalyticsProvider } from '@app/lib/analytics';
 
 function LoginOption(props: {
   icon: JSX.Element;
