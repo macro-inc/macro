@@ -377,6 +377,23 @@ impl UserRolesAndPermissionsService for MockUserRolesAndPermissionsService {
 struct MockNotificationIngress {
     fail_indices: HashSet<usize>,
     call_count: AtomicUsize,
+    /// Captured serialized snapshots of each request, in call order.
+    recorded_requests: Mutex<Vec<serde_json::Value>>,
+}
+
+impl MockNotificationIngress {
+    fn new(fail_indices: HashSet<usize>) -> Self {
+        Self {
+            fail_indices,
+            call_count: AtomicUsize::new(0),
+            recorded_requests: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Returns cloned snapshots of all recorded requests.
+    fn recorded_requests(&self) -> Vec<serde_json::Value> {
+        self.recorded_requests.lock().unwrap().clone()
+    }
 }
 
 impl NotificationIngress for MockNotificationIngress {
@@ -386,12 +403,14 @@ impl NotificationIngress for MockNotificationIngress {
         U: serde::Serialize + Send + Sync + 'static,
     >(
         &'a self,
-        _req: SendNotificationRequest<'a, T, U>,
+        req: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<
         Output = Result<Option<NotificationResult<'a>>, rootcause::Report<SendNotificationError>>,
     > + Send {
         let index = self.call_count.fetch_add(1, Ordering::SeqCst);
         let should_fail = self.fail_indices.contains(&index);
+        let snapshot = serde_json::to_value(&req).unwrap();
+        self.recorded_requests.lock().unwrap().push(snapshot);
         async move {
             if should_fail {
                 Err(rootcause::Report::new(SendNotificationError::Other))
@@ -419,19 +438,17 @@ fn build_service(
     invites: Vec<TeamInvite<'static>>,
     fail_indices: HashSet<usize>,
     mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>>,
-) -> impl TeamService {
+) -> (impl TeamService, Arc<MockNotificationIngress>) {
     let team_repo = MockTeamRepository::new(invites, "Test Team", mark_sent_calls);
-    let notification_ingress = MockNotificationIngress {
-        fail_indices,
-        call_count: AtomicUsize::new(0),
-    };
-    TeamServiceImpl::new(
+    let notification_ingress = Arc::new(MockNotificationIngress::new(fail_indices));
+    let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository,
         MockTeamChannelsRepository,
         MockUserRolesAndPermissionsService,
-        Arc::new(notification_ingress),
-    )
+        notification_ingress.clone(),
+    );
+    (service, notification_ingress)
 }
 
 // -- Tests --
@@ -455,7 +472,8 @@ async fn test_invite_marks_sent_only_for_successful_notifications() {
     let fail_indices = HashSet::from([1]);
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let service = build_service(invites, fail_indices, mark_sent_calls.clone());
+    let (service, _notification_ingress) =
+        build_service(invites, fail_indices, mark_sent_calls.clone());
 
     let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let emails = vec![
@@ -501,7 +519,8 @@ async fn test_invite_does_not_call_mark_sent_when_all_notifications_fail() {
     let fail_indices = HashSet::from([0]);
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let service = build_service(invites, fail_indices, mark_sent_calls.clone());
+    let (service, _notification_ingress) =
+        build_service(invites, fail_indices, mark_sent_calls.clone());
 
     let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let emails = vec![
@@ -534,7 +553,7 @@ async fn test_invite_marks_all_sent_when_all_notifications_succeed() {
 
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let service = build_service(
+    let (service, _notification_ingress) = build_service(
         invites,
         HashSet::new(), // all succeed
         mark_sent_calls.clone(),
