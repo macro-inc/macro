@@ -311,6 +311,7 @@
   ],
   "patchedDependencies": {
     "@kobalte/core@0.13.11": "patches/@kobalte%2Fcore@0.13.11.patch",
+    "virtua@0.48.8": "patches/virtua@0.48.8.patch",
     "@thisbeyond/solid-dnd@0.7.5": "patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
     "@lexical/markdown@0.32.1": "patches/@lexical%2Fmarkdown@0.32.1.patch",
     "solid-gesture@0.0.3": "patches/solid-gesture@0.0.3.patch",

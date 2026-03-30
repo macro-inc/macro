@@ -1,0 +1,13 @@
+diff --git a/lib/solid/index.jsx b/lib/solid/index.jsx
+index 029201a2c88fe71645242b3f6f11493a7f91fa86..19392eed983d16cdad923b2dc5ce2aaeec8e20fc 100644
+--- a/lib/solid/index.jsx
++++ b/lib/solid/index.jsx
+@@ -1068,7 +1068,7 @@ const createResizeObserver = (cb) => {
+             // https://www.w3.org/TR/resize-observer/#intro
+             (ro ||
+                 // https://bugs.chromium.org/p/chromium/issues/detail?id=1491739
+-                (ro = new (getCurrentWindow(getCurrentDocument(e)).ResizeObserver)(cb))).observe(e);
++                (ro = new window.ResizeObserver(cb))).observe(e);
+         },
+         _unobserve(e) {
+             ro.unobserve(e);
