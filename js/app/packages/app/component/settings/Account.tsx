@@ -90,6 +90,23 @@ export function Account() {
   const emailActive = useEmailLinksStatus();
   const [showTooltip, setShowTooltip] = createSignal<boolean>(false);
 
+  const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
+    const [_, response] = await authServiceClient.checkLinkExists({ idp_name: 'github' });
+    return response?.link_exists ?? false;
+  });
+
+  const handleGithubEnable = async () => {
+    const [_, url] = await authServiceClient.initGithubLink();
+    if (url) {
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleGithubDisable = async () => {
+    await authServiceClient.deleteGithubLink();
+    refetchGithubLink();
+  };
+
   const firstName = () => {
     // Display any updated first name immediately without having to refetch
     if (updatedFirstName() !== undefined) return updatedFirstName();
@@ -276,6 +293,30 @@ export function Account() {
             </div>
           </div>
         </Show>
+        <div class="flex items-center justify-between mb-[18px]">
+          <div class="text-sm">GitHub</div>
+          <Show
+            when={!githubLinkExists.loading}
+            fallback={<span class="text-sm text-ink-muted">Loading...</span>}
+          >
+            <Show
+              when={!githubLinkExists()}
+              fallback={
+                <DeprecatedTextButton
+                  theme="base"
+                  text="Disable"
+                  onClick={handleGithubDisable}
+                />
+              }
+            >
+              <DeprecatedTextButton
+                theme="accent"
+                text="Enable"
+                onClick={handleGithubEnable}
+              />
+            </Show>
+          </Show>
+        </div>
         <NotificationToggle />
         <div class="flex flex-row justify-between items-center border-t border-edge pt-4">
           <div
