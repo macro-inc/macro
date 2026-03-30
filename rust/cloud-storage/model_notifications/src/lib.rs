@@ -1,5 +1,6 @@
 use chrono::DateTime;
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::report;
 use serde::{Deserialize, Serialize};
 use std::hash::{DefaultHasher, Hasher};
 use utoipa::ToSchema;
@@ -224,9 +225,7 @@ impl NotificationTitle for NotifEvent {
                 channel_reply_metadata.format_title(sender_id)
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_title(sender_id),
-            NotifEvent::InviteToTeam(invite_to_team_metadata) => {
-                invite_to_team_metadata.format_title(sender_id)
-            }
+            NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_title(sender_id)
             }
@@ -262,9 +261,7 @@ impl NotificationTitle for NotifEvent {
                 channel_reply_metadata.format_body(sender_id)
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_body(sender_id),
-            NotifEvent::InviteToTeam(invite_to_team_metadata) => {
-                invite_to_team_metadata.format_body(sender_id)
-            }
+            NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_body(sender_id)
             }

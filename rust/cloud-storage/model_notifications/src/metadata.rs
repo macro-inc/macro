@@ -392,25 +392,6 @@ impl NotificationTitle for ChannelInviteMetadata {
     }
 }
 
-impl NotificationTitle for InviteToTeamMetadata {
-    fn format_title(
-        &self,
-        _sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report> {
-        let email = self.invited_by.email_part();
-        let sender = email.email_str();
-
-        Ok(format!("{sender} invited you to join a team"))
-    }
-
-    fn format_body(
-        &self,
-        _sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report> {
-        Ok(self.team_name.clone())
-    }
-}
-
 /// Metadata for when a user is assigned to a task
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
