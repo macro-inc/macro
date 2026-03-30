@@ -109,6 +109,7 @@ registerComponent(
         viewName="Inbox"
         queryFilters={preset.queryFilters}
         initialClientFilters={preset.clientFilters}
+        disableLocalSearch
       />
     );
   })

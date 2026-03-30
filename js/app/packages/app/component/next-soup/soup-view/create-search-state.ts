@@ -25,11 +25,13 @@ const freshSearch = createSoupFreshSearch();
 interface CreateSearchStateArgs {
   soup: SoupState;
   queryFilters: Accessor<SoupItemsQueryFilters>;
+  disableLocalSearch?: boolean;
 }
 
 export const createSearchState = ({
   soup,
   queryFilters,
+  disableLocalSearch,
 }: CreateSearchStateArgs) => {
   const [searchText, setSearchText] = createSignal('');
 
@@ -82,6 +84,7 @@ export const createSearchState = ({
 
   const localFuzzyResults = createMemo(
     on(debouncedSearchForLocal, (query) => {
+      if (disableLocalSearch) return [];
       if (!query || query.length === 0) return [];
       const pool = entityPool();
       // TODO: we can optimize fresh search for small feature counts since we

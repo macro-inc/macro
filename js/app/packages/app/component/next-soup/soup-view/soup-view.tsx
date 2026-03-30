@@ -179,6 +179,7 @@ interface SoupViewProps {
   viewName: string;
   initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
   queryFilters?: SoupItemsQueryFilters;
+  disableLocalSearch?: boolean;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -224,7 +225,11 @@ export const SoupView = (props: SoupViewProps) => {
           soup.previewEntity() ? { side: 'left', percentage: 30 } : undefined,
       }}
     >
-      <SoupViewContextProvider soup={soup} queryFilters={props.queryFilters}>
+      <SoupViewContextProvider
+        soup={soup}
+        queryFilters={props.queryFilters}
+        disableLocalSearch={props.disableLocalSearch}
+      >
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
