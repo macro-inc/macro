@@ -6,7 +6,6 @@ import {
   pendingLocationParamsSignal,
 } from '@block-pdf/signal/location';
 import { showTabBarSignal } from '@block-pdf/signal/placeables';
-import { withAnalytics } from '@coparse/analytics';
 import { useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
@@ -49,8 +48,6 @@ import { ModalsProvider } from './ModalsProvider';
 import { Tabs } from './Tabs';
 import { TopBar } from './TopBar';
 
-const { track, TrackingEvents } = withAnalytics();
-
 function onKeyPress(e: KeyboardEvent) {
   if (
     (e.key.toLowerCase() === 's' || e.key === 'z') &&
@@ -84,12 +81,6 @@ export default function BlockPdf() {
 
     setPdfDocumentProxy(blockData.documentProxy);
     setPdfViewLocation(isNestedBlock ? undefined : blockData.viewLocation);
-
-    if (
-      window.location.pathname !== '/app' &&
-      window.location.pathname !== '/app/'
-    )
-      track(TrackingEvents.BLOCKPDF.OPEN);
 
     const modificationData = blockData.documentMetadata.modificationData;
     if (!modificationData) return;

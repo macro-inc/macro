@@ -1,8 +1,6 @@
-import { withAnalytics } from '@coparse/analytics';
 import shortUUID from 'short-uuid';
 import ZipWorker from '../../workers/folder-upload/zip-worker?worker';
-
-const { track, TrackingEvents } = withAnalytics();
+import { analytics } from '@app/lib/analytics';
 
 const MAX_FOLDER_FILE_COUNT = 1000;
 // NOTE: you can expect a 30-40% decrease in folder size when zipped
@@ -29,9 +27,8 @@ export class DirectoryFileCountExceededError extends Error {
     this.directoryName = directoryName;
     this.count = count;
 
-    track(TrackingEvents.UPLOAD.ERROR, {
+    analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
     });
   }
 
@@ -78,9 +75,8 @@ export class DirectoryFileSizeExceededError extends Error {
     this.directoryName = directoryName;
     this.limit = limit;
 
-    track(TrackingEvents.UPLOAD.ERROR, {
+    analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
     });
   }
 

@@ -1,4 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { toast } from 'core/component/Toast/Toast';
@@ -6,8 +5,6 @@ import { createEffect, createSignal, Show } from 'solid-js';
 import { blockData } from '../signal/blockData';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
-
-const { track, TrackingEvents } = withAnalytics();
 
 export default function BlockVideo() {
   useBlockEntityCommands();
@@ -48,7 +45,6 @@ const Video = () => {
           src={videoUrl()}
           onError={(e) => {
             console.error('video error', e);
-            track(TrackingEvents.BLOCKVIDEO.PLAYBACK.ERROR, { error: e });
             setPlaybackError('Video playback failed');
           }}
         />

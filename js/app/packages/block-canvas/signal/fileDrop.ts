@@ -14,7 +14,6 @@ import {
   svgEntityStyles,
 } from '@block-canvas/util/svg';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
-import { withAnalytics } from '@coparse/analytics';
 import { createBlockSignal } from '@core/block';
 import { CANVAS_SVG_IMPORT } from '@core/constant/featureFlags';
 import { uploadFile } from '@core/util/upload';
@@ -25,6 +24,7 @@ import { getTextNodeHeight } from '../util/style';
 import { useCachedStyle } from './cachedStyle';
 import { useCanvasHistory } from './canvasHistory';
 import { useToolManager } from './toolManager';
+import { analytics } from '@app/lib/analytics';
 
 export const canvasDraggingSignal = createBlockSignal(false);
 
@@ -33,7 +33,6 @@ export const useCanvasFileDrop = () => {
   const { clientToCanvas } = useRenderState();
   const nodes = useCanvasNodes();
   const { setSelectedTool } = useToolManager();
-  const { track, TrackingEvents } = withAnalytics();
   const highestOrder = highestOrderSignal.get;
   const history = useCanvasHistory();
 
@@ -237,8 +236,9 @@ export const useCanvasFileDrop = () => {
         throw result.error;
       }
     } catch (_error) {
-      track(TrackingEvents.BLOCKCANVAS.IMAGES.STATICFAILURE, {
-        error: 'failed uploading image',
+      analytics.track('upload_error', {
+        type: 'canvas_image',
+        destination: 'static',
       });
       toast.failure('Failed to upload image');
       nodes.delete(loadingNode.id, { autosave: true });

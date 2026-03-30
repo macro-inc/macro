@@ -1,4 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
 import {
@@ -33,8 +32,6 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-
-const { track, TrackingEvents } = withAnalytics();
 
 // NOTE: solid directives
 false && fileSelector;
@@ -215,8 +212,6 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     const popupRef_ = popupRef();
     if (!popupRef_) return;
 
-    track(TrackingEvents.CHAT.ATTACHMENT.MENU.OPEN);
-
     document.body.style.overflow = 'hidden';
     const cleanup = autoUpdate(props.anchorRef, popupRef_, updatePosition);
 
@@ -226,7 +221,6 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     }, 0);
 
     onCleanup(() => {
-      track(TrackingEvents.CHAT.ATTACHMENT.MENU.CLOSE);
       cleanup();
       document.body.style.overflow = '';
     });
@@ -288,7 +282,6 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
                     const items = rankedHistory();
                     const selectedItem = items[selectedIndex()];
                     if (selectedItem) {
-                      track(TrackingEvents.CHAT.ATTACHMENT.MENU.SELECT);
                       selectItem(selectedItem);
                     }
                   }

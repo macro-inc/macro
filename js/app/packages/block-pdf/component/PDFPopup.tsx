@@ -1,5 +1,4 @@
 import type { IHighlight } from '@block-pdf/model/Highlight';
-import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { generateTitle } from '@service-cognition/client';
@@ -36,8 +35,6 @@ import {
   PDFPopupCompletionSignal,
   PDFPopupSelectedTextSignal,
 } from './PageOverlay';
-
-const { track, TrackingEvents } = withAnalytics();
 
 type PDFPopupProps = {
   highlightProps: {
@@ -247,7 +244,6 @@ export function PDFPopup(props: PDFPopupProps) {
                     icon={HighlightIcon}
                     onClick={() => {
                       props.highlightProps.highlight();
-                      track(TrackingEvents.POPUP.HIGHLIGHT.ADD);
                     }}
                   />
                 </Show>
@@ -259,7 +255,6 @@ export function PDFPopup(props: PDFPopupProps) {
                     icon={TrashIcon}
                     onClick={() => {
                       props.highlightProps.removeHighlight();
-                      track(TrackingEvents.POPUP.HIGHLIGHT.REMOVE);
                     }}
                   />
                 </Show>

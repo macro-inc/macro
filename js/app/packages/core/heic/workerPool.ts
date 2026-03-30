@@ -2,8 +2,6 @@
  * HEIC Worker Pool - Manages worker lifecycle and task distribution
  * Internal implementation detail, not exposed to consumers
  */
-
-import { withAnalytics } from '@coparse/analytics';
 import shortUUID from 'short-uuid';
 import {
   ERROR_MESSAGES,
@@ -13,8 +11,7 @@ import {
 } from './constants';
 import { EnhancedHeicConversionError, HeicLogger } from './logger';
 import { checkWebCodecsSupport } from './utils';
-
-const { track, TrackingEvents } = withAnalytics();
+import { analytics } from '@app/lib/analytics';
 
 export class HeicConversionError extends Error {
   public originalFilename: string | undefined;
@@ -27,9 +24,8 @@ export class HeicConversionError extends Error {
     this.name = 'HeicConversionError';
     this.originalFilename = originalFilename;
 
-    track(TrackingEvents.UPLOAD.ERROR, {
+    analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
     });
   }
 }

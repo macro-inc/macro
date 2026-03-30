@@ -1,4 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
 import {
   DEFAULT_MODEL,
   MODEL_PRETTYNAME,
@@ -19,25 +18,14 @@ export type ModelSelectorProps = {
 };
 
 export function ModelSelector(props: ModelSelectorProps) {
-  const { track, TrackingEvents } = withAnalytics();
-
   const model = () => props.selectedModel ?? DEFAULT_MODEL;
 
   const setSelected = (selected: TModel) => {
     props.onSelect(selected);
-    track(TrackingEvents.CHAT.MODEL.SELECT, { model: selected });
   };
 
   return (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        if (open) {
-          track(TrackingEvents.CHAT.MODEL.OPEN);
-        } else {
-          track(TrackingEvents.CHAT.MODEL.CLOSE);
-        }
-      }}
-    >
+    <DropdownMenu>
       <DropdownMenu.Trigger>
         <DeprecatedTextButton
           theme="clear"

@@ -1,4 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
 import type { BlockName } from '@core/block';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
@@ -6,8 +5,6 @@ import { isErr } from '@core/util/maybeResult';
 import { propsToHref } from '@core/util/url';
 import { postNewHistoryItem } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-
-const { track, TrackingEvents } = withAnalytics();
 
 export function useOpenChatForAttachment() {
   const { showPaywall } = usePaywallState();
@@ -74,7 +71,6 @@ export async function copyChat(args: { id: string; name: string }) {
   }
   const [_, { id }] = result;
   postNewHistoryItem('chat', id);
-  track(TrackingEvents.BLOCKCHAT.CHATMENU.COPY);
   const href = propsToHref({
     id,
     fileType: 'chat',

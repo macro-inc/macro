@@ -1,6 +1,5 @@
 import { sharedInstance } from '@block-canvas/util/sharedInstance';
 import { getTextNodeHeight } from '@block-canvas/util/style';
-import { withAnalytics } from '@coparse/analytics';
 import { jsonToXML } from '@core/component/LexicalMarkdown/citationsUtils';
 import { parseMacroAppUrl } from '@core/component/LexicalMarkdown/plugins';
 import { blockNameToFileExtensions } from '@core/constant/allBlocks';
@@ -42,7 +41,6 @@ export const useClipboard = sharedInstance(() => {
   const groups = useCanvasGroups();
   const highestOrder = highestOrderSignal.get;
   const history = useCanvasHistory();
-  const { track, TrackingEvents } = withAnalytics();
   const { staticImageUpload, parseSVGStringToNodes } = useCanvasFileDrop();
   const boundingBox = useBoundingBox();
   const { activeTextEditor } = useToolManager();
@@ -316,9 +314,6 @@ export const useClipboard = sharedInstance(() => {
       const mime = `image/${imageType}`;
       if (item.types.includes(mime)) {
         const blob = await item.getType(mime);
-        track(TrackingEvents.BLOCKCANVAS.IMAGES.STATICIMAGE, {
-          method: 'paste from clipboard',
-        });
         staticImageUpload(blob, centerPoint);
         history.close();
         return;

@@ -1,4 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
@@ -9,17 +8,11 @@ import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
-const { track, TrackingEvents } = withAnalytics();
-
 export default function BlockImage() {
   useBlockEntityCommands();
   const documentId = useBlockId();
 
   const [imageUrl, setImageUrl] = createSignal<string>();
-
-  onMount(() => {
-    track(TrackingEvents.BLOCKIMAGE.OPEN);
-  });
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {
