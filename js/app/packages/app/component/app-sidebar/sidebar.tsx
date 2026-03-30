@@ -41,11 +41,6 @@ import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
-import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
-import {
-  InviteModal,
-  setInviteModalOpen,
-} from '@app/component/app-sidebar/invite-modal';
 
 interface SidebarItem {
   id: ListView;
@@ -207,41 +202,34 @@ export const registerSidebarHotkeys = ({
     },
   });
 
-  registerHotkey({
-    hotkeyToken: TOKENS.global.inviteTeam,
-    scopeId: 'global',
-    description: 'Invite team',
-    keyDownHandler: () => {
-      setInviteModalOpen(true);
-      return true;
-    },
-  });
-
   // Register navigation shortcuts in the global GO_TO command scope
   for (const link of SIDEBAR_LINKS) {
+    const openSidebarView = (e?: KeyboardEvent) => {
+      e?.preventDefault();
+      if (hotkeyVisible()) {
+        resetHotkeysState();
+        debounceResetHotkeysState.clear();
+      }
+      openWithSplit(
+        {
+          type: 'component',
+          id: link.id,
+        },
+        {
+          preferNewSplit: e?.shiftKey,
+          mergeHistory: false,
+          allowDuplicate: true,
+        }
+      );
+      return true;
+    };
+
     registerHotkey({
       hotkey: link.hotkey,
       scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
       description: `Go to ${link.label}`,
-      keyDownHandler: (e) => {
-        e?.preventDefault();
-        if (hotkeyVisible()) {
-          resetHotkeysState();
-          debounceResetHotkeysState.clear();
-        }
-        openWithSplit(
-          {
-            type: 'component',
-            id: link.id,
-          },
-          {
-            preferNewSplit: e?.shiftKey,
-            mergeHistory: false,
-            allowDuplicate: true,
-          }
-        );
-        return true;
-      },
+      keyDownHandler: openSidebarView,
+      icon: link.icon,
     });
   }
 };
@@ -252,7 +240,7 @@ export const registerSidebarHotkeys = ({
 
 type SidebarActionButtonProps = {
   label: string;
-  hotkeyToken?: HotkeyToken;
+  hotkeyToken: HotkeyToken;
   /** Whether the sidebar is currently in slim (icon-only) mode. */
   isSlim: () => boolean;
   onClick: () => void;
@@ -283,14 +271,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       tooltipPlacement="right"
       tooltip={
         props.isSlim() ? (
-          props.hotkeyToken ? (
-            <LabelAndHotKey
-              label={props.label}
-              hotkeyToken={props.hotkeyToken}
-            />
-          ) : (
-            props.label
-          )
+          <LabelAndHotKey label={props.label} hotkeyToken={props.hotkeyToken} />
         ) : undefined
       }
       onClick={props.onClick}
@@ -306,11 +287,9 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
         {props.label}
       </span>
-      {props.hotkeyToken && (
-        <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
-          <Hotkey token={props.hotkeyToken} class="flex gap-1" />
-        </div>
-      )}
+      <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+        <Hotkey token={props.hotkeyToken} class="flex gap-1" />
+      </div>
     </Button>
   );
 };
@@ -466,12 +445,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
       <div class=" w-full px-2 flex flex-col">
         <SidebarActionButton
-          label="Invite Team"
-          icon={AnimatedUsersIcon}
-          isSlim={isSlim}
-          onClick={() => setInviteModalOpen(true)}
-        />
-        <SidebarActionButton
           label="New Split"
           hotkeyToken={TOKENS.global.createNewSplit}
           isSlim={isSlim}
@@ -496,8 +469,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
           icon={AnimatedGearIcon}
         />
       </div>
-
-      <InviteModal />
     </div>
   );
 };
@@ -641,7 +612,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Show when={props.hotkeyVisible}>
             <div
               class={cn(
-                'text-xs size-4 outline outline-1 outline-accent/50 rounded-xs bg-page text-ink flex items-center justify-center overflow-hidden',
+                'text-xs size-4 outline-1 outline-accent/50 rounded-xs bg-page text-ink flex items-center justify-center overflow-hidden',
                 props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
                 props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
               )}

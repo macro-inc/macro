@@ -67,7 +67,7 @@ export const InviteModal = () => {
         <DialogWrapper>
           <div class="flex flex-col text-ink">
             <div class="shrink-0 flex flex-row items-center px-2 gap-2 border-b-1 border-b-edge-muted h-[40px]">
-              <Dialog.CloseButton as={Button} varian="ghost" size="icon-sm">
+              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                 <CloseIcon />
               </Dialog.CloseButton>
               <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
