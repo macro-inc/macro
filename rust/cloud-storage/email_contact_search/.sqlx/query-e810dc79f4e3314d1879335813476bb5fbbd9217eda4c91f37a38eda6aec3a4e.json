@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT t.id as \"thread_id!\", t.latest_non_spam_message_ts as \"updated_at!\"\n        FROM email_threads t\n        WHERE t.id IN (\n            SELECT DISTINCT ecsi.thread_id\n            FROM email_contact_search_index ecsi\n            WHERE ecsi.link_id = (SELECT id FROM email_links WHERE macro_id = $1)\n              AND (ecsi.contact_name ILIKE $2 OR ecsi.contact_email ILIKE $2)\n        )\n        AND t.latest_non_spam_message_ts IS NOT NULL\n        AND (\n            $4::timestamptz IS NULL\n            OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)\n        )\n        ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC\n        LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "e810dc79f4e3314d1879335813476bb5fbbd9217eda4c91f37a38eda6aec3a4e"
+}
