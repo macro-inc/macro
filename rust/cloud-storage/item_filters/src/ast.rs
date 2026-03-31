@@ -65,6 +65,12 @@ pub enum ExpandErr {
     /// unknown document sub type
     #[error(transparent)]
     DocumentSubTypeErr(#[from] strum::ParseError),
+    /// invalid property entity type
+    #[error(transparent)]
+    PropertyEntityType(#[from] properties::PropertyEntityTypeError),
+    /// invalid entity reference id
+    #[error(transparent)]
+    EntityRefId(#[from] properties::EntityRefIdError),
 }
 
 /// type alias for a maybe empty, cheaply cloneable ast literal tree
