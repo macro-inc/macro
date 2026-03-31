@@ -283,10 +283,16 @@ export function Account() {
               <DeprecatedTextButton
                 theme="clear"
                 text="Confirm"
-                onClick={() => {
-                  disconnectEmail();
+                onClick={async () => {
                   setShowEmailModal(false);
-                  toast.success('Email disabled — clearing your email data, this may take a moment.');
+                  await disconnectEmail().match(
+                    () => {
+                      toast.success('Email disabled — clearing your email data, this may take a moment.');
+                    },
+                    () => {
+                      toast.failure('Failed to disable email. Please try again.');
+                    },
+                  );
                 }}
               />
               <DeprecatedTextButton
