@@ -20,80 +20,43 @@ impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
 
 impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> {
     #[tracing::instrument(err, skip(self))]
-    async fn create_call(
+    async fn get_or_create_call(
         &self,
         channel_id: &Uuid,
         user_id: &str,
     ) -> Result<CallTokenResponse, CallError> {
-        // Check if a call already exists for this channel.
-        if self
+        let call = match self
             .repo
             .get_call_by_channel_id(channel_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?
-            .is_some()
         {
-            return Err(CallError::AlreadyExists(channel_id.to_string()));
-        }
+            Some(existing) => existing,
+            None => {
+                let call_id = Uuid::now_v7();
+                let room_name = channel_id.to_string();
 
-        let call_id = Uuid::now_v7();
-        let room_name = channel_id.to_string();
+                // Create RTC room first.
+                self.rtc_client
+                    .create_room(&room_name)
+                    .await
+                    .map_err(CallError::Internal)?;
 
-        // Create RTC room first.
-        self.rtc_client
-            .create_room(&room_name)
-            .await
-            .map_err(CallError::Internal)?;
-
-        // Create call record in DB.
-        let call = self
-            .repo
-            .create_call(&call_id, channel_id, &room_name, user_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
-
-        // Add creator as first participant.
-        self.repo
-            .add_participant(&call.id, user_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
-
-        // Generate RTC token for the creator.
-        let token = self
-            .rtc_client
-            .generate_token(&room_name, user_id)
-            .await
-            .map_err(CallError::Internal)?;
-
-        Ok(CallTokenResponse {
-            call_id: call.id,
-            channel_id: *channel_id,
-            token,
-            room_name,
-        })
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn join_call(
-        &self,
-        channel_id: &Uuid,
-        user_id: &str,
-    ) -> Result<CallTokenResponse, CallError> {
-        let call = self
-            .repo
-            .get_call_by_channel_id(channel_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?
-            .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
+                // Create call record in DB.
+                self.repo
+                    .create_call(&call_id, channel_id, &room_name, user_id)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+            }
+        };
 
         // Add as participant if not already in the call.
-        let already_joined = self
+        if !self
             .repo
             .is_participant(&call.id, user_id)
             .await
-            .map_err(|e| CallError::Internal(e.into()))?;
-
-        if !already_joined {
+            .map_err(|e| CallError::Internal(e.into()))?
+        {
             self.repo
                 .add_participant(&call.id, user_id)
                 .await

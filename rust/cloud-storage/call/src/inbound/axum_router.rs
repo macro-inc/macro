@@ -2,7 +2,7 @@
 //!
 //! Two routers are exposed so the consumer can attach different middleware:
 //!
-//! - [`call_router`] — authenticated call operations (create, join, leave/end).
+//! - [`call_router`] — authenticated call operations (get/create, leave/end).
 //!   Requires auth middleware.
 //! - [`webhook_router`] — RTC provider webhook ingestion.
 //!   Does **not** require auth middleware (LiveKit signs requests itself).
@@ -14,7 +14,7 @@ use axum::{
     extract::{FromRef, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use entity_access::{
     domain::{
@@ -75,8 +75,7 @@ fn channel_id_from_receipt<T: RequiredPermission>(
 /// Authenticated call router.
 ///
 /// Routes:
-/// - `POST /{channel_id}` — create a new call
-/// - `GET /{channel_id}` — join an existing call
+/// - `GET /{channel_id}` — get or create a call (join existing or start new)
 /// - `DELETE /{channel_id}` — leave or end a call
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
@@ -85,9 +84,10 @@ where
     T: Send + Sync,
 {
     Router::new()
-        .route("/{channel_id}", post(create_call_handler::<S, Svc>))
-        .route("/{channel_id}", get(join_call_handler::<S, Svc>))
-        .route("/{channel_id}", delete(leave_or_end_call_handler::<S, Svc>))
+        .route(
+            "/{channel_id}",
+            get(get_or_create_call_handler::<S, Svc>).delete(leave_or_end_call_handler::<S, Svc>),
+        )
         .with_state(state)
 }
 
@@ -133,39 +133,13 @@ where
 // Handlers
 // ---------------------------------------------------------------------------
 
-/// Handler for `POST /call/{channel_id}`.
-#[utoipa::path(
-    post,
-    operation_id = "create_call",
-    path = "/call/{channel_id}",
-    params(
-        ("channel_id" = Uuid, Path, description = "Channel ID"),
-    ),
-    responses(
-        (status = 201, body = CallTokenResponse),
-        (status = 401, body = ErrorResponse),
-        (status = 409, body = ErrorResponse, description = "Call already exists"),
-        (status = 500, body = ErrorResponse),
-    )
-)]
-#[tracing::instrument(err, skip_all)]
-pub async fn create_call_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
-    user: MacroUserExtractor,
-) -> Result<(StatusCode, Json<CallTokenResponse>), CallError> {
-    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let user_id = user.macro_user_id.as_ref();
-
-    let response = state.service.create_call(&channel_id, user_id).await?;
-
-    Ok((StatusCode::CREATED, Json(response)))
-}
-
 /// Handler for `GET /call/{channel_id}`.
+///
+/// Gets or creates a call for the channel. If a call already exists, joins it;
+/// otherwise creates a new one. Always returns a join token.
 #[utoipa::path(
     get,
-    operation_id = "join_call",
+    operation_id = "get_or_create_call",
     path = "/call/{channel_id}",
     params(
         ("channel_id" = Uuid, Path, description = "Channel ID"),
@@ -173,12 +147,11 @@ pub async fn create_call_handler<S: CallService, Svc: EntityAccessService>(
     responses(
         (status = 200, body = CallTokenResponse),
         (status = 401, body = ErrorResponse),
-        (status = 404, body = ErrorResponse, description = "No active call"),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn join_call_handler<S: CallService, Svc: EntityAccessService>(
+pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     user: MacroUserExtractor,
@@ -186,7 +159,10 @@ pub async fn join_call_handler<S: CallService, Svc: EntityAccessService>(
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let user_id = user.macro_user_id.as_ref();
 
-    let response = state.service.join_call(&channel_id, user_id).await?;
+    let response = state
+        .service
+        .get_or_create_call(&channel_id, user_id)
+        .await?;
 
     Ok(Json(response))
 }
@@ -264,9 +240,7 @@ pub async fn webhook_handler<S: CallService>(
 impl IntoResponse for CallError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
-            CallError::AlreadyExists(_) => StatusCode::CONFLICT,
             CallError::NotFound(_) => StatusCode::NOT_FOUND,
-            CallError::AlreadyJoined => StatusCode::CONFLICT,
             CallError::NotInCall => StatusCode::BAD_REQUEST,
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");

@@ -109,15 +109,9 @@ pub trait CallRtcClient: Send + Sync + 'static {
 
 /// Service interface for call operations.
 pub trait CallService: Send + Sync + 'static {
-    /// Create a new call in a channel, create the RTC room, and return a join token.
-    fn create_call(
-        &self,
-        channel_id: &Uuid,
-        user_id: &str,
-    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
-
-    /// Join an existing call in a channel and return a join token.
-    fn join_call(
+    /// Get or create a call in a channel. If a call already exists, joins it;
+    /// otherwise creates a new one. Always returns a join token.
+    fn get_or_create_call(
         &self,
         channel_id: &Uuid,
         user_id: &str,

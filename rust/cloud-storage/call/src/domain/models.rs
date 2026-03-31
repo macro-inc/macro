@@ -71,15 +71,9 @@ pub struct CallWebhookEvent {
 /// Errors that can occur during call operations.
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
-    /// A call already exists for this channel.
-    #[error("call already exists for channel {0}")]
-    AlreadyExists(String),
     /// No active call found for this channel.
     #[error("no active call found for channel {0}")]
     NotFound(String),
-    /// User is already in the call.
-    #[error("user already in call")]
-    AlreadyJoined,
     /// User is not in the call.
     #[error("user not in call")]
     NotInCall,
