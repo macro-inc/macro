@@ -49,7 +49,6 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
     name: item.name,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
-    viewedAt: item.viewedAt,
     ownerId: item.ownerId,
   };
 
@@ -254,10 +253,9 @@ export const [QuickAccessProvider, useQuickAccess] =
           if (hidden.has(item.id)) continue;
           seenIds.add(item.id);
 
-          const soupViewedAt = viewedAtMap.get(item.id);
-          const mergedViewedAt = soupViewedAt ?? item.viewedAt ?? undefined;
+          const viewedAt = viewedAtMap.get(item.id);
 
-          const version = `${item.name}|${item.updatedAt}|${mergedViewedAt}|${item.deletedAt}`;
+          const version = `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
           const cached = itemCache.get(item.id);
 
           if (!cached || cached.version !== version) {
@@ -273,9 +271,9 @@ export const [QuickAccessProvider, useQuickAccess] =
             const bucket = getBucketForHistoryItem(item);
             const entity = {
               ...historyItemToEntity(item),
-              viewedAt: mergedViewedAt,
+              viewedAt: viewedAt,
             };
-            const viewedAtMs = toTimestamp(mergedViewedAt);
+            const viewedAtMs = toTimestamp(viewedAt);
             const updatedAtMs = toTimestamp(item.updatedAt);
             const sortTimestamp = viewedAtMs || updatedAtMs;
 
@@ -286,7 +284,7 @@ export const [QuickAccessProvider, useQuickAccess] =
               searchText: getEntitySearchText(entity),
               sortTimestamp,
               timestamps: {
-                viewedAt: mergedViewedAt,
+                viewedAt: viewedAt,
                 updatedAt: item.updatedAt,
                 createdAt: item.createdAt,
               },
@@ -309,10 +307,10 @@ export const [QuickAccessProvider, useQuickAccess] =
         for (const channel of channelData) {
           seenIds.add(channel.id);
 
-          const soupViewedAt = viewedAtMap.get(channel.id);
-          const mergedViewedAt = soupViewedAt ?? channel.viewed_at ?? undefined;
+          const viewedAt =
+            viewedAtMap.get(channel.id) ?? channel.viewed_at ?? undefined;
 
-          const version = `${channel.name}|${channel.updated_at}|${mergedViewedAt}`;
+          const version = `${channel.name}|${channel.updated_at}|${viewedAt}`;
           const cached = itemCache.get(channel.id);
 
           if (!cached || cached.version !== version) {
@@ -329,9 +327,9 @@ export const [QuickAccessProvider, useQuickAccess] =
             const bucket: Bucket = isDm ? 'dm' : 'channel';
             const entity = {
               ...channelToEntity(channel),
-              viewedAt: mergedViewedAt,
+              viewedAt: viewedAt,
             };
-            const viewedAtMs = toTimestamp(mergedViewedAt);
+            const viewedAtMs = toTimestamp(viewedAt);
             const updatedAtMs = toTimestamp(channel.updated_at);
             const sortTimestamp = viewedAtMs || updatedAtMs;
 
@@ -342,7 +340,7 @@ export const [QuickAccessProvider, useQuickAccess] =
               searchText: channel.name ?? '',
               sortTimestamp,
               timestamps: {
-                viewedAt: mergedViewedAt,
+                viewedAt: viewedAt,
                 updatedAt: channel.updated_at,
                 createdAt: channel.created_at,
               },

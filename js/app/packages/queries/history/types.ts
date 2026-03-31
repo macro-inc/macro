@@ -5,9 +5,6 @@ type BaseHistoryItem = Pick<Item, 'id' | 'name'> & {
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   deletedAt?: DateValue | null;
-  // NOTE: the history endpoint does not return this field so this
-  // is a placeholder for now
-  viewedAt?: DateValue;
   // TODO: item name without safe name transform
   rawName?: string;
   // Normalized owner field: BasicDocument.owner, Chat.userId, Project.userId
