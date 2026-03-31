@@ -139,7 +139,17 @@ function toTimestamp(value: DateValue | null | undefined): number {
   return toDate(value).getTime();
 }
 
-/** dumb use hash */
+function getHistoryItemVersion(item: HistoryItem, viewedAt?: string): string {
+  return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
+}
+
+function getChannelVersion(
+  channel: ApiChannelWithLatest,
+  viewedAt?: string
+): string {
+  return `${channel.name}|${channel.updated_at}|${viewedAt}`;
+}
+
 function getUserVersion(user: IUser): string {
   return `${user.name}|${user.email}|${user.lastInteraction}`;
 }
@@ -255,7 +265,7 @@ export const [QuickAccessProvider, useQuickAccess] =
 
           const viewedAt = viewedAtMap.get(item.id);
 
-          const version = `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
+          const version = getHistoryItemVersion(item, viewedAt);
           const cached = itemCache.get(item.id);
 
           if (!cached || cached.version !== version) {
@@ -310,7 +320,7 @@ export const [QuickAccessProvider, useQuickAccess] =
           const viewedAt =
             viewedAtMap.get(channel.id) ?? channel.viewed_at ?? undefined;
 
-          const version = `${channel.name}|${channel.updated_at}|${viewedAt}`;
+          const version = getChannelVersion(channel, viewedAt);
           const cached = itemCache.get(channel.id);
 
           if (!cached || cached.version !== version) {
