@@ -1,6 +1,6 @@
 use utoipa::OpenApi;
 
-use super::GetContactsResponse;
+use super::{AddContactRequest, GetContactsResponse};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -9,10 +9,12 @@ use super::GetContactsResponse;
         ),
         paths(
             super::handler,
+            super::add_contact_handler,
         ),
         components(
             schemas(
-                GetContactsResponse
+                GetContactsResponse,
+                AddContactRequest,
             ),
         ),
         tags(
