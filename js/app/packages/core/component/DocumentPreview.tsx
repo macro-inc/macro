@@ -650,7 +650,11 @@ export function PopupPreview(props: {
 
                   {/* Task properties: status, priority, assignees */}
                   <Show when={props.documentInfo.type === 'task'}>
-                    <TaskPropertiesPreview taskId={props.documentInfo.id} />
+                    <Suspense
+                      fallback={<div class="w-full bg-hover/50 h-4 m-2" />}
+                    >
+                      <TaskPropertiesPreview taskId={props.documentInfo.id} />
+                    </Suspense>
                   </Show>
 
                   {/* Visual preview for images */}
