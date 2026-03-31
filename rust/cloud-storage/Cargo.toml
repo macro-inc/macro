@@ -10,6 +10,7 @@ members = [
   "anthropic",
   "authentication_service",
   "authentication_service_client",
+  "backfill_entity_access",
   "call",
   "channels",
   "chat",
@@ -177,9 +178,9 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
   "rust_crypto",
 ] }
 lambda_runtime = "0.13.0"
+lazy_static = "1.5.0"
 livekit-api = "0.4.16"
 livekit-protocol = "0.7.2"
-lazy_static = "1.5.0"
 log = "0.4.26"
 mockall = "0.13"
 nom = "8"

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT cp.channel_id::text FROM comms_channel_participants cp\n    WHERE cp.user_id = $1 AND cp.left_at IS NULL\n    UNION ALL\n    SELECT t.team_id::text FROM team_user t\n    WHERE t.user_id = $1\n    UNION ALL\n    SELECT $1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "afff07a12eda767f4facb034315ce7e3d89db508f08afe5c547e981a875e9801"
+}
