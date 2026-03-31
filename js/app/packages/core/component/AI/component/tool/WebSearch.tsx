@@ -13,7 +13,7 @@ const handler = createToolRenderer({
   renderResponse: (ctx) => (
     <BaseTool renderContext={ctx.renderContext} type="response">
       <UnfurledLinkCollection
-        links={ctx.tool.data.content.map((result) => ({
+        links={ctx.toolResponse.tool.data.content.map((result) => ({
           title: result.title,
           url: result.url,
         }))}

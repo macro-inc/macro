@@ -91,7 +91,7 @@ export function createEmailFormState(
   let replyingTo: ApiMessage | undefined;
 
   if (purpose?.type === 'replying_to') {
-    replyingTo = options?.getMessageByID(purpose.messageID);
+    replyingTo = options?.getMessageByID?.(purpose.messageID);
   }
 
   let draft: ApiMessage | undefined;

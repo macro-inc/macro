@@ -187,8 +187,8 @@ const handler = createToolRenderer({
   renderResponse: (ctx) => (
     <BaseTool renderContext={ctx.renderContext} type="response">
       <ListEntitiesToolResponse
-        items={ctx.tool.data.items}
-        summary={ctx.tool.data.summary}
+        items={ctx.toolResponse.tool.data.items}
+        summary={ctx.toolResponse.tool.data.summary}
       />
     </BaseTool>
   ),

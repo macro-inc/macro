@@ -3,3 +3,5 @@ declare module '*.svg' {
   const c: Component<ComponentProps<'svg'>>;
   export default c;
 }
+
+declare module '@aws-crypto/sha256-js';

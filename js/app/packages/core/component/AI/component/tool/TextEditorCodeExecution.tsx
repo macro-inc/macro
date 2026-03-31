@@ -33,19 +33,12 @@ type TextEditorCodeExecutionStrReplaceResult = TextEditorCodeExecutionResult & {
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
-// Store file creation data from tool calls to use when handling responses
-type FileCreationData = {
-  path: string;
-  fileText: string;
-};
-
 type CreatedFileInfo = {
   documentId: string;
   fileName: string;
   extension: string;
 };
 
-const toolFileDataMap: Record<string, FileCreationData> = {};
 const createdFilesMap: Record<string, CreatedFileInfo> = {};
 
 function getExtensionFromPath(path: string): string | null {
@@ -245,32 +238,20 @@ function TextEditorResult(props: {
 
 const handler = createToolRenderer({
   name: 'text_editor_code_execution',
-  handleCall: async (ctx) => {
-    // Store file creation data for use in handleResponse
-    if (ctx.tool.data.command === 'create' && ctx.tool.data.file_text) {
-      toolFileDataMap[ctx.tool.id] = {
-        path: ctx.tool.data.path,
-        fileText: ctx.tool.data.file_text,
-      };
-    }
-  },
   handleResponse: async (ctx) => {
-    const { content } = ctx.tool.data;
+    const { content } = ctx.toolResponse.tool.data;
+    const { command, file_text: fileText, path } = ctx.toolCall.tool.data;
 
     // Only create macro files for successful file creations
-    if (content.type !== 'text_editor_code_execution_create_result') {
+    if (
+      content.type !== 'text_editor_code_execution_create_result' ||
+      command !== 'create' ||
+      !fileText
+    ) {
       return;
     }
 
-    const fileData = toolFileDataMap[ctx.tool.id];
-    if (!fileData) {
-      return;
-    }
-
-    // Clean up stored data
-    delete toolFileDataMap[ctx.tool.id];
-
-    const extension = getExtensionFromPath(fileData.path);
+    const extension = getExtensionFromPath(path);
     if (!extension || !allSupportedExtensionSet.has(extension)) {
       return;
     }
@@ -280,17 +261,17 @@ const handler = createToolRenderer({
       return;
     }
 
-    const fileName = getFileNameFromPath(fileData.path);
+    const fileName = getFileNameFromPath(path);
 
     const result = await createCodeFileFromText({
-      code: fileData.fileText,
+      code: fileText,
       extension: extension as CodeFileExtension,
       title: fileName,
     });
 
     if (isOk(result)) {
       const documentId = result[1].documentId;
-      createdFilesMap[ctx.tool.id] = {
+      createdFilesMap[ctx.toolResponse.tool.id] = {
         documentId,
         fileName,
         extension,
@@ -298,7 +279,7 @@ const handler = createToolRenderer({
 
       // Persist the mapping to the backend for retrieval on chat refresh
       await cognitionApiServiceClient.createIdMapping({
-        source_id: ctx.tool.id,
+        source_id: ctx.toolResponse.tool.id,
         target_id: JSON.stringify({ documentId, fileName, extension }),
       });
     }
@@ -312,8 +293,8 @@ const handler = createToolRenderer({
     return (
       <BaseTool renderContext={ctx.renderContext} type="response">
         <TextEditorResult
-          content={ctx.tool.data.content}
-          toolId={ctx.tool.id}
+          content={ctx.toolResponse.tool.data.content}
+          toolId={ctx.toolResponse.tool.id}
         />
       </BaseTool>
     );

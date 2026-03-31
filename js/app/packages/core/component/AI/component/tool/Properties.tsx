@@ -13,7 +13,7 @@ const getHandler = createToolRenderer({
   ),
   renderResponse: (ctx) => (
     <BaseTool renderContext={ctx.renderContext} type="response">
-      {ctx.tool.data.summary}
+      {ctx.toolResponse.tool.data.summary}
     </BaseTool>
   ),
 });
@@ -28,7 +28,7 @@ const setHandler = createToolRenderer({
   ),
   renderResponse: (ctx) => (
     <BaseTool renderContext={ctx.renderContext} type="response">
-      {ctx.tool.data.message}
+      {ctx.toolResponse.tool.data.message}
     </BaseTool>
   ),
 });

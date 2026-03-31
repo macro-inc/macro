@@ -1,5 +1,8 @@
 use crate::config::Config;
-use ai_tools::{ToolDocumentToolContext, ToolPropertiesToolContext, ToolSoupService};
+use ai_tools::{
+    AiToolSet, ToolDocumentToolContext, ToolEmailToolContext, ToolPropertiesToolContext,
+    ToolServiceContext, ToolSoupService,
+};
 use axum::extract::FromRef;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -49,6 +52,10 @@ pub struct ApiContext {
     pub document_tool_context: ToolDocumentToolContext,
     pub memory_service: Arc<DcsMemoryService>,
     pub properties_tool_context: ToolPropertiesToolContext,
+    pub email_tool_context: ToolEmailToolContext,
+    pub tool_service_context: ToolServiceContext,
+    pub all_tools: Arc<AiToolSet>,
+    pub all_tools_prompt: &'static str,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

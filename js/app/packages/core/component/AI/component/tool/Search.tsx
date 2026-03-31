@@ -336,7 +336,9 @@ const createHandler = (name: 'NameSearch' | 'ContentSearch') =>
     ),
     renderResponse: (ctx) => (
       <BaseTool renderContext={ctx.renderContext} type="response">
-        <UnifiedSearchToolResponse results={ctx.tool.data.results} />
+        <UnifiedSearchToolResponse
+          results={ctx.toolResponse.tool.data.results}
+        />
       </BaseTool>
     ),
   });

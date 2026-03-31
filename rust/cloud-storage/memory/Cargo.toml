@@ -24,6 +24,7 @@ model_user = { path = "../model_user", features = ["axum"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
 
 # For building ToolServiceContext
 comms = { path = "../comms" }
@@ -43,5 +44,5 @@ soup = { path = "../soup", features = ["all"] }
 properties = { path = "../properties" }
 macro_aws_config = { path = "../macro_aws_config" }
 
-[dev-dependencies]
+
 macro_db_migrator = { path = "../macro_db_migrator" }

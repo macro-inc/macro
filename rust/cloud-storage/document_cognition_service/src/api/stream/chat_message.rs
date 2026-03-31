@@ -1,6 +1,6 @@
 //! HTTP endpoint for sending chat messages with streaming responses.
 use super::util::chat_message::ai_request::build_chat_completion_request;
-use super::util::chat_message::toolset::choose_toolset;
+use super::util::chat_message::toolset::choose_tools_prompt;
 use super::util::chat_message::{store_conversation_messages, store_incoming_message};
 use super::util::chat_permissions;
 use crate::api::context::ApiContext;
@@ -12,7 +12,7 @@ use crate::service::notification::notify;
 use ai::tool::ToolLoop;
 use ai::tool::types::StreamPart;
 use ai::types::{AssistantMessagePart, Model};
-use ai_tools::{AiToolSet, RequestContext, ToolServiceContext};
+use ai_tools::RequestContext;
 use async_stream::stream;
 use axum::Json;
 use axum::extract::{Extension, Request, State};
@@ -243,12 +243,12 @@ pub async fn send_chat_message(
         .flatten();
 
     // Build the completion request
-    let toolset = choose_toolset(&payload);
+    let tools_prompt = choose_tools_prompt(&payload, ctx.all_tools_prompt);
     let ai_request = build_chat_completion_request(
         ctx.clone(),
         &chat,
         &payload,
-        toolset.prompt,
+        tools_prompt,
         &jwt_token,
         user_memory.as_deref(),
         (*user_id).clone(),
@@ -277,7 +277,6 @@ pub async fn send_chat_message(
     stream_and_save_message(
         ctx.clone(),
         ai_request,
-        toolset.toolset,
         (*user_id).clone(),
         jwt_token,
         actual_chat_id.clone(),
@@ -347,11 +346,10 @@ async fn create_new_chat(
 /// Creates a payload stream, publishes it via `from_async_stream`, and stores
 /// the conversation messages after the stream finishes.
 #[expect(clippy::too_many_arguments, reason = "matches WS handler signature")]
-#[tracing::instrument(skip(ctx, request, toolset, user_message_content))]
+#[tracing::instrument(skip(ctx, request, user_message_content))]
 fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: ai::types::ChatCompletionRequest,
-    toolset: Arc<AiToolSet>,
     user_id: MacroUserIdStr<'static>,
     jwt_token: String,
     chat_id: String,
@@ -365,15 +363,9 @@ fn stream_and_save_message(
     durable_stream_id: StreamId,
 ) {
     tracing::trace!(request=?request, "streaming chat request");
-
-    let tool_context = ToolServiceContext {
-        email_service_client: ctx.email_service_client_external.clone(),
-        search_service_client: ctx.search_service_client.clone(),
-        scribe: ctx.scribe.clone(),
-        soup_service: ctx.soup_service.clone(),
-        document_tool_context: ctx.document_tool_context.clone(),
-        properties_tool_context: ctx.properties_tool_context.clone(),
-    };
+    let model = Model::Claude45Haiku;
+    let tool_context = ctx.tool_service_context.clone();
+    let toolset = ctx.all_tools.clone();
 
     let request_context = RequestContext {
         user_id: user_id.clone(),

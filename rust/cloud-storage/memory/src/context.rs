@@ -146,6 +146,21 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
     let properties_tool_context =
         properties::inbound::toolset::PropertiesToolContext::new(properties_service);
 
+    // Email tool context
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        Arc::new(EmailServiceImpl::new(
+            EmailPgRepo::new(pool.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+            email::domain::ports::NoOpEnqueuer,
+            email::domain::ports::NoOpGmailLabelModifier,
+            0,
+        )),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            pool.clone(),
+        ))),
+    );
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
@@ -153,5 +168,6 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
         soup_service,
         document_tool_context,
         properties_tool_context,
+        email_tool_context,
     })
 }

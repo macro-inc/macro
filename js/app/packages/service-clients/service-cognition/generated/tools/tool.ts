@@ -25,10 +25,12 @@ type ToolParserMap = {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
+  GetThread: { call: types.GetThread; response: types.GetThreadResponse };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadMetadata: {
@@ -36,6 +38,7 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
@@ -43,6 +46,10 @@ type ToolParserMap = {
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;
+  };
+  UpdateThreadLabels: {
+    call: types.UpdateThreadLabels;
+    response: types.UpdateThreadLabelsResponse;
   };
   web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
@@ -68,9 +75,14 @@ const toolParserMap = {
     call: schemas.GetEntityProperties,
     response: schemas.GetEntityPropertiesResponse,
   },
+  GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
+  },
+  ListLabels: {
+    call: schemas.ListLabels,
+    response: schemas.ListLabelsResponse,
   },
   NameSearch: {
     call: schemas.NameSearch,
@@ -85,6 +97,7 @@ const toolParserMap = {
     response: schemas.ReadMetadataResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
     response: schemas.SetEntityPropertyResponse,
@@ -92,6 +105,10 @@ const toolParserMap = {
   text_editor_code_execution: {
     call: schemas.TextEditorCodeExecutionToolCall,
     response: schemas.TextEditorCodeExecutionResponse,
+  },
+  UpdateThreadLabels: {
+    call: schemas.UpdateThreadLabels,
+    response: schemas.UpdateThreadLabelsResponse,
   },
   web_fetch: {
     call: schemas.WebFetchToolCall,
@@ -128,10 +145,12 @@ type ToolDataMap = {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
+  GetThread: { call: types.GetThread; response: types.GetThreadResponse };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadMetadata: {
@@ -139,6 +158,7 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
@@ -146,6 +166,10 @@ type ToolDataMap = {
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;
+  };
+  UpdateThreadLabels: {
+    call: types.UpdateThreadLabels;
+    response: types.UpdateThreadLabelsResponse;
   };
   web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {

@@ -23,6 +23,7 @@ pub type Result<T> = std::result::Result<T, MemoryError>;
 pub type Memory = String;
 
 /// A memory record with its creation timestamp.
+#[derive(Debug)]
 pub struct MemoryRecord {
     /// The memory text.
     pub memory: Memory,

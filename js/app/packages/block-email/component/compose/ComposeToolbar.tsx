@@ -2,7 +2,6 @@ import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHe
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
-import { Button } from '@ui/components/Button';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
@@ -19,6 +18,7 @@ import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?compone
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
+import { Button } from '@ui/components/Button';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -98,21 +98,23 @@ export function EmailComposeToolbar(props: {
           }
         >
           <div class="flex flex-row items-center gap-2">
-            <div class="relative" ref={attachButtonRef}>
-              <Button
-                ref={(el) =>
-                  fileSelector(el, () => ({
-                    multiple: true,
-                    onSelect: handleAddAttachments,
-                  }))
-                }
-                tooltip="Attach"
-                class="aspect-square p-1"
-                disabled={ctx.disabled()}
-              >
-                <PaperclipIcon class="h-5" />
-              </Button>
-            </div>
+            <Show when={!ctx.hideAttachments}>
+              <div class="relative" ref={attachButtonRef}>
+                <Button
+                  ref={(el) =>
+                    fileSelector(el, () => ({
+                      multiple: true,
+                      onSelect: handleAddAttachments,
+                    }))
+                  }
+                  tooltip="Attach"
+                  class="aspect-square p-1"
+                  disabled={ctx.disabled()}
+                >
+                  <PaperclipIcon class="h-5" />
+                </Button>
+              </div>
+            </Show>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -141,26 +143,43 @@ export function EmailComposeToolbar(props: {
             </Show>
           </div>
 
-          <Tooltip
-            tooltip={ctx.sendTime() ? 'Send time is scheduled' : undefined}
-          >
-            <button
-              disabled={ctx.isSending() || ctx.disabled() || !!ctx.sendTime()}
-              onClick={() => ctx.onSend()}
-              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
-            >
-              <Show
-                when={!ctx.isSending()}
-                fallback={
-                  <Spinner class="size-6 animate-spin cursor-disabled" />
+          <div class="flex items-center gap-2">
+            <Show when={ctx.onSaveDraft}>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={
+                  ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
                 }
+                onClick={() => void ctx.onSaveDraft?.()}
               >
-                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-                </div>
-              </Show>
-            </button>
-          </Tooltip>
+                {ctx.isSavingDraft?.() ? 'Saving…' : 'Save Draft'}
+              </Button>
+            </Show>
+            <Tooltip
+              tooltip={ctx.sendTime() ? 'Send time is scheduled' : undefined}
+            >
+              <button
+                disabled={
+                  ctx.isSending() ||
+                  ctx.isSavingDraft?.() ||
+                  ctx.disabled() ||
+                  !!ctx.sendTime()
+                }
+                onClick={() => ctx.onSend()}
+                class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
+              >
+                <Show
+                  when={!ctx.isSending()}
+                  fallback={<Spinner class="size-6 animate-spin" />}
+                >
+                  <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                    <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                  </div>
+                </Show>
+              </button>
+            </Tooltip>
+          </div>
         </Show>
       </div>
     </>
@@ -202,8 +221,25 @@ function MobileToolbar(props: {
         <Tooltip
           tooltip={ctx.sendTime() ? 'Send time is scheduled' : undefined}
         >
+          <Show when={ctx.onSaveDraft}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={
+                ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
+              }
+              onClick={() => void ctx.onSaveDraft?.()}
+            >
+              {ctx.isSavingDraft?.() ? 'Saving…' : 'Draft'}
+            </Button>
+          </Show>
           <Button
-            disabled={ctx.isSending() || ctx.disabled() || !!ctx.sendTime()}
+            disabled={
+              ctx.isSending() ||
+              ctx.isSavingDraft?.() ||
+              ctx.disabled() ||
+              !!ctx.sendTime()
+            }
             onClick={() => ctx.onSend()}
           >
             <PaperPlane class="size-4.5 text-accent" />

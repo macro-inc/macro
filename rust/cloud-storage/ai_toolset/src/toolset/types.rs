@@ -1,5 +1,5 @@
 //! types
-use super::tool_object::{AsyncToolObject, UserTool, ValidationError};
+use super::tool_object::{AsyncToolObject, UserTool, UserToolResponse, ValidationError};
 use crate::RequestContext;
 use crate::{AsyncTool, ToolResult};
 use axum::extract::FromRef;
@@ -88,7 +88,13 @@ impl<T> ToolSet<T> {
                 panic!("{}", ToolSetCreationError::NameConflict(name.clone()));
             }
         }
+        for (name, _) in toolset.user_tools.iter() {
+            if self.user_tools.contains_key(name) {
+                panic!("{}", ToolSetCreationError::NameConflict(name.clone()));
+            }
+        }
         self.tools.extend(toolset.tools);
+        self.user_tools.extend(toolset.user_tools);
         self
     }
 }
@@ -180,7 +186,7 @@ where
         request_context: RequestContext,
         tool_name: &str,
         json: &serde_json::Value,
-    ) -> Result<ToolResult<serde_json::Value>, ToolSetError> {
+    ) -> Result<ToolResult<UserToolResponse<serde_json::Value>>, ToolSetError> {
         let tool = self
             .user_tools
             .get(tool_name)
@@ -189,7 +195,24 @@ where
                 tool.try_deserialize(json)
                     .map_err(ToolSetError::Deserialization)
             })?;
-        Ok(tool.call(context, request_context).await)
+        Ok(tool
+            .call(context, request_context)
+            .await
+            .map(UserToolResponse::UserAction))
+    }
+
+    /// check if json + name matches a known tool in the toolset
+    #[tracing::instrument(skip(self))]
+    pub fn is_valid_tool(&self, tool_name: &str, json: &serde_json::Value) -> bool {
+        let Some(tool) = self
+            .user_tools
+            .get(tool_name)
+            .or_else(|| self.tools.get(tool_name))
+        else {
+            return false;
+        };
+
+        tool.try_deserialize(json).is_ok()
     }
 
     /// Merges a subtoolset with a narrower context into this toolset.
@@ -256,6 +279,14 @@ where
             }
             let widened = tool.widen::<ToolSetContext>();
             self.tools.insert(name, widened);
+        }
+
+        for (name, tool) in subtoolset.user_tools {
+            if self.user_tools.contains_key(&name) {
+                panic!("{}", ToolSetCreationError::NameConflict(name));
+            }
+            let widened = tool.widen::<ToolSetContext>();
+            self.user_tools.insert(name, widened);
         }
         self
     }

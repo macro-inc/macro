@@ -1,4 +1,4 @@
-//! CreateDraft tool for composing a new email draft.
+//! SendEmail tool for composing and sending an email in one step.
 
 use crate::domain::{
     models::{ContactInfo, CreateDraftInput},
@@ -14,10 +14,10 @@ use uuid::Uuid;
 
 use super::EmailToolContext;
 
-/// A recipient for an email draft.
+/// A recipient for an email.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct DraftRecipient {
+pub struct EmailRecipient {
     /// The recipient's email address.
     pub email: String,
     /// The recipient's display name (optional).
@@ -25,8 +25,8 @@ pub struct DraftRecipient {
     pub name: Option<String>,
 }
 
-impl From<DraftRecipient> for ContactInfo {
-    fn from(r: DraftRecipient) -> Self {
+impl From<EmailRecipient> for ContactInfo {
+    fn from(r: EmailRecipient) -> Self {
         ContactInfo {
             email: r.email,
             name: r.name,
@@ -35,52 +35,56 @@ impl From<DraftRecipient> for ContactInfo {
     }
 }
 
-/// Create a new email draft. The draft is saved but NOT sent.
+/// Compose and send an email. Creates a draft and immediately queues it for delivery.
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
-    title = "CreateDraft",
-    description = "Create a new email draft that is saved but NOT sent. Use this to compose emails on behalf of the user. The user can review and send the draft themselves. To reply to an existing message, provide the replying_to_id. The body must be plain text only — do not use HTML, Markdown, or any formatting syntax (no **bold**, *italics*, headings, etc.). Just write natural prose with line breaks."
+    title = "SendEmail",
+    description = "Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. The body must be plain text only — do not use HTML, Markdown, or any formatting syntax (no **bold**, *italics*, headings, etc.). Just write natural prose with line breaks."
 )]
 #[serde(rename_all = "camelCase")]
-pub struct CreateDraft {
+pub struct SendEmail {
     /// The subject line of the email.
     pub subject: String,
     /// The plain text body of the email.
     pub body: String,
     /// The primary recipients (To field).
-    pub to: Vec<DraftRecipient>,
+    pub to: Vec<EmailRecipient>,
     /// Carbon copy recipients (optional).
     #[serde(default)]
-    pub cc: Vec<DraftRecipient>,
+    pub cc: Vec<EmailRecipient>,
     /// Blind carbon copy recipients (optional).
     #[serde(default)]
-    pub bcc: Vec<DraftRecipient>,
-    /// The ID of a message to reply to (optional). When set, the draft is
-    /// created as a reply within the same thread.
+    pub bcc: Vec<EmailRecipient>,
+    /// The ID of a message to reply to (optional). When set, the email is
+    /// sent as a reply within the same thread.
     #[serde(default)]
     pub replying_to_id: Option<Uuid>,
 }
 
-/// Response from the CreateDraft tool.
+/// Response from the SendEmail tool.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateDraftResponse {
-    /// The database ID of the newly created draft.
-    pub draft_id: Uuid,
-    /// The thread ID the draft belongs to.
-    pub thread_id: Uuid,
-    /// A human-readable summary of the draft.
-    pub summary: String,
+pub enum SendEmailResponse {
+    Sent {
+        /// The database ID of the sent message.
+        message_id: Uuid,
+        /// The thread ID the message belongs to.
+        thread_id: Uuid,
+    },
+    ConvertedToDraft {
+        draft_id: Uuid,
+    },
+    UserEdited,
 }
 
 #[async_trait]
-impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for CreateDraft
+impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for SendEmail
 where
     T: EmailService,
     G: GmailTokenProvider,
     E: EntityAccessService,
 {
-    type Output = CreateDraftResponse;
+    type Output = SendEmailResponse;
 
     #[tracing::instrument(skip_all, fields(
         user_id=?request_context.user_id,
@@ -92,7 +96,7 @@ where
         service_context: ServiceContext<EmailToolContext<T, G, E>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!("Create draft");
+        println!("CALL SEND EMAIL {:?}", request_context);
 
         let link = service_context
             .resolve_link(MacroUserIdStr((*request_context.user_id).clone()))
@@ -115,31 +119,18 @@ where
             send_time: None,
         };
 
-        let created = service_context
+        let sent = service_context
             .service
-            .create_draft(&link, input)
+            .send_message(&link, input)
             .await
             .map_err(|e| ToolCallError {
-                description: format!("Failed to create draft: {e}"),
+                description: format!("Failed to send email: {e}"),
                 internal_error: e.into(),
             })?;
 
-        let to_display: Vec<&str> = self.to.iter().map(|r| r.email.as_str()).collect();
-        let reply_note = if self.replying_to_id.is_some() {
-            " (reply)"
-        } else {
-            ""
-        };
-        let summary = format!(
-            "Draft{reply_note} created with subject \"{}\" to {}.",
-            self.subject,
-            to_display.join(", ")
-        );
-
-        Ok(CreateDraftResponse {
-            draft_id: created.db_id,
-            thread_id: created.thread_db_id,
-            summary,
+        Ok(SendEmailResponse::Sent {
+            message_id: sent.db_id,
+            thread_id: sent.thread_db_id,
         })
     }
 }

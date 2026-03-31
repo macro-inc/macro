@@ -15,7 +15,7 @@ const handler = createToolRenderer({
   ),
   renderResponse: (ctx) => (
     <BaseTool renderContext={ctx.renderContext} type="response">
-      <ItemPreview id={ctx.tool.data.documentId} type="document" />
+      <ItemPreview id={ctx.toolResponse.tool.data.documentId} type="document" />
     </BaseTool>
   ),
 });

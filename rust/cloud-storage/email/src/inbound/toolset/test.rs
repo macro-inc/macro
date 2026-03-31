@@ -72,19 +72,19 @@ fn test_update_thread_labels_schema_validation() {
 }
 
 #[test]
-fn test_create_draft_schema_validation() {
-    let schema = generate_tool_input_schema!(CreateDraft);
+fn test_send_email_schema_validation() {
+    let schema = generate_tool_input_schema!(SendEmail);
 
     let result = validate_tool_schema(&schema);
     assert!(result.is_ok(), "{:?}", result);
 
     let (name, description) = result.unwrap();
     assert_eq!(
-        name, "CreateDraft",
+        name, "SendEmail",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("draft"),
+        description.contains("send"),
         "Description should contain expected text"
     );
 }

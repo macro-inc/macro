@@ -235,6 +235,21 @@ async fn main() -> anyhow::Result<()> {
     let properties_tool_context =
         properties::inbound::toolset::PropertiesToolContext::new(properties_service);
 
+    // Build email tool context
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        Arc::new(EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            email::domain::ports::NoOpEnqueuer,
+            email::domain::ports::NoOpGmailLabelModifier,
+            0,
+        )),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            db.clone(),
+        ))),
+    );
+
     // Build the ToolServiceContext
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
@@ -262,6 +277,7 @@ async fn main() -> anyhow::Result<()> {
         soup_service,
         document_tool_context,
         properties_tool_context,
+        email_tool_context,
     };
 
     tracing::info!("initialized tool context");

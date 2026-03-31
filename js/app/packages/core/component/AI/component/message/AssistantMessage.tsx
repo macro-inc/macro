@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
+import { useChatContext } from '@core/component/AI/context';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
 import { createMarkdownFile } from '@core/util/create';
@@ -10,13 +10,13 @@ import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid'
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { generateTitle } from '@service-cognition/client';
 import type { AssistantMessagePart } from '@service-cognition/generated/schemas/assistantMessagePart';
 import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   createMemo,
-  createSelector,
   createSignal,
   For,
   Match,
@@ -24,6 +24,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 
 function messageContentIsEmpty(content: ChatMessageContent) {
   if (typeof content === 'string' || Array.isArray(content)) {
@@ -298,7 +299,6 @@ function pairToolCalls(parts: AssistantMessagePart[]): AssistantMessagePart[] {
       return pairParts(parts.slice(1), newParts);
     }
   }
-
   return pairParts(parts, []);
 }
 
@@ -324,23 +324,7 @@ function AssistantMessageParts(props: {
   message: ChatMessageWithAttachments;
   isStreaming: boolean;
 }) {
-  // const chatId = chatStore.get.id;
-  // if (!chatId) return;
-  const completedToolIds = createMemo(() => {
-    const ids = new Set<string>();
-    for (const part of props.parts) {
-      if (part.type === 'toolCallResponseJson' || part.type === 'toolCallErr') {
-        ids.add(part.id);
-      }
-    }
-    return ids;
-  });
-
-  const isCompleteSelector = createSelector(
-    completedToolIds,
-    (id: string, completed) => completed.has(id)
-  );
-
+  const chat = useChatContext();
   const parts = createMemo(() => {
     return pairToolCalls(props.parts);
   });
@@ -367,65 +351,71 @@ function AssistantMessageParts(props: {
   return (
     <For each={stableParts()}>
       {(part, i) => {
-        if (!part()) return null;
+        const currentPart = part();
+        if (!currentPart) return null;
+        const previousPart = () => stableParts()[i() - 1]?.();
 
-        if (part().type === 'toolCall') {
-          const toolCall = () =>
-            part() as Extract<AssistantMessagePart, { type: 'toolCall' }>;
-
-          return (
+        return match(currentPart)
+          .with({ type: 'toolCall' }, (toolCall) => (
             <RenderTool
-              tool_id={toolCall().id}
-              chat_id={'todo'}
-              json={toolCall().json}
-              name={toolCall().name}
+              tool_id={toolCall.id}
+              chat_id={chat.chatId()}
+              tool_call={toolCall.json}
+              name={toolCall.name}
               message_id={props.message.id}
               part_index={i()}
               type="call"
-              isComplete={isCompleteSelector(toolCall().id)}
               renderContext={{
                 renderContext: {
                   isStreaming: props.isStreaming,
                 },
               }}
             />
-          );
-        } else if (part().type === 'toolCallResponseJson') {
-          const toolResponse = () =>
-            part() as Extract<
-              AssistantMessagePart,
-              { type: 'toolCallResponseJson' }
-            >;
+          ))
+          .with({ type: 'toolCallResponseJson' }, (toolResponse) => {
+            const callPart = previousPart();
+            if (
+              callPart?.type !== 'toolCall' ||
+              callPart.id !== toolResponse.id
+            ) {
+              return null;
+            }
 
-          return (
-            <RenderTool
-              isComplete={true}
-              tool_id={toolResponse().id}
-              chat_id={'todo'}
-              json={toolResponse().json}
-              name={toolResponse().name}
-              message_id={props.message.id}
-              part_index={i()}
-              type="response"
-              renderContext={{
-                renderContext: {
-                  isStreaming: props.isStreaming,
-                },
-              }}
-            />
-          );
-        } else if (part().type === 'text') {
-          const textPart = () =>
-            part() as Extract<AssistantMessagePart, { type: 'text' }>;
+            return (
+              <RenderTool
+                tool_id={toolResponse.id}
+                chat_id={chat.chatId()}
+                call_part_index={i() - 1}
+                name={toolResponse.name}
+                message_id={props.message.id}
+                part_index={i()}
+                tool_call={callPart.json}
+                tool_response={toolResponse.json}
+                type="response"
+                renderContext={{
+                  renderContext: {
+                    isStreaming: props.isStreaming,
+                  },
+                }}
+              />
+            );
+          })
+          .with({ type: 'toolCallErr' }, (toolError) => (
+            <div class="px-2 py-1 text-sm text-ink-muted">
+              Tool `{toolError.name}` failed: {toolError.description}
+            </div>
+          ))
+          .with({ type: 'text' }, (textPart) => {
+            if (textPart.text.trim().length === 0) return null;
 
-          if (textPart().text.trim().length > 0)
             return (
               <ChatMessageMarkdown
-                text={textPart().text}
+                text={textPart.text}
                 generating={() => props.isStreaming}
               />
             );
-        }
+          })
+          .exhaustive();
       }}
     </For>
   );

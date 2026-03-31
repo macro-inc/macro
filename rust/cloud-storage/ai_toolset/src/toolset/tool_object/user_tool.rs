@@ -8,6 +8,7 @@ use crate::{RequestContext, ServiceContext};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// User tool wrapper type that implements stubs [`AsyncTool`]
 #[derive(Serialize, Deserialize)]
@@ -24,14 +25,14 @@ impl<T: JsonSchema> JsonSchema for UserTool<T> {
 }
 
 /// User tools are pending until a user executes them
-#[derive(Serialize, JsonSchema)]
-pub enum UserToolResult<T: Serialize + 'static> {
+#[derive(Serialize, Deserialize, JsonSchema, ToSchema, Debug, Clone, PartialEq)]
+pub enum UserToolResponse<T> {
     /// Tool has not yet been executed
     PendingUserExecution,
-    /// Tool is executed and has whatever return type the wrapped tool returns
-    Executed(T),
     /// User rejected suggested tool execution
     Rejected,
+    /// Tool is executed and has whatever return type the wrapped tool returns
+    UserAction(T),
 }
 
 #[async_trait]
@@ -41,7 +42,7 @@ where
     T: Send + Sync + 'static + for<'de> Deserialize<'de>,
     Context: Send + Sync + 'static,
 {
-    type Output = UserToolResult<T::Output>;
+    type Output = UserToolResponse<T::Output>;
 
     /// Calling a user tool doesn't do anything
     async fn call(
@@ -49,6 +50,6 @@ where
         _service_context: ServiceContext<Context>,
         _request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        ToolResult::Ok(UserToolResult::PendingUserExecution)
+        ToolResult::Ok(UserToolResponse::PendingUserExecution)
     }
 }

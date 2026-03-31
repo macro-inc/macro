@@ -103,7 +103,8 @@ const handler = createToolRenderer({
   ),
   renderResponse: (ctx) => {
     const isError =
-      ctx.tool.data.content.type === 'bash_code_execution_tool_result_error';
+      ctx.toolResponse.tool.data.content.type ===
+      'bash_code_execution_tool_result_error';
     return (
       <BaseTool renderContext={ctx.renderContext} type="response">
         <Switch>
@@ -112,7 +113,9 @@ const handler = createToolRenderer({
           </Match>
           <Match when={!isError}>
             <BashResult
-              result={ctx.tool.data.content as BashCodeExecutionResult}
+              result={
+                ctx.toolResponse.tool.data.content as BashCodeExecutionResult
+              }
             />
           </Match>
         </Switch>
