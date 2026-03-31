@@ -304,6 +304,12 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
       frecency_score: current.frecency_score,
     });
   }
+
+  // This import is a circular dependency so we lazy load it.
+  // We need this since recently viewed has an item limit so this ensures the item is added.
+  import('../recently-viewed').then(({ ensureItemInRecentlyViewed }) => {
+    ensureItemInRecentlyViewed(itemId);
+  });
 }
 
 /**

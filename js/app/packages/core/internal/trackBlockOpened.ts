@@ -6,7 +6,6 @@ import {
   refetchSoupEntity,
   type SoupEntityTag,
 } from '@queries/soup/cache';
-import { ensureItemInRecentlyViewed } from '@queries/soup/recently-viewed';
 import {
   blockNameToItemType,
   isCloudStorageItem,
@@ -32,7 +31,6 @@ export function track({
   const inSoup = hasSoupEntity(itemId);
   if (inSoup) {
     optimisticUpdateSoupItemViewedAt(itemId);
-    ensureItemInRecentlyViewed(itemId);
   } else if (itemType) {
     refetchSoupEntity(itemId, itemType as SoupEntityTag);
   }
