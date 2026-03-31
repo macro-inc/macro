@@ -14,6 +14,7 @@ use std::time::Duration;
 #[template(path = "digest.html")]
 struct DigestTemplate {
     notifs: Vec<NotifPreview>,
+    num_truncated: usize,
 }
 
 struct NotifPreview {
@@ -21,6 +22,8 @@ struct NotifPreview {
     title: String,
     body: String,
 }
+
+const TRUNCATE_LEN: usize = 15;
 
 impl NotifPreview {
     #[tracing::instrument(err)]
@@ -53,6 +56,8 @@ impl EmailDigestNotification {
             ..
         } = digest;
 
+        let input_len = notifications.len();
+
         fn log_err<E: std::fmt::Debug>(e: &E) {
             tracing::warn!("{e:?}");
         }
@@ -63,15 +68,21 @@ impl EmailDigestNotification {
             .filter_map(|res| res.inspect_err(log_err).ok())
             .map(NotifPreview::new)
             .filter_map(Result::ok)
+            .take(TRUNCATE_LEN)
             .collect();
 
-        let templated_len = notifs.len();
+        let preview_len = notifs.len();
+        let num_truncated = input_len - preview_len;
 
-        let inner_html_string = DigestTemplate { notifs }.render()?;
+        let inner_html_string = DigestTemplate {
+            notifs,
+            num_truncated,
+        }
+        .render()?;
 
         Ok(EmailDigestNotification {
             inner_html_string,
-            subject: format!("You have {} new notifications on Macro", templated_len),
+            subject: format!("You have {input_len} new notifications on Macro"),
         })
     }
 }

@@ -179,6 +179,20 @@
           />
           {% endif %} {% endfor %}
 
+          {% if num_truncated > 0 %}
+          <div
+            style="
+              padding: 12px 17px;
+              color: #636363;
+              font-size: 14px;
+              text-align: center;
+              font-family: &quot;Inter&quot;, sans-serif;
+            "
+          >
+            and {{ num_truncated }} more notification{% if num_truncated != 1 %}s{% endif %}
+          </div>
+          {% endif %}
+
           <hr
             style="
               border-top: 1px dashed #e0e0e0;
