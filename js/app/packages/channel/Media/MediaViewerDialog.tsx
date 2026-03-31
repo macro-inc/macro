@@ -1,5 +1,4 @@
 import * as stackingContext from '@core/constant/stackingContext';
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
@@ -86,7 +85,7 @@ function VideoViewerContent(props: {
             controls
             autoplay
             playsinline
-            src={staticFileIdEndpoint(props.item().fileId)}
+            src={props.item().src}
           />
         </div>
       </Dialog.Content>
@@ -129,8 +128,8 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
               }
             >
               <Lightbox
-                src={() => staticFileIdEndpoint(item().fileId)}
-                imageId={() => item().fileId}
+                src={() => item().src}
+                imageId={() => item().id}
                 onPrevious={hasPrevious() ? navigatePrevious : undefined}
                 onNext={hasNext() ? navigateNext : undefined}
                 indexLabel={hasMultipleItems() ? indexLabel : undefined}

@@ -1,8 +1,6 @@
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import PlayIcon from '@icon/fill/play-fill.svg';
 import { cn } from '@ui/utils/classname';
 import type { ParentProps } from 'solid-js';
-import type { MediaItem } from './media-items';
 
 function Root(props: ParentProps<{ class?: string }>) {
   return (
@@ -13,7 +11,7 @@ function Root(props: ParentProps<{ class?: string }>) {
 }
 
 function Preview(props: {
-  item: MediaItem;
+  src: string;
   class?: string;
   onOpen?: () => void;
   width?: number;
@@ -25,7 +23,7 @@ function Preview(props: {
       preload="metadata"
       playsinline
       muted
-      src={staticFileIdEndpoint(props.item.fileId)}
+      src={props.src}
       width={props.width}
       height={props.height}
       onClick={() => props.onOpen?.()}

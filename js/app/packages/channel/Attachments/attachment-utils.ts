@@ -1,6 +1,5 @@
 import type { ApiChannelAttachment } from '@service-comms/client';
-import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
-import { isItemType, stringToItemType } from '@service-storage/client';
+import { stringToItemType } from '@service-storage/client';
 import type { EntityData } from '@entity';
 import { match } from 'ts-pattern';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -17,16 +16,6 @@ export function itemsPerRow(containerWidth: number): number {
     1,
     Math.floor((containerWidth + THUMB_GAP) / (THUMB_SIZE + THUMB_GAP))
   );
-}
-
-export function isMediaAttachment(a: ApiChannelAttachment): boolean {
-  return a.entity_type === STATIC_IMAGE || a.entity_type === STATIC_VIDEO;
-}
-
-export function isDocumentAttachment(a: ApiChannelAttachment): boolean {
-  if (isMediaAttachment(a)) return false;
-  const itemType = stringToItemType(a.entity_type);
-  return itemType !== undefined && isItemType(a.entity_type);
 }
 
 /**

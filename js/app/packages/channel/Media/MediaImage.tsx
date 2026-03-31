@@ -1,4 +1,3 @@
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { cn } from '@ui/utils/classname';
 import {
@@ -7,8 +6,6 @@ import {
   Show,
   createSignal,
 } from 'solid-js';
-import type { MediaItem } from './media-items';
-
 const ATTACHMENT_TILE_SIZE = 92;
 
 function ImagePlaceholder(props: {
@@ -56,7 +53,7 @@ function Fallback(props: {
 }
 
 function Image(props: {
-  item: MediaItem;
+  src: string;
   onOpen?: () => void;
   class?: string;
   width?: number;
@@ -73,7 +70,7 @@ function Image(props: {
       <img
         class={cn(props.class, props.onOpen && 'cursor-pointer')}
         classList={{ invisible: !loaded(), absolute: !loaded() }}
-        src={staticFileIdEndpoint(props.item.fileId)}
+        src={props.src}
         alt="preview"
         width={props.width}
         height={props.height}

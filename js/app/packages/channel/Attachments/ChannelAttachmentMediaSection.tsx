@@ -6,7 +6,7 @@ import {
 } from '@queries/channel/channel-attachments';
 import {
   type MediaItem,
-  mapChannelAttachmentsToMediaItems,
+  mapMediaItems,
 } from '@channel/Media/media-items';
 import { MediaGallery } from './MediaGallery';
 
@@ -14,7 +14,7 @@ export function ChannelAttachmentMediaSection(props: { channelId: string }) {
   const attachmentsQuery = useChannelAttachmentsQuery(() => props.channelId);
 
   const items = createMemo<MediaItem[]>((previous = []) =>
-    mapChannelAttachmentsToMediaItems(
+    mapMediaItems(
       flattenAttachments(
         attachmentsQuery.data as ChannelAttachmentsData | undefined
       ),

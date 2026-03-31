@@ -5,7 +5,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show } from 'solid-js';
 import {
   type MediaItem,
-  mapMessageAttachmentsToMediaItems,
+  mapMediaItems,
   partitionAttachments,
 } from '@channel/Media/media-items';
 import { useMessage } from './context';
@@ -27,10 +27,7 @@ export function Attachments(props: AttachmentsProps) {
     partitionMessageAttachments(message().attachments ?? [])
   );
   const mediaItems = createMemo<MediaItem[]>((previous = []) =>
-    mapMessageAttachmentsToMediaItems(
-      buckets().mediaAttachments,
-      previous
-    )
+    mapMediaItems(buckets().mediaAttachments, previous)
   );
   const hasAttachments = createMemo(
     () =>

@@ -1,16 +1,14 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import {
   isStaticAttachmentType,
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
-import type { ApiChannelAttachment } from '@service-comms/client';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
-
-export type MediaKind = 'image' | 'video';
 
 export type MediaItem = {
-  fileId: string;
-  kind: MediaKind;
+  id: string;
+  src: string;
+  kind: 'image' | 'video';
   width?: number | null;
   height?: number | null;
 };
@@ -23,13 +21,13 @@ type AttachmentWithMediaFields = {
   height?: number | null;
 };
 
-export function getMediaKind(entityType: string): MediaKind | undefined {
+function getMediaKind(entityType: string): MediaItem['kind'] | undefined {
   if (entityType === STATIC_IMAGE) return 'image';
   if (entityType === STATIC_VIDEO) return 'video';
   return undefined;
 }
 
-export function isMediaAttachmentType(entityType: string): boolean {
+function isMediaAttachmentType(entityType: string): boolean {
   return entityType === STATIC_IMAGE || entityType === STATIC_VIDEO;
 }
 
@@ -60,14 +58,15 @@ function mapAttachmentToMediaItem(
   if (!kind) return;
 
   return {
-    fileId: attachment.entity_id,
+    id: attachment.entity_id,
+    src: staticFileIdEndpoint(attachment.entity_id),
     kind,
     width: attachment.width ?? undefined,
     height: attachment.height ?? undefined,
   };
 }
 
-export function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
+function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
   attachments: T[],
   previousItems: MediaItem[] = []
 ): MediaItem[] {
@@ -82,7 +81,7 @@ export function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
     const previousItem = previousByAttachmentId.get(attachment.id);
     if (
       previousItem &&
-      previousItem.fileId === item.fileId &&
+      previousItem.src === item.src &&
       previousItem.kind === item.kind &&
       previousItem.width === item.width &&
       previousItem.height === item.height
@@ -94,15 +93,8 @@ export function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
   });
 }
 
-export function mapMessageAttachmentsToMediaItems(
-  attachments: ApiMessageAttachment[],
-  previousItems?: MediaItem[]
-): MediaItem[] {
-  return mapAttachmentsToMediaItems(attachments, previousItems);
-}
-
-export function mapChannelAttachmentsToMediaItems(
-  attachments: ApiChannelAttachment[],
+export function mapMediaItems<T extends AttachmentWithMediaFields>(
+  attachments: T[],
   previousItems?: MediaItem[]
 ): MediaItem[] {
   return mapAttachmentsToMediaItems(attachments, previousItems);

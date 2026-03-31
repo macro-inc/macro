@@ -1,9 +1,7 @@
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
 import {
-  type JSX,
   For,
   Match,
   Show,
@@ -42,7 +40,7 @@ function MessageImageTile(props: {
       aria-label="Open image viewer"
     >
       <MediaImage.Image
-        item={props.item}
+        src={props.item.src}
         class="max-h-[80vh] w-full select-none rounded-2xl border border-edge object-contain"
         width={dimensions()?.width ?? props.item.width ?? undefined}
         height={dimensions()?.height ?? props.item.height ?? undefined}
@@ -65,12 +63,11 @@ function MessageImageTile(props: {
 function AttachmentImageTile(props: {
   item: MediaItem;
   onOpen?: () => void;
-  overlay?: JSX.Element;
 }) {
   return (
     <MediaImage.Root>
       <MediaImage.Image
-        item={props.item}
+        src={props.item.src}
         class={cn(
           'size-23 select-none rounded-2xl border border-edge object-cover',
           props.onOpen && 'hover:opacity-80'
@@ -81,14 +78,13 @@ function AttachmentImageTile(props: {
         loading="lazy"
         fallback={<MediaImage.Fallback square />}
       />
-      {props.overlay}
     </MediaImage.Root>
   );
 }
 
 function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
   const [isInlinePlaying, setIsInlinePlaying] = createSignal(false);
-  const src = () => staticFileIdEndpoint(props.item.fileId);
+  const src = () => props.item.src;
   const videoWidth = () => props.item.width ?? undefined;
   const videoHeight = () => props.item.height ?? undefined;
 
@@ -105,7 +101,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
               aria-label="Open video viewer"
             >
               <MediaVideo.Preview
-                item={props.item}
+                src={props.item.src}
                 class="block max-h-[480px] max-w-full"
                 width={videoWidth()}
                 height={videoHeight()}
@@ -153,17 +149,15 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
 function AttachmentVideoTile(props: {
   item: MediaItem;
   onOpen?: () => void;
-  overlay?: JSX.Element;
 }) {
   return (
     <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
       <MediaVideo.Preview
-        item={props.item}
+        src={props.item.src}
         class="size-full object-cover"
         onOpen={props.onOpen}
       />
       <MediaVideo.PlayOverlay onOpen={props.onOpen} />
-      {props.overlay}
     </MediaVideo.Root>
   );
 }
