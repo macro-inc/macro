@@ -331,7 +331,9 @@ export const [QuickAccessProvider, useQuickAccess] =
             const isDm = channel.channel_type === 'direct_message';
             const bucket: Bucket = isDm ? 'dm' : 'channel';
             const entity = channelToEntity(channel);
-            const sortTimestamp = toTimestamp(channel.updated_at);
+            const viewedAtMs = toTimestamp(channel.viewed_at);
+            const updatedAtMs = toTimestamp(channel.updated_at);
+            const sortTimestamp = viewedAtMs || updatedAtMs;
 
             const quickAccessItem: QuickAccessItem = {
               kind: 'entity',
