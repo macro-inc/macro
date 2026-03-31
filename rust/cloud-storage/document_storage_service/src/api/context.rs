@@ -21,7 +21,10 @@ use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
-use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
+use email::{
+    domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
+    outbound::EmailPgRepo,
+};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::GithubSyncServiceImpl;
@@ -56,24 +59,21 @@ pub struct InternalFlag {
     pub internal: bool,
 }
 
+type DssEmailService = EmailServiceImpl<
+    EmailPgRepo,
+    FrecencyQueryServiceImpl<FrecencyPgStorage>,
+    email::domain::ports::NoOpEnqueuer,
+    email::domain::ports::NoOpGmailLabelModifier,
+>;
+
 type DssSoupState = SoupRouterState<
     SoupImpl<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        EmailServiceImpl<
-            EmailPgRepo,
-            FrecencyQueryServiceImpl<FrecencyPgStorage>,
-            email::domain::ports::NoOpEnqueuer,
-            email::domain::ports::NoOpGmailLabelModifier,
-        >,
+        ReadonlyEmailPreviewAdapter<DssEmailService>,
         ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
     >,
-    EmailServiceImpl<
-        EmailPgRepo,
-        FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
-    >,
+    DssEmailService,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
