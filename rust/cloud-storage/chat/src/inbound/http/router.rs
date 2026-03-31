@@ -20,6 +20,7 @@ use utoipa::ToSchema;
 
 use crate::domain::models::{ChatErr, CreateChatArgs, GetChatResponse, PatchChatArgs};
 use crate::domain::ports::ChatService;
+use crate::inbound::http::extractors::ChatModelAccess;
 
 /// Shared state for the chat router, wrapping a [`ChatService`] implementation
 /// and an [`EntityAccessService`] for authorization.
@@ -160,6 +161,8 @@ pub struct CreateChatRequest {
 pub async fn create_chat_handler<S: ChatService, Svc: EntityAccessService>(
     State(state): State<ChatRouterState<S, Svc>>,
     user: MacroUserExtractor,
+    // 402 on no perms
+    _model_access: ChatModelAccess,
     Json(req): Json<CreateChatRequest>,
 ) -> Result<Json<StringIDResponse>, ChatHandlerErr> {
     let id = state
