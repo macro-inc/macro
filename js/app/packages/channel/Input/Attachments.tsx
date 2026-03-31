@@ -6,18 +6,19 @@ import {
   splitProps,
   Switch,
   type JSX,
-} from 'solid-js';
-import { EntityIcon } from '@core/component/EntityIcon';
-import { ImagePreview } from '@core/component/ImagePreview';
-import { VideoPreview } from '@core/component/VideoPreview';
-import { cn } from '@ui/utils/classname';
-import { useInput, useInputCommands } from './context';
-import type { InputAttachmentData, InputAttachmentKind } from './types';
-import XIcon from '@icon/regular/x.svg';
-import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
+} from "solid-js";
+import { EntityIcon } from "@core/component/EntityIcon";
+import { cn } from "@ui/utils/classname";
+import { MediaImage } from "@channel/Media/MediaImage";
+import { MediaVideo } from "@channel/Media/MediaVideo";
+import type { MediaItem } from "@channel/Media/media-items";
+import { useInput, useInputCommands } from "./context";
+import type { InputAttachmentData, InputAttachmentKind } from "./types";
+import XIcon from "@icon/regular/x.svg";
+import SpinnerIcon from "@icon/bold/spinner-gap-bold.svg";
 
 type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
-  kind?: InputAttachmentKind | 'media';
+  kind?: InputAttachmentKind | "media";
 };
 
 function RemoveButton(props: {
@@ -29,8 +30,8 @@ function RemoveButton(props: {
     <button
       type="button"
       class={cn(
-        'hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex',
-        props.class
+        "hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex",
+        props.class,
       )}
       onClick={(event) => {
         event.stopPropagation();
@@ -47,19 +48,21 @@ function MediaAttachmentItem(props: {
   attachment: InputAttachmentData;
   onRemove: (attachment: InputAttachmentData) => void;
 }) {
+  const mediaItem = (): MediaItem => ({
+    fileId: props.attachment.id,
+    kind: props.attachment.kind === "video" ? "video" : "image",
+    width: props.attachment.width,
+    height: props.attachment.height,
+  });
+
   return (
     <div class="ph-no-capture relative group">
-      <RemoveButton
-        attachment={props.attachment}
-        onRemove={props.onRemove}
-        class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-      />
       <Show
-        when={!props.attachment.pending && props.attachment.kind === 'image'}
+        when={!props.attachment.pending && props.attachment.kind === "image"}
         fallback={
           <Show
             when={
-              !props.attachment.pending && props.attachment.kind === 'video'
+              !props.attachment.pending && props.attachment.kind === "video"
             }
             fallback={
               <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
@@ -67,11 +70,36 @@ function MediaAttachmentItem(props: {
               </div>
             }
           >
-            <VideoPreview id={props.attachment.id} variant="small" />
+            <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
+              <MediaVideo.Preview
+                item={mediaItem()}
+                class="size-full object-cover"
+              />
+              <MediaVideo.PlayOverlay />
+              <RemoveButton
+                attachment={props.attachment}
+                onRemove={props.onRemove}
+                class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              />
+            </MediaVideo.Root>
           </Show>
         }
       >
-        <ImagePreview image={{ id: props.attachment.id }} variant="small" />
+        <MediaImage.Root>
+          <MediaImage.Image
+            item={mediaItem()}
+            class="size-23 select-none rounded-2xl border border-edge object-cover"
+            width={92}
+            height={92}
+            loading="lazy"
+            fallback={<MediaImage.Fallback square />}
+          />
+          <RemoveButton
+            attachment={props.attachment}
+            onRemove={props.onRemove}
+            class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          />
+        </MediaImage.Root>
       </Show>
     </div>
   );
@@ -88,7 +116,7 @@ function DocumentAttachmentItem(props: {
         fallback={<SpinnerIcon class="w-4 h-4 animate-spin" />}
       >
         <EntityIcon
-          targetType={props.attachment.iconType ?? 'unknown'}
+          targetType={props.attachment.iconType ?? "unknown"}
           size="xs"
         />
       </Show>
@@ -101,16 +129,16 @@ function DocumentAttachmentItem(props: {
 export function Attachments(props: AttachmentsProps) {
   const input = useInput();
   const commands = useInputCommands();
-  const [local, rest] = splitProps(props, ['class', 'children', 'kind']);
+  const [local, rest] = splitProps(props, ["class", "children", "kind"]);
   const resolved = children(() => local.children);
 
   const visibleAttachments = () => {
     const items = input().attachments ?? [];
     if (!local.kind) return items;
-    if (local.kind === 'media') {
+    if (local.kind === "media") {
       return items.filter(
         (attachment) =>
-          attachment.kind === 'image' || attachment.kind === 'video'
+          attachment.kind === "image" || attachment.kind === "video",
       );
     }
     return items.filter((attachment) => attachment.kind === local.kind);
@@ -124,10 +152,10 @@ export function Attachments(props: AttachmentsProps) {
     <Show when={visibleAttachments().length > 0}>
       <div
         class={cn(
-          'flex flex-row w-full px-2 py-1 gap-2 flex-wrap',
-          local.class
+          "flex flex-row w-full px-2 py-1 gap-2 flex-wrap",
+          local.class,
         )}
-        data-input-attachments={local.kind ?? 'all'}
+        data-input-attachments={local.kind ?? "all"}
         {...rest}
       >
         <Show
@@ -138,7 +166,7 @@ export function Attachments(props: AttachmentsProps) {
                 <Switch>
                   <Match
                     when={
-                      attachment.kind === 'image' || attachment.kind === 'video'
+                      attachment.kind === "image" || attachment.kind === "video"
                     }
                   >
                     <MediaAttachmentItem
@@ -146,7 +174,7 @@ export function Attachments(props: AttachmentsProps) {
                       onRemove={handleRemove}
                     />
                   </Match>
-                  <Match when={attachment.kind === 'document'}>
+                  <Match when={attachment.kind === "document"}>
                     <DocumentAttachmentItem
                       attachment={attachment}
                       onRemove={handleRemove}

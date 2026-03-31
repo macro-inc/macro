@@ -1,11 +1,19 @@
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
-import PlayIcon from '@icon/fill/play-fill.svg';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
+import {
+  type JSX,
+  For,
+  Match,
+  Show,
+  Switch,
+  createMemo,
+  createSignal,
+} from 'solid-js';
 import { cn } from '@ui/utils/classname';
+import { MediaImage } from './MediaImage';
+import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
 
 const ATTACHMENT_TILE_SIZE = 92;
@@ -13,41 +21,11 @@ const SINGLE_IMAGE_MAX_WIDTH = 400;
 const MESSAGE_GALLERY_IMAGE_MAX_WIDTH = 200;
 const MESSAGE_GALLERY_IMAGE_MAX_HEIGHT = 200;
 
-function ImagePlaceholder(props: {
-  dims?: { width: number; height: number };
-  square?: boolean;
-}) {
-  return (
-    <div
-      class="flex items-center justify-center rounded-2xl border border-edge bg-menu"
-      style={
-        props.square
-          ? {
-              width: `${ATTACHMENT_TILE_SIZE}px`,
-              height: `${ATTACHMENT_TILE_SIZE}px`,
-            }
-          : props.dims
-            ? {
-                width: `${props.dims.width}px`,
-                height: `${props.dims.height}px`,
-              }
-            : {
-                width: '60px',
-                height: '60px',
-              }
-      }
-    >
-      <Spinner class="h-4 w-4 animate-spin" />
-    </div>
-  );
-}
-
 function MessageImageTile(props: {
   item: MediaItem;
   large: boolean;
   onOpen: () => void;
 }) {
-  const [loaded, setLoaded] = createSignal(false);
   const dimensions = () =>
     constrainImageDimensions(
       props.item.width ?? undefined,
@@ -63,16 +41,12 @@ function MessageImageTile(props: {
       onClick={props.onOpen}
       aria-label="Open image viewer"
     >
-      <Show when={!loaded()}>
-        <ImagePlaceholder dims={dimensions()} />
-      </Show>
-      <img
+      <MediaImage.Image
+        item={props.item}
         class="max-h-[80vh] w-full select-none rounded-2xl border border-edge object-contain"
-        classList={{ invisible: !loaded(), absolute: !loaded() }}
-        src={staticFileIdEndpoint(props.item.fileId)}
-        alt="preview"
         width={dimensions()?.width ?? props.item.width ?? undefined}
         height={dimensions()?.height ?? props.item.height ?? undefined}
+        fallback={<MediaImage.Fallback dims={dimensions()} />}
         style={{
           ...(dimensions()
             ? {
@@ -83,36 +57,32 @@ function MessageImageTile(props: {
                 'max-width': `${props.large ? SINGLE_IMAGE_MAX_WIDTH : MESSAGE_GALLERY_IMAGE_MAX_WIDTH}px`,
               }),
         }}
-        onLoad={() => setLoaded(true)}
       />
     </button>
   );
 }
 
-function AttachmentImageTile(props: { item: MediaItem; onOpen: () => void }) {
-  const [loaded, setLoaded] = createSignal(false);
-
+function AttachmentImageTile(props: {
+  item: MediaItem;
+  onOpen?: () => void;
+  overlay?: JSX.Element;
+}) {
   return (
-    <button
-      type="button"
-      class="flex rounded-2xl"
-      onClick={props.onOpen}
-      aria-label="Open image viewer"
-    >
-      <Show when={!loaded()}>
-        <ImagePlaceholder square />
-      </Show>
-      <img
-        class="size-23 cursor-pointer select-none rounded-2xl border border-edge object-cover hover:opacity-80"
-        classList={{ invisible: !loaded(), absolute: !loaded() }}
-        src={staticFileIdEndpoint(props.item.fileId)}
-        alt="preview"
+    <MediaImage.Root>
+      <MediaImage.Image
+        item={props.item}
+        class={cn(
+          'size-23 select-none rounded-2xl border border-edge object-cover',
+          props.onOpen && 'hover:opacity-80'
+        )}
+        onOpen={props.onOpen}
         width={ATTACHMENT_TILE_SIZE}
         height={ATTACHMENT_TILE_SIZE}
         loading="lazy"
-        onLoad={() => setLoaded(true)}
+        fallback={<MediaImage.Fallback square />}
       />
-    </button>
+      {props.overlay}
+    </MediaImage.Root>
   );
 }
 
@@ -134,18 +104,13 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
               onClick={props.onOpen}
               aria-label="Open video viewer"
             >
-              <video
+              <MediaVideo.Preview
+                item={props.item}
                 class="block max-h-[480px] max-w-full"
-                preload="metadata"
-                playsinline
-                muted
-                src={src()}
                 width={videoWidth()}
                 height={videoHeight()}
               />
-              <div class="absolute inset-0 flex items-center justify-center bg-ink/20 transition-colors group-hover:bg-ink/30">
-                <PlayIcon class="size-6 text-page drop-shadow" />
-              </div>
+              <MediaVideo.PlayOverlay class="[&_svg]:size-6" />
             </button>
             <button
               type="button"
@@ -185,25 +150,21 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
   );
 }
 
-function AttachmentVideoTile(props: { item: MediaItem; onOpen: () => void }) {
+function AttachmentVideoTile(props: {
+  item: MediaItem;
+  onOpen?: () => void;
+  overlay?: JSX.Element;
+}) {
   return (
-    <button
-      type="button"
-      class="size-23 group relative overflow-hidden rounded-2xl border border-edge bg-menu"
-      onClick={props.onOpen}
-      aria-label="Open video viewer"
-    >
-      <video
+    <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
+      <MediaVideo.Preview
+        item={props.item}
         class="size-full object-cover"
-        preload="metadata"
-        playsinline
-        muted
-        src={staticFileIdEndpoint(props.item.fileId)}
+        onOpen={props.onOpen}
       />
-      <div class="absolute inset-0 flex items-center justify-center bg-ink/20 transition-colors group-hover:bg-ink/30">
-        <PlayIcon class="size-5 text-page drop-shadow" />
-      </div>
-    </button>
+      <MediaVideo.PlayOverlay onOpen={props.onOpen} />
+      {props.overlay}
+    </MediaVideo.Root>
   );
 }
 
