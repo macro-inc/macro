@@ -55,11 +55,16 @@ export function ensureItemInRecentlyViewed(itemId: string) {
   const soupEntity = getSoupEntityById(itemId);
   if (!soupEntity) return;
 
-  queryClient.setQueryData<SoupPage>(recentlyViewedQueryKey, {
-    ...currentData,
-    items: [
-      soupEntity,
-      ...currentData.items.slice(0, RECENTLY_VIEWED_LIMIT - 1),
-    ],
+  queryClient.setQueryData<SoupPage>(recentlyViewedQueryKey, (prev) => {
+    if (!prev) return prev;
+    return {
+      ...prev,
+      items: [
+        soupEntity,
+        ...prev.items
+          .filter((item) => getSoupItemId(item) !== itemId)
+          .slice(0, RECENTLY_VIEWED_LIMIT - 1),
+      ],
+    };
   });
 }

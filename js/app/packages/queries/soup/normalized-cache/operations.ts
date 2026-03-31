@@ -287,26 +287,27 @@ export function buildSingleEntityFilter(
  */
 export function optimisticUpdateSoupItemViewedAt(itemId: string) {
   const current = getSoupEntityById(itemId);
-  if (!current) return;
 
-  const now = new Date();
+  if (current) {
+    const now = new Date();
 
-  if (current.tag === 'channel') {
-    optimisticUpdateSoupEntity({
-      tag: 'channel',
-      data: { channel: { id: itemId }, viewed_at: now.toISOString() },
-      frecency_score: current.frecency_score,
-    });
-  } else {
-    optimisticUpdateSoupEntity({
-      tag: current.tag,
-      data: { id: itemId, viewedAt: now.toISOString() },
-      frecency_score: current.frecency_score,
-    });
+    if (current.tag === 'channel') {
+      optimisticUpdateSoupEntity({
+        tag: 'channel',
+        data: { channel: { id: itemId }, viewed_at: now.toISOString() },
+        frecency_score: current.frecency_score,
+      });
+    } else {
+      optimisticUpdateSoupEntity({
+        tag: current.tag,
+        data: { id: itemId, viewedAt: now.toISOString() },
+        frecency_score: current.frecency_score,
+      });
+    }
   }
 
-  // This import is a circular dependency so we lazy load it.
-  // We need this since recently viewed has an item limit so this ensures the item is added.
+  // Lazy import to break circular dependency (operations → recently-viewed → normalized-cache).
+  // Ensures the item appears in the recently-viewed query even if it wasn't in the top N results.
   import('../recently-viewed').then(({ ensureItemInRecentlyViewed }) => {
     ensureItemInRecentlyViewed(itemId);
   });
