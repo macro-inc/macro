@@ -102,7 +102,9 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
         0,
     );
     let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo { readonly_pool: pool.clone() },
+        PgCommsRepo {
+            pool_readonly: pool.clone(),
+        },
         PgUserRepo::new(pool.clone()),
         frecency_storage,
     );

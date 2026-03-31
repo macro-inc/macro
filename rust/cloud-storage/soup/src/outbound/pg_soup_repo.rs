@@ -14,6 +14,7 @@ mod expanded;
 mod unexpanded;
 
 pub struct PgSoupRepo {
+    // this pool only does read queries. if you need to do write queries make a separate pool
     pool_readonly: PgPool,
 }
 

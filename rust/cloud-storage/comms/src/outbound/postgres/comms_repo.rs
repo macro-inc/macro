@@ -319,7 +319,8 @@ pub async fn get_activities(
 }
 
 pub struct PgCommsRepo {
-    pub readonly_pool: PgPool,
+    // this pool only does read queries. create a separate pool if you need to do writes.
+    pub pool_readonly: PgPool,
 }
 
 impl CommsRepo for PgCommsRepo {
@@ -327,7 +328,7 @@ impl CommsRepo for PgCommsRepo {
         &self,
         req: GetChannelsParams,
     ) -> Result<Vec<ChannelWithParticipants>, rootcause::Report> {
-        Ok(get_user_channels_dynamic(&self.readonly_pool, &req).await?)
+        Ok(get_user_channels_dynamic(&self.pool_readonly, &req).await?)
     }
 
     async fn get_latest_channel_messages_batch(
@@ -337,13 +338,13 @@ impl CommsRepo for PgCommsRepo {
         std::collections::HashMap<ChannelId, models_comms::channel::LatestMessage>,
         rootcause::Report,
     > {
-        get_latest_channel_messages_batch(&self.readonly_pool, channels).await
+        get_latest_channel_messages_batch(&self.pool_readonly, channels).await
     }
 
     async fn get_activities(
         &self,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<models_comms::channel::Activity>, rootcause::Report> {
-        get_activities(&self.readonly_pool, user_id).await
+        get_activities(&self.pool_readonly, user_id).await
     }
 }
