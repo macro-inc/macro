@@ -305,12 +305,6 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
       });
     }
   }
-
-  // Lazy import to break circular dependency (operations → recently-viewed → normalized-cache).
-  // Ensures the item appears in the recently-viewed query even if it wasn't in the top N results.
-  import('../recently-viewed').then(({ ensureItemInRecentlyViewed }) => {
-    ensureItemInRecentlyViewed(itemId);
-  });
 }
 
 /**
