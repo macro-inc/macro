@@ -141,11 +141,6 @@ function toTimestamp(value: DateValue | null | undefined): number {
   return toDate(value).getTime();
 }
 
-/** dumb channel hash */
-function getChannelVersion(channel: ApiChannelWithLatest): string {
-  return `${channel.name}|${channel.updated_at}|${channel.viewed_at}`;
-}
-
 /** dumb use hash */
 function getUserVersion(user: IUser): string {
   return `${user.name}|${user.email}|${user.lastInteraction}`;
@@ -261,7 +256,7 @@ export const [QuickAccessProvider, useQuickAccess] =
             soupEntity && soupEntity.tag !== 'channel'
               ? soupEntity.data.viewedAt
               : undefined;
-          const mergedViewedAt = item.viewedAt ?? soupViewedAt ?? undefined;
+          const mergedViewedAt = soupViewedAt ?? item.viewedAt ?? undefined;
 
           const version = `${item.name}|${item.updatedAt}|${mergedViewedAt}|${item.deletedAt}`;
           const cached = itemCache.get(item.id);
@@ -315,7 +310,14 @@ export const [QuickAccessProvider, useQuickAccess] =
         for (const channel of channelData) {
           seenIds.add(channel.id);
 
-          const version = getChannelVersion(channel);
+          const soupEntity = getSoupEntityById(channel.id);
+          const soupViewedAt =
+            soupEntity?.tag === 'channel'
+              ? soupEntity.data.viewed_at
+              : undefined;
+          const mergedViewedAt = soupViewedAt ?? channel.viewed_at ?? undefined;
+
+          const version = `${channel.name}|${channel.updated_at}|${mergedViewedAt}`;
           const cached = itemCache.get(channel.id);
 
           if (!cached || cached.version !== version) {
@@ -330,8 +332,11 @@ export const [QuickAccessProvider, useQuickAccess] =
             });
             const isDm = channel.channel_type === 'direct_message';
             const bucket: Bucket = isDm ? 'dm' : 'channel';
-            const entity = channelToEntity(channel);
-            const viewedAtMs = toTimestamp(channel.viewed_at);
+            const entity = {
+              ...channelToEntity(channel),
+              viewedAt: mergedViewedAt,
+            };
+            const viewedAtMs = toTimestamp(mergedViewedAt);
             const updatedAtMs = toTimestamp(channel.updated_at);
             const sortTimestamp = viewedAtMs || updatedAtMs;
 
@@ -342,7 +347,7 @@ export const [QuickAccessProvider, useQuickAccess] =
               searchText: channel.name ?? '',
               sortTimestamp,
               timestamps: {
-                viewedAt: channel.viewed_at,
+                viewedAt: mergedViewedAt,
                 updatedAt: channel.updated_at,
                 createdAt: channel.created_at,
               },
