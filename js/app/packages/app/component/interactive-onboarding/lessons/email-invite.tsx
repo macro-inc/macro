@@ -4,6 +4,7 @@ import { MockAppChrome } from '../components/MockAppChrome';
 import { useReferralCode } from '@core/context/user';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
+import { contactsClient } from '@service-contacts/client';
 
 function parseEmails(raw: string): string[] {
   return raw
@@ -49,6 +50,7 @@ function EmailInviteContent(props: LessonContentProps) {
     if (!emails.length) return;
     for (const email of emails) {
       authServiceClient.sendReferralInvite(email);
+      contactsClient.addContact(`macro|${email.toLowerCase()}`);
     }
   });
 
