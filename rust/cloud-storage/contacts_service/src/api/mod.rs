@@ -1,15 +1,20 @@
 use crate::api::context::AppState;
 use anyhow::Context;
 use async_trait::async_trait;
-use axum::extract::{Json, State};
+use axum::extract::{FromRequestParts, Json, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::{Extension, Router};
+use axum::{Extension, RequestPartsExt, Router};
+use axum_extra::extract::Cached;
 use model::user::UserContext;
+use model_user::axum_extractor::MacroUserExtractor;
+use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
+use rate_limit::{RateLimitConfig, RateLimitKey};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::instrument;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
@@ -166,8 +171,44 @@ pub async fn add_contact_handler(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Rate limit for adding contacts: 50 requests per user per hour.
+pub struct PerUserAddContactRateLimit(MacroUserExtractor);
+
+impl<S> RateLimitExtractable<S> for PerUserAddContactRateLimit
+where
+    S: Send + Sync,
+{
+    fn config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: 50,
+            window: Duration::from_mins(60),
+        }
+    }
+
+    fn key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&"per-user-add-contact")
+            .append(&self.0.macro_user_id.as_ref())
+            .finish()
+    }
+}
+
+impl<S> FromRequestParts<S> for PerUserAddContactRateLimit
+where
+    S: Send + Sync,
+{
+    type Rejection = <MacroUserExtractor as FromRequestParts<S>>::Rejection;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let Cached(user): Cached<MacroUserExtractor> = parts.extract_with_state(state).await?;
+        Ok(Self(user))
+    }
+}
+
 fn api_router(app_state: AppState) -> Router {
-    contacts_router()
+    contacts_router(app_state.rate_limit_service.clone())
         .layer(axum::middleware::from_fn_with_state(
             app_state.jwt_args.clone(),
             macro_middleware::auth::decode_jwt::handler,
@@ -177,11 +218,27 @@ fn api_router(app_state: AppState) -> Router {
 
 #[cfg(test)]
 fn test_api_router() -> Router {
-    contacts_router().with_state(AppState::new_testing())
+    // Tests bypass rate limiting — no Redis or JWT middleware available
+    Router::new()
+        .route("/contacts", get(handler).post(add_contact_handler))
+        .with_state(AppState::new_testing())
 }
 
-fn contacts_router() -> Router<AppState> {
-    Router::new().route("/contacts", get(handler).post(add_contact_handler))
+fn contacts_router(rate_limiter: context::RateLimiter) -> Router<AppState> {
+    let post_route = Router::new()
+        .route("/contacts", axum::routing::post(add_contact_handler))
+        .layer(axum::middleware::from_fn_with_state(
+            rate_limiter,
+            rate_limit_middleware::<
+                context::RateLimiter,
+                PerUserAddContactRateLimit,
+                context::RateLimiter,
+            >,
+        ));
+
+    Router::new()
+        .route("/contacts", get(handler))
+        .merge(post_route)
 }
 
 #[cfg(test)]

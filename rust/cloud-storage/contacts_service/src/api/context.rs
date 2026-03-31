@@ -2,9 +2,12 @@ use crate::{api::ContactsService, config::Config};
 use axum::extract::FromRef;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use std::sync::Arc;
+
+pub type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
 
 #[derive(Clone, FromRef)]
 pub struct AppState {
@@ -13,6 +16,7 @@ pub struct AppState {
     pub jwt_args: JwtValidationArgs,
     pub internal_api_secret: LocalOrRemoteSecret<InternalApiSecretKey>,
     pub contacts_service: Arc<dyn ContactsService>,
+    pub rate_limit_service: RateLimiter,
 }
 
 impl AppState {
@@ -27,6 +31,9 @@ impl AppState {
             .connect_lazy("postgres://postgres:password@localhost/test_db")
             .expect("Failed to create mock pool");
 
+        let redis_client = redis::Client::open("redis://localhost:6379")
+            .expect("Failed to create mock redis client");
+
         AppState {
             config: Arc::new(Config::new_testing()),
             db,
@@ -35,6 +42,11 @@ impl AppState {
                 "testing",
             )),
             contacts_service: Arc::new(MockService),
+            rate_limit_service: RateLimitServiceImpl {
+                repo: RedisRateLimitAdapter {
+                    redis: redis_client,
+                },
+            },
         }
     }
 }
