@@ -71,8 +71,8 @@
             font-family: &quot;Inter&quot;, sans-serif;
           "
         >
-          You have {{ notifs.len() }} unread {% if notifs.len() == 1 %}message{%
-          else %}messages{% endif %}
+          You have {{ total_count }} new {% if total_count == 1 %}notification{%
+          else %}notifications{% endif %}
         </div>
         <hr
           style="

@@ -15,6 +15,7 @@ use std::time::Duration;
 struct DigestTemplate {
     notifs: Vec<NotifPreview>,
     num_truncated: usize,
+    total_count: usize,
 }
 
 struct NotifPreview {
@@ -77,6 +78,7 @@ impl EmailDigestNotification {
         let inner_html_string = DigestTemplate {
             notifs,
             num_truncated,
+            total_count: input_len,
         }
         .render()?;
 
