@@ -28,10 +28,9 @@ export function track({
 }) {
   const itemType = blockNameToItemType(blockName);
 
-  const inSoup = hasSoupEntity(itemId);
-  if (inSoup) {
-    optimisticUpdateSoupItemViewedAt(itemId);
-  } else if (itemType) {
+  optimisticUpdateSoupItemViewedAt(itemId);
+
+  if (!hasSoupEntity(itemId) && itemType) {
     refetchSoupEntity(itemId, itemType as SoupEntityTag);
   }
 
