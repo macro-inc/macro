@@ -1,5 +1,10 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use call::{
+    domain::service::CallServiceImpl,
+    inbound::axum_router::{CallRouterState, WebhookRouterState},
+    outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
+};
 use channels::{
     domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
     outbound::pg_channels_repo::PgChannelMessagesRepo,
@@ -154,6 +159,15 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 pub(crate) type DssChannelsState =
     ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, EntityAccessService>;
 
+/// Type alias for the call service.
+pub(crate) type DssCallService = CallServiceImpl<PgCallRepo, LivekitRtcClient>;
+
+/// Type alias for the call router state.
+pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessService>;
+
+/// Type alias for the call webhook router state.
+pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
+
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
     GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
@@ -185,6 +199,8 @@ pub(crate) struct ApiContext {
     pub entity_access_service: Arc<EntityAccessService>,
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,
+    pub call_state: DssCallState,
+    pub call_webhook_state: DssCallWebhookState,
 }
 
 env_var! {

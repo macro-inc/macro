@@ -50,11 +50,11 @@ impl<S, Svc> Clone for CallRouterState<S, Svc> {
 }
 
 impl<S: CallService, Svc: EntityAccessService> CallRouterState<S, Svc> {
-    /// Create a new router state wrapping the service and entity access service.
-    pub fn new(service: S, access_service: Svc) -> Self {
+    /// Create a new router state from shared service references.
+    pub fn new(service: Arc<S>, access_service: Arc<Svc>) -> Self {
         Self {
-            service: Arc::new(service),
-            access_service: Arc::new(access_service),
+            service,
+            access_service,
         }
     }
 }
