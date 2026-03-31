@@ -1,6 +1,6 @@
 //! Types and errors used by the chat domain ports.
 
-use ai::types::Model;
+use ai::types::{ChatMessageContent, Model};
 use model::chat::{ChatAttachmentWithName, ChatMessageWithAttachments};
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
@@ -110,4 +110,25 @@ pub struct ChatResponse {
     pub web_citations: Vec<(String, Vec<WebCitation>)>,
     /// Whether the chat is persistent or not.
     pub is_persistent: bool,
+}
+
+/// Arguments for patching a chat message's content.
+#[derive(Debug)]
+pub struct PatchChatMessageArgs {
+    /// The message ID to patch.
+    pub message_id: String,
+    /// The new content for the message.
+    pub content: ChatMessageContent,
+}
+
+/// The outcome of executing a user tool call.
+#[derive(Debug)]
+pub enum ToolCallOutcome {
+    /// Tool executed successfully with a JSON result.
+    Success(serde_json::Value),
+    /// Tool execution failed with a human-readable description.
+    ExecutionError {
+        /// Description of the error, suitable for display.
+        description: String,
+    },
 }

@@ -1,6 +1,8 @@
 use crate::domain::models::{
     ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
+    PatchChatMessageArgs, ToolCallOutcome,
 };
+use ai::types::ChatMessageContent;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
@@ -77,6 +79,46 @@ pub trait ChatRepo: Send + Sync + 'static {
         chat_id: &str,
         args: PatchChatArgs,
     ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
+
+    /// Patch a message's content.
+    fn patch_message(
+        &self,
+        chat_id: &str,
+        args: PatchChatMessageArgs,
+    ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
+
+    /// Get the content of a single message by ID
+    fn get_message_content(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+    ) -> impl std::future::Future<Output = Result<ChatMessageContent, ChatErr>> + Send;
+
+    /// Update the content of a specific message.
+    fn update_message_content(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        content: &ChatMessageContent,
+    ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
+}
+
+/// Port for tool validation and execution.
+///
+/// Implemented by a DCS adapter wrapping `AsyncToolSet<ToolServiceContext>`.
+/// The chat domain uses this to validate tool arguments and execute user tools
+/// without depending on the concrete toolset implementation.
+pub trait ToolExecutor: Send + Sync + 'static {
+    /// Validate that `args` deserializes correctly for the named tool.
+    fn validate_args(&self, tool_name: &str, args: &serde_json::Value) -> Result<(), ChatErr>;
+
+    /// Execute a user tool call, returning the outcome.
+    fn call_tool(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> impl std::future::Future<Output = Result<ToolCallOutcome, ChatErr>> + Send;
 }
 
 /// Service trait for chat business logic.
@@ -133,4 +175,30 @@ pub trait ChatService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl std::future::Future<Output = Result<SharePermissionV2, ChatErr>> + Send;
+
+    /// Update a tool call's arguments after validation.
+    fn update_tool_call(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+        new_args: serde_json::Value,
+    ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
+
+    /// Execute a pending tool call. Optionally update its arguments first.
+    fn call_tool(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+        args: Option<serde_json::Value>,
+    ) -> impl std::future::Future<Output = Result<serde_json::Value, ChatErr>> + Send;
+
+    /// Reject a pending tool call.
+    fn reject_tool_call(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+    ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
 }

@@ -1,9 +1,12 @@
 //! Default [`ChatService`] implementation backed by a [`ChatRepo`].
 
 use crate::domain::{
-    models::{ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs},
-    ports::{ChatRepo, ChatService},
+    models::{
+        ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs, ToolCallOutcome,
+    },
+    ports::{ChatRepo, ChatService, ToolExecutor},
 };
+use ai::types::{AssistantMessagePart, ChatMessageContent};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
@@ -11,15 +14,19 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
 use unicode_segmentation::UnicodeSegmentation;
 
-/// Concrete service implementation that delegates to a [`ChatRepo`].
-pub struct ChatServiceImpl<R> {
+/// Concrete service implementation that delegates to a [`ChatRepo`] and [`ToolExecutor`].
+pub struct ChatServiceImpl<R, T> {
     repo: R,
+    tool_executor: T,
 }
 
-impl<R: ChatRepo> ChatServiceImpl<R> {
-    /// Create a new [`ChatServiceImpl`] wrapping the given repo.
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+impl<R: ChatRepo, T: ToolExecutor> ChatServiceImpl<R, T> {
+    /// Create a new [`ChatServiceImpl`] wrapping the given repo and tool executor.
+    pub fn new(repo: R, tool_executor: T) -> Self {
+        Self {
+            repo,
+            tool_executor,
+        }
     }
 }
 
@@ -33,7 +40,7 @@ fn extract_user_id<T: entity_access::domain::models::RequiredPermission>(
     }
 }
 
-impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
+impl<R: ChatRepo, T: ToolExecutor> ChatService for ChatServiceImpl<R, T> {
     #[tracing::instrument(err, skip(self))]
     async fn create(
         &self,
@@ -141,5 +148,199 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
     ) -> Result<SharePermissionV2, ChatErr> {
         let chat_id = &entity_access_receipt.entity().entity_id;
         self.repo.get_permissions(chat_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, new_args))]
+    async fn update_tool_call(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+        new_args: serde_json::Value,
+    ) -> Result<(), ChatErr> {
+        let chat_id = &entity_access_receipt.entity().entity_id;
+        let mut parts = self
+            .get_tool_call_parts(chat_id, message_id, tool_call_id)
+            .await?;
+
+        let (tool_name, _) = extract_tool_call_info(&parts, tool_call_id);
+
+        self.tool_executor.validate_args(&tool_name, &new_args)?;
+        update_tool_call_args(&mut parts, tool_call_id, new_args);
+
+        let content = ChatMessageContent::AssistantMessageParts(parts);
+        self.repo
+            .update_message_content(chat_id, message_id, &content)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn call_tool(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+        args: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, ChatErr> {
+        let user_id = extract_user_id(&entity_access_receipt)?;
+        let chat_id = &entity_access_receipt.entity().entity_id;
+        let mut parts = self
+            .get_tool_call_parts(chat_id, message_id, tool_call_id)
+            .await?;
+
+        let (tool_name, original_args) = extract_tool_call_info(&parts, tool_call_id);
+        let exec_args = args.as_ref().unwrap_or(&original_args);
+
+        self.tool_executor.validate_args(&tool_name, exec_args)?;
+
+        if let Some(ref custom_args) = args {
+            update_tool_call_args(&mut parts, tool_call_id, custom_args.clone());
+        }
+
+        let outcome = self
+            .tool_executor
+            .call_tool(user_id, &tool_name, exec_args)
+            .await?;
+
+        let response_json = match outcome {
+            ToolCallOutcome::Success(result) => {
+                let json = serde_json::json!({ "Executed": result });
+                update_tool_response(&mut parts, tool_call_id, json.clone());
+                json
+            }
+            ToolCallOutcome::ExecutionError { description } => {
+                replace_tool_response_with_err(&mut parts, tool_call_id, &tool_name, &description);
+                let content = ChatMessageContent::AssistantMessageParts(parts);
+                self.repo
+                    .update_message_content(chat_id, message_id, &content)
+                    .await?;
+                return Err(ChatErr::BadRequest(description));
+            }
+        };
+
+        let content = ChatMessageContent::AssistantMessageParts(parts);
+        self.repo
+            .update_message_content(chat_id, message_id, &content)
+            .await?;
+
+        Ok(response_json)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn reject_tool_call(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+    ) -> Result<(), ChatErr> {
+        let chat_id = &entity_access_receipt.entity().entity_id;
+        let mut parts = self
+            .get_tool_call_parts(chat_id, message_id, tool_call_id)
+            .await?;
+
+        let rejected = serde_json::json!("Rejected");
+        update_tool_response(&mut parts, tool_call_id, rejected);
+
+        let content = ChatMessageContent::AssistantMessageParts(parts);
+        self.repo
+            .update_message_content(chat_id, message_id, &content)
+            .await
+    }
+}
+
+impl<R: ChatRepo, T: ToolExecutor> ChatServiceImpl<R, T> {
+    /// Fetch a message's content and extract its AssistantMessageParts,
+    /// verifying the tool_call_id exists within it.
+    async fn get_tool_call_parts(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        tool_call_id: &str,
+    ) -> Result<Vec<AssistantMessagePart>, ChatErr> {
+        let content = self.repo.get_message_content(chat_id, message_id).await?;
+        match content {
+            ChatMessageContent::AssistantMessageParts(parts) => {
+                let has_tool = parts.iter().any(|part| {
+                    matches!(part, AssistantMessagePart::ToolCall { id, .. } if id == tool_call_id)
+                });
+                if has_tool {
+                    Ok(parts)
+                } else {
+                    Err(ChatErr::NotFound)
+                }
+            }
+            _ => Err(ChatErr::BadRequest(
+                "message does not contain tool calls".to_string(),
+            )),
+        }
+    }
+}
+
+/// Extract the tool name and original args from the parts for a given tool_call_id.
+fn extract_tool_call_info(
+    parts: &[AssistantMessagePart],
+    tool_call_id: &str,
+) -> (String, serde_json::Value) {
+    parts
+        .iter()
+        .find_map(|part| match part {
+            AssistantMessagePart::ToolCall { name, json, id } if id == tool_call_id => {
+                Some((name.clone(), json.clone()))
+            }
+            _ => None,
+        })
+        .expect("tool call must exist since we found the message above")
+}
+
+/// Update the json field of the ToolCall part matching the given tool_call_id.
+fn update_tool_call_args(
+    parts: &mut [AssistantMessagePart],
+    tool_call_id: &str,
+    new_args: serde_json::Value,
+) {
+    for part in parts.iter_mut() {
+        if let AssistantMessagePart::ToolCall { id, json, .. } = part
+            && id == tool_call_id
+        {
+            *json = new_args;
+            return;
+        }
+    }
+}
+
+/// Update the json field of the ToolCallResponseJson part matching the given tool_call_id.
+fn update_tool_response(
+    parts: &mut [AssistantMessagePart],
+    tool_call_id: &str,
+    new_json: serde_json::Value,
+) {
+    for part in parts.iter_mut() {
+        if let AssistantMessagePart::ToolCallResponseJson { id, json, .. } = part
+            && id == tool_call_id
+        {
+            *json = new_json;
+            return;
+        }
+    }
+}
+
+/// Replace a ToolCallResponseJson with a ToolCallErr for the given tool_call_id.
+fn replace_tool_response_with_err(
+    parts: &mut [AssistantMessagePart],
+    tool_call_id: &str,
+    tool_name: &str,
+    description: &str,
+) {
+    for part in parts.iter_mut() {
+        if let AssistantMessagePart::ToolCallResponseJson { id, .. } = part
+            && id == tool_call_id
+        {
+            *part = AssistantMessagePart::ToolCallErr {
+                name: tool_name.to_string(),
+                description: description.to_string(),
+                id: tool_call_id.to_string(),
+            };
+            return;
+        }
     }
 }

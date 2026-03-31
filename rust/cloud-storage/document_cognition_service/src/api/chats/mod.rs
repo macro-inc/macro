@@ -1,8 +1,9 @@
 pub mod chat_history;
 pub mod chat_history_batch_messages;
-pub mod tool;
 
 use super::context::ApiContext;
+use crate::service::tool_executor::DcsToolExecutor;
+use ai_tools::ToolServiceContext;
 use axum::{
     Router,
     routing::{get, post},
@@ -18,7 +19,18 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let access_repo = PgAccessRepository::new(state.db.clone());
     let access_service = EntityAccessServiceImpl::new(access_repo);
     let chat_repo = PgChatRepo::new(state.db.clone());
-    let chat_service = ChatServiceImpl::new(chat_repo);
+
+    let tool_context = ToolServiceContext {
+        email_service_client: state.email_service_client_external.clone(),
+        search_service_client: state.search_service_client.clone(),
+        scribe: state.scribe.clone(),
+        soup_service: state.soup_service.clone(),
+        document_tool_context: state.document_tool_context.clone(),
+        properties_tool_context: state.properties_tool_context.clone(),
+    };
+    let tool_executor = DcsToolExecutor::new(tool_context);
+
+    let chat_service = ChatServiceImpl::new(chat_repo, tool_executor);
     let chat_state = ChatRouterState::new(chat_service, access_service);
 
     let ensure_chat_exists = axum::middleware::from_fn_with_state(
@@ -48,16 +60,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // All /{chat_id} routes — need ensure_chat_exists for ChatAccessLevelExtractor
         .merge(
             chat_id_router(chat_state).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        .nest(
-            "/{chat_id}/tool",
-            tool::router().layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
                         macro_middleware::auth::ensure_user_exists::handler,

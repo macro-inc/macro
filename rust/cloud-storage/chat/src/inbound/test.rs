@@ -101,6 +101,35 @@ impl ChatService for MockService {
     ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("not implemented")))
     }
+
+    async fn update_tool_call(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+        _new_args: serde_json::Value,
+    ) -> Result<(), ChatErr> {
+        Ok(())
+    }
+
+    async fn call_tool(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+        _args: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, ChatErr> {
+        Ok(serde_json::json!({"Executed": null}))
+    }
+
+    async fn reject_tool_call(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+    ) -> Result<(), ChatErr> {
+        Ok(())
+    }
 }
 
 struct ErrorService;
@@ -161,6 +190,35 @@ impl ChatService for ErrorService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
+    }
+
+    async fn update_tool_call(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+        _new_args: serde_json::Value,
+    ) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
+    }
+
+    async fn call_tool(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+        _args: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
+    }
+
+    async fn reject_tool_call(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+    ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 }
@@ -224,6 +282,35 @@ impl ChatService for NotFoundService {
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
+    }
+
+    async fn update_tool_call(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+        _new_args: serde_json::Value,
+    ) -> Result<(), ChatErr> {
+        Err(ChatErr::NotFound)
+    }
+
+    async fn call_tool(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+        _args: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, ChatErr> {
+        Err(ChatErr::NotFound)
+    }
+
+    async fn reject_tool_call(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _message_id: &str,
+        _tool_call_id: &str,
+    ) -> Result<(), ChatErr> {
+        Err(ChatErr::NotFound)
     }
 }
 

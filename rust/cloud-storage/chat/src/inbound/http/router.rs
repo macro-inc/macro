@@ -15,7 +15,7 @@ use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use model::response::StringIDResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::models::{ChatErr, CreateChatArgs, GetChatResponse, PatchChatArgs};
@@ -92,6 +92,15 @@ pub fn chat_id_router<S: ChatService, Svc: EntityAccessService, T: Send + Sync +
         .route(
             "/{chat_id}/permissions",
             get(get_chat_permissions_handler::<S, Svc>),
+        )
+        .route(
+            "/{chat_id}/tool/update",
+            post(update_tool_call_handler::<S, Svc>),
+        )
+        .route("/{chat_id}/tool/call", post(call_tool_handler::<S, Svc>))
+        .route(
+            "/{chat_id}/tool/reject",
+            post(reject_tool_call_handler::<S, Svc>),
         )
         .with_state(state)
 }
@@ -383,4 +392,147 @@ pub async fn get_chat_permissions_handler<S: ChatService, Svc: EntityAccessServi
         .get_permissions(access.entity_access_receipt)
         .await?;
     Ok(Json(GetChatPermissionsResponse { permissions }))
+}
+
+// --- Tool handlers ---
+
+/// Request body for updating a tool call's arguments.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateToolCallRequest {
+    /// The message ID containing the tool call.
+    pub message_id: String,
+    /// The tool call ID to update.
+    pub tool_call_id: String,
+    /// The new arguments for the tool call.
+    pub args: serde_json::Value,
+}
+
+/// Request body for executing a pending tool call.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CallToolRequest {
+    /// The message ID containing the tool call.
+    pub message_id: String,
+    /// The tool call ID to execute.
+    pub tool_call_id: String,
+    /// Optional updated arguments. Uses original args if omitted.
+    pub args: Option<serde_json::Value>,
+}
+
+/// Response body for a successful tool call.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CallToolResponse {
+    /// The tool execution result.
+    pub result: serde_json::Value,
+}
+
+/// Request body for rejecting a pending tool call.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RejectToolCallRequest {
+    /// The message ID containing the tool call.
+    pub message_id: String,
+    /// The tool call ID to reject.
+    pub tool_call_id: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/chats/{chat_id}/tool/update",
+    tag = "chats",
+    operation_id = "update_tool_call",
+    params(("chat_id" = String, Path, description = "ID of the chat")),
+    request_body = UpdateToolCallRequest,
+    responses(
+        (status = 200, description = "Tool call args updated"),
+        (status = 400, body = String, description = "Validation failed"),
+        (status = 404, body = String, description = "Tool call not found"),
+        (status = 500, body = String),
+    )
+)]
+/// Update a tool call's arguments after validation.
+#[tracing::instrument(skip(state, access, req), fields(chat_id = %chat_id))]
+pub async fn update_tool_call_handler<S: ChatService, Svc: EntityAccessService>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
+    State(state): State<ChatRouterState<S, Svc>>,
+    Path(chat_id): Path<String>,
+    Json(req): Json<UpdateToolCallRequest>,
+) -> Result<StatusCode, ChatHandlerErr> {
+    state
+        .inner
+        .update_tool_call(
+            access.entity_access_receipt,
+            &req.message_id,
+            &req.tool_call_id,
+            req.args,
+        )
+        .await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    post,
+    path = "/chats/{chat_id}/tool/call",
+    tag = "chats",
+    operation_id = "call_tool",
+    params(("chat_id" = String, Path, description = "ID of the chat")),
+    request_body = CallToolRequest,
+    responses(
+        (status = 200, body = CallToolResponse, description = "Tool executed successfully"),
+        (status = 400, body = String, description = "Validation or execution failed"),
+        (status = 404, body = String, description = "Tool call not found"),
+        (status = 500, body = String),
+    )
+)]
+/// Execute a pending tool call, optionally with updated arguments.
+#[tracing::instrument(skip(state, access, req), fields(chat_id = %chat_id))]
+pub async fn call_tool_handler<S: ChatService, Svc: EntityAccessService>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
+    State(state): State<ChatRouterState<S, Svc>>,
+    Path(chat_id): Path<String>,
+    Json(req): Json<CallToolRequest>,
+) -> Result<Json<CallToolResponse>, ChatHandlerErr> {
+    let result = state
+        .inner
+        .call_tool(
+            access.entity_access_receipt,
+            &req.message_id,
+            &req.tool_call_id,
+            req.args,
+        )
+        .await?;
+    Ok(Json(CallToolResponse { result }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/chats/{chat_id}/tool/reject",
+    tag = "chats",
+    operation_id = "reject_tool_call",
+    params(("chat_id" = String, Path, description = "ID of the chat")),
+    request_body = RejectToolCallRequest,
+    responses(
+        (status = 200, description = "Tool call rejected"),
+        (status = 404, body = String, description = "Tool call not found"),
+        (status = 500, body = String),
+    )
+)]
+/// Reject a pending tool call.
+#[tracing::instrument(skip(state, access, req), fields(chat_id = %chat_id))]
+pub async fn reject_tool_call_handler<S: ChatService, Svc: EntityAccessService>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
+    State(state): State<ChatRouterState<S, Svc>>,
+    Path(chat_id): Path<String>,
+    Json(req): Json<RejectToolCallRequest>,
+) -> Result<StatusCode, ChatHandlerErr> {
+    state
+        .inner
+        .reject_tool_call(
+            access.entity_access_receipt,
+            &req.message_id,
+            &req.tool_call_id,
+        )
+        .await?;
+    Ok(StatusCode::OK)
 }
