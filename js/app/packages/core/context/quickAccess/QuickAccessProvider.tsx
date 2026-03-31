@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useChannelsContext } from '@core/context/channels';
 import {
@@ -9,9 +9,8 @@ import {
 } from '@core/user';
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
 import type { ChannelEntity } from '@entity';
-import { queryClient } from '@queries/client';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
-import { getSoupEntityById } from '@queries/soup/cache';
+import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { queryReadyGate } from '@queries/gate';
 import type { DateValue } from '@core/util/date';
@@ -219,20 +218,28 @@ export const [QuickAccessProvider, useQuickAccess] =
       // stable cache for transformed items
       const itemCache = new Map<string, CacheEntry>();
 
-      const [soupVersion, setSoupVersion] = createSignal(0);
-      const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
-        if (
-          event.type === 'updated' &&
-          Array.isArray(event.query.queryKey) &&
-          event.query.queryKey[0] === 'soup'
-        ) {
-          setSoupVersion((v) => v + 1);
+      const recentlyViewedQuery = useRecentlyViewedSoupQuery();
+
+      const soupViewedAtMap = createLazyMemo(() => {
+        const map = new Map<string, string>();
+        const data = recentlyViewedQuery.data;
+        if (!data) return map;
+        for (const item of data.items) {
+          if (item.tag === 'channel') {
+            if (item.data.viewed_at) {
+              map.set(item.data.channel.id, item.data.viewed_at);
+            }
+          } else {
+            if (item.data.viewedAt) {
+              map.set(item.data.id, item.data.viewedAt);
+            }
+          }
         }
+        return map;
       });
-      onCleanup(unsubscribe);
 
       const processedData = createLazyMemo(() => {
-        soupVersion();
+        const viewedAtMap = soupViewedAtMap();
         const seenIds = new Set<string>();
         const allEntries: IndexEntry[] = [];
 
@@ -251,11 +258,7 @@ export const [QuickAccessProvider, useQuickAccess] =
           if (hidden.has(item.id)) continue;
           seenIds.add(item.id);
 
-          const soupEntity = getSoupEntityById(item.id);
-          const soupViewedAt =
-            soupEntity && soupEntity.tag !== 'channel'
-              ? soupEntity.data.viewedAt
-              : undefined;
+          const soupViewedAt = viewedAtMap.get(item.id);
           const mergedViewedAt = soupViewedAt ?? item.viewedAt ?? undefined;
 
           const version = `${item.name}|${item.updatedAt}|${mergedViewedAt}|${item.deletedAt}`;
@@ -310,11 +313,7 @@ export const [QuickAccessProvider, useQuickAccess] =
         for (const channel of channelData) {
           seenIds.add(channel.id);
 
-          const soupEntity = getSoupEntityById(channel.id);
-          const soupViewedAt =
-            soupEntity?.tag === 'channel'
-              ? soupEntity.data.viewed_at
-              : undefined;
+          const soupViewedAt = viewedAtMap.get(channel.id);
           const mergedViewedAt = soupViewedAt ?? channel.viewed_at ?? undefined;
 
           const version = `${channel.name}|${channel.updated_at}|${mergedViewedAt}`;
