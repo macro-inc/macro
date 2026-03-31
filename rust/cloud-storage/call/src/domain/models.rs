@@ -89,6 +89,23 @@ pub struct CallWebhookEvent {
     pub created_at: i64,
 }
 
+/// A transcript segment from the LiveKit Agent STT pipeline.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptSegmentRequest {
+    /// The speaker's user ID.
+    pub speaker_id: String,
+    /// The transcribed text content.
+    pub content: String,
+    /// When the speaker started talking for this segment.
+    pub started_at: DateTime<Utc>,
+    /// When the speaker stopped talking for this segment.
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Whether this is a final transcription (not interim).
+    pub is_final: bool,
+}
+
 /// Errors that can occur during call operations.
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {

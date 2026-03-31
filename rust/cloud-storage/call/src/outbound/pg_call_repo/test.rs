@@ -1,5 +1,7 @@
+use crate::domain::models::TranscriptSegmentRequest;
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
+use chrono::Utc;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -238,5 +240,107 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     assert_eq!(participants.len(), 2);
     assert!(participants.contains(&USER_A.to_string()));
     assert!(participants.contains(&USER_B.to_string()));
+    Ok(())
+}
+
+// -- create_transcript_segment ------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn create_transcript_segment_stores_and_increments_sequence(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let now = Utc::now();
+
+    let seg1 = TranscriptSegmentRequest {
+        speaker_id: USER_A.to_string(),
+        content: "hello world".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+    };
+    let seg2 = TranscriptSegmentRequest {
+        speaker_id: USER_B.to_string(),
+        content: "hi there".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+    };
+
+    repo.create_transcript_segment(&CALL1, &seg1).await?;
+    repo.create_transcript_segment(&CALL1, &seg2).await?;
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT speaker_id, content, sequence_num
+        FROM call_transcripts
+        WHERE call_id = $1
+        ORDER BY sequence_num ASC
+        "#,
+        CALL1,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].content, "hello world");
+    assert_eq!(rows[0].sequence_num, 1);
+    assert_eq!(rows[1].content, "hi there");
+    assert_eq!(rows[1].sequence_num, 2);
+    Ok(())
+}
+
+// -- archive_call copies transcripts ------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let now = Utc::now();
+
+    // Add a transcript segment to the active call.
+    let seg = TranscriptSegmentRequest {
+        speaker_id: USER_A.to_string(),
+        content: "test transcript".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+    };
+    repo.create_transcript_segment(&CALL1, &seg).await?;
+
+    // Archive the call.
+    let record_id = repo.archive_call(&CALL1).await?;
+
+    // Transcripts should be in call_record_transcripts.
+    let transcripts = sqlx::query!(
+        r#"
+        SELECT speaker_id, content, sequence_num
+        FROM call_record_transcripts
+        WHERE call_record_id = $1
+        "#,
+        record_id,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    assert_eq!(transcripts.len(), 1);
+    assert_eq!(transcripts[0].content, "test transcript");
+    assert_eq!(transcripts[0].speaker_id, USER_A);
+    assert_eq!(transcripts[0].sequence_num, 1);
+
+    // Ephemeral transcripts should be gone (cascaded).
+    let ephemeral = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_transcripts WHERE call_id = $1"#,
+        CALL1,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(ephemeral, 0);
+
     Ok(())
 }

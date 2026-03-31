@@ -7,7 +7,7 @@ use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{Call, CallParticipant};
+use crate::domain::models::{Call, CallParticipant, TranscriptSegmentRequest};
 use crate::domain::ports::CallRepository;
 
 /// Postgres implementation of [`CallRepository`].
@@ -281,7 +281,21 @@ impl CallRepository for PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
-        // Delete the ephemeral call (cascades to call_participants).
+        // Copy transcripts to call_record_transcripts.
+        sqlx::query!(
+            r#"
+            INSERT INTO call_record_transcripts (call_record_id, speaker_id, content, started_at, ended_at, sequence_num)
+            SELECT $1, speaker_id, content, started_at, ended_at, sequence_num
+            FROM call_transcripts
+            WHERE call_id = $2
+            "#,
+            record_id,
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // Delete the ephemeral call (cascades to call_participants and call_transcripts).
         sqlx::query!(
             r#"
             DELETE FROM calls WHERE id = $1
@@ -326,5 +340,31 @@ impl CallRepository for PgCallRepo {
         )
         .fetch_optional(&self.pool)
         .await
+    }
+
+    #[tracing::instrument(err, skip(self, segment))]
+    async fn create_transcript_segment(
+        &self,
+        call_id: &Uuid,
+        segment: &TranscriptSegmentRequest,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            INSERT INTO call_transcripts (call_id, speaker_id, content, started_at, ended_at, sequence_num)
+            VALUES ($1, $2, $3, $4, $5, (
+                SELECT COALESCE(MAX(sequence_num), 0) + 1
+                FROM call_transcripts
+                WHERE call_id = $1
+            ))
+            "#,
+            call_id,
+            segment.speaker_id,
+            segment.content,
+            segment.started_at,
+            segment.ended_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 }

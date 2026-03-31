@@ -2,7 +2,9 @@
 
 use uuid::Uuid;
 
-use super::models::{CallError, CallTokenResponse, EgressS3Config, LeaveCallResponse};
+use super::models::{
+    CallError, CallTokenResponse, EgressS3Config, LeaveCallResponse, TranscriptSegmentRequest,
+};
 use super::ports::{CallRepository, CallRtcClient, CallService};
 
 /// The concrete call service implementation.
@@ -326,6 +328,31 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                 tracing::debug!(event_type = %event.event, "unhandled webhook event type");
             }
         }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, segment))]
+    async fn ingest_transcript_segment(
+        &self,
+        channel_id: &Uuid,
+        segment: TranscriptSegmentRequest,
+    ) -> Result<(), CallError> {
+        if !segment.is_final {
+            return Ok(());
+        }
+
+        let call = self
+            .repo
+            .get_call_by_channel_id(channel_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
+
+        self.repo
+            .create_transcript_segment(&call.id, &segment)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
 
         Ok(())
     }

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::models::{
     Call, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent, EgressS3Config,
-    LeaveCallResponse,
+    LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -99,6 +99,13 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         egress_id: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Insert a transcript segment for an active call.
+    fn create_transcript_segment(
+        &self,
+        call_id: &Uuid,
+        segment: &TranscriptSegmentRequest,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -160,5 +167,12 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         body: &str,
         auth_token: &str,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Ingest a transcript segment from the LiveKit Agent STT pipeline.
+    fn ingest_transcript_segment(
+        &self,
+        channel_id: &Uuid,
+        segment: TranscriptSegmentRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 }

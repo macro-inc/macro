@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
+    extract::{FromRef, Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -27,7 +27,9 @@ use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use uuid::Uuid;
 
-use crate::domain::models::{CallError, CallTokenResponse, LeaveCallResponse};
+use crate::domain::models::{
+    CallError, CallTokenResponse, LeaveCallResponse, TranscriptSegmentRequest,
+};
 use crate::domain::ports::CallService;
 
 // ---------------------------------------------------------------------------
@@ -115,10 +117,11 @@ impl<S: CallService> WebhookRouterState<S> {
     }
 }
 
-/// Webhook router for RTC provider event ingestion.
+/// Webhook router for RTC provider event ingestion and agent transcript ingestion.
 ///
 /// Routes:
-/// - `POST /webhook` — ingest a webhook event
+/// - `POST /webhook` — ingest a webhook event from LiveKit
+/// - `POST /{channel_id}/transcript` — ingest a transcript segment from the LiveKit Agent
 pub fn webhook_router<S, T>(state: WebhookRouterState<S>) -> Router<T>
 where
     S: CallService,
@@ -126,6 +129,7 @@ where
 {
     Router::new()
         .route("/webhook", post(webhook_handler::<S>))
+        .route("/{channel_id}/transcript", post(transcript_handler::<S>))
         .with_state(state)
 }
 
@@ -228,6 +232,38 @@ pub async fn webhook_handler<S: CallService>(
     state
         .service
         .process_webhook_event(&body, auth_token)
+        .await?;
+
+    Ok(StatusCode::OK)
+}
+
+/// Handler for `POST /call/{channel_id}/transcript`.
+///
+/// Receives transcript segments from the LiveKit Agent STT pipeline.
+/// Intended for internal service-to-service calls.
+#[utoipa::path(
+    post,
+    operation_id = "ingest_transcript",
+    path = "/call/{channel_id}/transcript",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+    ),
+    request_body = TranscriptSegmentRequest,
+    responses(
+        (status = 200, description = "Segment ingested"),
+        (status = 404, body = ErrorResponse, description = "No active call"),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn transcript_handler<S: CallService>(
+    State(state): State<WebhookRouterState<S>>,
+    Path(channel_id): Path<Uuid>,
+    Json(segment): Json<TranscriptSegmentRequest>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .ingest_transcript_segment(&channel_id, segment)
         .await?;
 
     Ok(StatusCode::OK)
