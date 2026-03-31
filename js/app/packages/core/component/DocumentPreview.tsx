@@ -46,8 +46,11 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
-import { Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, For, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { useEntityProperties } from '@core/component/Properties/hooks';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
 import { beveledCorners } from '../signal/beveledCorners';
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
@@ -301,6 +304,43 @@ function ImageCoverStrip(props: { documentId: string; class?: string }) {
         </Show>
       </Suspense>
     </div>
+  );
+}
+
+const TASK_PREVIEW_PROPERTIES = [
+  SYSTEM_PROPERTY_IDS.STATUS,
+  SYSTEM_PROPERTY_IDS.PRIORITY,
+  SYSTEM_PROPERTY_IDS.ASSIGNEES,
+];
+
+function TaskPropertiesPreview(props: { taskId: string }) {
+  const { properties, isLoading } = useEntityProperties(
+    props.taskId,
+    'TASK',
+    false
+  );
+
+  const previewProperties = createMemo(() =>
+    TASK_PREVIEW_PROPERTIES.flatMap((id) => {
+      const p = properties().find((p) => p.propertyDefinitionId === id);
+      return p ? [p] : [];
+    })
+  );
+
+  return (
+    <Show when={!isLoading() && previewProperties().length > 0}>
+      <div class="px-2 pb-2 flex flex-row flex-wrap gap-1 text-xs justify-start">
+        <For each={previewProperties()}>
+          {(property) => (
+            <Show when={property.value !== null}>
+              <div class="w-fit max-w-full">
+                <PropertyValue property={property} />
+              </div>
+            </Show>
+          )}
+        </For>
+      </div>
+    </Show>
   );
 }
 
@@ -608,6 +648,11 @@ export function PopupPreview(props: {
                     {props.documentInfo.name || accessibleItem().name}
                   </div>
 
+                  {/* Task properties: status, priority, assignees */}
+                  <Show when={props.documentInfo.type === 'task'}>
+                    <TaskPropertiesPreview taskId={props.documentInfo.id} />
+                  </Show>
+
                   {/* Visual preview for images */}
                   <Show when={props.documentInfo.type === 'image'}>
                     <ImageCoverStrip
@@ -617,71 +662,82 @@ export function PopupPreview(props: {
                   </Show>
 
                   {/* Footer: message context + owner/timestamp */}
-                  <div class="px-2 py-2 border-t border-edge-muted">
-                    <Show when={messageContext()}>
-                      {(context) => (
-                        <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-                          <div class="line-clamp-3 break-words">
-                            <StaticMarkdown
-                              markdown={context().content}
-                              theme={channelTheme}
-                              target="internal"
-                            />
+                  <Show
+                    when={
+                      messageContext() ||
+                      accessibleItem().owner ||
+                      accessibleItem().updatedAt ||
+                      props.snapshotInfo
+                    }
+                  >
+                    <div class="px-2 py-2 border-t border-edge-muted">
+                      <Show when={messageContext()}>
+                        {(context) => (
+                          <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
+                            <div class="line-clamp-3 break-words">
+                              <StaticMarkdown
+                                markdown={context().content}
+                                theme={channelTheme}
+                                target="internal"
+                              />
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </Show>
-
-                    <div class="flex justify-between items-center text-sm font-medium">
-                      <Show
-                        when={messageContext()}
-                        fallback={
-                          <Show when={accessibleItem().owner}>
-                            {(owner) => <UserInfo userId={owner()} />}
-                          </Show>
-                        }
-                      >
-                        {(context) => <UserInfo userId={context().sender_id} />}
+                        )}
                       </Show>
 
-                      <Show
-                        when={messageContext()}
-                        fallback={
-                          <Show when={accessibleItem().updatedAt}>
-                            {(time) => (
-                              <MetadataInfo icon={ClockIcon} align="right">
-                                <span class="text-xxs font-mono uppercase">
-                                  {formatDate(time())}
-                                </span>
-                              </MetadataInfo>
-                            )}
-                          </Show>
-                        }
-                      >
-                        {(context) => (
-                          <MetadataInfo icon={ClockIcon} align="right">
-                            {formatDate(context().created_at)}
-                          </MetadataInfo>
+                      <div class="flex justify-between items-center text-sm font-medium">
+                        <Show
+                          when={messageContext()}
+                          fallback={
+                            <Show when={accessibleItem().owner}>
+                              {(owner) => <UserInfo userId={owner()} />}
+                            </Show>
+                          }
+                        >
+                          {(context) => (
+                            <UserInfo userId={context().sender_id} />
+                          )}
+                        </Show>
+
+                        <Show
+                          when={messageContext()}
+                          fallback={
+                            <Show when={accessibleItem().updatedAt}>
+                              {(time) => (
+                                <MetadataInfo icon={ClockIcon} align="right">
+                                  <span class="text-xxs font-mono uppercase">
+                                    {formatDate(time())}
+                                  </span>
+                                </MetadataInfo>
+                              )}
+                            </Show>
+                          }
+                        >
+                          {(context) => (
+                            <MetadataInfo icon={ClockIcon} align="right">
+                              {formatDate(context().created_at)}
+                            </MetadataInfo>
+                          )}
+                        </Show>
+                      </div>
+
+                      <Show when={props.snapshotInfo}>
+                        {(snapshot) => (
+                          <div class="mt-2 pt-2 border-t border-edge">
+                            <div class="flex items-center gap-1.5 text-ink-muted">
+                              <ClockIcon class="size-3" />
+                              <span class="text-xxs font-medium font-mono uppercase">
+                                Snapshot from{' '}
+                                {formatDate(new Date(snapshot().date), {
+                                  showTime: true,
+                                })}
+                              </span>
+                            </div>
+                          </div>
                         )}
                       </Show>
                     </div>
-
-                    <Show when={props.snapshotInfo}>
-                      {(snapshot) => (
-                        <div class="mt-2 pt-2 border-t border-edge">
-                          <div class="flex items-center gap-1.5 text-ink-muted">
-                            <ClockIcon class="size-3" />
-                            <span class="text-xxs font-medium font-mono uppercase">
-                              Snapshot from{' '}
-                              {formatDate(new Date(snapshot().date), {
-                                showTime: true,
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </Show>
-                  </div>
+                  </Show>
                 </div>
               );
             }}
