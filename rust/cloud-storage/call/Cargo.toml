@@ -1,0 +1,37 @@
+[package]
+edition = "2024"
+name = "call"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:entity_access",
+  "dep:model-error-response",
+  "dep:model_user",
+  "dep:utoipa",
+  "ports",
+]
+outbound = ["ports"]
+ports = ["dep:tokio"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["inbound"] }
+macro_user_id = { path = "../macro_user_id" }
+model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"], optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio = { workspace = true }
