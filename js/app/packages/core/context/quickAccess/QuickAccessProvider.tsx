@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js';
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useChannelsContext } from '@core/context/channels';
 import {
@@ -9,7 +9,9 @@ import {
 } from '@core/user';
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
 import type { ChannelEntity } from '@entity';
+import { queryClient } from '@queries/client';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
+import { getSoupEntityById } from '@queries/soup/cache';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { queryReadyGate } from '@queries/gate';
 import type { DateValue } from '@core/util/date';
@@ -139,11 +141,6 @@ function toTimestamp(value: DateValue | null | undefined): number {
   return toDate(value).getTime();
 }
 
-/** dumb history item hash */
-function getHistoryItemVersion(item: HistoryItem): string {
-  return `${item.name}|${item.updatedAt}|${item.viewedAt}|${item.deletedAt}`;
-}
-
 /** dumb channel hash */
 function getChannelVersion(channel: ApiChannelWithLatest): string {
   return `${channel.name}|${channel.updated_at}|${channel.viewed_at}`;
@@ -227,11 +224,20 @@ export const [QuickAccessProvider, useQuickAccess] =
       // stable cache for transformed items
       const itemCache = new Map<string, CacheEntry>();
 
-      /**
-       * Process all data sources and update the cache incrementally.
-       * Returns the sorted index entries (lightweight id+timestamp arrays).
-       */
+      const [soupVersion, setSoupVersion] = createSignal(0);
+      const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+        if (
+          event.type === 'updated' &&
+          Array.isArray(event.query.queryKey) &&
+          event.query.queryKey[0] === 'soup'
+        ) {
+          setSoupVersion((v) => v + 1);
+        }
+      });
+      onCleanup(unsubscribe);
+
       const processedData = createLazyMemo(() => {
+        soupVersion();
         const seenIds = new Set<string>();
         const allEntries: IndexEntry[] = [];
 
@@ -250,10 +256,16 @@ export const [QuickAccessProvider, useQuickAccess] =
           if (hidden.has(item.id)) continue;
           seenIds.add(item.id);
 
-          const version = getHistoryItemVersion(item);
+          const soupEntity = getSoupEntityById(item.id);
+          const soupViewedAt =
+            soupEntity && soupEntity.tag !== 'channel'
+              ? soupEntity.data.viewedAt
+              : undefined;
+          const mergedViewedAt = item.viewedAt ?? soupViewedAt ?? undefined;
+
+          const version = `${item.name}|${item.updatedAt}|${mergedViewedAt}|${item.deletedAt}`;
           const cached = itemCache.get(item.id);
 
-          // Only transform if not cached or version changed
           if (!cached || cached.version !== version) {
             const reason = !cached
               ? 'new'
@@ -265,8 +277,11 @@ export const [QuickAccessProvider, useQuickAccess] =
               reason,
             });
             const bucket = getBucketForHistoryItem(item);
-            const entity = historyItemToEntity(item);
-            const viewedAtMs = toTimestamp(item.viewedAt);
+            const entity = {
+              ...historyItemToEntity(item),
+              viewedAt: mergedViewedAt,
+            };
+            const viewedAtMs = toTimestamp(mergedViewedAt);
             const updatedAtMs = toTimestamp(item.updatedAt);
             const sortTimestamp = viewedAtMs || updatedAtMs;
 
@@ -277,7 +292,7 @@ export const [QuickAccessProvider, useQuickAccess] =
               searchText: getEntitySearchText(entity),
               sortTimestamp,
               timestamps: {
-                viewedAt: item.viewedAt,
+                viewedAt: mergedViewedAt,
                 updatedAt: item.updatedAt,
                 createdAt: item.createdAt,
               },

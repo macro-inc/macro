@@ -91,8 +91,6 @@ export function refetchHistory() {
   });
 }
 
-// @ts-ignore
-// biome-ignore lint/correctness/noUnusedVariables: we may use this eventually
 function optimisticUpdateViewedAt(itemId: string) {
   const now = new Date();
 
@@ -137,15 +135,14 @@ export function useUpsertToHistoryMutation(
         UpsertToHistoryContext
       >(
         {
-          onMutate: async (_params) => {
+          onMutate: async (params) => {
             await queryClient.cancelQueries({
               queryKey: historyQueryOptions.queryKey,
             });
 
             const previousData = getHistoryItems();
 
-            // NOTE: doesn't make sense to do this if it gets invalidated on refetch anyways
-            // optimisticUpdateViewedAt(params.itemId);
+            optimisticUpdateViewedAt(params.itemId);
 
             return { previousData };
           },
@@ -155,8 +152,6 @@ export function useUpsertToHistoryMutation(
             }
           },
           onSettled: () => {
-            // NOTE: the history refetch will invalidate the optimistic update viewed at
-            // since only soup items have viewed at timestamp
             queryClient.invalidateQueries({
               queryKey: historyQueryOptions.queryKey,
             });
