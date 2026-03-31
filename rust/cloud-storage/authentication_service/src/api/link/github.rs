@@ -1,12 +1,14 @@
 use axum::{
     Json,
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
 use macro_middleware::tracking::ClientIp;
 use model_user::axum_extractor::MacroUserExtractor;
+use serde_utils::urlencode::UrlEncoded;
+use url::Url;
 
 use crate::api::{context::ApiContext, oauth2::OAuthState};
 
@@ -61,11 +63,21 @@ impl IntoResponse for InitGithubLinkError {
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct InitGithubLinkQueryParams {
+    /// Once the frontend is update to NOT 2x urlencode this then this should be changed to
+    /// `Option<Url>`
+    original_url: Option<UrlEncoded<Url>>,
+}
+
 /// Initiates a link for a user
 #[utoipa::path(
         post,
         operation_id = "init_github_link",
         path = "/link/github",
+        params(
+            ("original_url" = String, Query, description = "**OPTIONAL**. The original url to redirect to.")
+        ),
         responses(
             (status = 200, body=InitGithubLinkResponse),
             (status = 400, body=ErrorResponse),
@@ -77,9 +89,11 @@ impl IntoResponse for InitGithubLinkError {
 #[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context, user_id=%user_context.user_context.user_id, fusion_user_id=%user_context.user_context.fusion_user_id), err)]
 pub async fn init_github_link_handler(
     State(ctx): State<ApiContext>,
+    query: Query<InitGithubLinkQueryParams>,
     ip_context: ClientIp,
     user_context: MacroUserExtractor,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
+    let Query(InitGithubLinkQueryParams { original_url }) = query;
     // TODO: this should probably be a middleware or extractor
     // Check count of in-progress links
     let count =
@@ -111,9 +125,7 @@ pub async fn init_github_link_handler(
     let state = OAuthState {
         identity_provider_id: github_idp_id.clone(),
         link_id: Some(link_id),
-        // TODO: support
-        original_url: None,
-        // TODO: support
+        original_url: original_url.map(|x| x.0.to_string()),
         is_mobile: None,
     };
 
