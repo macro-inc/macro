@@ -11,7 +11,6 @@ import {
 } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';
-import { recentlyViewedQueryKey } from '../soup/recently-viewed';
 import { historyKeys } from './keys';
 import {
   transformHistoryItem,
@@ -155,9 +154,6 @@ export function useUpsertToHistoryMutation(
           onSettled: () => {
             queryClient.invalidateQueries({
               queryKey: historyQueryOptions.queryKey,
-            });
-            queryClient.invalidateQueries({
-              queryKey: recentlyViewedQueryKey,
             });
           },
         },
