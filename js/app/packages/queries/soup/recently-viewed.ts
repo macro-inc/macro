@@ -5,8 +5,8 @@ import { soupKeys } from './keys';
 import type { SoupItemsQueryArgs } from './items';
 
 const RECENTLY_VIEWED_LIMIT = 50;
-const RECENTLY_VIEWED_STALE_TIME = 5 * 60 * 1000;
-const RECENTLY_VIEWED_GC_TIME = 10 * 60 * 1000;
+const RECENTLY_VIEWED_STALE_TIME = 5 * 60 * 1000; // 5 minutes
+const RECENTLY_VIEWED_GC_TIME = 10 * 60 * 1000; // 10 minutes
 
 const recentlyViewedArgs: SoupItemsQueryArgs = {
   params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
