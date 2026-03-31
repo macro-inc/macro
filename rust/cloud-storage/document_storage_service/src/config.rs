@@ -39,6 +39,7 @@ pub struct Config {
 env_var! {
     struct EnvVars {
         pub DatabaseUrl,
+        pub DatabaseUrlReadonly,
         pub DocumentStorageBucket,
         pub DocxDocumentUploadBucket,
         pub DocumentDeleteQueue,

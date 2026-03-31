@@ -114,6 +114,15 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
+    let readonly_db = PgPoolOptions::new()
+        .min_connections(min_connections)
+        .max_connections(max_connections)
+        .connect(&config.vars.database_url_readonly)
+        .await
+        .context("could not connect to readonly db")?;
+
+    tracing::trace!("initialized readonly db connection");
+
     let dynamo_db = aws_sdk_dynamodb::Client::new(&aws_config);
 
     let dynamodb_client = DynamodbClient::new_from_client(
@@ -203,6 +212,13 @@ async fn main() -> anyhow::Result<()> {
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        email::domain::ports::NoOpGmailLabelModifier,
+        0,
+    );
+    let readonly_email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(readonly_db.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         email::domain::ports::NoOpGmailLabelModifier,
@@ -332,9 +348,9 @@ async fn main() -> anyhow::Result<()> {
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
-                PgSoupRepo::new(db.clone()),
+                PgSoupRepo::new(readonly_db.clone()),
                 frecency_service,
-                email_service.clone(),
+                readonly_email_service,
                 channel_service_for_soup,
             ),
             email_service,

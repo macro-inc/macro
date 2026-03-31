@@ -11,7 +11,7 @@ use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
     models::{EnrichedEmailThreadPreview, GetEmailsRequest},
-    ports::EmailService,
+    ports::EmailPreviewServiceReadOnly,
 };
 use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
@@ -54,7 +54,7 @@ where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
-    V: EmailService,
+    V: EmailPreviewServiceReadOnly,
     C: ChannelsService,
 {
     pub fn new(soup_storage: T, frecency: U, email_service: V, comms_service: C) -> Self {
@@ -349,7 +349,7 @@ where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
-    V: EmailService,
+    V: EmailPreviewServiceReadOnly,
     C: ChannelsService,
 {
     #[tracing::instrument(err, skip(self, req))]

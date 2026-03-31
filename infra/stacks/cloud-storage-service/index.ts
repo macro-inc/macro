@@ -42,6 +42,12 @@ const DATABASE_URL_PROXY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const DATABASE_URL_READONLY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_db_readonly_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const DOCUMENT_STORAGE_SERVICE_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.get(`document_storage_service_auth_key`) ?? '',
@@ -307,6 +313,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
+      },
+      {
+        name: 'DATABASE_URL_READONLY',
+        value: pulumi.interpolate`${DATABASE_URL_READONLY}`,
       },
       {
         name: 'REDIS_URI',
