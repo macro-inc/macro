@@ -4,6 +4,7 @@ import type { ApiMessageAttachment } from '@service-storage/generated/schemas/ap
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show } from 'solid-js';
 import {
+  type MediaItem,
   mapMessageAttachmentsToMediaItems,
   partitionAttachments,
 } from '@channel/Media/media-items';
@@ -25,8 +26,11 @@ export function Attachments(props: AttachmentsProps) {
   const buckets = createMemo(() =>
     partitionMessageAttachments(message().attachments ?? [])
   );
-  const mediaItems = createMemo(() =>
-    mapMessageAttachmentsToMediaItems(buckets().mediaAttachments)
+  const mediaItems = createMemo<MediaItem[]>((previous = []) =>
+    mapMessageAttachmentsToMediaItems(
+      buckets().mediaAttachments,
+      previous
+    )
   );
   const hasAttachments = createMemo(
     () =>

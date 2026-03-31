@@ -16,6 +16,7 @@ export type MediaItem = {
 };
 
 type AttachmentWithMediaFields = {
+  id: string;
   entity_id: string;
   entity_type: string;
   width?: number | null;
@@ -67,22 +68,42 @@ function mapAttachmentToMediaItem(
 }
 
 export function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
-  attachments: T[]
+  attachments: T[],
+  previousItems: MediaItem[] = []
 ): MediaItem[] {
+  const previousByAttachmentId = new Map(
+    attachments.map((attachment, index) => [attachment.id, previousItems[index]])
+  );
+
   return attachments.flatMap((attachment) => {
     const item = mapAttachmentToMediaItem(attachment);
-    return item ? [item] : [];
+    if (!item) return [];
+
+    const previousItem = previousByAttachmentId.get(attachment.id);
+    if (
+      previousItem &&
+      previousItem.fileId === item.fileId &&
+      previousItem.kind === item.kind &&
+      previousItem.width === item.width &&
+      previousItem.height === item.height
+    ) {
+      return [previousItem];
+    }
+
+    return [item];
   });
 }
 
 export function mapMessageAttachmentsToMediaItems(
-  attachments: ApiMessageAttachment[]
+  attachments: ApiMessageAttachment[],
+  previousItems?: MediaItem[]
 ): MediaItem[] {
-  return mapAttachmentsToMediaItems(attachments);
+  return mapAttachmentsToMediaItems(attachments, previousItems);
 }
 
 export function mapChannelAttachmentsToMediaItems(
-  attachments: ApiChannelAttachment[]
+  attachments: ApiChannelAttachment[],
+  previousItems?: MediaItem[]
 ): MediaItem[] {
-  return mapAttachmentsToMediaItems(attachments);
+  return mapAttachmentsToMediaItems(attachments, previousItems);
 }

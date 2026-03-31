@@ -3,6 +3,7 @@ import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import PlayIcon from '@icon/fill/play-fill.svg';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
+import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import type { MediaItem } from './media-items';
@@ -12,11 +13,41 @@ const SINGLE_IMAGE_MAX_WIDTH = 400;
 const MESSAGE_GALLERY_IMAGE_MAX_WIDTH = 200;
 const MESSAGE_GALLERY_IMAGE_MAX_HEIGHT = 200;
 
+function ImagePlaceholder(props: {
+  dims?: { width: number; height: number };
+  square?: boolean;
+}) {
+  return (
+    <div
+      class="flex items-center justify-center rounded-2xl border border-edge bg-menu"
+      style={
+        props.square
+          ? {
+              width: `${ATTACHMENT_TILE_SIZE}px`,
+              height: `${ATTACHMENT_TILE_SIZE}px`,
+            }
+          : props.dims
+            ? {
+                width: `${props.dims.width}px`,
+                height: `${props.dims.height}px`,
+              }
+            : {
+                width: '60px',
+                height: '60px',
+              }
+      }
+    >
+      <Spinner class="h-4 w-4 animate-spin" />
+    </div>
+  );
+}
+
 function MessageImageTile(props: {
   item: MediaItem;
   large: boolean;
   onOpen: () => void;
 }) {
+  const [loaded, setLoaded] = createSignal(false);
   const dimensions = () =>
     constrainImageDimensions(
       props.item.width ?? undefined,
@@ -32,8 +63,12 @@ function MessageImageTile(props: {
       onClick={props.onOpen}
       aria-label="Open image viewer"
     >
+      <Show when={!loaded()}>
+        <ImagePlaceholder dims={dimensions()} />
+      </Show>
       <img
         class="max-h-[80vh] w-full select-none rounded-2xl border border-edge object-contain"
+        classList={{ invisible: !loaded(), absolute: !loaded() }}
         src={staticFileIdEndpoint(props.item.fileId)}
         alt="preview"
         width={dimensions()?.width ?? props.item.width ?? undefined}
@@ -48,12 +83,15 @@ function MessageImageTile(props: {
                 'max-width': `${props.large ? SINGLE_IMAGE_MAX_WIDTH : MESSAGE_GALLERY_IMAGE_MAX_WIDTH}px`,
               }),
         }}
+        onLoad={() => setLoaded(true)}
       />
     </button>
   );
 }
 
 function AttachmentImageTile(props: { item: MediaItem; onOpen: () => void }) {
+  const [loaded, setLoaded] = createSignal(false);
+
   return (
     <button
       type="button"
@@ -61,13 +99,18 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen: () => void }) {
       onClick={props.onOpen}
       aria-label="Open image viewer"
     >
+      <Show when={!loaded()}>
+        <ImagePlaceholder square />
+      </Show>
       <img
         class="size-23 cursor-pointer select-none rounded-2xl border border-edge object-cover hover:opacity-80"
+        classList={{ invisible: !loaded(), absolute: !loaded() }}
         src={staticFileIdEndpoint(props.item.fileId)}
         alt="preview"
         width={ATTACHMENT_TILE_SIZE}
         height={ATTACHMENT_TILE_SIZE}
         loading="lazy"
+        onLoad={() => setLoaded(true)}
       />
     </button>
   );
@@ -76,30 +119,29 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen: () => void }) {
 function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
   const [isInlinePlaying, setIsInlinePlaying] = createSignal(false);
   const src = () => staticFileIdEndpoint(props.item.fileId);
+  const videoWidth = () => props.item.width ?? undefined;
+  const videoHeight = () => props.item.height ?? undefined;
 
   return (
-    <div
-      class={cn(
-        'group relative min-h-20 min-w-0 overflow-hidden rounded-2xl border border-edge bg-menu',
-        isInlinePlaying() ? 'w-full max-w-[400px]' : 'w-full max-w-[400px]'
-      )}
-    >
+    <div class="group relative flex min-h-20 max-h-[480px] max-w-[480px] min-w-0 overflow-hidden rounded-2xl border border-edge bg-menu">
       <Show
         when={isInlinePlaying()}
         fallback={
           <>
             <button
               type="button"
-              class="block w-full cursor-pointer"
+              class="block max-w-full cursor-pointer"
               onClick={props.onOpen}
               aria-label="Open video viewer"
             >
               <video
-                class="block max-h-[500px] max-w-full"
+                class="block max-h-[480px] max-w-full"
                 preload="metadata"
                 playsinline
                 muted
                 src={src()}
+                width={videoWidth()}
+                height={videoHeight()}
               />
               <div class="absolute inset-0 flex items-center justify-center bg-ink/20 transition-colors group-hover:bg-ink/30">
                 <PlayIcon class="size-6 text-page drop-shadow" />
@@ -119,11 +161,13 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
         }
       >
         <video
-          class="block max-h-[500px] max-w-full"
+          class="block max-h-[480px] max-w-full"
           controls
           autoplay
           playsinline
           src={src()}
+          width={videoWidth()}
+          height={videoHeight()}
         />
       </Show>
       <div class="absolute right-2 top-2 z-10">

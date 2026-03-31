@@ -4,17 +4,21 @@ import {
   useChannelAttachmentsQuery,
   type ChannelAttachmentsData,
 } from '@queries/channel/channel-attachments';
-import { mapChannelAttachmentsToMediaItems } from '@channel/Media/media-items';
+import {
+  type MediaItem,
+  mapChannelAttachmentsToMediaItems,
+} from '@channel/Media/media-items';
 import { MediaGallery } from './MediaGallery';
 
 export function ChannelAttachmentMediaSection(props: { channelId: string }) {
   const attachmentsQuery = useChannelAttachmentsQuery(() => props.channelId);
 
-  const items = createMemo(() =>
+  const items = createMemo<MediaItem[]>((previous = []) =>
     mapChannelAttachmentsToMediaItems(
       flattenAttachments(
         attachmentsQuery.data as ChannelAttachmentsData | undefined
-      )
+      ),
+      previous
     )
   );
 
