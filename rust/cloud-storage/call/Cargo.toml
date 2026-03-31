@@ -14,7 +14,7 @@ inbound = [
   "dep:utoipa",
   "ports",
 ]
-outbound = ["ports"]
+outbound = ["dep:livekit-api", "ports"]
 ports = ["dep:tokio"]
 
 [dependencies]
@@ -22,6 +22,7 @@ anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["inbound"] }
+livekit-api = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }

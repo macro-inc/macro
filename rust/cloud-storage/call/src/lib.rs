@@ -9,3 +9,6 @@ pub mod domain;
 /// Inbound layer: axum handler and router.
 #[cfg(feature = "inbound")]
 pub mod inbound;
+/// Outbound layer: LiveKit RTC client adapter.
+#[cfg(feature = "outbound")]
+pub mod outbound;
