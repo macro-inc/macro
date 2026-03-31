@@ -2,6 +2,7 @@ import {
   Channel as NewChannel,
   type ChannelHandle,
 } from '@channel/Channel/Channel';
+import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { createSignal, Match, Suspense, Switch } from 'solid-js';
@@ -38,15 +39,18 @@ function NewTop(props: {
 
   return (
     <Suspense>
-      <ChannelTopLeft
-        channelId={props.channelId}
-        channelType={channelType()!}
-        participants={participants() ?? []}
-        channelName={channelName() ?? 'New Channel'}
-        tabs={tabs()}
-        activeTab={props.activeTab}
-        onTabChange={props.onTabChange}
-      />
+      <>
+        <ChannelTopLeft
+          channelId={props.channelId}
+          channelType={channelType()!}
+          participants={participants() ?? []}
+          channelName={channelName() ?? 'New Channel'}
+          tabs={tabs()}
+          activeTab={props.activeTab}
+          onTabChange={props.onTabChange}
+        />
+        <ChannelTopBarLiveIndicators />
+      </>
     </Suspense>
   );
 }
