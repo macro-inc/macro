@@ -14,7 +14,7 @@ inbound = [
   "dep:utoipa",
   "ports",
 ]
-outbound = ["dep:livekit-api", "ports"]
+outbound = ["dep:livekit-api", "dep:sqlx", "ports"]
 ports = ["dep:tokio"]
 
 [dependencies]
@@ -27,6 +27,7 @@ macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
@@ -34,5 +35,7 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+sqlx = { workspace = true }
 tokio = { workspace = true }

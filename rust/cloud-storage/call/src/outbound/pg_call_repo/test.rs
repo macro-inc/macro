@@ -1,0 +1,242 @@
+use crate::domain::ports::CallRepository;
+use crate::outbound::pg_call_repo::PgCallRepo;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use sqlx::{Pool, Postgres};
+use uuid::Uuid;
+
+const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
+const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
+const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
+const USER_A: &str = "macro|user-a@test.com";
+const USER_B: &str = "macro|user-b@test.com";
+const USER_C: &str = "macro|user-c@test.com";
+
+fn repo(pool: Pool<Postgres>) -> PgCallRepo {
+    PgCallRepo::new(pool)
+}
+
+// -- create_call --------------------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let id = Uuid::now_v7();
+    let call = repo.create_call(&id, &CH2, "room-ch2", USER_B).await?;
+
+    assert_eq!(call.id, id);
+    assert_eq!(call.channel_id, CH2);
+    assert_eq!(call.room_name, "room-ch2");
+    assert_eq!(call.created_by, USER_B);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn create_call_rejects_duplicate_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // CH1 already has an active call from the fixture.
+    let result = repo
+        .create_call(&Uuid::now_v7(), &CH1, "room-dup", USER_A)
+        .await;
+
+    assert!(result.is_err(), "unique constraint should reject duplicate");
+    Ok(())
+}
+
+// -- get_call_by_channel_id ---------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_by_channel_id_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let call = repo.get_call_by_channel_id(&CH1).await?;
+
+    let call = call.expect("call should exist for ch1");
+    assert_eq!(call.id, CALL1);
+    assert_eq!(call.channel_id, CH1);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_by_channel_id_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let call = repo.get_call_by_channel_id(&CH2).await?;
+
+    assert!(call.is_none(), "ch2 has no active call");
+    Ok(())
+}
+
+// -- get_call_by_room_name ----------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_by_room_name_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let call = repo
+        .get_call_by_room_name("00000000-0000-0000-0000-000000000c01")
+        .await?;
+
+    let call = call.expect("call should exist for room name");
+    assert_eq!(call.id, CALL1);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_by_room_name_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let call = repo.get_call_by_room_name("nonexistent-room").await?;
+
+    assert!(call.is_none());
+    Ok(())
+}
+
+// -- add_participant / remove_participant / is_participant ---------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn add_and_check_participant(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // user-c is not in the call yet.
+    assert!(!repo.is_participant(&CALL1, USER_C).await?);
+
+    let participant = repo.add_participant(&CALL1, USER_C).await?;
+    assert_eq!(participant.call_id, CALL1);
+    assert_eq!(participant.user_id, USER_C);
+
+    assert!(repo.is_participant(&CALL1, USER_C).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn remove_participant_removes_from_db(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    assert!(repo.is_participant(&CALL1, USER_B).await?);
+    repo.remove_participant(&CALL1, USER_B).await?;
+    assert!(!repo.is_participant(&CALL1, USER_B).await?);
+    Ok(())
+}
+
+// -- get_participants ---------------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_participants_returns_all(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let participants = repo.get_participants(&CALL1).await?;
+
+    assert_eq!(participants.len(), 2);
+    let user_ids: Vec<&str> = participants.iter().map(|p| p.user_id.as_str()).collect();
+    assert!(user_ids.contains(&USER_A));
+    assert!(user_ids.contains(&USER_B));
+    Ok(())
+}
+
+// -- get_participant_count ----------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_participant_count_correct(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    assert_eq!(repo.get_participant_count(&CALL1).await?, 2);
+
+    repo.remove_participant(&CALL1, USER_B).await?;
+    assert_eq!(repo.get_participant_count(&CALL1).await?, 1);
+    Ok(())
+}
+
+// -- delete_call --------------------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn delete_call_cascades_to_participants(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    repo.delete_call(&CALL1).await?;
+
+    assert!(repo.get_call_by_channel_id(&CH1).await?.is_none());
+    // Participants should be cascade-deleted.
+    assert_eq!(repo.get_participant_count(&CALL1).await?, 0);
+    Ok(())
+}
+
+// -- archive_call -------------------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_call_creates_record_and_deletes_ephemeral(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    let record_id = repo.archive_call(&CALL1).await?;
+
+    // Ephemeral call should be gone.
+    assert!(repo.get_call_by_channel_id(&CH1).await?.is_none());
+    assert_eq!(repo.get_participant_count(&CALL1).await?, 0);
+
+    // call_records should have the archived call.
+    let record = sqlx::query!(
+        r#"
+        SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms
+        FROM call_records
+        WHERE id = $1
+        "#,
+        record_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(record.channel_id, CH1);
+    assert_eq!(record.created_by, USER_A);
+    assert!(record.duration_ms >= 0);
+    assert!(record.ended_at >= record.started_at);
+
+    // call_record_participants should have both participants.
+    let participants = sqlx::query_scalar!(
+        r#"
+        SELECT user_id
+        FROM call_record_participants
+        WHERE call_record_id = $1
+        ORDER BY joined_at ASC
+        "#,
+        record_id,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    assert_eq!(participants.len(), 2);
+    assert!(participants.contains(&USER_A.to_string()));
+    assert!(participants.contains(&USER_B.to_string()));
+    Ok(())
+}

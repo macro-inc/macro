@@ -1,0 +1,279 @@
+//! Postgres-backed repository for call state.
+
+#[cfg(test)]
+mod test;
+
+use chrono::Utc;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::domain::models::{Call, CallParticipant};
+use crate::domain::ports::CallRepository;
+
+/// Postgres implementation of [`CallRepository`].
+pub struct PgCallRepo {
+    pool: PgPool,
+}
+
+impl PgCallRepo {
+    /// Create a new repo with the given connection pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl CallRepository for PgCallRepo {
+    type Err = sqlx::Error;
+
+    #[tracing::instrument(err, skip(self))]
+    async fn create_call(
+        &self,
+        call_id: &Uuid,
+        channel_id: &Uuid,
+        room_name: &str,
+        created_by: &str,
+    ) -> Result<Call, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            INSERT INTO calls (id, channel_id, room_name, created_by)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, channel_id, room_name, created_by, created_at
+            "#,
+            call_id,
+            channel_id,
+            room_name,
+            created_by,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(Call {
+            id: row.id,
+            channel_id: row.channel_id,
+            room_name: row.room_name,
+            created_by: row.created_by,
+            created_at: row.created_at,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_by_channel_id(&self, channel_id: &Uuid) -> Result<Option<Call>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at
+            FROM calls
+            WHERE channel_id = $1
+            "#,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| {
+            opt.map(|row| Call {
+                id: row.id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                created_at: row.created_at,
+            })
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_by_room_name(&self, room_name: &str) -> Result<Option<Call>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at
+            FROM calls
+            WHERE room_name = $1
+            "#,
+            room_name,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| {
+            opt.map(|row| Call {
+                id: row.id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                created_at: row.created_at,
+            })
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn add_participant(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+    ) -> Result<CallParticipant, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            INSERT INTO call_participants (call_id, user_id)
+            VALUES ($1, $2)
+            RETURNING call_id, user_id, joined_at
+            "#,
+            call_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(CallParticipant {
+            call_id: row.call_id,
+            user_id: row.user_id,
+            joined_at: row.joined_at,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn remove_participant(&self, call_id: &Uuid, user_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM call_participants
+            WHERE call_id = $1 AND user_id = $2
+            "#,
+            call_id,
+            user_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_participants(&self, call_id: &Uuid) -> Result<Vec<CallParticipant>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT call_id, user_id, joined_at
+            FROM call_participants
+            WHERE call_id = $1
+            ORDER BY joined_at ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|row| CallParticipant {
+                    call_id: row.call_id,
+                    user_id: row.user_id,
+                    joined_at: row.joined_at,
+                })
+                .collect()
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_participant_count(&self, call_id: &Uuid) -> Result<i64, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) as "count!"
+            FROM call_participants
+            WHERE call_id = $1
+            "#,
+            call_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn is_participant(&self, call_id: &Uuid, user_id: &str) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM call_participants
+                WHERE call_id = $1 AND user_id = $2
+            ) as "exists!"
+            "#,
+            call_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM calls WHERE id = $1
+            "#,
+            call_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
+        // Fetch the active call.
+        let call = sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at
+            FROM calls
+            WHERE id = $1
+            "#,
+            call_id,
+        )
+        .fetch_one(tx.as_mut())
+        .await?;
+
+        let now = Utc::now();
+        let duration_ms = now
+            .signed_duration_since(call.created_at)
+            .num_milliseconds()
+            .max(0);
+        let record_id = Uuid::now_v7();
+
+        // Insert into call_records.
+        sqlx::query!(
+            r#"
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "#,
+            record_id,
+            call.channel_id,
+            call.room_name,
+            call.created_by,
+            call.created_at,
+            now,
+            duration_ms,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // Copy participants to call_record_participants.
+        sqlx::query!(
+            r#"
+            INSERT INTO call_record_participants (call_record_id, user_id, joined_at)
+            SELECT $1, user_id, joined_at
+            FROM call_participants
+            WHERE call_id = $2
+            "#,
+            record_id,
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // Delete the ephemeral call (cascades to call_participants).
+        sqlx::query!(
+            r#"
+            DELETE FROM calls WHERE id = $1
+            "#,
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        tx.commit().await?;
+        Ok(record_id)
+    }
+}
