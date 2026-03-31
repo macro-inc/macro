@@ -1,6 +1,9 @@
 import { throwOnErr } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
+import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import { useQuery } from '@tanstack/solid-query';
+import { queryClient } from '../client';
+import { getSoupEntityById, getSoupItemId } from './normalized-cache';
 import { soupKeys } from './keys';
 import type { SoupItemsQueryArgs } from './items';
 
@@ -36,4 +39,27 @@ export function useRecentlyViewedSoupQuery() {
     placeholderData: (prev: any) => prev,
     meta: { normalize: true },
   }));
+}
+
+export function ensureItemInRecentlyViewed(itemId: string) {
+  const currentData = queryClient.getQueryData<SoupPage>(
+    recentlyViewedQueryKey
+  );
+  if (!currentData) return;
+
+  const alreadyPresent = currentData.items.some(
+    (item) => getSoupItemId(item) === itemId
+  );
+  if (alreadyPresent) return;
+
+  const soupEntity = getSoupEntityById(itemId);
+  if (!soupEntity) return;
+
+  queryClient.setQueryData<SoupPage>(recentlyViewedQueryKey, {
+    ...currentData,
+    items: [
+      soupEntity,
+      ...currentData.items.slice(0, RECENTLY_VIEWED_LIMIT - 1),
+    ],
+  });
 }
