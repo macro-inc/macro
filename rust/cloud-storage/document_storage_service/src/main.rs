@@ -220,12 +220,9 @@ async fn main() -> anyhow::Result<()> {
         email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
-    let readonly_frecency_storage = FrecencyPgStorage::new(readonly_db.clone());
-    let readonly_frecency_service =
-        FrecencyQueryServiceImpl::new(readonly_frecency_storage.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
         EmailPgRepo::new(readonly_db.clone()),
-        readonly_frecency_service.clone(),
+        frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         email::domain::ports::NoOpGmailLabelModifier,
         0,
@@ -257,7 +254,7 @@ async fn main() -> anyhow::Result<()> {
             pool: readonly_db.clone(),
         },
         PgUserRepo::new(readonly_db.clone()),
-        readonly_frecency_storage.clone(),
+        frecency_storage.clone(),
     );
     let channel_service_for_comms = ChannelServiceImpl::new(
         PgCommsRepo { pool: db.clone() },
@@ -357,7 +354,7 @@ async fn main() -> anyhow::Result<()> {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
                 PgSoupRepo::new(readonly_db.clone()),
-                readonly_frecency_service,
+                frecency_service,
                 readonly_email_service,
                 channel_service_for_soup,
             ),
