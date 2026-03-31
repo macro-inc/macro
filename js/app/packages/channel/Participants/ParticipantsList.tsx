@@ -9,6 +9,7 @@ export function ParticipantsList(props: {
   searchQuery: Accessor<string>;
   currentUserId?: string;
   editable: boolean;
+  onParticipantClick: (participantId: string) => void | Promise<void>;
   onRemoveParticipant: (participantId: string) => void;
 }) {
   return (
@@ -31,6 +32,7 @@ export function ParticipantsList(props: {
               participant={participant}
               currentUserId={props.currentUserId}
               editable={props.editable}
+              onClick={() => props.onParticipantClick(participant.user_id)}
               onRemove={() => props.onRemoveParticipant(participant.user_id)}
             />
           )}

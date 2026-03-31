@@ -1,10 +1,13 @@
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useUserId } from '@core/context/user';
 import { useChannelType } from '@core/context/channels';
+import { isOk } from '@core/util/maybeResult';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { commsServiceClient } from '@service-comms/client';
 import { ChannelType } from '@service-comms/generated/models/channelType';
 import { createSignal, Show } from 'solid-js';
 import { idToEmail } from '@core/user';
@@ -32,6 +35,7 @@ function ParticipantsSection(props: {
 }
 
 export function ChannelParticipantsTab(props: { channelId: string }) {
+  const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
   const channelType = useChannelType(props.channelId);
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
@@ -75,6 +79,20 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
     });
   };
 
+  const openDirectMessage = async (participantId: string) => {
+    const result = await commsServiceClient.getOrCreateDirectMessage({
+      recipient_id: participantId,
+    });
+    const channelId = isOk(result) && result[1]?.channel_id;
+
+    if (channelId) {
+      replaceOrInsertSplit({
+        type: 'channel',
+        id: channelId,
+      });
+    }
+  };
+
   return (
     <div class="relative flex-1 min-h-0 overflow-hidden">
       <div class="macro-message-width macro-message-padding mx-auto flex h-full min-h-0 w-full flex-col gap-6 py-4">
@@ -101,6 +119,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
               searchQuery={searchQuery}
               currentUserId={userId() ?? undefined}
               editable={canManageParticipants()}
+              onParticipantClick={openDirectMessage}
               onRemoveParticipant={removeParticipant}
             />
           </div>

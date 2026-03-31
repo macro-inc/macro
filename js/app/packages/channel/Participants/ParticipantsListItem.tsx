@@ -1,42 +1,25 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { idToEmail } from '@core/user';
-import { isOk } from '@core/util/maybeResult';
 import IconX from '@icon/regular/x.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
-import { commsServiceClient } from '@service-comms/client';
 
 export function ParticipantsListItem(props: {
   participant: ChannelParticipant;
   currentUserId?: string;
   editable: boolean;
+  onClick: () => void | Promise<void>;
   onRemove: () => void;
 }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
   const canRemove =
     props.editable && props.currentUserId !== props.participant.user_id;
-
-  const openDirectMessage = async () => {
-    const result = await commsServiceClient.getOrCreateDirectMessage({
-      recipient_id: props.participant.user_id,
-    });
-    const channelId = isOk(result) && result[1]?.channel_id;
-
-    if (channelId) {
-      replaceOrInsertSplit({
-        type: 'channel',
-        id: channelId,
-      });
-    }
-  };
 
   const navigationHandlers = useSplitNavigationHandler<HTMLButtonElement>(
     async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      await openDirectMessage();
+      await props.onClick();
     }
   );
 
