@@ -68,7 +68,12 @@ async fn main() {
 
     // Create the soup service with real database connections
     let soup_repo = PgSoupRepo::new(pool);
-    let soup_service = SoupImpl::new(soup_repo, frecency_service, ReadonlyEmailPreviewAdapter(email_service), channels_service);
+    let soup_service = SoupImpl::new(
+        soup_repo,
+        frecency_service,
+        ReadonlyEmailPreviewAdapter(email_service),
+        channels_service,
+    );
 
     // Create the soup tool context
     let soup_context = SoupToolContext::new(soup_service);
