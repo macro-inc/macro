@@ -7,7 +7,9 @@ use std::future::Future;
 
 use uuid::Uuid;
 
-use super::models::{Call, CallError, CallParticipant, CallTokenResponse, LeaveCallResponse};
+use super::models::{
+    Call, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent, LeaveCallResponse,
+};
 
 /// Repository port for persisting call state to the database.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
@@ -89,6 +91,9 @@ pub trait CallRtcClient: Send + Sync + 'static {
         room_name: &str,
         participant_identity: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Validate a webhook signature and parse the event from the raw body.
+    fn receive_webhook(&self, body: &str, auth_token: &str) -> Result<CallWebhookEvent, CallError>;
 }
 
 /// Service interface for call operations.
@@ -113,4 +118,11 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: Uuid,
         user_id: &str,
     ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
+
+    /// Validate and process a raw webhook event from the RTC provider.
+    fn process_webhook_event(
+        &self,
+        body: &str,
+        auth_token: &str,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
 }

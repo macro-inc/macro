@@ -2,14 +2,17 @@
 //!
 //! Wraps the `livekit-api` crate to provide room management and token generation.
 
-use livekit_api::access_token::{AccessToken, VideoGrants};
+use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
+use livekit_api::webhooks::WebhookReceiver;
 
+use crate::domain::models::{CallError, CallWebhookEvent};
 use crate::domain::ports::CallRtcClient;
 
 /// LiveKit implementation of [`CallRtcClient`].
 pub struct LivekitRtcClient {
     room_client: RoomClient,
+    webhook_receiver: WebhookReceiver,
     api_key: String,
     api_secret: String,
 }
@@ -29,8 +32,11 @@ impl LivekitRtcClient {
         let api_key = api_key.into();
         let api_secret = api_secret.into();
         let room_client = RoomClient::with_api_key(server_url, &api_key, &api_secret);
+        let verifier = TokenVerifier::with_api_key(&api_key, &api_secret);
+        let webhook_receiver = WebhookReceiver::new(verifier);
         Self {
             room_client,
+            webhook_receiver,
             api_key,
             api_secret,
         }
@@ -82,5 +88,20 @@ impl CallRtcClient for LivekitRtcClient {
             .remove_participant(room_name, participant_identity)
             .await?;
         Ok(())
+    }
+
+    fn receive_webhook(&self, body: &str, auth_token: &str) -> Result<CallWebhookEvent, CallError> {
+        let event = self
+            .webhook_receiver
+            .receive(body, auth_token)
+            .map_err(|e| CallError::Internal(anyhow::anyhow!("webhook validation failed: {e}")))?;
+
+        Ok(CallWebhookEvent {
+            event: event.event,
+            id: event.id,
+            room_name: event.room.map(|r| r.name),
+            participant_identity: event.participant.map(|p| p.identity),
+            created_at: event.created_at,
+        })
     }
 }

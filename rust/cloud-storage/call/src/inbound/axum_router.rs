@@ -1,9 +1,11 @@
-//! Axum router for call endpoints.
+//! Axum routers for call endpoints.
 //!
-//! Provides routes:
-//! - `POST /{channel_id}` — create a new call
-//! - `GET /{channel_id}` — join an existing call
-//! - `DELETE /{channel_id}` — leave or end a call
+//! Two routers are exposed so the consumer can attach different middleware:
+//!
+//! - [`call_router`] — authenticated call operations (create, join, leave/end).
+//!   Requires auth middleware.
+//! - [`webhook_router`] — RTC provider webhook ingestion.
+//!   Does **not** require auth middleware (LiveKit signs requests itself).
 
 use std::sync::Arc;
 
@@ -28,7 +30,11 @@ use uuid::Uuid;
 use crate::domain::models::{CallError, CallTokenResponse, LeaveCallResponse};
 use crate::domain::ports::CallService;
 
-/// Router state containing the call service and entity access service.
+// ---------------------------------------------------------------------------
+// Call router (authenticated)
+// ---------------------------------------------------------------------------
+
+/// Router state for authenticated call operations.
 pub struct CallRouterState<S, Svc> {
     service: Arc<S>,
     access_service: Arc<Svc>,
@@ -66,7 +72,12 @@ fn channel_id_from_receipt<T: RequiredPermission>(
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))
 }
 
-/// Create the call router.
+/// Authenticated call router.
+///
+/// Routes:
+/// - `POST /{channel_id}` — create a new call
+/// - `GET /{channel_id}` — join an existing call
+/// - `DELETE /{channel_id}` — leave or end a call
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -79,6 +90,48 @@ where
         .route("/{channel_id}", delete(leave_or_end_call_handler::<S, Svc>))
         .with_state(state)
 }
+
+// ---------------------------------------------------------------------------
+// Webhook router (unauthenticated — LiveKit validates via its own JWT)
+// ---------------------------------------------------------------------------
+
+/// Router state for the webhook endpoint.
+pub struct WebhookRouterState<S> {
+    service: Arc<S>,
+}
+
+impl<S> Clone for WebhookRouterState<S> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+        }
+    }
+}
+
+impl<S: CallService> WebhookRouterState<S> {
+    /// Create a new webhook router state wrapping the call service.
+    pub fn new(service: Arc<S>) -> Self {
+        Self { service }
+    }
+}
+
+/// Webhook router for RTC provider event ingestion.
+///
+/// Routes:
+/// - `POST /webhook` — ingest a webhook event
+pub fn webhook_router<S, T>(state: WebhookRouterState<S>) -> Router<T>
+where
+    S: CallService,
+    T: Send + Sync,
+{
+    Router::new()
+        .route("/webhook", post(webhook_handler::<S>))
+        .with_state(state)
+}
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
 
 /// Handler for `POST /call/{channel_id}`.
 #[utoipa::path(
@@ -166,6 +219,44 @@ pub async fn leave_or_end_call_handler<S: CallService, Svc: EntityAccessService>
 
     Ok(Json(response))
 }
+
+/// Handler for `POST /call/webhook`.
+///
+/// Receives webhook events from the RTC provider (e.g. LiveKit).
+/// The `Authorization` header contains the webhook auth token
+/// and the body contains the raw event payload.
+#[utoipa::path(
+    post,
+    operation_id = "call_webhook",
+    path = "/call/webhook",
+    responses(
+        (status = 200, description = "Event processed"),
+        (status = 401, description = "Invalid webhook signature"),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn webhook_handler<S: CallService>(
+    State(state): State<WebhookRouterState<S>>,
+    headers: axum::http::HeaderMap,
+    body: String,
+) -> Result<StatusCode, CallError> {
+    let auth_token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| CallError::Internal(anyhow::anyhow!("missing Authorization header")))?;
+
+    state
+        .service
+        .process_webhook_event(&body, auth_token)
+        .await?;
+
+    Ok(StatusCode::OK)
+}
+
+// ---------------------------------------------------------------------------
+// Error mapping
+// ---------------------------------------------------------------------------
 
 impl IntoResponse for CallError {
     fn into_response(self) -> axum::response::Response {

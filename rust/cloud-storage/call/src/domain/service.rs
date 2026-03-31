@@ -180,4 +180,54 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
 
         Ok(LeaveCallResponse { call_ended: false })
     }
+
+    #[tracing::instrument(err, skip(self, body, auth_token))]
+    async fn process_webhook_event(&self, body: &str, auth_token: &str) -> Result<(), CallError> {
+        let event = self.rtc_client.receive_webhook(body, auth_token)?;
+
+        tracing::info!(
+            event_type = %event.event,
+            event_id = %event.id,
+            room_name = ?event.room_name,
+            participant = ?event.participant_identity,
+            "processing call webhook event"
+        );
+
+        match event.event.as_str() {
+            "room_started" => {
+                tracing::info!(room_name = ?event.room_name, "room started");
+            }
+            "room_finished" => {
+                tracing::info!(room_name = ?event.room_name, "room finished");
+                // TODO: trigger post-call processing (download recordings, transcripts, etc.)
+            }
+            "participant_joined" => {
+                tracing::info!(
+                    room_name = ?event.room_name,
+                    participant = ?event.participant_identity,
+                    "participant joined"
+                );
+            }
+            "participant_left" => {
+                tracing::info!(
+                    room_name = ?event.room_name,
+                    participant = ?event.participant_identity,
+                    "participant left"
+                );
+            }
+            "egress_started" | "egress_updated" | "egress_ended" => {
+                tracing::info!(
+                    event_type = %event.event,
+                    room_name = ?event.room_name,
+                    "egress event"
+                );
+                // TODO: handle recording/streaming lifecycle events
+            }
+            _ => {
+                tracing::debug!(event_type = %event.event, "unhandled webhook event type");
+            }
+        }
+
+        Ok(())
+    }
 }

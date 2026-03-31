@@ -53,6 +53,21 @@ pub struct LeaveCallResponse {
     pub call_ended: bool,
 }
 
+/// A validated webhook event from the RTC provider.
+#[derive(Debug, Clone)]
+pub struct CallWebhookEvent {
+    /// The event type (e.g. `room_started`, `room_finished`, `participant_joined`).
+    pub event: String,
+    /// Unique event identifier.
+    pub id: String,
+    /// Room name associated with the event, if any.
+    pub room_name: Option<String>,
+    /// Participant identity associated with the event, if any.
+    pub participant_identity: Option<String>,
+    /// Unix timestamp (seconds) when the event was created.
+    pub created_at: i64,
+}
+
 /// Errors that can occur during call operations.
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
