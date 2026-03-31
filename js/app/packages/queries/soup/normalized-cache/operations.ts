@@ -287,23 +287,22 @@ export function buildSingleEntityFilter(
  */
 export function optimisticUpdateSoupItemViewedAt(itemId: string) {
   const current = getSoupEntityById(itemId);
+  if (!current) return;
 
-  if (current) {
-    const now = new Date();
+  const now = new Date();
 
-    if (current.tag === 'channel') {
-      optimisticUpdateSoupEntity({
-        tag: 'channel',
-        data: { channel: { id: itemId }, viewed_at: now.toISOString() },
-        frecency_score: current.frecency_score,
-      });
-    } else {
-      optimisticUpdateSoupEntity({
-        tag: current.tag,
-        data: { id: itemId, viewedAt: now.toISOString() },
-        frecency_score: current.frecency_score,
-      });
-    }
+  if (current.tag === 'channel') {
+    optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: itemId }, viewed_at: now.toISOString() },
+      frecency_score: current.frecency_score,
+    });
+  } else {
+    optimisticUpdateSoupEntity({
+      tag: current.tag,
+      data: { id: itemId, viewedAt: now.toISOString() },
+      frecency_score: current.frecency_score,
+    });
   }
 }
 
