@@ -139,13 +139,15 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
             return Err(CallError::NotInCall);
         }
 
-        // Remove from DB.
+        // Remove participant from DB.
         self.repo
             .remove_participant(call.id, user_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
         // Remove from RTC (best-effort).
+        // LiveKit will fire participant_left and eventually room_finished webhooks,
+        // which handle call record archival and cleanup of the ephemeral tables.
         self.rtc_client
             .remove_participant(&call.room_name, user_id)
             .await
@@ -161,24 +163,9 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
-        if remaining == 0 {
-            // Delete the RTC room (best-effort).
-            self.rtc_client
-                .delete_room(&call.room_name)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "failed to delete RTC room"))
-                .ok();
-
-            // Delete the call record.
-            self.repo
-                .delete_call(call.id)
-                .await
-                .map_err(|e| CallError::Internal(e.into()))?;
-
-            return Ok(LeaveCallResponse { call_ended: true });
-        }
-
-        Ok(LeaveCallResponse { call_ended: false })
+        Ok(LeaveCallResponse {
+            call_ended: remaining == 0,
+        })
     }
 
     #[tracing::instrument(err, skip(self, body, auth_token))]
