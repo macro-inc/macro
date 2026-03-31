@@ -29,7 +29,10 @@ use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
-use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
+use email::{
+    domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
+    outbound::EmailPgRepo,
+};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
@@ -220,13 +223,13 @@ async fn main() -> anyhow::Result<()> {
     let readonly_frecency_storage = FrecencyPgStorage::new(readonly_db.clone());
     let readonly_frecency_service =
         FrecencyQueryServiceImpl::new(readonly_frecency_storage.clone());
-    let readonly_email_service = EmailServiceImpl::new(
+    let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
         EmailPgRepo::new(readonly_db.clone()),
         readonly_frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         email::domain::ports::NoOpGmailLabelModifier,
         0,
-    );
+    ));
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsIngressQueue {

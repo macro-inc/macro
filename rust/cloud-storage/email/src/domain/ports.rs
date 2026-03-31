@@ -264,7 +264,12 @@ pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
     > + Send;
 }
 
-impl<T: EmailService> EmailPreviewServiceReadOnly for T {
+/// Newtype adapter that restricts a full `EmailService` to read-only preview access.
+/// Wrapping is explicit so readonly wiring is intentional — a bare `EmailServiceImpl`
+/// will *not* silently satisfy `EmailPreviewServiceReadOnly`.
+pub struct ReadonlyEmailPreviewAdapter<T>(pub T);
+
+impl<T: EmailService> EmailPreviewServiceReadOnly for ReadonlyEmailPreviewAdapter<T> {
     fn get_email_thread_previews(
         &self,
         req: GetEmailsRequest,
@@ -274,7 +279,7 @@ impl<T: EmailService> EmailPreviewServiceReadOnly for T {
             EmailErr,
         >,
     > + Send {
-        EmailService::get_email_thread_previews(self, req)
+        EmailService::get_email_thread_previews(&self.0, req)
     }
 }
 
