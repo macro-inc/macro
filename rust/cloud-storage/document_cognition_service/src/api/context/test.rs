@@ -194,7 +194,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
     let user_repo = PgUserRepo::new(pool.clone());
     let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo { pool: pool.clone() },
+        PgCommsRepo { readonly_pool: pool.clone() },
         user_repo,
         frecency_storage,
     );

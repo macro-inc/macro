@@ -251,13 +251,13 @@ async fn main() -> anyhow::Result<()> {
     // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
     let channel_service_for_soup = ChannelServiceImpl::new(
         PgCommsRepo {
-            pool: readonly_db.clone(),
+            readonly_pool: readonly_db.clone(),
         },
         PgUserRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
     let channel_service_for_comms = ChannelServiceImpl::new(
-        PgCommsRepo { pool: db.clone() },
+        PgCommsRepo { readonly_pool: db.clone() },
         PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
     );
