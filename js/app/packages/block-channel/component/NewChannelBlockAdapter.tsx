@@ -4,7 +4,7 @@ import {
 } from '@channel/Channel/Channel';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
-import { createSignal, Match, Suspense, Switch } from 'solid-js';
+import { createEffect, createSignal, Match, Suspense, Switch } from 'solid-js';
 import { blockHandleSignal } from '@core/signal/load';
 import { createMethodRegistration } from '@core/orchestrator';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -12,12 +12,14 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { ChannelTopLeft } from './Top';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { ChannelTypeEnum } from '@service-comms/client';
 import {
   CHANNEL_TABS,
   DEFAULT_CHANNEL_TAB,
   type ChannelTabId,
 } from '@channel/Channel/channel-tabs';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
+import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 
 function NewTop(props: {
   channelId: string;
@@ -29,6 +31,10 @@ function NewTop(props: {
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const participants = () =>
     participantsQuery.isLoading ? [] : participantsQuery.data;
+  const tabs = () =>
+    channelType() === ChannelTypeEnum.DirectMessage
+      ? CHANNEL_TABS.filter((tab) => tab.value !== 'participants')
+      : CHANNEL_TABS;
 
   return (
     <Suspense>
@@ -37,7 +43,7 @@ function NewTop(props: {
         channelType={channelType()!}
         participants={participants() ?? []}
         channelName={channelName() ?? 'New Channel'}
-        tabs={CHANNEL_TABS}
+        tabs={tabs()}
         activeTab={props.activeTab}
         onTabChange={props.onTabChange}
       />
@@ -51,6 +57,16 @@ export function NewChannelBlockAdapter() {
   const blockHandle = blockHandleSignal.get;
   const [activeTab, setActiveTab] =
     createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);
+  const channelType = useChannelType(channelId);
+
+  createEffect(() => {
+    if (
+      channelType() === ChannelTypeEnum.DirectMessage &&
+      activeTab() === 'participants'
+    ) {
+      setActiveTab(DEFAULT_CHANNEL_TAB);
+    }
+  });
 
   const onChannelReady = (handle: ChannelHandle) => {
     createMethodRegistration(blockHandle, {
@@ -81,6 +97,9 @@ export function NewChannelBlockAdapter() {
           </Match>
           <Match when={activeTab() === 'attachments'}>
             <ChannelAttachmentsTab channelId={channelId} />
+          </Match>
+          <Match when={activeTab() === 'participants'}>
+            <ChannelParticipantsTab channelId={channelId} />
           </Match>
         </Switch>
         <NewTop
