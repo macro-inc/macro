@@ -164,11 +164,41 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                 }
             }
             "participant_joined" => {
-                tracing::info!(
-                    room_name = ?event.room_name,
-                    participant = ?event.participant_identity,
-                    "participant joined via webhook"
-                );
+                let (Some(room_name), Some(participant_identity)) =
+                    (&event.room_name, &event.participant_identity)
+                else {
+                    tracing::warn!(
+                        "participant_joined webhook missing room_name or participant_identity"
+                    );
+                    return Ok(());
+                };
+
+                let Some(call) = self
+                    .repo
+                    .get_call_by_room_name(room_name)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                else {
+                    return Ok(());
+                };
+
+                // Reconcile: ensure participant is tracked in DB (handles reconnect/race conditions).
+                if !self
+                    .repo
+                    .is_participant(&call.id, participant_identity)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                {
+                    self.repo
+                        .add_participant(&call.id, participant_identity)
+                        .await
+                        .map_err(|e| CallError::Internal(e.into()))?;
+                    tracing::info!(
+                        call_id = %call.id,
+                        participant = participant_identity,
+                        "reconciled participant_joined via webhook"
+                    );
+                }
             }
             "participant_left" => {
                 let (Some(room_name), Some(participant_identity)) =
