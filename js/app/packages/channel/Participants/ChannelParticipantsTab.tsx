@@ -6,7 +6,7 @@ import {
 } from '@queries/channel/participants';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { ChannelType } from '@service-comms/generated/models/channelType';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { idToEmail } from '@core/user';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
 import { ParticipantsList } from './ParticipantsList';
@@ -39,15 +39,13 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   const removeParticipantsMutation = useRemoveParticipantsMutation();
   const [searchQuery, setSearchQuery] = createSignal('');
 
-  const participants = createMemo(() => participantsQuery.data ?? []);
-  const canManageParticipants = createMemo(
-    () => channelType() !== ChannelType.organization
-  );
-  const canAddParticipants = createMemo(
-    () => canManageParticipants() && channelType() === ChannelType.private
-  );
+  const participants = () => participantsQuery.data ?? [];
+  const canManageParticipants = () =>
+    channelType() !== ChannelType.organization;
+  const canAddParticipants = () =>
+    canManageParticipants() && channelType() === ChannelType.private;
 
-  const filteredParticipants = createMemo(() => {
+  const filteredParticipants = () => {
     const query = searchQuery().trim().toLowerCase();
     if (query.length === 0) return participants();
 
@@ -59,7 +57,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
         participant.role.toLowerCase().includes(query)
       );
     });
-  });
+  };
 
   const addParticipants = (participantIds: string[]) => {
     if (participantIds.length === 0) return;

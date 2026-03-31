@@ -4,7 +4,7 @@ import {
 } from '@channel/Channel/Channel';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
-import { createEffect, createSignal, Match, Suspense, Switch } from 'solid-js';
+import { createSignal, Match, Suspense, Switch } from 'solid-js';
 import { blockHandleSignal } from '@core/signal/load';
 import { createMethodRegistration } from '@core/orchestrator';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -57,16 +57,6 @@ export function NewChannelBlockAdapter() {
   const blockHandle = blockHandleSignal.get;
   const [activeTab, setActiveTab] =
     createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);
-  const channelType = useChannelType(channelId);
-
-  createEffect(() => {
-    if (
-      channelType() === ChannelTypeEnum.DirectMessage &&
-      activeTab() === 'participants'
-    ) {
-      setActiveTab(DEFAULT_CHANNEL_TAB);
-    }
-  });
 
   const onChannelReady = (handle: ChannelHandle) => {
     createMethodRegistration(blockHandle, {

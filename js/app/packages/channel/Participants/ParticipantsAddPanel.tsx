@@ -6,7 +6,7 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import type { ChannelParticipant } from '@queries/channel/types';
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { createSignal, type Accessor } from 'solid-js';
 
 export function ParticipantsAddPanel(props: {
   participants: Accessor<ChannelParticipant[]>;
@@ -17,7 +17,7 @@ export function ParticipantsAddPanel(props: {
     WithCustomUserInput<'user'>[]
   >([]);
 
-  const options = createMemo(() => {
+  const options = () => {
     const existingParticipantIds = new Set(
       props.participants().map((participant) => participant.user_id)
     );
@@ -27,7 +27,7 @@ export function ParticipantsAddPanel(props: {
         ?.filter((user) => !existingParticipantIds.has(user.id))
         .map(recipientEntityMapper('user')) ?? []
     );
-  });
+  };
 
   const handleAddParticipants = () => {
     const destination = getDestinationFromOptions(selectedUsers());
