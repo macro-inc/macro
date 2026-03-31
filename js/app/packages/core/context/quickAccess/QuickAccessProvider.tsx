@@ -225,15 +225,11 @@ export const [QuickAccessProvider, useQuickAccess] =
         const data = recentlyViewedQuery.data;
         if (!data) return map;
         for (const item of data.items) {
-          if (item.tag === 'channel') {
-            if (item.data.viewed_at) {
-              map.set(item.data.channel.id, item.data.viewed_at);
-            }
-          } else {
-            if (item.data.viewedAt) {
-              map.set(item.data.id, item.data.viewedAt);
-            }
-          }
+          const id =
+            item.tag === 'channel' ? item.data.channel.id : item.data.id;
+          const viewedAt =
+            item.tag === 'channel' ? item.data.viewed_at : item.data.viewedAt;
+          if (viewedAt) map.set(id, viewedAt);
         }
         return map;
       });
