@@ -13,39 +13,6 @@ import { BulkDeleteView } from './BulkDeleteView';
 import { BulkMoveToProjectView } from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
-export const BulkEditEntityModalTitle = (props: { title: string }) => {
-  return <h2 class="text-xl mb-4">{props.title}</h2>;
-};
-
-export const BulkEditEntityModalActionFooter = (props: {
-  onCancel: () => void;
-  onConfirm: () => void;
-  confirmText: string;
-  isDisabled?: boolean;
-}) => {
-  return (
-    <div class="flex w-full justify-end items-stretch tex-sm gap-1">
-      <button
-        class="py-1 px-3 text-sm border-edge-muted border bg-panel"
-        onClick={props.onCancel}
-      >
-        Cancel
-      </button>
-      <button
-        class="uppercase py-1 px-3 text-sm font-semibold border"
-        classList={{
-          'text-accent bg-accent/10 border-accent/20': !props.isDisabled,
-          'text-ink-disabled bg-egde/10 border-edge-muted': props.isDisabled,
-        }}
-        onClick={props.onConfirm}
-        disabled={props.isDisabled}
-      >
-        {props.confirmText}
-      </button>
-    </div>
-  );
-};
-
 const BulkEditEntityModalContent = (props: {
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;

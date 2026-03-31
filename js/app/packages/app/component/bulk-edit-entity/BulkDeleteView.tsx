@@ -2,8 +2,7 @@ import { type EntityData, InlineEntity } from '@entity';
 import { createBulkDeleteDssItemsMutation } from '@macro-entity';
 import { Dialog } from '@kobalte/core/dialog';
 import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
-import { For, Show } from 'solid-js';
+import { For } from 'solid-js';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 
 export const BulkDeleteView = (props: {
@@ -40,25 +39,14 @@ export const BulkDeleteView = (props: {
         </Dialog.Title>
       </div>
 
-      <div class="p-2 border-b border-edge-muted">
-        <div class="flex items-center gap-2">
-          <For each={props.entities.slice(0, 2)}>
-            {(entity) => (
-              <div
-                class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
-                  'max-w-[50%]': props.entities.length === 2,
-                })}
-              >
-                <InlineEntity entity={entity} />
-              </div>
-            )}
-          </For>
-          <Show when={props.entities.length > 2}>
-            <div class="text-muted-foreground text-xs px-2 py-1">
-              +{props.entities.length - 2} more
+      <div class="flex flex-col">
+        <For each={props.entities}>
+          {(entity) => (
+            <div class="flex flex-row w-full items-center gap-2 py-1.5 px-2">
+              <InlineEntity entity={entity} />
             </div>
-          </Show>
-        </div>
+          )}
+        </For>
       </div>
 
       <div class="p-3 flex flex-col gap-3">
