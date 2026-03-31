@@ -18,6 +18,7 @@ use ai::types::Model;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
+use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use frecency::domain::services::FrecencyQueryServiceImpl;
@@ -67,7 +68,7 @@ async fn main() {
 
     // Create the soup service with real database connections
     let soup_repo = PgSoupRepo::new(pool);
-    let soup_service = SoupImpl::new(soup_repo, frecency_service, email_service, channels_service);
+    let soup_service = SoupImpl::new(soup_repo, frecency_service, ReadonlyEmailPreviewAdapter(email_service), channels_service);
 
     // Create the soup tool context
     let soup_context = SoupToolContext::new(soup_service);

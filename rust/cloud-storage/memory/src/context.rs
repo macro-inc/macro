@@ -9,6 +9,7 @@ use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
+use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
@@ -111,7 +112,7 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(pool.clone()),
         frecency_service,
-        email_service,
+        ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
     ));
 

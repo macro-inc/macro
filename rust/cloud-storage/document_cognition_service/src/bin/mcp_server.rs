@@ -21,6 +21,7 @@ use documents::{
     inbound::toolset::DocumentToolContext,
     outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
 };
+use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
@@ -169,7 +170,7 @@ async fn main() -> anyhow::Result<()> {
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(db.clone()),
         frecency_service,
-        email_service,
+        ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
     ));
 

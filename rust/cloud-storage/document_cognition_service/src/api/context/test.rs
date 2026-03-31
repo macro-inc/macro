@@ -114,6 +114,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use comms_service_client::CommsServiceClient;
     use document_cognition_service_client::DocumentCognitionServiceClient;
     use document_storage_service_client::DocumentStorageServiceClient;
+    use email::domain::ports::ReadonlyEmailPreviewAdapter;
     use email::domain::service::EmailServiceImpl;
     use email::outbound::EmailPgRepo;
     use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
@@ -203,7 +204,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(pool.clone()),
         frecency_service,
-        email_service,
+        ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
     ));
 
