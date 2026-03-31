@@ -391,8 +391,9 @@ async fn attachments_batch_grouped_by_message(pool: Pool<Postgres>) -> anyhow::R
     let map = repo.get_attachments_batch(&[MSG1, MSG2, MSG3]).await?;
 
     assert_eq!(map[&MSG1].len(), 2);
+    assert_eq!(map[&MSG2].len(), 1);
     assert_eq!(map[&MSG3].len(), 1);
-    assert!(map.get(&MSG2).is_none(), "msg2 has no attachments");
+    assert_eq!(map[&MSG2][0].id, DELETED_MSG_ATTACHMENT);
     Ok(())
 }
 
