@@ -1,5 +1,4 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
-import type { DateValue } from '@core/util/date';
 import type { Item } from '@service-storage/generated/schemas/item';
 import type { HistoryItem, HistoryQueryResponse } from './types';
 
@@ -44,29 +43,4 @@ export function transformHistoryResponse(
   response: HistoryQueryResponse
 ): HistoryItem[] {
   return response.data.map(transformHistoryItem);
-}
-
-/**
- * Pure function: Updates an item's viewedAt timestamp and moves it to the front.
- * Returns a new array without mutating the input.
- */
-export function updateViewedAtAndMoveItemToFront(
-  items: HistoryItem[],
-  itemId: string,
-  timestamp: DateValue
-): HistoryItem[] {
-  const itemIndex = items.findIndex((item) => item.id === itemId);
-
-  // Item not found, return original array
-  if (itemIndex === -1) return items;
-
-  const item = items[itemIndex];
-  const updatedItem: HistoryItem = { ...item, viewedAt: timestamp };
-
-  // Return new array with updated item at front
-  return [
-    updatedItem,
-    ...items.slice(0, itemIndex),
-    ...items.slice(itemIndex + 1),
-  ];
 }

@@ -12,11 +12,7 @@ import {
 import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
-import {
-  transformHistoryItem,
-  transformHistoryResponse,
-  updateViewedAtAndMoveItemToFront,
-} from './transforms';
+import { transformHistoryItem, transformHistoryResponse } from './transforms';
 import type { HistoryItem } from './types';
 
 // re-export history item type from this file
@@ -91,14 +87,6 @@ export function refetchHistory() {
   });
 }
 
-function optimisticUpdateViewedAt(itemId: string) {
-  const now = new Date();
-
-  setHistoryData((old) => {
-    return updateViewedAtAndMoveItemToFront(old, itemId, now);
-  });
-}
-
 type UpsertToHistoryParams = {
   itemId: string;
   itemType: CloudStorageItemType;
@@ -135,14 +123,12 @@ export function useUpsertToHistoryMutation(
         UpsertToHistoryContext
       >(
         {
-          onMutate: async (params) => {
+          onMutate: async () => {
             await queryClient.cancelQueries({
               queryKey: historyQueryOptions.queryKey,
             });
 
             const previousData = getHistoryItems();
-
-            optimisticUpdateViewedAt(params.itemId);
 
             return { previousData };
           },
