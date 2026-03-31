@@ -4,10 +4,7 @@ import {
   useChannelAttachmentsQuery,
   type ChannelAttachmentsData,
 } from '@queries/channel/channel-attachments';
-import {
-  type MediaItem,
-  mapMediaItems,
-} from '@channel/Media/media-items';
+import { type MediaItem, mapMediaItems } from '@channel/Media/media-items';
 import { MediaGallery } from './MediaGallery';
 
 export function ChannelAttachmentMediaSection(props: { channelId: string }) {

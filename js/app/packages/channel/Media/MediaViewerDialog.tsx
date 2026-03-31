@@ -98,7 +98,8 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
   const hasPrevious = () => props.currentIndex() > 0;
   const hasNext = () => props.currentIndex() < props.items().length - 1;
   const hasMultipleItems = () => props.items().length > 1;
-  const indexLabel = () => `${props.currentIndex() + 1}/${props.items().length}`;
+  const indexLabel = () =>
+    `${props.currentIndex() + 1}/${props.items().length}`;
 
   const navigatePrevious = () => {
     if (!hasPrevious()) return;

@@ -1,14 +1,7 @@
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
-import {
-  For,
-  Match,
-  Show,
-  Switch,
-  createMemo,
-  createSignal,
-} from 'solid-js';
+import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { MediaImage } from './MediaImage';
 import { MediaVideo } from './MediaVideo';
@@ -60,10 +53,7 @@ function MessageImageTile(props: {
   );
 }
 
-function AttachmentImageTile(props: {
-  item: MediaItem;
-  onOpen?: () => void;
-}) {
+function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
   return (
     <MediaImage.Root>
       <MediaImage.Image
@@ -146,10 +136,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
   );
 }
 
-function AttachmentVideoTile(props: {
-  item: MediaItem;
-  onOpen?: () => void;
-}) {
+function AttachmentVideoTile(props: { item: MediaItem; onOpen?: () => void }) {
   return (
     <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
       <MediaVideo.Preview

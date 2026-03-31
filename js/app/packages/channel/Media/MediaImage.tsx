@@ -1,11 +1,6 @@
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { cn } from '@ui/utils/classname';
-import {
-  type ParentProps,
-  type JSX,
-  Show,
-  createSignal,
-} from 'solid-js';
+import { type ParentProps, type JSX, Show, createSignal } from 'solid-js';
 const ATTACHMENT_TILE_SIZE = 92;
 
 function ImagePlaceholder(props: {

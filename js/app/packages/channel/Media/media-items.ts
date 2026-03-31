@@ -71,7 +71,10 @@ function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
   previousItems: MediaItem[] = []
 ): MediaItem[] {
   const previousByAttachmentId = new Map(
-    attachments.map((attachment, index) => [attachment.id, previousItems[index]])
+    attachments.map((attachment, index) => [
+      attachment.id,
+      previousItems[index],
+    ])
   );
 
   return attachments.flatMap((attachment) => {
