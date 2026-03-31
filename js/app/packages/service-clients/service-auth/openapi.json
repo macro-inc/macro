@@ -370,6 +370,17 @@
         "tags": ["link::github"],
         "summary": "Initiates a link for a user",
         "operationId": "init_github_link",
+        "parameters": [
+          {
+            "name": "original_url",
+            "in": "query",
+            "description": "**OPTIONAL**. The original url to redirect to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",

@@ -21,6 +21,7 @@ import type {
   GetProfilePicturesRequestBody,
   GetUserInfo,
   GetUserLinkExistsParams,
+  InitGithubLinkParams,
   InitGithubLinkResponse,
   InviteToTeamRequest,
   MacroApiTokenParams,
@@ -547,14 +548,27 @@ export type initGithubLinkResponse =
   | initGithubLinkResponseSuccess
   | initGithubLinkResponseError;
 
-export const getInitGithubLinkUrl = () => {
-  return `/link/github`;
+export const getInitGithubLinkUrl = (params: InitGithubLinkParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/link/github?${stringifiedParams}`
+    : `/link/github`;
 };
 
 export const initGithubLink = async (
+  params: InitGithubLinkParams,
   options?: RequestInit
 ): Promise<initGithubLinkResponse> => {
-  const res = await fetch(getInitGithubLinkUrl(), {
+  const res = await fetch(getInitGithubLinkUrl(params), {
     ...options,
     method: 'POST',
   });
