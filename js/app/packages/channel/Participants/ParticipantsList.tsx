@@ -1,5 +1,11 @@
 import type { ChannelParticipant } from '@queries/channel/types';
-import { Show, createSignal, onCleanup, onMount, type Accessor } from 'solid-js';
+import {
+  Show,
+  createSignal,
+  onCleanup,
+  onMount,
+  type Accessor,
+} from 'solid-js';
 import { VList } from 'virtua/solid';
 import { ParticipantsEmptyState } from './ParticipantsEmptyState';
 import { ParticipantsListItem } from './ParticipantsListItem';
@@ -12,7 +18,8 @@ export function ParticipantsList(props: {
   onRemoveParticipant: (participantId: string) => void;
 }) {
   const [isDesktop, setIsDesktop] = createSignal(false);
-  const desktopHeight = () => `${Math.min(props.participants().length * 56, 420)}px`;
+  const desktopHeight = () =>
+    `${Math.min(props.participants().length * 56, 420)}px`;
   const listHeight = () => (isDesktop() ? desktopHeight() : '100%');
 
   onMount(() => {

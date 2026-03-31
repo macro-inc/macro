@@ -19,10 +19,14 @@ function ParticipantsSection(props: {
   contentClass?: string;
 }) {
   return (
-    <div class={`rounded-sm border border-edge-muted bg-menu py-3 ${props.class ?? ''}`}>
+    <div
+      class={`rounded-sm border border-edge-muted bg-menu py-3 ${props.class ?? ''}`}
+    >
       <div class="px-3 pb-3 text-sm font-medium text-ink">{props.title}</div>
       <div class="border-b border-edge-muted" />
-      <div class={`px-3 pt-3 ${props.contentClass ?? ''}`}>{props.children}</div>
+      <div class={`px-3 pt-3 ${props.contentClass ?? ''}`}>
+        {props.children}
+      </div>
     </div>
   );
 }

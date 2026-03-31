@@ -28,7 +28,9 @@ export type RemoveParticipantsContext = {
 export function optimisticAddParticipants(
   vars: WithChannelId<{ participants: string[] }>
 ): AddParticipantsContext | undefined {
-  const participantsQueryKey = channelKeys.participants(vars.channelId).queryKey;
+  const participantsQueryKey = channelKeys.participants(
+    vars.channelId
+  ).queryKey;
   queryClient.cancelQueries({ queryKey: participantsQueryKey });
 
   let context: AddParticipantsContext | undefined;
@@ -91,7 +93,9 @@ export function rollbackAddParticipants(
 export function optimisticRemoveParticipants(
   vars: WithChannelId<{ participants: string[] }>
 ): RemoveParticipantsContext | undefined {
-  const participantsQueryKey = channelKeys.participants(vars.channelId).queryKey;
+  const participantsQueryKey = channelKeys.participants(
+    vars.channelId
+  ).queryKey;
   queryClient.cancelQueries({ queryKey: participantsQueryKey });
 
   let context: RemoveParticipantsContext | undefined;
@@ -111,7 +115,9 @@ export function optimisticRemoveParticipants(
         context = { removedParticipants };
       }
 
-      return prev.filter((participant) => !toRemoveSet.has(participant.user_id));
+      return prev.filter(
+        (participant) => !toRemoveSet.has(participant.user_id)
+      );
     }
   );
 
@@ -132,7 +138,9 @@ export function rollbackRemoveParticipants(
     (prev: ChannelParticipant[] | undefined) => {
       if (!prev) return prev;
 
-      const existingUserIds = new Set(prev.map((participant) => participant.user_id));
+      const existingUserIds = new Set(
+        prev.map((participant) => participant.user_id)
+      );
       const restoredParticipants = context.removedParticipants.filter(
         (participant) => !existingUserIds.has(participant.user_id)
       );
