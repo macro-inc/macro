@@ -157,7 +157,7 @@ pub async fn create_call_handler<S: CallService, Svc: EntityAccessService>(
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let user_id = user.macro_user_id.as_ref();
 
-    let response = state.service.create_call(channel_id, user_id).await?;
+    let response = state.service.create_call(&channel_id, user_id).await?;
 
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -186,7 +186,7 @@ pub async fn join_call_handler<S: CallService, Svc: EntityAccessService>(
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let user_id = user.macro_user_id.as_ref();
 
-    let response = state.service.join_call(channel_id, user_id).await?;
+    let response = state.service.join_call(&channel_id, user_id).await?;
 
     Ok(Json(response))
 }
@@ -215,7 +215,10 @@ pub async fn leave_or_end_call_handler<S: CallService, Svc: EntityAccessService>
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let user_id = user.macro_user_id.as_ref();
 
-    let response = state.service.leave_or_end_call(channel_id, user_id).await?;
+    let response = state
+        .service
+        .leave_or_end_call(&channel_id, user_id)
+        .await?;
 
     Ok(Json(response))
 }

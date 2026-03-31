@@ -22,7 +22,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
     #[tracing::instrument(err, skip(self))]
     async fn create_call(
         &self,
-        channel_id: Uuid,
+        channel_id: &Uuid,
         user_id: &str,
     ) -> Result<CallTokenResponse, CallError> {
         // Check if a call already exists for this channel.
@@ -48,13 +48,13 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
         // Create call record in DB.
         let call = self
             .repo
-            .create_call(call_id, channel_id, &room_name, user_id)
+            .create_call(&call_id, channel_id, &room_name, user_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
         // Add creator as first participant.
         self.repo
-            .add_participant(call.id, user_id)
+            .add_participant(&call.id, user_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
@@ -67,7 +67,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
 
         Ok(CallTokenResponse {
             call_id: call.id,
-            channel_id,
+            channel_id: *channel_id,
             token,
             room_name,
         })
@@ -76,7 +76,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
     #[tracing::instrument(err, skip(self))]
     async fn join_call(
         &self,
-        channel_id: Uuid,
+        channel_id: &Uuid,
         user_id: &str,
     ) -> Result<CallTokenResponse, CallError> {
         let call = self
@@ -89,13 +89,13 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
         // Add as participant if not already in the call.
         let already_joined = self
             .repo
-            .is_participant(call.id, user_id)
+            .is_participant(&call.id, user_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
         if !already_joined {
             self.repo
-                .add_participant(call.id, user_id)
+                .add_participant(&call.id, user_id)
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?;
         }
@@ -109,7 +109,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
 
         Ok(CallTokenResponse {
             call_id: call.id,
-            channel_id,
+            channel_id: *channel_id,
             token,
             room_name: call.room_name,
         })
@@ -118,7 +118,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
     #[tracing::instrument(err, skip(self))]
     async fn leave_or_end_call(
         &self,
-        channel_id: Uuid,
+        channel_id: &Uuid,
         user_id: &str,
     ) -> Result<LeaveCallResponse, CallError> {
         let call = self
@@ -131,7 +131,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
         // Verify user is in the call.
         let is_in_call = self
             .repo
-            .is_participant(call.id, user_id)
+            .is_participant(&call.id, user_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
@@ -141,7 +141,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
 
         // Remove participant from DB.
         self.repo
-            .remove_participant(call.id, user_id)
+            .remove_participant(&call.id, user_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
@@ -159,7 +159,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
         // Check if this was the last participant.
         let remaining = self
             .repo
-            .get_participant_count(call.id)
+            .get_participant_count(&call.id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
@@ -185,22 +185,81 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                 tracing::info!(room_name = ?event.room_name, "room started");
             }
             "room_finished" => {
-                tracing::info!(room_name = ?event.room_name, "room finished");
-                // TODO: trigger post-call processing (download recordings, transcripts, etc.)
+                // Safety net: archive if not already handled by participant_left.
+                if let Some(room_name) = &event.room_name
+                    && let Some(call) = self
+                        .repo
+                        .get_call_by_room_name(room_name)
+                        .await
+                        .map_err(|e| CallError::Internal(e.into()))?
+                {
+                    tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
+                    self.repo
+                        .archive_call(&call.id)
+                        .await
+                        .map_err(|e| CallError::Internal(e.into()))?;
+                }
             }
             "participant_joined" => {
                 tracing::info!(
                     room_name = ?event.room_name,
                     participant = ?event.participant_identity,
-                    "participant joined"
+                    "participant joined via webhook"
                 );
             }
             "participant_left" => {
-                tracing::info!(
-                    room_name = ?event.room_name,
-                    participant = ?event.participant_identity,
-                    "participant left"
-                );
+                let (Some(room_name), Some(participant_identity)) =
+                    (&event.room_name, &event.participant_identity)
+                else {
+                    tracing::warn!(
+                        "participant_left webhook missing room_name or participant_identity"
+                    );
+                    return Ok(());
+                };
+
+                let Some(call) = self
+                    .repo
+                    .get_call_by_room_name(room_name)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                else {
+                    // Call already archived, nothing to do.
+                    return Ok(());
+                };
+
+                // Reconcile: remove participant from DB if still present (handles crash/disconnect).
+                if self
+                    .repo
+                    .is_participant(&call.id, participant_identity)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                {
+                    self.repo
+                        .remove_participant(&call.id, participant_identity)
+                        .await
+                        .map_err(|e| CallError::Internal(e.into()))?;
+                }
+
+                // If no participants remain, archive the call and delete the room.
+                let remaining = self
+                    .repo
+                    .get_participant_count(&call.id)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?;
+
+                if remaining == 0 {
+                    tracing::info!(call_id = %call.id, room_name, "last participant left, archiving call");
+                    self.repo
+                        .archive_call(&call.id)
+                        .await
+                        .map_err(|e| CallError::Internal(e.into()))?;
+
+                    self.rtc_client
+                        .delete_room(room_name)
+                        .await
+                        .inspect_err(|e| tracing::error!(error=?e, "failed to delete RTC room"))
+                        .ok();
+                }
             }
             "egress_started" | "egress_updated" | "egress_ended" => {
                 tracing::info!(
