@@ -570,6 +570,66 @@ export const initGithubLink = async (
 };
 
 /**
+ * @summary Deletes a github link for a user
+ */
+export type deleteGithubLinkResponse200 = {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type deleteGithubLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteGithubLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteGithubLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteGithubLinkResponseSuccess = deleteGithubLinkResponse200 & {
+  headers: Headers;
+};
+export type deleteGithubLinkResponseError = (
+  | deleteGithubLinkResponse400
+  | deleteGithubLinkResponse401
+  | deleteGithubLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteGithubLinkResponse =
+  | deleteGithubLinkResponseSuccess
+  | deleteGithubLinkResponseError;
+
+export const getDeleteGithubLinkUrl = () => {
+  return `/link/github`;
+};
+
+export const deleteGithubLink = async (
+  options?: RequestInit
+): Promise<deleteGithubLinkResponse> => {
+  const res = await fetch(getDeleteGithubLinkUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteGithubLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteGithubLinkResponse;
+};
+
+/**
  * @summary Completes the apple login flow
  */
 export type appleLoginResponse200 = {
