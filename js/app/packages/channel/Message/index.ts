@@ -9,7 +9,7 @@ import {
 export { Message } from './Message';
 
 export { ChannelMessage } from './ChannelMessage';
-export { Attachments, partitionMessageAttachments } from './Attachments';
+export { Attachments } from './Attachments';
 export { MediaPreview } from './MediaPreview';
 export { DateDivider } from './DateDivider';
 export { NewDivider } from './NewDivider';

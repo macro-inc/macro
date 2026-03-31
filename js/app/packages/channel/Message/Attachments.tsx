@@ -1,6 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
 import { stringToItemType } from '@service-storage/client';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show } from 'solid-js';
 import {
@@ -15,16 +14,10 @@ type AttachmentsProps = {
   class?: string;
 };
 
-export function partitionMessageAttachments(
-  attachments: ApiMessageAttachment[]
-) {
-  return partitionAttachments(attachments);
-}
-
 export function Attachments(props: AttachmentsProps) {
   const message = useMessage();
   const buckets = createMemo(() =>
-    partitionMessageAttachments(message().attachments ?? [])
+    partitionAttachments(message().attachments ?? [])
   );
   const mediaItems = createMemo<MediaItem[]>((previous = []) =>
     mapMediaItems(buckets().mediaAttachments, previous)

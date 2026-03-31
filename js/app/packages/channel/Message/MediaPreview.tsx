@@ -3,7 +3,7 @@ import { MediaGrid } from '@channel/Media/MediaGrid';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
 
-export type MediaPreviewProps = {
+type MediaPreviewProps = {
   items: MediaItem[];
   class?: string;
 };
