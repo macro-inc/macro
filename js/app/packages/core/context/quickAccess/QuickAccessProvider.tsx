@@ -281,7 +281,7 @@ export const [QuickAccessProvider, useQuickAccess] =
             const bucket = getBucketForHistoryItem(item);
             const entity = {
               ...historyItemToEntity(item),
-              viewedAt: viewedAt,
+              viewedAt,
             };
             const viewedAtMs = toTimestamp(viewedAt);
             const updatedAtMs = toTimestamp(item.updatedAt);
@@ -294,7 +294,7 @@ export const [QuickAccessProvider, useQuickAccess] =
               searchText: getEntitySearchText(entity),
               sortTimestamp,
               timestamps: {
-                viewedAt: viewedAt,
+                viewedAt,
                 updatedAt: item.updatedAt,
                 createdAt: item.createdAt,
               },
@@ -337,7 +337,7 @@ export const [QuickAccessProvider, useQuickAccess] =
             const bucket: Bucket = isDm ? 'dm' : 'channel';
             const entity = {
               ...channelToEntity(channel),
-              viewedAt: viewedAt,
+              viewedAt,
             };
             const viewedAtMs = toTimestamp(viewedAt);
             const updatedAtMs = toTimestamp(channel.updated_at);
@@ -350,7 +350,7 @@ export const [QuickAccessProvider, useQuickAccess] =
               searchText: channel.name ?? '',
               sortTimestamp,
               timestamps: {
-                viewedAt: viewedAt,
+                viewedAt,
                 updatedAt: channel.updated_at,
                 createdAt: channel.created_at,
               },
