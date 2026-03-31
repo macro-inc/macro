@@ -130,7 +130,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
     // Mark button-like anchors so the font override doesn't break their sizing
-    for (const a of messageDiv.querySelectorAll<HTMLAnchorElement>('a[style]')) {
+    for (const a of messageDiv.querySelectorAll<HTMLAnchorElement>(
+      'a[style]'
+    )) {
       if (a.style.backgroundColor) {
         a.dataset.macroBtn = '';
         for (const child of a.querySelectorAll('*')) {
