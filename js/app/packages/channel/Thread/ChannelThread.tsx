@@ -129,7 +129,14 @@ export function ChannelThread(props: ThreadProps) {
         props.isExpanded,
         replyListHandle,
       ],
-      ([targetReplyId, canScroll, replies, renderedReplies, isExpanded, handle]) => {
+      ([
+        targetReplyId,
+        canScroll,
+        replies,
+        renderedReplies,
+        isExpanded,
+        handle,
+      ]) => {
         if (!targetReplyId) return;
         if (!canScroll) return;
 
