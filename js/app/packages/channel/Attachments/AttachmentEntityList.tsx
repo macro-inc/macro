@@ -1,54 +1,23 @@
-import { type Accessor, createMemo, For, Show } from 'solid-js';
-import type { ApiChannelAttachment } from '@service-comms/client';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import { For, Show } from 'solid-js';
 import type { EntityData } from '@entity';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import {
-  isDocumentAttachment,
-  buildAttachmentEntityFilters,
-  getEntityClickContent,
-} from './attachment-utils';
+import type { DateValue } from '@core/util/date';
 import { SectionHeader, LoadMoreButton } from './SectionHeader';
 import { AttachmentEntityRow } from './AttachmentEntityRow';
 
+export type AttachmentEntityListRow = {
+  entity: EntityData;
+  timestamp?: DateValue | null;
+  senderId?: string;
+  onClick?: () => void;
+};
+
 export function AttachmentEntityList(props: {
-  attachments: Accessor<ApiChannelAttachment[]>;
-  hasNextPage: Accessor<boolean>;
-  isFetchingNextPage: Accessor<boolean>;
+  rows: AttachmentEntityListRow[];
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
   onLoadMore: () => void;
 }) {
-  const documentAttachments = createMemo(() =>
-    props.attachments().filter(isDocumentAttachment)
-  );
-  const hasDocuments = () => documentAttachments().length > 0;
-
-  const soupQuery = useSoupItemsQuery(
-    () => ({
-      params: { limit: 500 },
-      body: buildAttachmentEntityFilters(documentAttachments()),
-    }),
-    () => ({ enabled: hasDocuments() })
-  );
-
-  const attachmentByEntityId = createMemo(() => {
-    const map = new Map<string, ApiChannelAttachment>();
-    for (const a of documentAttachments()) map.set(a.entity_id, a);
-    return map;
-  });
-
-  const sortedEntities = () => {
-    const entities = soupQuery.data ?? [];
-    const lookup = attachmentByEntityId();
-    return [...entities].sort((a, b) => {
-      const aTime = lookup.get(a.id)?.created_at ?? '';
-      const bTime = lookup.get(b.id)?.created_at ?? '';
-      return bTime.localeCompare(aTime);
-    });
-  };
-
-  const { replaceOrInsertSplit } = useSplitLayout();
-  const handleEntityClick = (entity: EntityData) =>
-    replaceOrInsertSplit(getEntityClickContent(entity));
+  const hasDocuments = () => props.rows.length > 0;
 
   return (
     <div class="flex flex-col">
@@ -61,25 +30,22 @@ export function AttachmentEntityList(props: {
       </Show>
 
       <Show when={hasDocuments()}>
-          <For each={sortedEntities()}>
-            {(entity) => {
-              const attachment = attachmentByEntityId().get(entity.id);
-              return (
-                <AttachmentEntityRow
-                  entity={entity}
-                  timestamp={attachment?.created_at}
-                  senderId={attachment?.sender_id}
-                  onClick={() => handleEntityClick(entity)}
-                />
-              );
-            }}
-          </For>
+        <For each={props.rows}>
+          {(row) => (
+            <AttachmentEntityRow
+              entity={row.entity}
+              timestamp={row.timestamp}
+              senderId={row.senderId}
+              onClick={row.onClick}
+            />
+          )}
+        </For>
       </Show>
 
-      <Show when={hasDocuments() && props.hasNextPage()}>
+      <Show when={hasDocuments() && props.hasNextPage}>
         <LoadMoreButton
           onLoadMore={props.onLoadMore}
-          isFetching={props.isFetchingNextPage}
+          isFetching={() => props.isFetchingNextPage}
         />
       </Show>
     </div>
