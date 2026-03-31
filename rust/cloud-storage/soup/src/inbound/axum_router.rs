@@ -369,10 +369,20 @@ pub struct PostSoupAstRequest {
     email_view: PreviewView,
 }
 
-#[utoipa::path(post, operation_id = "post_items_soup_ast", path = "/items/soup/ast", params(("cursor" = Option<String>, Query, description = "Base64 encoded cursor value.")), responses(
-    (status = 200, body=SoupPage),
-    (status = 500, body=ErrorResponse),
-))]
+/// Gets the items the user has access to using AST filters
+#[utoipa::path(
+    post,
+    operation_id = "post_items_soup_ast",
+    path = "/items/soup/ast",
+    params(
+        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value."),
+    ),
+    request_body = PostSoupAstRequest,
+    responses(
+        (status = 200, body=SoupPage),
+        (status = 500, body=ErrorResponse),
+    )
+)]
 #[tracing::instrument(err, skip_all)]
 pub async fn post_soup_ast_handler<T, U>(
     State(service): State<SoupRouterState<T, U>>,

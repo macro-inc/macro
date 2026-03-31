@@ -91,7 +91,7 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "ef")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub email_filter: LiteralTree<EmailLiteral>,
-    /// the filters taht should be applied to the channel entity
+    /// the filters that should be applied to the channel entity
     #[serde(default, rename = "chanf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub channel_filter: LiteralTree<ChannelLiteral>,

@@ -3106,6 +3106,7 @@
     "/items/soup/ast": {
       "post": {
         "tags": ["soup::inbound::axum_router"],
+        "summary": "Gets the items the user has access to using AST filters",
         "operationId": "post_items_soup_ast",
         "parameters": [
           {
@@ -7057,7 +7058,7 @@
             "description": "the filters that should be applied to the chat entity"
           },
           "chanf": {
-            "description": "the filters taht should be applied to the channel entity"
+            "description": "the filters that should be applied to the channel entity"
           },
           "df": {
             "description": "the filters that should be applied to the document entity"

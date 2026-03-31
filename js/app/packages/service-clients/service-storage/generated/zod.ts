@@ -5695,6 +5695,9 @@ export const postItemsSoupResponse = zod.object({
   next_cursor: zod.string().nullish(),
 });
 
+/**
+ * @summary Gets the items the user has access to using AST filters
+ */
 export const postItemsSoupAstQueryParams = zod.object({
   cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
 });
@@ -5710,7 +5713,7 @@ export const postItemsSoupAstBody = zod
     chanf: zod
       .any()
       .optional()
-      .describe('the filters taht should be applied to the channel entity'),
+      .describe('the filters that should be applied to the channel entity'),
     df: zod
       .any()
       .optional()

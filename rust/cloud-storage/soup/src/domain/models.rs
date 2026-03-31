@@ -12,6 +12,7 @@ use models_pagination::{
     SimpleSortMethod, SortOn,
 };
 use models_soup::item::SoupItem;
+use non_empty::IsEmpty;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -229,7 +230,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
         Ok(SoupRequest {
             soup_type,
             limit,
-            cursor: cursor.map(Some),
+            cursor: cursor.map(|f| if f.is_empty() { None } else { Some(f) }),
             user,
             email_preview_view,
             link_id,

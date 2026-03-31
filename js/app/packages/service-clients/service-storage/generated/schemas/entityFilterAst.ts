@@ -11,7 +11,7 @@
 export interface EntityFilterAst {
   /** the filters that should be applied to the chat entity */
   cf?: unknown;
-  /** the filters taht should be applied to the channel entity */
+  /** the filters that should be applied to the channel entity */
   chanf?: unknown;
   /** the filters that should be applied to the document entity */
   df?: unknown;
