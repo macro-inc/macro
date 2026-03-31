@@ -86,7 +86,7 @@ function VideoViewerContent(props: {
             controls
             autoplay
             playsinline
-            src={staticFileIdEndpoint(props.item().entityId)}
+            src={staticFileIdEndpoint(props.item().fileId)}
           />
         </div>
       </Dialog.Content>
@@ -129,8 +129,8 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
               }
             >
               <Lightbox
-                src={() => staticFileIdEndpoint(item().entityId)}
-                imageId={() => item().entityId}
+                src={() => staticFileIdEndpoint(item().fileId)}
+                imageId={() => item().fileId}
                 onPrevious={hasPrevious() ? navigatePrevious : undefined}
                 onNext={hasNext() ? navigateNext : undefined}
                 indexLabel={hasMultipleItems() ? indexLabel : undefined}

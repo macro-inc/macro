@@ -9,25 +9,17 @@ import type { ApiMessageAttachment } from '@service-storage/generated/schemas/ap
 export type MediaKind = 'image' | 'video';
 
 export type MediaItem = {
-  attachmentId: string;
-  entityId: string;
+  fileId: string;
   kind: MediaKind;
   width?: number | null;
   height?: number | null;
-  createdAt?: string;
-  senderId?: string;
-  messageId?: string;
 };
 
 type AttachmentWithMediaFields = {
-  id: string;
   entity_id: string;
   entity_type: string;
   width?: number | null;
   height?: number | null;
-  created_at?: string;
-  sender_id?: string;
-  message_id?: string;
 };
 
 export function getMediaKind(entityType: string): MediaKind | undefined {
@@ -67,14 +59,10 @@ function mapAttachmentToMediaItem(
   if (!kind) return;
 
   return {
-    attachmentId: attachment.id,
-    entityId: attachment.entity_id,
+    fileId: attachment.entity_id,
     kind,
     width: attachment.width ?? undefined,
     height: attachment.height ?? undefined,
-    createdAt: attachment.created_at,
-    senderId: attachment.sender_id,
-    messageId: attachment.message_id,
   };
 }
 

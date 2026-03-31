@@ -34,7 +34,7 @@ function MessageImageTile(props: {
     >
       <img
         class="max-h-[80vh] w-full select-none rounded-2xl border border-edge object-contain"
-        src={staticFileIdEndpoint(props.item.entityId)}
+        src={staticFileIdEndpoint(props.item.fileId)}
         alt="preview"
         width={dimensions()?.width ?? props.item.width ?? undefined}
         height={dimensions()?.height ?? props.item.height ?? undefined}
@@ -63,7 +63,7 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen: () => void }) {
     >
       <img
         class="size-23 cursor-pointer select-none rounded-2xl border border-edge object-cover hover:opacity-80"
-        src={staticFileIdEndpoint(props.item.entityId)}
+        src={staticFileIdEndpoint(props.item.fileId)}
         alt="preview"
         width={ATTACHMENT_TILE_SIZE}
         height={ATTACHMENT_TILE_SIZE}
@@ -75,7 +75,7 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen: () => void }) {
 
 function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
   const [isInlinePlaying, setIsInlinePlaying] = createSignal(false);
-  const src = () => staticFileIdEndpoint(props.item.entityId);
+  const src = () => staticFileIdEndpoint(props.item.fileId);
 
   return (
     <div
@@ -154,7 +154,7 @@ function AttachmentVideoTile(props: { item: MediaItem; onOpen: () => void }) {
         preload="metadata"
         playsinline
         muted
-        src={staticFileIdEndpoint(props.item.entityId)}
+        src={staticFileIdEndpoint(props.item.fileId)}
       />
       <div class="absolute inset-0 flex items-center justify-center bg-ink/20 transition-colors group-hover:bg-ink/30">
         <PlayIcon class="size-5 text-page drop-shadow" />
