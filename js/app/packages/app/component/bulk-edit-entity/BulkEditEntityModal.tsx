@@ -1,4 +1,5 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { Dialog } from '@kobalte/core/dialog';
 import type { EntityData } from '@entity';
 import {
@@ -74,36 +75,31 @@ const BulkEditEntityModalContent = (props: {
       modal={true}
     >
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay" />
-        <div class="fixed inset-0 z-modal">
-          <Dialog.Content>
-            <div class="pointer-events-auto max-w-xl bg-menu border border-edge-muted w-lg h-fit p-2 mt-[25vh] mx-auto">
-              <div class="w-full my-1">
-                <Show when={props.view === 'rename'}>
-                  <BulkRenameEntitiesView
-                    entities={props.entities}
-                    onFinish={handleFinish}
-                    onCancel={handleCancel}
-                  />
-                </Show>
-                <Show when={props.view === 'moveToProject'}>
-                  <BulkMoveToProjectView
-                    entities={props.entities}
-                    onFinish={handleFinish}
-                    onCancel={handleCancel}
-                  />
-                </Show>
-                <Show when={props.view === 'delete'}>
-                  <BulkDeleteView
-                    entities={props.entities}
-                    onFinish={handleFinish}
-                    onCancel={handleCancel}
-                  />
-                </Show>
-              </div>
-            </div>
-          </Dialog.Content>
-        </div>
+        <DialogWrapper>
+          <div class="flex flex-col text-ink">
+            <Show when={props.view === 'rename'}>
+              <BulkRenameEntitiesView
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+              />
+            </Show>
+            <Show when={props.view === 'moveToProject'}>
+              <BulkMoveToProjectView
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+              />
+            </Show>
+            <Show when={props.view === 'delete'}>
+              <BulkDeleteView
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+              />
+            </Show>
+          </div>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );
