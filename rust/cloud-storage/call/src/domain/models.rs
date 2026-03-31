@@ -42,6 +42,8 @@ pub struct CallTokenResponse {
     pub token: String,
     /// The RTC room name.
     pub room_name: String,
+    /// The RTC server URL for the frontend SDK to connect to.
+    pub server_url: String,
 }
 
 /// Response for the leave/end call operation.

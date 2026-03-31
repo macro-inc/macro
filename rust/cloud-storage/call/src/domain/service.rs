@@ -9,12 +9,17 @@ use super::ports::{CallRepository, CallRtcClient, CallService};
 pub struct CallServiceImpl<R: CallRepository, C: CallRtcClient> {
     repo: R,
     rtc_client: C,
+    server_url: String,
 }
 
 impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
     /// Create a new call service.
-    pub fn new(repo: R, rtc_client: C) -> Self {
-        Self { repo, rtc_client }
+    pub fn new(repo: R, rtc_client: C, server_url: impl Into<String>) -> Self {
+        Self {
+            repo,
+            rtc_client,
+            server_url: server_url.into(),
+        }
     }
 }
 
@@ -75,6 +80,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
             channel_id: *channel_id,
             token,
             room_name: call.room_name,
+            server_url: self.server_url.clone(),
         })
     }
 
