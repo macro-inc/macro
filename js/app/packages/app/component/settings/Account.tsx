@@ -310,7 +310,7 @@ export function Account() {
               }
             >
               <DeprecatedTextButton
-                theme="accent"
+                theme="base"
                 text="Enable"
                 onClick={handleGithubEnable}
               />
