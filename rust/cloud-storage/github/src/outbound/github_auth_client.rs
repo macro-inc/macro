@@ -3,6 +3,7 @@
 use anyhow::Context;
 use fusionauth::{
     FusionAuthClient,
+    error::FusionAuthClientError,
     identity_provider::{IdentityProviderLink, LinkUserRequest},
 };
 use redis::AsyncCommands;
@@ -110,14 +111,17 @@ impl Auth for GithubAuthImpl {
         github_link: &GithubLink,
         github_idp_id: &str,
     ) -> Result<(), Self::Err> {
-        self.fusionauth_client
+        match self
+            .fusionauth_client
             .unlink_user(
                 &github_link.fusionauth_user_id.to_string(),
                 github_idp_id,
                 &github_link.github_user_id,
             )
-            .await?;
-
-        Ok(())
+            .await
+        {
+            Ok(()) | Err(FusionAuthClientError::NoIdentityProviderFound) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
     }
 }

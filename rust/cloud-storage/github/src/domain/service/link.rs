@@ -75,7 +75,9 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
             Ok(link) => link,
             Err(e) => {
                 let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
+                if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
+                    && matches!(db_err, sqlx::Error::RowNotFound)
+                {
                     tracing::trace!("no github link found for user");
                     return Ok(());
                 } else {

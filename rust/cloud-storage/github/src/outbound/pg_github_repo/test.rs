@@ -171,6 +171,25 @@ async fn test_delete_in_progress_user_link(pool: Pool<Postgres>) {
     assert!(row.is_none());
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_test_data"))
+)]
+async fn test_delete_github_link(pool: Pool<Postgres>) {
+    let repo = PgGithubRepo::new(pool.clone());
+
+    let id = uuid::Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+
+    repo.delete_github_link(&id).await.unwrap();
+
+    // Verify it was deleted
+    let row = sqlx::query!("SELECT id FROM github_links WHERE id = $1", id)
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+    assert!(row.is_none());
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_delete_in_progress_user_link_nonexistent(pool: Pool<Postgres>) {
     let repo = PgGithubRepo::new(pool);
