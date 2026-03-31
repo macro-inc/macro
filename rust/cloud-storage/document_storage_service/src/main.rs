@@ -117,14 +117,21 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let readonly_db = PgPoolOptions::new()
+    let readonly_db = match PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
         .connect(&config.vars.database_url_readonly)
         .await
-        .context("could not connect to readonly db")?;
-
-    tracing::trace!("initialized readonly db connection");
+    {
+        Ok(pool) => {
+            tracing::trace!("initialized readonly db connection");
+            pool
+        }
+        Err(e) => {
+            tracing::warn!(error=?e, "failed to connect to readonly db, falling back to primary");
+            db.clone()
+        }
+    };
 
     let dynamo_db = aws_sdk_dynamodb::Client::new(&aws_config);
 
