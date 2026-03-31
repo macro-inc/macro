@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use super::models::{CallError, CallTokenResponse, LeaveCallResponse};
+use super::models::{CallError, CallTokenResponse, EgressS3Config, LeaveCallResponse};
 use super::ports::{CallRepository, CallRtcClient, CallService};
 
 /// The concrete call service implementation.
@@ -10,6 +10,7 @@ pub struct CallServiceImpl<R: CallRepository, C: CallRtcClient> {
     repo: R,
     rtc_client: C,
     server_url: String,
+    egress_s3_config: Option<EgressS3Config>,
 }
 
 impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
@@ -19,7 +20,14 @@ impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
             repo,
             rtc_client,
             server_url: server_url.into(),
+            egress_s3_config: None,
         }
+    }
+
+    /// Enable auto-recording with the given S3 configuration.
+    pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
+        self.egress_s3_config = Some(s3_config);
+        self
     }
 }
 
@@ -48,10 +56,33 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                     .map_err(CallError::Internal)?;
 
                 // Create call record in DB.
-                self.repo
+                let call = self
+                    .repo
                     .create_call(&call_id, channel_id, &room_name, user_id)
                     .await
-                    .map_err(|e| CallError::Internal(e.into()))?
+                    .map_err(|e| CallError::Internal(e.into()))?;
+
+                // Start recording if egress is configured.
+                if let Some(s3_config) = &self.egress_s3_config {
+                    match self
+                        .rtc_client
+                        .start_room_composite_egress(&room_name, s3_config)
+                        .await
+                    {
+                        Ok(egress_id) => {
+                            self.repo
+                                .set_egress_id(&call.id, &egress_id)
+                                .await
+                                .map_err(|e| CallError::Internal(e.into()))?;
+                        }
+                        Err(e) => {
+                            // Don't fail call creation if egress fails — log and continue.
+                            tracing::error!(error=?e, "failed to start egress recording");
+                        }
+                    }
+                }
+
+                call
             }
         };
 
@@ -260,13 +291,36 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                         .ok();
                 }
             }
-            "egress_started" | "egress_updated" | "egress_ended" => {
+            "egress_started" | "egress_updated" => {
                 tracing::info!(
                     event_type = %event.event,
+                    egress_id = ?event.egress_id,
                     room_name = ?event.room_name,
                     "egress event"
                 );
-                // TODO: handle recording/streaming lifecycle events
+            }
+            "egress_ended" => {
+                let (Some(egress_id), Some(file_url)) = (&event.egress_id, &event.file_url) else {
+                    tracing::warn!("egress_ended webhook missing egress_id or file_url");
+                    return Ok(());
+                };
+
+                tracing::info!(egress_id, file_url, "egress recording completed");
+
+                // Find the call record by egress_id and update the recording URL.
+                if let Some(call_record_id) = self
+                    .repo
+                    .get_call_record_by_egress_id(egress_id)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                {
+                    self.repo
+                        .set_recording_url(&call_record_id, file_url)
+                        .await
+                        .map_err(|e| CallError::Internal(e.into()))?;
+                } else {
+                    tracing::warn!(egress_id, "no call record found for egress_id");
+                }
             }
             _ => {
                 tracing::debug!(event_type = %event.event, "unhandled webhook event type");

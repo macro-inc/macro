@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at\n            FROM calls\n            WHERE id = $1\n            ",
+  "query": "\n            INSERT INTO calls (id, channel_id, room_name, created_by)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, channel_id, room_name, created_by, created_at, egress_id\n            ",
   "describe": {
     "columns": [
       {
@@ -27,11 +27,19 @@
         "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "egress_id",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -39,8 +47,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "397e07a6c785520ac56ddd41c766c28668b75cbf67b79050cbff7646683b35eb"
+  "hash": "3a0338cdf4b30c39ac47b1698438c1720031470e931d2145d42ce0947e17d722"
 }

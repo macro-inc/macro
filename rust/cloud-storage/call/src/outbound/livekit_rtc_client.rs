@@ -1,17 +1,21 @@
 //! LiveKit adapter for the [`CallRtcClient`] port.
 //!
-//! Wraps the `livekit-api` crate to provide room management and token generation.
+//! Wraps the `livekit-api` crate to provide room management, token generation,
+//! egress recording, and webhook validation.
 
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
+use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
 use livekit_api::webhooks::WebhookReceiver;
+use livekit_protocol::{EncodedFileOutput, S3Upload, encoded_file_output};
 
-use crate::domain::models::{CallError, CallWebhookEvent};
+use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use crate::domain::ports::CallRtcClient;
 
 /// LiveKit implementation of [`CallRtcClient`].
 pub struct LivekitRtcClient {
     room_client: RoomClient,
+    egress_client: EgressClient,
     webhook_receiver: WebhookReceiver,
     api_key: String,
     api_secret: String,
@@ -32,10 +36,12 @@ impl LivekitRtcClient {
         let api_key = api_key.into();
         let api_secret = api_secret.into();
         let room_client = RoomClient::with_api_key(server_url, &api_key, &api_secret);
+        let egress_client = EgressClient::with_api_key(server_url, &api_key, &api_secret);
         let verifier = TokenVerifier::with_api_key(&api_key, &api_secret);
         let webhook_receiver = WebhookReceiver::new(verifier);
         Self {
             room_client,
+            egress_client,
             webhook_receiver,
             api_key,
             api_secret,
@@ -90,17 +96,65 @@ impl CallRtcClient for LivekitRtcClient {
         Ok(())
     }
 
+    #[tracing::instrument(err, skip(self, s3_config))]
+    async fn start_room_composite_egress(
+        &self,
+        room_name: &str,
+        s3_config: &EgressS3Config,
+    ) -> anyhow::Result<String> {
+        let output = EgressOutput::File(EncodedFileOutput {
+            filepath: format!("calls/{room_name}/{{time}}"),
+            output: Some(encoded_file_output::Output::S3(S3Upload {
+                bucket: s3_config.bucket.clone(),
+                region: s3_config.region.clone(),
+                access_key: s3_config.access_key.clone(),
+                secret: s3_config.secret.clone(),
+                ..Default::default()
+            })),
+            ..Default::default()
+        });
+
+        let info = self
+            .egress_client
+            .start_room_composite_egress(room_name, vec![output], RoomCompositeOptions::default())
+            .await?;
+
+        Ok(info.egress_id)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn stop_egress(&self, egress_id: &str) -> anyhow::Result<()> {
+        self.egress_client.stop_egress(egress_id).await?;
+        Ok(())
+    }
+
     fn receive_webhook(&self, body: &str, auth_token: &str) -> Result<CallWebhookEvent, CallError> {
         let event = self
             .webhook_receiver
             .receive(body, auth_token)
             .map_err(|e| CallError::Internal(anyhow::anyhow!("webhook validation failed: {e}")))?;
 
+        // Extract file URL from egress info if available.
+        let (egress_id, file_url) = match &event.egress_info {
+            Some(info) => {
+                let url = info.file_results.first().map(|f| f.location.clone());
+                let id = if info.egress_id.is_empty() {
+                    None
+                } else {
+                    Some(info.egress_id.clone())
+                };
+                (id, url)
+            }
+            None => (None, None),
+        };
+
         Ok(CallWebhookEvent {
             event: event.event,
             id: event.id,
             room_name: event.room.map(|r| r.name),
             participant_identity: event.participant.map(|p| p.identity),
+            egress_id,
+            file_url,
             created_at: event.created_at,
         })
     }

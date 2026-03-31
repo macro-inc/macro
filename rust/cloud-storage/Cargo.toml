@@ -175,6 +175,7 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 ] }
 lambda_runtime = "0.13.0"
 livekit-api = "0.4.16"
+livekit-protocol = "0.7.2"
 lazy_static = "1.5.0"
 log = "0.4.26"
 mockall = "0.13"

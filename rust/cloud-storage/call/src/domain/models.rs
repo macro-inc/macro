@@ -16,6 +16,8 @@ pub struct Call {
     pub created_by: String,
     /// When the call was created.
     pub created_at: DateTime<Utc>,
+    /// Egress (recording) ID, if recording is active.
+    pub egress_id: Option<String>,
 }
 
 /// A participant in an active call.
@@ -55,6 +57,19 @@ pub struct LeaveCallResponse {
     pub call_ended: bool,
 }
 
+/// Configuration for S3 egress output.
+#[derive(Debug, Clone)]
+pub struct EgressS3Config {
+    /// S3 bucket name.
+    pub bucket: String,
+    /// AWS region.
+    pub region: String,
+    /// AWS access key ID.
+    pub access_key: String,
+    /// AWS secret access key.
+    pub secret: String,
+}
+
 /// A validated webhook event from the RTC provider.
 #[derive(Debug, Clone)]
 pub struct CallWebhookEvent {
@@ -66,6 +81,10 @@ pub struct CallWebhookEvent {
     pub room_name: Option<String>,
     /// Participant identity associated with the event, if any.
     pub participant_identity: Option<String>,
+    /// Egress ID associated with the event, if any.
+    pub egress_id: Option<String>,
+    /// File download URL from a completed egress, if any.
+    pub file_url: Option<String>,
     /// Unix timestamp (seconds) when the event was created.
     pub created_at: i64,
 }

@@ -1725,6 +1725,7 @@ dependencies = [
  "chrono",
  "entity_access",
  "livekit-api",
+ "livekit-protocol",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",

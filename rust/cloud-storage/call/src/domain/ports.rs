@@ -8,7 +8,8 @@ use std::future::Future;
 use uuid::Uuid;
 
 use super::models::{
-    Call, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent, LeaveCallResponse,
+    Call, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent, EgressS3Config,
+    LeaveCallResponse,
 };
 
 /// Repository port for persisting call state to the database.
@@ -74,10 +75,30 @@ pub trait CallRepository: Send + Sync + 'static {
     /// Delete a call record (when the call ends).
     fn delete_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Set the egress (recording) ID on an active call.
+    fn set_egress_id(
+        &self,
+        call_id: &Uuid,
+        egress_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
     /// Returns the new `call_records` id.
     fn archive_call(&self, call_id: &Uuid) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+
+    /// Set the recording URL on an archived call record.
+    fn set_recording_url(
+        &self,
+        call_record_id: &Uuid,
+        recording_url: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Find a call record by its egress ID (for webhook handling).
+    fn get_call_record_by_egress_id(
+        &self,
+        egress_id: &str,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -102,6 +123,16 @@ pub trait CallRtcClient: Send + Sync + 'static {
         room_name: &str,
         participant_identity: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Start a room composite egress (recording). Returns the egress ID.
+    fn start_room_composite_egress(
+        &self,
+        room_name: &str,
+        s3_config: &EgressS3Config,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Stop an active egress by ID.
+    fn stop_egress(&self, egress_id: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Validate a webhook signature and parse the event from the raw body.
     fn receive_webhook(&self, body: &str, auth_token: &str) -> Result<CallWebhookEvent, CallError>;

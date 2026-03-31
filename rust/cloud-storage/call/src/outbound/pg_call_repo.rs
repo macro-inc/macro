@@ -37,7 +37,7 @@ impl CallRepository for PgCallRepo {
             r#"
             INSERT INTO calls (id, channel_id, room_name, created_by)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, channel_id, room_name, created_by, created_at
+            RETURNING id, channel_id, room_name, created_by, created_at, egress_id
             "#,
             call_id,
             channel_id,
@@ -53,6 +53,7 @@ impl CallRepository for PgCallRepo {
             room_name: row.room_name,
             created_by: row.created_by,
             created_at: row.created_at,
+            egress_id: row.egress_id,
         })
     }
 
@@ -60,7 +61,7 @@ impl CallRepository for PgCallRepo {
     async fn get_call_by_channel_id(&self, channel_id: &Uuid) -> Result<Option<Call>, Self::Err> {
         sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
             FROM calls
             WHERE channel_id = $1
             "#,
@@ -75,6 +76,7 @@ impl CallRepository for PgCallRepo {
                 room_name: row.room_name,
                 created_by: row.created_by,
                 created_at: row.created_at,
+                egress_id: row.egress_id,
             })
         })
     }
@@ -83,7 +85,7 @@ impl CallRepository for PgCallRepo {
     async fn get_call_by_room_name(&self, room_name: &str) -> Result<Option<Call>, Self::Err> {
         sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
             FROM calls
             WHERE room_name = $1
             "#,
@@ -98,6 +100,7 @@ impl CallRepository for PgCallRepo {
                 room_name: row.room_name,
                 created_by: row.created_by,
                 created_at: row.created_at,
+                egress_id: row.egress_id,
             })
         })
     }
@@ -210,13 +213,27 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn set_egress_id(&self, call_id: &Uuid, egress_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE calls SET egress_id = $2 WHERE id = $1
+            "#,
+            call_id,
+            egress_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
         let mut tx = self.pool.begin().await?;
 
         // Fetch the active call.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
             FROM calls
             WHERE id = $1
             "#,
@@ -232,11 +249,11 @@ impl CallRepository for PgCallRepo {
             .max(0);
         let record_id = Uuid::now_v7();
 
-        // Insert into call_records.
+        // Insert into call_records (including egress_id).
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
             record_id,
             call.channel_id,
@@ -245,6 +262,7 @@ impl CallRepository for PgCallRepo {
             call.created_at,
             now,
             duration_ms,
+            call.egress_id,
         )
         .execute(tx.as_mut())
         .await?;
@@ -275,5 +293,38 @@ impl CallRepository for PgCallRepo {
 
         tx.commit().await?;
         Ok(record_id)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn set_recording_url(
+        &self,
+        call_record_id: &Uuid,
+        recording_url: &str,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE call_records SET recording_url = $2 WHERE id = $1
+            "#,
+            call_record_id,
+            recording_url,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_record_by_egress_id(
+        &self,
+        egress_id: &str,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT id FROM call_records WHERE egress_id = $1
+            "#,
+            egress_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
     }
 }
