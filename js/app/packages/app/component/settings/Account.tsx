@@ -96,9 +96,9 @@ export function Account() {
   });
 
   const handleGithubEnable = async () => {
-    const [_, url] = await authServiceClient.initGithubLink();
+    const [_, url] = await authServiceClient.initGithubLink(window.location.href);
     if (url) {
-      window.open(url, '_blank');
+      window.location.href = url;
     }
   };
 

@@ -455,9 +455,12 @@ export const authServiceClient = {
    * Initializes the github account link for the user.
    * Returns the url you need to redirect user to to start the link.
    */
-  async initGithubLink() {
+  async initGithubLink(originalUrl?: string) {
+    const url = originalUrl
+      ? `${authHost}/link/github?original_url=${encodeURIComponent(originalUrl)}`
+      : `${authHost}/link/github`;
     return mapOk(
-      await fetchWithAuth<InitGithubLinkResponse>(`${authHost}/link/github`, {
+      await fetchWithAuth<InitGithubLinkResponse>(url, {
         method: 'POST',
       }),
       (result) => result.authorization_url
