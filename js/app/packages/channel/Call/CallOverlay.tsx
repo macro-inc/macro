@@ -1,0 +1,218 @@
+import { Track, type RemoteParticipant } from 'livekit-client';
+import { For, Show, createEffect, onCleanup, type Component } from 'solid-js';
+import PhoneDisconnect from '@icon/regular/phone-disconnect.svg';
+import Microphone from '@icon/regular/microphone.svg';
+import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
+import VideoCamera from '@icon/regular/video-camera.svg';
+import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
+import { useCallContext } from './CallContext';
+
+/**
+ * Attaches a video or audio track's media element to a container div.
+ */
+function TrackRenderer(props: {
+  participant: RemoteParticipant;
+  source: Track.Source;
+}) {
+  let containerRef!: HTMLDivElement;
+  const callCtx = useCallContext();
+
+  createEffect(() => {
+    // Subscribe to trackVersion so the effect re-runs when tracks change
+    callCtx.trackVersion();
+    const pub = props.participant.getTrackPublication(props.source);
+    const track = pub?.track;
+    if (!track || !containerRef) return;
+
+    const el = track.attach();
+    el.style.width = '100%';
+    el.style.height = '100%';
+    el.style.objectFit = 'cover';
+    containerRef.appendChild(el);
+
+    onCleanup(() => {
+      track.detach(el);
+      el.remove();
+    });
+  });
+
+  return <div ref={containerRef} class="w-full h-full" />;
+}
+
+function LocalVideoPreview() {
+  let containerRef!: HTMLDivElement;
+  const callCtx = useCallContext();
+
+  createEffect(() => {
+    callCtx.trackVersion();
+    const r = callCtx.room();
+    if (!r || callCtx.isVideoMuted()) return;
+
+    const pub = r.localParticipant.getTrackPublication(Track.Source.Camera);
+    const track = pub?.track;
+    if (!track || !containerRef) return;
+
+    const el = track.attach();
+    el.style.width = '100%';
+    el.style.height = '100%';
+    el.style.objectFit = 'cover';
+    el.style.transform = 'scaleX(-1)';
+    containerRef.appendChild(el);
+
+    onCleanup(() => {
+      track.detach(el);
+      el.remove();
+    });
+  });
+
+  return <div ref={containerRef} class="w-full h-full" />;
+}
+
+function ParticipantTile(props: { participant: RemoteParticipant }) {
+  const callCtx = useCallContext();
+
+  const hasVideo = () => {
+    // Subscribe to trackVersion so this re-evaluates when remote tracks change
+    callCtx.trackVersion();
+    const pub = props.participant.getTrackPublication(Track.Source.Camera);
+    return pub?.isSubscribed && !pub.isMuted;
+  };
+
+  const isSpeaking = () => {
+    callCtx.trackVersion();
+    return props.participant.isSpeaking;
+  };
+
+  return (
+    <div
+      class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
+      classList={{ 'ring-2 ring-accent-2': isSpeaking() }}
+    >
+      {/* Attach remote audio so we can hear this participant */}
+      <TrackRenderer
+        participant={props.participant}
+        source={Track.Source.Microphone}
+      />
+      <Show
+        when={hasVideo()}
+        fallback={
+          <div class="flex items-center justify-center w-full h-full p-4">
+            <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
+              {props.participant.identity.charAt(0).toUpperCase()}
+            </div>
+          </div>
+        }
+      >
+        <TrackRenderer
+          participant={props.participant}
+          source={Track.Source.Camera}
+        />
+      </Show>
+      <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs truncate max-w-[80%]">
+        {props.participant.identity}
+      </div>
+    </div>
+  );
+}
+
+const ControlButton: Component<{
+  onClick: () => void;
+  active?: boolean;
+  danger?: boolean;
+  children: any;
+}> = (props) => {
+  return (
+    <button
+      onClick={props.onClick}
+      class="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+      classList={{
+        'bg-failure text-white hover:bg-failure/80': props.danger,
+        'bg-surface-2 text-ink hover:bg-surface-3':
+          !props.danger && !props.active,
+        'bg-accent-2 text-white hover:bg-accent-3':
+          !props.danger && props.active,
+      }}
+    >
+      {props.children}
+    </button>
+  );
+};
+
+export function CallOverlay(props: { onLeave: () => void }) {
+  const callCtx = useCallContext();
+
+  const participants = () => Array.from(callCtx.remoteParticipants().values());
+
+  const gridCols = () => {
+    const count = participants().length + 1; // +1 for local
+    if (count <= 1) return 'grid-cols-1';
+    if (count <= 4) return 'grid-cols-2';
+    return 'grid-cols-3';
+  };
+
+  return (
+    <div class="flex flex-col h-full bg-surface-0">
+      {/* Participants grid */}
+      <div class={`flex-1 grid ${gridCols()} gap-2 p-2 auto-rows-fr`}>
+        {/* Local participant */}
+        <div
+          class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
+          classList={{
+            'ring-2 ring-accent-2': callCtx.room()?.localParticipant.isSpeaking,
+          }}
+        >
+          <Show
+            when={!callCtx.isVideoMuted()}
+            fallback={
+              <div class="flex items-center justify-center w-full h-full p-4">
+                <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
+                  You
+                </div>
+              </div>
+            }
+          >
+            <LocalVideoPreview />
+          </Show>
+          <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs">
+            You
+          </div>
+        </div>
+
+        <For each={participants()}>
+          {(participant) => <ParticipantTile participant={participant} />}
+        </For>
+      </div>
+
+      {/* Controls bar */}
+      <div class="flex items-center justify-center gap-3 p-3 bg-surface-1 border-t border-edge">
+        <ControlButton
+          onClick={() => callCtx.toggleAudio()}
+          active={!callCtx.isAudioMuted()}
+        >
+          <Show
+            when={!callCtx.isAudioMuted()}
+            fallback={<MicrophoneSlash class="w-5 h-5" />}
+          >
+            <Microphone class="w-5 h-5" />
+          </Show>
+        </ControlButton>
+
+        <ControlButton
+          onClick={() => callCtx.toggleVideo()}
+          active={!callCtx.isVideoMuted()}
+        >
+          <Show
+            when={!callCtx.isVideoMuted()}
+            fallback={<VideoCameraSlash class="w-5 h-5" />}
+          >
+            <VideoCamera class="w-5 h-5" />
+          </Show>
+        </ControlButton>
+
+        <ControlButton onClick={props.onLeave} danger>
+          <PhoneDisconnect class="w-5 h-5" />
+        </ControlButton>
+      </div>
+    </div>
+  );
+}

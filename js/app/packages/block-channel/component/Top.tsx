@@ -21,6 +21,8 @@ import Bell from '@icon/regular/bell.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import PhoneIcon from '@icon/regular/phone.svg';
+import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
@@ -172,6 +174,18 @@ export function Top(props: TopProps) {
       buttonComponent: () => (
         <AttachmentsButton attachments={channelModals.attachments} />
       ),
+    },
+    {
+      label: () => (channelModals.isInCall() ? 'Leave Call' : 'Call'),
+      icon: channelModals.isInCall() ? PhoneDisconnectIcon : PhoneIcon,
+      action: () => {
+        if (channelModals.isInCall()) {
+          channelModals.leaveCall();
+        } else {
+          channelModals.joinCall();
+        }
+      },
+      isActive: () => channelModals.isInCall(),
     },
     {
       label: 'Participants',

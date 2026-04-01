@@ -102,6 +102,9 @@
       "@service-notification/*": [
         "./packages/service-clients/service-notification/*"
       ],
+      "@service-call/*": [
+        "./packages/service-clients/service-call/*"
+      ],
       "@service-comms/*": [
         "./packages/service-clients/service-comms/*"
       ],
