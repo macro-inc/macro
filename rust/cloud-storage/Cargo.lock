@@ -3567,6 +3567,7 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "chrono",
+ "macro_service_urls",
  "macro_user_id",
  "model_notifications",
  "notification",
@@ -6041,6 +6042,14 @@ name = "macro_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "macro_service_urls"
+version = "0.1.0"
+dependencies = [
+ "macro_env",
+ "url",
 ]
 
 [[package]]
