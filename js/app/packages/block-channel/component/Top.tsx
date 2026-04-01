@@ -28,7 +28,7 @@ import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { createMemo, Show } from 'solid-js';
+import { type Component, createMemo, Show } from 'solid-js';
 import { AttachmentsButton } from './AttachmentsModal';
 import { useChannelContext } from '@block-channel/hooks/channel';
 import { isChannelAdminOrOwner } from '@queries/channel/derived';
@@ -124,6 +124,12 @@ export function Top(props: TopProps) {
   const attachmentsControl = useDrawerControl('attachments');
   const channelModals = useChannelModals();
 
+  const CallIcon: Component = (iconProps) => (
+    <Show when={channelModals.isInCall()} fallback={<PhoneIcon {...iconProps} />}>
+      <PhoneDisconnectIcon {...iconProps} />
+    </Show>
+  );
+
   const isAdminOrOwner = createMemo(() => {
     const channelData = channelContext.channel();
     return isChannelAdminOrOwner(channelData);
@@ -177,7 +183,7 @@ export function Top(props: TopProps) {
     },
     {
       label: () => (channelModals.isInCall() ? 'Leave Call' : 'Call'),
-      icon: channelModals.isInCall() ? PhoneDisconnectIcon : PhoneIcon,
+      icon: CallIcon,
       action: () => {
         if (channelModals.isInCall()) {
           channelModals.leaveCall();

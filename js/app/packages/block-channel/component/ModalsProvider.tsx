@@ -69,14 +69,14 @@ function ModalsProviderInner(props: ParentProps) {
         isInCall: call.isInThisChannel,
       }}
     >
-      <Show when={call.isInThisChannel()} fallback={props.children}>
-        <div class="flex flex-col h-full">
-          <div class="flex-1 min-h-0">{props.children}</div>
-          <div class="h-[300px] shrink-0 border-t border-edge">
+      <div class="relative h-full">
+        {props.children}
+        <Show when={call.isInThisChannel()}>
+          <div class="absolute inset-0 z-50">
             <CallOverlay onLeave={call.leaveCall} />
           </div>
-        </div>
-      </Show>
+        </Show>
+      </div>
       <NotificationsDrawer
         entity={{ id: blockId, type: 'channel' }}
         notificationSource={notificationSource}
