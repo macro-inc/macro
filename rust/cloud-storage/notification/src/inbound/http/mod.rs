@@ -1,6 +1,7 @@
 //! This module exposes the http adapter for inbound http requests via an axum router
 
 pub mod device;
+pub mod preferences;
 
 use axum::{
     Json, Router,
@@ -12,7 +13,7 @@ use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{CreatedAt, CursorOptionExt, CursorWithValAndFilter};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -44,21 +45,25 @@ pub struct NotificationIdPath {
 pub struct NotificationRouterState<S> {
     /// the inner S wrapped in an [Arc]
     pub inner: Arc<S>,
+    /// the statically known list of notification typenames which can be blocked by the user
+    pub blockable_notification_typenames: &'static HashSet<&'static str>,
 }
 
 impl<S> Clone for NotificationRouterState<S> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
+            blockable_notification_typenames: self.blockable_notification_typenames,
         }
     }
 }
 
 impl<S: NotificationReader> NotificationRouterState<S> {
     /// create a new instance of self
-    pub fn new(val: S) -> Self {
+    pub fn new(val: S, blockable_notification_typenames: &'static HashSet<&'static str>) -> Self {
         NotificationRouterState {
             inner: Arc::new(val),
+            blockable_notification_typenames,
         }
     }
 }
@@ -66,14 +71,27 @@ impl<S: NotificationReader> NotificationRouterState<S> {
 /// construct the router
 pub fn router<S: NotificationReader, T: Serialize + DeserializeOwned + Send + 'static>()
 -> Router<NotificationRouterState<S>> {
-    Router::new().nest(
-        "/bulk",
-        Router::new()
-            .route("/", delete(bulk_delete_notifications))
-            .route("/seen", patch(bulk_mark_seen))
-            .route("/done", patch(bulk_mark_done))
-            .route("/undone", patch(bulk_mark_undone)),
-    )
+    Router::new()
+        .nest(
+            "/bulk",
+            Router::new()
+                .route("/", delete(bulk_delete_notifications))
+                .route("/seen", patch(bulk_mark_seen))
+                .route("/done", patch(bulk_mark_done))
+                .route("/undone", patch(bulk_mark_undone)),
+        )
+        .route(
+            "/preferences",
+            axum::routing::get(preferences::get_notification_type_preferences::<S>),
+        )
+        .route(
+            "/preferences/{notification_event_type}/disable",
+            axum::routing::put(preferences::disable_notification_type::<S>),
+        )
+        .route(
+            "/preferences/{notification_event_type}/enable",
+            axum::routing::put(preferences::enable_notification_type::<S>),
+        )
 }
 
 /// the params for pagination

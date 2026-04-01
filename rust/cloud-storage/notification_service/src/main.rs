@@ -1,5 +1,6 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
+use crate::api::user_notification::BLOCKABLE_NOTIFICATIONS;
 use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
@@ -144,7 +145,10 @@ pub async fn main() -> anyhow::Result<()> {
         sns_endpoint_manager,
         platform_config,
     );
-    let ingress_state = ::notification::inbound::http::NotificationRouterState::new(reader_service);
+    let ingress_state = ::notification::inbound::http::NotificationRouterState::new(
+        reader_service,
+        &BLOCKABLE_NOTIFICATIONS,
+    );
 
     // Set up egress worker for delivering notifications from the queue
     let egress_repository =
