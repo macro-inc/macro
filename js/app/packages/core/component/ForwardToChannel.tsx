@@ -103,17 +103,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(props.initialAccessLevel ?? null);
-
   const blockBaseName = useMaybeBlockName() ?? props.blockName;
 
   createEffect(() => {
     const channelPermissions_ = channelPermissions();
     if (channelPermissions_) {
-      setSubmitAccessLevel(channelPermissions_?.access_level);
-    } else {
-      setSubmitAccessLevel(
-        ['md'].includes(blockBaseName as string) ? 'edit' : 'view'
-      );
+      setSubmitAccessLevel(channelPermissions_.access_level);
     }
   });
 
@@ -398,7 +393,8 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             </Button>
             <Button
               variant={selectedOptions().length > 0 ? 'accent' : 'secondary'}
-              class="h-[22px] py-2 pl-2 pr-2 rounded-xs flex items-center gap-1"
+              size="sm"
+              class="pl-2 pr-2 rounded-xs flex items-center gap-1"
               disabled={selectedOptions().length === 0}
               onClick={() => {
                 const options = selectedOptions();
