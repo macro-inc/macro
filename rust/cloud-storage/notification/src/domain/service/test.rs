@@ -1858,7 +1858,7 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
         })
     }
 
-    service.poll_email_digests(digest_to_notif).await.unwrap();
+    service.poll_email_digests(&digest_to_notif).await.unwrap();
 
     let published = queue.get_published();
     assert_eq!(published.len(), 1);
@@ -1918,7 +1918,7 @@ async fn it_fails_to_send_to_non_macro_users() {
     }
 
     service
-        .poll_email_digests(digest_to_notif)
+        .poll_email_digests(&digest_to_notif)
         .await
         .unwrap_err();
 }
@@ -1932,7 +1932,7 @@ async fn test_poll_email_digests_noop_when_empty() {
     }
 
     // MockDigestBatcher always returns Empty
-    service.poll_email_digests(digest_to_notif).await.unwrap();
+    service.poll_email_digests(&digest_to_notif).await.unwrap();
 }
 
 // ============================================================================

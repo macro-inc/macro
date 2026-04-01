@@ -12,7 +12,8 @@ env_var!(
         pub(crate) NotificationIngressQueue,
         pub(crate) ConnectionGatewayUrl,
         pub(crate) RedisUri,
-        pub(crate) AppleBundleId
+        pub(crate) AppleBundleId,
+        pub(crate) UnsubscribeHmacSecret
     }
 );
 

@@ -339,9 +339,13 @@ where
     }
 
     // #[tracing::instrument(err, skip(self))]
-    async fn poll_email_digests<T: NotificationExtEmail>(
-        &self,
-        f: fn(DigestBatch) -> Result<T, Report>,
+    async fn poll_email_digests<
+        'a,
+        T: NotificationExtEmail,
+        F: Fn(DigestBatch) -> Result<T, Report> + Send + Sync + 'static,
+    >(
+        &'a self,
+        f: &'a F,
     ) -> Result<ClaimResult<()>, Report> {
         let batch =
             match tokio::time::timeout(DELIVERY_TIMEOUT, self.digest_batcher.claim_ready_digest())

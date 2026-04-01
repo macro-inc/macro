@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
 use crate::api::user_notification::BLOCKABLE_NOTIFICATIONS;
+use ::notification::domain::models::email_notification_digest::ports::DigestBatch;
 use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
@@ -11,11 +12,13 @@ use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
 use config::Config;
 use email_formatting::EmailDigestNotification;
+use hmac::{Hmac, Mac};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use secretsmanager_client::SecretManager;
+use sha2::Sha256;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 
@@ -67,6 +70,10 @@ pub async fn main() -> anyhow::Result<()> {
         .await?;
 
     let vars = config::Vars::new()?;
+
+    let hmac_key = Hmac::<Sha256>::new_from_slice(vars.unsubscribe_hmac_secret.as_ref().as_bytes())
+        .expect("HMAC accepts any key size");
+
     let redis_client =
         redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
 
@@ -210,11 +217,15 @@ pub async fn main() -> anyhow::Result<()> {
         tracing::info!("starting notification egress worker");
         worker_clone.run_notifications().await
     });
+
+    let env = config.environment;
+    let digest_batch_to_email = move |batch: DigestBatch| {
+        EmailDigestNotification::new_from_digest_batch(batch, env, hmac_key.clone())
+    };
+
     tokio::spawn(async move {
         tracing::info!("starting digest worker");
-        worker
-            .run_digests(EmailDigestNotification::new_from_digest_batch)
-            .await
+        worker.run_digests(digest_batch_to_email).await
     });
 
     // Set up ingress worker for processing notification requests from the ingress queue
