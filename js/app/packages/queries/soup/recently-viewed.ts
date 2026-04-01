@@ -42,29 +42,25 @@ export function useRecentlyViewedSoupQuery() {
 }
 
 export function ensureItemInRecentlyViewed(itemId: string) {
-  const currentData = queryClient.getQueryData<SoupPage>(
-    recentlyViewedQueryKey
-  );
-  if (!currentData) return;
-
-  const alreadyPresent = currentData.items.some(
-    (item) => getSoupItemId(item) === itemId
-  );
-  if (alreadyPresent) return;
-
-  const soupEntity = getSoupEntityById(itemId);
-  if (!soupEntity) return;
-
   queryClient.setQueryData<SoupPage>(recentlyViewedQueryKey, (prev) => {
     if (!prev) return prev;
+
+    const alreadyPresent = prev.items.some(
+      (item) => getSoupItemId(item) === itemId
+    );
+    if (alreadyPresent) return prev;
+
+    const soupEntity = getSoupEntityById(itemId);
+    if (!soupEntity) return prev;
+
     return {
       ...prev,
-      items: [
-        soupEntity,
-        ...prev.items
-          .filter((item) => getSoupItemId(item) !== itemId)
-          .slice(0, RECENTLY_VIEWED_LIMIT - 1),
-      ],
+      items: [soupEntity, ...prev.items.slice(0, RECENTLY_VIEWED_LIMIT - 1)],
     };
   });
+
+  const data = queryClient.getQueryData<SoupPage>(recentlyViewedQueryKey);
+  if (data && !data.items.some((item) => getSoupItemId(item) === itemId)) {
+    queryClient.invalidateQueries({ queryKey: recentlyViewedQueryKey });
+  }
 }
