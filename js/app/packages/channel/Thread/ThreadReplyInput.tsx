@@ -1,7 +1,7 @@
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import type { Accessor, Setter } from 'solid-js';
+import { onCleanup, type Accessor, type Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import type { InputSnapshot } from '../Input';
 import { buildPostMessageRequest } from '../Input/message-payload';
@@ -24,6 +24,8 @@ type ThreadReplyInputProps = {
 };
 
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
+  onCleanup(() => props.setReplyInputEl?.(undefined));
+
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
