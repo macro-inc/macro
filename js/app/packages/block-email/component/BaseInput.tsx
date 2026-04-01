@@ -1245,7 +1245,6 @@ export function BaseInput(props: {
     )
   );
 
-
   return (
     <div
       ref={(el) => {
