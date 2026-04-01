@@ -319,18 +319,30 @@ export function Channel(props: ChannelProps) {
 
                         const handleFocusIn = () => {
                           setIsChannelInputHidden(true);
-                          keyboardWillShowHandler = (event: Event) => {
-                            const height =
-                              (event as CustomEvent<{ height: number }>).detail
-                                ?.height ?? 0;
-                            scrollReplyInputAboveKeyboard(item.id, height);
-                            keyboardWillShowHandler = undefined;
-                          };
-                          window.addEventListener(
-                            'keyboardWillShow',
-                            keyboardWillShowHandler,
-                            { once: true }
+                          const currentKeyboardHeight = parseFloat(
+                            getComputedStyle(
+                              document.documentElement
+                            ).getPropertyValue('--virtual-keyboard-height')
                           );
+                          if (currentKeyboardHeight > 0) {
+                            scrollReplyInputAboveKeyboard(
+                              item.id,
+                              currentKeyboardHeight
+                            );
+                          } else {
+                            keyboardWillShowHandler = (event: Event) => {
+                              const height =
+                                (event as CustomEvent<{ height: number }>)
+                                  .detail?.height ?? 0;
+                              scrollReplyInputAboveKeyboard(item.id, height);
+                              keyboardWillShowHandler = undefined;
+                            };
+                            window.addEventListener(
+                              'keyboardWillShow',
+                              keyboardWillShowHandler,
+                              { once: true }
+                            );
+                          }
                         };
 
                         const handleFocusOut = (e: FocusEvent) => {
