@@ -4,6 +4,7 @@ import { useReferralCode } from '@core/context/user';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
+import { isOk } from '@core/util/maybeResult';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import { Button } from '@ui/components/Button';
 import { toast } from '@core/component/Toast/Toast';
@@ -45,8 +46,10 @@ export const InviteModal = () => {
     if (!emails.length) return;
     setSending(true);
     for (const email of emails) {
-      authServiceClient.sendReferralInvite(email);
-      contactsClient.addContact(`macro|${email.toLowerCase()}`);
+      const result = await authServiceClient.sendReferralInvite(email);
+      if (isOk(result)) {
+        contactsClient.addContact(`macro|${email.toLowerCase()}`);
+      }
     }
     setValue('');
     setSending(false);

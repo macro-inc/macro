@@ -5,6 +5,7 @@ import { useReferralCode } from '@core/context/user';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
+import { isOk } from '@core/util/maybeResult';
 
 function parseEmails(raw: string): string[] {
   return raw
@@ -49,8 +50,11 @@ function EmailInviteContent(props: LessonContentProps) {
     const emails = parseEmails(value());
     if (!emails.length) return;
     for (const email of emails) {
-      authServiceClient.sendReferralInvite(email);
-      contactsClient.addContact(`macro|${email.toLowerCase()}`);
+      authServiceClient.sendReferralInvite(email).then((result) => {
+        if (isOk(result)) {
+          contactsClient.addContact(`macro|${email.toLowerCase()}`);
+        }
+      });
     }
   });
 
