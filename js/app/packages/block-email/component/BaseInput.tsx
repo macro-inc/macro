@@ -631,7 +631,7 @@ export function BaseInput(props: {
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let draftSaveTimer: number | undefined;
-  const DRAFT_DEBOUNCE_MS = 1000;
+  const DRAFT_DEBOUNCE_MS = 500;
 
   function collectDraft() {
     $removeAllWatermarkNodes(editor());

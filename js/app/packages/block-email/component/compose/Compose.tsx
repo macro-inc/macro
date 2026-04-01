@@ -60,7 +60,7 @@ import {
 import { ComposeLayout } from './ComposeLayout';
 import { EmailComposeToolbar } from './ComposeToolbar';
 
-const DRAFT_DEBOUNCE_MS = 1000;
+const DRAFT_DEBOUNCE_MS = 500;
 
 type UndoComposeSnapshot = {
   draftId: string;
