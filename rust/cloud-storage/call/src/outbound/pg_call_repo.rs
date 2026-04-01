@@ -134,8 +134,9 @@ impl CallRepository for PgCallRepo {
     async fn remove_participant(&self, call_id: &Uuid, user_id: &str) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            DELETE FROM call_participants
-            WHERE call_id = $1 AND user_id = $2
+            UPDATE call_participants
+            SET left_at = now()
+            WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL
             "#,
             call_id,
             user_id,
@@ -151,7 +152,7 @@ impl CallRepository for PgCallRepo {
             r#"
             SELECT call_id, user_id, joined_at
             FROM call_participants
-            WHERE call_id = $1
+            WHERE call_id = $1 AND left_at IS NULL
             ORDER BY joined_at ASC
             "#,
             call_id,
@@ -175,7 +176,7 @@ impl CallRepository for PgCallRepo {
             r#"
             SELECT COUNT(*) as "count!"
             FROM call_participants
-            WHERE call_id = $1
+            WHERE call_id = $1 AND left_at IS NULL
             "#,
             call_id,
         )
@@ -189,7 +190,7 @@ impl CallRepository for PgCallRepo {
             r#"
             SELECT EXISTS(
                 SELECT 1 FROM call_participants
-                WHERE call_id = $1 AND user_id = $2
+                WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL
             ) as "exists!"
             "#,
             call_id,
@@ -270,11 +271,11 @@ impl CallRepository for PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
-        // Copy participants to call_record_participants.
+        // Copy all participants (including soft-deleted) to call_record_participants.
         sqlx::query!(
             r#"
-            INSERT INTO call_record_participants (call_record_id, user_id, joined_at)
-            SELECT $1, user_id, joined_at
+            INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
+            SELECT $1, user_id, joined_at, left_at
             FROM call_participants
             WHERE call_id = $2
             "#,

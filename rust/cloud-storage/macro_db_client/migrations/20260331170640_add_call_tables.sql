@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS call_participants (
     call_id     UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
     user_id     TEXT NOT NULL,
     joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    left_at     TIMESTAMPTZ,
     PRIMARY KEY (call_id, user_id)
 );
 

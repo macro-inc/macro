@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT call_id, user_id, joined_at\n            FROM call_participants\n            WHERE call_id = $1\n            ORDER BY joined_at ASC\n            ",
+  "query": "\n            SELECT call_id, user_id, joined_at\n            FROM call_participants\n            WHERE call_id = $1 AND left_at IS NULL\n            ORDER BY joined_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -30,5 +30,5 @@
       false
     ]
   },
-  "hash": "3a521493725b7ac065769abf0b71e0b70331ad7f63f9e0c3d61e56e13d4c07ae"
+  "hash": "2a75819c2697a91f55f1161c1dd79d065235f02119bbb2cc2b881f6fa8f82274"
 }

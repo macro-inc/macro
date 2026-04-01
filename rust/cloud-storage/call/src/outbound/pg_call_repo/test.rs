@@ -243,6 +243,50 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     Ok(())
 }
 
+// -- archive preserves soft-deleted participants ------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_call_preserves_soft_deleted_participants(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Soft-delete both participants (simulates leave_or_end_call flow).
+    repo.remove_participant(&CALL1, USER_A).await?;
+    repo.remove_participant(&CALL1, USER_B).await?;
+
+    // Active count should be 0 but rows still exist.
+    assert_eq!(repo.get_participant_count(&CALL1).await?, 0);
+
+    // Archive the call.
+    let record_id = repo.archive_call(&CALL1).await?;
+
+    // call_record_participants should have both participants with left_at set.
+    let rows = sqlx::query!(
+        r#"
+        SELECT user_id, left_at
+        FROM call_record_participants
+        WHERE call_record_id = $1
+        ORDER BY joined_at ASC
+        "#,
+        record_id,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    assert_eq!(rows.len(), 2);
+    let user_ids: Vec<&str> = rows.iter().map(|r| r.user_id.as_str()).collect();
+    assert!(user_ids.contains(&USER_A));
+    assert!(user_ids.contains(&USER_B));
+    // Both should have left_at set since they were soft-deleted.
+    assert!(rows.iter().all(|r| r.left_at.is_some()));
+
+    Ok(())
+}
+
 // -- set_active_call_recording_url --------------------------------------------
 
 #[sqlx::test(
