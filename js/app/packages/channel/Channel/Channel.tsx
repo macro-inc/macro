@@ -69,6 +69,7 @@ import { resetKeyboardModality } from './util';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
+import { scrollReplyInputIntoView } from '../scroll-utils';
 
 type ChannelProps = {
   channelId: string;
@@ -184,6 +185,7 @@ export function Channel(props: ChannelProps) {
     onReply: (ctx) => {
       const state = threadManager.getOrCreateThreadState(ctx.message.id);
       state.setIsReplying(true);
+      requestAnimationFrame(() => scrollReplyInputIntoView(ctx.message.id));
     },
     onEdit: ({ message }) => {
       messageEditor.start(message);

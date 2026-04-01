@@ -9,10 +9,7 @@ import { onCleanup, type Accessor } from 'solid-js';
 import type { MessageSelection } from '../Channel/create-message-selection';
 import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
 import type { MessageActions, MessageData } from '../Message';
-import {
-  scrollMessageIntoView,
-  scrollReplyInputIntoView,
-} from '../scroll-utils';
+import { scrollMessageIntoView } from '../scroll-utils';
 
 type CreateThreadHotkeysOptions = {
   messageListScopeId: string;
@@ -164,7 +161,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const parentMsg = options.parentMessage();
       const actions = options.getMessageActions(parentMsg);
       actions?.onReply?.({ message: parentMsg });
-      requestAnimationFrame(() => scrollReplyInputIntoView(parentMsg.id));
       return true;
     },
   }).withGroup(group);

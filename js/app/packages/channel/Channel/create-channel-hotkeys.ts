@@ -6,7 +6,6 @@ import type { ThreadListNavigation } from './ThreadList';
 import type { MessageSelection } from './create-message-selection';
 import type { ApiChannelMessage } from '@service-comms/client';
 import type { MessageActions, MessageData } from '../Message';
-import { scrollReplyInputIntoView } from '../scroll-utils';
 
 type CreateChannelHotkeysOptions = {
   selection: MessageSelection;
@@ -116,7 +115,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
       actions?.onReply?.({ message: msg });
-      requestAnimationFrame(() => scrollReplyInputIntoView(msg.id));
       return true;
     },
   });
