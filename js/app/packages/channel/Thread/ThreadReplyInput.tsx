@@ -9,6 +9,7 @@ import { buildPostMessageRequest } from '../Input/message-payload';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
 import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
+import { scrollReplyInputAboveKeyboard } from '../scroll-utils';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
@@ -25,6 +26,7 @@ type ThreadReplyInputProps = {
 
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
   const mobileChannelInputVisibility = useMobileChannelInputVisibility();
+  let keyboardWillShowHandler: ((e: Event) => void) | undefined;
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
@@ -48,10 +50,28 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
     <div
       class="relative pt-2"
       style={{ 'margin-left': replyInputOffsetX }}
-      onFocusIn={() => mobileChannelInputVisibility?.hide()}
+      onFocusIn={() => {
+        mobileChannelInputVisibility?.hide();
+        keyboardWillShowHandler = (event: Event) => {
+          const height =
+            (event as CustomEvent<{ height: number }>).detail?.height ?? 0;
+          scrollReplyInputAboveKeyboard(props.messageId, height);
+          keyboardWillShowHandler = undefined;
+        };
+        window.addEventListener('keyboardWillShow', keyboardWillShowHandler, {
+          once: true,
+        });
+      }}
       onFocusOut={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
           mobileChannelInputVisibility?.show();
+          if (keyboardWillShowHandler) {
+            window.removeEventListener(
+              'keyboardWillShow',
+              keyboardWillShowHandler
+            );
+            keyboardWillShowHandler = undefined;
+          }
         }
       }}
       data-reply-input
