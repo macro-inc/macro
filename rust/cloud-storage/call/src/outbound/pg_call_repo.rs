@@ -230,17 +230,19 @@ impl CallRepository for PgCallRepo {
     async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
         let mut tx = self.pool.begin().await?;
 
-        // Fetch the active call.
+        // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
             SELECT id, channel_id, room_name, created_by, created_at, egress_id
             FROM calls
             WHERE id = $1
+            FOR UPDATE
             "#,
             call_id,
         )
-        .fetch_one(tx.as_mut())
-        .await?;
+        .fetch_optional(tx.as_mut())
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)?;
 
         let now = Utc::now();
         let duration_ms = now
