@@ -32,6 +32,7 @@ cowlike = { path = "../cowlike" }
 either = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+hmac = { workspace = true }
 itertools = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
 macro_user_id = { path = "../macro_user_id" }
@@ -57,6 +58,7 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
+url = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 

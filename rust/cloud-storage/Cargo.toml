@@ -52,6 +52,7 @@ members = [
   "gmail_client",
   "image_proxy_service",
   "integration_tests/*",
+  "invite_email",
   "lambda_client",
   "lexical_client",
   "macro_auth",
@@ -69,6 +70,7 @@ members = [
   "macro_sha_count_client",
   "macro_share_permissions",
   "macro_uuid",
+  "memory",
   "mention_utils",
   "model",
   "model_notifications",
@@ -101,7 +103,6 @@ members = [
   "rate_limit",
   "readonly_pool",
   "referral",
-  "invite_email",
   "roles_and_permissions",
   "rpc/axum_rpc",
   "rpc/axum_rpc_emit",
@@ -131,7 +132,7 @@ members = [
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "user_quota",
-  "worker_trigger", "memory",
+  "worker_trigger",
 ]
 
 [workspace.dependencies]
@@ -166,6 +167,7 @@ ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
 hex = "0.4.3"
+hmac = "0.12.1"
 http = "1"
 http-body-util = "0.1.2"
 inquire = "0.7"
