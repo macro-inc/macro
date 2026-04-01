@@ -101,7 +101,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const [submitAccessLevel, setSubmitAccessLevel] =
-    createSignal<AccessLevel | null>(props.initialAccessLevel ?? null);
+    createSignal<AccessLevel | null>(props.initialAccessLevel ?? 'view');
   createEffect(() => {
     const channelPermissions_ = channelPermissions();
     if (channelPermissions_) {
