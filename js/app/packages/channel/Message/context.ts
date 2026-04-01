@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'solid-js';
-import type { Accessor } from 'solid-js';
+import { createContext, useContext, type Accessor } from 'solid-js';
+import type { MessageActions, MessageData } from './types';
 
 const MessageContext = createContext<Accessor<MessageData>>();
 const MessageActionsContext = createContext<MessageActions>();
