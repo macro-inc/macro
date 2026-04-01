@@ -356,22 +356,6 @@ export function EmailCompose(props: EmailComposeProps) {
       }
     }
 
-    const cleanupWatermark = $appendWatermarkNodeToLast(
-      currentEditor,
-      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
-    );
-
-    const prepared = prepareEmailBody(currentEditor, undefined);
-    if (!prepared) return;
-
-    const bodyMacro = content();
-
-    const data = {
-      text: prepared.bodyText,
-      html: prepared.bodyHtml,
-      raw: bodyMacro,
-    };
-
     const currentLink = link();
     const recipients = form.recipients();
 
@@ -383,7 +367,7 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
-    if (!data.raw.trim()) {
+    if (!content().trim()) {
       setValidationError({
         type: 'no_message',
         message: 'Please enter a message',
@@ -412,6 +396,21 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
+    // Append watermark after all validation passes so failed sends don't
+    // leave orphaned watermark nodes in the editor tree.
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      currentEditor,
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+    );
+
+    const prepared = prepareEmailBody(currentEditor, undefined);
+    if (!prepared) {
+      cleanupWatermark();
+      return;
+    }
+
+    const bodyMacro = content();
+
     sendMutation.mutate({
       message: {
         to: convertToContactInfoArray(recipients.to),
@@ -424,9 +423,9 @@ export function EmailCompose(props: EmailComposeProps) {
             ? convertToContactInfoArray(recipients.bcc)
             : [],
         subject: form.subject(),
-        body_text: data.text,
-        body_html: data.html,
-        body_macro: data.raw,
+        body_text: prepared.bodyText,
+        body_html: prepared.bodyHtml,
+        body_macro: bodyMacro,
         db_id: currentDraftID(),
       },
     });
