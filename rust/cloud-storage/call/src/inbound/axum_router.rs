@@ -230,7 +230,7 @@ pub async fn webhook_handler<S: CallService>(
     let auth_token = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| CallError::Internal(anyhow::anyhow!("missing Authorization header")))?;
+        .ok_or(CallError::Auth)?;
 
     state
         .service
@@ -284,13 +284,17 @@ impl IntoResponse for CallError {
         let status_code = match &self {
             CallError::NotFound(_) => StatusCode::NOT_FOUND,
             CallError::NotInCall => StatusCode::BAD_REQUEST,
+            CallError::Auth => StatusCode::UNAUTHORIZED,
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
 
-        let message = self.to_string();
+        let message = match &self {
+            CallError::Internal(_) => "internal server error".to_string(),
+            other => other.to_string(),
+        };
         (
             status_code,
             Json(ErrorResponse {

@@ -138,7 +138,10 @@ impl CallRtcClient for LivekitRtcClient {
         let event = self
             .webhook_receiver
             .receive(body, auth_token)
-            .map_err(|e| CallError::Internal(anyhow::anyhow!("webhook validation failed: {e}")))?;
+            .map_err(|e| {
+                tracing::warn!(error=?e, "webhook signature validation failed");
+                CallError::Auth
+            })?;
 
         // Extract file URL from egress info if available.
         let (egress_id, file_url) = match &event.egress_info {

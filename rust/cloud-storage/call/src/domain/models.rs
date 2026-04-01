@@ -117,6 +117,9 @@ pub enum CallError {
     /// User is not in the call.
     #[error("user not in call")]
     NotInCall,
+    /// Authentication or signature validation failed.
+    #[error("authentication failed")]
+    Auth,
     /// An internal error occurred.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
