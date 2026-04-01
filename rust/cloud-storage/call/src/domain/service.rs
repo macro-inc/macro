@@ -309,7 +309,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
 
                 tracing::info!(egress_id, file_url, "egress recording completed");
 
-                // Find the call record by egress_id and update the recording URL.
+                // Find the archived call record by egress_id and update the recording URL.
                 if let Some(call_record_id) = self
                     .repo
                     .get_call_record_by_egress_id(egress_id)
@@ -321,7 +321,16 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
                 } else {
-                    tracing::warn!(egress_id, "no call record found for egress_id");
+                    // Call not yet archived — store on the active call so
+                    // archive_call can carry it forward.
+                    let updated = self
+                        .repo
+                        .set_active_call_recording_url(egress_id, file_url)
+                        .await
+                        .map_err(|e| CallError::Internal(e.into()))?;
+                    if !updated {
+                        tracing::warn!(egress_id, "no active call or call record found for egress_id");
+                    }
                 }
             }
             _ => {

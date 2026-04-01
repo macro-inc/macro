@@ -243,6 +243,60 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     Ok(())
 }
 
+// -- set_active_call_recording_url --------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn set_active_call_recording_url_updates_matching_call(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Set egress_id on the fixture call first.
+    repo.set_egress_id(&CALL1, "egress-123").await?;
+
+    // Should update and return true.
+    let updated = repo
+        .set_active_call_recording_url("egress-123", "s3://bucket/recording.mp4")
+        .await?;
+    assert!(updated);
+
+    // Verify the URL is on the active call.
+    let call = repo.get_call_by_channel_id(&CH1).await?.unwrap();
+    assert_eq!(call.egress_id.as_deref(), Some("egress-123"));
+
+    // Now archive and verify recording_url carries forward.
+    let record_id = repo.archive_call(&CALL1).await?;
+    let url = sqlx::query_scalar!(
+        r#"SELECT recording_url FROM call_records WHERE id = $1"#,
+        record_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(url.as_deref(), Some("s3://bucket/recording.mp4"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn set_active_call_recording_url_returns_false_when_no_match(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let updated = repo
+        .set_active_call_recording_url("nonexistent-egress", "s3://bucket/recording.mp4")
+        .await?;
+    assert!(!updated);
+
+    Ok(())
+}
+
 // -- create_transcript_segment ------------------------------------------------
 
 #[sqlx::test(

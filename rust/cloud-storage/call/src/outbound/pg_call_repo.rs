@@ -233,7 +233,7 @@ impl CallRepository for PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_url
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -251,11 +251,11 @@ impl CallRepository for PgCallRepo {
             .max(0);
         let record_id = Uuid::now_v7();
 
-        // Insert into call_records (including egress_id).
+        // Insert into call_records (including egress_id and any early recording_url).
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
             record_id,
             call.channel_id,
@@ -265,6 +265,7 @@ impl CallRepository for PgCallRepo {
             now,
             duration_ms,
             call.egress_id,
+            call.recording_url,
         )
         .execute(tx.as_mut())
         .await?;
@@ -342,6 +343,24 @@ impl CallRepository for PgCallRepo {
         )
         .fetch_optional(&self.pool)
         .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn set_active_call_recording_url(
+        &self,
+        egress_id: &str,
+        recording_url: &str,
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE calls SET recording_url = $2 WHERE egress_id = $1
+            "#,
+            egress_id,
+            recording_url,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
     }
 
     #[tracing::instrument(err, skip(self, segment))]

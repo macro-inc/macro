@@ -100,6 +100,16 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
+    /// Set the recording URL on an active call (by egress ID).
+    ///
+    /// Used when `egress_ended` arrives before the call is archived.
+    /// Returns `true` if a matching active call was found and updated.
+    fn set_active_call_recording_url(
+        &self,
+        egress_id: &str,
+        recording_url: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Insert a transcript segment for an active call.
     fn create_transcript_segment(
         &self,

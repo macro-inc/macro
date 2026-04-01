@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS calls (
     room_name   TEXT NOT NULL,
     created_by  TEXT NOT NULL,
     egress_id   TEXT,
+    recording_url TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT calls_one_per_channel UNIQUE (channel_id)
 );

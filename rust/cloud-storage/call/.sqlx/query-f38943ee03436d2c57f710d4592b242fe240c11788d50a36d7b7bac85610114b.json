@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id\n            FROM calls\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_url\n            FROM calls\n            WHERE id = $1\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,11 @@
         "ordinal": 5,
         "name": "egress_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "recording_url",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -45,8 +50,9 @@
       false,
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "d01d678114a6d7df2ab63718e3964ca1e9ae7883d06dfab3637829749a42b351"
+  "hash": "f38943ee03436d2c57f710d4592b242fe240c11788d50a36d7b7bac85610114b"
 }
