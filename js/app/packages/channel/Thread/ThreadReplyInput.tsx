@@ -1,4 +1,3 @@
-import { useMobileChannelInputVisibility } from '@channel/Channel/mobile-channel-input-visibility';
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
@@ -9,7 +8,6 @@ import { buildPostMessageRequest } from '../Input/message-payload';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
 import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
-import { scrollReplyInputAboveKeyboard } from '../scroll-utils';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
@@ -22,11 +20,10 @@ type ThreadReplyInputProps = {
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
   setIsReplying: Setter<boolean>;
+  setReplyInputEl?: Setter<HTMLElement | undefined>;
 };
 
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
-  const mobileChannelInputVisibility = useMobileChannelInputVisibility();
-  let keyboardWillShowHandler: ((e: Event) => void) | undefined;
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
@@ -50,30 +47,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
     <div
       class="relative pt-2"
       style={{ 'margin-left': replyInputOffsetX }}
-      onFocusIn={() => {
-        mobileChannelInputVisibility?.hide();
-        keyboardWillShowHandler = (event: Event) => {
-          const height =
-            (event as CustomEvent<{ height: number }>).detail?.height ?? 0;
-          scrollReplyInputAboveKeyboard(props.messageId, height);
-          keyboardWillShowHandler = undefined;
-        };
-        window.addEventListener('keyboardWillShow', keyboardWillShowHandler, {
-          once: true,
-        });
-      }}
-      onFocusOut={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          mobileChannelInputVisibility?.show();
-          if (keyboardWillShowHandler) {
-            window.removeEventListener(
-              'keyboardWillShow',
-              keyboardWillShowHandler
-            );
-            keyboardWillShowHandler = undefined;
-          }
-        }
-      }}
+      ref={(el) => props.setReplyInputEl?.(el)}
       data-reply-input
       data-reply-input-id={props.messageId}
     >
