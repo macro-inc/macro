@@ -14,8 +14,8 @@ export function useJoinCallMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (channelId: string) =>
-      await throwOnErr(async () =>
-        await callServiceClient.getOrCreateCall(channelId)
+      await throwOnErr(
+        async () => await callServiceClient.getOrCreateCall(channelId)
       ),
     ...withCallbacks(
       {
@@ -34,8 +34,8 @@ export function useLeaveCallMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (channelId: string) =>
-      await throwOnErr(async () =>
-        await callServiceClient.leaveCall(channelId)
+      await throwOnErr(
+        async () => await callServiceClient.leaveCall(channelId)
       ),
     ...withCallbacks(
       {
