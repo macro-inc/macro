@@ -1,5 +1,7 @@
 //! Domain models for the call crate.
 
+use std::fmt;
+
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -58,7 +60,7 @@ pub struct LeaveCallResponse {
 }
 
 /// Configuration for S3 egress output.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct EgressS3Config {
     /// S3 bucket name.
     pub bucket: String,
@@ -68,6 +70,17 @@ pub struct EgressS3Config {
     pub access_key: String,
     /// AWS secret access key.
     pub secret: String,
+}
+
+impl fmt::Debug for EgressS3Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EgressS3Config")
+            .field("bucket", &self.bucket)
+            .field("region", &self.region)
+            .field("access_key", &"<redacted>")
+            .field("secret", &"<redacted>")
+            .finish()
+    }
 }
 
 /// A validated webhook event from the RTC provider.

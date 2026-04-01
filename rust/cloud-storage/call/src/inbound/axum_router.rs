@@ -262,10 +262,16 @@ pub async fn webhook_handler<S: CallService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn transcript_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+    user: MacroUserExtractor,
     Json(segment): Json<TranscriptSegmentRequest>,
 ) -> Result<StatusCode, CallError> {
-    let channel_id = channel_id_from_receipt(&_access.entity_access_receipt)?;
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let user_id = user.macro_user_id.as_ref();
+
+    if segment.speaker_id != user_id {
+        return Err(CallError::Auth);
+    }
 
     state
         .service
