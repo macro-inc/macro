@@ -89,12 +89,14 @@ pub struct CallWebhookEvent {
     pub created_at: i64,
 }
 
-/// A transcript segment from the LiveKit Agent STT pipeline.
+/// A transcript segment from LiveKit Inference STT.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSegmentRequest {
-    /// The speaker's user ID.
+    /// LiveKit segment ID (used for deduplication across multiple submitters).
+    pub segment_id: String,
+    /// The speaker's user ID (from `lk.transcribed_track_id`).
     pub speaker_id: String,
     /// The transcribed text content.
     pub content: String,

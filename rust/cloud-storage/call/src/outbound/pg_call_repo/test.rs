@@ -256,6 +256,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     let now = Utc::now();
 
     let seg1 = TranscriptSegmentRequest {
+        segment_id: "seg-001".to_string(),
         speaker_id: USER_A.to_string(),
         content: "hello world".to_string(),
         started_at: now,
@@ -263,6 +264,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
         is_final: true,
     };
     let seg2 = TranscriptSegmentRequest {
+        segment_id: "seg-002".to_string(),
         speaker_id: USER_B.to_string(),
         content: "hi there".to_string(),
         started_at: now,
@@ -272,6 +274,9 @@ async fn create_transcript_segment_stores_and_increments_sequence(
 
     repo.create_transcript_segment(&CALL1, &seg1).await?;
     repo.create_transcript_segment(&CALL1, &seg2).await?;
+
+    // Duplicate segment_id should be ignored.
+    repo.create_transcript_segment(&CALL1, &seg1).await?;
 
     let rows = sqlx::query!(
         r#"
@@ -305,6 +310,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
 
     // Add a transcript segment to the active call.
     let seg = TranscriptSegmentRequest {
+        segment_id: "seg-archive-001".to_string(),
         speaker_id: USER_A.to_string(),
         content: "test transcript".to_string(),
         started_at: now,

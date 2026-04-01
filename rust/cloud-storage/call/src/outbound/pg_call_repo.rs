@@ -284,8 +284,8 @@ impl CallRepository for PgCallRepo {
         // Copy transcripts to call_record_transcripts.
         sqlx::query!(
             r#"
-            INSERT INTO call_record_transcripts (call_record_id, speaker_id, content, started_at, ended_at, sequence_num)
-            SELECT $1, speaker_id, content, started_at, ended_at, sequence_num
+            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
+            SELECT $1, segment_id, speaker_id, content, started_at, ended_at, sequence_num
             FROM call_transcripts
             WHERE call_id = $2
             "#,
@@ -350,14 +350,16 @@ impl CallRepository for PgCallRepo {
     ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            INSERT INTO call_transcripts (call_id, speaker_id, content, started_at, ended_at, sequence_num)
-            VALUES ($1, $2, $3, $4, $5, (
+            INSERT INTO call_transcripts (call_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
+            VALUES ($1, $2, $3, $4, $5, $6, (
                 SELECT COALESCE(MAX(sequence_num), 0) + 1
                 FROM call_transcripts
                 WHERE call_id = $1
             ))
+            ON CONFLICT (call_id, segment_id) DO NOTHING
             "#,
             call_id,
+            segment.segment_id,
             segment.speaker_id,
             segment.content,
             segment.started_at,

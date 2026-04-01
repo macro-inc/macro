@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Path, State},
+    extract::{FromRef, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -79,6 +79,7 @@ fn channel_id_from_receipt<T: RequiredPermission>(
 /// Routes:
 /// - `GET /{channel_id}` — get or create a call (join existing or start new)
 /// - `DELETE /{channel_id}` — leave or end a call
+/// - `POST /{channel_id}/transcript` — ingest a transcript segment (from authenticated frontend)
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -89,6 +90,10 @@ where
         .route(
             "/{channel_id}",
             get(get_or_create_call_handler::<S, Svc>).delete(leave_or_end_call_handler::<S, Svc>),
+        )
+        .route(
+            "/{channel_id}/transcript",
+            post(transcript_handler::<S, Svc>),
         )
         .with_state(state)
 }
@@ -117,11 +122,10 @@ impl<S: CallService> WebhookRouterState<S> {
     }
 }
 
-/// Webhook router for RTC provider event ingestion and agent transcript ingestion.
+/// Webhook router for RTC provider event ingestion.
 ///
 /// Routes:
 /// - `POST /webhook` — ingest a webhook event from LiveKit
-/// - `POST /{channel_id}/transcript` — ingest a transcript segment from the LiveKit Agent
 pub fn webhook_router<S, T>(state: WebhookRouterState<S>) -> Router<T>
 where
     S: CallService,
@@ -129,7 +133,6 @@ where
 {
     Router::new()
         .route("/webhook", post(webhook_handler::<S>))
-        .route("/{channel_id}/transcript", post(transcript_handler::<S>))
         .with_state(state)
 }
 
@@ -239,8 +242,8 @@ pub async fn webhook_handler<S: CallService>(
 
 /// Handler for `POST /call/{channel_id}/transcript`.
 ///
-/// Receives transcript segments from the LiveKit Agent STT pipeline.
-/// Intended for internal service-to-service calls.
+/// Receives transcript segments from the frontend.
+/// Requires channel membership. Duplicate segments (same `segment_id`) are ignored.
 #[utoipa::path(
     post,
     operation_id = "ingest_transcript",
@@ -251,16 +254,19 @@ pub async fn webhook_handler<S: CallService>(
     request_body = TranscriptSegmentRequest,
     responses(
         (status = 200, description = "Segment ingested"),
+        (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse, description = "No active call"),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn transcript_handler<S: CallService>(
-    State(state): State<WebhookRouterState<S>>,
-    Path(channel_id): Path<Uuid>,
+pub async fn transcript_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Json(segment): Json<TranscriptSegmentRequest>,
 ) -> Result<StatusCode, CallError> {
+    let channel_id = channel_id_from_receipt(&_access.entity_access_receipt)?;
+
     state
         .service
         .ingest_transcript_segment(&channel_id, segment)
