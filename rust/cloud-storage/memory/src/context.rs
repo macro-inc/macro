@@ -104,13 +104,13 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
     );
     let channels_service = ChannelServiceImpl::new(
         PgCommsRepo {
-            pool_readonly: pool.clone(),
+            pool: readonly_pool::ReadOnlyPool(pool.clone()),
         },
         PgUserRepo::new(pool.clone()),
         frecency_storage,
     );
     let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(pool.clone()),
+        PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,

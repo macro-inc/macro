@@ -258,14 +258,14 @@ async fn main() -> anyhow::Result<()> {
     // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
     let channel_service_for_soup = ChannelServiceImpl::new(
         PgCommsRepo {
-            pool_readonly: readonly_db.clone(),
+            pool: readonly_pool::ReadOnlyPool(readonly_db.clone()),
         },
         PgUserRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
     let channel_service_for_comms = ChannelServiceImpl::new(
         PgCommsRepo {
-            pool_readonly: db.clone(),
+            pool: readonly_pool::ReadOnlyPool(db.clone()),
         },
         PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
@@ -362,7 +362,7 @@ async fn main() -> anyhow::Result<()> {
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
-                PgSoupRepo::new(readonly_db.clone()),
+                PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
                 frecency_service,
                 readonly_email_service,
                 channel_service_for_soup,

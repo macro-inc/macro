@@ -155,13 +155,13 @@ async fn main() -> anyhow::Result<()> {
     );
     let channels_service = ChannelServiceImpl::new(
         PgCommsRepo {
-            pool_readonly: db.clone(),
+            pool: readonly_pool::ReadOnlyPool(db.clone()),
         },
         PgUserRepo::new(db.clone()),
         frecency_storage,
     );
     let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(db.clone()),
+        PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,

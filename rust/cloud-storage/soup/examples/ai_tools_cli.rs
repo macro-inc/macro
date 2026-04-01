@@ -61,13 +61,13 @@ async fn main() {
 
     // Create the channels service with real database connections
     let comms_repo = PgCommsRepo {
-        pool_readonly: pool.clone(),
+        pool: readonly_pool::ReadOnlyPool(pool.clone()),
     };
     let user_repo = PgUserRepo::new(pool.clone());
     let channels_service = ChannelServiceImpl::new(comms_repo, user_repo, frecency_storage);
 
     // Create the soup service with real database connections
-    let soup_repo = PgSoupRepo::new(pool);
+    let soup_repo = PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool));
     let soup_service = SoupImpl::new(
         soup_repo,
         frecency_service,

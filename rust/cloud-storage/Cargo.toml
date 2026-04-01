@@ -98,6 +98,7 @@ members = [
   "properties_db_client",
   "properties_service",
   "rate_limit",
+  "readonly_pool",
   "referral",
   "invite_email",
   "roles_and_permissions",

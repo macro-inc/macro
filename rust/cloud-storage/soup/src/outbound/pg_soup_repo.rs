@@ -7,22 +7,19 @@ use crate::{
 };
 use either::Either;
 use models_soup::{SoupProperty, item::SoupItem};
-use sqlx::PgPool;
+use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
 mod expanded;
 mod unexpanded;
 
 pub struct PgSoupRepo {
-    // this pool only does read queries. if you need to do write queries make a separate pool
-    pool_readonly: PgPool,
+    pool: ReadOnlyPool,
 }
 
 impl PgSoupRepo {
-    pub fn new(pool: PgPool) -> Self {
-        PgSoupRepo {
-            pool_readonly: pool,
-        }
+    pub fn new(pool: ReadOnlyPool) -> Self {
+        PgSoupRepo { pool }
     }
 }
 
@@ -38,7 +35,7 @@ impl SoupRepo for PgSoupRepo {
                 // Extract the EntityFilterAst from the tuple (Frecency, EntityFilterAst)
                 Either::Left(Either::Left(
                     expanded::dynamic::expanded_dynamic_cursor_soup(
-                        &self.pool_readonly,
+                        &self.pool.0,
                         ExpandedDynamicCursorArgs {
                             user_id: req.user_id,
                             limit: req.limit,
@@ -50,7 +47,7 @@ impl SoupRepo for PgSoupRepo {
             }
             SimpleSortQuery::ItemsFilter(ast) => Either::Left(Either::Right(
                 expanded::dynamic::expanded_dynamic_cursor_soup(
-                    &self.pool_readonly,
+                    &self.pool.0,
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
@@ -61,7 +58,7 @@ impl SoupRepo for PgSoupRepo {
             )),
             SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
                 expanded::by_cursor::no_frecency_expanded_generic_soup(
-                    &self.pool_readonly,
+                    &self.pool.0,
                     req.user_id,
                     req.limit,
                     f,
@@ -69,7 +66,7 @@ impl SoupRepo for PgSoupRepo {
             )),
             SimpleSortQuery::NoFilter(f) => Either::Right(Either::Right(
                 expanded::by_cursor::expanded_generic_cursor_soup(
-                    &self.pool_readonly,
+                    &self.pool.0,
                     req.user_id,
                     req.limit,
                     f,
@@ -89,7 +86,7 @@ impl SoupRepo for PgSoupRepo {
             }
             SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
                 expanded::by_cursor::no_frecency_expanded_generic_soup(
-                    &self.pool_readonly,
+                    &self.pool.0,
                     req.user_id,
                     req.limit,
                     f,
@@ -97,7 +94,7 @@ impl SoupRepo for PgSoupRepo {
             )),
             SimpleSortQuery::NoFilter(f) => Either::Right(Either::Right(
                 unexpanded::by_cursor::unexpanded_generic_cursor_soup(
-                    &self.pool_readonly,
+                    &self.pool.0,
                     req.user_id,
                     req.limit,
                     f,
@@ -110,21 +107,21 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: AdvancedSortParams<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
-        expanded::by_ids::expanded_soup_by_ids(&self.pool_readonly, req.user_id, req.entities)
+        expanded::by_ids::expanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
     }
 
     fn unexpanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
-        unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool_readonly, req.user_id, req.entities)
+        unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
     }
 
     fn populate_properties(
         &self,
         items: &mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send {
-        populate_properties(&self.pool_readonly, items)
+        populate_properties(&self.pool.0, items)
     }
 }
 
