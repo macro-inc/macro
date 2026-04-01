@@ -35,8 +35,14 @@ impl LivekitRtcClient {
     ) -> Self {
         let api_key = api_key.into();
         let api_secret = api_secret.into();
-        let room_client = RoomClient::with_api_key(server_url, &api_key, &api_secret);
-        let egress_client = EgressClient::with_api_key(server_url, &api_key, &api_secret);
+        // Twirp RPC requires HTTP(S), not WebSocket. Convert wss:// → https://
+        // and ws:// → http:// so the same env var works for both client SDK and
+        // server-side API calls.
+        let http_url = server_url
+            .replace("wss://", "https://")
+            .replace("ws://", "http://");
+        let room_client = RoomClient::with_api_key(&http_url, &api_key, &api_secret);
+        let egress_client = EgressClient::with_api_key(&http_url, &api_key, &api_secret);
         let verifier = TokenVerifier::with_api_key(&api_key, &api_secret);
         let webhook_receiver = WebhookReceiver::new(verifier);
         Self {
