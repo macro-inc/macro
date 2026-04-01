@@ -154,6 +154,14 @@ pub trait CallRtcClient: Send + Sync + 'static {
 
     /// Validate a webhook signature and parse the event from the raw body.
     fn receive_webhook(&self, body: &str, auth_token: &str) -> Result<CallWebhookEvent, CallError>;
+
+    /// Dispatch the transcription agent to a room (best-effort).
+    ///
+    /// Returns `Ok(())` if dispatch succeeded or if no agent is configured.
+    fn dispatch_transcription_agent(
+        &self,
+        room_name: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// Service interface for call operations.

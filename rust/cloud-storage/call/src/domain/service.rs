@@ -66,7 +66,16 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                     .map_err(|e| CallError::Internal(e.into()))?
                 {
                     Some(call) => {
-                        // We are the creator — start recording if configured.
+                        // We are the creator — dispatch transcription agent (best-effort).
+                        self.rtc_client
+                            .dispatch_transcription_agent(&room_name)
+                            .await
+                            .inspect_err(|e| {
+                                tracing::error!(error=?e, "failed to dispatch transcription agent")
+                            })
+                            .ok();
+
+                        // Start recording if configured.
                         if let Some(s3_config) = &self.egress_s3_config {
                             match self
                                 .rtc_client

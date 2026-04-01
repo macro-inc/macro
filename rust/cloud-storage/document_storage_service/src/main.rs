@@ -353,10 +353,13 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Call service (LiveKit)
+    let transcription_agent_name =
+        config::LivekitTranscriptionAgentName::new().map(|v| v.as_ref().to_owned());
     let livekit_rtc_client = LivekitRtcClient::new(
         config.vars.livekit_server_url.as_ref(),
         config.vars.livekit_api_key.as_ref(),
         config.vars.livekit_api_secret.as_ref(),
+        transcription_agent_name,
     );
     let call_repo = PgCallRepo::new(db.clone());
     let call_service = Arc::new(CallServiceImpl::new(
