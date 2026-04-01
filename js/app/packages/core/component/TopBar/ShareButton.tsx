@@ -238,7 +238,7 @@ function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
   );
 
   return (
-    <Show when={others().length > 0} fallback={<>{props.fallbackName}</>}>
+    <Show when={others().length > 0} fallback={props.fallbackName}>
       <Tooltip
         placement="bottom"
         tooltip={<div class="text-xs whitespace-pre">{tooltipContent()}</div>}

@@ -4,7 +4,6 @@ import { useIsAuthenticated } from '@core/auth';
 import {
   useMaybeBlockAliasedName,
   useMaybeBlockId,
-  useMaybeBlockName,
   type BlockName,
   type BlockAlias,
 } from '@core/block';
@@ -103,8 +102,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(props.initialAccessLevel ?? null);
-  const blockBaseName = useMaybeBlockName() ?? props.blockName;
-
   createEffect(() => {
     const channelPermissions_ = channelPermissions();
     if (channelPermissions_) {
