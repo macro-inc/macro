@@ -48,7 +48,7 @@ export function useRecentlyViewedSoupQuery() {
     },
     staleTime: RECENTLY_VIEWED_STALE_TIME,
     gcTime: RECENTLY_VIEWED_GC_TIME,
-    placeholderData: (prev: any) => prev,
+    placeholderData: (prev) => prev,
   }));
 }
 
