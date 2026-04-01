@@ -117,7 +117,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
       },
     },
     (prev) => {
-      if (!prev) return prev;
+      if (!prev || !prev.pages) return prev;
       return {
         ...prev,
         pages: prev.pages.map((p, i) => {
@@ -144,7 +144,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
     { queryKey: soupKeys.items._def },
     (prev) => {
-      if (!prev) return prev;
+      if (!prev || !prev.pages) return prev;
       return {
         ...prev,
         pages: prev.pages.map((page) => {
