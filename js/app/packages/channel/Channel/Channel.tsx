@@ -71,10 +71,13 @@ import { resetKeyboardModality } from './util';
 import { focusAndOpenKeyboard } from '@core/mobile/focus-and-open-keyboard';
 import { isMobile } from '@core/mobile/isMobile';
 import { DebugSuspense } from '@channel/DebugSuspense';
-import { MaybeMessageActionDrawerManager } from '@channel/Message/MessageActionDrawerManager';
+import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import { scrollReplyInputAboveKeyboard, scrollReplyInputIntoView } from '../scroll-utils';
+import {
+  scrollReplyInputAboveKeyboard,
+  scrollReplyInputIntoView,
+} from '../scroll-utils';
 
 type ChannelProps = {
   channelId: string;

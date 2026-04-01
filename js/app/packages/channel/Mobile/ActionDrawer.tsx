@@ -13,13 +13,13 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
-import { useMessageActionDrawer } from './context';
-import { renderIcon } from './render-icon';
+import { useMessageActionDrawer } from './message-action-drawer-context';
+import { renderIcon } from '../Message/render-icon';
 import type {
   MessageActionEvent,
   MessageActionHandler,
   MessageActions,
-} from './types';
+} from '../Message/types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
 
