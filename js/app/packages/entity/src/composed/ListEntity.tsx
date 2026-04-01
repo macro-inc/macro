@@ -548,8 +548,8 @@ function WideLayout(props: LayoutProps) {
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (
               <>
-                <span class="w-(--title-width) shrink-0 flex gap-2">
-                  <span class="truncate max-w-[8rem]">
+                <span class="w-(--title-width) shrink-0">
+                  <span class="truncate max-w-[8rem] flex gap-2 items-center">
                     <EmailIdentity entity={entity()} />
                   </span>
                 </span>
