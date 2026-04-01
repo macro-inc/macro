@@ -337,7 +337,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 return true;
               }}
               initialValue={markdownState()}
-              onTab={() => true}
+              onTab={() => false}
               useBlockBoundary={false}
               portalScope="local"
               dontFocusOnMount
