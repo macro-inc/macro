@@ -43,7 +43,12 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
   });
 
   return (
-    <div class="relative pt-2" style={{ 'margin-left': replyInputOffsetX }}>
+    <div
+      class="relative pt-2"
+      style={{ 'margin-left': replyInputOffsetX }}
+      data-reply-input
+      data-reply-input-id={props.messageId}
+    >
       <ThreadReplyInputConnector />
       {(() => {
         const droppable = entityDropZone.droppable;
