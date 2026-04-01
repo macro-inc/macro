@@ -18,6 +18,7 @@ import { Stage } from './Shared';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { useAnalytics } from '@app/component/analytics-context';
 import type { AnalyticsProvider } from '@app/lib/analytics';
+import { useEmailLinks } from '@core/email-link';
 
 function LoginOption(props: {
   icon: JSX.Element;
@@ -53,6 +54,7 @@ export function LoginOptions(props: {
 }) {
   const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
+  const { initEmailLink } = useEmailLinks();
 
   const startSsoLogin = async (idp_name: string) => {
     const analyticsEvent = props.signupMode ? 'sign_up' : 'login';
@@ -104,7 +106,15 @@ export function LoginOptions(props: {
       });
 
       if (isOk(res)) {
-        invalidateAllAfterLogin();
+        await invalidateAllAfterLogin();
+        await initEmailLink().match(
+          () => {},
+          (err) => {
+            if (err.tag !== 'AlreadyInitialized') {
+              console.error('Failed to init email link on login', err);
+            }
+          }
+        );
       }
 
       analytics.track(
