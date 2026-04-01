@@ -326,7 +326,10 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
                     if !updated {
-                        tracing::warn!(egress_id, "no active call or call record found for egress_id");
+                        tracing::warn!(
+                            egress_id,
+                            "no active call or call record found for egress_id"
+                        );
                     }
                 }
             }
