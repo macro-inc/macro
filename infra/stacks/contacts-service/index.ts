@@ -26,6 +26,12 @@ const DATABASE_URL = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
@@ -68,6 +74,10 @@ let containerEnvVars = [
   {
     name: 'CONTACTS_QUEUE',
     value: pulumi.interpolate`${contactsQueueName}`,
+  },
+  {
+    name: 'REDIS_URI',
+    value: pulumi.interpolate`redis://${MACRO_CACHE}`,
   },
   {
     name: 'JWT_SECRET_KEY',

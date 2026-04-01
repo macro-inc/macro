@@ -5,4 +5,5 @@ config:
   contacts-service:fusionauth_issuer: fusionauth-dev.macro.com
   contacts-service:jwt_secret_key: fusionauth-jwt-secret-dev
   contacts-service:internal_api_key: document-storage-service-auth-key-dev
+  contacts-service:macro_cache_secret_key: macro-cache-dev
   contacts-service:macro_db_secret_key: macro-db-dev
