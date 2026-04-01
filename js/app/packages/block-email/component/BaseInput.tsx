@@ -125,7 +125,6 @@ import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { isMobile } from '@core/mobile/isMobile';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
-import { stickyGate } from '@core/util/debounce';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import ChevronDown from '@icon/regular/caret-down.svg';
 
@@ -1246,8 +1245,6 @@ export function BaseInput(props: {
     )
   );
 
-  const isDraftSaving = () => saveDraftMutation.isPending;
-  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
 
   return (
     <div
@@ -1658,7 +1655,7 @@ export function BaseInput(props: {
                 disablePortal={isMobile()}
               />
             </Show>
-            <Show when={savedDraftId() && !laggedIsDraftSaving()}>
+            <Show when={savedDraftId()}>
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip="Delete draft"
@@ -1666,11 +1663,6 @@ export function BaseInput(props: {
               >
                 <Trash class="h-5" />
               </Button>
-            </Show>
-            <Show when={laggedIsDraftSaving()}>
-              <div class="aspect-square p-1 flex items-center justify-center">
-                <Spinner class="size-5 animate-spin text-ink-muted" />
-              </div>
             </Show>
           </div>
 

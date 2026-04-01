@@ -23,7 +23,6 @@ import {
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
-import { stickyGate } from '@core/util/debounce';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import {
   $appendWatermarkNodeToLast,
@@ -571,9 +570,6 @@ export function EmailCompose(props: EmailComposeProps) {
     return `Email to ${names.join(' and ')}`;
   });
 
-  const isDraftSaving = () => saveDraftMutation.isPending;
-  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
-
   // --- Context value ---
 
   const ctxValue: ComposeContextValue = {
@@ -608,7 +604,6 @@ export function EmailCompose(props: EmailComposeProps) {
     // Status
     disabled: () => hasLinkError() || sendMutation.isPending,
     isSending: () => sendMutation.isPending,
-    isDraftSaving: () => laggedIsDraftSaving(),
     hasDraft: () => currentDraftID() != null,
 
     // Validation
