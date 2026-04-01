@@ -513,7 +513,7 @@ function WideLayout(props: LayoutProps) {
       class={cn(
         'w-full min-h-[inherit] items-center text-sm px-2',
         'gap-2 grid grid-cols-[1rem_1fr_auto_8ch] grid-rows-[1fr]',
-        '[--title-width:clamp(6rem,20%,16rem)]'
+        '[--title-width:12rem]'
       )}
       style={{
         'grid-template-areas': '"indicator content meta timestamp"',
