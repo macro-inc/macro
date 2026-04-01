@@ -2,13 +2,12 @@ import { throwOnErr } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { getSoupItemId } from './normalized-cache';
 import { soupKeys } from './keys';
 import type { SoupItemsQueryArgs } from './items';
 
 // NOTE: we only use this for merging viewedAt into history items.
 // This narrower type makes optimistic updates simpler if the item is not already in the normy cache.
-export type RecentlyViewedItem = {
+type RecentlyViewedItem = {
   id: string;
   viewedAt: string | undefined;
 };
@@ -22,8 +21,7 @@ const recentlyViewedArgs: SoupItemsQueryArgs = {
   body: {},
 };
 
-export const recentlyViewedQueryKey =
-  soupKeys.items(recentlyViewedArgs).queryKey;
+const recentlyViewedQueryKey = soupKeys.items(recentlyViewedArgs).queryKey;
 
 export function useRecentlyViewedSoupQuery() {
   return useQuery(() => ({
@@ -40,7 +38,7 @@ export function useRecentlyViewedSoupQuery() {
           })
       );
       return page.items.map((item) => ({
-        id: getSoupItemId(item),
+        id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
         viewedAt:
           (item.tag === 'channel' ? item.data.viewed_at : item.data.viewedAt) ??
           undefined,
@@ -52,16 +50,16 @@ export function useRecentlyViewedSoupQuery() {
   }));
 }
 
-export function ensureItemInRecentlyViewed(itemId: string) {
+export function updateRecentlyViewedItem(itemId: string, viewedAt?: string) {
   queryClient.setQueryData<RecentlyViewedItem[]>(
     recentlyViewedQueryKey,
     (prev) => {
-      if (!prev) return prev;
-      if (prev.some((item) => item.id === itemId)) return prev;
-      return [
-        { id: itemId, viewedAt: new Date().toISOString() },
-        ...prev.slice(0, RECENTLY_VIEWED_LIMIT - 1),
-      ];
+      const filtered = prev?.filter((item) => item.id !== itemId) ?? [];
+      const updatedItem = {
+        id: itemId,
+        viewedAt: viewedAt ?? new Date().toISOString(),
+      };
+      return [updatedItem, ...filtered.slice(0, RECENTLY_VIEWED_LIMIT - 1)];
     }
   );
 }

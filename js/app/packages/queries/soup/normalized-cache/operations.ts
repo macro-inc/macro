@@ -286,21 +286,26 @@ export function buildSingleEntityFilter(
  * Updates the item across all soup queries if it exists.
  */
 export function optimisticUpdateSoupItemViewedAt(itemId: string) {
+  const now = new Date().toISOString();
+
+  // Lazy import to break circular dependency
+  import('../recently-viewed').then(({ updateRecentlyViewedItem }) => {
+    updateRecentlyViewedItem(itemId, now);
+  });
+
   const current = getSoupEntityById(itemId);
   if (!current) return;
-
-  const now = new Date();
 
   if (current.tag === 'channel') {
     optimisticUpdateSoupEntity({
       tag: 'channel',
-      data: { channel: { id: itemId }, viewed_at: now.toISOString() },
+      data: { channel: { id: itemId }, viewed_at: now },
       frecency_score: current.frecency_score,
     });
   } else {
     optimisticUpdateSoupEntity({
       tag: current.tag,
-      data: { id: itemId, viewedAt: now.toISOString() },
+      data: { id: itemId, viewedAt: now },
       frecency_score: current.frecency_score,
     });
   }

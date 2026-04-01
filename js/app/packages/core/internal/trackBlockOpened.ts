@@ -12,7 +12,6 @@ import {
 } from '@service-storage/client';
 import type { QueryClient } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { ensureItemInRecentlyViewed } from '@queries/soup/recently-viewed';
 
 /**
  * Tracks opening of a block and updates history accordingly.
@@ -29,14 +28,10 @@ export function track({
 }) {
   const itemType = blockNameToItemType(blockName);
 
+  optimisticUpdateSoupItemViewedAt(itemId);
   const inSoup = hasSoupEntity(itemId);
-  if (inSoup) {
-    optimisticUpdateSoupItemViewedAt(itemId);
-    ensureItemInRecentlyViewed(itemId);
-  } else if (itemType) {
-    refetchSoupEntity(itemId, itemType as SoupEntityTag).then(() => {
-      ensureItemInRecentlyViewed(itemId);
-    });
+  if (!inSoup && itemType) {
+    refetchSoupEntity(itemId, itemType as SoupEntityTag);
   }
 
   if (!isCloudStorageItem(itemType)) return;
