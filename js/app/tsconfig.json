@@ -90,6 +90,9 @@
       "@service-static-files/*": [
         "./packages/service-clients/service-static-files/*"
       ],
+      "@service-call/*": [
+        "./packages/service-clients/service-call/*"
+      ],
       "@service-cognition/*": [
         "./packages/service-clients/service-cognition/*"
       ],
