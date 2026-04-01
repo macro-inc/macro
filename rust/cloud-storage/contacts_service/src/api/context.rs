@@ -1,4 +1,4 @@
-use crate::{api::ContactsService, config::Config};
+use crate::{api::Service, config::Config};
 use axum::extract::FromRef;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -15,38 +15,6 @@ pub struct AppState {
     pub db: PgPool,
     pub jwt_args: JwtValidationArgs,
     pub internal_api_secret: LocalOrRemoteSecret<InternalApiSecretKey>,
-    pub contacts_service: Arc<dyn ContactsService>,
+    pub contacts_service: Arc<Service>,
     pub rate_limit_service: RateLimiter,
-}
-
-impl AppState {
-    #[cfg(test)]
-    pub fn new_testing() -> Self {
-        use sqlx::postgres::PgPoolOptions;
-
-        use crate::api::MockService;
-
-        let db = PgPoolOptions::new()
-            .max_connections(1)
-            .connect_lazy("postgres://postgres:password@localhost/test_db")
-            .expect("Failed to create mock pool");
-
-        let redis_client = redis::Client::open("redis://localhost:6379")
-            .expect("Failed to create mock redis client");
-
-        AppState {
-            config: Arc::new(Config::new_testing()),
-            db,
-            jwt_args: JwtValidationArgs::new_testing(),
-            internal_api_secret: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime(
-                "testing",
-            )),
-            contacts_service: Arc::new(MockService),
-            rate_limit_service: RateLimitServiceImpl {
-                repo: RedisRateLimitAdapter {
-                    redis: redis_client,
-                },
-            },
-        }
-    }
 }

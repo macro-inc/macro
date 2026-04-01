@@ -85,7 +85,7 @@ async fn connections_message_handler(conmsg: &ConnectionsMessage, queue: &Messag
         .into_iter()
         .map(|e| (e.a.data.id.to_string(), e.b.data.id.to_string()))
         .collect();
-    let _ = create_connections(&mut transaction, connection_pairs.clone())
+    let _ = create_connections(transaction.as_mut(), connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);
@@ -103,7 +103,7 @@ async fn add_participants_handler(body: &AddParticipantsMessageBody, queue: &Mes
     let db = &queue.db;
     let connection_pairs = add_participants(body).await;
     let mut transaction = db.begin().await.unwrap();
-    let _ = create_connections(&mut transaction, connection_pairs.clone())
+    let _ = create_connections(transaction.as_mut(), connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);
@@ -122,7 +122,7 @@ async fn create_group_handler(body: &CreateGroupMessageBody, queue: &MessageQueu
     let db = &queue.db;
     let connection_pairs = create_group(body).await;
     let mut transaction = db.begin().await.unwrap();
-    let _ = create_connections(&mut transaction, connection_pairs.clone())
+    let _ = create_connections(transaction.as_mut(), connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);

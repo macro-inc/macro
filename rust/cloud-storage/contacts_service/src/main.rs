@@ -96,10 +96,10 @@ async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(AppState {
         config: Arc::new(config),
-        db,
+        db: db.clone(),
         jwt_args,
         internal_api_secret,
-        contacts_service: Arc::new(Service),
+        contacts_service: Arc::new(Service(db)),
         rate_limit_service,
     })
     .await?;

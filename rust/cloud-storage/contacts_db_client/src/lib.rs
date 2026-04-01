@@ -1,14 +1,14 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres, Transaction};
+use sqlx::{Pool, Postgres};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionRowId {
     id: i32,
 }
 
-pub async fn create_connections(
-    transaction: &mut Transaction<'_, Postgres>,
+pub async fn create_connections<'a, E: sqlx::Executor<'a, Database = Postgres>>(
+    transaction: E,
     connections: Vec<(String, String)>,
 ) -> Result<(), sqlx::Error> {
     let mut query = "INSERT INTO contacts_connections(user1, user2) VALUES ".to_string();
@@ -36,7 +36,7 @@ pub async fn create_connections(
         query = query.bind(param);
     }
 
-    query.execute(transaction.as_mut()).await?;
+    query.execute(transaction).await?;
 
     Ok(())
 }
@@ -95,7 +95,7 @@ mod tests {
         //.collect();
 
         let mut transaction = pool.begin().await?;
-        create_connections(&mut transaction, connections).await?;
+        create_connections(transaction.as_mut(), connections).await?;
         transaction.commit().await?;
 
         let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
@@ -117,7 +117,7 @@ mod tests {
 
         // Insert in opposite order
         let mut transaction = pool.begin().await?;
-        create_connections(&mut transaction, connections).await?;
+        create_connections(transaction.as_mut(), connections).await?;
         transaction.commit().await?;
 
         let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
@@ -191,7 +191,7 @@ mod tests {
         .collect();
 
         let mut transaction = pool.begin().await?;
-        create_connections(&mut transaction, connections).await?;
+        create_connections(transaction.as_mut(), connections).await?;
         transaction.commit().await?;
 
         let result = sqlx::query!("SELECT count(*) as count FROM contacts_connections; ")
