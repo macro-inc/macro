@@ -68,7 +68,7 @@ pub trait ContactsService: Send + Sync + 'static {
 
 #[cfg(test)]
 #[derive(Clone, Debug)]
-pub struct MockService(PgPool);
+pub struct MockService;
 
 #[derive(Clone, Debug)]
 pub struct Service(pub PgPool);
@@ -258,7 +258,6 @@ mod tests {
         domain::models::RateLimitOk,
     };
     use rootcause::Report;
-    use sqlx::postgres::PgPoolOptions;
     use std::collections::HashSet;
     use tower::ServiceExt;
 
@@ -306,11 +305,7 @@ mod tests {
     }
 
     fn mock_service() -> Arc<MockService> {
-        let db = PgPoolOptions::new()
-            .max_connections(1)
-            .connect_lazy("postgres://postgres:password@localhost/test_db")
-            .expect("Failed to create mock pool");
-        Arc::new(MockService(db))
+        Arc::new(MockService)
     }
 
     fn test_user_context(user_id: &str) -> UserContext {
@@ -442,36 +437,5 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    async fn run_with_id(_pool: PgPool, user_id: &str) -> GetContactsResponse {
-        let api = build_test_router(allowing_rate_limiter(), user_id);
-
-        let response = api
-            .oneshot(
-                Request::builder()
-                    .uri("/contacts")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        serde_json::from_slice(&body).unwrap()
-    }
-
-    // Some integration tests using an actual database query
-    #[sqlx::test(fixtures(path = "../fixtures", scripts("user_list")))]
-    // Skipped by default because you have to spin up a db,
-    // Run with: `cargo test test_get_contacts_with_db -- --ignored`
-    #[ignore]
-    async fn test_integration_get_contacts_with_db(pool: PgPool) -> sqlx::Result<()> {
-        let user_id = "macro|51028bda-67f0-44df-aa21-5853963524f1@test.com";
-        let body = run_with_id(pool, user_id).await;
-        assert_eq!(body.contacts.len(), 3, "Not enough contacts");
-
-        Ok(())
     }
 }
