@@ -67,4 +67,5 @@ CREATE TABLE IF NOT EXISTS call_record_transcripts (
 CREATE INDEX IF NOT EXISTS idx_calls_channel_id ON calls(channel_id);
 CREATE INDEX IF NOT EXISTS idx_call_transcripts_call_id ON call_transcripts(call_id);
 CREATE INDEX IF NOT EXISTS idx_call_records_channel_id ON call_records(channel_id);
+CREATE INDEX IF NOT EXISTS idx_call_records_egress_id ON call_records(egress_id);
 CREATE INDEX IF NOT EXISTS idx_call_record_transcripts_call_record_id ON call_record_transcripts(call_record_id);
