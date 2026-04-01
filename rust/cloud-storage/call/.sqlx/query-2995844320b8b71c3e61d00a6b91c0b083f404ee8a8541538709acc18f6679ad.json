@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO calls (id, channel_id, room_name, created_by)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, channel_id, room_name, created_by, created_at, egress_id\n            ",
+  "query": "\n            INSERT INTO calls (id, channel_id, room_name, created_by)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (channel_id) DO NOTHING\n            RETURNING id, channel_id, room_name, created_by, created_at, egress_id\n            ",
   "describe": {
     "columns": [
       {
@@ -51,5 +51,5 @@
       true
     ]
   },
-  "hash": "3a0338cdf4b30c39ac47b1698438c1720031470e931d2145d42ce0947e17d722"
+  "hash": "2995844320b8b71c3e61d00a6b91c0b083f404ee8a8541538709acc18f6679ad"
 }

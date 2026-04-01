@@ -26,7 +26,10 @@ fn repo(pool: Pool<Postgres>) -> PgCallRepo {
 async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let id = Uuid::now_v7();
-    let call = repo.create_call(&id, &CH2, "room-ch2", USER_B).await?;
+    let call = repo
+        .create_call(&id, &CH2, "room-ch2", USER_B)
+        .await?
+        .expect("should create new call");
 
     assert_eq!(call.id, id);
     assert_eq!(call.channel_id, CH2);
@@ -39,14 +42,14 @@ async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn create_call_rejects_duplicate_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn create_call_returns_none_on_duplicate_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     // CH1 already has an active call from the fixture.
     let result = repo
         .create_call(&Uuid::now_v7(), &CH1, "room-dup", USER_A)
-        .await;
+        .await?;
 
-    assert!(result.is_err(), "unique constraint should reject duplicate");
+    assert!(result.is_none(), "should return None on conflict");
     Ok(())
 }
 

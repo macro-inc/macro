@@ -18,14 +18,15 @@ pub trait CallRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
 
-    /// Create a new call record.
+    /// Create a new call record, or return `None` if one already exists for
+    /// this channel (unique-constraint conflict).
     fn create_call(
         &self,
         call_id: &Uuid,
         channel_id: &Uuid,
         room_name: &str,
         created_by: &str,
-    ) -> impl Future<Output = Result<Call, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Get an active call by channel ID.
     fn get_call_by_channel_id(

@@ -32,11 +32,12 @@ impl CallRepository for PgCallRepo {
         channel_id: &Uuid,
         room_name: &str,
         created_by: &str,
-    ) -> Result<Call, Self::Err> {
+    ) -> Result<Option<Call>, Self::Err> {
         let row = sqlx::query!(
             r#"
             INSERT INTO calls (id, channel_id, room_name, created_by)
             VALUES ($1, $2, $3, $4)
+            ON CONFLICT (channel_id) DO NOTHING
             RETURNING id, channel_id, room_name, created_by, created_at, egress_id
             "#,
             call_id,
@@ -44,17 +45,17 @@ impl CallRepository for PgCallRepo {
             room_name,
             created_by,
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
-        Ok(Call {
-            id: row.id,
-            channel_id: row.channel_id,
-            room_name: row.room_name,
-            created_by: row.created_by,
-            created_at: row.created_at,
-            egress_id: row.egress_id,
-        })
+        Ok(row.map(|r| Call {
+            id: r.id,
+            channel_id: r.channel_id,
+            room_name: r.room_name,
+            created_by: r.created_by,
+            created_at: r.created_at,
+            egress_id: r.egress_id,
+        }))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -115,6 +116,7 @@ impl CallRepository for PgCallRepo {
             r#"
             INSERT INTO call_participants (call_id, user_id)
             VALUES ($1, $2)
+            ON CONFLICT (call_id, user_id) DO UPDATE SET left_at = NULL, joined_at = now()
             RETURNING call_id, user_id, joined_at
             "#,
             call_id,

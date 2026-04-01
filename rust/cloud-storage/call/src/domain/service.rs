@@ -51,55 +51,59 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                 let call_id = Uuid::now_v7();
                 let room_name = channel_id.to_string();
 
-                // Create RTC room first.
+                // Create RTC room (idempotent in LiveKit).
                 self.rtc_client
                     .create_room(&room_name)
                     .await
                     .map_err(CallError::Internal)?;
 
-                // Create call record in DB.
-                let call = self
+                // Try to create call record; if another request won the race
+                // the ON CONFLICT returns None — re-read the existing call.
+                match self
                     .repo
                     .create_call(&call_id, channel_id, &room_name, user_id)
                     .await
-                    .map_err(|e| CallError::Internal(e.into()))?;
-
-                // Start recording if egress is configured.
-                if let Some(s3_config) = &self.egress_s3_config {
-                    match self
-                        .rtc_client
-                        .start_room_composite_egress(&room_name, s3_config)
-                        .await
-                    {
-                        Ok(egress_id) => {
-                            self.repo
-                                .set_egress_id(&call.id, &egress_id)
+                    .map_err(|e| CallError::Internal(e.into()))?
+                {
+                    Some(call) => {
+                        // We are the creator — start recording if configured.
+                        if let Some(s3_config) = &self.egress_s3_config {
+                            match self
+                                .rtc_client
+                                .start_room_composite_egress(&room_name, s3_config)
                                 .await
-                                .map_err(|e| CallError::Internal(e.into()))?;
+                            {
+                                Ok(egress_id) => {
+                                    self.repo
+                                        .set_egress_id(&call.id, &egress_id)
+                                        .await
+                                        .map_err(|e| CallError::Internal(e.into()))?;
+                                }
+                                Err(e) => {
+                                    tracing::error!(error=?e, "failed to start egress recording");
+                                }
+                            }
                         }
-                        Err(e) => {
-                            // Don't fail call creation if egress fails — log and continue.
-                            tracing::error!(error=?e, "failed to start egress recording");
-                        }
+
+                        call
+                    }
+                    None => {
+                        // Another request created the call — read the existing one.
+                        self.repo
+                            .get_call_by_channel_id(channel_id)
+                            .await
+                            .map_err(|e| CallError::Internal(e.into()))?
+                            .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?
                     }
                 }
-
-                call
             }
         };
 
-        // Add as participant if not already in the call.
-        if !self
-            .repo
-            .is_participant(&call.id, user_id)
+        // Idempotent upsert — handles concurrent joins and rejoin after leave.
+        self.repo
+            .add_participant(&call.id, user_id)
             .await
-            .map_err(|e| CallError::Internal(e.into()))?
-        {
-            self.repo
-                .add_participant(&call.id, user_id)
-                .await
-                .map_err(|e| CallError::Internal(e.into()))?;
-        }
+            .map_err(|e| CallError::Internal(e.into()))?;
 
         // Always generate a fresh token (supports reconnection from different devices).
         let token = self
@@ -221,23 +225,16 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                     return Ok(());
                 };
 
-                // Reconcile: ensure participant is tracked in DB (handles reconnect/race conditions).
-                if !self
-                    .repo
-                    .is_participant(&call.id, participant_identity)
+                // Reconcile: idempotent upsert (handles reconnect/race conditions).
+                self.repo
+                    .add_participant(&call.id, participant_identity)
                     .await
-                    .map_err(|e| CallError::Internal(e.into()))?
-                {
-                    self.repo
-                        .add_participant(&call.id, participant_identity)
-                        .await
-                        .map_err(|e| CallError::Internal(e.into()))?;
-                    tracing::info!(
-                        call_id = %call.id,
-                        participant = participant_identity,
-                        "reconciled participant_joined via webhook"
-                    );
-                }
+                    .map_err(|e| CallError::Internal(e.into()))?;
+                tracing::info!(
+                    call_id = %call.id,
+                    participant = participant_identity,
+                    "reconciled participant_joined via webhook"
+                );
             }
             "participant_left" => {
                 let (Some(room_name), Some(participant_identity)) =
