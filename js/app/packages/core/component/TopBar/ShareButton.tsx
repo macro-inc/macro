@@ -9,7 +9,7 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+import { DropdownMenuContent } from '@core/component/Menu';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
@@ -33,11 +33,16 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import CheckIcon from '@icon/bold/check-bold.svg';
 import IconLink from '@icon/regular/link.svg';
+import UserCircle from '@macro-icons/wide/user-circle.svg';
+import WideCopy from '@macro-icons/wide/copy.svg';
+import WideUsers from '@macro-icons/wide/users.svg';
+import IconX from '@icon/bold/x-bold.svg';
 import IconShared from '@macro-icons/wide/share.svg';
-import User from '@icon/regular/user.svg';
-import IconUsers from '@icon/regular/users.svg';
-import CloseIcon from '@icon/regular/x.svg';
+import IconComment from '@macro-icons/wide/comment.svg';
+import IconEdit from '@macro-icons/wide/edit.svg';
+import IconEye from '@macro-icons/wide/eye.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -67,13 +72,17 @@ import {
   useContext,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import { DialogWrapper } from '../DialogWrapper';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
+import { ClippedPanel } from '../ClippedPanel';
+import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
+import { useChannelParticipants } from '@channel/use-channel-participants';
 import { useAnalytics } from '@app/component/analytics-context';
 import { Button } from '@ui/components/Button';
 import { Dynamic } from 'solid-js/web';
@@ -144,7 +153,7 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
     case 'owner':
       return 'Owner';
     default:
-      return 'No Access';
+      return 'Remove Access';
   }
 };
 
@@ -167,6 +176,77 @@ interface ShareModalProps {
   owner?: string;
   name: string;
   id: string;
+}
+
+function DmRecipientIcon(props: { channelId: string }) {
+  const currentUserId = useUserId();
+  const { ids } = useChannelParticipants(() => props.channelId);
+  const dmPartnerId = createMemo(() =>
+    ids().find((id) => id !== currentUserId())
+  );
+  return (
+    <Show
+      when={dmPartnerId()}
+      fallback={<UserCircle class="flex-shrink-0 w-4 h-4" />}
+    >
+      {(id) => (
+        <UserIcon id={id()} size="xs" isDeleted={false} showTooltip={false} />
+      )}
+    </Show>
+  );
+}
+
+function shortName(user: { name: string; email: string }): string {
+  const display = user.name || user.email;
+  if (display.includes('@')) return display.split('@')[0];
+  return display.split(' ')[0];
+}
+
+function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
+  const currentUserId = useUserId();
+  const { users } = useChannelParticipants(() => props.channelId);
+  const others = createMemo(() =>
+    users().filter((u) => u.id !== currentUserId())
+  );
+
+  const label = createMemo(() => {
+    const rest = others();
+    if (rest.length === 0) return props.fallbackName;
+
+    const MAX_CHARS = 20;
+    const names: string[] = [];
+    let charsUsed = 0;
+
+    for (const user of rest) {
+      const name = shortName(user);
+      const separator = names.length > 0 ? ', ' : '';
+      if (charsUsed + separator.length + name.length > MAX_CHARS) break;
+      names.push(name);
+      charsUsed += separator.length + name.length;
+    }
+
+    const remaining = rest.length - names.length;
+    const base = names.join(', ');
+    if (remaining === 0) return base;
+    return `${base} +${remaining} ${remaining === 1 ? 'other' : 'others'}`;
+  });
+
+  const tooltipContent = createMemo(() =>
+    others()
+      .map((u) => u.name || u.email)
+      .join('\n')
+  );
+
+  return (
+    <Show when={others().length > 0} fallback={props.fallbackName}>
+      <Tooltip
+        placement="bottom"
+        tooltip={<div class="text-xs whitespace-pre">{tooltipContent()}</div>}
+      >
+        <span>{label()}</span>
+      </Tooltip>
+    </Show>
+  );
 }
 
 export function ShareModal(props: ShareModalProps) {
@@ -554,161 +634,246 @@ export function ShareModal(props: ShareModalProps) {
       open={props.isSharePermOpen}
     >
       <Dialog.Portal>
-        <DialogWrapper>
-          <div class="text-ink flex flex-col">
-            <div class="shrink-0 flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
-              <div class="flex flex-row items-center gap-2">
-                <Dialog.CloseButton>
-                  <Button tooltip="Close" variant="ghost" size="icon-sm">
-                    <CloseIcon />
-                  </Button>
-                </Dialog.CloseButton>
-                <Dialog.Title>{`Share: ${props.name}`}</Dialog.Title>
-              </div>
-
-              <div class="flex flex-row items-center gap-2"></div>
-            </div>
-
-            <ForwardToChannel
-              submitPermissionInfo={{
-                setChannelPermissions: (id, accessLevel) =>
-                  setChannelPermissions(id, accessLevel, true),
-                userPermissions: props.userPermissions,
-                channelSharePermissions: recipients(),
-              }}
-              onSubmit={() => props.setIsSharePermOpen(false)}
-              refetch={refetch}
-              name={props.name}
-              hideAccessLevelSelector={props.itemType === 'email'}
-              initialAccessLevel={props.itemType === 'email' ? 'view' : null}
-              blockId={props.id}
-              blockName={props.blockAlias}
-            />
-
-            <Show when={(recipients()?.length ?? 0) > 0}>
-              <div class="grow-2 shrink-1 min-h-[118px] flex flex-col border-t-1 border-edge-muted relative">
-                <ScrollIndicators
-                  scrollRef={recipientScrollRef}
-                  noBorderStart
-                  noBorderEnd
-                />
-                <div
-                  class="overflow-y-auto scrollbar-hidden"
-                  ref={setRecipientScrollRef}
-                >
-                  <div
-                    class="sticky shrink-0 top-0 left-0 border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center z-1"
-                    style="transform: translateX(12px); width: calc(100% - 24px);"
-                  >
-                    Share Recipients
-                  </div>
-                  <div class="grid gap-3 text-ink text-sm select-none py-3 px-3 relative">
-                    <Show when={props.owner}>
-                      <div class="flex justify-between bg-panel">
-                        <div class="flex items-center gap-2 overflow-hidden">
-                          <UserIcon
-                            isDeleted={false}
-                            id={props.owner!}
-                            size="xs"
-                          />
-                          <div class="font-medium truncate">
-                            {formattedOwner()}
-                          </div>
-                        </div>
-                        <div class="flex items-center">
-                          <div class="font-medium text-ink-muted text-xs">
-                            Owner
-                          </div>
-                        </div>
-                      </div>
-                    </Show>
-
-                    <For each={recipients() || []}>
-                      {(recipient) => (
-                        <div class="flex justify-between bg-panel">
-                          <div
-                            class="flex items-center gap-2 overflow-hidden cursor-pointer"
-                            onClick={() =>
-                              navigateToChannel(recipient.channel_id)
-                            }
-                          >
-                            <Switch>
-                              <Match
-                                when={channelNameMap().get(
-                                  recipient.channel_id
-                                )}
-                              >
-                                <User class="flex-shrink-0 w-4 h-4" />
-                              </Match>
-                              <Match when={true}>
-                                <IconUsers class="flex-shrink-0 w-4 h-4" />
-                              </Match>
-                            </Switch>
-                            <div class="font-medium truncate">
-                              {channelNameMap().get(recipient.channel_id)
-                                ?.name || recipient.channel_id}
-                            </div>
-                          </div>
-                          <div class="flex items-center">
-                            <div class="font-medium text-ink-muted text-xs">
-                              <ShareOptions
-                                permissions={recipient.access_level}
-                                setPermissions={(accessLevel) => {
-                                  if (accessLevel === null) {
-                                    removeChannelAccess(recipient.channel_id);
-                                  } else if (
-                                    accessLevel !== recipient.access_level
-                                  ) {
-                                    setChannelPermissions(
-                                      recipient.channel_id,
-                                      accessLevel
-                                    );
-                                  }
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </For>
+        <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4 pointer-events-none" />
+        <div class="z-modal fixed inset-0 flex flex-col items-center justify-center py-8">
+          <Dialog.Content
+            class="max-w-[calc(100vw-16px)] max-h-[calc(100vh-64px)] overflow-y-auto scrollbar-hidden mx-auto portal-scope flex flex-col gap-2"
+            style={{ width: '533px' }}
+          >
+            {/* Card 1: Share form — gradient border */}
+            <ClippedPanel active cornerRadius="4px">
+              <div class="text-ink flex flex-col">
+                <div class="shrink-0 flex flex-row items-center justify-between px-3 h-[40px] gap-2 border-b border-edge-muted">
+                  <div class="flex-1 flex flex-row items-center gap-2 min-w-0">
+                    <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
+                      <span class="shrink-0">Share:</span>
+                      <EntityIcon
+                        targetType={props.blockAlias}
+                        size="sm"
+                        class="shrink-0"
+                      />
+                      <span class="truncate">{props.name}</span>
+                    </Dialog.Title>
                   </div>
                 </div>
+                <ForwardToChannel
+                  submitPermissionInfo={{
+                    setChannelPermissions: (id, accessLevel) =>
+                      setChannelPermissions(id, accessLevel, true),
+                    userPermissions: props.userPermissions,
+                    channelSharePermissions: recipients(),
+                  }}
+                  onSubmit={() => props.setIsSharePermOpen(false)}
+                  onCancel={() => props.setIsSharePermOpen(false)}
+                  refetch={refetch}
+                  name={props.name}
+                  hideAccessLevelSelector={props.itemType === 'email'}
+                  initialAccessLevel={
+                    props.itemType === 'email' ? 'view' : null
+                  }
+                  blockId={props.id}
+                  blockName={props.blockAlias}
+                />
               </div>
+            </ClippedPanel>
+
+            {/* Card 2: Recipients — plain border */}
+            <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
+              <ClippedPanel cornerRadius="4px">
+                <div class="text-ink flex flex-col">
+                  <div class="shrink-0 h-[40px] flex items-center px-3 border-b border-edge-muted text-sm font-medium">
+                    People with access to this{' '}
+                    {props.itemType === 'email'
+                      ? 'email thread'
+                      : props.itemType}
+                  </div>
+                  <div class="relative">
+                    <ScrollIndicators
+                      scrollRef={recipientScrollRef}
+                      noBorderStart
+                      noBorderEnd
+                    />
+                    <CustomScrollbar scrollContainer={recipientScrollRef} />
+                    <div
+                      class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
+                      ref={setRecipientScrollRef}
+                    >
+                      <div class="grid gap-3 text-ink text-sm select-none py-3 px-3">
+                        <Show when={props.owner}>
+                          <div class="flex justify-between">
+                            <div class="flex items-center gap-2 overflow-hidden">
+                              <UserIcon
+                                isDeleted={false}
+                                id={props.owner!}
+                                size="xs"
+                              />
+                              <div class="font-medium truncate">
+                                {formattedOwner()}
+                              </div>
+                            </div>
+                            <div class="flex items-center">
+                              <div class="font-medium text-ink-muted text-xs">
+                                Owner
+                              </div>
+                            </div>
+                          </div>
+                        </Show>
+                        <For each={recipients() || []}>
+                          {(recipient) => (
+                            <div class="flex justify-between">
+                              <div
+                                class="flex items-center gap-2 overflow-hidden cursor-pointer"
+                                onClick={() =>
+                                  navigateToChannel(recipient.channel_id)
+                                }
+                              >
+                                <Switch
+                                  fallback={
+                                    <WideUsers class="flex-shrink-0 w-4 h-4" />
+                                  }
+                                >
+                                  <Match
+                                    when={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.type === 'direct_message'
+                                    }
+                                  >
+                                    <DmRecipientIcon
+                                      channelId={recipient.channel_id}
+                                    />
+                                  </Match>
+                                  <Match
+                                    when={channelNameMap().get(
+                                      recipient.channel_id
+                                    )}
+                                  >
+                                    <WideUsers class="flex-shrink-0 w-4 h-4" />
+                                  </Match>
+                                </Switch>
+                                <div class="font-medium truncate">
+                                  <Show
+                                    when={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.type !== 'direct_message'
+                                    }
+                                    fallback={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.name || recipient.channel_id
+                                    }
+                                  >
+                                    <GroupChannelLabel
+                                      channelId={recipient.channel_id}
+                                      fallbackName={
+                                        channelNameMap().get(
+                                          recipient.channel_id
+                                        )?.name || recipient.channel_id
+                                      }
+                                    />
+                                  </Show>
+                                </div>
+                              </div>
+                              <div class="flex items-center">
+                                <ShareOptions
+                                  permissions={recipient.access_level}
+                                  setPermissions={(accessLevel) => {
+                                    if (accessLevel === null) {
+                                      removeChannelAccess(recipient.channel_id);
+                                    } else if (
+                                      accessLevel !== recipient.access_level
+                                    ) {
+                                      setChannelPermissions(
+                                        recipient.channel_id,
+                                        accessLevel
+                                      );
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </ClippedPanel>
             </Show>
 
+            {/* Card 3: Public link — plain border */}
             <Show
               when={
                 props.userPermissions === Permissions.OWNER &&
                 props.itemType !== 'email'
               }
             >
-              <div class="border-t-1 border-edge-muted flex flex-col">
-                <div
-                  class="border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center"
-                  style="transform: translateX(12px); left: 12px; width: calc(100% - 24px);"
-                >
-                  Public Link
-                </div>
-                <div class="flex items-center p-3 justify-between">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    class="flex items-center gap-1 rounded-xs px-2"
-                    onClick={copyPublicLink}
+              <ClippedPanel cornerRadius="4px">
+                <div class="text-ink flex flex-col">
+                  <div
+                    class="h-[40px] flex items-center justify-between px-3 text-sm font-medium"
+                    classList={{
+                      'border-b border-edge-muted': publicAccessLevel() != null,
+                    }}
                   >
-                    <IconLink class="size-4" />
-                    Copy Link
-                  </Button>
-                  <ShareOptions
-                    permissions={publicAccessLevel() ?? null}
-                    hideNoAccess={props.itemType === 'chat'}
-                    setPermissions={setPublicPermissions}
-                  />
+                    <div class="flex items-center gap-2">
+                      Public link
+                      <div
+                        class="px-2 rounded-xl border-1 py-0.5 flex justify-center items-center"
+                        classList={{
+                          'border-accent/30 bg-accent/10':
+                            publicAccessLevel() != null,
+                          'border-edge-muted bg-edge-muted/20':
+                            publicAccessLevel() == null,
+                        }}
+                      >
+                        <span
+                          class="text-xs font-medium whitespace-nowrap"
+                          classList={{
+                            'text-accent-ink': publicAccessLevel() != null,
+                            'text-ink-extra-muted': publicAccessLevel() == null,
+                          }}
+                        >
+                          {publicAccessLevel() != null ? 'ENABLED' : 'DISABLED'}
+                        </span>
+                      </div>
+                    </div>
+                    <MiniToggleSwitch
+                      size="Base"
+                      label="Enable public link"
+                      checked={publicAccessLevel() != null}
+                      onChange={(on) =>
+                        setPublicPermissions(on ? 'view' : null)
+                      }
+                    />
+                  </div>
+                  <Show when={publicAccessLevel() != null}>
+                    <div class="flex items-center p-3 justify-between">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        class="flex items-center gap-1 rounded-xs px-2"
+                        onClick={copyPublicLink}
+                      >
+                        <WideCopy class="size-4" />
+                        <span class="hidden sm:inline">Copy Link</span>
+                      </Button>
+                      <span class="text-sm text-ink-muted flex items-center">
+                        <span class="px-2 hidden sm:inline">
+                          Anyone with the link can
+                        </span>
+                        <span class="px-2 sm:hidden">Permissions:</span>
+                        <ShareOptions
+                          permissions={publicAccessLevel() ?? null}
+                          hideNoAccess={true}
+                          setPermissions={setPublicPermissions}
+                        />
+                      </span>
+                    </div>
+                  </Show>
                 </div>
-              </div>
+              </ClippedPanel>
             </Show>
-          </div>
-        </DialogWrapper>
+          </Dialog.Content>
+        </div>
       </Dialog.Portal>
     </Dialog>
   );
@@ -864,12 +1029,19 @@ export function ShareBlockModal(props: {
   );
 }
 
+const PERMISSION_ICONS = {
+  comment: IconComment,
+  view: IconEye,
+  edit: IconEdit,
+} as const;
+
 export function ShareOptions(props: {
   setPermissions: (accessLevel: AccessLevel | null) => void;
   permissions?: AccessLevel | null;
   hideNoAccess?: boolean;
   label?: string | '';
   disabled?: boolean;
+  noBorder?: boolean;
 }) {
   const editPermissionEnabled = isInBlock()
     ? blockEditPermissionEnabledSignal()
@@ -879,22 +1051,22 @@ export function ShareOptions(props: {
   const options = createMemo(() => {
     const optionsList: { value: string; label: string }[] = [];
 
-    // Add no access option if not hidden
-    if (!props.hideNoAccess) {
-      optionsList.push({ value: 'none', label: accessLevelText(null) });
-    }
+    // Always add view option
+    optionsList.push({ value: 'view', label: accessLevelText('view') });
 
     // Add comment option if applicable
     if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
       optionsList.push({ value: 'comment', label: accessLevelText('comment') });
     }
 
-    // Always add view option
-    optionsList.push({ value: 'view', label: accessLevelText('view') });
-
     // Add edit option if enabled
     if (editPermissionEnabled) {
       optionsList.push({ value: 'edit', label: accessLevelText('edit') });
+    }
+
+    // Add no access option if not hidden
+    if (!props.hideNoAccess) {
+      optionsList.push({ value: 'none', label: accessLevelText(null) });
     }
 
     return optionsList;
@@ -911,7 +1083,10 @@ export function ShareOptions(props: {
     return accessLevelText(value as AccessLevel);
   });
 
+  const [isOpen, setIsOpen] = createSignal(false);
+
   const handleChange = (value: string) => {
+    setIsOpen(false);
     if (value === 'none') {
       props.setPermissions(null);
     } else {
@@ -920,11 +1095,11 @@ export function ShareOptions(props: {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen()} onOpenChange={setIsOpen}>
       <DropdownMenu.Trigger disabled={props.disabled}>
         <Button
           disabled={props.disabled}
-          class="min-w-[67px] h-[22px] py-2 pl-2 pr-1 rounded-xs flex items-center gap-1"
+          class={`min-w-[67px] h-[22px] py-2 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
           variant="secondary"
         >
           {currentValueText()}
@@ -937,16 +1112,43 @@ export function ShareOptions(props: {
             value={currentValue()}
             onChange={handleChange}
           >
-            <For each={options()}>
-              {(option) => (
-                <MenuItem
-                  groupValue={currentValue()}
-                  value={option.value}
-                  selectorType="radio"
-                  text={option.label}
-                />
-              )}
+            <For each={options().filter((o) => o.value !== 'none')}>
+              {(option) => {
+                const Icon =
+                  PERMISSION_ICONS[
+                    option.value as keyof typeof PERMISSION_ICONS
+                  ];
+                return (
+                  <DropdownMenu.RadioItem
+                    value={option.value}
+                    class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket"
+                  >
+                    <div class="w-4 h-4 shrink-0">
+                      {Icon && <Icon class="w-full h-full" />}
+                    </div>
+                    <div class="flex-1 truncate">{option.label}</div>
+                    <Show when={currentValue() === option.value}>
+                      <CheckIcon class="w-3 h-3 text-accent" />
+                    </Show>
+                  </DropdownMenu.RadioItem>
+                );
+              }}
             </For>
+            <Show when={!props.hideNoAccess}>
+              <div class="my-1 border-t border-edge-muted w-full" />
+              <DropdownMenu.RadioItem
+                value="none"
+                class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket"
+              >
+                <div class="w-4 h-4 shrink-0">
+                  <IconX class="w-full h-full" />
+                </div>
+                <div class="flex-1 truncate">{accessLevelText(null)}</div>
+                <Show when={currentValue() === 'none'}>
+                  <CheckIcon class="w-3 h-3 text-accent" />
+                </Show>
+              </DropdownMenu.RadioItem>
+            </Show>
           </DropdownMenu.RadioGroup>
         </DropdownMenuContent>
       </DropdownMenu.Portal>

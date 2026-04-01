@@ -1,3 +1,10 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { EntityIcon } from '@core/component/EntityIcon';
+import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
+import XIcon from '@icon/regular/x.svg';
+import { MediaImage } from '@channel/Media/MediaImage';
+import { MediaVideo } from '@channel/Media/MediaVideo';
+import { cn } from '@ui/utils/classname';
 import {
   children,
   For,
@@ -7,14 +14,8 @@ import {
   Switch,
   type JSX,
 } from 'solid-js';
-import { EntityIcon } from '@core/component/EntityIcon';
-import { ImagePreview } from '@core/component/ImagePreview';
-import { VideoPreview } from '@core/component/VideoPreview';
-import { cn } from '@ui/utils/classname';
 import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
-import XIcon from '@icon/regular/x.svg';
-import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
 
 type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
   kind?: InputAttachmentKind | 'media';
@@ -47,13 +48,10 @@ function MediaAttachmentItem(props: {
   attachment: InputAttachmentData;
   onRemove: (attachment: InputAttachmentData) => void;
 }) {
+  const mediaSrc = () => staticFileIdEndpoint(props.attachment.id);
+
   return (
     <div class="ph-no-capture relative group">
-      <RemoveButton
-        attachment={props.attachment}
-        onRemove={props.onRemove}
-        class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-      />
       <Show
         when={!props.attachment.pending && props.attachment.kind === 'image'}
         fallback={
@@ -67,11 +65,36 @@ function MediaAttachmentItem(props: {
               </div>
             }
           >
-            <VideoPreview id={props.attachment.id} variant="small" />
+            <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
+              <MediaVideo.Preview
+                src={mediaSrc()}
+                class="size-full object-cover"
+              />
+              <MediaVideo.PlayOverlay />
+              <RemoveButton
+                attachment={props.attachment}
+                onRemove={props.onRemove}
+                class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              />
+            </MediaVideo.Root>
           </Show>
         }
       >
-        <ImagePreview image={{ id: props.attachment.id }} variant="small" />
+        <MediaImage.Root>
+          <MediaImage.Image
+            src={mediaSrc()}
+            class="size-23 select-none rounded-2xl border border-edge object-cover"
+            width={92}
+            height={92}
+            loading="lazy"
+            fallback={<MediaImage.Fallback square />}
+          />
+          <RemoveButton
+            attachment={props.attachment}
+            onRemove={props.onRemove}
+            class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          />
+        </MediaImage.Root>
       </Show>
     </div>
   );

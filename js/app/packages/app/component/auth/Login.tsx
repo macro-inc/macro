@@ -6,7 +6,7 @@ import {
   invalidateAllAfterLogin,
   invalidateUserInfo,
 } from '@queries/auth/user-info';
-import { Navigate, useSearchParams } from '@solidjs/router';
+import { useNavigate, useSearchParams } from '@solidjs/router';
 import {
   createEffect,
   createSignal,
@@ -27,6 +27,27 @@ import { useUserInfo } from '@queries/auth';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import LogoIcon from '@macro-icons/macro-logo.svg';
+import { useEmailLinks } from '@core/email-link';
+import { LoadingBlock } from '@core/component/LoadingBlock';
+
+function PostLoginRedirect() {
+  const navigate = useNavigate();
+  const { initEmailLink } = useEmailLinks();
+
+  onMount(async () => {
+    await initEmailLink().match(
+      () => {},
+      (err) => {
+        if (err.tag !== 'AlreadyInitialized') {
+          console.error('Failed to init email link on login', err);
+        }
+      }
+    );
+    navigate('/', { replace: true });
+  });
+
+  return <LoadingBlock />;
+}
 
 export function Login() {
   const [stage, setStage] = createSignal(Stage.None);
@@ -65,18 +86,36 @@ export function Login() {
       const session_code = searchParams.token;
       console.log({ session_code });
       unsetTokenPromise();
-      authServiceClient.sessionLogin({ session_code }).then((res) => {
+      authServiceClient.sessionLogin({ session_code }).then(async (res) => {
         console.log({ res });
         if (isOk(res)) {
-          invalidateAllAfterLogin();
+          await invalidateAllAfterLogin();
+          await initEmailLink().match(
+            () => {},
+            (err) => {
+              if (err.tag !== 'AlreadyInitialized') {
+                console.error('Failed to init email link on login', err);
+              }
+            }
+          );
         }
       });
     }
   });
 
+  const { initEmailLink } = useEmailLinks();
+
   const onComplete = async () => {
     unsetTokenPromise();
     await invalidateAllAfterLogin();
+    await initEmailLink().match(
+      () => {},
+      (err) => {
+        if (err.tag !== 'AlreadyInitialized') {
+          console.error('Failed to init email link on login', err);
+        }
+      }
+    );
     const user = userInfo();
 
     if (!user || !user.authenticated) return;
@@ -99,7 +138,7 @@ export function Login() {
   };
 
   return (
-    <Show when={!userInfo()?.authenticated} fallback={<Navigate href="/" />}>
+    <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
       <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
         <style>{
           /*css*/ `

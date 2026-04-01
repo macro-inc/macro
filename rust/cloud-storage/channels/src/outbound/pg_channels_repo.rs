@@ -435,6 +435,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             FROM comms_attachments a
             JOIN comms_messages m ON m.id = a.message_id
             WHERE a.channel_id = $1
+              AND m.deleted_at IS NULL
               AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT $4

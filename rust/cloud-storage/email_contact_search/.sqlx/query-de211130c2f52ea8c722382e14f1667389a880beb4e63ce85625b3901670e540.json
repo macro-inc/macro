@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            ecsi.thread_id as \"thread_id!\",\n            ecsi.message_id as \"message_id!\",\n            ecsi.contact_name as \"contact_name?\",\n            ecsi.contact_email as \"contact_email!\",\n            ecsi.contact_type as \"contact_type!\"\n        FROM email_contact_search_index ecsi\n        WHERE ecsi.link_id = (SELECT id FROM email_links WHERE macro_id = $1)\n          AND ecsi.thread_id = ANY($2)\n          AND (ecsi.contact_name ILIKE $3 OR ecsi.contact_email ILIKE $3)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "contact_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "contact_email!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "contact_type!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "de211130c2f52ea8c722382e14f1667389a880beb4e63ce85625b3901670e540"
+}

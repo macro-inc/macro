@@ -5,10 +5,10 @@ import {
   commsServiceClient,
   type MessageResponse,
 } from '@service-comms/client';
-import type { ChannelParticipant, GetChannelResponse } from './types';
+import type { ChannelParticipant } from './types';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { softInvalidateChannelWithID } from './channel';
+import { softInvalidateChannelParticipants } from './channel-participants';
 import { channelKeys } from './keys';
 
 type WithChannelId<T> = T & { channelId: string };
@@ -28,26 +28,28 @@ export type RemoveParticipantsContext = {
 export function optimisticAddParticipants(
   vars: WithChannelId<{ participants: string[] }>
 ): AddParticipantsContext | undefined {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
+  const participantsQueryKey = channelKeys.participants(
+    vars.channelId
+  ).queryKey;
+  queryClient.cancelQueries({ queryKey: participantsQueryKey });
 
   let context: AddParticipantsContext | undefined;
-
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
+  queryClient.setQueryData(
+    participantsQueryKey,
+    (prev: ChannelParticipant[] | undefined) => {
       if (!prev) return prev;
 
-      const existingUserIds = new Set(prev.participants.map((p) => p.user_id));
-      const newUserIds = vars.participants.filter(
-        (id) => !existingUserIds.has(id)
+      const existingUserIds = new Set(
+        prev.map((participant) => participant.user_id)
+      );
+      const addedUserIds = vars.participants.filter(
+        (userId) => !existingUserIds.has(userId)
       );
 
-      if (newUserIds.length === 0) return prev;
+      if (addedUserIds.length === 0) return prev;
+      context = { addedUserIds };
 
-      context = { addedUserIds: newUserIds };
-
-      const newParticipants: ChannelParticipant[] = newUserIds.map(
+      const addedParticipants: ChannelParticipant[] = addedUserIds.map(
         (userId) => ({
           user_id: userId,
           role: 'member',
@@ -57,10 +59,7 @@ export function optimisticAddParticipants(
         })
       );
 
-      return {
-        ...prev,
-        participants: [...prev.participants, ...newParticipants],
-      };
+      return [...prev, ...addedParticipants];
     }
   );
 
@@ -74,18 +73,15 @@ export function rollbackAddParticipants(
   channelId: string,
   context: AddParticipantsContext
 ): void {
-  const queryKey = channelKeys.withID(channelId).queryKey;
+  const participantsQueryKey = channelKeys.participants(channelId).queryKey;
 
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
+  queryClient.setQueryData(
+    participantsQueryKey,
+    (prev: ChannelParticipant[] | undefined) => {
       if (!prev) return prev;
 
       const addedSet = new Set(context.addedUserIds);
-      return {
-        ...prev,
-        participants: prev.participants.filter((p) => !addedSet.has(p.user_id)),
-      };
+      return prev.filter((participant) => !addedSet.has(participant.user_id));
     }
   );
 }
@@ -97,31 +93,31 @@ export function rollbackAddParticipants(
 export function optimisticRemoveParticipants(
   vars: WithChannelId<{ participants: string[] }>
 ): RemoveParticipantsContext | undefined {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
+  const participantsQueryKey = channelKeys.participants(
+    vars.channelId
+  ).queryKey;
+  queryClient.cancelQueries({ queryKey: participantsQueryKey });
 
   let context: RemoveParticipantsContext | undefined;
 
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
+  queryClient.setQueryData(
+    participantsQueryKey,
+    (prev: ChannelParticipant[] | undefined) => {
       if (!prev) return prev;
 
       const toRemoveSet = new Set(vars.participants);
-      const removedParticipants = prev.participants.filter((p) =>
-        toRemoveSet.has(p.user_id)
+      const removedParticipants = prev.filter((participant) =>
+        toRemoveSet.has(participant.user_id)
       );
 
       if (removedParticipants.length === 0) return prev;
+      if (!context) {
+        context = { removedParticipants };
+      }
 
-      context = { removedParticipants };
-
-      return {
-        ...prev,
-        participants: prev.participants.filter(
-          (p) => !toRemoveSet.has(p.user_id)
-        ),
-      };
+      return prev.filter(
+        (participant) => !toRemoveSet.has(participant.user_id)
+      );
     }
   );
 
@@ -135,17 +131,22 @@ export function rollbackRemoveParticipants(
   channelId: string,
   context: RemoveParticipantsContext
 ): void {
-  const queryKey = channelKeys.withID(channelId).queryKey;
+  const participantsQueryKey = channelKeys.participants(channelId).queryKey;
 
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
+  queryClient.setQueryData(
+    participantsQueryKey,
+    (prev: ChannelParticipant[] | undefined) => {
       if (!prev) return prev;
 
-      return {
-        ...prev,
-        participants: [...prev.participants, ...context.removedParticipants],
-      };
+      const existingUserIds = new Set(
+        prev.map((participant) => participant.user_id)
+      );
+      const restoredParticipants = context.removedParticipants.filter(
+        (participant) => !existingUserIds.has(participant.user_id)
+      );
+
+      if (restoredParticipants.length === 0) return prev;
+      return [...prev, ...restoredParticipants];
     }
   );
 }
@@ -204,7 +205,8 @@ export function useAddParticipantsMutation(
             rollbackAddParticipants(vars.channelId, context);
           }
         },
-        onSettled: (_, __, vars) => softInvalidateChannelWithID(vars.channelId),
+        onSettled: (_, __, vars) =>
+          softInvalidateChannelParticipants(vars.channelId),
       },
       callbacks
     ),
@@ -252,7 +254,8 @@ export function useRemoveParticipantsMutation(
             rollbackRemoveParticipants(vars.channelId, context);
           }
         },
-        onSettled: (_, __, vars) => softInvalidateChannelWithID(vars.channelId),
+        onSettled: (_, __, vars) =>
+          softInvalidateChannelParticipants(vars.channelId),
       },
       callbacks
     ),

@@ -9,7 +9,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
-import { invalidateSoupEntity, invalidateAllSoup } from '@queries/soup/cache';
+import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
 
 type CreateDraftParams = {
   draft: ApiDraftInput;
@@ -38,11 +38,13 @@ export function useSaveDraftMutation(
           console.error('Failed to save draft', error);
           toast.failure('Failed to save draft');
         },
-        onSuccess() {
+        onSuccess(data) {
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
-          invalidateAllSoup();
+          const threadId = data.draft.thread_db_id;
+          if (!threadId) return;
+          refetchSoupEntity(threadId, 'emailThread');
         },
       },
       callbacks

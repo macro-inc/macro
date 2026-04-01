@@ -108,7 +108,6 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'created_at',
   'updated_at',
   'viewed_updated',
-  'frecency',
 ];
 
 export const SoupViewContextProvider: FlowComponent<

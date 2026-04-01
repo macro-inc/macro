@@ -45,7 +45,6 @@ export interface ComposeContextValue {
   // Status
   disabled: Accessor<boolean>;
   isSending: Accessor<boolean>;
-  isDraftSaving: Accessor<boolean>;
   hasDraft: Accessor<boolean>;
 
   // Validation

@@ -27,6 +27,10 @@ VALUES
     -- Contact with NULL name (should use message-level override)
     ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '00000000-0000-0001-0000-000000000001', 'emily@example.com', NULL, '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00'),
 
+    -- Contacts for cursor tie-breaking tests
+    ('a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', '00000000-0000-0001-0000-000000000001', 'sam.taylor@example.com', 'Sam Taylor', '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00'),
+    ('a2a2a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2', '00000000-0000-0001-0000-000000000001', 'pat.taylor@example.com', 'Pat Taylor', '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00'),
+
     -- Contacts for user2's link (for isolation testing)
     ('ffffffff-ffff-ffff-ffff-ffffffffffff', '00000000-0000-0002-0000-000000000002', 'frank@example.com', 'Frank Wilson', '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
 
@@ -46,7 +50,12 @@ VALUES
     ('44444444-4444-4444-4444-444444444444', '00000000-0000-0001-0000-000000000001', true, false, '2024-12-03 10:00:00+00', '2024-04-01 10:00:00+00', '2024-12-03 10:00:00+00'),
 
     -- Thread 5: Thread with NULL latest_non_spam_message_ts
-    ('55555555-5555-5555-5555-555555555555', '00000000-0000-0001-0000-000000000001', true, false, NULL, '2024-05-01 10:00:00+00', '2024-05-01 10:00:00+00');
+    ('55555555-5555-5555-5555-555555555555', '00000000-0000-0001-0000-000000000001', true, false, NULL, '2024-05-01 10:00:00+00', '2024-05-01 10:00:00+00'),
+
+    -- Threads 6 and 7: Same latest_non_spam_message_ts for cursor tie-breaking tests
+    -- Thread 7 has a higher UUID so it sorts first in DESC order
+    ('77777777-7777-7777-7777-777777777777', '00000000-0000-0001-0000-000000000001', true, false, '2024-12-02 10:00:00+00', '2024-06-01 10:00:00+00', '2024-12-02 10:00:00+00'),
+    ('66666666-6666-6666-6666-666666666666', '00000000-0000-0001-0000-000000000001', true, false, '2024-12-02 10:00:00+00', '2024-06-01 10:00:00+00', '2024-12-02 10:00:00+00');
 
 -- Email threads for user2 (for isolation testing)
 INSERT INTO email_threads (id, link_id, inbox_visible, is_read, latest_non_spam_message_ts, created_at, updated_at)
@@ -78,6 +87,16 @@ VALUES
 INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, from_name, subject, internal_date_ts, is_read, is_sent, created_at, updated_at)
 VALUES
     ('10000000-0005-0000-0000-000000000001', '55555555-5555-5555-5555-555555555555', '00000000-0000-0001-0000-000000000001', 'dddddddd-dddd-dddd-dddd-dddddddddddd', NULL, 'Subject 5', '2024-05-01 10:00:00+00', false, false, '2024-05-01 10:00:00+00', '2024-05-01 10:00:00+00');
+
+-- Thread 6: Sam Taylor is the sender (tied timestamp with thread 7)
+INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, from_name, subject, internal_date_ts, is_read, is_sent, created_at, updated_at)
+VALUES
+    ('10000000-0006-0000-0000-000000000001', '66666666-6666-6666-6666-666666666666', '00000000-0000-0001-0000-000000000001', 'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', NULL, 'Subject 6', '2024-06-01 10:00:00+00', false, false, '2024-06-01 10:00:00+00', '2024-06-01 10:00:00+00');
+
+-- Thread 7: Pat Taylor is the sender (tied timestamp with thread 6)
+INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, from_name, subject, internal_date_ts, is_read, is_sent, created_at, updated_at)
+VALUES
+    ('10000000-0007-0000-0000-000000000001', '77777777-7777-7777-7777-777777777777', '00000000-0000-0001-0000-000000000001', 'a2a2a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2', NULL, 'Subject 7', '2024-06-01 10:00:00+00', false, false, '2024-06-01 10:00:00+00', '2024-06-01 10:00:00+00');
 
 -- Email messages for user2's threads (for isolation testing)
 INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, from_name, subject, internal_date_ts, is_read, is_sent, created_at, updated_at)

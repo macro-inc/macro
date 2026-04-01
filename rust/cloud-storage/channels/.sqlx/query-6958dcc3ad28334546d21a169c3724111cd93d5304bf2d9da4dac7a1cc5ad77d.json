@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT a.id, a.channel_id, a.message_id, m.sender_id,\n                a.entity_type, a.entity_id,\n                a.width AS \"width?\", a.height AS \"height?\", a.created_at\n            FROM comms_attachments a\n            JOIN comms_messages m ON m.id = a.message_id\n            WHERE a.channel_id = $1\n              AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))\n            ORDER BY a.created_at DESC, a.id DESC\n            LIMIT $4\n            ",
+  "query": "\n            SELECT a.id, a.channel_id, a.message_id, m.sender_id,\n                a.entity_type, a.entity_id,\n                a.width AS \"width?\", a.height AS \"height?\", a.created_at\n            FROM comms_attachments a\n            JOIN comms_messages m ON m.id = a.message_id\n            WHERE a.channel_id = $1\n              AND m.deleted_at IS NULL\n              AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))\n            ORDER BY a.created_at DESC, a.id DESC\n            LIMIT $4\n            ",
   "describe": {
     "columns": [
       {
@@ -69,5 +69,5 @@
       false
     ]
   },
-  "hash": "24699ee15071155de425d4228c9a5ae5feeab0bd3eed5a659795ea3a07c96ba9"
+  "hash": "6958dcc3ad28334546d21a169c3724111cd93d5304bf2d9da4dac7a1cc5ad77d"
 }

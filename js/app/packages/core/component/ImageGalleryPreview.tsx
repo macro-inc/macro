@@ -22,6 +22,10 @@ type ImageData = {
   height?: string | number | undefined;
 };
 
+/**
+ * @deprecated Prefer the composable media primitives in `@channel/Media`.
+ * Keep this only for legacy callers until they are migrated.
+ */
 export type ImageGalleryPreviewProps = {
   images: ImageData[];
   initialIndex?: number;
@@ -67,6 +71,10 @@ function GalleryImagePlaceholder(props: {
   );
 }
 
+/**
+ * @deprecated Prefer the composable media primitives in `@channel/Media`.
+ * Keep this only for legacy callers until they are migrated.
+ */
 export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   props
 ) => {

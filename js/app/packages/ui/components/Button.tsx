@@ -41,7 +41,7 @@ const variantStyles: Record<ButtonVariant, string> = {
     'bg-transparent text-ink-muted not-disabled:hover:bg-ink/10 not-disabled:hover:text-ink not-disabled:active:bg-ink/12 disabled:opacity-30',
   link: 'bg-transparent text-accent underline-offset-2 not-disabled:hover:underline not-disabled:active:text-accent/80 disabled:text-ink-extra-muted',
   accent:
-    'bg-accent text-page not-disabled:hover:bg-accent/90 not-disabled:active:bg-accent/80 disabled:bg-ink-extra-muted',
+    'bg-accent text-panel not-disabled:hover:bg-accent/90 not-disabled:active:bg-accent/80 disabled:bg-ink-extra-muted',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

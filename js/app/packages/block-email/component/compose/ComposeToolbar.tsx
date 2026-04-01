@@ -130,7 +130,7 @@ export function EmailComposeToolbar(props: {
                 disabled={ctx.scheduleSendDisabled?.()}
               />
             </Show>
-            <Show when={ctx.hasDraft() && !ctx.isDraftSaving()}>
+            <Show when={ctx.hasDraft()}>
               <Button
                 onclick={ctx.onDelete}
                 tooltip="Delete draft"
@@ -138,11 +138,6 @@ export function EmailComposeToolbar(props: {
               >
                 <Trash />
               </Button>
-            </Show>
-            <Show when={ctx.isDraftSaving()}>
-              <div class="aspect-square p-1 flex items-center justify-center">
-                <Spinner class="size-5 animate-spin text-ink-muted" />
-              </div>
             </Show>
           </div>
 

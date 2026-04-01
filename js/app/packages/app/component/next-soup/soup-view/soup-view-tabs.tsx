@@ -10,6 +10,10 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { useUserContext } from '@core/context/user';
 import {
+  SegmentedControl,
+  type SegmentedControlItem,
+} from '@core/component/SegmentedControl';
+import {
   batch,
   createEffect,
   createMemo,
@@ -18,18 +22,14 @@ import {
   Match,
   on,
   onMount,
-  type ParentComponent,
   Switch,
 } from 'solid-js';
-import {
-  SegmentedControl as KSegmentedControl,
-  type SegmentedControlRootProps,
-} from '@kobalte/core/segmented-control';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { cn } from '@ui/utils/classname';
-type TabItem = { value: string; label: string };
+
+type TabItem = SegmentedControlItem;
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -336,52 +336,5 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
         style={{ width: `${activeWidth()}px` }}
       />
     </div>
-  );
-};
-
-export const SegmentedControl: ParentComponent<
-  {
-    list: { value: string; label: string }[];
-    value?: string;
-    defaultValue?: string;
-  } & Omit<SegmentedControlRootProps, 'defaultValue'>
-> = (props) => {
-  const onChange = (newValue: string) => {
-    props.onChange?.(newValue);
-  };
-
-  return (
-    <KSegmentedControl
-      class="h-full text-sm rounded-xs border border-edge-muted relative overflow-hidden"
-      value={props.value}
-      defaultValue={props.defaultValue ?? props.list[0]?.value}
-      onChange={onChange}
-      disabled={props.disabled}
-    >
-      <div class="relative" role="presentation">
-        <div class="flex" role="presentation">
-          <For each={props.list}>
-            {(item) => {
-              const itemValue = () =>
-                typeof item === 'object' ? item.value : item;
-              const itemLabel = () =>
-                typeof item === 'object' ? item.label : item;
-              return (
-                <KSegmentedControl.Item
-                  value={itemValue()}
-                  disabled={props.disabled}
-                  class="border-r border-edge-muted last:border-r-0"
-                >
-                  <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                  <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full mobile:min-h-11 flex items-center justify-center px-2.5 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-edge/50 hover:text-ink hover:bg-ink/6 data-[checked]:hover:bg-edge/60 transition-colors duration-150">
-                    {itemLabel()}
-                  </KSegmentedControl.ItemLabel>
-                </KSegmentedControl.Item>
-              );
-            }}
-          </For>
-        </div>
-      </div>
-    </KSegmentedControl>
   );
 };

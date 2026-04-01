@@ -484,3 +484,58 @@ async fn test_search_email_contacts_by_email_address(pool: Pool<Postgres>) -> an
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("email_contacts"))
+)]
+async fn test_search_email_contacts_cursor_tiebreak_on_identical_timestamps(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let user_id = MacroUserId::parse_from_str("macro|user1@test.com")
+        .map(|l| l.lowercase())
+        .unwrap();
+
+    // Threads 6 (66666666) and 7 (77777777) both have latest_non_spam_message_ts = 2024-12-02.
+    // ORDER BY ts DESC, id DESC means thread 7 (higher UUID) comes first.
+    let thread_7 = uuid::Uuid::parse_str("77777777-7777-7777-7777-777777777777").unwrap();
+    let thread_6 = uuid::Uuid::parse_str("66666666-6666-6666-6666-666666666666").unwrap();
+
+    // Page 1: limit=1 should return thread 7
+    let page1 =
+        search_email_contacts(&pool, user_id.clone(), "Taylor".to_string(), 1, None).await?;
+
+    let page1_thread_ids: Vec<_> = {
+        let mut seen = std::collections::HashSet::new();
+        page1
+            .items
+            .iter()
+            .filter(|r| seen.insert(r.thread_id))
+            .map(|r| r.thread_id)
+            .collect()
+    };
+    assert_eq!(page1_thread_ids, vec![thread_7]);
+    assert!(page1.cursor.has_more());
+
+    // Page 2: should return thread 6
+    let cursor = match page1.cursor {
+        SearchCursorOption::NotDone(c) => c,
+        SearchCursorOption::Done => panic!("Expected more results"),
+    };
+
+    let page2 = search_email_contacts(&pool, user_id, "Taylor".to_string(), 1, cursor).await?;
+
+    let page2_thread_ids: Vec<_> = {
+        let mut seen = std::collections::HashSet::new();
+        page2
+            .items
+            .iter()
+            .filter(|r| seen.insert(r.thread_id))
+            .map(|r| r.thread_id)
+            .collect()
+    };
+    assert_eq!(page2_thread_ids, vec![thread_6]);
+    assert!(page2.cursor.is_done());
+
+    Ok(())
+}
