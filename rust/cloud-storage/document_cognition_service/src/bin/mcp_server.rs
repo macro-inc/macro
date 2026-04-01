@@ -161,9 +161,7 @@ async fn main() -> anyhow::Result<()> {
         0,
     );
     let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo {
-            pool: readonly_pool::ReadOnlyPool(db.clone()),
-        },
+        PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         PgUserRepo::new(db.clone()),
         frecency_storage,
     );

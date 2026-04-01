@@ -319,7 +319,13 @@ pub async fn get_activities(
 }
 
 pub struct PgCommsRepo {
-    pub pool: readonly_pool::ReadOnlyPool,
+    pool: readonly_pool::ReadOnlyPool,
+}
+
+impl PgCommsRepo {
+    pub fn new(pool: readonly_pool::ReadOnlyPool) -> Self {
+        Self { pool }
+    }
 }
 
 impl CommsRepo for PgCommsRepo {

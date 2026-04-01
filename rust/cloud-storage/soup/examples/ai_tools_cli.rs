@@ -60,9 +60,7 @@ async fn main() {
     );
 
     // Create the channels service with real database connections
-    let comms_repo = PgCommsRepo {
-        pool: readonly_pool::ReadOnlyPool(pool.clone()),
-    };
+    let comms_repo = PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone()));
     let user_repo = PgUserRepo::new(pool.clone());
     let channels_service = ChannelServiceImpl::new(comms_repo, user_repo, frecency_storage);
 
