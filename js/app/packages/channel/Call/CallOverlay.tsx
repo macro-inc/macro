@@ -5,6 +5,7 @@ import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
+import Screencast from '@icon/regular/screencast.svg';
 import { useCallContext } from './CallContext';
 
 /**
@@ -27,7 +28,36 @@ function TrackRenderer(props: {
     const el = track.attach();
     el.style.width = '100%';
     el.style.height = '100%';
-    el.style.objectFit = 'cover';
+    el.style.objectFit =
+      props.source === Track.Source.ScreenShare ? 'contain' : 'cover';
+    containerRef.appendChild(el);
+
+    onCleanup(() => {
+      track.detach(el);
+      el.remove();
+    });
+  });
+
+  return <div ref={containerRef} class="w-full h-full" />;
+}
+
+function LocalScreenSharePreview() {
+  let containerRef!: HTMLDivElement;
+  const callCtx = useCallContext();
+
+  createEffect(() => {
+    callCtx.trackVersion();
+    const r = callCtx.room();
+    if (!r || !callCtx.isScreenSharing()) return;
+
+    const pub = r.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    const track = pub?.track;
+    if (!track || !containerRef) return;
+
+    const el = track.attach();
+    el.style.width = '100%';
+    el.style.height = '100%';
+    el.style.objectFit = 'contain';
     containerRef.appendChild(el);
 
     onCleanup(() => {
@@ -138,10 +168,35 @@ const ControlButton: Component<{
   );
 };
 
+function ScreenShareTile(props: { participant: RemoteParticipant }) {
+  return (
+    <div class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2">
+      <TrackRenderer
+        participant={props.participant}
+        source={Track.Source.ScreenShare}
+      />
+      <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs truncate max-w-[80%]">
+        {props.participant.identity}'s screen
+      </div>
+    </div>
+  );
+}
+
 export function CallOverlay(props: { onLeave: () => void }) {
   const callCtx = useCallContext();
 
   const participants = () => Array.from(callCtx.remoteParticipants().values());
+
+  const remoteScreenShares = () => {
+    callCtx.trackVersion();
+    return participants().filter((p) => {
+      const pub = p.getTrackPublication(Track.Source.ScreenShare);
+      return pub?.isSubscribed && !pub.isMuted;
+    });
+  };
+
+  const hasAnyScreenShare = () =>
+    callCtx.isScreenSharing() || remoteScreenShares().length > 0;
 
   const gridCols = () => {
     const count = participants().length + 1; // +1 for local
@@ -152,8 +207,29 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
   return (
     <div class="flex flex-col h-full bg-surface-0">
+      {/* Screen share area */}
+      <Show when={hasAnyScreenShare()}>
+        <div class="flex-1 min-h-0 p-2">
+          <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+            <Show when={callCtx.isScreenSharing()}>
+              <div class="relative w-full h-full">
+                <LocalScreenSharePreview />
+                <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs">
+                  Your screen
+                </div>
+              </div>
+            </Show>
+            <For each={remoteScreenShares()}>
+              {(participant) => <ScreenShareTile participant={participant} />}
+            </For>
+          </div>
+        </div>
+      </Show>
+
       {/* Participants grid */}
-      <div class={`flex-1 grid ${gridCols()} gap-2 p-2 auto-rows-fr`}>
+      <div
+        class={`${hasAnyScreenShare() ? 'h-[140px] shrink-0' : 'flex-1'} grid ${gridCols()} gap-2 p-2 auto-rows-fr`}
+      >
         {/* Local participant */}
         <div
           class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
@@ -207,6 +283,13 @@ export function CallOverlay(props: { onLeave: () => void }) {
           >
             <VideoCamera class="w-5 h-5" />
           </Show>
+        </ControlButton>
+
+        <ControlButton
+          onClick={() => callCtx.toggleScreenShare()}
+          active={callCtx.isScreenSharing()}
+        >
+          <Screencast class="w-5 h-5" />
         </ControlButton>
 
         <ControlButton onClick={props.onLeave} danger>

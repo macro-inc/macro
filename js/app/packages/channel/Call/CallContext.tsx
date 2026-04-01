@@ -2,9 +2,11 @@ import {
   Room,
   RoomEvent,
   ConnectionState,
+  Track,
   type RemoteParticipant,
   type RemoteTrackPublication,
   type RemoteTrack,
+  type LocalTrackPublication,
   type Participant,
   type TranscriptionSegment,
 } from 'livekit-client';
@@ -48,6 +50,8 @@ export type CallState = {
   isAudioMuted: () => boolean;
   /** Whether local video is muted */
   isVideoMuted: () => boolean;
+  /** Whether local screen share is active */
+  isScreenSharing: () => boolean;
   /** Connect to a call using a token response */
   connect: (tokenResponse: CallTokenResponse) => Promise<void>;
   /** Disconnect from the current call */
@@ -56,6 +60,8 @@ export type CallState = {
   toggleAudio: () => Promise<void>;
   /** Toggle local video */
   toggleVideo: () => Promise<void>;
+  /** Toggle screen sharing */
+  toggleScreenShare: () => Promise<void>;
   /** Transcript segments received via lk.transcription stream */
   transcriptSegments: () => TranscriptionSegment[];
   /** Register a callback for when final transcript segments are received */
@@ -89,6 +95,7 @@ export function CallProvider(props: ParentProps) {
   >(new Map());
   const [isAudioMuted, setIsAudioMuted] = createSignal(false);
   const [isVideoMuted, setIsVideoMuted] = createSignal(true);
+  const [isScreenSharing, setIsScreenSharing] = createSignal(false);
   const [trackVersion, setTrackVersion] = createSignal(0);
   const [transcriptSegments, setTranscriptSegments] = createSignal<
     TranscriptionSegment[]
@@ -123,6 +130,15 @@ export function CallProvider(props: ParentProps) {
     r.on(RoomEvent.ActiveSpeakersChanged, (_speakers: Participant[]) => {
       syncParticipants(r);
     });
+    r.on(
+      RoomEvent.LocalTrackUnpublished,
+      (pub: LocalTrackPublication) => {
+        if (pub.source === Track.Source.ScreenShare) {
+          setIsScreenSharing(false);
+        }
+        syncParticipants(r);
+      }
+    );
     r.on(RoomEvent.Disconnected, () => {
       cleanupRoom();
     });
@@ -169,6 +185,7 @@ export function CallProvider(props: ParentProps) {
     setRemoteParticipants(new Map());
     setIsAudioMuted(false);
     setIsVideoMuted(true);
+    setIsScreenSharing(false);
     setTranscriptSegments([]);
   }
 
@@ -223,6 +240,14 @@ export function CallProvider(props: ParentProps) {
     setIsVideoMuted(newMuted);
   }
 
+  async function toggleScreenShare() {
+    const r = room();
+    if (!r) return;
+    const newSharing = !isScreenSharing();
+    await r.localParticipant.setScreenShareEnabled(newSharing);
+    setIsScreenSharing(newSharing);
+  }
+
   onCleanup(() => {
     const r = room();
     if (r) {
@@ -240,10 +265,12 @@ export function CallProvider(props: ParentProps) {
     trackVersion,
     isAudioMuted,
     isVideoMuted,
+    isScreenSharing,
     connect,
     disconnect,
     toggleAudio,
     toggleVideo,
+    toggleScreenShare,
     transcriptSegments,
     onTranscriptSegment: (cb) => {
       transcriptCallback = cb;
