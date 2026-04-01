@@ -112,6 +112,7 @@ secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+readonly_pool = { path = "../readonly_pool" }
 soup = { path = "../soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [

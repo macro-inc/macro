@@ -117,6 +117,7 @@ reqwest = { workspace = true }
 saved_views = { path = "../saved_views" }
 schemars = { workspace = true }
 search_service = { path = "../search_service" }
+readonly_pool = { path = "../readonly_pool" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -146,7 +146,7 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
 /// Tasks use `EntityType::Task` while regular documents use `EntityType::Document`.
 #[tracing::instrument(err, skip(db, items))]
 pub(crate) async fn populate_properties(
-    db: &PgPool,
+    db: &sqlx::PgPool,
     items: &mut [SoupItem],
 ) -> Result<(), sqlx::Error> {
     let entity_refs = items
