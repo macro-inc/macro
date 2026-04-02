@@ -44,8 +44,10 @@ export type CallState = {
   activeChannelId: () => string | null;
   /** Remote participants in the call */
   remoteParticipants: () => Map<string, RemoteParticipant>;
-  /** Incremented on every track/participant event to drive reactivity in UI components */
+  /** Incremented when track subscription/mute state changes */
   trackVersion: () => number;
+  /** Incremented when active speakers change */
+  speakerVersion: () => number;
   /** Whether local audio is muted */
   isAudioMuted: () => boolean;
   /** Whether local video is muted */
@@ -99,13 +101,14 @@ export function CallProvider(props: ParentProps) {
   const [isVideoMuted, setIsVideoMuted] = createSignal(true);
   const [isScreenSharing, setIsScreenSharing] = createSignal(false);
   const [trackVersion, setTrackVersion] = createSignal(0);
+  const [speakerVersion, setSpeakerVersion] = createSignal(0);
   const [transcriptSegments, setTranscriptSegments] = createSignal<
     TranscriptionSegment[]
   >([]);
   const transcriptCallbacks: Array<(segment: FinalTranscriptSegment) => void> =
     [];
 
-  function syncParticipants(r: Room) {
+  function syncParticipantMap(r: Room) {
     setRemoteParticipants(new Map(r.remoteParticipants));
     setTrackVersion((v) => v + 1);
   }
@@ -114,29 +117,35 @@ export function CallProvider(props: ParentProps) {
     r.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
       setConnectionState(state);
     });
-    r.on(RoomEvent.ParticipantConnected, () => syncParticipants(r));
-    r.on(RoomEvent.ParticipantDisconnected, () => syncParticipants(r));
-    r.on(
-      RoomEvent.TrackSubscribed,
-      (
-        _track: RemoteTrack,
-        _pub: RemoteTrackPublication,
-        _participant: RemoteParticipant
-      ) => {
-        syncParticipants(r);
-      }
-    );
-    r.on(RoomEvent.TrackUnsubscribed, () => syncParticipants(r));
-    r.on(RoomEvent.TrackMuted, () => syncParticipants(r));
-    r.on(RoomEvent.TrackUnmuted, () => syncParticipants(r));
-    r.on(RoomEvent.ActiveSpeakersChanged, (_speakers: Participant[]) => {
-      syncParticipants(r);
+
+    // Participant join/leave: need new Map + trackVersion
+    r.on(RoomEvent.ParticipantConnected, () => syncParticipantMap(r));
+    r.on(RoomEvent.ParticipantDisconnected, () => syncParticipantMap(r));
+
+    // Track state changes: only bump trackVersion (state lives on participant objects)
+    r.on(RoomEvent.TrackSubscribed, () => {
+      setTrackVersion((v) => v + 1);
     });
+    r.on(RoomEvent.TrackUnsubscribed, () => {
+      setTrackVersion((v) => v + 1);
+    });
+    r.on(RoomEvent.TrackMuted, () => {
+      setTrackVersion((v) => v + 1);
+    });
+    r.on(RoomEvent.TrackUnmuted, () => {
+      setTrackVersion((v) => v + 1);
+    });
+
+    // Speaking changes: separate signal, no Map recreation or trackVersion bump
+    r.on(RoomEvent.ActiveSpeakersChanged, () => {
+      setSpeakerVersion((v) => v + 1);
+    });
+
     r.on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
       if (pub.source === Track.Source.ScreenShare) {
         setIsScreenSharing(false);
       }
-      syncParticipants(r);
+      setTrackVersion((v) => v + 1);
     });
     r.on(RoomEvent.Disconnected, () => {
       cleanupRoom();
@@ -274,6 +283,7 @@ export function CallProvider(props: ParentProps) {
     activeChannelId,
     remoteParticipants,
     trackVersion,
+    speakerVersion,
     isAudioMuted,
     isVideoMuted,
     isScreenSharing,

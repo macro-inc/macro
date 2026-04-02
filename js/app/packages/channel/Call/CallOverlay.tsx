@@ -24,13 +24,30 @@ function TrackRenderer(props: {
 }) {
   let containerRef!: HTMLDivElement;
   const callCtx = useCallContext();
+  let prevTrack: any = null;
+  let prevEl: HTMLMediaElement | null = null;
+
+  function detachPrev() {
+    if (prevTrack && prevEl) {
+      prevTrack.detach(prevEl);
+      prevEl.remove();
+      prevTrack = null;
+      prevEl = null;
+    }
+  }
 
   createEffect(() => {
-    // Subscribe to trackVersion so the effect re-runs when tracks change
     callCtx.trackVersion();
     const pub = props.participant.getTrackPublication(props.source);
     const track = pub?.track;
-    if (!track || !containerRef) return;
+
+    if (!containerRef || !track) {
+      detachPrev();
+      return;
+    }
+    if (track === prevTrack) return;
+
+    detachPrev();
 
     const el = track.attach();
     el.style.width = '100%';
@@ -38,11 +55,10 @@ function TrackRenderer(props: {
     el.style.objectFit =
       props.source === Track.Source.ScreenShare ? 'contain' : 'cover';
     containerRef.appendChild(el);
+    prevTrack = track;
+    prevEl = el;
 
-    onCleanup(() => {
-      track.detach(el);
-      el.remove();
-    });
+    onCleanup(detachPrev);
   });
 
   return <div ref={containerRef} class="w-full h-full" />;
@@ -51,28 +67,44 @@ function TrackRenderer(props: {
 function LocalScreenSharePreview() {
   let containerRef!: HTMLDivElement;
   const callCtx = useCallContext();
+  let prevTrack: any = null;
+  let prevEl: HTMLMediaElement | null = null;
+
+  function detachPrev() {
+    if (prevTrack && prevEl) {
+      prevTrack.detach(prevEl);
+      prevEl.remove();
+      prevTrack = null;
+      prevEl = null;
+    }
+  }
 
   createEffect(() => {
     callCtx.trackVersion();
     const r = callCtx.room();
-    if (!r || !callCtx.isScreenSharing()) return;
+    if (!r || !callCtx.isScreenSharing()) {
+      detachPrev();
+      return;
+    }
 
     const pub = r.localParticipant.getTrackPublication(
       Track.Source.ScreenShare
     );
     const track = pub?.track;
     if (!track || !containerRef) return;
+    if (track === prevTrack) return;
+
+    detachPrev();
 
     const el = track.attach();
     el.style.width = '100%';
     el.style.height = '100%';
     el.style.objectFit = 'contain';
     containerRef.appendChild(el);
+    prevTrack = track;
+    prevEl = el;
 
-    onCleanup(() => {
-      track.detach(el);
-      el.remove();
-    });
+    onCleanup(detachPrev);
   });
 
   return <div ref={containerRef} class="w-full h-full" />;
@@ -81,15 +113,32 @@ function LocalScreenSharePreview() {
 function LocalVideoPreview() {
   let containerRef!: HTMLDivElement;
   const callCtx = useCallContext();
+  let prevTrack: any = null;
+  let prevEl: HTMLMediaElement | null = null;
+
+  function detachPrev() {
+    if (prevTrack && prevEl) {
+      prevTrack.detach(prevEl);
+      prevEl.remove();
+      prevTrack = null;
+      prevEl = null;
+    }
+  }
 
   createEffect(() => {
     callCtx.trackVersion();
     const r = callCtx.room();
-    if (!r || callCtx.isVideoMuted()) return;
+    if (!r || callCtx.isVideoMuted()) {
+      detachPrev();
+      return;
+    }
 
     const pub = r.localParticipant.getTrackPublication(Track.Source.Camera);
     const track = pub?.track;
     if (!track || !containerRef) return;
+    if (track === prevTrack) return;
+
+    detachPrev();
 
     const el = track.attach();
     el.style.width = '100%';
@@ -97,11 +146,10 @@ function LocalVideoPreview() {
     el.style.objectFit = 'cover';
     el.style.transform = 'scaleX(-1)';
     containerRef.appendChild(el);
+    prevTrack = track;
+    prevEl = el;
 
-    onCleanup(() => {
-      track.detach(el);
-      el.remove();
-    });
+    onCleanup(detachPrev);
   });
 
   return <div ref={containerRef} class="w-full h-full" />;
@@ -118,7 +166,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
   };
 
   const isSpeaking = () => {
-    callCtx.trackVersion();
+    callCtx.speakerVersion();
     return props.participant.isSpeaking;
   };
 
@@ -196,6 +244,11 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
   const participants = () => Array.from(callCtx.remoteParticipants().values());
 
+  const isLocalSpeaking = () => {
+    callCtx.speakerVersion();
+    return callCtx.room()?.localParticipant.isSpeaking;
+  };
+
   const remoteScreenShares = () => {
     callCtx.trackVersion();
     return participants().filter((p) => {
@@ -243,7 +296,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
         <div
           class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
           classList={{
-            'ring-2 ring-accent-2': callCtx.room()?.localParticipant.isSpeaking,
+            'ring-2 ring-accent-2': isLocalSpeaking(),
           }}
         >
           <Show
