@@ -148,7 +148,7 @@ export function CallProvider(props: ParentProps) {
       setTrackVersion((v) => v + 1);
     });
     r.on(RoomEvent.Disconnected, () => {
-      cleanupRoom();
+      resetCallState();
     });
 
     // Register lk.transcription text stream handler
@@ -185,12 +185,7 @@ export function CallProvider(props: ParentProps) {
     );
   }
 
-  function cleanupRoom() {
-    const r = room();
-    if (r) {
-      r.removeAllListeners();
-      setRoom(null);
-    }
+  function resetCallState() {
     setConnectionState(ConnectionState.Disconnected);
     setActiveChannelId(null);
     setRemoteParticipants(new Map());
@@ -200,26 +195,47 @@ export function CallProvider(props: ParentProps) {
     setTranscriptSegments([]);
   }
 
-  async function connect(tokenResponse: CallTokenResponse) {
-    // Disconnect from any existing call first
-    await disconnect();
+  function destroyRoom() {
+    const r = room();
+    if (r) {
+      r.removeAllListeners();
+      setRoom(null);
+    }
+    resetCallState();
+  }
 
-    const newRoom = new Room();
-    attachRoomListeners(newRoom);
-    setRoom(newRoom);
+  async function connect(tokenResponse: CallTokenResponse) {
+    const existingRoom = room();
+
+    // If switching to a different channel, tear down the old room entirely
+    if (existingRoom && activeChannelId() !== tokenResponse.channelId) {
+      await existingRoom.disconnect();
+      destroyRoom();
+    }
+
+    let targetRoom: Room;
+    if (room()) {
+      // Reuse existing room instance (same channel, e.g. leave then rejoin)
+      targetRoom = room()!;
+    } else {
+      targetRoom = new Room();
+      attachRoomListeners(targetRoom);
+      setRoom(targetRoom);
+    }
+
     setActiveChannelId(tokenResponse.channelId);
 
     try {
-      await newRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
+      await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
     } catch (e) {
       console.error('failed to connect to LiveKit room', e);
-      cleanupRoom();
+      destroyRoom();
       throw e;
     }
 
     // Enable microphone by default, video off by default
     try {
-      await newRoom.localParticipant.setMicrophoneEnabled(true);
+      await targetRoom.localParticipant.setMicrophoneEnabled(true);
     } catch (e) {
       console.error('failed to enable microphone', e);
     }
@@ -231,7 +247,7 @@ export function CallProvider(props: ParentProps) {
     const r = room();
     if (r) {
       await r.disconnect();
-      cleanupRoom();
+      resetCallState();
     }
   }
 
