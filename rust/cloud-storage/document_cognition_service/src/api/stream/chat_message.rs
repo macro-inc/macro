@@ -21,6 +21,7 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use chat::inbound::ChatModelAccess;
 use futures::StreamExt;
+use macro_auth::headers::AccessTokenExtractor;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService;
@@ -42,20 +43,22 @@ pub(crate) struct BearerToken(pub String);
 /// Middleware that extracts the raw access token from request headers or cookies
 /// and inserts it into request extensions.
 pub(crate) async fn attach_bearer_token(
+    access_token: Result<AccessTokenExtractor, StatusCode>,
     mut req: Request,
     next: Next,
 ) -> Result<axum::response::Response, StatusCode> {
     if cfg!(feature = "local_auth") {
-        let token = macro_auth::headers::extract_access_token_from_request_headers(req.headers())
+        let token = access_token
+            .map(|t| t.as_ref().to_string())
             .unwrap_or_default();
         req.extensions_mut().insert(BearerToken(token));
         return Ok(next.run(req).await);
     }
 
-    let token = macro_auth::headers::extract_access_token_from_request_headers(req.headers())
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let token = access_token.map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-    req.extensions_mut().insert(BearerToken(token));
+    req.extensions_mut()
+        .insert(BearerToken(token.as_ref().to_string()));
     Ok(next.run(req).await)
 }
 

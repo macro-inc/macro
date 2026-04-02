@@ -1,16 +1,20 @@
+#[cfg(test)]
+mod test;
+
 use axum::{
     Json,
-    extract::{Request, State},
+    extract::{Query, Request, State},
     http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use macro_auth::{
     error::MacroAuthError,
+    headers::AccessTokenExtractor,
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
 use model::{response::ErrorResponse, user::UserContext};
-use std::collections::HashMap;
+use serde::Deserialize;
 
 /// Stores information about the JWT, this is used for the logout in particular call
 #[derive(Clone)]
@@ -21,12 +25,21 @@ pub struct JwtContext {
     pub tid: String,
 }
 
+/// the struct we use to extract api token from query parms
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Params {
+    macro_api_token: String,
+}
+
 /// Decodes the JWT and updates the UserContext with the user_id, fusion_user_id and organization_id.
 /// If in your request the user requires to be authenticated for all use cases, you can use this
 /// middleware.
 /// Otherwise, you should be using the `attach_user` middleware.
 pub async fn handler(
+    access_token: Result<AccessTokenExtractor, StatusCode>,
     jwt_validation_args: State<JwtValidationArgs>, // used for macro-access-token validation
+    params: Query<Option<Params>>,
     mut req: Request,
     next: Next,
 ) -> Result<Response, Response> {
@@ -45,24 +58,12 @@ pub async fn handler(
         return Ok(next.run(req).await);
     }
 
-    let query_params: HashMap<String, String> = req
-        .uri()
-        .query()
-        .map(|q| {
-            url::form_urlencoded::parse(q.as_bytes())
-                .into_owned()
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let access_token = if let Some(macro_api_token) = query_params.get("macro-api-token") {
+    let access_token = if let Query(Some(Params { macro_api_token })) = params {
         tracing::trace!("macro-api-token found in query params");
-        macro_api_token.to_string()
+        macro_api_token
     } else {
-        let headers = req.headers();
-
-        match macro_auth::headers::extract_access_token_from_request_headers(headers) {
-            Ok(access_token) => access_token,
+        match access_token {
+            Ok(access_token) => access_token.as_ref().to_string(),
             Err(e) => {
                 tracing::trace!(error=?e, "unable to get macro access token");
                 return Err((

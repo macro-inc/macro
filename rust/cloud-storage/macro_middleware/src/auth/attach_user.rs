@@ -9,6 +9,7 @@ use axum::{
 };
 use macro_auth::{
     error::MacroAuthError,
+    headers::AccessTokenExtractor,
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
 
@@ -17,6 +18,7 @@ use model::{response::ErrorResponse, user::UserContext};
 /// Attempts to decode the JWT and attach user to the request context
 /// If there is no JWT to decode, the user context remains empty
 pub async fn handler(
+    access_token: Result<AccessTokenExtractor, StatusCode>,
     State(jwt_validation_args): State<JwtValidationArgs>, // used for macro-access-token validation
     mut req: Request,
     next: Next,
@@ -46,10 +48,8 @@ pub async fn handler(
         tracing::trace!("macro-api-token found in query params");
         macro_api_token.to_string()
     } else {
-        let headers = req.headers();
-
-        match macro_auth::headers::extract_access_token_from_request_headers(headers) {
-            Ok(access_token) => access_token,
+        match access_token {
+            Ok(access_token) => access_token.as_ref().to_string(),
             Err(e) => {
                 tracing::trace!(error=?e, "unable to get macro access token");
                 return Ok(next.run(req).await);
