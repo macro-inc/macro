@@ -2,7 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useBlockId } from '@core/block';
 import { NotificationsDrawer } from '@core/component/NotificationsModal';
 import { ChannelTypeEnum } from '@service-comms/client';
-import { createContext, createSignal, Show, useContext } from 'solid-js';
+import { createContext, createSignal, onCleanup, onMount, Show, useContext } from 'solid-js';
 import type { ParentProps } from 'solid-js';
 import { AttachmentsDrawer, useAttachments } from './AttachmentsModal';
 import type { Attachment } from '@queries/channel/types';
@@ -46,17 +46,22 @@ function ModalsProviderInner(props: ParentProps) {
   const sendTranscript = useSendTranscriptMutation();
 
   // Forward final transcript segments to the backend
-  call.callCtx.onTranscriptSegment((segment) => {
-    sendTranscript.mutate({
-      channelId: blockId,
-      segment: {
-        segmentId: segment.id,
-        speakerId: segment.participantIdentity,
-        content: segment.text,
-        startedAt: new Date().toISOString(),
-        isFinal: segment.isFinal,
-      },
+  onMount(() => {
+    call.callCtx.onTranscriptSegment((segment) => {
+      sendTranscript.mutate({
+        channelId: blockId,
+        segment: {
+          segmentId: segment.id,
+          speakerId: segment.participantIdentity,
+          content: segment.text,
+          startedAt: new Date().toISOString(),
+          isFinal: segment.isFinal,
+        },
+      });
     });
+  });
+  onCleanup(() => {
+    call.callCtx.onTranscriptSegment(() => {});
   });
 
   return (
