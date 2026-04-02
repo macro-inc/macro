@@ -3,10 +3,7 @@ import { cn } from '@ui/utils/classname';
 import type { MessageActions, MessageData } from './types';
 import { Message } from './Message';
 import type { ChannelMessageListMeta } from './list-meta';
-import {
-  useMessage,
-  MessageSelectionProvider,
-} from './context';
+import { useMessage, MessageSelectionProvider } from './context';
 import type { MessageSelectionState } from './context';
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import type { MessageEditor } from '../Channel/create-message-editor';
