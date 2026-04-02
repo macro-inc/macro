@@ -1,5 +1,6 @@
 # Deploy the agent to LiveKit Cloud
-deploy:
+deploy-dev:
+    cp livekit.dev.toml livekit.toml
     lk agent deploy
 
 # Run the agent locally in console mode
