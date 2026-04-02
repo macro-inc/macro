@@ -480,28 +480,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     applyTabPreset,
   });
 
-  // Register previewed entity for auto-attach
-  createEffect(() => {
-    const entity = soup.previewEntity() ? soup.focus.item() : undefined;
-    if (!entity) {
-      registerPreviewEntity(panel.handle.id, undefined);
-      return;
-    }
-    const type =
-      entity.type === 'document'
-        ? fileTypeToResolvedBlockName(
-            (entity as { fileType?: string }).fileType
-          )
-        : entity.type === 'channel_message'
-          ? 'channel'
-          : entity.type;
-    const previewId =
-      entity.type === 'channel_message' ? entity.channelId : entity.id;
-    registerPreviewEntity(panel.handle.id, { type, id: previewId });
-  });
-  onCleanup(() => {
-    registerPreviewEntity(panel.handle.id, undefined);
-  });
   // Create markDone action for swipe/click handlers
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
