@@ -155,15 +155,20 @@ export const openEntityInNewTab = ({
     const blockName = fileTypeToBlockName(subType?.type ?? fileType);
     entityPath = `/app/${blockName}/${entity.id}`;
   } else if (entity.type === 'channel_message') {
-    // TODO: add channel params to URL
     entityPath = `/app/channel/${entity.channelId}`;
   } else {
     entityPath = `/app/${entity.type}/${entity.id}`;
   }
 
   // Add location params if present
-  const entityUrl = new URL(entityPath, window.location.origin);
-  if (location) {
+  let entityUrl = new URL(entityPath, window.location.origin);
+
+  if (entity.type === 'channel_message') {
+    entityUrl.searchParams.set(CHANNEL_PARAMS.message, entity.messageId);
+    if (entity.threadId) {
+      entityUrl.searchParams.set(CHANNEL_PARAMS.thread, entity.threadId);
+    }
+  } else if (location) {
     switch (location.type) {
       case 'channel':
         if (location.messageId) {
@@ -173,7 +178,7 @@ export const openEntityInNewTab = ({
           );
         }
         if (location.threadId) {
-          entityUrl.searchParams.set('thread', location.threadId);
+          entityUrl.searchParams.set(CHANNEL_PARAMS.thread, location.threadId);
         }
         break;
       case 'email':
