@@ -14,3 +14,5 @@ config:
   notification-service:macro_cache_secret_key: macro-cache-dev
   notification-service:authentication_service_internal_api_key: authentication-service-internal-api-key-dev
   notification-service:macro_db_secret_key: macro-db-dev
+  notification-service:unsubscribe_hmac_secret:
+    secure: AAABAIDn9UcKMR8rHG1OsCVWSjryU0W9nsOlfWPJJNvznX0EJGc0mnpsFIST3LrUCKi+er4PQe9xRPzYfhZDMgnNs+nIBhrVID+CbLWBzcVd564fkjFOTNd/XfuyId3a

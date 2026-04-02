@@ -46,6 +46,7 @@ const APNS_KEY_ID = aws.secretsmanager
   .getSecretVersionOutput({ secretId: apnsKeyId })
   .apply((secret) => secret.secretString);
 const APNS_PRIVATE_KEY = config.requireSecret(`apns_private_key`);
+const UNSUBSCRIBE_HMAC_SECRET = config.requireSecret(`unsubscribe_hmac_secret`);
 
 const FCM_SECRET_KEY = config.require(`fcm_secret_key`);
 const fcmCredentials: pulumi.Output<string> = aws.secretsmanager
@@ -269,6 +270,10 @@ const notificationService = new NotificationService('notification-service', {
     {
       name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
       value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
+    },
+    {
+      name: 'UNSUBSCRIBE_HMAC_SECRET',
+      value: UNSUBSCRIBE_HMAC_SECRET,
     },
     // OpenTelemetry / Datadog tracing configuration
     {
