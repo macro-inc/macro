@@ -15,6 +15,7 @@ inbound = [
   "ports",
 ]
 outbound = [
+  "dep:entity_access",
   "dep:livekit-api",
   "dep:livekit-protocol",
   "dep:models_permissions",
