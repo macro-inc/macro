@@ -114,6 +114,18 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
   );
 }
 
+const CallIcon: Component = (iconProps) => {
+  const channelModals = useChannelModals();
+  return (
+    <Show
+      when={channelModals.isInCall()}
+      fallback={<PhoneIcon {...iconProps} />}
+    >
+      <PhoneDisconnectIcon {...iconProps} />
+    </Show>
+  );
+};
+
 export function Top(props: TopProps) {
   const analytics = useAnalytics();
 
@@ -124,15 +136,6 @@ export function Top(props: TopProps) {
   const notificationsControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
   const attachmentsControl = useDrawerControl('attachments');
   const channelModals = useChannelModals();
-
-  const CallIcon: Component = (iconProps) => (
-    <Show
-      when={channelModals.isInCall()}
-      fallback={<PhoneIcon {...iconProps} />}
-    >
-      <PhoneDisconnectIcon {...iconProps} />
-    </Show>
-  );
 
   const isAdminOrOwner = createMemo(() => {
     const channelData = channelContext.channel();
