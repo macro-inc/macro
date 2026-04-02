@@ -454,9 +454,7 @@ export function Root() {
                         <Title>{tabTitle()}</Title>
                         <MacroJump />
                         <Visor />
-                        <SuspenseContextComp
-                          fallback={<RootSuspenseFallback />}
-                        >
+                        <Suspense>
                           <IsomorphicRouter
                             transformUrl={transformShortIdInUrlPathname}
                             root={Layout}
@@ -469,7 +467,7 @@ export function Root() {
                               children: ROUTES,
                             }}
                           </IsomorphicRouter>
-                        </SuspenseContextComp>
+                        </Suspense>
                         <ToastRegion />
                       </SearchProvider>
                     </QuickAccessProvider>
