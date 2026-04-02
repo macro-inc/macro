@@ -7,7 +7,7 @@
 
 export type GetChannelAttachmentsParams = {
   /**
-   * Page size (1-100, default 50)
+   * Page size (1-500, default 50)
    * @minimum 0
    */
   limit?: number;

@@ -97,6 +97,7 @@ models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
 regex = { workspace = true }
 reqwest.workspace = true
+roles_and_permissions = { path = "../roles_and_permissions", default-features = false }
 rmcp = { version = "1.2.0", features = ["transport-streamable-http-server"] }
 schemars = { workspace = true }
 scribe = { path = "../scribe", features = [
@@ -111,6 +112,7 @@ secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+readonly_pool = { path = "../readonly_pool" }
 soup = { path = "../soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [

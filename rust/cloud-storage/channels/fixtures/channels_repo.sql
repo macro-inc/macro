@@ -3,7 +3,8 @@
 -- Channel: ch1 (public, in org 1)
 -- Top-level messages: msg1 (oldest), msg2, msg3 (newest)
 -- msg1 has a thread with 4 replies (r1..r4), reactions, and an attachment
--- msg2 is soft-deleted but has an active reply → should still appear
+-- msg2 is soft-deleted but has an active reply → should still appear in message listings
+-- but its attachments should not appear in the channel attachments endpoint
 -- msg3 is a normal message with no thread
 --
 -- Also:
@@ -84,6 +85,11 @@ INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_i
 INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_id, width, height, created_at) VALUES
   ('00000000-0000-0000-0000-00000000a003', '00000000-0000-0000-0000-000000000003',
    '00000000-0000-0000-0000-000000000c01', 'document', 'doc-2', NULL, NULL, '2024-01-01 12:00:00+00');
+
+-- attachment on deleted msg2: should be excluded from channel-level attachments
+INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_id, width, height, created_at) VALUES
+  ('00000000-0000-0000-0000-00000000a004', '00000000-0000-0000-0000-000000000002',
+   '00000000-0000-0000-0000-000000000c01', 'image', 'img-deleted', 640, 480, '2024-01-01 11:00:30+00');
 
 -- participants in ch1
 INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at, left_at) VALUES

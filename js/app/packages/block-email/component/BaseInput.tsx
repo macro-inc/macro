@@ -81,6 +81,7 @@ import {
   For,
   type JSX,
   Match,
+  on,
   onCleanup,
   onMount,
   type Setter,
@@ -124,7 +125,6 @@ import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { isMobile } from '@core/mobile/isMobile';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
-import { stickyGate } from '@core/util/debounce';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import ChevronDown from '@icon/regular/caret-down.svg';
 
@@ -631,7 +631,7 @@ export function BaseInput(props: {
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let draftSaveTimer: number | undefined;
-  const DRAFT_DEBOUNCE_MS = 1000;
+  const DRAFT_DEBOUNCE_MS = 500;
 
   function collectDraft() {
     $removeAllWatermarkNodes(editor());
@@ -646,7 +646,10 @@ export function BaseInput(props: {
       !hasDraftContent(
         prepared.bodyText,
         form().subject(),
-        form().attachments.list().length
+        form().attachments.list().length,
+        form().recipients().to.length +
+          form().recipients().cc.length +
+          form().recipients().bcc.length
       )
     ) {
       return null;
@@ -916,9 +919,13 @@ export function BaseInput(props: {
       }
     }
 
-    // We handle cleaning up the signature after we've sent the request because
-    // otherwise the `bodyMacro` signal would update after the clean up call and
-    // not contain the signature in the request data
+    // Failsafe: don't send if a scheduled send time is set
+    if (form().sendTime()) {
+      return;
+    }
+
+    // Append watermark after all validation passes so failed sends don't
+    // leave orphaned watermark nodes in the editor tree.
     const cleanupWatermark = $appendWatermarkNodeToLast(
       currentEditor,
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
@@ -936,6 +943,7 @@ export function BaseInput(props: {
         : undefined
     );
     if (!prepared) {
+      cleanupWatermark();
       return;
     }
 
@@ -945,12 +953,6 @@ export function BaseInput(props: {
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
     const currentDraftID = savedDraftId();
-
-    // Failsafe: don't send if a scheduled send time is set
-    if (form().sendTime()) {
-      cleanupWatermark();
-      return;
-    }
 
     sendMutation.mutate({
       message: {
@@ -1225,8 +1227,22 @@ export function BaseInput(props: {
     }
   };
 
-  const isDraftSaving = () => saveDraftMutation.isPending;
-  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
+  // Unschedule when all recipients are removed
+  const totalRecipientCount = () => {
+    const r = form().recipients();
+    return r.to.length + r.cc.length + r.bcc.length;
+  };
+  createEffect(
+    on(
+      totalRecipientCount,
+      (count) => {
+        if (count === 0 && form().sendTime()) {
+          handleSendTimeChange(null);
+        }
+      },
+      { defer: true }
+    )
+  );
 
   return (
     <div
@@ -1629,10 +1645,15 @@ export function BaseInput(props: {
               <EmailDateSelector
                 sendTime={form().sendTime() ?? null}
                 onSendTimeChange={handleSendTimeChange}
+                disabled={
+                  form().recipients().to.length === 0 &&
+                  form().recipients().cc.length === 0 &&
+                  form().recipients().bcc.length === 0
+                }
                 disablePortal={isMobile()}
               />
             </Show>
-            <Show when={savedDraftId() && !laggedIsDraftSaving()}>
+            <Show when={savedDraftId()}>
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip="Delete draft"
@@ -1640,11 +1661,6 @@ export function BaseInput(props: {
               >
                 <Trash class="h-5" />
               </Button>
-            </Show>
-            <Show when={laggedIsDraftSaving()}>
-              <div class="aspect-square p-1 flex items-center justify-center">
-                <Spinner class="size-5 animate-spin text-ink-muted" />
-              </div>
             </Show>
           </div>
 

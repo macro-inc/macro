@@ -1,6 +1,5 @@
 import { useToolManager } from '@block-canvas/signal/toolManager';
 import { useRenderState } from '@block-canvas/store/RenderState';
-import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { HoverCard } from '@core/component/HoverCard';
@@ -26,8 +25,6 @@ import type { EntityMentionNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';
 import { type Vector2, vec2 } from '../../util/vector2';
 import { BaseCanvasRectangle } from './BaseCanvasRectangle';
-
-const { track, TrackingEvents } = withAnalytics();
 
 function ErrorMessage(props: {
   node: EntityMentionNode;
@@ -191,7 +188,6 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
                     type: blockName() as BlockName,
                     id: props.node.file,
                   });
-                  track(TrackingEvents.BLOCKCANVAS.FILES.OPENFILESIDE);
                 }
               }}
             >

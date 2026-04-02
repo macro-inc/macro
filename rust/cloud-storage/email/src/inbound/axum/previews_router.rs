@@ -6,7 +6,9 @@ use axum::{
 use axum_extra::extract::Cached;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
-use models_pagination::{CursorExtractor, SimpleSortMethod, TypeEraseCursor};
+use models_pagination::{
+    CursorOptionExt, CursorWithValAndFilter, SimpleSortMethod, TypeEraseCursor,
+};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -83,7 +85,7 @@ async fn cursor_handler<T: EmailService>(
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
     PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
-    cursor: CursorExtractor<Uuid, SimpleSortMethod, ()>,
+    cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ()>>,
 ) -> Result<Json<ApiPaginatedThreadCursor>, GetPreviewsCursorError> {
     Ok(Json(ApiPaginatedThreadCursor::new(
         service

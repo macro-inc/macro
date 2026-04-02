@@ -151,7 +151,7 @@ const getEntityTypeQueryFilters = (
       fileTypes.push('md');
     }
     if (includesFiles) {
-      fileTypes.push(...getFileAssociations('soup'));
+      fileTypes.push(...getFileAssociations());
     }
     result.document_filters = {
       ...currentFilters.document_filters,

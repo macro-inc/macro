@@ -1,5 +1,10 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use call::{
+    domain::service::CallServiceImpl,
+    inbound::axum_router::{CallRouterState, WebhookRouterState},
+    outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
+};
 use channels::{
     domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
     outbound::pg_channels_repo::PgChannelMessagesRepo,
@@ -21,7 +26,10 @@ use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
-use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
+use email::{
+    domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
+    outbound::EmailPgRepo,
+};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::GithubSyncServiceImpl;
@@ -56,22 +64,20 @@ pub struct InternalFlag {
     pub internal: bool,
 }
 
+type DssEmailService = EmailServiceImpl<
+    EmailPgRepo,
+    FrecencyQueryServiceImpl<FrecencyPgStorage>,
+    email::domain::ports::NoOpEnqueuer,
+>;
+
 type DssSoupState = SoupRouterState<
     SoupImpl<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        EmailServiceImpl<
-            EmailPgRepo,
-            FrecencyQueryServiceImpl<FrecencyPgStorage>,
-            email::domain::ports::NoOpEnqueuer,
-        >,
+        ReadonlyEmailPreviewAdapter<DssEmailService>,
         ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
     >,
-    EmailServiceImpl<
-        EmailPgRepo,
-        FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        email::domain::ports::NoOpEnqueuer,
-    >,
+    DssEmailService,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
@@ -152,6 +158,15 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 pub(crate) type DssChannelsState =
     ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, EntityAccessService>;
 
+/// Type alias for the call service.
+pub(crate) type DssCallService = CallServiceImpl<PgCallRepo, LivekitRtcClient>;
+
+/// Type alias for the call router state.
+pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessService>;
+
+/// Type alias for the call webhook router state.
+pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
+
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
     GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
@@ -183,6 +198,8 @@ pub(crate) struct ApiContext {
     pub entity_access_service: Arc<EntityAccessService>,
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,
+    pub call_state: DssCallState,
+    pub call_webhook_state: DssCallWebhookState,
 }
 
 env_var! {

@@ -914,6 +914,11 @@ export type sendChatMessageResponse401 = {
   status: 401;
 };
 
+export type sendChatMessageResponse402 = {
+  data: void;
+  status: 402;
+};
+
 export type sendChatMessageResponse403 = {
   data: void;
   status: 403;
@@ -925,6 +930,7 @@ export type sendChatMessageResponseSuccess = sendChatMessageResponse200 & {
 export type sendChatMessageResponseError = (
   | sendChatMessageResponse400
   | sendChatMessageResponse401
+  | sendChatMessageResponse402
   | sendChatMessageResponse403
 ) & {
   headers: Headers;

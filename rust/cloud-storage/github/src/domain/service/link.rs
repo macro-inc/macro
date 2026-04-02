@@ -55,6 +55,53 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_user_link(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<GithubLink, GithubError> {
+        self.repo
+            .get_github_link_by_user_id(macro_user_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_user_link(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<(), GithubError> {
+        // Get link
+        let link = match self.repo.get_github_link_by_user_id(macro_user_id).await {
+            Ok(link) => link,
+            Err(e) => {
+                let e: anyhow::Error = e.into();
+                if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
+                    && matches!(db_err, sqlx::Error::RowNotFound)
+                {
+                    tracing::trace!("no github link found for user");
+                    return Ok(());
+                } else {
+                    return Err(GithubError::Internal(e));
+                }
+            }
+        };
+
+        // Delete link from Auth
+        self.auth
+            .delete_user_link(&link, &self.config.idp_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        // Delete from repo
+        self.repo
+            .delete_github_link(&link.id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn link_user(
         &self,
         user_id: &MacroUserId<Lowercase<'static>>,

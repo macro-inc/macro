@@ -12,7 +12,14 @@ import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
-import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
@@ -32,6 +39,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { MobileDock } from './mobile/MobileDock';
 import { MobileSearchOuter } from './mobile/MobileSearch';
 import { makePersisted } from '@solid-primitives/storage';
+import {
+  SidebarVisibilityContext,
+  isSidebarVisible,
+} from '@app/component/sidebarVisibility';
+export { SidebarVisibilityContext, isSidebarVisible };
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -51,6 +63,23 @@ export const [sidebarState, setSidebarState] = makePersisted(
 );
 
 export function Layout(props: RouteSectionProps) {
+  const isAuthenticated = useIsAuthenticated();
+  const location = useLocation();
+  const sidebarVisible = createMemo(
+    () =>
+      !isMobile() &&
+      isAuthenticated() === true &&
+      !AUTH_URLS.includes(location.pathname)
+  );
+
+  return (
+    <SidebarVisibilityContext.Provider value={sidebarVisible}>
+      <LayoutInner {...props} />
+    </SidebarVisibilityContext.Provider>
+  );
+}
+
+function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
@@ -136,13 +165,7 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow-1 flex">
-        <Show
-          when={
-            !isMobile() &&
-            isAuthenticated() &&
-            !AUTH_URLS.includes(location.pathname)
-          }
-        >
+        <Show when={isSidebarVisible()}>
           <AppSidebar
             sidebarState={sidebarState()}
             onOpenChange={(open) => {

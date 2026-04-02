@@ -183,12 +183,19 @@ use utoipa::OpenApi;
         // items
         soup::inbound::axum_router::get_soup_handler,
         soup::inbound::axum_router::post_soup_handler,
+        soup::inbound::axum_router::post_soup_ast_handler,
 
         // channels
         channels::inbound::axum_router::get_channel_messages_handler,
         channels::inbound::axum_router::get_thread_replies_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
+
+        // calls
+        call::inbound::axum_router::get_or_create_call_handler,
+        call::inbound::axum_router::leave_or_end_call_handler,
+        call::inbound::axum_router::webhook_handler,
+        call::inbound::axum_router::transcript_handler,
 
         // pins
         pins::add_pin::add_pin_handler,
@@ -325,6 +332,11 @@ use utoipa::OpenApi;
             ApiChannelAttachment,
             ApiChannelParticipant,
             ApiParticipantRole,
+
+            // Calls
+            call::domain::models::CallTokenResponse,
+            call::domain::models::LeaveCallResponse,
+            call::domain::models::TranscriptSegmentRequest,
 
             DocumentSubType,
 

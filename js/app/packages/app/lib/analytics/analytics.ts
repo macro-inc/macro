@@ -6,7 +6,7 @@ import {
 import { PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 
-type AnalyticsProvider = 'ga' | 'meta-pixel' | 'posthog';
+export type AnalyticsProvider = 'ga' | 'meta-pixel' | 'posthog';
 
 const DEFAULT_ANALYTICS_PROVIDERS: AnalyticsProvider[] = ['posthog'];
 
@@ -37,7 +37,7 @@ const initializePosthog = (instance: PostHog) => {
   if (!key) return;
 
   instance.init(key, {
-    api_host: 'https://analytics-proxy.macroverse.workers.dev/ingest/ph',
+    api_host: 'https://macro-prox.macroverse.workers.dev/i/ph',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
   });

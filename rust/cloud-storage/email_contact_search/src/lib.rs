@@ -110,36 +110,26 @@ pub async fn search_email_contacts<'a>(
     // Fetch limit + 1 to determine if there are more results
     let fetch_limit = limit as i64 + 1;
 
-    let rows = sqlx::query!(
+    // Find threads with matching contacts, sorted by most recent activity.
+    // Uses trigram indexes on contact_name/email for the ILIKE search, then
+    // joins email_threads for timestamp-based ordering and cursor pagination.
+    let thread_rows = sqlx::query!(
         r#"
-        WITH matches AS (
-            SELECT thread_id, message_id, contact_name, contact_email, contact_type
-            FROM email_contact_search_index
-            WHERE link_id = (SELECT id FROM email_links WHERE macro_id = $1)
-              AND (contact_name ILIKE $2 OR contact_email ILIKE $2)
-        ),
-        paginated_threads AS (
-            SELECT t.id, t.latest_non_spam_message_ts
-            FROM email_threads t
-            JOIN (SELECT DISTINCT thread_id FROM matches) mt ON mt.thread_id = t.id
-            WHERE t.latest_non_spam_message_ts IS NOT NULL
-              AND (
-                  $4::timestamptz IS NULL
-                  OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)
-              )
-            ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC
-            LIMIT $3
+        SELECT t.id as "thread_id!", t.latest_non_spam_message_ts as "updated_at!"
+        FROM email_threads t
+        WHERE t.id IN (
+            SELECT DISTINCT ecsi.thread_id
+            FROM email_contact_search_index ecsi
+            WHERE ecsi.link_id = (SELECT id FROM email_links WHERE macro_id = $1)
+              AND (ecsi.contact_name ILIKE $2 OR ecsi.contact_email ILIKE $2)
         )
-        SELECT
-            pt.id as "thread_id!",
-            pt.latest_non_spam_message_ts as "updated_at!",
-            m.message_id as "message_id!",
-            m.contact_name as "contact_name?",
-            m.contact_email as "contact_email!",
-            m.contact_type as "contact_type!"
-        FROM paginated_threads pt
-        JOIN matches m ON m.thread_id = pt.id
-        ORDER BY pt.latest_non_spam_message_ts DESC, pt.id DESC
+        AND t.latest_non_spam_message_ts IS NOT NULL
+        AND (
+            $4::timestamptz IS NULL
+            OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)
+        )
+        ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC
+        LIMIT $3
         "#,
         macro_user_id.as_ref(),
         search_pattern,
@@ -150,52 +140,85 @@ pub async fn search_email_contacts<'a>(
     .fetch_all(db)
     .await?;
 
-    let results: Vec<EmailContactMatchThreadResult> = rows
-        .into_iter()
-        .map(|row| EmailContactMatchThreadResult {
+    let thread_entries: Vec<ThreadPaginationEntry> = thread_rows
+        .iter()
+        .map(|row| ThreadPaginationEntry {
             thread_id: row.thread_id,
-            message_id: row.message_id,
-            contact_name: row.contact_name,
-            contact_email: row.contact_email,
-            contact_type: match row.contact_type.as_str() {
-                "TO" => ContactType::To,
-                "CC" => ContactType::Cc,
-                "BCC" => ContactType::Bcc,
-                _ => ContactType::From,
-            },
             updated_at: row.updated_at,
         })
         .collect();
 
-    // Collect unique threads for pagination (preserving order)
-    let mut seen_threads = std::collections::HashSet::new();
-    let thread_entries: Vec<ThreadPaginationEntry> = results
-        .iter()
-        .filter(|r| seen_threads.insert(r.thread_id))
-        .map(|r| ThreadPaginationEntry {
-            thread_id: r.thread_id,
-            updated_at: r.updated_at,
-        })
-        .collect();
-
-    // Use paginate helper to determine cursor
     let paginated_threads = SearchCursorOption::paginate(thread_entries, limit as usize);
 
-    // Get the thread IDs we want to keep
-    let threads_to_keep: std::collections::HashSet<_> = paginated_threads
+    let thread_ids: Vec<uuid::Uuid> = paginated_threads
         .items
         .iter()
         .map(|t| t.thread_id)
         .collect();
 
-    // Filter results to only include matches from kept threads
-    let filtered_results: Vec<_> = results
-        .into_iter()
-        .filter(|r| threads_to_keep.contains(&r.thread_id))
+    if thread_ids.is_empty() {
+        return Ok(PaginatedResult {
+            items: vec![],
+            cursor: paginated_threads.cursor,
+        });
+    }
+
+    let thread_ts_map: std::collections::HashMap<uuid::Uuid, DateTime<Utc>> = paginated_threads
+        .items
+        .iter()
+        .map(|t| (t.thread_id, t.updated_at))
         .collect();
 
+    // Fetch contact details for the paginated threads using the idx_ecsi_link_thread
+    // btree index. This avoids re-running the expensive trigram scan from the previous query.
+    let contact_rows = sqlx::query!(
+        r#"
+        SELECT
+            ecsi.thread_id as "thread_id!",
+            ecsi.message_id as "message_id!",
+            ecsi.contact_name as "contact_name?",
+            ecsi.contact_email as "contact_email!",
+            ecsi.contact_type as "contact_type!"
+        FROM email_contact_search_index ecsi
+        WHERE ecsi.link_id = (SELECT id FROM email_links WHERE macro_id = $1)
+          AND ecsi.thread_id = ANY($2)
+          AND (ecsi.contact_name ILIKE $3 OR ecsi.contact_email ILIKE $3)
+        "#,
+        macro_user_id.as_ref(),
+        &thread_ids,
+        search_pattern,
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut results: Vec<EmailContactMatchThreadResult> = contact_rows
+        .into_iter()
+        .filter_map(|row| {
+            let updated_at = *thread_ts_map.get(&row.thread_id)?;
+            Some(EmailContactMatchThreadResult {
+                thread_id: row.thread_id,
+                message_id: row.message_id,
+                contact_name: row.contact_name,
+                contact_email: row.contact_email,
+                contact_type: match row.contact_type.as_str() {
+                    "TO" => ContactType::To,
+                    "CC" => ContactType::Cc,
+                    "BCC" => ContactType::Bcc,
+                    _ => ContactType::From,
+                },
+                updated_at,
+            })
+        })
+        .collect();
+
+    results.sort_by(|a, b| {
+        b.updated_at
+            .cmp(&a.updated_at)
+            .then(b.thread_id.cmp(&a.thread_id))
+    });
+
     Ok(PaginatedResult {
-        items: filtered_results,
+        items: results,
         cursor: paginated_threads.cursor,
     })
 }

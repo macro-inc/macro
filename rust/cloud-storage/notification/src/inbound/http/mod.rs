@@ -9,7 +9,7 @@ use axum::{
 };
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
-use models_pagination::{CreatedAt, CursorExtractor};
+use models_pagination::{CreatedAt, CursorOptionExt, CursorWithValAndFilter};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::sync::Arc;
@@ -100,7 +100,7 @@ pub async fn list_user_notifications<
     service: &NotificationRouterState<S>,
     macro_user: MacroUserExtractor,
     Query(Params { limit }): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
+    cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let query = cursor.into_query(CreatedAt, ());
     let result = service
@@ -155,7 +155,7 @@ pub async fn bulk_get_by_event_item_ids<
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Query(Params { limit }): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
+    cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
     Json(req): Json<BulkGetByEventItemIdsRequest>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let result = service
@@ -303,7 +303,7 @@ pub async fn get_by_event_item_id<S: NotificationReader, T: Serialize + Deserial
     macro_user: MacroUserExtractor,
     Path(EventItemIdPath { event_item_id }): Path<EventItemIdPath>,
     Query(Params { limit }): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
+    cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let result = service
         .inner

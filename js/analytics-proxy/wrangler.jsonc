@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "analytics-proxy",
+  "name": "macro-prox",
   "main": "src/index.ts",
   "compatibility_date": "2025-07-22",
   "observability": {

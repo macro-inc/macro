@@ -96,6 +96,7 @@ fn test_user_id(email: &str) -> MacroUserIdStr<'static> {
 struct MockRepository {
     muted_users: HashSet<MacroUserIdStr<'static>>,
     unsubscribed_users: HashSet<MacroUserIdStr<'static>>,
+    type_disabled_users: HashSet<MacroUserIdStr<'static>>,
     device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
     created_notifications: Mutex<Vec<Uuid>>,
     stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
@@ -109,6 +110,7 @@ impl MockRepository {
         Self {
             muted_users: HashSet::new(),
             unsubscribed_users: HashSet::new(),
+            type_disabled_users: HashSet::new(),
             device_endpoints: HashMap::new(),
             created_notifications: Mutex::new(Vec::new()),
             stored_collapse_keys: Mutex::new(Vec::new()),
@@ -133,6 +135,11 @@ impl MockRepository {
 
     fn with_unsubscribed_user(mut self, user_id: MacroUserIdStr<'static>) -> Self {
         self.unsubscribed_users.insert(user_id);
+        self
+    }
+
+    fn with_type_disabled_user(mut self, user_id: MacroUserIdStr<'static>) -> Self {
+        self.type_disabled_users.insert(user_id);
         self
     }
 
@@ -339,6 +346,37 @@ impl NotificationRepository for MockRepository {
     async fn delete_device_by_endpoint(&self, _endpoint_arn: &str) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn get_users_with_type_disabled<'a>(
+        &self,
+        _notification_event_type: &str,
+        _user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        Ok(self.type_disabled_users.clone())
+    }
+
+    async fn get_disabled_notification_types(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::models::DisabledNotificationType>, Report> {
+        Ok(vec![])
+    }
+
+    async fn disable_notification_type(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_event_type: &str,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn enable_notification_type(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_event_type: &str,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 impl NotificationRepository for std::sync::Arc<MockRepository> {
@@ -500,6 +538,43 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {
         (**self).delete_device_by_endpoint(endpoint_arn).await
+    }
+
+    async fn get_users_with_type_disabled<'a>(
+        &self,
+        notification_event_type: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        (**self)
+            .get_users_with_type_disabled(notification_event_type, user_ids)
+            .await
+    }
+
+    async fn get_disabled_notification_types(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::models::DisabledNotificationType>, Report> {
+        (**self).get_disabled_notification_types(user_id).await
+    }
+
+    async fn disable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> Result<(), Report> {
+        (**self)
+            .disable_notification_type(user_id, notification_event_type)
+            .await
+    }
+
+    async fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> Result<(), Report> {
+        (**self)
+            .enable_notification_type(user_id, notification_event_type)
+            .await
     }
 }
 
@@ -705,6 +780,31 @@ async fn test_unsubscribed_user_excluded() {
     let result = service.send_notification(request).await.unwrap();
 
     // Unsubscribed user should be excluded, no valid recipients remain
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+async fn test_type_disabled_user_excluded() {
+    let disabled_user = test_user_id("disabled@example.com");
+    let service = NotificationIngressService::new(
+        MockRepository::new().with_type_disabled_user(disabled_user.clone()),
+        MockQueue::new(),
+        MockStateMachine,
+    );
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        notification: TestNotification {
+            message: "Hello".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([disabled_user]),
+    }
+    .into_request();
+
+    let result = service.send_notification(request).await.unwrap();
+
+    // User with type disabled should be excluded, no valid recipients remain
     assert!(result.is_none());
 }
 

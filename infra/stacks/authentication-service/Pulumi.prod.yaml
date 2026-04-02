@@ -23,6 +23,8 @@ config:
   authentication-service:ga_measurement_id: G-52HPEL3FTV
   authentication-service:ga_api_secret: ga-api-secret
   authentication-service:meta_pixel_id: 639142540393286
+  authentication-service:posthog_host: https://us.i.posthog.com
+  authentication-service:posthog_api_key: posthog-api-key
   authentication-service:stripe_price_id_haiku: stripe-price-id-haiku-prod
   authentication-service:stripe_price_id_sonnet: stripe-price-id-sonnet-prod
   authentication-service:stripe_price_id_opus: stripe-price-id-opus-prod

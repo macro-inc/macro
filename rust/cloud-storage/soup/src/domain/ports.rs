@@ -1,10 +1,10 @@
 use crate::domain::models::{
-    AdvancedSortParams, FrecencySoupItem, SimpleSortRequest, SoupErr, SoupRequest,
+    AdvancedSortParams, FrecencySoupItem, IntoSoupReqAst, SimpleSortRequest, SoupErr, SoupRequest,
 };
 use either::Either;
-use item_filters::EntityFilters;
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
 use models_soup::item::SoupItem;
+use serde::Serialize;
 
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait SoupRepo: Send + Sync + 'static {
@@ -42,14 +42,17 @@ pub trait SoupRepo: Send + Sync + 'static {
 /// 1. The id type is [String] (this should be changed to uuid)
 /// 1. The sort method is [Either] [SimpleSortMethod] or [Frecency]
 /// 1. The filter type is an [Option] [EntityFilterAst]
-pub type SoupOutput = Either<
-    PaginatedCursor<FrecencySoupItem, String, SimpleSortMethod, EntityFilters>,
-    PaginatedCursor<FrecencySoupItem, String, Frecency, EntityFilters>,
+pub type SoupOutput<T> = Either<
+    PaginatedCursor<FrecencySoupItem, String, SimpleSortMethod, T>,
+    PaginatedCursor<FrecencySoupItem, String, Frecency, T>,
 >;
 
 pub trait SoupService: Send + Sync + 'static {
-    fn get_user_soup(
+    fn get_user_soup<T>(
         &self,
-        req: SoupRequest<EntityFilters>,
-    ) -> impl Future<Output = Result<SoupOutput, SoupErr>> + Send;
+        req: SoupRequest<T>,
+    ) -> impl Future<Output = Result<SoupOutput<T>, SoupErr>> + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send;
 }

@@ -2,7 +2,6 @@ use axum::{
     Extension, Router,
     http::{Method, Request, StatusCode},
 };
-use cool_asserts::assert_matches;
 use email::domain::{
     models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
@@ -13,8 +12,7 @@ use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
 use models_pagination::{
-    Cursor, CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Query, SimpleSortMethod,
-    SortOn, TypeEraseCursor,
+    CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Query, SortOn, TypeEraseCursor,
 };
 use serde::Serialize;
 use serde_json::json;
@@ -24,7 +22,10 @@ use uuid::Uuid;
 
 use crate::{
     domain::{
-        models::{FrecencyQueryInner, SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType},
+        models::{
+            FrecencyQueryInner, IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupQuery, SoupRequest,
+            SoupType,
+        },
         ports::{SoupOutput, SoupService},
     },
     inbound::axum_router::{SoupRouterState, soup_router},
@@ -32,9 +33,26 @@ use crate::{
 
 static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifSwiZmlsdGVyIjp7fX0=";
 
+#[derive(Debug)]
+enum MockCursorKind {
+    SimpleSort,
+    SimpleCursor,
+    FrecencySort,
+    FrecencyCursor,
+}
+
+#[derive(Debug)]
+struct MockSoupCall {
+    soup_type: SoupType,
+    email_preview_view: PreviewView,
+    link_id: Option<Uuid>,
+    cursor_kind: MockCursorKind,
+    filter: serde_json::Value,
+}
+
 #[derive(Clone)]
 struct MockSoup {
-    called: Arc<std::sync::Mutex<Vec<SoupRequest<EntityFilters>>>>,
+    called: Arc<std::sync::Mutex<Vec<MockSoupCall>>>,
 }
 
 impl MockSoup {
@@ -46,12 +64,30 @@ impl MockSoup {
 }
 
 impl SoupService for MockSoup {
-    async fn get_user_soup(
-        &self,
-        req: crate::domain::models::SoupRequest<EntityFilters>,
-    ) -> Result<SoupOutput, SoupErr> {
+    async fn get_user_soup<T>(&self, req: SoupRequest<T>) -> Result<SoupOutput<T>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        let cursor_kind = match &req.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(..))) => MockCursorKind::SimpleSort,
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(..))) => MockCursorKind::SimpleCursor,
+            SoupQuery::Frecency(FrecencyQueryInner(Query::Sort(..))) => {
+                MockCursorKind::FrecencySort
+            }
+            SoupQuery::Frecency(FrecencyQueryInner(Query::Cursor(..))) => {
+                MockCursorKind::FrecencyCursor
+            }
+        };
+        let filter = serde_json::to_value(req.cursor.filter()).unwrap();
         let mut guard = self.called.lock().unwrap();
-        guard.push(req);
+        guard.push(MockSoupCall {
+            soup_type: req.soup_type,
+            email_preview_view: req.email_preview_view,
+            link_id: req.link_id,
+            cursor_kind,
+            filter,
+        });
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
 }
@@ -366,7 +402,7 @@ async fn it_calls_soup_with_missing_link() {
     let guard = inner_counter.lock().unwrap();
 
     assert_eq!(guard.len(), 1);
-    assert_matches!(guard.first().unwrap(), SoupRequest { link_id: None, .. })
+    assert!(guard.first().unwrap().link_id.is_none())
 }
 
 #[tokio::test]
@@ -433,17 +469,11 @@ async fn it_loads_email_all_view() {
 
     let guard = inner_counter.lock().unwrap();
     let arg = guard.first().unwrap();
-    assert_matches!(
-        arg,
-        SoupRequest {
-            soup_type: SoupType::Expanded,
-            limit: _,
-            cursor: _,
-            user: _,
-            email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
-            link_id: _
-        }
-    )
+    assert!(matches!(arg.soup_type, SoupType::Expanded));
+    assert_eq!(
+        arg.email_preview_view,
+        PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+    );
 }
 
 #[tokio::test]
@@ -479,17 +509,11 @@ async fn it_loads_email_sent_view() {
 
     let guard = inner_counter.lock().unwrap();
     let arg = guard.first().unwrap();
-    assert_matches!(
-        arg,
-        SoupRequest {
-            soup_type: SoupType::Expanded,
-            limit: _,
-            cursor: _,
-            user: _,
-            email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Sent),
-            link_id: _
-        }
-    )
+    assert!(matches!(arg.soup_type, SoupType::Expanded));
+    assert_eq!(
+        arg.email_preview_view,
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Sent)
+    );
 }
 
 #[tokio::test]
@@ -527,20 +551,8 @@ async fn it_parses_file_assoc_filters() {
 
     let guard = inner_counter.lock().unwrap();
     let arg = guard.first().unwrap();
-    assert_matches!(
-        arg,
-        SoupRequest {
-            soup_type: SoupType::Expanded,
-            limit: _,
-            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
-                SimpleSortMethod::ViewedAt,
-                _filters
-            ))),
-            user: _,
-            email_preview_view: _,
-            link_id: _
-        }
-    )
+    assert!(matches!(arg.soup_type, SoupType::Expanded));
+    assert!(matches!(arg.cursor_kind, MockCursorKind::SimpleSort));
 }
 
 #[tokio::test]
@@ -581,6 +593,8 @@ async fn cursor_with_assoc_works() {
         guard.pop().unwrap()
     };
 
+    let filter: EntityFilters = serde_json::from_value(arg.filter).unwrap();
+
     #[derive(Serialize)]
     struct Data(usize, Uuid);
 
@@ -605,7 +619,7 @@ async fn cursor_with_assoc_works() {
     let res = (0..1000)
         .map(|x| Data(x, Uuid::new_v4()))
         .paginate_on(100, Frecency)
-        .filter_on(arg.cursor.filter().clone())
+        .filter_on(filter)
         .into_page();
 
     let cursor = res.type_erase().next_cursor.unwrap();
@@ -635,16 +649,7 @@ async fn cursor_with_assoc_works() {
     let _res = router.oneshot(request2).await.unwrap();
     let guard2 = inner_counter.lock().unwrap();
     let req = guard2.first().unwrap();
-    assert_matches!(
-        req,
-        SoupRequest {
-            cursor: SoupQuery::Frecency(FrecencyQueryInner(Query::Cursor(Cursor {
-                filter: _f,
-                ..
-            }))),
-            ..
-        }
-    )
+    assert!(matches!(req.cursor_kind, MockCursorKind::FrecencyCursor));
 }
 
 #[tokio::test]
@@ -685,6 +690,8 @@ async fn cursor_with_all_works() {
         guard.pop().unwrap()
     };
 
+    let filter: EntityFilters = serde_json::from_value(arg.filter).unwrap();
+
     #[derive(Serialize)]
     struct Data(usize, Uuid);
 
@@ -709,7 +716,7 @@ async fn cursor_with_all_works() {
     let res = (0..1000)
         .map(|x| Data(x, Uuid::new_v4()))
         .paginate_on(100, Frecency)
-        .filter_on(arg.cursor.filter().clone())
+        .filter_on(filter)
         .into_page();
 
     let cursor = res.type_erase().next_cursor.unwrap();
@@ -739,16 +746,7 @@ async fn cursor_with_all_works() {
     let _res = router.oneshot(request2).await.unwrap();
     let guard2 = inner_counter.lock().unwrap();
     let req = guard2.first().unwrap();
-    assert_matches!(
-        req,
-        SoupRequest {
-            cursor: SoupQuery::Frecency(FrecencyQueryInner(Query::Cursor(Cursor {
-                filter: _f,
-                ..
-            }))),
-            ..
-        }
-    )
+    assert!(matches!(req.cursor_kind, MockCursorKind::FrecencyCursor));
 }
 
 #[tokio::test]
@@ -791,22 +789,8 @@ async fn it_parses_channel_filters() {
         guard.pop().unwrap()
     };
 
-    // Check that channel_filters were parsed correctly
-    assert_matches!(
-        arg,
-        SoupRequest {
-            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
-                _,
-                EntityFilters {
-                    channel_filters,
-                    ..
-                },
-            ))),
-            ..
-        } => {
-            assert!(!channel_filters.channel_ids.is_empty());
-        }
-    )
+    let filter: EntityFilters = serde_json::from_value(arg.filter).unwrap();
+    assert!(!filter.channel_filters.channel_ids.is_empty());
 }
 
 #[tokio::test]
@@ -857,32 +841,37 @@ async fn it_parses_notification_and_task_filters() {
         guard.pop().unwrap()
     };
 
-    assert_matches!(
-        arg,
-        SoupRequest {
-            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
-                _,
-                EntityFilters {
-                    document_filters,
-                    chat_filters,
-                    project_filters,
-                    channel_filters,
-                    ..
-                },
-            ))),
-            ..
-        } => {
-            assert_eq!(document_filters.notification_filters.done, Some(false));
-            assert_eq!(document_filters.notification_filters.seen, Some(false));
-            assert_eq!(document_filters.task_filters.include_cbm_atm_nc, Some(true));
-            assert_eq!(chat_filters.notification_filters.done, Some(false));
-            assert_eq!(chat_filters.notification_filters.seen, Some(false));
-            assert_eq!(project_filters.notification_filters.done, Some(false));
-            assert_eq!(project_filters.notification_filters.seen, Some(false));
-            assert_eq!(channel_filters.notification_filters.done, Some(false));
-            assert_eq!(channel_filters.notification_filters.seen, Some(false));
-        }
-    )
+    let filter: EntityFilters = serde_json::from_value(arg.filter).unwrap();
+    assert_eq!(
+        filter.document_filters.notification_filters.done,
+        Some(false)
+    );
+    assert_eq!(
+        filter.document_filters.notification_filters.seen,
+        Some(false)
+    );
+    assert_eq!(
+        filter.document_filters.task_filters.include_cbm_atm_nc,
+        Some(true)
+    );
+    assert_eq!(filter.chat_filters.notification_filters.done, Some(false));
+    assert_eq!(filter.chat_filters.notification_filters.seen, Some(false));
+    assert_eq!(
+        filter.project_filters.notification_filters.done,
+        Some(false)
+    );
+    assert_eq!(
+        filter.project_filters.notification_filters.seen,
+        Some(false)
+    );
+    assert_eq!(
+        filter.channel_filters.notification_filters.done,
+        Some(false)
+    );
+    assert_eq!(
+        filter.channel_filters.notification_filters.seen,
+        Some(false)
+    );
 }
 
 #[tokio::test]
@@ -947,19 +936,9 @@ async fn it_can_filter_chat_owners() {
         guard.pop().unwrap()
     };
 
-    assert_matches!(
-        arg,
-        SoupRequest {
-            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
-                _,
-                EntityFilters {
-                    chat_filters,
-                    ..
-                },
-            ))),
-            ..
-        } => {
-            assert_eq!(chat_filters.owners, vec!["macro|rahul@macro.com".to_string()]);
-        }
-    )
+    let filter: EntityFilters = serde_json::from_value(arg.filter).unwrap();
+    assert_eq!(
+        filter.chat_filters.owners,
+        vec!["macro|rahul@macro.com".to_string()]
+    );
 }

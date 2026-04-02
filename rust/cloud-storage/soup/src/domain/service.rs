@@ -1,6 +1,6 @@
 use crate::domain::{
     models::{
-        AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, SimpleQueryInner,
+        AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, IntoSoupReqAst, SimpleQueryInner,
         SimpleSortQuery, SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
@@ -11,13 +11,13 @@ use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
     models::{EnrichedEmailThreadPreview, GetEmailsRequest},
-    ports::EmailService,
+    ports::EmailPreviewServiceReadOnly,
 };
 use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
 };
-use item_filters::{EntityFilters, ast::EntityFilterAst};
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
@@ -30,6 +30,7 @@ use models_soup::{
     },
     item::SoupItem,
 };
+use serde::Serialize;
 use std::cmp::Ordering;
 use uuid::Uuid;
 
@@ -53,7 +54,7 @@ where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
-    V: EmailService,
+    V: EmailPreviewServiceReadOnly,
     C: ChannelsService,
 {
     pub fn new(soup_storage: T, frecency: U, email_service: V, comms_service: C) -> Self {
@@ -348,11 +349,15 @@ where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
-    V: EmailService,
+    V: EmailPreviewServiceReadOnly,
     C: ChannelsService,
 {
-    #[tracing::instrument(err, skip(self))]
-    async fn get_user_soup(&self, req: SoupRequest<EntityFilters>) -> Result<SoupOutput, SoupErr> {
+    #[tracing::instrument(err, skip(self, req))]
+    async fn get_user_soup<R>(&self, req: SoupRequest<R>) -> Result<SoupOutput<R>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
         let entity_filter = req.filters().clone();
         let req = req.into_ast()?;
         let limit = req.limit.clamp(20, 500);

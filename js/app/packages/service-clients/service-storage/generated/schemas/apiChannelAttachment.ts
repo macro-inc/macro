@@ -25,6 +25,8 @@ export interface ApiChannelAttachment {
   id: string;
   /** Message id this attachment belongs to. */
   message_id: string;
+  /** The user who sent the message containing this attachment. */
+  sender_id: string;
   /** Width (for images). */
   width?: ApiChannelAttachmentWidth;
 }

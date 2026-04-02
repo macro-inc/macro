@@ -98,11 +98,7 @@ where
 {
     AsyncToolSet::new()
         .add_tool::<ListLabels, EmailToolContext<T, G, E>>()
-        .expect("failed to add ListLabels tool")
         .add_tool::<UpdateThreadLabels, EmailToolContext<T, G, E>>()
-        .expect("failed to add UpdateThreadLabels tool")
         .add_tool::<CreateDraft, EmailToolContext<T, G, E>>()
-        .expect("failed to add CreateDraft tool")
         .add_tool::<GetThread, EmailToolContext<T, G, E>>()
-        .expect("failed to add GetThread tool")
 }

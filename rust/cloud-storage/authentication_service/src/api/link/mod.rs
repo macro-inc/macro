@@ -1,5 +1,8 @@
 use crate::api::context::ApiContext;
-use axum::{Router, routing::post};
+use axum::{
+    Router,
+    routing::{delete, post},
+};
 pub(in crate::api) mod create_in_progress_link;
 pub(in crate::api) mod github;
 
@@ -9,4 +12,5 @@ pub fn router(_state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route("/", post(create_in_progress_link::handler))
         .route("/github", post(github::init_github_link_handler))
+        .route("/github", delete(github::delete_github_link_handler))
 }

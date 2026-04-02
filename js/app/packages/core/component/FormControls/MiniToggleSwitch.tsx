@@ -92,7 +92,7 @@ export const MiniToggleSwitch: Component<
           <div
             class="relative w-8 h-3  transition-colors duration-80"
             classList={{
-              'bg-edge-muted': !checked(),
+              'bg-edge': !checked(),
               'bg-accent': checked(),
             }}
             aria-hidden

@@ -65,6 +65,12 @@ pub enum ExpandErr {
     /// unknown document sub type
     #[error(transparent)]
     DocumentSubTypeErr(#[from] strum::ParseError),
+    /// invalid property entity type
+    #[error(transparent)]
+    PropertyEntityType(#[from] properties::PropertyEntityTypeError),
+    /// invalid entity reference id
+    #[error(transparent)]
+    EntityRefId(#[from] properties::EntityRefIdError),
 }
 
 /// type alias for a maybe empty, cheaply cloneable ast literal tree
@@ -72,25 +78,32 @@ pub type LiteralTree<T> = Option<Arc<Expr<T>>>;
 
 /// Describes a bundle of filters that should be applied across different entity types
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[non_exhaustive]
 pub struct EntityFilterAst {
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub document_filter: LiteralTree<DocumentLiteral>,
     /// the filters that should be applied to the project entity
     #[serde(default, rename = "pf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub project_filter: LiteralTree<ProjectLiteral>,
     /// the filters that should be applied to the chat entity
     #[serde(default, rename = "cf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub chat_filter: LiteralTree<ChatLiteral>,
     /// the filters that should be applied to the email entity
     #[serde(default, rename = "ef")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub email_filter: LiteralTree<EmailLiteral>,
-    /// the filters taht should be applied to the channel entity
+    /// the filters that should be applied to the channel entity
     #[serde(default, rename = "chanf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub channel_filter: LiteralTree<ChannelLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
 }
 

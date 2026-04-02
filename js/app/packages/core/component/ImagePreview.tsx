@@ -28,6 +28,10 @@ type ImageData = {
   height?: string | number | undefined;
 };
 
+/**
+ * @deprecated Prefer the composable media primitives in `@channel/Media`.
+ * Keep this only for legacy callers until they are migrated.
+ */
 export type ImagePreviewProps = {
   image: ImageData;
   variant: 'small' | 'dynamic';
@@ -84,6 +88,10 @@ function ImagePlaceholder(props: {
   );
 }
 
+/**
+ * @deprecated Prefer the composable media primitives in `@channel/Media`.
+ * Keep this only for legacy callers until they are migrated.
+ */
 export function ImagePreview(props: ImagePreviewProps) {
   const [imageBlob, setImageBlob] = createSignal<Blob>();
   const [objectUrl, setObjectUrl] = createSignal<string>();

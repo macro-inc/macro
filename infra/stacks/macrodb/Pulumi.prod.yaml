@@ -4,7 +4,9 @@ config:
   macrodb:parameter_group_family: postgres14
   macrodb:engine_version: 14.17
   macrodb:instance_size: db.t4g.xlarge
-  macrodb:storage_type: gp2
+  macrodb:storage_type: gp3
+  macrodb:storage_iops: 12000
+  macrodb:storage_throughput: 500
   macrodb:allocated_storage: 1500
   macrodb:max_allocated_storage: 2000
   macrodb:ca_cert_identifier: rds-ca-rsa2048-g1
@@ -14,3 +16,5 @@ config:
   macrodb:subnet_group_name: macro-db-prod-stack-macrodbinstancesubnetgroup483984b1-ny9ca5kliq6z
   macrodb:security_group_ids: sg-0997207417c39f5b3
   macrodb:backup_retention_days: 6
+  macrodb:read_replica_enabled: true
+  macrodb:read_replica_instance_size: db.t4g.xlarge

@@ -55,6 +55,8 @@ export type InputCallbacks = {
     attachment: InputAttachmentData,
     snapshot: InputSnapshot
   ) => void | Promise<void>;
+  onStartTyping?: () => void;
+  onStopTyping?: () => void;
 };
 
 export type InputCommands = {

@@ -370,6 +370,17 @@
         "tags": ["link::github"],
         "summary": "Initiates a link for a user",
         "operationId": "init_github_link",
+        "parameters": [
+          {
+            "name": "original_url",
+            "in": "query",
+            "description": "**OPTIONAL**. The original url to redirect to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -402,6 +413,53 @@
             }
           },
           "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["link::github"],
+        "summary": "Deletes a github link for a user",
+        "operationId": "delete_github_link",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -1934,78 +1992,6 @@
         }
       }
     },
-    "/team/{team_id}/reinvite/{team_invite_id}": {
-      "post": {
-        "tags": ["teams::inbound::axum_router::reinvite_to_team"],
-        "summary": "Regenerates a team invite notifying the user again.",
-        "operationId": "reinvite_to_team",
-        "parameters": [
-          {
-            "name": "team_id",
-            "in": "path",
-            "description": "The ID of the team to invite to",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "team_invite_id",
-            "in": "path",
-            "description": "The ID of the team invite to reinvite",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/team/{team_id}/remove/{remove_user_id}": {
       "delete": {
         "tags": ["teams::inbound::axum_router::remove_user_from_team"],
@@ -2046,6 +2032,79 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/{team_id}/tier": {
+      "patch": {
+        "tags": ["teams::inbound::axum_router::patch_team_user_tier"],
+        "summary": "Updates a team.",
+        "operationId": "patch_team_user_tier",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to update",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTeamUserTierRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -3321,6 +3380,21 @@
           }
         }
       },
+      "PatchTeamUserTierRequest": {
+        "type": "object",
+        "description": "Request to update a team user's tier",
+        "required": ["team_user_id", "new_tier"],
+        "properties": {
+          "new_tier": {
+            "$ref": "#/components/schemas/TeamUserTier",
+            "description": "The new tier of the team user"
+          },
+          "team_user_id": {
+            "type": "string",
+            "description": "The team user you are updating"
+          }
+        }
+      },
       "PatchUserGroupRequest": {
         "type": "object",
         "required": ["group"],
@@ -3575,6 +3649,11 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["Member", "Admin", "Owner"]
+      },
+      "TeamUserTier": {
+        "type": "string",
+        "description": "Ordered from lowest to highest tier top -> bottom",
+        "enum": ["Haiku", "Sonnet", "Opus"]
       },
       "TeamWithMembers": {
         "type": "object",

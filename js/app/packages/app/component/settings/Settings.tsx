@@ -8,7 +8,6 @@ import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
-import { withAnalytics } from '@coparse/analytics';
 import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
@@ -19,8 +18,6 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import { SettingsButton } from './SettingsButton';
-
-const { track, TrackingEvents } = withAnalytics();
 
 /**
  * Wrapper specifically for in-Split version of Settings Panel used on Mobile. Includes the correct Header button.
@@ -103,7 +100,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
       const tab = tabs[index];
       if (tab) {
         setActiveTabId(tab.value as SettingsTab);
-        track(TrackingEvents.SETTINGS.CHANGETAB, { tab: tab.value });
         return true;
       }
     }
@@ -175,7 +171,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
               onChange={(value: string | undefined) => {
                 if(value && (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts')){
                   setActiveTabId(value as SettingsTab);
-                  track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
               }}
               class="flex flex-col h-full"

@@ -42,6 +42,12 @@ const DATABASE_URL_PROXY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const DATABASE_URL_READONLY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_db_readonly_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const DOCUMENT_STORAGE_SERVICE_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.get(`document_storage_service_auth_key`) ?? '',
@@ -259,6 +265,18 @@ const githubSyncAppPemArn: pulumi.Output<string> = aws.secretsmanager
 
 const GITHUB_SYNC_APP_CLIENT_ID = config.require('github_sync_app_client_id');
 
+const LIVEKIT_SERVER_URL = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('livekit_server_url') })
+  .apply((secret) => secret.secretString);
+
+const LIVEKIT_API_KEY = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('livekit_api_key') })
+  .apply((secret) => secret.secretString);
+
+const LIVEKIT_API_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('livekit_api_secret') })
+  .apply((secret) => secret.secretString);
+
 const cloudStorageService = new CloudStorageService(
   `cloud-storage-service-${stack}`,
   {
@@ -293,6 +311,19 @@ const cloudStorageService = new CloudStorageService(
     ],
     containerEnvVars: [
       {
+        name: 'LIVEKIT_SERVER_URL',
+        value: pulumi.interpolate`${LIVEKIT_SERVER_URL}`,
+      },
+      {
+        name: 'LIVEKIT_API_KEY',
+        value: pulumi.interpolate`${LIVEKIT_API_KEY}`,
+      },
+      {
+        name: 'LIVEKIT_API_SECRET',
+        value: pulumi.interpolate`${LIVEKIT_API_SECRET}`,
+      },
+
+      {
         name: 'OPENSEARCH_URL',
         value: OPENSEARCH_URL,
       },
@@ -307,6 +338,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
+      },
+      {
+        name: 'DATABASE_URL_READONLY',
+        value: pulumi.interpolate`${DATABASE_URL_READONLY}`,
       },
       {
         name: 'REDIS_URI',

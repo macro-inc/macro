@@ -1,5 +1,7 @@
 #![recursion_limit = "256"]
-use analytics_client::{AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig};
+use analytics_client::{
+    AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
+};
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -215,6 +217,16 @@ async fn main() -> anyhow::Result<()> {
                     test_event_code: config.meta_test_event_code.clone(),
                 }
             }),
+        posthog: config.posthog_api_key.as_ref().map(|api_key| {
+            tracing::info!("configuring PostHog");
+            PostHogConfig {
+                api_key: api_key.clone(),
+                host: config
+                    .posthog_host
+                    .clone()
+                    .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
+            }
+        }),
     });
     tracing::trace!("initialized analytics client");
 

@@ -1,5 +1,9 @@
 import { staticFileIdEndpoint } from '@core/constant/servers';
 
+/**
+ * @deprecated Prefer the composable media primitives in `@channel/Media`.
+ * Keep this only for legacy callers until they are migrated.
+ */
 export type VideoPreviewProps = {
   id: string;
   variant: 'small' | 'dynamic';
@@ -18,6 +22,10 @@ const VIDEO_THEMES = {
   dynamic: '',
 };
 
+/**
+ * @deprecated Prefer the composable media primitives in `@channel/Media`.
+ * Keep this only for legacy callers until they are migrated.
+ */
 export function VideoPreview(props: VideoPreviewProps) {
   return (
     <div class={CONTAINER_THEMES[props.variant]}>

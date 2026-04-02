@@ -39,6 +39,7 @@ where
     /// hammering the queue.
     pub async fn run(&self) -> ! {
         loop {
+            tracing::info!("ingress queue tick");
             match self.queue.receive_messages().await {
                 Ok(messages) if messages.is_empty() => {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;

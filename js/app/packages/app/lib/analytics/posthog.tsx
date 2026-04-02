@@ -40,20 +40,28 @@ export function useFeatureFlag<T extends JsonType>(
 ): Accessor<FeatureFlagResult<T | undefined>> {
   const posthog = usePosthog();
 
-  return createMemo(() => {
-    const { enabledOverride, fallbackPayload } = opts ?? {};
+  return createMemo(
+    () => {
+      const { enabledOverride, fallbackPayload } = opts ?? {};
 
-    if (!posthog.featureFlags().length && !enabledOverride) {
-      return { enabled: false, payload: fallbackPayload };
+      if (!posthog.featureFlags().length && !enabledOverride) {
+        return { enabled: false, payload: fallbackPayload };
+      }
+
+      const flag = posthog.instance.getFeatureFlagResult(key);
+
+      const enabled = flag?.enabled || (enabledOverride ?? false);
+      const payload = (flag?.payload as T) ?? fallbackPayload;
+
+      return { enabled, payload };
+    },
+    undefined,
+    {
+      // Only notify dependents when enabled or payload actually changes
+      equals: (prev, next) =>
+        prev.enabled === next.enabled && prev.payload === next.payload,
     }
-
-    const flag = posthog.instance.getFeatureFlagResult(key);
-
-    const enabled = flag?.enabled || (enabledOverride ?? false);
-    const payload = (flag?.payload as T) ?? fallbackPayload;
-
-    return { enabled, payload };
-  });
+  );
 }
 
 export const ShowFeatureFlag = <T extends JsonType>(props: {

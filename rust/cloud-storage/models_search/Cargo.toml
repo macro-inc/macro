@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 chrono = { workspace = true }
 item_filters = { path = "../item_filters", features = ["schema"] }
+model_file_type = { path = "../model_file_type" }
 models_opensearch = { path = "../models_opensearch" }
 opensearch_client = { path = "../opensearch_client" }
 schemars = { workspace = true }

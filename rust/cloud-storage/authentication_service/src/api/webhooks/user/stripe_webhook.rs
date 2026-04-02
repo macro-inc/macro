@@ -453,15 +453,14 @@ fn track_stripe_subscription(
             match (data.status.as_str(), data.is_new) {
                 ("active" | "trialing", true) => {
                     if let Some(ref ga_client_id) = data.ga_client_id {
-                        match client.track_ga(ga_client_id, "purchase", &event).await {
-                            Ok(()) => tracing::info!("tracked GA purchase event"),
-                            Err(e) => tracing::warn!(error = ?e, "failed to track GA purchase event"),
-                        }
+                        let _ = client.track_ga(ga_client_id, "purchase", &event)
+                            .await
+                            .inspect_err(|e| tracing::warn!(error = ?e, "failed to track GA purchase event"));
                     } else {
                         tracing::debug!("skipping GA purchase tracking: no ga_client_id");
                     }
 
-                    match client
+                    let _ = client
                         .track_meta(
                             "Purchase",
                             &user_data,
@@ -470,22 +469,23 @@ fn track_stripe_subscription(
                             &event,
                         )
                         .await
-                    {
-                        Ok(()) => tracing::info!("tracked Meta purchase event"),
-                        Err(e) => tracing::warn!(error = ?e, "failed to track Meta purchase event"),
-                    }
+                        .inspect_err(|e| tracing::warn!(error = ?e, "failed to track Meta purchase event"));
+
+                    let _ = client
+                        .track_posthog(&data.email, "subscription_created", &event)
+                        .await
+                        .inspect_err(|e| tracing::warn!(error = ?e, "failed to track PostHog subscription_created event"));
                 }
                 ("canceled", _) => {
                     if let Some(ref ga_client_id) = data.ga_client_id {
-                        match client.track_ga(ga_client_id, "refund", &event).await {
-                            Ok(()) => tracing::info!("tracked GA refund event"),
-                            Err(e) => tracing::warn!(error = ?e, "failed to track GA refund event"),
-                        }
+                        let _ = client.track_ga(ga_client_id, "refund", &event)
+                            .await
+                            .inspect_err(|e| tracing::warn!(error = ?e, "failed to track GA refund event"));
                     } else {
                         tracing::debug!("skipping GA refund tracking: no ga_client_id");
                     }
 
-                    match client
+                    let _ = client
                         .track_meta(
                             "CancelSubscription",
                             &user_data,
@@ -494,10 +494,12 @@ fn track_stripe_subscription(
                             &event,
                         )
                         .await
-                    {
-                        Ok(()) => tracing::info!("tracked Meta cancel event"),
-                        Err(e) => tracing::warn!(error = ?e, "failed to track Meta cancel event"),
-                    }
+                        .inspect_err(|e| tracing::warn!(error = ?e, "failed to track Meta cancel event"));
+
+                    let _ = client
+                        .track_posthog(&data.email, "subscription_canceled", &event)
+                        .await
+                        .inspect_err(|e| tracing::warn!(error = ?e, "failed to track PostHog subscription_canceled event"));
                 }
                 _ => {
                     tracing::debug!(status = %data.status, is_new = data.is_new, "skipping analytics tracking: unhandled status/is_new combination");

@@ -1,13 +1,27 @@
+use std::{collections::HashSet, sync::LazyLock};
+
 use ::notification::domain::models::UserNotificationRow;
-use axum::extract::State;
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 use chrono::{DateTime, Utc};
+use email_formatting::EmailDigestNotification;
 use itertools::{Either, Itertools};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
-use model_notifications::NotifEvent;
-use notification::{domain::service::NotificationReader, inbound::http::NotificationRouterState};
-use serde::Serialize;
+use model_notifications::{
+    AiResponseMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
+    CommentedOnDocumentMetadata, DocumentMentionMetadata, MentionedInDocumentCommentMetadata,
+    NewEmailMetadata, NotifEvent, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+};
+use notification::{
+    domain::{models::Notification, service::NotificationReader},
+    inbound::http::NotificationRouterState,
+};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -119,6 +133,18 @@ pub fn router<S: ::notification::domain::service::NotificationReader>()
             axum::routing::get(get_typed_notification_by_id::<S>)
                 .delete(::notification::inbound::http::delete_notification::<S>),
         )
+        .route(
+            "/preferences",
+            axum::routing::get(get_notification_type_preferences::<S>),
+        )
+        .route(
+            "/preferences/{notification_event_type}/disable",
+            axum::routing::put(disable_notification_type::<S>),
+        )
+        .route(
+            "/preferences/{notification_event_type}/enable",
+            axum::routing::put(enable_notification_type::<S>),
+        )
 }
 
 /// Wrapper handler that calls the inner generic list handler with `serde_json::Value`,
@@ -144,7 +170,9 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
     State(state): State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     query: axum::extract::Query<::notification::inbound::http::Params>,
-    cursor: models_pagination::CursorExtractor<uuid::Uuid, models_pagination::CreatedAt, ()>,
+    cursor: Option<
+        models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
+    >,
 ) -> Result<
     axum::Json<GetAllUserNotificationsResponse>,
     (
@@ -210,7 +238,8 @@ where
 
             (err_str.contains("channel_message_document")
                 || err_str.contains("missing field `toEmail`")
-                || err_str.contains("missing field `sender`"))
+                || err_str.contains("missing field `sender`")
+                || err_str.contains("missing field `threadId`"))
             .then_some(uuid)
         }
 
@@ -249,7 +278,9 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     query: axum::extract::Query<::notification::inbound::http::Params>,
-    cursor: models_pagination::CursorExtractor<uuid::Uuid, models_pagination::CreatedAt, ()>,
+    cursor: Option<
+        models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
+    >,
     body: axum::Json<::notification::inbound::http::BulkGetByEventItemIdsRequest>,
 ) -> Result<
     axum::Json<GetAllUserNotificationsResponse>,
@@ -303,7 +334,9 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     path: axum::extract::Path<::notification::inbound::http::EventItemIdPath>,
     query: axum::extract::Query<::notification::inbound::http::Params>,
-    cursor: models_pagination::CursorExtractor<uuid::Uuid, models_pagination::CreatedAt, ()>,
+    cursor: Option<
+        models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
+    >,
 ) -> Result<
     axum::Json<GetAllUserNotificationsResponse>,
     (
@@ -378,4 +411,165 @@ async fn get_typed_notification_by_id<S: ::notification::domain::service::Notifi
     })?;
 
     Ok(axum::Json(ApiUserNotification::from_notification(typed)))
+}
+
+/// Path parameter for a notification event type.
+#[derive(Deserialize)]
+pub struct NotificationEventTypePath {
+    /// The notification event type (e.g. "channel_message_send").
+    pub notification_event_type: String,
+}
+
+/// Response for listing disabled notification types.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GetNotificationTypePreferencesResponse {
+    /// The notification types that the user has disabled.
+    pub disabled_types: Vec<String>,
+}
+
+/// Get the notification types that the user has disabled.
+#[utoipa::path(
+    get,
+    operation_id = "get_notification_type_preferences",
+    path = "/v1/user_notifications/preferences",
+    responses(
+        (status = 200, body = GetNotificationTypePreferencesResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn get_notification_type_preferences<S: NotificationReader>(
+    State(state): State<NotificationRouterState<S>>,
+    macro_user: model_user::axum_extractor::MacroUserExtractor,
+) -> Result<
+    axum::Json<GetNotificationTypePreferencesResponse>,
+    (axum::http::StatusCode, axum::Json<ErrorResponse<'static>>),
+> {
+    let disabled = state
+        .inner
+        .get_disabled_notification_types(macro_user.macro_user_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to get notification type preferences");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                axum::Json(ErrorResponse {
+                    message: "failed to get notification type preferences".into(),
+                }),
+            )
+        })?;
+
+    Ok(axum::Json(GetNotificationTypePreferencesResponse {
+        disabled_types: disabled
+            .into_iter()
+            .map(|d| d.notification_event_type)
+            .collect(),
+    }))
+}
+
+/// The types of notifications that are blockable
+static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
+        EmailDigestNotification::TYPE_NAME,
+        NewEmailMetadata::TYPE_NAME,
+        AiResponseMetadata::TYPE_NAME,
+        ChannelMessageSendMetadata::TYPE_NAME,
+        ChannelMentionMetadata::TYPE_NAME,
+        ChannelReplyMetadata::TYPE_NAME,
+        DocumentMentionMetadata::TYPE_NAME,
+        TaskAssignedMetadata::TYPE_NAME,
+        MentionedInDocumentCommentMetadata::TYPE_NAME,
+        RepliedToDocumentCommentThreadMetadata::TYPE_NAME,
+        CommentedOnDocumentMetadata::TYPE_NAME,
+    ])
+});
+
+/// Disable a notification type for the authenticated user.
+#[utoipa::path(
+    put,
+    operation_id = "disable_notification_type",
+    path = "/v1/user_notifications/preferences/{notification_event_type}/disable",
+    params(
+        ("notification_event_type" = String, Path, description = "The notification event type to disable"),
+    ),
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn disable_notification_type<S: NotificationReader>(
+    State(state): State<NotificationRouterState<S>>,
+    macro_user: model_user::axum_extractor::MacroUserExtractor,
+    Path(NotificationEventTypePath {
+        notification_event_type,
+    }): Path<NotificationEventTypePath>,
+) -> Result<axum::Json<()>, (axum::http::StatusCode, axum::Json<ErrorResponse<'static>>)> {
+    // make sure the notification to block is one that matches the list
+    let true = BLOCKABLE_NOTIFICATIONS.contains(notification_event_type.as_str()) else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: format!(
+                    "Cannot block notification type {notification_event_type}. Expected one of {:?}",
+                    &*BLOCKABLE_NOTIFICATIONS
+                ).into(),
+            }),
+        ));
+    };
+
+    state
+        .inner
+        .disable_notification_type(macro_user.macro_user_id, &notification_event_type)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to disable notification type");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                axum::Json(ErrorResponse {
+                    message: "failed to disable notification type".into(),
+                }),
+            )
+        })?;
+
+    Ok(axum::Json(()))
+}
+
+/// Re-enable a notification type for the authenticated user.
+#[utoipa::path(
+    put,
+    operation_id = "enable_notification_type",
+    path = "/v1/user_notifications/preferences/{notification_event_type}/enable",
+    params(
+        ("notification_event_type" = String, Path, description = "The notification event type to enable"),
+    ),
+    responses(
+        (status = 200),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn enable_notification_type<S: NotificationReader>(
+    State(state): State<NotificationRouterState<S>>,
+    macro_user: model_user::axum_extractor::MacroUserExtractor,
+    Path(NotificationEventTypePath {
+        notification_event_type,
+    }): Path<NotificationEventTypePath>,
+) -> Result<axum::Json<()>, (axum::http::StatusCode, axum::Json<ErrorResponse<'static>>)> {
+    state
+        .inner
+        .enable_notification_type(macro_user.macro_user_id, &notification_event_type)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to enable notification type");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                axum::Json(ErrorResponse {
+                    message: "failed to enable notification type".into(),
+                }),
+            )
+        })?;
+
+    Ok(axum::Json(()))
 }

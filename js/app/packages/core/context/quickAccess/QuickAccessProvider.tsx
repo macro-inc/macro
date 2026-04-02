@@ -10,6 +10,7 @@ import {
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
 import type { ChannelEntity } from '@entity';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
+import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { queryReadyGate } from '@queries/gate';
 import type { DateValue } from '@core/util/date';
@@ -48,7 +49,6 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
     name: item.name,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
-    viewedAt: item.viewedAt,
     ownerId: item.ownerId,
   };
 
@@ -139,17 +139,17 @@ function toTimestamp(value: DateValue | null | undefined): number {
   return toDate(value).getTime();
 }
 
-/** dumb history item hash */
-function getHistoryItemVersion(item: HistoryItem): string {
-  return `${item.name}|${item.updatedAt}|${item.viewedAt}|${item.deletedAt}`;
+function getHistoryItemVersion(item: HistoryItem, viewedAt?: string): string {
+  return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
 }
 
-/** dumb channel hash */
-function getChannelVersion(channel: ApiChannelWithLatest): string {
-  return `${channel.name}|${channel.updated_at}|${channel.viewed_at}`;
+function getChannelVersion(
+  channel: ApiChannelWithLatest,
+  viewedAt?: string
+): string {
+  return `${channel.name}|${channel.updated_at}|${viewedAt}`;
 }
 
-/** dumb use hash */
 function getUserVersion(user: IUser): string {
   return `${user.name}|${user.email}|${user.lastInteraction}`;
 }
@@ -227,11 +227,20 @@ export const [QuickAccessProvider, useQuickAccess] =
       // stable cache for transformed items
       const itemCache = new Map<string, CacheEntry>();
 
-      /**
-       * Process all data sources and update the cache incrementally.
-       * Returns the sorted index entries (lightweight id+timestamp arrays).
-       */
+      const recentlyViewedQuery = useRecentlyViewedSoupQuery();
+
+      const soupViewedAtMap = createLazyMemo(() => {
+        const map = new Map<string, string>();
+        const data = recentlyViewedQuery.data;
+        if (!data) return map;
+        for (const item of data) {
+          if (item.viewedAt) map.set(item.id, item.viewedAt);
+        }
+        return map;
+      });
+
       const processedData = createLazyMemo(() => {
+        const viewedAtMap = soupViewedAtMap();
         const seenIds = new Set<string>();
         const allEntries: IndexEntry[] = [];
 
@@ -250,10 +259,11 @@ export const [QuickAccessProvider, useQuickAccess] =
           if (hidden.has(item.id)) continue;
           seenIds.add(item.id);
 
-          const version = getHistoryItemVersion(item);
+          const viewedAt = viewedAtMap.get(item.id);
+
+          const version = getHistoryItemVersion(item, viewedAt);
           const cached = itemCache.get(item.id);
 
-          // Only transform if not cached or version changed
           if (!cached || cached.version !== version) {
             const reason = !cached
               ? 'new'
@@ -265,8 +275,11 @@ export const [QuickAccessProvider, useQuickAccess] =
               reason,
             });
             const bucket = getBucketForHistoryItem(item);
-            const entity = historyItemToEntity(item);
-            const viewedAtMs = toTimestamp(item.viewedAt);
+            const entity = {
+              ...historyItemToEntity(item),
+              viewedAt,
+            };
+            const viewedAtMs = toTimestamp(viewedAt);
             const updatedAtMs = toTimestamp(item.updatedAt);
             const sortTimestamp = viewedAtMs || updatedAtMs;
 
@@ -277,7 +290,7 @@ export const [QuickAccessProvider, useQuickAccess] =
               searchText: getEntitySearchText(entity),
               sortTimestamp,
               timestamps: {
-                viewedAt: item.viewedAt,
+                viewedAt,
                 updatedAt: item.updatedAt,
                 createdAt: item.createdAt,
               },
@@ -300,7 +313,10 @@ export const [QuickAccessProvider, useQuickAccess] =
         for (const channel of channelData) {
           seenIds.add(channel.id);
 
-          const version = getChannelVersion(channel);
+          const viewedAt =
+            viewedAtMap.get(channel.id) ?? channel.viewed_at ?? undefined;
+
+          const version = getChannelVersion(channel, viewedAt);
           const cached = itemCache.get(channel.id);
 
           if (!cached || cached.version !== version) {
@@ -315,8 +331,13 @@ export const [QuickAccessProvider, useQuickAccess] =
             });
             const isDm = channel.channel_type === 'direct_message';
             const bucket: Bucket = isDm ? 'dm' : 'channel';
-            const entity = channelToEntity(channel);
-            const sortTimestamp = toTimestamp(channel.updated_at);
+            const entity = {
+              ...channelToEntity(channel),
+              viewedAt,
+            };
+            const viewedAtMs = toTimestamp(viewedAt);
+            const updatedAtMs = toTimestamp(channel.updated_at);
+            const sortTimestamp = viewedAtMs || updatedAtMs;
 
             const quickAccessItem: QuickAccessItem = {
               kind: 'entity',
@@ -325,7 +346,7 @@ export const [QuickAccessProvider, useQuickAccess] =
               searchText: channel.name ?? '',
               sortTimestamp,
               timestamps: {
-                viewedAt: channel.viewed_at,
+                viewedAt,
                 updatedAt: channel.updated_at,
                 createdAt: channel.created_at,
               },

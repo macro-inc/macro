@@ -38,6 +38,7 @@ email_service_client = { path = "../email_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 static_file_service_client = { path = "../static_file_service_client" }
 sync_service_client = { path = "../sync_service_client" }
+readonly_pool = { path = "../readonly_pool" }
 soup = { path = "../soup", features = ["all"] }
 properties = { path = "../properties" }
 macro_aws_config = { path = "../macro_aws_config" }

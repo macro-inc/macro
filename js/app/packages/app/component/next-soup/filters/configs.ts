@@ -401,6 +401,11 @@ export const createSoupFilters = (
       predicate: (entity) => !taskFilter(entity),
     },
     {
+      id: 'document-or-file',
+      label: 'Documents & Files',
+      predicate: (entity) => entity.type === 'document' && !taskFilter(entity),
+    },
+    {
       id: 'active-task',
       label: 'Task active',
       predicate: (entity) =>
@@ -427,4 +432,4 @@ export const SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
 
 type SoupFilter = ReturnType<typeof createSoupFilters>[number];
 
-export type FilterID = Extract<SoupFilter, { id: string & {} }>['id'];
+export type FilterID = Extract<SoupFilter, { id: string }>['id'];

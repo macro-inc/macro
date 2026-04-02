@@ -3,6 +3,7 @@ import { formatDate } from '@core/util/dateParser';
 import ClockIcon from '@icon/regular/clock.svg';
 import type { DateMentionDecoratorProps } from '@lexical-core';
 import { $isDateMentionNode } from '@lexical-core';
+import { differenceInCalendarDays } from 'date-fns';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
@@ -17,17 +18,51 @@ import { MentionTooltip } from './MentionTooltip';
 
 false && floatWithElement;
 
+function formatRelativeDate(date: Date): string {
+  const diff = differenceInCalendarDays(date, new Date());
+  switch (diff) {
+    case -2:
+      return '2 days ago';
+    case -1:
+      return 'Yesterday';
+    case 0:
+      return 'Today';
+    case 1:
+      return 'Tomorrow';
+    case 2:
+      return 'In 2 days';
+    default:
+      return formatDate(date);
+  }
+}
+
+function formatTooltipDate(date: Date): string {
+  const diff = Math.abs(differenceInCalendarDays(date, new Date()));
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  };
+  if (diff <= 5) {
+    options.hour = 'numeric';
+    options.minute = '2-digit';
+    options.hour12 = true;
+  }
+  return date.toLocaleDateString('en-US', options);
+}
+
 export function DateMention(props: DateMentionDecoratorProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
 
   const [datePickerOpen, setDatePickerOpen] = createSignal(false);
+  const [hovered, setHovered] = createSignal(false);
   let mentionRef!: HTMLSpanElement;
 
   const displayFormat = createMemo(() => {
-    const date = new Date(props.date);
-    return formatDate(date);
+    return formatRelativeDate(new Date(props.date));
   });
 
   const isSelectedAsNode = () => {
@@ -44,7 +79,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
       const node = $getNodeByKey(props.key);
       if ($isDateMentionNode(node)) {
         node.setDate(newDate.toISOString());
-        node.setDisplayFormat(formatDate(newDate));
+        node.setDisplayFormat(formatRelativeDate(newDate));
       }
     });
 
@@ -83,6 +118,8 @@ export function DateMention(props: DateMentionDecoratorProps) {
           'bracket-offset-2': isSelectedAsNode(),
         }}
         onClick={() => setDatePickerOpen(true)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         <span class="relative top-[0.125em] size-[1em] inline-flex mx-0.5">
           <ClockIcon class="w-full h-full" />
@@ -96,6 +133,17 @@ export function DateMention(props: DateMentionDecoratorProps) {
         </span>
         <MentionTooltip show={isSelectedAsNode()} text="Edit" />
       </span>
+
+      <Show when={hovered() && !datePickerOpen()}>
+        <Portal>
+          <div
+            class="absolute select-none z-tool-tip bg-panel p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/5"
+            use:floatWithElement={{ element: () => mentionRef }}
+          >
+            {formatTooltipDate(new Date(props.date))}
+          </div>
+        </Portal>
+      </Show>
 
       <Show when={datePickerOpen()}>
         <Portal>

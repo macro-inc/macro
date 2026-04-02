@@ -14,8 +14,6 @@ import type {
   PlatformNotificationData,
   PlatformNotificationHandle,
 } from '../notification-platform';
-import { BrowserNotificationModal } from './BrowserNotificationModal';
-
 type NotGranted = 'not-granted';
 
 /// the context provider value which provides an interface wherein downstream consumers can interact with
@@ -226,7 +224,6 @@ export function PlatformNotificationProvider(props: {
         manuallyDisabled={manuallyDisabled}
         setManuallyDisabled={setManuallyDisabled}
       >
-        <BrowserNotificationModal />
         {props.children}
       </PlatformNotificationState>
     </NotificationInterfaceContext.Provider>

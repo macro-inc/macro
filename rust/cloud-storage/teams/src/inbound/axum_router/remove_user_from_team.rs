@@ -1,6 +1,6 @@
 use axum::extract::{Path, State};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::domain::{model::RemoveUserFromTeamError, team_repo::TeamService};
 
@@ -12,7 +12,7 @@ pub struct Param {
     /// The team ID.
     pub team_id: uuid::Uuid,
     /// The ID of the user to remove.
-    pub remove_user_id: String,
+    pub remove_user_id: MacroUserIdStr<'static>,
 }
 
 /// Removes a user from a team.
@@ -35,15 +35,14 @@ pub struct Param {
 pub async fn handler<T: TeamService>(
     _access: TeamAccessRoleExtractor<super::middleware::OwnerRole, T>,
     State(state): State<TeamRouterState<T>>,
-    user_context: MacroUserExtractor,
     Path(Param {
         team_id,
-        remove_user_id: _,
+        remove_user_id,
     }): Path<Param>,
 ) -> Result<(), RemoveUserFromTeamError> {
     state
         .service
-        .remove_user_from_team(&team_id, &user_context.macro_user_id)
+        .remove_user_from_team(&team_id, &remove_user_id)
         .await?;
     Ok(())
 }

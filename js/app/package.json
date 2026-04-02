@@ -15,7 +15,7 @@
 		"gen-tools": "bun scripts/generate-dcs-tools.ts",
 		"check": "tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
 		"preview": "cd packages/app && bun run --bun preview:dev",
-		"lint": "bunx --bun biome lint --skip=nursery/noImportCycles",
+		"lint": "bunx --bun biome lint --skip=suspicious/noImportCycles",
 		"format": "bunx --bun biome format --write",
 		"fix": "bunx --bun biome lint --write",
 		"clean": "bun scripts/clean-env.js",
@@ -32,6 +32,7 @@
 		"@codemirror/lang-rust": "^6.0.2",
 		"@codemirror/language": "^6.11.3",
 		"@corvu/dialog": "^0.2.4",
+		"@corvu/drawer": "^0.2.4",
 		"@corvu/resizable": "^0.2.5",
 		"@corvu/tooltip": "^0.2.2",
 		"@date-fns/tz": "^1.4.1",
@@ -93,6 +94,7 @@
 		"lexical": "^0.32.1",
 		"libheif-js": "^1.19.8",
 		"linkify-it": "^5.0.0",
+		"livekit-client": "^2.18.0",
 		"loro-crdt": "^1.5.9",
 		"nanoid": "^3.3.7",
 		"neverthrow": "^8.2.0",
@@ -117,7 +119,7 @@
 		"zod": "^3.23.8"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.2.6",
+		"@biomejs/biome": "2.4.7",
 		"@playwright/test": "^1.55.1",
 		"@solidjs/meta": "^0.29.4",
 		"@solidjs/testing-library": "^0.8.10",
@@ -162,7 +164,8 @@
 		"solid-gesture@0.0.3": "patches/solid-gesture@0.0.3.patch",
 		"@thisbeyond/solid-dnd@0.7.5": "patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
 		"@lexical/markdown@0.32.1": "patches/@lexical%2Fmarkdown@0.32.1.patch",
-		"@kobalte/core@0.13.11": "patches/@kobalte%2Fcore@0.13.11.patch"
+		"@kobalte/core@0.13.11": "patches/@kobalte%2Fcore@0.13.11.patch",
+		"virtua@0.48.8": "patches/virtua@0.48.8.patch"
 	},
 	"overrides": {
 		"cross-spawn": "7.0.6",

@@ -13,6 +13,7 @@ const MSG2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000002);
 const MSG3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000003);
 const REPLY1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b001);
 const REPLY5: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b005);
+const DELETED_MSG_ATTACHMENT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000a004);
 
 fn repo(pool: Pool<Postgres>) -> PgChannelMessagesRepo {
     PgChannelMessagesRepo::new(pool)
@@ -390,8 +391,9 @@ async fn attachments_batch_grouped_by_message(pool: Pool<Postgres>) -> anyhow::R
     let map = repo.get_attachments_batch(&[MSG1, MSG2, MSG3]).await?;
 
     assert_eq!(map[&MSG1].len(), 2);
+    assert_eq!(map[&MSG2].len(), 1);
     assert_eq!(map[&MSG3].len(), 1);
-    assert!(map.get(&MSG2).is_none(), "msg2 has no attachments");
+    assert_eq!(map[&MSG2][0].id, DELETED_MSG_ATTACHMENT);
     Ok(())
 }
 
@@ -447,6 +449,27 @@ async fn channel_attachments_include_dimensions(pool: Pool<Postgres>) -> anyhow:
     let doc = all.iter().find(|a| a.entity_id == "doc-1").unwrap();
     assert_eq!(doc.width, None);
     assert_eq!(doc.height, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_attachments_exclude_deleted_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let all = repo
+        .get_channel_attachments(CH1, &Query::Sort(CreatedAt, ()), 50)
+        .await?;
+
+    let ids: Vec<Uuid> = all.iter().map(|a| a.id).collect();
+    assert_eq!(
+        ids.len(),
+        3,
+        "only attachments from non-deleted messages are returned"
+    );
+    assert!(!ids.contains(&DELETED_MSG_ATTACHMENT));
+    assert!(all.iter().all(|a| a.message_id != MSG2));
     Ok(())
 }
 

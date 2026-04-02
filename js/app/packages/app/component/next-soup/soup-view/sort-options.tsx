@@ -15,7 +15,6 @@ import type { JSX } from 'solid-js';
 import ClockIcon from '@icon/regular/clock.svg';
 import ArrowClockwiseIcon from '@icon/regular/arrow-clockwise.svg';
 import EyeIcon from '@icon/regular/eye.svg';
-import ChartLineUpIcon from '@icon/regular/chart-line-up.svg';
 import FlagIcon from '@icon/regular/flag.svg';
 import ListChecksIcon from '@icon/regular/list-checks.svg';
 
@@ -23,7 +22,6 @@ export type SystemSortOption =
   | 'updated_at'
   | 'created_at'
   | 'viewed_at'
-  | 'frecency'
   | 'priority'
   | 'status';
 
@@ -52,19 +50,15 @@ export function sortByNotifiedAt<T extends WithNotification<EntityData>>(
 }
 
 export function sortByCreatedAt<T extends EntityData>(a: T, b: T): number {
-  return compareDateDesc(a.createdAt, b.createdAt);
+  return compareDateDesc(a.sortTs ?? a.createdAt, b.sortTs ?? b.createdAt);
 }
 
 export function sortByUpdatedAt<T extends EntityData>(a: T, b: T) {
-  return compareDateDesc(a.updatedAt, b.updatedAt);
+  return compareDateDesc(a.sortTs ?? a.updatedAt, b.sortTs ?? b.updatedAt);
 }
 
 export function sortByViewedAt<T extends EntityData>(a: T, b: T) {
-  return compareDateDesc(a.viewedAt, b.viewedAt);
-}
-
-export function sortByFrecencyScore<T extends EntityData>(a: T, b: T): number {
-  return (b.frecencyScore ?? 0) - (a.frecencyScore ?? 0);
+  return compareDateDesc(a.sortTs ?? a.viewedAt, b.sortTs ?? b.viewedAt);
 }
 
 /**
@@ -156,10 +150,6 @@ export const SORT_CONFIGS = {
     id: 'viewed_at',
     fn: sortByViewedAt,
   },
-  frecency: {
-    id: 'frecency',
-    fn: sortByFrecencyScore,
-  },
   priority: {
     id: 'priority',
     fn: sortByPriority,
@@ -187,11 +177,6 @@ const SORT_OPTIONS = [
     icon: () => <ClockIcon class="size-3.5" />,
   },
   {
-    value: 'frecency',
-    label: 'Frecency',
-    icon: () => <ChartLineUpIcon class="size-3.5" />,
-  },
-  {
     value: 'priority',
     label: 'Priority',
     icon: () => <FlagIcon class="size-3.5" />,
@@ -213,7 +198,6 @@ export const DEFAULT_SORT_OPTIONS = buildSortOptions([
   'viewed_at',
   'updated_at',
   'created_at',
-  'frecency',
 ]);
 
 export const TASK_SORT_OPTIONS = buildSortOptions([

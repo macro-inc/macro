@@ -25,8 +25,8 @@ use entity_access::{
 };
 use model_error_response::ErrorResponse;
 use models_pagination::{
-    Base64Str, BidirectionalCursor, BidirectionalCursorExtractor, CreatedAt, Cursor,
-    CursorExtractor, CursorVal, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
+    Base64Str, BidirectionalCursor, CreatedAt, Cursor, CursorOptionExt, CursorVal,
+    CursorWithValAndFilter, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -92,24 +92,24 @@ pub struct ThreadRepliesPath {
 }
 
 fn parse_messages_query(
-    cursor: BidirectionalCursorExtractor<Uuid, CreatedAt, ()>,
+    cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
 ) -> (
     PaginationQuery<Uuid, CreatedAt, ()>,
     MessagePageDirection,
     bool,
 ) {
     match cursor {
-        BidirectionalCursorExtractor::Some(BidirectionalCursor::Next(cursor)) => (
+        Some(BidirectionalCursor::Next(cursor)) => (
             PaginationQuery::Cursor(cursor),
             MessagePageDirection::Older,
             true,
         ),
-        BidirectionalCursorExtractor::Some(BidirectionalCursor::Previous(cursor)) => (
+        Some(BidirectionalCursor::Previous(cursor)) => (
             PaginationQuery::Cursor(cursor),
             MessagePageDirection::Newer,
             true,
         ),
-        BidirectionalCursorExtractor::None => (
+        None => (
             PaginationQuery::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             false,
@@ -184,7 +184,7 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: Entity
     State(state): State<ChannelsRouterState<S, Svc>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Query(params): Query<Params>,
-    cursor: BidirectionalCursorExtractor<Uuid, CreatedAt, ()>,
+    cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let (query, direction, has_cursor) = parse_messages_query(cursor);
@@ -277,7 +277,7 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAc
     path = "/channels/{channel_id}/attachments",
     params(
         ("channel_id" = Uuid, Path, description = "Channel ID"),
-        ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
+        ("limit" = Option<u16>, Query, description = "Page size (1-500, default 50)"),
         ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value"),
     ),
     responses(
@@ -295,7 +295,7 @@ pub async fn get_channel_attachments_handler<
     State(state): State<ChannelsRouterState<S, Svc>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Query(params): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
+    cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<PaginatedOpaqueCursor<ApiChannelAttachment>>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50);
     let query = cursor.into_query(CreatedAt, ());
@@ -538,6 +538,8 @@ pub struct ApiChannelAttachment {
     channel_id: Uuid,
     /// Message id this attachment belongs to.
     message_id: Uuid,
+    /// The user who sent the message containing this attachment.
+    sender_id: String,
     /// Type of entity.
     entity_type: String,
     /// Entity id.
@@ -556,6 +558,7 @@ impl From<ChannelAttachment> for ApiChannelAttachment {
             id: a.id,
             channel_id: a.channel_id,
             message_id: a.message_id,
+            sender_id: a.sender_id,
             entity_type: a.entity_type,
             entity_id: a.entity_id,
             width: a.width,

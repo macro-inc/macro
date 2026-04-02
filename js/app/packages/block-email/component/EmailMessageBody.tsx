@@ -123,12 +123,23 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const styleEl = document.createElement('style');
     // Normalize font in email
     const fontOverride = isPersonal()
-      ? `*:not(code):not(pre):not(code *):not(pre *){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
+      ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
       : '';
     styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
+    // Mark button-like anchors so the font override doesn't break their sizing
+    for (const a of messageDiv.querySelectorAll<HTMLAnchorElement>(
+      'a[style]'
+    )) {
+      if (a.style.backgroundColor) {
+        a.dataset.macroBtn = '';
+        for (const child of a.querySelectorAll('*')) {
+          (child as HTMLElement).dataset.macroBtn = '';
+        }
+      }
+    }
     // Open links in a new tab instead of navigating the current one
     for (const a of messageDiv.querySelectorAll('a[href]')) {
       a.setAttribute('target', '_blank');

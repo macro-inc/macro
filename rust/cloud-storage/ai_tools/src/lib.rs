@@ -41,17 +41,10 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
 pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = AsyncToolSet::new()
         .add_toolset(search_toolset())
-        .expect("failed to add search toolset")
-        // .add_toolset(list_toolset())
-        // .expect("failed to add list toolset")
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService>>()
-        .expect("failed to add list entities tool")
         .add_tool::<read::ReadThread, Arc<ToolScribe>>()
-        .expect("read thread tool")
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
-        .expect("failed to add document toolset")
-        .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
-        .expect("failed to add properties toolset");
+        .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset());
     let prompt = prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt { toolset, prompt }

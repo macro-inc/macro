@@ -8,6 +8,8 @@ pub struct Config {
     pub environment: Environment,
     /// The connection URL for the Postgres database this application should use.
     pub database_url: String,
+    /// The Redis URI for rate limiting.
+    pub redis_uri: String,
     /// SQS URL
     pub queue_url: String,
     /// The notification queue max messages per poll
@@ -27,6 +29,8 @@ impl Config {
 
         let database_url =
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
+
+        let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
         let queue_url =
             std::env::var("CONTACTS_QUEUE").context("CONTACTS_QUEUE must be provided")?;
@@ -49,6 +53,7 @@ impl Config {
             port,
             environment,
             database_url,
+            redis_uri,
             queue_url,
             queue_wait_time_seconds,
             queue_max_messages,
@@ -62,6 +67,7 @@ impl Config {
             port: 0,
             environment: Environment::Local,
             database_url: "".to_string(),
+            redis_uri: "".to_string(),
             queue_url: "".to_string(),
             queue_max_messages: 0,
             queue_wait_time_seconds: 0,

@@ -7,6 +7,7 @@ use crate::domain::{
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::domain::models::PreviewView;
+use item_filters::EntityFilters;
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_soup::item::SoupItem;
 use schemars::JsonSchema;
@@ -150,7 +151,7 @@ where
             .get_user_soup(SoupRequest {
                 soup_type: SoupType::Expanded,
                 limit: RESULT_LIMIT,
-                cursor: SoupQuery::new_sort_simple(sort_method, Default::default()),
+                cursor: SoupQuery::new_sort_simple(sort_method, EntityFilters::default()),
                 user: request_context.user_id,
                 email_preview_view: PreviewView::default(),
                 link_id: None,

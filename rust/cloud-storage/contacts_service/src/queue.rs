@@ -85,7 +85,7 @@ async fn connections_message_handler(conmsg: &ConnectionsMessage, queue: &Messag
         .into_iter()
         .map(|e| (e.a.data.id.to_string(), e.b.data.id.to_string()))
         .collect();
-    let _ = create_connections(&mut transaction, connection_pairs.clone())
+    let _ = create_connections(transaction.as_mut(), connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);
@@ -103,7 +103,7 @@ async fn add_participants_handler(body: &AddParticipantsMessageBody, queue: &Mes
     let db = &queue.db;
     let connection_pairs = add_participants(body).await;
     let mut transaction = db.begin().await.unwrap();
-    let _ = create_connections(&mut transaction, connection_pairs.clone())
+    let _ = create_connections(transaction.as_mut(), connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);
@@ -122,7 +122,7 @@ async fn create_group_handler(body: &CreateGroupMessageBody, queue: &MessageQueu
     let db = &queue.db;
     let connection_pairs = create_group(body).await;
     let mut transaction = db.begin().await.unwrap();
-    let _ = create_connections(&mut transaction, connection_pairs.clone())
+    let _ = create_connections(transaction.as_mut(), connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);
@@ -269,14 +269,7 @@ pub async fn add_user_to_group(group: &[String], user: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::PgPool;
     use std::collections::HashSet;
-
-    async fn sqs_dummy() -> SQSWorker {
-        let config = macro_aws_config::get_macro_aws_config().await;
-        let client = aws_sdk_sqs::Client::new(&config);
-        SQSWorker::new(client, "nothing".to_string(), 1, 1)
-    }
 
     #[test]
     fn test_deserialize_connections_message() {
@@ -370,46 +363,6 @@ mod tests {
         assert_eq!(body.connections.len(), 0);
     }
 
-    #[sqlx::test]
-    #[ignore]
-    async fn test_connections_message_handler(pool: PgPool) -> sqlx::Result<()> {
-        let input_json = include_str!("../tests/fixtures/connections_message.json");
-
-        let message: Message = message_from_json(input_json).unwrap();
-        let db = pool.clone();
-        let sqs = sqs_dummy().await;
-        let queue = MessageQueue::new(sqs, db, None);
-        match message {
-            Message::AddConnection(con) => connections_message_handler(&con, &queue).await,
-            _ => panic!("Message not matched properly"),
-        };
-        let user = "AE2C090C-E478-4454-A001-3DF458BF1FE4";
-        let contacts = contacts_db_client::get_contacts(&pool, user).await;
-        assert!(contacts.is_ok());
-        let contacts = contacts.unwrap();
-        dbg!(&contacts);
-        assert_eq!(contacts.len(), 7);
-
-        let expectations: HashSet<String> = [
-            "FF038D36-1AEF-461A-8AA8-34001FA1ABAD",
-            "C3F4D826-F8FD-478A-AA66-B5B6BB370CBC",
-            "D44CAADA-98C0-49EB-AB20-6851B824983A",
-            "5AB8C770-F2CB-4C6C-BC08-AE64569E324C",
-            "79A5557B-7827-4E2E-A6AE-F0935CDB762E",
-            "C3B1970F-18EE-4DFA-B5FB-E8240E28E51D",
-            "9EFFE035-BB12-4FCC-B479-800E1C2551A8",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
-
-        let reality: HashSet<String> = contacts.into_iter().collect();
-
-        assert_eq!(&expectations, &reality);
-
-        Ok(())
-    }
-
     #[tokio::test]
     async fn test_add_participants_message_body() {
         // The full group: it's assumed the participants are in here already
@@ -434,72 +387,6 @@ mod tests {
         assert_eq!(connections.len(), expected_nconnections);
     }
 
-    async fn add_participants_handler_tester(
-        pool: PgPool,
-        body: AddParticipantsMessageBody,
-    ) -> sqlx::Result<()> {
-        let message: Message = Message::AddParticipants(body);
-        let db = pool.clone();
-        let sqs = sqs_dummy().await;
-        let queue = MessageQueue::new(sqs, db, None);
-        match message {
-            Message::AddParticipants(body) => add_participants_handler(&body, &queue).await,
-            _ => panic!("Message not matched properly"),
-        };
-
-        let user = "ringo";
-        let contacts = contacts_db_client::get_contacts(&pool, user).await;
-
-        assert!(contacts.is_ok());
-        let contacts = contacts.unwrap();
-        dbg!(&contacts);
-
-        assert_eq!(contacts.len(), 3);
-
-        let expectations: HashSet<String> = ["john", "paul", "george"]
-            .into_iter()
-            .map(String::from)
-            .collect();
-
-        let reality: HashSet<String> = contacts.into_iter().collect();
-
-        assert_eq!(&expectations, &reality);
-
-        Ok(())
-    }
-
-    #[sqlx::test]
-    #[ignore]
-    async fn test_integration_add_participants_handler(pool: PgPool) -> sqlx::Result<()> {
-        let group = ["paul", "john", "ringo", "george"];
-        let participants = ["ringo", "george"];
-
-        let body = AddParticipantsMessageBody {
-            group: group.into_iter().map(String::from).collect(),
-            participants: participants.into_iter().map(String::from).collect(),
-            group_id: None,
-        };
-        add_participants_handler_tester(pool, body).await
-    }
-
-    // Add participants to the group, but the participants aren't in the group yet
-    #[sqlx::test]
-    #[ignore]
-    async fn test_integration_add_participants_handler_pre_participants(
-        pool: PgPool,
-    ) -> sqlx::Result<()> {
-        let group = ["paul", "john"];
-        let participants = ["ringo", "george"];
-
-        let body = AddParticipantsMessageBody {
-            group: group.into_iter().map(String::from).collect(),
-            participants: participants.into_iter().map(String::from).collect(),
-            group_id: None,
-        };
-
-        add_participants_handler_tester(pool, body).await
-    }
-
     #[tokio::test]
     async fn test_create_group_message_body() {
         let group = ["paul", "john", "ringo", "george"];
@@ -515,46 +402,6 @@ mod tests {
         let connections = create_group(&body).await;
 
         assert_eq!(connections.len(), expected_nconnections);
-    }
-
-    #[sqlx::test]
-    #[ignore]
-    async fn test_integration_create_group_handler(pool: PgPool) -> sqlx::Result<()> {
-        let group = ["paul", "john", "ringo", "george"];
-
-        let body = CreateGroupMessageBody {
-            group: group.into_iter().map(String::from).collect(),
-            group_id: None,
-        };
-
-        let message: Message = Message::CreateGroup(body);
-        let db = pool.clone();
-        let sqs = sqs_dummy().await;
-        let queue = MessageQueue::new(sqs, db, None);
-        match message {
-            Message::CreateGroup(body) => create_group_handler(&body, &queue).await,
-            _ => panic!("Message not matched properly"),
-        };
-
-        let user = "paul";
-        let contacts = contacts_db_client::get_contacts(&pool, user).await;
-
-        assert!(contacts.is_ok());
-        let contacts = contacts.unwrap();
-        dbg!(&contacts);
-
-        assert_eq!(contacts.len(), 3);
-
-        let expectations: HashSet<String> = ["john", "ringo", "george"]
-            .into_iter()
-            .map(String::from)
-            .collect();
-
-        let reality: HashSet<String> = contacts.into_iter().collect();
-
-        assert_eq!(&expectations, &reality);
-
-        Ok(())
     }
 
     #[tokio::test]

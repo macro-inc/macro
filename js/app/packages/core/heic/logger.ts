@@ -1,7 +1,5 @@
-import { withAnalytics } from '@coparse/analytics';
+import { analytics } from '@app/lib/analytics';
 import { ERROR_MESSAGES, LOG_MESSAGES } from './constants';
-
-const { track, TrackingEvents } = withAnalytics();
 
 /**
  * Centralized logging utilities for HEIC conversion
@@ -90,12 +88,8 @@ export class EnhancedHeicConversionError extends Error {
     // Log the error immediately
     HeicLogger.error(fullMessage, cause);
 
-    // Track error in analytics
-    track(TrackingEvents.UPLOAD.ERROR, {
+    analytics.track('upload_error', {
       type: this.name,
-      errorCode: this.errorCode,
-      filename: this.originalFilename,
-      error: this.toString(),
     });
   }
 }

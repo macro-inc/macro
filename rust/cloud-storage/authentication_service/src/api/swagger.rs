@@ -1,6 +1,7 @@
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
-    PatchTeamRequest, Team, TeamInviteDetails, TeamMember, TeamRole, TeamWithMembers,
+    PatchTeamRequest, PatchTeamUserTierRequest, Team, TeamInviteDetails, TeamMember, TeamRole,
+    TeamUserTier, TeamWithMembers,
 };
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
@@ -67,6 +68,7 @@ use model::user::{
                 /// /link
                 link::create_in_progress_link::handler,
                 link::github::init_github_link_handler,
+                link::github::delete_github_link_handler,
 
                 /// /oauth
                 oauth::oauth_redirect::handler,
@@ -116,9 +118,9 @@ use model::user::{
                 teams::inbound::axum_router::invite_to_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_team_invites::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::patch_team_user_tier::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType>,
-                teams::inbound::axum_router::reinvite_to_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType>,
@@ -183,6 +185,8 @@ use model::user::{
                         PatchTeamRequest,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
+                        PatchTeamUserTierRequest,
+                        TeamUserTier,
 
                         // Merge
                         CreateAccountMergeRequest,

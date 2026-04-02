@@ -39,7 +39,5 @@ pub fn soup_toolset<T>() -> AsyncToolSet<SoupToolContext<T>>
 where
     T: SoupService,
 {
-    AsyncToolSet::new()
-        .add_tool::<ListEntities, SoupToolContext<T>>()
-        .expect("failed to add ListEntities tool")
+    AsyncToolSet::new().add_tool::<ListEntities, SoupToolContext<T>>()
 }

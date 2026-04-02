@@ -1,3 +1,4 @@
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
@@ -11,7 +12,6 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { matches } from '@core/util/match';
 import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
@@ -53,14 +53,14 @@ function RecipientChip(props: {
 }) {
   return (
     <div
-      class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
+      class="flex flex-row flex-shrink-0 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
       classList={{ 'cursor-grab active:cursor-grabbing': props.draggable }}
       draggable={props.draggable}
       onDragStart={props.onDragStart}
       onDragEnd={props.onDragEnd}
     >
       <Show when={props.icon}>{props.icon}</Show>
-      <p class="text-sm">{truncateString(props.label, 20)}</p>
+      <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
       <XIcon
         class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1"
         onClick={props.onRemove}
@@ -239,6 +239,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
+  mobileHorizontalScroll?: boolean;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -483,162 +484,177 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       <Combobox.Control<CombinedRecipientItem>>
         {(state) => {
           const context = useComboboxContext();
+          const [chipsScrollRef, setChipsScrollRef] =
+            createSignal<HTMLElement>();
           return (
-            <div class="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto text-ink">
-              <For each={state.selectedOptions()}>
-                {(option) => {
-                  return (
-                    <Switch>
-                      <Match
-                        when={matches(
-                          option,
-                          (o) => o.kind === 'user' || o.kind === 'contact'
-                        )}
-                      >
-                        {(userOrContactOption) => {
-                          const opt = userOrContactOption();
-                          const name = getRecipientOptionName(opt);
-                          const email = getRecipientOptionEmail(opt);
+            <div class="relative">
+              <div
+                ref={
+                  props.mobileHorizontalScroll ? setChipsScrollRef : undefined
+                }
+                class={`flex gap-1.5 text-ink scrollbar-hidden ${props.mobileHorizontalScroll ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-[150px] sm:overflow-y-auto pb-[2px] sm:pb-0' : 'flex-wrap max-h-[150px] overflow-y-auto'}`}
+              >
+                <For each={state.selectedOptions()}>
+                  {(option) => {
+                    return (
+                      <Switch>
+                        <Match
+                          when={matches(
+                            option,
+                            (o) => o.kind === 'user' || o.kind === 'contact'
+                          )}
+                        >
+                          {(userOrContactOption) => {
+                            const opt = userOrContactOption();
+                            const name = getRecipientOptionName(opt);
+                            const email = getRecipientOptionEmail(opt);
 
-                          const displayText = () => name || email;
+                            const displayText = () => name || email;
 
-                          return (
-                            <Tooltip
-                              placement="bottom"
-                              unstyled
-                              tooltip={
-                                <UserTooltip
-                                  displayName={name || ''}
-                                  email={email}
-                                  id={opt.id}
-                                  isDeleted={false}
-                                />
-                              }
-                            >
-                              <RecipientChip
-                                icon={
-                                  !isMobileWidth() ? (
+                            return (
+                              <Tooltip
+                                placement="bottom"
+                                unstyled
+                                tooltip={
+                                  <UserTooltip
+                                    displayName={name || ''}
+                                    email={email}
+                                    id={opt.id}
+                                    isDeleted={false}
+                                  />
+                                }
+                              >
+                                <RecipientChip
+                                  icon={
                                     <UserIcon
                                       id={opt.id}
                                       size="xs"
                                       isDeleted={false}
                                       showTooltip={false}
                                     />
-                                  ) : undefined
-                                }
-                                label={displayText() ?? ''}
-                                onRemove={() => state.remove(option)}
-                                draggable={!!props.onChipDragStart}
-                                onDragStart={(e) =>
-                                  props.onChipDragStart?.(
-                                    option as WithCustomUserInput<K>,
-                                    e
-                                  )
-                                }
-                                onDragEnd={props.onChipDragEnd}
-                              />
-                            </Tooltip>
-                          );
-                        }}
-                      </Match>
-                      <Match
-                        when={matches(option, (o) => o.kind === 'channel')}
-                      >
-                        {(channelOption) => {
-                          return (
-                            <RecipientChip
-                              icon={<HashIcon class="w-4 h-4" />}
-                              label={
-                                channelOption().data.name ?? channelOption().id
-                              }
-                              onRemove={() => state.remove(option)}
-                            />
-                          );
-                        }}
-                      </Match>
-                      <Match when={matches(option, (o) => o.kind === 'custom')}>
-                        {(customOption) => {
-                          const email = customOption().data.email;
-
-                          return (
-                            <Tooltip
-                              placement="bottom"
-                              unstyled
-                              tooltip={
-                                <UserTooltip
-                                  displayName={email}
-                                  email={email}
-                                  isDeleted={false}
+                                  }
+                                  label={displayText() ?? ''}
+                                  onRemove={() => state.remove(option)}
+                                  draggable={!!props.onChipDragStart}
+                                  onDragStart={(e) =>
+                                    props.onChipDragStart?.(
+                                      option as WithCustomUserInput<K>,
+                                      e
+                                    )
+                                  }
+                                  onDragEnd={props.onChipDragEnd}
                                 />
-                              }
-                            >
+                              </Tooltip>
+                            );
+                          }}
+                        </Match>
+                        <Match
+                          when={matches(option, (o) => o.kind === 'channel')}
+                        >
+                          {(channelOption) => {
+                            return (
                               <RecipientChip
-                                icon={
-                                  !isMobileWidth() ? (
+                                icon={<HashIcon class="w-4 h-4" />}
+                                label={
+                                  channelOption().data.name ??
+                                  channelOption().id
+                                }
+                                onRemove={() => state.remove(option)}
+                              />
+                            );
+                          }}
+                        </Match>
+                        <Match
+                          when={matches(option, (o) => o.kind === 'custom')}
+                        >
+                          {(customOption) => {
+                            const email = customOption().data.email;
+
+                            return (
+                              <Tooltip
+                                placement="bottom"
+                                unstyled
+                                tooltip={
+                                  <UserTooltip
+                                    displayName={email}
+                                    email={email}
+                                    isDeleted={false}
+                                  />
+                                }
+                              >
+                                <RecipientChip
+                                  icon={
                                     <UserIcon
                                       id={email}
                                       size="xs"
                                       isDeleted={false}
                                       showTooltip={false}
                                     />
-                                  ) : undefined
-                                }
-                                label={email}
-                                onRemove={() => state.remove(option)}
-                                draggable={!!props.onChipDragStart}
-                                onDragStart={(e) =>
-                                  props.onChipDragStart?.(
-                                    option as WithCustomUserInput<K>,
-                                    e
-                                  )
-                                }
-                                onDragEnd={props.onChipDragEnd}
-                              />
-                            </Tooltip>
-                          );
-                        }}
-                      </Match>
-                    </Switch>
-                  );
-                }}
-              </For>
-              <Combobox.Input
-                disabled={disabled()}
-                ref={(el) => {
-                  setInputRef(el);
-                  props.inputRef?.(el);
-                }}
-                class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
-                classList={{ 'ml-1': selectedLen() === 0 }}
-                onKeyDown={(e) => {
-                  if (
-                    (e.key === 'a' && e.ctrlKey) ||
-                    (e.key === 'a' && e.metaKey)
-                  ) {
-                    setDisabled(true);
-                    queueMicrotask(() => setDisabled(false));
-                  }
-                  if (e.key === 'Escape') {
-                    if (inputValue().length === 0) {
-                      inputRef()?.blur();
-                    }
-                  }
-                }}
-                // use a non-delegated event here so that we can process it before Kobalte
-                on:keydown={(e: KeyboardEvent) => {
-                  if (e.key === 'Tab' && context.isOpen()) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    inputRef()?.dispatchEvent(
-                      // We need to send `bubbles: true` because otherwise Kobalte ignores the event
-                      new KeyboardEvent('keydown', {
-                        bubbles: true,
-                        key: 'Enter',
-                      })
+                                  }
+                                  label={email}
+                                  onRemove={() => state.remove(option)}
+                                  draggable={!!props.onChipDragStart}
+                                  onDragStart={(e) =>
+                                    props.onChipDragStart?.(
+                                      option as WithCustomUserInput<K>,
+                                      e
+                                    )
+                                  }
+                                  onDragEnd={props.onChipDragEnd}
+                                />
+                              </Tooltip>
+                            );
+                          }}
+                        </Match>
+                      </Switch>
                     );
-                  }
-                }}
-              />
+                  }}
+                </For>
+                <Combobox.Input
+                  disabled={disabled()}
+                  ref={(el) => {
+                    setInputRef(el);
+                    props.inputRef?.(el);
+                  }}
+                  class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
+                  classList={{ 'ml-1': selectedLen() === 0 }}
+                  onKeyDown={(e) => {
+                    if (
+                      (e.key === 'a' && e.ctrlKey) ||
+                      (e.key === 'a' && e.metaKey)
+                    ) {
+                      setDisabled(true);
+                      queueMicrotask(() => setDisabled(false));
+                    }
+                    if (e.key === 'Escape') {
+                      if (inputValue().length === 0) {
+                        inputRef()?.blur();
+                      }
+                    }
+                  }}
+                  // use a non-delegated event here so that we can process it before Kobalte
+                  on:keydown={(e: KeyboardEvent) => {
+                    if (e.key === 'Tab' && context.isOpen()) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      inputRef()?.dispatchEvent(
+                        // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+                        new KeyboardEvent('keydown', {
+                          bubbles: true,
+                          key: 'Enter',
+                        })
+                      );
+                    }
+                  }}
+                />
+              </div>
+              <Show when={props.mobileHorizontalScroll}>
+                <CustomScrollbar
+                  scrollContainer={chipsScrollRef}
+                  horizontal
+                  class="sm:hidden"
+                />
+              </Show>
             </div>
           );
         }}

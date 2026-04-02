@@ -3,6 +3,7 @@ config:
   aws:region: us-east-1
   cloud-storage-service:macro_db_secret_key: macro-db-prod
   cloud-storage-service:macro_db_proxy_secret_key: macrodb-rds-proxy-prod
+  cloud-storage-service:macro_db_readonly_secret_key: macro-db-readonly-prod
   cloud-storage-service:document_storage_service_auth_key: document-storage-service-auth-key-prod
   cloud-storage-service:jwt_secret_key: fusionauth-jwt-secret-prod
   cloud-storage-service:fusionauth_client_id: fusionauth-client-id-key-prod
@@ -14,6 +15,9 @@ config:
   cloud-storage-service:opensearch_password_key: macro-opensearch-password-prod
   cloud-storage-service:macro_cache_secret_key: macro-cache-prod
   cloud-storage-service:github_webhook_secret_key: github-webhook-secret-prod
-  cloud-storage-service:github_sync_app_url: https://github.com/apps/macro-sync
+  cloud-storage-service:github_sync_app_url: https://github.com/apps/macro-application
   cloud-storage-service:github_sync_app_pem: github-sync-app-pem-prod
-  cloud-storage-service:github_sync_app_client_id: Iv23ctSZX2wLdqO2iqrS
+  cloud-storage-service:github_sync_app_client_id: Iv23ct0BBwvcPqFORaCI
+  cloud-storage-service:livekit_server_url: livekit-server-url-prod
+  cloud-storage-service:livekit_api_key: livekit-api-key-prod
+  cloud-storage-service:livekit_api_secret: livekit-api-secret-prod

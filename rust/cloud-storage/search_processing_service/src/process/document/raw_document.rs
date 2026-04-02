@@ -3,8 +3,8 @@ use std::str::FromStr;
 use anyhow::Context;
 use chrono::Utc;
 use model::document::{DocumentMetadata, FileType};
-use model_file_type::FileAssociation;
 use models_search::document::MarkdownParseResult;
+use models_search::unified::is_searchable_association;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
 };
@@ -70,18 +70,9 @@ pub async fn update_search_with_raw_document(
     document_storage_bucket: &str,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    // Early exit if we do not support search on the file type
-    // TODO: support other documents
-    match search_extractor_message.file_type.macro_app_path() {
-        FileAssociation::Pdf(_)
-        | FileAssociation::Write(_)
-        | FileAssociation::Code(_)
-        | model_file_type::FileAssociation::Canvas(_)
-        | model_file_type::FileAssociation::Md(_) => {}
-        _ => {
-            tracing::warn!("unsupported file type");
-            return Ok(());
-        }
+    if !is_searchable_association(&search_extractor_message.file_type.macro_app_path()) {
+        tracing::warn!("unsupported file type");
+        return Ok(());
     }
 
     // This ensures we only process the latest version

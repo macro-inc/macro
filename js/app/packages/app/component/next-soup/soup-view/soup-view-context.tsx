@@ -99,6 +99,7 @@ export const useMaybeSoupView = () => useContext(SoupViewContext);
 interface SoupViewContextProviderProps {
   soup?: SoupState;
   queryFilters?: SoupBody;
+  disableLocalSearch?: boolean;
 }
 
 type ApiSortMethod = NonNullable<SoupParams['sort_method']>;
@@ -107,7 +108,6 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'created_at',
   'updated_at',
   'viewed_updated',
-  'frecency',
 ];
 
 export const SoupViewContextProvider: FlowComponent<
@@ -158,7 +158,11 @@ export const SoupViewContextProvider: FlowComponent<
     })
   );
 
-  const search = createSearchState({ soup, queryFilters });
+  const search = createSearchState({
+    soup,
+    queryFilters,
+    disableLocalSearch: props.disableLocalSearch,
+  });
 
   const notificationSource = useGlobalNotificationSource();
 

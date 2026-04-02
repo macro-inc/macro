@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{FrecencySoupItem, SoupErr, SoupQuery, SoupRequest, SoupType},
+    models::{FrecencySoupItem, IntoSoupReqAst, SoupErr, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
 use axum::{
@@ -17,12 +17,16 @@ use email::{
     },
     inbound::{EmailLinkErr, EmailLinkExtractor, EmailRouterState},
 };
-use item_filters::{EntityFilters, ast::ExpandErr};
+use item_filters::{
+    EntityFilters,
+    ast::{EntityFilterAst, ExpandErr},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
-    CursorExtractor, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod, TypeEraseCursor,
+    CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
+    TypeEraseCursor,
 };
 use models_soup::item::SoupItem;
 use serde::{Deserialize, Serialize};
@@ -108,18 +112,22 @@ where
         }
     }
 
-    async fn handle(
+    async fn handle<R>(
         &self,
         macro_user_id: MacroUserIdStr<'static>,
         email_link: Option<Link>,
-        PostSoupRequest {
+        ApiSoupRequestInner {
             filters,
             params,
             email_view,
-        }: PostSoupRequest,
-        cursor: SoupCursor,
-    ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
-        let create_fallback = move || {
+        }: ApiSoupRequestInner<R>,
+        cursor: SoupCursor<R>,
+    ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
+        let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
                 .sort_method
                 .map(|s| s.into_sort_method())
@@ -132,13 +140,11 @@ where
             }
         };
 
-        let cursor = match cursor {
+        let cursor: SoupQuery<R> = match cursor {
             Either::E1(l) => l
-                .into_option()
                 .map(SoupQuery::new_cursor_simple)
                 .unwrap_or_else(create_fallback),
             Either::E2(r) => r
-                .into_option()
                 .map(SoupQuery::new_cursor_frecency)
                 .unwrap_or_else(create_fallback),
         };
@@ -173,6 +179,7 @@ where
     Router::new()
         .route("/soup", get(get_soup_handler))
         .route("/soup", post(post_soup_handler))
+        .route("/soup/ast", post(post_soup_ast_handler))
         .with_state(state)
 }
 
@@ -252,7 +259,7 @@ pub async fn get_soup_handler<T, U>(
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
     email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     Query(params): Query<Params>,
-    cursor: SoupCursor,
+    cursor: SoupCursor<EntityFilters>,
 ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
 where
     T: SoupService,
@@ -267,9 +274,9 @@ where
         .handle(
             macro_user_id,
             link,
-            PostSoupRequest {
+            ApiSoupRequestInner {
                 params,
-                filters: Default::default(),
+                filters: EntityFilters::default(),
                 email_view: Default::default(),
             },
             cursor,
@@ -290,9 +297,15 @@ pub struct PostSoupRequest {
     email_view: PreviewView,
 }
 
-type SoupCursor = axum_extra::either::Either<
-    CursorExtractor<Uuid, SimpleSortMethod, EntityFilters>,
-    CursorExtractor<Uuid, Frecency, EntityFilters>,
+struct ApiSoupRequestInner<T> {
+    filters: T,
+    params: Params,
+    email_view: PreviewView,
+}
+
+type SoupCursor<R> = axum_extra::either::Either<
+    Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, R>>,
+    Option<CursorWithValAndFilter<Uuid, Frecency, R>>,
 >;
 
 /// Gets the items the user has access to
@@ -313,8 +326,12 @@ pub async fn post_soup_handler<T, U>(
     State(service): State<SoupRouterState<T, U>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
     email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
-    cursor: SoupCursor,
-    Json(post_soup_request): Json<PostSoupRequest>,
+    cursor: SoupCursor<EntityFilters>,
+    Json(PostSoupRequest {
+        filters,
+        params,
+        email_view,
+    }): Json<PostSoupRequest>,
 ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
 where
     T: SoupService,
@@ -326,6 +343,77 @@ where
         Err(e) => Err(e)?,
     };
     service
-        .handle(macro_user_id, link, post_soup_request, cursor)
+        .handle(
+            macro_user_id,
+            link,
+            ApiSoupRequestInner {
+                filters,
+                params,
+                email_view,
+            },
+            cursor,
+        )
+        .await
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PostSoupAstRequest {
+    #[serde(default, flatten)]
+    filters: EntityFilterAst,
+    #[serde(default, flatten)]
+    params: Params,
+    /// the view of specific emails to display
+    #[serde(default)]
+    #[schema(value_type = String)]
+    email_view: PreviewView,
+}
+
+/// Gets the items the user has access to using AST filters
+#[utoipa::path(
+    post,
+    operation_id = "post_items_soup_ast",
+    path = "/items/soup/ast",
+    params(
+        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value."),
+    ),
+    request_body = PostSoupAstRequest,
+    responses(
+        (status = 200, body=SoupPage),
+        (status = 500, body=ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn post_soup_ast_handler<T, U>(
+    State(service): State<SoupRouterState<T, U>>,
+    Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
+    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
+    cursor: SoupCursor<EntityFilterAst>,
+    Json(PostSoupAstRequest {
+        filters,
+        params,
+        email_view,
+    }): Json<PostSoupAstRequest>,
+) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
+where
+    T: SoupService,
+    U: EmailService,
+{
+    let link = match email_link {
+        Ok(l) => Some(l.0.0),
+        Err(EmailLinkErr::NotFound) => None,
+        Err(e) => Err(e)?,
+    };
+    service
+        .handle(
+            macro_user_id,
+            link,
+            ApiSoupRequestInner {
+                filters,
+                params,
+                email_view,
+            },
+            cursor,
+        )
         .await
 }

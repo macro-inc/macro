@@ -2,7 +2,6 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { withAnalytics } from '@coparse/analytics';
 import { TabAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
@@ -23,10 +22,10 @@ import { transformShortIdInUrlPathname } from '@core/util/url';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { Provider as EntityProvider } from '@macro-entity';
 import {
+  BrowserNotificationModal,
   createNotificationSource,
   type UnifiedNotification,
   usePlatformNotificationState,
-  PlatformNotificationProvider,
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { useObserveRouting } from '@observability';
@@ -92,8 +91,6 @@ import {
 } from '@app/component/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 
-const { track, TrackingEvents } = withAnalytics();
-
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
   const userInfoQuery = useUserInfoQuery();
@@ -148,19 +145,18 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     url.pathname = transformedPathname;
     window.history.replaceState(args.location.state, '', url);
   }
-
-  track(TrackingEvents.AUTH.START);
 };
 
 function BasePathComponent() {
+  const analytics = useAnalytics();
+
   const [searchParams] = useSearchParams();
+
   const subscriptionSuccess = searchParams.subscriptionSuccess;
   const type = searchParams.type;
   if (subscriptionSuccess === 'true') {
     toast.success('Your plan has been activated!');
-    track(TrackingEvents.SUBSCRIPTION.SUCCESS, {
-      type: type ?? undefined,
-    });
+    analytics.track('subscription_success', { type });
     // Invalidate user info to refresh trial status and subscription data
     invalidateUserInfo();
   }
@@ -412,16 +408,11 @@ export function Root() {
     onCleanup(() => cleanup());
   });
 
-  const handleBeforeUnload = () => track(TrackingEvents.AUTH.TERMINATE);
   onMount(() => {
     systemThemeEffect();
     applyTheme(currentThemeId());
     ensureMinimalThemeContrast();
-    window.addEventListener('beforeunload', handleBeforeUnload);
   });
-  onCleanup(() =>
-    window.removeEventListener('beforeunload', handleBeforeUnload)
-  );
 
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
@@ -451,40 +442,39 @@ export function Root() {
           <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
-                <PlatformNotificationProvider>
-                  <QuerySyncProviderWithUserId />
-                  <UserInfoSideEffects />
-                  <ConfiguredGlobalAppStateProvider>
-                    <ChannelsContextProvider>
-                      <QuickAccessProvider>
-                        <SearchProvider>
-                          <TabAttachmentsInit />
-                          <ReactiveFavicon />
-                          <Title>{tabTitle()}</Title>
-                          <MacroJump />
-                          <Visor />
-                          <SuspenseContextComp
-                            fallback={<RootSuspenseFallback />}
+                <BrowserNotificationModal />
+                <QuerySyncProviderWithUserId />
+                <UserInfoSideEffects />
+                <ConfiguredGlobalAppStateProvider>
+                  <ChannelsContextProvider>
+                    <QuickAccessProvider>
+                      <SearchProvider>
+                        <TabAttachmentsInit />
+                        <ReactiveFavicon />
+                        <Title>{tabTitle()}</Title>
+                        <MacroJump />
+                        <Visor />
+                        <SuspenseContextComp
+                          fallback={<RootSuspenseFallback />}
+                        >
+                          <IsomorphicRouter
+                            transformUrl={transformShortIdInUrlPathname}
+                            root={Layout}
+                            rootPreload={rootPreload}
+                            base={ROUTER_BASE}
                           >
-                            <IsomorphicRouter
-                              transformUrl={transformShortIdInUrlPathname}
-                              root={Layout}
-                              rootPreload={rootPreload}
-                              base={ROUTER_BASE}
-                            >
-                              {{
-                                path: '/',
-                                component: TauriRouteListener,
-                                children: ROUTES,
-                              }}
-                            </IsomorphicRouter>
-                          </SuspenseContextComp>
-                          <ToastRegion />
-                        </SearchProvider>
-                      </QuickAccessProvider>
-                    </ChannelsContextProvider>
-                  </ConfiguredGlobalAppStateProvider>
-                </PlatformNotificationProvider>
+                            {{
+                              path: '/',
+                              component: TauriRouteListener,
+                              children: ROUTES,
+                            }}
+                          </IsomorphicRouter>
+                        </SuspenseContextComp>
+                        <ToastRegion />
+                      </SearchProvider>
+                    </QuickAccessProvider>
+                  </ChannelsContextProvider>
+                </ConfiguredGlobalAppStateProvider>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

@@ -1220,6 +1220,39 @@
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
       },
+      "EntityFilters": {
+        "type": "object",
+        "description": "a bundle of all of the filters for each entity type",
+        "properties": {
+          "channel_filters": {
+            "$ref": "#/components/schemas/ChannelFilters",
+            "description": "the bundled [ChannelFilters]"
+          },
+          "chat_filters": {
+            "$ref": "#/components/schemas/ChatFilters",
+            "description": "the bundled [ChatFilters]"
+          },
+          "document_filters": {
+            "$ref": "#/components/schemas/DocumentFilters",
+            "description": "the bundled [DocumentFilters]"
+          },
+          "email_filters": {
+            "$ref": "#/components/schemas/EmailFilters",
+            "description": "the bundled [EmailFilters]"
+          },
+          "project_filters": {
+            "$ref": "#/components/schemas/ProjectFilters",
+            "description": "the bundled [ProjectFilters]"
+          },
+          "property_filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyFilter"
+            },
+            "description": "property-based filters applied across entity types"
+          }
+        }
+      },
       "EntityReference": {
         "type": "object",
         "description": "Entity reference for entity-type property values.",
@@ -1971,6 +2004,35 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PropertyFilter": {
+        "type": "object",
+        "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
+        "required": ["property_definition_id"],
+        "properties": {
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Entity reference IDs to match. Multiple values are OR'd together."
+          },
+          "entity_type": {
+            "type": ["string", "null"],
+            "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
+          },
+          "option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Select option UUIDs to match. Multiple values are OR'd together."
+          },
+          "property_definition_id": {
+            "type": "string",
+            "description": "The UUID of the property definition to filter on."
           }
         }
       },
@@ -3147,70 +3209,6 @@
           }
         }
       },
-      "UnifiedSearchFilters": {
-        "type": "object",
-        "properties": {
-          "channel": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ChannelFilters",
-                "description": "Channel filters. `null` to not filter channels searched over."
-              }
-            ]
-          },
-          "chat": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ChatFilters",
-                "description": "Chat filters. `null` to not filter chats searched over."
-              }
-            ]
-          },
-          "document": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DocumentFilters",
-                "description": "Document filters. `null` to not filter documents searched over."
-              }
-            ]
-          },
-          "email": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/EmailFilters",
-                "description": "Email filters. `null` to not filter emails searched over."
-              }
-            ]
-          },
-          "project": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ProjectFilters",
-                "description": "Project filters. `null` to not filter projects searched over."
-              }
-            ]
-          }
-        }
-      },
-      "UnifiedSearchIndex": {
-        "type": "string",
-        "enum": ["documents", "chats", "emails", "channels", "projects"]
-      },
       "UnifiedSearchRequest": {
         "type": "object",
         "required": ["query", "match_type"],
@@ -3219,22 +3217,8 @@
             "type": ["boolean", "null"]
           },
           "filters": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/UnifiedSearchFilters",
-                "description": "Search filters for various kinds of items. Set the entire filters property as `null` if you do not have specific filters for a given type, e.g. bcc for email filters."
-              }
-            ]
-          },
-          "include": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UnifiedSearchIndex"
-            },
-            "description": "Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all."
+            "$ref": "#/components/schemas/EntityFilters",
+            "description": "Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search."
           },
           "match_type": {
             "$ref": "#/components/schemas/MatchType",

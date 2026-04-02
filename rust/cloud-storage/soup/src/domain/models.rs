@@ -12,6 +12,7 @@ use models_pagination::{
     SimpleSortMethod, SortOn,
 };
 use models_soup::item::SoupItem;
+use non_empty::IsEmpty;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -101,6 +102,22 @@ pub enum SoupQuery<T> {
     Frecency(FrecencyQueryInner<T>),
 }
 
+impl<T> SoupQuery<T> {
+    pub(crate) fn map<F, U>(self, f: F) -> SoupQuery<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            SoupQuery::Simple(SimpleQueryInner(i)) => {
+                SoupQuery::Simple(SimpleQueryInner(i.map_filter(f)))
+            }
+            SoupQuery::Frecency(FrecencyQueryInner(i)) => {
+                SoupQuery::Frecency(FrecencyQueryInner(i.map_filter(f)))
+            }
+        }
+    }
+}
+
 /// the inner private type for [SoupQuery::Simple]
 #[derive(Debug)]
 pub struct SimpleQueryInner<T>(pub(crate) Query<Uuid, SimpleSortMethod, T>);
@@ -109,48 +126,46 @@ pub struct SimpleQueryInner<T>(pub(crate) Query<Uuid, SimpleSortMethod, T>);
 #[derive(Debug)]
 pub struct FrecencyQueryInner<T>(pub(crate) Query<Uuid, Frecency, T>);
 
-impl SoupQuery<EntityFilters> {
-    /// create a new instance of a [SimpleSortMethod] with [EntityFilters] this is used to
+impl<T> SoupQuery<T> {
+    /// create a new instance of a [SimpleSortMethod] with [T] this is used to
     /// construct the initial page request. To paginate an existing cursor see [Self::new_cursor_simple]
-    pub fn new_sort_simple(method: SimpleSortMethod, filters: EntityFilters) -> Self {
+    pub fn new_sort_simple(method: SimpleSortMethod, filters: T) -> Self {
         SoupQuery::Simple(SimpleQueryInner(models_pagination::Query::Sort(
             method, filters,
         )))
     }
 
-    /// create a new instance of a [Frecency] with [EntityFilters] this is used to
+    /// create a new instance of a [Frecency] with [T] this is used to
     /// construct the initial page request. To paginate an existing cursor see [Self::new_cursor_frecency]
-    pub fn new_sort_frecency(method: Frecency, filters: EntityFilters) -> Self {
+    pub fn new_sort_frecency(method: Frecency, filters: T) -> Self {
         SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Sort(
             method, filters,
         )))
     }
 
-    /// create a new instance of a [SimpleSortMethod] with an existing cursor on [EntityFilters].
+    /// create a new instance of a [SimpleSortMethod] with an existing cursor on [T].
     /// This is used to continue paginating on an existing cursor.
     /// To create a new initial page see [Self::new_sort_simple]
-    pub fn new_cursor_simple(
-        cursor: CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilters>,
-    ) -> Self {
+    pub fn new_cursor_simple(cursor: CursorWithValAndFilter<Uuid, SimpleSortMethod, T>) -> Self {
         SoupQuery::Simple(SimpleQueryInner(models_pagination::Query::Cursor(cursor)))
     }
 
-    /// create a new instance of a [Frecency] with an existing cursor on [EntityFilters].
+    /// create a new instance of a [Frecency] with an existing cursor on [T].
     /// This is used to continue paginating on an existing cursor.
     /// To create a new initial page see [Self::new_sort_simple]
-    pub fn new_cursor_frecency(
-        cursor: CursorWithValAndFilter<Uuid, Frecency, EntityFilters>,
-    ) -> Self {
+    pub fn new_cursor_frecency(cursor: CursorWithValAndFilter<Uuid, Frecency, T>) -> Self {
         SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Cursor(cursor)))
     }
 
-    pub fn filter(&self) -> &EntityFilters {
+    pub fn filter(&self) -> &T {
         match self {
             SoupQuery::Simple(SimpleQueryInner(query)) => query.filter(),
             SoupQuery::Frecency(FrecencyQueryInner(query)) => query.filter(),
         }
     }
+}
 
+impl SoupQuery<EntityFilters> {
     pub fn into_ast(self) -> Result<SoupQuery<Option<EntityFilterAst>>, ExpandErr> {
         match self {
             SoupQuery::Simple(SimpleQueryInner(query)) => Ok(SoupQuery::Simple(SimpleQueryInner(
@@ -173,14 +188,14 @@ pub struct SoupRequest<T> {
     pub link_id: Option<Uuid>,
 }
 
-impl SoupRequest<EntityFilters> {
-    /// returns a reference to the filters to pass to the paginator
-    /// this is used to prevent passing back the full ast on each server request
-    pub(crate) fn filters(&self) -> &EntityFilters {
-        self.cursor.filter()
-    }
+/// trait which defines a type which can be fallibly converted into a SoupRequest with ast
+pub trait IntoSoupReqAst {
+    /// perform the conversion
+    fn into_ast(self) -> Result<SoupRequest<Option<EntityFilterAst>>, ExpandErr>;
+}
 
-    pub(crate) fn into_ast(self) -> Result<SoupRequest<Option<EntityFilterAst>>, ExpandErr> {
+impl IntoSoupReqAst for SoupRequest<EntityFilters> {
+    fn into_ast(self) -> Result<SoupRequest<Option<EntityFilterAst>>, ExpandErr> {
         let SoupRequest {
             soup_type,
             limit,
@@ -198,6 +213,36 @@ impl SoupRequest<EntityFilters> {
             email_preview_view,
             link_id,
         })
+    }
+}
+
+impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
+    fn into_ast(self) -> Result<SoupRequest<Option<EntityFilterAst>>, ExpandErr> {
+        let SoupRequest {
+            soup_type,
+            limit,
+            cursor,
+            user,
+            email_preview_view,
+            link_id,
+        } = self;
+
+        Ok(SoupRequest {
+            soup_type,
+            limit,
+            cursor: cursor.map(|f| if f.is_empty() { None } else { Some(f) }),
+            user,
+            email_preview_view,
+            link_id,
+        })
+    }
+}
+
+impl<T> SoupRequest<T> {
+    /// returns a reference to the filters to pass to the paginator
+    /// this is used to prevent passing back the full ast on each server request
+    pub(crate) fn filters(&self) -> &T {
+        self.cursor.filter()
     }
 }
 

@@ -14,7 +14,11 @@ import { logger } from '@observability';
 import { makePersisted } from '@solid-primitives/storage';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
-import type { PatchUserTutorialRequest, UserQuota } from './generated/schemas';
+import type {
+  InitGithubLinkResponse,
+  PatchUserTutorialRequest,
+  UserQuota,
+} from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
@@ -444,6 +448,35 @@ export const authServiceClient = {
         }),
       }),
       (result) => result.url
+    );
+  },
+
+  /**
+   * Initializes the github account link for the user.
+   * Returns the url you need to redirect user to to start the link.
+   */
+  async initGithubLink(originalUrl?: string) {
+    const url = originalUrl
+      ? `${authHost}/link/github?original_url=${encodeURIComponent(originalUrl)}`
+      : `${authHost}/link/github`;
+    return mapOk(
+      await fetchWithAuth<InitGithubLinkResponse>(url, {
+        method: 'POST',
+      }),
+      (result) => result.authorization_url
+    );
+  },
+
+  /**
+   * Deletes a github link for a user
+   * NOTE: this does not delete the github application from being installed on a teams repository
+   */
+  async deleteGithubLink() {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/link/github`, {
+        method: 'DELETE',
+      }),
+      (_result) => {}
     );
   },
 };

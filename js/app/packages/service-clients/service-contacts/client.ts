@@ -42,4 +42,11 @@ export const contactsClient = {
       (result) => result
     );
   },
+  async addContact(userId: string) {
+    return contactsFetch(`/contacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    });
+  },
 };

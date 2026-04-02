@@ -191,7 +191,7 @@ where
         query: Query<Uuid, CreatedAt, ()>,
         limit: u16,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
-        let limit = limit.clamp(1, 100);
+        let limit = limit.clamp(1, 500);
 
         let attachments = self
             .repo

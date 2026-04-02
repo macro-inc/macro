@@ -7,6 +7,8 @@ use model_file_type::FileType;
 use serde_json::json;
 use uuid::Uuid;
 
+use super::properties;
+
 #[test]
 fn it_works_with_file_type() {
     let res: Result<Vec<_>, _> = ["pdf", "md", "txt", "html"]
@@ -721,5 +723,78 @@ fn empty_sub_types_produce_no_ast() {
     assert!(
         EntityFilterAst::new_from_filters(f).unwrap().is_none(),
         "empty sub_types should produce no AST"
+    );
+}
+
+#[test]
+fn invalid_entity_type_returns_error() {
+    let prop_def_id = Uuid::new_v4();
+    let option_id = Uuid::new_v4();
+    let f = EntityFilters {
+        property_filters: vec![PropertyFilter {
+            property_definition_id: prop_def_id.to_string(),
+            entity_type: Some("TASK'; DROP TABLE documents; --".to_string()),
+            option_ids: vec![option_id.to_string()],
+            entity_ids: vec![],
+        }],
+        ..Default::default()
+    };
+
+    assert!(
+        EntityFilterAst::new_from_filters(f).is_err(),
+        "SQL injection in entity_type should be rejected"
+    );
+}
+
+#[test]
+fn entity_ref_with_single_quote_returns_error() {
+    let prop_def_id = Uuid::new_v4();
+    let f = EntityFilters {
+        property_filters: vec![PropertyFilter {
+            property_definition_id: prop_def_id.to_string(),
+            entity_type: Some("TASK".to_string()),
+            option_ids: vec![],
+            entity_ids: vec!["x'); DROP TABLE documents; --".to_string()],
+        }],
+        ..Default::default()
+    };
+
+    assert!(
+        EntityFilterAst::new_from_filters(f).is_err(),
+        "SQL injection in entity_ids should be rejected"
+    );
+}
+
+#[test]
+fn entity_ref_ast_deserialization_rejects_injection() {
+    let json = serde_json::json!({
+        "l": {
+            "pd": Uuid::new_v4(),
+            "et": "TASK",
+            "v": { "er": "x'); DROP TABLE documents; --" }
+        }
+    });
+
+    let result = serde_json::from_value::<filter_ast::Expr<properties::PropertiesLiteral>>(json);
+    assert!(
+        result.is_err(),
+        "direct AST deserialization should reject SQL injection in EntityRef"
+    );
+}
+
+#[test]
+fn entity_type_ast_deserialization_rejects_invalid() {
+    let json = serde_json::json!({
+        "l": {
+            "pd": Uuid::new_v4(),
+            "et": "INVALID_TYPE",
+            "v": { "so": Uuid::new_v4() }
+        }
+    });
+
+    let result = serde_json::from_value::<filter_ast::Expr<properties::PropertiesLiteral>>(json);
+    assert!(
+        result.is_err(),
+        "direct AST deserialization should reject invalid entity type"
     );
 }

@@ -41,6 +41,7 @@ bytes = { workspace = true }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
 ] }
+call = { path = "../call" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
 clap = { workspace = true }
@@ -117,6 +118,7 @@ reqwest = { workspace = true }
 saved_views = { path = "../saved_views" }
 schemars = { workspace = true }
 search_service = { path = "../search_service" }
+readonly_pool = { path = "../readonly_pool" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

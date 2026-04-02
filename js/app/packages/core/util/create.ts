@@ -18,6 +18,7 @@ import {
   isCodeEditorExtensionSupported,
   isCodeEditorLanguageSupported,
 } from './languageQuery';
+import { isPaymentError } from './handlePaymentError';
 import { err, isErr, ok } from './maybeResult';
 import { refetchSoupEntity } from '@queries/soup/cache';
 
@@ -241,7 +242,7 @@ export async function createChat(args?: CreateChatRequest) {
 
   invalidateUserQuota();
   if (isErr(maybeChat)) {
-    if (maybeChat[0][0].message.includes('403')) {
+    if (isPaymentError(maybeChat)) {
       showPaywall(PaywallKey.CHAT_LIMIT);
     }
     return { error: 'Failed to create chat.' };

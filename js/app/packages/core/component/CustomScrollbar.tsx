@@ -10,6 +10,7 @@ interface CustomScrollbarProps {
   labelClass?: string;
   enabled?: boolean;
   reverse?: boolean;
+  horizontal?: boolean;
 }
 
 export function CustomScrollbar(props: CustomScrollbarProps) {
@@ -21,11 +22,13 @@ export function CustomScrollbar(props: CustomScrollbarProps) {
 }
 
 function InnerCustomScrollbar(props: CustomScrollbarProps) {
-  const [scrollTop, setScrollTop] = createSignal(0);
-  const [scrollHeight, setScrollHeight] = createSignal(0);
-  const [clientHeight, setClientHeight] = createSignal(0);
+  const horiz = () => props.horizontal ?? false;
+
+  const [scrollPos, setScrollPos] = createSignal(0);
+  const [scrollSize, setScrollSize] = createSignal(0);
+  const [clientSize, setClientSize] = createSignal(0);
   const [isDragging, setIsDragging] = createSignal(false);
-  const [scrollStartTop, setScrollStartTop] = createSignal(0);
+  const [scrollStart, setScrollStart] = createSignal(0);
   const [isScrolling, setIsScrolling] = createSignal(false);
   const [isHovering, setIsHovering] = createSignal(false);
 
@@ -43,59 +46,46 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const updateScrollMetrics = () => {
     const container = props.scrollContainer();
     if (!container) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = container;
-
-    setScrollTop(scrollTop);
-    setScrollHeight(scrollHeight);
-    setClientHeight(clientHeight);
-  };
-
-  const maxScroll = () => Math.max(0, scrollHeight() - clientHeight());
-
-  /**
-   * Maps the container's scroll position to an offset measured from the top of
-   * the content in the normal (non-reversed) coordinate space.
-   *
-   * When using reverse layouts (e.g. `flex-direction: column-reverse`), many
-   * browsers report `scrollTop` in the range `[-maxScroll..0]`. In that case:
-   * - at visual top: scrollTop === -maxScroll
-   * - at visual bottom: scrollTop === 0
-   *
-   * We map that into [0..maxScroll] so the thumb can correctly reach the top.
-   */
-  const scrollOffsetFromTop = () => {
-    const max = maxScroll();
-    if (max <= 0) return 0;
-
-    if (!props.reverse) {
-      return Math.max(0, Math.min(max, scrollTop()));
+    if (horiz()) {
+      setScrollPos(container.scrollLeft);
+      setScrollSize(container.scrollWidth);
+      setClientSize(container.clientWidth);
+    } else {
+      setScrollPos(container.scrollTop);
+      setScrollSize(container.scrollHeight);
+      setClientSize(container.clientHeight);
     }
-
-    // For reversed scrollTop in [-max..0], this converts to [0..max]
-    return Math.max(0, Math.min(max, max + scrollTop()));
   };
 
-  // Calculate scrollbar metrics
-  function thumbHeight() {
-    const containerHeight = clientHeight();
-    const contentHeight = scrollHeight();
-    if (contentHeight <= containerHeight) return 0;
-    return Math.max(20, (containerHeight / contentHeight) * containerHeight);
-  }
-  const thumbTop = () => {
-    const containerHeight = clientHeight();
+  const maxScroll = () => Math.max(0, scrollSize() - clientSize());
+
+  const scrollOffset = () => {
     const max = maxScroll();
     if (max <= 0) return 0;
-    const thumbH = thumbHeight();
-    const trackSpace = Math.max(0, containerHeight - thumbH);
-    const offset = scrollOffsetFromTop();
-    return (offset / max) * trackSpace;
+    if (!props.reverse || horiz()) {
+      return Math.max(0, Math.min(max, scrollPos()));
+    }
+    return Math.max(0, Math.min(max, max + scrollPos()));
   };
 
-  const isVisible = () => scrollHeight() > clientHeight();
+  const thumbSize = () => {
+    const cSize = clientSize();
+    const sSize = scrollSize();
+    if (sSize <= cSize) return 0;
+    return Math.max(20, (cSize / sSize) * cSize);
+  };
 
-  // Handle scroll events
+  const thumbOffset = () => {
+    const cSize = clientSize();
+    const max = maxScroll();
+    if (max <= 0) return 0;
+    const tSize = thumbSize();
+    const trackSpace = Math.max(0, cSize - tSize);
+    return (scrollOffset() / max) * trackSpace;
+  };
+
+  const isVisible = () => scrollSize() > clientSize();
+
   createEffect(() => {
     const container = props.scrollContainer();
     if (!container) return;
@@ -103,26 +93,17 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     updateScrollMetrics();
 
     const handleScroll = () => {
-      if (!isDragging()) {
-        updateScrollMetrics();
-      }
-
-      // Show scrollbar while scrolling, hide after delay
+      if (!isDragging()) updateScrollMetrics();
       setIsScrolling(true);
       debouncedHideScrollbar();
-
       if (props.labelVisibilityDebounceMs !== Infinity) {
         setScrollLabelVisible(true);
         debouncedHideScrollLabel();
       }
     };
 
-    const handleResize = () => {
-      updateScrollMetrics();
-    };
-
     container.addEventListener('scroll', handleScroll, { passive: true });
-    const resizeObserver = new ResizeObserver(handleResize);
+    const resizeObserver = new ResizeObserver(updateScrollMetrics);
     resizeObserver.observe(container);
 
     onCleanup(() => {
@@ -131,7 +112,6 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     });
   });
 
-  // Handle mouse drag
   const handleMouseDown = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -140,35 +120,37 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     if (!container) return;
 
     setIsDragging(true);
-    // Store "offset from top" so dragging works consistently in reverse mode.
-    setScrollStartTop(scrollOffsetFromTop());
+    setScrollStart(scrollOffset());
 
     let isDraggingLocal = true;
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingLocal) return;
 
-      const deltaY = moveEvent.clientY - e.clientY;
-      const trackH = clientHeight();
+      const delta = horiz()
+        ? moveEvent.clientX - e.clientX
+        : moveEvent.clientY - e.clientY;
+      const trackSize = clientSize();
       const max = maxScroll();
       if (max <= 0) return;
 
-      const thumbH = thumbHeight();
-      const trackSpace = trackH - thumbH;
+      const tSize = thumbSize();
+      const trackSpace = trackSize - tSize;
       if (trackSpace <= 0) return;
 
-      const scrollRatio = deltaY / trackSpace;
-      let newScrollTop = Math.max(
+      const scrollRatio = delta / trackSpace;
+      let newPos = Math.max(
         0,
-        Math.min(max, scrollStartTop() + scrollRatio * max)
+        Math.min(max, scrollStart() + scrollRatio * max)
       );
 
-      if (props.reverse) {
-        // Convert [0..max] back into [-max..0] for reversed layouts.
-        newScrollTop = newScrollTop - max;
-      }
+      if (props.reverse && !horiz()) newPos = newPos - max;
 
-      container.scrollTop = newScrollTop;
-      setScrollTop(newScrollTop);
+      if (horiz()) {
+        container.scrollLeft = newPos;
+      } else {
+        container.scrollTop = newPos;
+      }
+      setScrollPos(newPos);
     };
 
     const handleMouseUp = () => {
@@ -182,26 +164,27 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Handle track click
   const handleTrackClick = (e: MouseEvent) => {
     const container = props.scrollContainer();
     if (!container) return;
 
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const clickY = e.clientY - rect.top;
-    const trackH = clientHeight();
+    const clickPos = horiz() ? e.clientX - rect.left : e.clientY - rect.top;
+    const trackSize = horiz() ? rect.width : rect.height;
     const max = maxScroll();
     if (max <= 0) return;
 
-    const scrollRatio = clickY / trackH;
-    let newScrollTop = Math.max(0, Math.min(max, scrollRatio * max));
+    const scrollRatio = clickPos / trackSize;
+    let newPos = Math.max(0, Math.min(max, scrollRatio * max));
 
-    if (props.reverse) {
-      newScrollTop = newScrollTop - max;
+    if (props.reverse && !horiz()) newPos = newPos - max;
+
+    if (horiz()) {
+      container.scrollLeft = newPos;
+    } else {
+      container.scrollTop = newPos;
     }
-
-    container.scrollTop = newScrollTop;
-    setScrollTop(newScrollTop);
+    setScrollPos(newPos);
   };
 
   const getThumbOpacity = () => {
@@ -212,6 +195,12 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   };
 
   const getThumbScale = () => {
+    if (horiz()) {
+      if (isDragging()) return 'scaleY(4)';
+      if (isHovering()) return 'scaleY(2)';
+      if (isScrolling()) return 'scaleY(2)';
+      return 'scaleY(1)';
+    }
     if (isDragging()) return 'scaleX(4)';
     if (isHovering()) return 'scaleX(2)';
     if (isScrolling()) return 'scaleX(2)';
@@ -221,7 +210,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   return (
     <Show when={isVisible()}>
       <div
-        class={`absolute right-0 top-0 bottom-0 w-[1px] pointer-events-auto overflow-visible bg-transparent ${props.class || ''}`}
+        class={`absolute pointer-events-auto overflow-visible bg-transparent ${horiz() ? 'bottom-0 left-0 right-0 h-[1px]' : 'right-0 top-0 bottom-0 w-[1px]'} ${props.class || ''}`}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
       >
@@ -232,28 +221,45 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         />
         {/* Thumb */}
         <div
-          class="absolute right-0 cursor-grab active:cursor-grabbing"
-          style={{
-            top: `${thumbTop()}px`,
-            height: `${thumbHeight()}px`,
-            width: '1px',
-            'background-color': 'var(--color-accent)',
-            'transform-origin': 'right center',
-            opacity: getThumbOpacity(),
-            transform: getThumbScale(),
-            transition: 'opacity 200ms ease-out, transform 200ms ease-out',
-          }}
+          class="absolute cursor-grab active:cursor-grabbing"
+          style={
+            horiz()
+              ? {
+                  left: `${thumbOffset()}px`,
+                  width: `${thumbSize()}px`,
+                  height: '1px',
+                  bottom: '0',
+                  'background-color': 'var(--color-accent)',
+                  'transform-origin': 'center bottom',
+                  opacity: getThumbOpacity(),
+                  transform: getThumbScale(),
+                  transition:
+                    'opacity 200ms ease-out, transform 200ms ease-out',
+                }
+              : {
+                  top: `${thumbOffset()}px`,
+                  height: `${thumbSize()}px`,
+                  width: '1px',
+                  right: '0',
+                  'background-color': 'var(--color-accent)',
+                  'transform-origin': 'right center',
+                  opacity: getThumbOpacity(),
+                  transform: getThumbScale(),
+                  transition:
+                    'opacity 200ms ease-out, transform 200ms ease-out',
+                }
+          }
           onMouseDown={handleMouseDown}
         />
         <Show when={props.getLabel}>
           <div
             class={`absolute right-[calc(100%+8px)] -translate-y-1/2 whitespace-nowrap font-mono text-sm text-accent pointer-events-none select-none drop-shadow transition-opacity duration-200 ease-out ${props.labelClass || ''}`}
             style={{
-              top: `${thumbTop() + thumbHeight() / 2}px`,
+              top: `${thumbOffset() + thumbSize() / 2}px`,
               opacity: scrollLabelVisible() ? 1 : 0,
             }}
           >
-            {props.getLabel?.(scrollOffsetFromTop())}
+            {props.getLabel?.(scrollOffset())}
           </div>
         </Show>
       </div>

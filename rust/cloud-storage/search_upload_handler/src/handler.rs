@@ -29,17 +29,17 @@ pub async fn handler(
     let document_key = match DocumentKey::from_s3_key(&key) {
         Ok(key) => key,
         Err(e) => {
-            tracing::warn!(error=?e, "unable to parse key");
+            tracing::warn!(error=?e, key=%key, "unable to parse key");
             return Ok(());
         }
     };
 
-    if document_key.is_temp() {
-        tracing::trace!("skipping temp file");
+    if document_key.is_temp() || document_key.is_bom_part() {
+        tracing::trace!("skipping non-document key");
         return Ok(());
     }
 
-    let document_id = document_key.document_id();
+    let document_id = document_key.document_id().expect("document key has id");
 
     tracing::trace!(?document_key, "processing document key");
 
@@ -49,9 +49,13 @@ pub async fn handler(
         .context("Failed to fetch document basic info")?
         .ok_or_else(|| anyhow::anyhow!("document not found"))?;
 
-    let file_type = document_basic
-        .try_file_type()
-        .ok_or_else(|| anyhow::anyhow!("file type not found"))?;
+    let file_type = match document_basic.try_file_type() {
+        Some(file_type) => file_type,
+        None => {
+            tracing::trace!(document_id=?document_id, "no file type found");
+            return Ok(());
+        }
+    };
 
     let search_extractor_message = SearchExtractorMessage {
         user_id: document_basic.owner.to_string(),

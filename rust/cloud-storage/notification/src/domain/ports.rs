@@ -20,7 +20,7 @@ use crate::domain::models::device::DeviceType;
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::{
-    DeviceEndpoint, NotificationExtEmail, NotificationIdAndCollapseKey,
+    DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
     SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
     apple::APNSPushNotification, mobile::MessageAttributes,
 };
@@ -193,6 +193,33 @@ pub trait NotificationRepository: Send + Sync + 'static {
     fn delete_device_by_endpoint(
         &self,
         endpoint_arn: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Get users (from the given set) who have disabled the specified notification type.
+    fn get_users_with_type_disabled<'a>(
+        &self,
+        notification_event_type: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Get all disabled notification types for a user.
+    fn get_disabled_notification_types(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send;
+
+    /// Disable a notification type for a user (insert).
+    fn disable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Re-enable a notification type for a user (delete).
+    fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

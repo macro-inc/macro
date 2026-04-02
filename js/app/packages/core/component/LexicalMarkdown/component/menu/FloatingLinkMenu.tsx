@@ -352,7 +352,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
       <Show when={linkInfo()?.linkRef || linkInfo()?.selection}>
         <ScopedPortal scope="block">
           <div
-            class="p-2 fixed bg-menu top-0 left-0 text-sm z-modal-content ring ring-edge rounded-md shadow-lg min-w-80"
+            class="p-2 fixed bg-menu top-0 left-0 text-sm z-modal-content ring ring-edge-muted rounded-sm shadow-lg min-w-80"
             use:floatWithElement={floatWithElementProps()}
             use:floatWithSelection={floatWithSelectionProps()}
             use:clickOutside={() => {
@@ -375,7 +375,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
           {(link) => (
             <ScopedPortal>
               <div
-                class="p-2 absolute top-0 left-0 z-10 bg-menu w-80 shadow-lg ring-edge ring-1"
+                class="p-2 absolute top-0 left-0 z-10 bg-menu w-80 shadow-lg ring-edge-muted rounded-sm ring-1"
                 use:floatWithElement={{
                   element: () => link().linkRef,
                   useBlockBoundary: true,

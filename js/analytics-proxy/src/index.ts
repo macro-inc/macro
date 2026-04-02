@@ -1,5 +1,5 @@
 const PROVIDERS: Record<string, string> = {
-  '/ingest/ph': 'us.i.posthog.com',
+  '/i/ph': 'us.i.posthog.com',
 };
 
 function getProvider(pathname: string): { apiHost: string; path: string } | null {

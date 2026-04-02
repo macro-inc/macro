@@ -23,7 +23,6 @@ export function canReplyToSelectedMessageFromHotkey(input: {
 }) {
   return input.hasSelection && !input.isEditing;
 }
-
 export function canEditOrDeleteSelectedMessageFromHotkey(input: {
   hasSelection: boolean;
   isEditing: boolean;

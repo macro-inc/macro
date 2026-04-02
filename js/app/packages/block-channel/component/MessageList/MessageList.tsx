@@ -342,6 +342,7 @@ function MessageListImpl(props: MessageListProps) {
     createSignal(false);
   const [isScrollingDown, setIsScrollingDown] = createSignal(false);
   let prevScrollOffset: number | undefined;
+  let prevScrollSize: number | undefined;
   let downwardScrollAccumulator = 0;
 
   // Navigation methods for keyboard navigation
@@ -562,19 +563,6 @@ function MessageListImpl(props: MessageListProps) {
     return out;
   });
 
-  const [isPrepend, setIsPrepend] = createSignal(false);
-
-  createEffect(
-    on(
-      () => props.messages,
-      () => {
-        props.messages;
-        setIsPrepend(true);
-      },
-      { defer: true }
-    )
-  );
-
   createEffect(
     on(flattenedThreaded, (flat, prev) => {
       const oldFlat = prev;
@@ -646,11 +634,6 @@ function MessageListImpl(props: MessageListProps) {
     }
   );
 
-  createEffect(() => {
-    threadRows();
-    setIsPrepend(false);
-  });
-
   // Ensure thread view store store reflects drafts. Only sets when no entry exists to avoid overriding user actions.
   createEffect(() => {
     const base = filteredTopLevelMessages();
@@ -665,7 +648,6 @@ function MessageListImpl(props: MessageListProps) {
 
   // Indices of top-level rows that should remain mounted even when off screen.
   // Criteria: thread has an active reply, so keep its parent row mounted.
-  // NOTE: VList receives reversed top-level rows, so indices must be normalized.
   const keepMountedIndices = createMemo(() => {
     const list = filteredTopLevelMessages();
     const length = list.length;
@@ -686,7 +668,10 @@ function MessageListImpl(props: MessageListProps) {
     if (!initialScrollComplete()) return true;
 
     const THRESHOLD = 100;
-    const distanceFromBottom = handle.scrollOffset;
+    const scrollHeight = handle.scrollSize;
+    const viewportHeight = handle.viewportSize;
+    const scrollTop = handle.scrollOffset;
+    const distanceFromBottom = scrollHeight - viewportHeight - scrollTop;
     return distanceFromBottom <= THRESHOLD;
   };
 
@@ -694,29 +679,45 @@ function MessageListImpl(props: MessageListProps) {
     const handle = virtualHandle();
     if (!handle) return false;
     const THRESHOLD = 2000;
-    return handle.scrollOffset > THRESHOLD;
+    const scrollHeight = handle.scrollSize;
+    const viewportHeight = handle.viewportSize;
+    const scrollTop = handle.scrollOffset;
+    const distanceFromBottom = scrollHeight - viewportHeight - scrollTop;
+    return distanceFromBottom > THRESHOLD;
   };
 
   // Track scroll direction.
   // Requires 100px of cumulative downward scrolling before triggering.
-  // Any upward scroll resets the accumulator immediately.
-  const updateScrollDirection = () => {
+  const updateScrollDirection = (offset: number) => {
     const handle = virtualHandle();
-    if (handle && prevScrollOffset !== undefined) {
-      const currentOffset = handle.scrollOffset;
-      const delta = prevScrollOffset - currentOffset; // positive = scrolling down
-      if (delta > 0) {
-        downwardScrollAccumulator += delta;
-        if (downwardScrollAccumulator >= 100) {
-          setIsScrollingDown(true);
-        }
-      } else if (delta < 0) {
-        downwardScrollAccumulator = 0;
-        setIsScrollingDown(false);
-      }
+    const scrollSize = handle?.scrollSize ?? 0;
+
+    if (prevScrollOffset === undefined) {
+      prevScrollOffset = offset;
+      prevScrollSize = scrollSize;
+      return;
     }
-    if (handle) {
-      prevScrollOffset = handle.scrollOffset;
+
+    const delta = offset - prevScrollOffset; // positive = scrolling down
+    const scrollSizeChanged = prevScrollSize !== scrollSize;
+
+    prevScrollOffset = offset;
+    prevScrollSize = scrollSize;
+
+    // Ignore scroll events where scrollSize changed - virtualization adjustments
+    // can cause offset jumps that don't reflect actual user scroll direction
+    if (scrollSizeChanged) {
+      return;
+    }
+
+    if (delta > 0) {
+      downwardScrollAccumulator += delta;
+      if (downwardScrollAccumulator >= 100) {
+        setIsScrollingDown(true);
+      }
+    } else {
+      downwardScrollAccumulator = 0;
+      setIsScrollingDown(false);
     }
   };
 
@@ -770,32 +771,35 @@ function MessageListImpl(props: MessageListProps) {
     on(filteredTopLevelMessages, (newFilteredMessages, oldFilteredMessages) => {
       const handle = virtualHandle();
       if (!handle) return;
-      const lastIndexInView = handle.findItemIndex(
-        handle.scrollOffset + handle.viewportSize
-      );
-      const lastItemOffset = handle.getItemOffset(
-        (oldFilteredMessages?.length ?? 0) - 1
-      );
-      const viewportSize = handle.viewportSize;
-      if (!isNearBottom() && lastItemOffset > viewportSize) {
-        const prevUnviewedMessages = unviewedMessages();
-        const messages = newFilteredMessages ?? [];
-        const newUnviewedMessages = messages
-          .slice(lastIndexInView + 1)
-          .filter(
-            (msg) =>
-              msg.sender_id !== userId() &&
-              !oldFilteredMessages?.some((m) => m.id === msg.id) &&
-              !prevUnviewedMessages?.some((m) => m.id === msg.id)
-          );
 
-        if (newUnviewedMessages.length > 0) {
-          setUnviewedMessages((prev) => [
-            ...(prev ?? []),
-            ...newUnviewedMessages,
-          ]);
-          setDismissUnviewedMessages(false);
-        }
+      // Don't track unviewed messages if we're near the bottom
+      if (isNearBottom()) return;
+
+      // Find the last visible item index
+      const bottomOfViewport = handle.scrollOffset + handle.viewportSize;
+      const lastIndexInView = handle.findItemIndex(bottomOfViewport);
+
+      // Only track if we have enough messages to scroll
+      const oldLength = oldFilteredMessages?.length ?? 0;
+      if (oldLength === 0) return;
+
+      const prevUnviewedMessages = unviewedMessages();
+      const messages = newFilteredMessages ?? [];
+      const newUnviewedMessages = messages
+        .slice(lastIndexInView + 1)
+        .filter(
+          (msg) =>
+            msg.sender_id !== userId() &&
+            !oldFilteredMessages?.some((m) => m.id === msg.id) &&
+            !prevUnviewedMessages?.some((m) => m.id === msg.id)
+        );
+
+      if (newUnviewedMessages.length > 0) {
+        setUnviewedMessages((prev) => [
+          ...(prev ?? []),
+          ...newUnviewedMessages,
+        ]);
+        setDismissUnviewedMessages(false);
       }
     })
   );
@@ -823,36 +827,49 @@ function MessageListImpl(props: MessageListProps) {
   );
 
   // Handle vlistscroll events
-  const handleScroll = () => {
+  const handleScroll = (offset: number) => {
     if (!initialScrollComplete()) return;
 
     const nearBottom = checkIfNearBottom();
     setIsNearBottom(nearBottom);
 
     setIsScrolledBackSignificantly(checkIfScrolledBackSignificantly());
-    updateScrollDirection();
+    updateScrollDirection(offset);
 
     if (!nearBottom && dismissJumpToLatest()) {
       setDismissJumpToLatest(false);
     }
 
+    // Clear unviewed messages when we scroll to see them or reach the bottom
     const messages = unviewedMessages();
-    if (messages?.length) {
-      const firstUnviewed = messages[0];
-      const firstUnviewedIndex = props
-        .orderedMessages()
-        ?.findIndex((m) => m.id === firstUnviewed.id);
 
-      if (
-        firstUnviewedIndex !== undefined &&
-        firstUnviewedIndex >= 0 &&
-        (virtualHandle()?.findItemIndex(
-          (virtualHandle()?.scrollOffset ?? 0) +
-            (virtualHandle()?.viewportSize ?? 0)
-        ) ?? 0) >= firstUnviewedIndex
-      ) {
-        setUnviewedMessages(undefined);
-      }
+    if (!messages?.length) return;
+
+    if (nearBottom) {
+      setUnviewedMessages(undefined);
+      return;
+    }
+
+    const handle = virtualHandle();
+    if (!handle) return;
+
+    const firstUnviewed = messages[0];
+    const topLevelMessages = filteredTopLevelMessages();
+    const firstUnviewedIndex = topLevelMessages.findIndex(
+      (m) => m.id === firstUnviewed.id
+    );
+
+    if (firstUnviewedIndex === -1) {
+      // Message no longer exists in the list
+      setUnviewedMessages(undefined);
+      return;
+    }
+
+    const bottomOfViewport = handle.scrollOffset + handle.viewportSize;
+    const lastVisibleIndex = handle.findItemIndex(bottomOfViewport);
+
+    if (lastVisibleIndex >= firstUnviewedIndex) {
+      setUnviewedMessages(undefined);
     }
   };
 
@@ -1007,10 +1024,9 @@ function MessageListImpl(props: MessageListProps) {
                 'overflow-anchor': 'none',
                 display: 'flex',
               }}
-              class="scrollbar-hidden [&>div]:mb-auto"
+              class="scrollbar-hidden"
               data-channel-message-list
               data={threadRows()}
-              shift={isPrepend()}
               itemSize={BASE_ITEM_SIZE}
               bufferSize={10 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}

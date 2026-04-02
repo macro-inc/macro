@@ -180,6 +180,7 @@ fn get_safe_css_properties() -> HashSet<&'static str> {
         "font-size",
         "font-weight",
         "font-style",
+        "font",
         "font-variant",
         "text-decoration",
         "text-transform",

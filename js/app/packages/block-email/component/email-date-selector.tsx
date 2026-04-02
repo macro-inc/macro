@@ -16,6 +16,8 @@ interface EmailDateSelectorProps {
   compact?: boolean;
   /** Render content inline instead of in a portal */
   disablePortal?: boolean;
+  /** Disable the schedule button */
+  disabled?: boolean;
 }
 export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   props
@@ -26,6 +28,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
     <DateSelector
       selectedDate={props.sendTime}
       onSelectDate={props.onSendTimeChange}
+      disabled={props.disabled}
       disablePriorToDate={new Date()}
       disableAfterDate={addYears(new Date(), 1)}
       disablePortal={props.disablePortal}
@@ -46,6 +49,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
           >
             <Button
               size="icon-sm"
+              disabled={props.disabled}
               class={cn(
                 showExpanded() &&
                   'size-auto gap-1 bg-accent/20 text-accent-ink hover:!bg-accent/15 hover:!text-accent-ink'

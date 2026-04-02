@@ -10,21 +10,26 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { useUserContext } from '@core/context/user';
 import {
+  SegmentedControl,
+  type SegmentedControlItem,
+} from '@core/component/SegmentedControl';
+import {
   batch,
+  createEffect,
   createMemo,
+  createSignal,
   For,
   Match,
-  type ParentComponent,
+  on,
+  onMount,
   Switch,
 } from 'solid-js';
-import {
-  SegmentedControl as KSegmentedControl,
-  type SegmentedControlRootProps,
-} from '@kobalte/core/segmented-control';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import { impactFeedback } from '@tauri-apps/plugin-haptics';
+import { cn } from '@ui/utils/classname';
 
-type TabItem = { value: string; label: string };
+type TabItem = SegmentedControlItem;
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -106,16 +111,18 @@ export const useApplyPreset = () => {
     });
   };
 
-  const applyTabPreset = (view: ListView, tabId: string) => {
+  const applyTabPreset = (view: ListView, tabId: string): boolean => {
     const config = VIEW_TAB_PRESETS[view];
+    if (!config) return false;
     const resolver = config.tabs[tabId];
-    if (!resolver) return;
+    if (!resolver) return false;
 
     const resolved = resolver(getPresetContext());
-    if (!resolved) return;
+    if (!resolved) return false;
 
     setActiveTab(tabId);
     applyPreset(resolved);
+    return true;
   };
 
   return { applyTabPreset };
@@ -201,49 +208,133 @@ export const CollapsedSoupViewTabs = () => {
   );
 };
 
-export const SegmentedControl: ParentComponent<
-  {
-    list: { value: string; label: string }[];
-    value?: string;
-    defaultValue?: string;
-  } & Omit<SegmentedControlRootProps, 'defaultValue'>
-> = (props) => {
-  const onChange = (newValue: string) => {
-    props.onChange?.(newValue);
+export const MobileSoupViewTabs = () => {
+  const listView = useCurrentListView();
+
+  return (
+    <Switch>
+      <For
+        each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
+      >
+        {(v) => (
+          <Match when={listView() === v}>
+            <MobileViewTabs view={v} />
+          </Match>
+        )}
+      </For>
+    </Switch>
+  );
+};
+
+const MobileViewTabs = (props: { view: TabbedListView }) => {
+  const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
+
+  let scrollRef!: HTMLDivElement;
+  let spacerRef!: HTMLDivElement;
+  const itemRefs: HTMLDivElement[] = [];
+  const textRefs: HTMLSpanElement[] = [];
+
+  const tabs = () => VIEW_TAB_LISTS[props.view];
+
+  const [scrollActiveId, setScrollActiveId] = createSignal<string>();
+  const [activeWidth, setActiveWidth] = createSignal(0);
+
+  createEffect(
+    on(scrollActiveId, (id) => {
+      const idx = tabs().findIndex((t) => t.value === id);
+      const el = textRefs[idx];
+      if (el) setActiveWidth(el.offsetWidth);
+    })
+  );
+
+  const updateActiveFromScroll = () => {
+    const scrollLeft = scrollRef.scrollLeft;
+    let closest: HTMLDivElement | null = null;
+    let closestDist = Infinity;
+    for (const el of itemRefs) {
+      const dist = Math.abs(el.offsetLeft - scrollLeft);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = el;
+      }
+    }
+    const id = closest?.dataset.tabId;
+    if (id && scrollActiveId() !== id) {
+      impactFeedback('light');
+      setScrollActiveId(id);
+    }
+  };
+
+  const updateSpacer = () => {
+    const last = itemRefs[itemRefs.length - 1];
+    if (last) {
+      spacerRef.style.width = `${scrollRef.clientWidth - last.offsetWidth}px`;
+    }
+  };
+
+  onMount(() => {
+    updateSpacer();
+    const tab = activeTab();
+    const idx = tabs().findIndex((t) => t.value === tab);
+    const startIdx = idx >= 0 ? idx : 0;
+    scrollRef.scrollLeft = itemRefs[startIdx]?.offsetLeft ?? 0;
+    setScrollActiveId(tabs()[startIdx]?.value);
+  });
+
+  const handleTouchEnd = () => {
+    const id = scrollActiveId();
+    if (id) {
+      applyTabPreset(props.view, id);
+    }
+  };
+
+  const handleItemClick = (tabValue: string, idx: number) => {
+    const el = itemRefs[idx];
+    if (el) scrollRef.scrollTo({ left: el.offsetLeft, behavior: 'smooth' });
+    impactFeedback('light');
+    applyTabPreset(props.view, tabValue);
   };
 
   return (
-    <KSegmentedControl
-      class="h-full text-sm rounded-xs border border-edge-muted relative overflow-hidden"
-      value={props.value}
-      defaultValue={props.defaultValue ?? props.list[0]?.value}
-      onChange={onChange}
-      disabled={props.disabled}
-    >
-      <div class="relative" role="presentation">
-        <div class="flex" role="presentation">
-          <For each={props.list}>
-            {(item) => {
-              const itemValue = () =>
-                typeof item === 'object' ? item.value : item;
-              const itemLabel = () =>
-                typeof item === 'object' ? item.label : item;
-              return (
-                <KSegmentedControl.Item
-                  value={itemValue()}
-                  disabled={props.disabled}
-                  class="border-r border-edge-muted last:border-r-0"
-                >
-                  <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                  <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full px-2.5 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-edge/50 hover:text-ink hover:bg-ink/6 data-[checked]:hover:bg-edge/60 transition-colors duration-150 block">
-                    {itemLabel()}
-                  </KSegmentedControl.ItemLabel>
-                </KSegmentedControl.Item>
-              );
-            }}
-          </For>
-        </div>
+    <div class="relative bg-panel border-t border-edge-muted [--tab-padding-l:1rem]">
+      <div
+        ref={scrollRef}
+        class="flex flex-row overflow-x-scroll scrollbar-hidden"
+        style="scroll-snap-type: x mandatory;"
+        onScroll={updateActiveFromScroll}
+        onTouchEnd={handleTouchEnd}
+      >
+        <For each={tabs()}>
+          {(tab, i) => (
+            <div
+              ref={(el) => {
+                itemRefs[i()] = el;
+              }}
+              data-tab-id={tab.value}
+              class={cn(
+                'flex-shrink-0 flex items-center pl-(--tab-padding-l) pt-3 pb-3 min-h-11 text-sm cursor-pointer',
+                scrollActiveId() === tab.value ? 'text-ink' : 'text-ink/60'
+              )}
+              style="scroll-snap-align: start;"
+              onClick={() => handleItemClick(tab.value, i())}
+            >
+              <span
+                ref={(el) => {
+                  textRefs[i()] = el;
+                }}
+              >
+                {tab.label}
+              </span>
+            </div>
+          )}
+        </For>
+        <div ref={spacerRef} class="flex-shrink-0" />
       </div>
-    </KSegmentedControl>
+      <div
+        class="absolute top-0 left-(--tab-padding-l) h-[3px] bg-accent transition-[width] duration-150 pointer-events-none"
+        style={{ width: `${activeWidth()}px` }}
+      />
+    </div>
   );
 };

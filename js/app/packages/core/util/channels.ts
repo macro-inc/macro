@@ -1,7 +1,5 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { invalidateListChannels } from '@queries/channel/channels';
 import { toast } from '@core/component/Toast/Toast';
 import { invalidateContacts } from '@core/user/contactService';
@@ -36,7 +34,6 @@ export type SendToChannelArgs = SendContent & {
 };
 
 export function useSendMessageToPeople() {
-  const { track } = withAnalytics();
   const { replaceSplit } = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
 
@@ -104,13 +101,6 @@ export function useSendMessageToPeople() {
       return;
     }
 
-    if (result?.at(1)?.action === 'create') {
-      track(TrackingEvents.BLOCKCHANNEL.CHANNEL.CREATE);
-    }
-
-    track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
-      fromNewMessageModal: true,
-    });
     return sendAndNavigateToChannel(
       result[1].channel_id,
       args.content,
@@ -121,9 +111,6 @@ export function useSendMessageToPeople() {
   }
 
   async function sendToChannel(args: SendToChannelArgs) {
-    track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
-      fromNewMessageModal: true,
-    });
     return sendAndNavigateToChannel(
       args.channelId,
       args.content,

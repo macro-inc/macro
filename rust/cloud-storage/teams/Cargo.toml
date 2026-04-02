@@ -55,4 +55,6 @@ sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }

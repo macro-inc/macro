@@ -29,7 +29,7 @@ export function channelAttachmentsQueryOptions(channelId: string) {
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ChannelAttachmentsPage) =>
-      lastPage.next_cursor ?? null,
+      lastPage.next_cursor ?? undefined,
     staleTime: Infinity,
   };
 }

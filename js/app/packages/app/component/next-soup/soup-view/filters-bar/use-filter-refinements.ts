@@ -28,7 +28,6 @@ const TAB_ONLY_FILTERS = new Set([
   'shared-entity',
   'shared-agent',
   'assigned-to',
-  'email',
   'no-drafts',
   'email-drafts',
   'not-task',

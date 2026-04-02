@@ -11,6 +11,7 @@ import type {
   EmptyResponse,
   ErrorResponse,
   GetAllUserNotificationsResponse,
+  GetNotificationTypePreferencesResponse,
   GetTypedNotificationsByEventItemIdParams,
   ListTypedNotificationsParams,
   NotificationBulkRequest,
@@ -638,6 +639,190 @@ export const getTypedNotificationsByEventItemId = async (
     status: res.status,
     headers: res.headers,
   } as getTypedNotificationsByEventItemIdResponse;
+};
+
+/**
+ * @summary Get the notification types that the user has disabled.
+ */
+export type getNotificationTypePreferencesResponse200 = {
+  data: GetNotificationTypePreferencesResponse;
+  status: 200;
+};
+
+export type getNotificationTypePreferencesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getNotificationTypePreferencesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getNotificationTypePreferencesResponseSuccess =
+  getNotificationTypePreferencesResponse200 & {
+    headers: Headers;
+  };
+export type getNotificationTypePreferencesResponseError = (
+  | getNotificationTypePreferencesResponse401
+  | getNotificationTypePreferencesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getNotificationTypePreferencesResponse =
+  | getNotificationTypePreferencesResponseSuccess
+  | getNotificationTypePreferencesResponseError;
+
+export const getGetNotificationTypePreferencesUrl = () => {
+  return `/v1/user_notifications/preferences`;
+};
+
+export const getNotificationTypePreferences = async (
+  options?: RequestInit
+): Promise<getNotificationTypePreferencesResponse> => {
+  const res = await fetch(getGetNotificationTypePreferencesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getNotificationTypePreferencesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getNotificationTypePreferencesResponse;
+};
+
+/**
+ * @summary Disable a notification type for the authenticated user.
+ */
+export type disableNotificationTypeResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type disableNotificationTypeResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type disableNotificationTypeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type disableNotificationTypeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type disableNotificationTypeResponseSuccess =
+  disableNotificationTypeResponse200 & {
+    headers: Headers;
+  };
+export type disableNotificationTypeResponseError = (
+  | disableNotificationTypeResponse400
+  | disableNotificationTypeResponse401
+  | disableNotificationTypeResponse500
+) & {
+  headers: Headers;
+};
+
+export type disableNotificationTypeResponse =
+  | disableNotificationTypeResponseSuccess
+  | disableNotificationTypeResponseError;
+
+export const getDisableNotificationTypeUrl = (
+  notificationEventType: string
+) => {
+  return `/v1/user_notifications/preferences/${notificationEventType}/disable`;
+};
+
+export const disableNotificationType = async (
+  notificationEventType: string,
+  options?: RequestInit
+): Promise<disableNotificationTypeResponse> => {
+  const res = await fetch(
+    getDisableNotificationTypeUrl(notificationEventType),
+    {
+      ...options,
+      method: 'PUT',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disableNotificationTypeResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disableNotificationTypeResponse;
+};
+
+/**
+ * @summary Re-enable a notification type for the authenticated user.
+ */
+export type enableNotificationTypeResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type enableNotificationTypeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type enableNotificationTypeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type enableNotificationTypeResponseSuccess =
+  enableNotificationTypeResponse200 & {
+    headers: Headers;
+  };
+export type enableNotificationTypeResponseError = (
+  | enableNotificationTypeResponse401
+  | enableNotificationTypeResponse500
+) & {
+  headers: Headers;
+};
+
+export type enableNotificationTypeResponse =
+  | enableNotificationTypeResponseSuccess
+  | enableNotificationTypeResponseError;
+
+export const getEnableNotificationTypeUrl = (notificationEventType: string) => {
+  return `/v1/user_notifications/preferences/${notificationEventType}/enable`;
+};
+
+export const enableNotificationType = async (
+  notificationEventType: string,
+  options?: RequestInit
+): Promise<enableNotificationTypeResponse> => {
+  const res = await fetch(getEnableNotificationTypeUrl(notificationEventType), {
+    ...options,
+    method: 'PUT',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enableNotificationTypeResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as enableNotificationTypeResponse;
 };
 
 /**

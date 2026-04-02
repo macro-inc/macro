@@ -1,6 +1,6 @@
-import { For, Show, createSignal, onCleanup, type JSX } from 'solid-js';
 import ChevronDownIcon from '@icon/regular/caret-down.svg?component-solid';
 import { cn } from '@ui/utils/classname';
+import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 
 interface CollapsibleListProps<T> {
   items: T[];
