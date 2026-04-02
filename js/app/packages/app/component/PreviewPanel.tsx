@@ -119,8 +119,6 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       class="flex flex-col size-full"
       onFocusIn={(event) => {
         if (interactedWith()) return;
-        const relatedTarget = event.relatedTarget;
-        const currentTarget = event.currentTarget;
 
         // TODO: use state instead to determine when preview block can recieve focus
         if (event.target.hasAttribute('data-allow-focus-in-preview')) {
@@ -128,10 +126,19 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           return;
         }
 
-        if (relatedTarget instanceof HTMLElement) {
-          if (!currentTarget.contains(relatedTarget)) {
-            relatedTarget.focus();
-          }
+        // Prevent blocks from stealing focus in preview mode.
+        // Redirect to the previous element if it was outside the preview,
+        // otherwise blur the target to keep focus on the search list.
+        const relatedTarget = event.relatedTarget;
+        const currentTarget = event.currentTarget;
+
+        if (
+          relatedTarget instanceof HTMLElement &&
+          !currentTarget.contains(relatedTarget)
+        ) {
+          relatedTarget.focus();
+        } else {
+          (event.target as HTMLElement).blur?.();
         }
       }}
       onPointerDown={() => {
