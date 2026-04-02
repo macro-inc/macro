@@ -307,9 +307,8 @@ impl CallRepository for PgCallRepo {
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
-        let record_id = Uuid::now_v7();
-
         // Insert into call_records (including egress_id and any early recording_url).
+        // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
             INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_url, share_permission_id)
@@ -368,7 +367,7 @@ impl CallRepository for PgCallRepo {
         .await?;
 
         tx.commit().await?;
-        Ok(record_id)
+        Ok(*call_id)
     }
 
     #[tracing::instrument(err, skip(self))]
