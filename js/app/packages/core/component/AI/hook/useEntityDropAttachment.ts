@@ -125,7 +125,7 @@ export function useEntityDropAttachment(
         } satisfies Attachment;
       })
       .with('chat', () => undefined)
-      // TODO: Add support for channel messages drag in
+      // TODO: Add support for channel messages
       .with('channel_message', () => undefined)
       .exhaustive() satisfies Attachment | undefined;
 
