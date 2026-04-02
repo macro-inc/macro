@@ -37,6 +37,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     useSetPropertyStatusCompleteMutation();
 
   const canExecute = (entity: EntityData): boolean => {
+    if (entity.type === 'channel_message') return false;
     if (
       entity.type === 'email' ||
       entity.type === 'channel' ||
