@@ -21,6 +21,8 @@ import {
 } from '@channel/Channel/channel-tabs';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
+import { ChannelDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 
 function NewTop(props: {
   channelId: string;
@@ -55,6 +57,9 @@ function NewTop(props: {
 
 export function NewChannelBlockAdapter() {
   useBlockEntityCommands();
+
+  const notificationSource = useGlobalNotificationSource();
+
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
   const [activeTab, setActiveTab] =
@@ -82,6 +87,11 @@ export function NewChannelBlockAdapter() {
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
+      <ChannelDebouncedNotificationReadMarker
+        notificationSource={notificationSource}
+        channelId={channelId}
+        debounceTime={500}
+      />
       <div class="relative h-full flex flex-col">
         <Switch>
           <Match when={activeTab() === 'messages'}>

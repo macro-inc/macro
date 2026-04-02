@@ -22,17 +22,30 @@ export function useAppSquishHandlers() {
       setVirtualKeyboardHeight(event.detail?.height ?? 0);
       const newViewportHeight =
         (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
-      const vh = newViewportHeight * 0.01;
-      document.documentElement.style.setProperty('--dvh', `${vh}px`);
+      const dvh = newViewportHeight * 0.01;
+      document.documentElement.style.setProperty('--dvh', `${dvh}px`);
+      document.documentElement.style.setProperty(
+        '--virtual-keyboard-height',
+        `${event.detail?.height ?? 0}px`
+      );
     };
 
     const handleKeyboardWillHide = () => {
       setVirtualKeyboardVisible(false);
       setVirtualKeyboardHeight(0);
       document.documentElement.style.setProperty('--dvh', '1dvh');
+      document.documentElement.style.setProperty(
+        '--virtual-keyboard-height',
+        '0px'
+      );
     };
 
     onMount(() => {
+      document.documentElement.style.setProperty(
+        '--virtual-keyboard-height',
+        '0px'
+      );
+      document.documentElement.style.setProperty('--dvh', '1dvh');
       window.addEventListener('keyboardWillShow', handleKeyboardWillShow);
       window.addEventListener('keyboardWillHide', handleKeyboardWillHide);
 

@@ -9,6 +9,7 @@ import IconTrash from '@macro-icons/macro-trash.svg';
 import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@macro-icons/macro-dice.svg';
 import IconSave from '@macro-icons/macro-save.svg';
+import IconPaintbrush from '@macro-icons/wide/paintbrush.svg';
 
 export function ThemeTools() {
   let themeName!: HTMLDivElement;
@@ -37,7 +38,7 @@ export function ThemeTools() {
   return (
     <div
       style={{
-        'grid-template-columns': `min-content 1fr repeat(${columnCount()}, min-content)`,
+        'grid-template-columns': `min-content min-content 1fr repeat(${columnCount()}, min-content)`,
         'padding': '0 12px 0 20px' /* (41 - 32) / 2 */,
         'gap': '4.5px' /* (41 - 32) / 2 */,
         'font-family': 'var( --font-mono)',
@@ -51,6 +52,10 @@ export function ThemeTools() {
         'width': '100%',
       }}
     >
+      <div style="width: 18px; height: 18px; flex-shrink: 0; color: var(--color-text-muted)">
+        <IconPaintbrush />
+      </div>
+
       <div
         ref={themeName}
         contentEditable

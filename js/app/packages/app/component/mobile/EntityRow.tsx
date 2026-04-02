@@ -1,4 +1,4 @@
-import { impactFeedback } from '@tauri-apps/plugin-haptics';
+import { hapticImpact } from '@core/mobile/haptics';
 import {
   type Accessor,
   createContext,
@@ -332,7 +332,7 @@ export function EntityRowProvider(
 
       if (thesholdCrossed) {
         if (phase !== 'threshold') {
-          impactFeedback('light');
+          hapticImpact('light');
           setState(touchState.entityId, {
             direction: dx > 0 ? 'right' : 'left',
             phase: 'threshold',
@@ -341,7 +341,7 @@ export function EntityRowProvider(
       } else {
         if (phase !== 'dragging') {
           if (phase === 'threshold') {
-            impactFeedback('light');
+            hapticImpact('light');
           }
           setState(touchState.entityId, {
             direction: dx > 0 ? 'right' : 'left',

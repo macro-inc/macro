@@ -67,16 +67,14 @@ pub struct ArchiveThreadRequest {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, link, gmail_token, body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, link, body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn archived_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     link: Extension<Link>,
-    gmail_token: Extension<String>,
     Path(thread_id): Path<Uuid>,
     Json(body): Json<ArchiveThreadRequest>,
 ) -> Result<Response, ArchiveThreadError> {
-    let gmail_access_token = gmail_token.as_str();
     let is_archiving = body.value;
 
     let thread =
@@ -92,7 +90,6 @@ pub async fn archived_handler(
             .await?;
 
     let mut message_db_ids = Vec::new();
-    let mut provider_message_tuples: Vec<(Uuid, String)> = Vec::new();
 
     // if we are archiving the thread, any messages with the INBOX label are affected. and vice versa
     let has_inbox_label = |m: &Message| {
@@ -101,16 +98,14 @@ pub async fn archived_handler(
             .any(|l| l.provider_label_id == system_labels::INBOX)
     };
 
-    for m in messages.iter() {
-        if has_inbox_label(m) == is_archiving {
-            message_db_ids.push(m.db_id);
-            // Only send provider messages to Gmail (drafts have no provider_id)
-            if let Some(ref pid) = m.provider_id
-                && !pid.is_empty()
-            {
-                provider_message_tuples.push((m.db_id, pid.clone()));
-            }
-        }
+    // Collect affected messages
+    let affected_messages: Vec<&Message> = messages
+        .iter()
+        .filter(|m| has_inbox_label(m) == is_archiving)
+        .collect();
+
+    for m in &affected_messages {
+        message_db_ids.push(m.db_id);
     }
 
     // Early return if no messages need to be updated
@@ -168,103 +163,43 @@ pub async fn archived_handler(
         }
     }
 
-    // async send requests to gmail async. if they fail, revert db changes we made earlier. we make
-    // the calls async at Teo's request because they are slow and doing it sync causes this endpoint
-    // to take >300ms
-
-    let db_clone = ctx.db.clone();
-    let gmail_client_clone = ctx.gmail_client.clone();
-    let gmail_access_token_clone = gmail_access_token.to_string();
-    let thread_id_clone = thread_id;
-    let link_id_clone = link.id;
-    let message_db_ids_clone = message_db_ids.clone();
-
+    // Enqueue one gmail_ops message per provider message
     let (labels_to_add, labels_to_remove) = if is_archiving {
         (Vec::new(), vec![system_labels::INBOX.to_string()])
     } else {
         (vec![system_labels::INBOX.to_string()], Vec::new())
     };
 
-    tokio::spawn(async move {
-        // Only send provider messages to Gmail (drafts are already updated in DB)
-        let (success_ids, failed_ids) = gmail_client_clone
-            .batch_modify_labels(
-                &gmail_access_token_clone,
-                provider_message_tuples,
-                labels_to_add,
-                labels_to_remove,
-            )
-            .await;
-
-        if !failed_ids.is_empty() {
-            tracing::error!(
-                failed_ids = ?failed_ids,
-                success_ids = ?success_ids,
-                "Gmail API failed to modify labels for some messages, reverting database changes"
-            );
-
-            let mut revert_tx = match db_clone.begin().await {
-                Ok(tx) => tx,
-                Err(e) => {
-                    tracing::error!(error = ?e, "Failed to begin transaction for reversion");
-                    return;
-                }
-            };
-
-            // revert the changes we made in the previous transaction
-            let revert_result = async {
-                update_inbox_visible_status(
-                    &mut revert_tx,
-                    thread_id_clone,
-                    link_id_clone,
-                    is_archiving,
+    let gmail_ops_messages: Vec<_> = affected_messages
+        .iter()
+        .filter_map(|msg| {
+            msg.provider_id
+                .as_ref()
+                .filter(|pid| !pid.is_empty())
+                .map(
+                    |pid| models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
+                        link_id: link.id,
+                        operation:
+                            models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(
+                                models_email::gmail::gmail_ops::ModifyMessageLabelsPayload {
+                                    db_message_id: msg.db_id,
+                                    provider_message_id: pid.clone(),
+                                    labels_to_add: labels_to_add.clone(),
+                                    labels_to_remove: labels_to_remove.clone(),
+                                },
+                            ),
+                    },
                 )
-                .await
-                .context("Failed to revert thread inbox_visible status")?;
+        })
+        .collect();
 
-                if !is_archiving {
-                    email_db_client::labels::delete::delete_message_labels_batch(
-                        &mut *revert_tx,
-                        &message_db_ids_clone,
-                        system_labels::INBOX,
-                        link_id_clone,
-                    )
-                    .await
-                    .context("Failed to revert removing 'INBOX' label from messages")?;
-                } else {
-                    email_db_client::labels::insert::insert_message_labels_batch(
-                        &mut *revert_tx,
-                        &message_db_ids_clone,
-                        system_labels::INBOX,
-                        link_id_clone,
-                    )
-                    .await
-                    .context("Failed to revert adding 'INBOX' label to messages")?;
-                }
-
-                anyhow::Ok(())
-            }
-            .await;
-
-            match revert_result {
-                Ok(_) => {
-                    if let Err(e) = revert_tx.commit().await {
-                        tracing::error!(error = ?e, "Unable to commit transaction for revert");
-                    } else {
-                        tracing::info!(
-                            "Successfully reverted database changes after Gmail API failure"
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(error = ?e, "Revert failed for thread {}, rolling back", thread_id_clone);
-                    if let Err(rollback_err) = revert_tx.rollback().await {
-                        tracing::error!(error = ?rollback_err, "Failed to rollback revert transaction!");
-                    }
-                }
-            }
-        }
-    });
+    ctx.sqs_client
+        .enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "Failed to enqueue gmail ops notifications batch for archived");
+        })
+        .ok();
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }

@@ -13,20 +13,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route("/", get(list::list_contacts_handler))
         .route(
             "/block",
-            post(block_sender::handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    crate::api::middleware::gmail_token::attach_gmail_token,
-                ),
+            post(block_sender::handler).layer(axum::middleware::from_fn_with_state(
+                state.email_service.clone(),
+                crate::api::middleware::link::attach_link_context,
             )),
         )
         .route(
             "/unblock",
-            post(unblock_sender::handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    crate::api::middleware::gmail_token::attach_gmail_token,
-                ),
+            post(unblock_sender::handler).layer(axum::middleware::from_fn_with_state(
+                state.email_service.clone(),
+                crate::api::middleware::link::attach_link_context,
             )),
         )
         .route(

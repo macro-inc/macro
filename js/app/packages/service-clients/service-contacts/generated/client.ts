@@ -4,7 +4,7 @@
  * contacts_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GetContactsResponse } from './schemas';
+import type { AddContactRequest, GetContactsResponse } from './schemas';
 
 export type getContactsResponse200 = {
   data: GetContactsResponse;
@@ -61,4 +61,58 @@ export const getContacts = async (
     status: res.status,
     headers: res.headers,
   } as getContactsResponse;
+};
+
+export type addContactResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type addContactResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type addContactResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type addContactResponseSuccess = addContactResponse204 & {
+  headers: Headers;
+};
+export type addContactResponseError = (
+  | addContactResponse401
+  | addContactResponse500
+) & {
+  headers: Headers;
+};
+
+export type addContactResponse =
+  | addContactResponseSuccess
+  | addContactResponseError;
+
+export const getAddContactUrl = () => {
+  return `/contacts`;
+};
+
+export const addContact = async (
+  addContactRequest: AddContactRequest,
+  options?: RequestInit
+): Promise<addContactResponse> => {
+  const res = await fetch(getAddContactUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(addContactRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addContactResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addContactResponse;
 };

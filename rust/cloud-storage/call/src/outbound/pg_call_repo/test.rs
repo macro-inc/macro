@@ -290,6 +290,43 @@ async fn archive_call_preserves_soft_deleted_participants(
     Ok(())
 }
 
+// -- archive_call preserves id and share_permission_id ------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_call_preserves_id_and_share_permission(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Read the share_permission_id from the active call before archiving.
+    let active_share_permission_id = sqlx::query_scalar!(
+        r#"SELECT share_permission_id FROM calls WHERE id = $1"#,
+        CALL1,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    let record_id = repo.archive_call(&CALL1).await?;
+
+    // The call_record id should be the same as the original call id.
+    assert_eq!(record_id, CALL1);
+
+    // The share_permission_id should carry over to the call_record.
+    let record_share_permission_id = sqlx::query_scalar!(
+        r#"SELECT share_permission_id FROM call_records WHERE id = $1"#,
+        record_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(record_share_permission_id, active_share_permission_id);
+
+    Ok(())
+}
+
 // -- set_active_call_recording_url --------------------------------------------
 
 #[sqlx::test(

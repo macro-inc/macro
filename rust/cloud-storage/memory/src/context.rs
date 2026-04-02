@@ -99,7 +99,6 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
         EmailPgRepo::new(pool.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
     let channels_service = ChannelServiceImpl::new(

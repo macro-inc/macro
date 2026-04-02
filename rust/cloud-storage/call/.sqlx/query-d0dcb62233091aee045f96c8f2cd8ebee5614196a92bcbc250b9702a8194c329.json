@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO calls (id, channel_id, room_name, created_by)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (channel_id) DO NOTHING\n            RETURNING id, channel_id, room_name, created_by, created_at, egress_id\n            ",
+  "query": "\n            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (channel_id) DO NOTHING\n            RETURNING id, channel_id, room_name, created_by, created_at, egress_id\n            ",
   "describe": {
     "columns": [
       {
@@ -39,6 +39,7 @@
         "Uuid",
         "Uuid",
         "Text",
+        "Text",
         "Text"
       ]
     },
@@ -51,5 +52,5 @@
       true
     ]
   },
-  "hash": "2995844320b8b71c3e61d00a6b91c0b083f404ee8a8541538709acc18f6679ad"
+  "hash": "d0dcb62233091aee045f96c8f2cd8ebee5614196a92bcbc250b9702a8194c329"
 }

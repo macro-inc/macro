@@ -68,7 +68,6 @@ type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
-    email::domain::ports::NoOpGmailLabelModifier,
 >;
 
 type DssSoupState = SoupRouterState<

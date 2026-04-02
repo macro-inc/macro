@@ -20,7 +20,7 @@ export function Root(props: RootProps) {
 
   return (
     <div
-      class={cn('group/message relative', local.class)}
+      class={cn('group/message relative touch:no-select-children', local.class)}
       data-message
       data-message-id={local.message.id}
       data-highlighted={local.highlighted ? '' : undefined}

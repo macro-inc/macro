@@ -67,12 +67,11 @@ pub struct PathParams {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, gmail_token))]
+#[tracing::instrument(skip(ctx, user_context), err)]
 pub async fn seen_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     link: Extension<Link>,
-    gmail_token: Extension<String>,
     Path(PathParams { id: thread_id }): Path<PathParams>,
 ) -> Result<Response, SeenThreadError> {
     // update viewed_at value in user_history table for thread
@@ -104,16 +103,6 @@ pub async fn seen_handler(
     }
 
     let message_db_ids: Vec<Uuid> = unread_messages.iter().map(|m| m.db_id).collect();
-    // Only collect provider messages for Gmail API calls (drafts have no provider_id)
-    let provider_message_tuples: Vec<(Uuid, String)> = unread_messages
-        .iter()
-        .filter_map(|m| {
-            m.provider_id
-                .as_ref()
-                .filter(|pid| !pid.is_empty())
-                .map(|pid| (m.db_id, pid.clone()))
-        })
-        .collect();
 
     let mut tx = ctx.db.begin().await?;
 
@@ -162,99 +151,37 @@ pub async fn seen_handler(
         }
     }
 
-    // async send requests to gmail. if they fail, revert db changes.
-    let db_clone = ctx.db.clone();
-    let gmail_client_clone = ctx.gmail_client.clone();
-    let gmail_access_token = gmail_token.as_str().to_string();
-    let thread_id_clone = thread_id;
-    let link_id_clone = link.id;
-    let message_db_ids_clone = message_db_ids.clone();
-    let fusion_user_id = user_context.fusion_user_id.clone();
-
-    tokio::spawn(async move {
-        let labels_to_add = Vec::new();
-        let labels_to_remove = vec![system_labels::UNREAD.to_string()];
-
-        // Only send provider messages to Gmail (drafts are already updated in DB)
-        let (success_ids, failed_ids) = gmail_client_clone
-            .batch_modify_labels(
-                &gmail_access_token,
-                provider_message_tuples,
-                labels_to_add,
-                labels_to_remove,
-            )
-            .await;
-
-        if !failed_ids.is_empty() {
-            tracing::error!(
-                failed_ids = ?failed_ids,
-                success_ids = ?success_ids,
-                "Gmail API failed to modify labels for some messages, reverting database changes"
-            );
-
-            let mut revert_tx = match db_clone.begin().await {
-                Ok(tx) => tx,
-                Err(e) => {
-                    tracing::error!(error = ?e, "Failed to begin transaction for reversion");
-                    return;
-                }
-            };
-
-            // revert the changes we made in the previous transaction
-            let revert_result = async {
-                // Revert thread read status to unread
-                email_db_client::threads::update::update_thread_read_status(
-                    &mut *revert_tx,
-                    thread_id_clone,
-                    link_id_clone,
-                    false,
+    // Enqueue gmail ops messages in batch
+    let gmail_ops_messages: Vec<_> = unread_messages
+        .iter()
+        .filter_map(|msg| {
+            msg.provider_id
+                .as_ref()
+                .filter(|pid| !pid.is_empty())
+                .map(
+                    |pid| models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
+                        link_id: link.id,
+                        operation:
+                            models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(
+                                models_email::gmail::gmail_ops::ModifyMessageLabelsPayload {
+                                    db_message_id: msg.db_id,
+                                    provider_message_id: pid.clone(),
+                                    labels_to_add: Vec::new(),
+                                    labels_to_remove: vec![system_labels::UNREAD.to_string()],
+                                },
+                            ),
+                    },
                 )
-                .await
-                .context("Failed to revert thread read status")?;
+        })
+        .collect();
 
-                // Revert messages read status to unread
-                email_db_client::messages::update::update_message_read_status_batch(
-                    &mut *revert_tx,
-                    message_db_ids_clone.clone(),
-                    &fusion_user_id,
-                    false,
-                )
-                .await
-                .context("Failed to revert message read status")?;
-
-                // Revert: Add UNREAD label back to messages
-                email_db_client::labels::insert::insert_message_labels_batch(
-                    &mut *revert_tx,
-                    &message_db_ids_clone,
-                    system_labels::UNREAD,
-                    link_id_clone,
-                )
-                .await
-                .context("Failed to revert adding 'UNREAD' label to messages")?;
-
-                anyhow::Ok(())
-            }
-            .await;
-
-            match revert_result {
-                Ok(_) => {
-                    if let Err(e) = revert_tx.commit().await {
-                        tracing::error!(error = ?e, "Unable to commit transaction for revert");
-                    } else {
-                        tracing::info!(
-                            "Successfully reverted database changes after Gmail API failure"
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(error = ?e, "Revert failed for thread {}, rolling back", thread_id_clone);
-                    if let Err(rollback_err) = revert_tx.rollback().await {
-                        tracing::error!(error = ?rollback_err, "Failed to rollback revert transaction");
-                    }
-                }
-            }
-        }
-    });
+    ctx.sqs_client
+        .enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "Failed to enqueue gmail ops notifications batch for seen");
+        })
+        .ok();
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }

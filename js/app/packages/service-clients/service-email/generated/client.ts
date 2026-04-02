@@ -12,7 +12,6 @@ import type {
   ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
   BlockSenderRequest,
-  BlockSenderResponse,
   CancelBackfillParams,
   CreateDraftRequest,
   CreateDraftResponse,
@@ -445,10 +444,11 @@ export const listContacts = async (
 
 /**
  * @summary Block a sender by creating a Gmail filter that sends their emails to trash.
+The actual Gmail API call is performed asynchronously by the gmail_ops worker.
  */
-export type blockSenderResponse201 = {
-  data: BlockSenderResponse;
-  status: 201;
+export type blockSenderResponse200 = {
+  data: void;
+  status: 200;
 };
 
 export type blockSenderResponse400 = {
@@ -461,29 +461,17 @@ export type blockSenderResponse401 = {
   status: 401;
 };
 
-export type blockSenderResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type blockSenderResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
 export type blockSenderResponse500 = {
   data: ErrorResponse;
   status: 500;
 };
 
-export type blockSenderResponseSuccess = blockSenderResponse201 & {
+export type blockSenderResponseSuccess = blockSenderResponse200 & {
   headers: Headers;
 };
 export type blockSenderResponseError = (
   | blockSenderResponse400
   | blockSenderResponse401
-  | blockSenderResponse403
-  | blockSenderResponse409
   | blockSenderResponse500
 ) & {
   headers: Headers;
@@ -581,6 +569,7 @@ export const listBlockedSenders = async (
 
 /**
  * @summary Unblock a sender by removing their block filter from Gmail.
+The actual Gmail API call is performed asynchronously by the gmail_ops worker.
  */
 export type unblockSenderResponse204 = {
   data: void;
@@ -597,16 +586,6 @@ export type unblockSenderResponse401 = {
   status: 401;
 };
 
-export type unblockSenderResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type unblockSenderResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
 export type unblockSenderResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -618,8 +597,6 @@ export type unblockSenderResponseSuccess = unblockSenderResponse204 & {
 export type unblockSenderResponseError = (
   | unblockSenderResponse400
   | unblockSenderResponse401
-  | unblockSenderResponse403
-  | unblockSenderResponse404
   | unblockSenderResponse500
 ) & {
   headers: Headers;

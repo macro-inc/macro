@@ -270,19 +270,12 @@ export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = resolveFeatureFlag(
-  'ENABLE_AI_AUTO_TAB_ATTACHMENTS',
-  true
-);
-
 export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   'ENABLE_FEATURED_SEARCH_RESULTS',
   true
 );
 
-const ENABLE_NEW_CHANNELS_OVERRIDE = getFeatureFlagOverride(
-  'ENABLE_NEW_CHANNELS'
-);
+const ENABLE_NEW_CHANNELS_OVERRIDE = true;
 
 export function ENABLE_NEW_CHANNELS(): boolean {
   if (ENABLE_NEW_CHANNELS_OVERRIDE !== undefined) {

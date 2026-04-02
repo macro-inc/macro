@@ -1,15 +1,19 @@
 use crate::api::context::AppState;
 use anyhow::Context;
-use async_trait::async_trait;
-use axum::extract::{Json, State};
+use axum::extract::{FromRequestParts, Json, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::{Extension, Router};
-use model::user::UserContext;
+use axum::{RequestPartsExt, Router};
+use axum_extra::extract::Cached;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_user::axum_extractor::MacroUserExtractor;
+use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
+use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::instrument;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
@@ -43,23 +47,36 @@ pub struct GetContactsResponse {
     contacts: Vec<String>,
 }
 
-#[async_trait]
-pub trait ContactsService: Send + Sync + std::fmt::Debug + 'static {
-    async fn query_contacts(&self, db: &PgPool, user_id: &str) -> Option<Vec<String>>;
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+pub struct AddContactRequest {
+    #[schema(value_type = String)]
+    user_id: MacroUserIdStr<'static>,
+}
+
+pub trait ContactsService: Send + Sync + 'static {
+    fn query_contacts(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Option<Vec<String>>> + Send;
+
+    fn add_contact(
+        &self,
+        caller: MacroUserIdStr<'_>,
+        recipient: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), anyhow::Error>> + Send;
 }
 
 #[cfg(test)]
 #[derive(Clone, Debug)]
 pub struct MockService;
 
-#[derive(Clone, Debug, Default)]
-pub struct Service;
+#[derive(Clone, Debug)]
+pub struct Service(pub PgPool);
 
 #[cfg(test)]
-#[async_trait]
 impl ContactsService for MockService {
-    async fn query_contacts(&self, _db: &PgPool, user_id: &str) -> Option<Vec<String>> {
-        if user_id == "a2b9b60f-a7f0-4bee-bcf1-0851eeec1c05" {
+    async fn query_contacts(&self, user_id: MacroUserIdStr<'_>) -> Option<Vec<String>> {
+        if user_id.as_ref() == "macro|found@test.com" {
             let contacts = [
                 "0bcabd1a-1bf5-48d7-b334-5f7e59e8a9ff",
                 "3a90b186-0288-4819-8e1a-8e10cb685c0c",
@@ -70,7 +87,7 @@ impl ContactsService for MockService {
             .collect();
 
             return Some(contacts);
-        } else if user_id == "ae2c090c-e478-4454-a001-3df458bf1fe4" {
+        } else if user_id.as_ref() == "macro|many@test.com" {
             let contacts = [
                 "d44caada-98c0-49eb-ab20-6851b824983a",
                 "5ab8c770-f2cb-4c6c-bc08-ae64569e324c",
@@ -89,13 +106,33 @@ impl ContactsService for MockService {
 
         None
     }
+
+    async fn add_contact(
+        &self,
+        _caller: MacroUserIdStr<'_>,
+        _recipient: MacroUserIdStr<'_>,
+    ) -> Result<(), anyhow::Error> {
+        Ok(())
+    }
 }
 
-#[async_trait]
 impl ContactsService for Service {
-    async fn query_contacts(&self, db: &PgPool, user_id: &str) -> Option<Vec<String>> {
-        let contacts = contacts_db_client::get_contacts(db, user_id).await;
+    async fn query_contacts(&self, user_id: MacroUserIdStr<'_>) -> Option<Vec<String>> {
+        let contacts = contacts_db_client::get_contacts(&self.0, user_id.as_ref()).await;
         contacts.ok()
+    }
+
+    async fn add_contact(
+        &self,
+        caller: MacroUserIdStr<'_>,
+        recipient: MacroUserIdStr<'_>,
+    ) -> Result<(), anyhow::Error> {
+        contacts_db_client::create_connections(
+            &self.0,
+            vec![(caller.as_ref().to_string(), recipient.as_ref().to_string())],
+        )
+        .await?;
+        Ok(())
     }
 }
 
@@ -109,15 +146,12 @@ impl ContactsService for Service {
     (status = 404, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(skip(db, user_context), level = "info")]
-pub async fn handler(
-    State(db): State<PgPool>,
-    State(contacts): State<Arc<dyn ContactsService>>,
-    user_context: Extension<UserContext>,
+#[instrument(skip(macro_user_id, contacts), level = "info", fields(user_id = macro_user_id.as_ref()))]
+pub async fn handler<S: ContactsService>(
+    State(contacts): State<Arc<S>>,
+    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
 ) -> impl IntoResponse {
-    let user_id = &user_context.user_id.to_lowercase();
-    tracing::info!("retrieving contacts for user {}", user_id);
-    let contacts = contacts.query_contacts(&db, user_id).await;
+    let contacts = contacts.query_contacts(macro_user_id).await;
     if contacts.is_none() {
         return (StatusCode::NOT_FOUND, Json(None));
     }
@@ -127,53 +161,175 @@ pub async fn handler(
     (StatusCode::OK, Json(Some(GetContactsResponse { contacts })))
 }
 
+#[utoipa::path(post,
+    tag = "contacts",
+    operation_id = "add_contact",
+    path = "/contacts",
+    request_body = AddContactRequest,
+    responses(
+    (status = 204),
+    (status = 401, body=String),
+    (status = 500, body=String)))
+]
+#[instrument(skip(service, macro_user_id), err)]
+pub async fn add_contact_handler<S: ContactsService>(
+    State(service): State<Arc<S>>,
+    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+    Json(body): Json<AddContactRequest>,
+) -> Result<StatusCode, StatusCode> {
+    service
+        .add_contact(macro_user_id, body.user_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to create contact connection");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Rate limit for adding contacts: 50 requests per user per hour.
+pub struct PerUserAddContactRateLimit(MacroUserExtractor);
+
+impl<S> RateLimitExtractable<S> for PerUserAddContactRateLimit
+where
+    S: Send + Sync,
+{
+    fn config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: 50,
+            window: Duration::from_mins(60),
+        }
+    }
+
+    fn key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&"per-user-add-contact")
+            .append(&self.0.macro_user_id.as_ref())
+            .finish()
+    }
+}
+
+impl<S> FromRequestParts<S> for PerUserAddContactRateLimit
+where
+    S: Send + Sync,
+{
+    type Rejection = <MacroUserExtractor as FromRequestParts<S>>::Rejection;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let Cached(user): Cached<MacroUserExtractor> = parts.extract_with_state(state).await?;
+        Ok(Self(user))
+    }
+}
+
 fn api_router(app_state: AppState) -> Router {
-    contacts_router()
+    contacts_router(app_state.rate_limit_service.clone())
         .layer(axum::middleware::from_fn_with_state(
             app_state.jwt_args.clone(),
             macro_middleware::auth::decode_jwt::handler,
         ))
-        .with_state(app_state)
+        .with_state(app_state.contacts_service)
 }
 
-#[cfg(test)]
-fn test_api_router() -> Router {
-    contacts_router().with_state(AppState::new_testing())
-}
+fn contacts_router<R: RateLimitService + Clone, S: ContactsService>(
+    rate_limiter: R,
+) -> Router<Arc<S>> {
+    let post_route = Router::new()
+        .route("/contacts", axum::routing::post(add_contact_handler))
+        .layer(axum::middleware::from_fn_with_state(
+            rate_limiter,
+            rate_limit_middleware::<R, PerUserAddContactRateLimit, R>,
+        ));
 
-fn contacts_router() -> Router<AppState> {
-    Router::new().route("/contacts", get(handler))
+    Router::new()
+        .route("/contacts", get(handler))
+        .merge(post_route)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode},
-    };
+    use axum::{Extension, body::Body, http::Request};
     use http_body_util::BodyExt;
+    use model_user::UserContext;
+    use rate_limit::{
+        RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult, RateLimitServiceImpl,
+        domain::models::RateLimitOk,
+    };
+    use rootcause::Report;
     use std::collections::HashSet;
     use tower::ServiceExt;
 
-    #[tokio::test]
-    async fn test_get_contact() {
-        let user_id = "a2b9b60f-a7f0-4bee-bcf1-0851eeec1c05";
-        let api = test_api_router().layer(Extension(UserContext {
+    #[derive(Clone)]
+    struct MockRateLimitPort {
+        should_exceed: bool,
+    }
+
+    impl rate_limit::RateLimitPort for MockRateLimitPort {
+        async fn check(
+            &self,
+            key: RateLimitKey,
+            config: RateLimitConfig,
+        ) -> Result<RateLimitResult, Report> {
+            if self.should_exceed {
+                Ok(Err(RateLimitExceeded {
+                    current_count: config.max_count.saturating_add(1),
+                    max_count: config.max_count,
+                    retry_after: config.window,
+                }))
+            } else {
+                Ok(Ok(RateLimitOk::new_testing_value(0, key, config)))
+            }
+        }
+
+        async fn decrement(&self, _key: &RateLimitKey) -> Result<(), Report> {
+            Ok(())
+        }
+    }
+
+    fn allowing_rate_limiter() -> RateLimitServiceImpl<MockRateLimitPort> {
+        RateLimitServiceImpl {
+            repo: MockRateLimitPort {
+                should_exceed: false,
+            },
+        }
+    }
+
+    fn exceeding_rate_limiter() -> RateLimitServiceImpl<MockRateLimitPort> {
+        RateLimitServiceImpl {
+            repo: MockRateLimitPort {
+                should_exceed: true,
+            },
+        }
+    }
+
+    fn mock_service() -> Arc<MockService> {
+        Arc::new(MockService)
+    }
+
+    fn test_user_context(user_id: &str) -> UserContext {
+        UserContext {
             user_id: user_id.to_string(),
             permissions: None,
             organization_id: None,
             fusion_user_id: "".to_string(),
-        }));
+        }
+    }
 
-        let contact_list: HashSet<String> = [
-            "0bcabd1a-1bf5-48d7-b334-5f7e59e8a9ff",
-            "3a90b186-0288-4819-8e1a-8e10cb685c0c",
-            "e3cf7c46-60c9-413a-8f27-57c91c3297cf",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
+    fn build_test_router(
+        rate_limiter: RateLimitServiceImpl<MockRateLimitPort>,
+        user_id: &str,
+    ) -> Router {
+        contacts_router(rate_limiter)
+            .with_state(mock_service())
+            .layer(Extension(test_user_context(user_id)))
+    }
+
+    #[tokio::test]
+    async fn test_get_contact() {
+        let user_id = "macro|found@test.com";
+        let api = build_test_router(allowing_rate_limiter(), user_id);
 
         let response = api
             .oneshot(
@@ -188,8 +344,16 @@ mod tests {
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let body: GetContactsResponse = serde_json::from_slice(&body).unwrap();
 
-        assert_eq!(body.contacts.len(), 3, "Not enough contacts");
+        let contact_list: HashSet<String> = [
+            "0bcabd1a-1bf5-48d7-b334-5f7e59e8a9ff",
+            "3a90b186-0288-4819-8e1a-8e10cb685c0c",
+            "e3cf7c46-60c9-413a-8f27-57c91c3297cf",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
 
+        assert_eq!(body.contacts.len(), 3, "Not enough contacts");
         for contact in &body.contacts {
             assert!(
                 contact_list.contains(contact),
@@ -200,14 +364,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_contact_notfound() {
-        let nonexistent_user_id = "d1eff0b9-e1d5-4fb5-a656-1a238323245c";
-        let api = test_api_router().layer(Extension(UserContext {
-            user_id: nonexistent_user_id.to_string(),
-            permissions: None,
-            organization_id: None,
-            fusion_user_id: "".to_string(),
-        }));
+    async fn test_get_contact_not_found() {
+        let user_id = "macro|notfound@test.com";
+        let api = build_test_router(allowing_rate_limiter(), user_id);
 
         let response = api
             .oneshot(
@@ -221,13 +380,52 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    async fn run_with_id(_pool: PgPool, user_id: &str) -> GetContactsResponse {
-        let api = test_api_router().layer(Extension(UserContext {
-            user_id: user_id.to_string(),
-            permissions: None,
-            organization_id: None,
-            fusion_user_id: "".to_string(),
-        }));
+    #[tokio::test]
+    async fn test_add_contact() {
+        let user_id = "macro|sender@test.com";
+        let api = build_test_router(allowing_rate_limiter(), user_id);
+
+        let response = api
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/contacts")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({"user_id": "macro|recipient@example.com"}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_add_contact_rate_limited() {
+        let user_id = "macro|sender@test.com";
+        let api = build_test_router(exceeding_rate_limiter(), user_id);
+
+        let response = api
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/contacts")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({"user_id": "macro|recipient@example.com"}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn test_get_not_affected_by_rate_limit() {
+        let user_id = "macro|found@test.com";
+        let api = build_test_router(exceeding_rate_limiter(), user_id);
 
         let response = api
             .oneshot(
@@ -239,40 +437,5 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        let body: GetContactsResponse = serde_json::from_slice(&body).unwrap();
-        body
-    }
-    // Some integration tests using an actual database query
-    #[sqlx::test(fixtures(path = "../fixtures", scripts("user_list")))]
-    // Skipped by default because you have to spin up a db,
-    // Run with: `cargo test test_get_contacts_with_db -- --ignored`
-    #[ignore]
-    async fn test_integration_get_contacts_with_db(pool: PgPool) -> sqlx::Result<()> {
-        let user_id = "51028bda-67f0-44df-aa21-5853963524f1";
-        let body = run_with_id(pool.clone(), user_id).await;
-        assert_eq!(body.contacts.len(), 3, "Not enough contacts");
-
-        let expectations: HashSet<String> = [
-            "1af59c26-c5b3-480c-9ad1-b87c2a69e72c",
-            "80c0effd-1b9d-4eba-ad86-bc52c4a63294",
-            "654df835-bb97-48e0-9b5b-0ad71a608dbd",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
-
-        let reality: HashSet<String> = body.contacts.into_iter().collect();
-
-        assert_eq!(&expectations, &reality);
-
-        // Now try it with a different case
-        let user_id = "51028BDA-67F0-44DF-AA21-5853963524F1";
-        let body = run_with_id(pool, user_id).await;
-        let reality: HashSet<String> = body.contacts.into_iter().collect();
-        assert_eq!(&expectations, &reality);
-
-        Ok(())
     }
 }

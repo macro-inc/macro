@@ -65,6 +65,16 @@ const INBOX_SYNC_RETRY_QUEUE_WORKERS = config.require(
 const INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES = config.require(
   `inbox_sync_retry_queue_max_messages`
 );
+const GMAIL_OPS_QUEUE_WORKERS = config.require(`gmail_ops_queue_workers`);
+const GMAIL_OPS_QUEUE_MAX_MESSAGES = config.require(
+  `gmail_ops_queue_max_messages`
+);
+const GMAIL_OPS_RETRY_QUEUE_WORKERS = config.require(
+  `gmail_ops_retry_queue_workers`
+);
+const GMAIL_OPS_RETRY_QUEUE_MAX_MESSAGES = config.require(
+  `gmail_ops_retry_queue_max_messages`
+);
 const SFS_UPLOADER_WORKERS = config.require(`sfs_uploader_workers`);
 const gmailGcpQueue = config.require(`gmail_gcp_queue`);
 const GMAIL_GCP_QUEUE = aws.secretsmanager
@@ -153,7 +163,7 @@ const macroDbUrlArn: pulumi.Output<string> = aws.secretsmanager
 
 const inbox_sync_queue = new Queue('email-service-gmail-webhook', {
   tags,
-  maxReceiveCount: 5,
+  maxReceiveCount: 3,
   visibilityTimeoutSeconds: 60,
 });
 
@@ -168,6 +178,24 @@ const inbox_sync_retry_queue = new Queue('email-service-gmail-webhook-retry', {
 
 export const inboxSyncRetryQueueArn = pulumi.interpolate`${inbox_sync_retry_queue.queue.arn}`;
 export const inboxSyncRetryQueueName = pulumi.interpolate`${inbox_sync_retry_queue.queue.name}`;
+
+const gmail_ops_queue = new Queue('email-service-gmail-ops', {
+  tags,
+  maxReceiveCount: 3,
+  visibilityTimeoutSeconds: 60,
+});
+
+export const gmailOpsQueueArn = pulumi.interpolate`${gmail_ops_queue.queue.arn}`;
+export const gmailOpsQueueName = pulumi.interpolate`${gmail_ops_queue.queue.name}`;
+
+const gmail_ops_retry_queue = new Queue('email-service-gmail-ops-retry', {
+  tags,
+  maxReceiveCount: 100,
+  visibilityTimeoutSeconds: 60,
+});
+
+export const gmailOpsRetryQueueArn = pulumi.interpolate`${gmail_ops_retry_queue.queue.arn}`;
+export const gmailOpsRetryQueueName = pulumi.interpolate`${gmail_ops_retry_queue.queue.name}`;
 
 const link_manager_queue = new Queue('email-service-refresh', {
   tags,
@@ -249,6 +277,8 @@ const queueArns = [
   notificationIngressQueueArn,
   inboxSyncQueueArn,
   inboxSyncRetryQueueArn,
+  gmailOpsQueueArn,
+  gmailOpsRetryQueueArn,
   linkManagerQueueArn,
   scheduledQueueArn,
   searchEventQueueArn,
@@ -376,6 +406,14 @@ const containerEnvVars = [
     value: inboxSyncRetryQueueName,
   },
   {
+    name: 'GMAIL_OPS_QUEUE',
+    value: gmailOpsQueueName,
+  },
+  {
+    name: 'GMAIL_OPS_RETRY_QUEUE',
+    value: gmailOpsRetryQueueName,
+  },
+  {
     name: 'BACKFILL_QUEUE',
     value: backfillQueueName,
   },
@@ -478,6 +516,22 @@ const containerEnvVars = [
   {
     name: 'INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES',
     value: pulumi.interpolate`${INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES}`,
+  },
+  {
+    name: 'GMAIL_OPS_QUEUE_WORKERS',
+    value: pulumi.interpolate`${GMAIL_OPS_QUEUE_WORKERS}`,
+  },
+  {
+    name: 'GMAIL_OPS_QUEUE_MAX_MESSAGES',
+    value: pulumi.interpolate`${GMAIL_OPS_QUEUE_MAX_MESSAGES}`,
+  },
+  {
+    name: 'GMAIL_OPS_RETRY_QUEUE_WORKERS',
+    value: pulumi.interpolate`${GMAIL_OPS_RETRY_QUEUE_WORKERS}`,
+  },
+  {
+    name: 'GMAIL_OPS_RETRY_QUEUE_MAX_MESSAGES',
+    value: pulumi.interpolate`${GMAIL_OPS_RETRY_QUEUE_MAX_MESSAGES}`,
   },
   {
     name: 'SFS_UPLOADER_WORKERS',

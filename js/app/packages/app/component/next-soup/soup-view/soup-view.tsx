@@ -18,9 +18,7 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-import { registerPreviewEntity } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -118,6 +116,16 @@ const useSoupNotificationInvalidators = () => {
     'channel',
     (notification) => {
       refetchSoupEntity(notification.entity_id, 'channel');
+      invalidateSoupEntity(notification.entity_id);
+      invalidateEntityNotifications(notification.entity_id);
+    }
+  );
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'chat',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'chat');
       invalidateSoupEntity(notification.entity_id);
       invalidateEntityNotifications(notification.entity_id);
     }
@@ -487,7 +495,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
         : entity.type === 'channel_message'
           ? 'channel'
           : entity.type;
-    // TODO: preview channel message entity directly
     const previewId =
       entity.type === 'channel_message' ? entity.channelId : entity.id;
     registerPreviewEntity(panel.handle.id, { type, id: previewId });
@@ -495,7 +502,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   onCleanup(() => {
     registerPreviewEntity(panel.handle.id, undefined);
   });
-
   // Create markDone action for swipe/click handlers
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();

@@ -17,20 +17,25 @@ path = "src/openapi.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
-macro_aws_config = { path = "../macro_aws_config" }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
+axum-extra = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 contacts_db_client = { path = "../contacts_db_client" }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }
+macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
+model_user = { path = "../model_user", features = ["axum"] }
+rate_limit = { path = "../rate_limit", features = ["axum"] }
+redis = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -47,3 +52,5 @@ mock = []
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }
+rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
+rootcause = { workspace = true }
