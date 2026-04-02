@@ -65,7 +65,9 @@ export type CallState = {
   /** Transcript segments received via lk.transcription stream */
   transcriptSegments: () => TranscriptionSegment[];
   /** Register a callback for when final transcript segments are received. Returns an unsubscribe function. */
-  onTranscriptSegment: (cb: (segment: FinalTranscriptSegment) => void) => () => void;
+  onTranscriptSegment: (
+    cb: (segment: FinalTranscriptSegment) => void
+  ) => () => void;
 };
 
 const CallContext = createContext<CallState>();
@@ -100,7 +102,8 @@ export function CallProvider(props: ParentProps) {
   const [transcriptSegments, setTranscriptSegments] = createSignal<
     TranscriptionSegment[]
   >([]);
-  const transcriptCallbacks: Array<(segment: FinalTranscriptSegment) => void> = [];
+  const transcriptCallbacks: Array<(segment: FinalTranscriptSegment) => void> =
+    [];
 
   function syncParticipants(r: Room) {
     setRemoteParticipants(new Map(r.remoteParticipants));

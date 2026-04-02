@@ -20,7 +20,10 @@ export function useCall(channelId: () => string) {
       try {
         await leaveMutation.mutateAsync(id);
       } catch (leaveErr) {
-        console.error('Failed to roll back join after connect failure', leaveErr);
+        console.error(
+          'Failed to roll back join after connect failure',
+          leaveErr
+        );
       }
       throw e;
     }

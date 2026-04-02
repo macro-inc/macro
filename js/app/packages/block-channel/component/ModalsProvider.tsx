@@ -2,7 +2,14 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useBlockId } from '@core/block';
 import { NotificationsDrawer } from '@core/component/NotificationsModal';
 import { ChannelTypeEnum } from '@service-comms/client';
-import { createContext, createSignal, onCleanup, onMount, Show, useContext } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+  useContext,
+} from 'solid-js';
 import type { ParentProps } from 'solid-js';
 import { AttachmentsDrawer, useAttachments } from './AttachmentsModal';
 import type { Attachment } from '@queries/channel/types';

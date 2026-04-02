@@ -1,5 +1,12 @@
 import { Track, type RemoteParticipant } from 'livekit-client';
-import { For, Show, createEffect, onCleanup, type Component, type JSX } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  onCleanup,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import PhoneDisconnect from '@icon/regular/phone-disconnect.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
