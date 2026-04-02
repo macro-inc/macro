@@ -50,7 +50,9 @@ function LocalScreenSharePreview() {
     const r = callCtx.room();
     if (!r || !callCtx.isScreenSharing()) return;
 
-    const pub = r.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    const pub = r.localParticipant.getTrackPublication(
+      Track.Source.ScreenShare
+    );
     const track = pub?.track;
     if (!track || !containerRef) return;
 

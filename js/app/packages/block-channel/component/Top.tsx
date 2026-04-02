@@ -126,7 +126,10 @@ export function Top(props: TopProps) {
   const channelModals = useChannelModals();
 
   const CallIcon: Component = (iconProps) => (
-    <Show when={channelModals.isInCall()} fallback={<PhoneIcon {...iconProps} />}>
+    <Show
+      when={channelModals.isInCall()}
+      fallback={<PhoneIcon {...iconProps} />}
+    >
       <PhoneDisconnectIcon {...iconProps} />
     </Show>
   );

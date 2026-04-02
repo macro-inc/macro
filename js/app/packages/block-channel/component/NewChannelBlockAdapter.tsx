@@ -6,7 +6,14 @@ import {
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
-import { type Component, createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  type Component,
+  createSignal,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { blockHandleSignal } from '@core/signal/load';
 import { createMethodRegistration } from '@core/orchestrator';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -49,10 +56,7 @@ function CallButton(props: {
   isInCall: () => boolean;
 }) {
   const CallIcon: Component = (iconProps) => (
-    <Show
-      when={props.isInCall()}
-      fallback={<PhoneIcon {...iconProps} />}
-    >
+    <Show when={props.isInCall()} fallback={<PhoneIcon {...iconProps} />}>
       <PhoneDisconnectIcon {...iconProps} />
     </Show>
   );

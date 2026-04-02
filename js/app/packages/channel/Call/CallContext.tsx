@@ -130,15 +130,12 @@ export function CallProvider(props: ParentProps) {
     r.on(RoomEvent.ActiveSpeakersChanged, (_speakers: Participant[]) => {
       syncParticipants(r);
     });
-    r.on(
-      RoomEvent.LocalTrackUnpublished,
-      (pub: LocalTrackPublication) => {
-        if (pub.source === Track.Source.ScreenShare) {
-          setIsScreenSharing(false);
-        }
-        syncParticipants(r);
+    r.on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
+      if (pub.source === Track.Source.ScreenShare) {
+        setIsScreenSharing(false);
       }
-    );
+      syncParticipants(r);
+    });
     r.on(RoomEvent.Disconnected, () => {
       cleanupRoom();
     });
