@@ -6,7 +6,7 @@ import {
   type ChannelMessagesPage,
 } from '@service-comms/client';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
-import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import { type Accessor, createRenderEffect, createSignal, on } from 'solid-js';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { queryClient } from '../client';
@@ -577,7 +577,7 @@ export function createMessageIndex(
 
   const [messageIndex, setMessageIndex] = createStore<string[]>([]);
 
-  createEffect(
+  createRenderEffect(
     on(data, (data) => {
       byId.clear();
       items = [];
