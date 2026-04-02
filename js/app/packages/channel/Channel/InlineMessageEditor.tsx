@@ -33,7 +33,11 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
   });
 
   return (
-    <div ref={attachHotkeys} class={cn('w-full min-w-0', props.class)}>
+    <div
+      ref={attachHotkeys}
+      class={cn('w-full min-w-0', props.class)}
+      data-inline-input-container-id={message().id}
+    >
       <ChannelInput
         input={{
           mode: 'channel',

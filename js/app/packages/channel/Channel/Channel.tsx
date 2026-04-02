@@ -58,6 +58,7 @@ import { createStickyScrollEffect } from './sticky-scroll';
 import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import { createChannelHotkeys } from './create-channel-hotkeys';
+import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import {
   createTargetMessageController,
@@ -74,10 +75,7 @@ import { DebugSuspense } from '@channel/DebugSuspense';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import {
-  scrollReplyInputAboveKeyboard,
-  scrollReplyInputIntoView,
-} from '../scroll-utils';
+import { scrollReplyInputIntoView } from '../scroll-utils';
 
 type ChannelProps = {
   channelId: string;
@@ -103,7 +101,8 @@ export function Channel(props: ChannelProps) {
     createSignal<ThreadListNavigation>();
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
-  let messageListElement: HTMLDivElement | undefined;
+  const [messageListElement, setMessageListElement] =
+    createSignal<HTMLDivElement>();
 
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,
@@ -231,6 +230,19 @@ export function Channel(props: ChannelProps) {
     scrollToBottom: () => threadListNavigation()?.scrollToBottom(),
   });
 
+  // On Mobile when a thread reply input is focused, we want to hide the main Channel input
+  if (isMobile()) {
+    createEffect(() => {
+      const el = messageListElement();
+      if (!el) return;
+      const cleanup = createInlineInputKeyboardHandler(
+        el,
+        setIsChannelInputHidden
+      );
+      onCleanup(cleanup);
+    });
+  }
+
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
     if (!senderId) return;
@@ -255,9 +267,8 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    if (messageListElement) {
-      resetKeyboardModality(messageListElement);
-    }
+    const el = messageListElement();
+    if (el) resetKeyboardModality(el);
     targetMessageController.goToMessage(messageId, replyId);
   };
 
@@ -279,7 +290,7 @@ export function Channel(props: ChannelProps) {
               <div
                 class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
                 ref={(element) => {
-                  messageListElement = element;
+                  setMessageListElement(element);
                   attachMessageListRef(element);
                 }}
                 tabIndex={-1}
@@ -308,76 +319,6 @@ export function Channel(props: ChannelProps) {
                     const isNewestThread = () =>
                       item.id === messageIndex().keys.at(-1);
 
-                    if (isMobile()) {
-                      createEffect(() => {
-                        const el = state.replyInputEl?.();
-                        if (!el) return;
-
-                        let keyboardWillShowHandler:
-                          | ((e: Event) => void)
-                          | undefined;
-
-                        const handleFocusIn = () => {
-                          setIsChannelInputHidden(true);
-                          const currentKeyboardHeight = parseFloat(
-                            getComputedStyle(
-                              document.documentElement
-                            ).getPropertyValue('--virtual-keyboard-height')
-                          );
-                          if (currentKeyboardHeight > 0) {
-                            scrollReplyInputAboveKeyboard(
-                              item.id,
-                              currentKeyboardHeight
-                            );
-                          } else {
-                            keyboardWillShowHandler = (event: Event) => {
-                              const height =
-                                (event as CustomEvent<{ height: number }>)
-                                  .detail?.height ?? 0;
-                              scrollReplyInputAboveKeyboard(item.id, height);
-                              keyboardWillShowHandler = undefined;
-                            };
-                            window.addEventListener(
-                              'keyboardWillShow',
-                              keyboardWillShowHandler,
-                              { once: true }
-                            );
-                          }
-                        };
-
-                        const handleFocusOut = (e: FocusEvent) => {
-                          if (!el.contains(e.relatedTarget as Node)) {
-                            setIsChannelInputHidden(false);
-                            if (keyboardWillShowHandler) {
-                              window.removeEventListener(
-                                'keyboardWillShow',
-                                keyboardWillShowHandler
-                              );
-                              keyboardWillShowHandler = undefined;
-                            }
-                          }
-                        };
-
-                        el.addEventListener('focusin', handleFocusIn);
-                        el.addEventListener(
-                          'focusout',
-                          handleFocusOut as EventListener
-                        );
-                        onCleanup(() => {
-                          el.removeEventListener('focusin', handleFocusIn);
-                          el.removeEventListener(
-                            'focusout',
-                            handleFocusOut as EventListener
-                          );
-                          if (keyboardWillShowHandler) {
-                            window.removeEventListener(
-                              'keyboardWillShow',
-                              keyboardWillShowHandler
-                            );
-                          }
-                        });
-                      });
-                    }
                     return (
                       <Show when={message()}>
                         {(m) => (
