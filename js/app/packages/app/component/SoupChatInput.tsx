@@ -170,7 +170,7 @@ function SoupChatInputInner() {
 
 export function SoupChatInput() {
   return (
-    <ChatInputProvider autoAttach={false}>
+    <ChatInputProvider>
       <SoupChatInputInner />
     </ChatInputProvider>
   );

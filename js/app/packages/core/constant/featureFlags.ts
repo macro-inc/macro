@@ -270,11 +270,6 @@ export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = resolveFeatureFlag(
-  'ENABLE_AI_AUTO_TAB_ATTACHMENTS',
-  true
-);
-
 export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   'ENABLE_FEATURED_SEARCH_RESULTS',
   true

@@ -2,7 +2,7 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { TabAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
+import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -449,7 +449,7 @@ export function Root() {
                   <ChannelsContextProvider>
                     <QuickAccessProvider>
                       <SearchProvider>
-                        <TabAttachmentsInit />
+                        <ChatAttachmentsInit />
                         <ReactiveFavicon />
                         <Title>{tabTitle()}</Title>
                         <MacroJump />
