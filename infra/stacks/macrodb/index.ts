@@ -94,7 +94,7 @@ const readReplica = enableReadReplica
         applyImmediately: stack !== 'prod',
         identifier: `macro-db-${stack}-read-replica`,
         replicateSourceDb: database.identifier,
-        instanceClass: 'db.t4g.xlarge',
+        instanceClass: config.require('read_replica_instance_size'),
         storageType: config.require('storage_type'),
         iops: config.getNumber('storage_iops'),
         storageThroughput: config.getNumber('storage_throughput'),
