@@ -10,7 +10,7 @@ export function ChannelInputContainer(props: {
   return (
     <div
       class={cn(
-        'pb-2 w-full flex justify-center [&_[data-input-editor-shell]]:max-h-[60vh]',
+        'pb-2 w-full flex justify-center [&_[data-input-editor-shell]]:max-h-[calc(60*var(--dvh,1dvh))] mobile:[&_[data-input-editor-shell]]:max-h-[calc(32*var(--dvh,1dvh))]',
         visibility?.isHidden() && 'hidden'
       )}
       ref={props.ref}

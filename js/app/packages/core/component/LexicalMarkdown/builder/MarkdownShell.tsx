@@ -37,6 +37,7 @@ import { EmojiMenu } from '../component/menu/EmojiMenu';
 import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
 import { MentionsMenu } from '../component/menu/MentionsMenu';
 import { ActionMenu } from '../component/menu/ActionsMenu';
+import { isMobile } from '@core/mobile/isMobile';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
 export const MarkdownShell: Component<
@@ -178,7 +179,7 @@ export const MarkdownShell: Component<
         on:keydown={(e) => e.stopPropagation()}
         on:click={(e) => {
           e.stopPropagation();
-          editor.focus();
+          if (!isMobile()) editor.focus();
         }}
         on:mousedown={(e) => e.stopPropagation()}
         on:mouseup={(e) => e.stopPropagation()}
