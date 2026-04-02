@@ -6,7 +6,6 @@ import type { ChannelMessageListMeta } from './list-meta';
 import {
   useMessage,
   MessageSelectionProvider,
-  useMessageActionDrawer,
 } from './context';
 import type { MessageSelectionState } from './context';
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
