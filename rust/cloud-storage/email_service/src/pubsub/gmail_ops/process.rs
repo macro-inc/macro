@@ -73,21 +73,25 @@ async fn inner_process_message(
             modify_message_labels(ctx, &link, payload)
                 .await
                 .map_err(|e| prefix_error_source(e, "modify_message_labels"))?;
+            tracing::debug!("Successfully processed modify message labels operation");
         }
         GmailOpsOperation::DeleteLabel(payload) => {
             delete_label(ctx, &link, payload)
                 .await
                 .map_err(|e| prefix_error_source(e, "delete_label"))?;
+            tracing::debug!("Successfully processed delete label operation");
         }
         GmailOpsOperation::BlockSender(payload) => {
             block_sender(ctx, &link, payload)
                 .await
                 .map_err(|e| prefix_error_source(e, "block_sender"))?;
+            tracing::debug!("Successfully processed block sender operation");
         }
         GmailOpsOperation::UnblockSender(payload) => {
             unblock_sender(ctx, &link, payload)
                 .await
                 .map_err(|e| prefix_error_source(e, "unblock_sender"))?;
+            tracing::debug!("Successfully processed unblock sender operation");
         }
     }
 
