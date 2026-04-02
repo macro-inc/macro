@@ -1,5 +1,4 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
@@ -309,8 +308,7 @@ export function Channel(props: {
   const [channelInputRef, setChannelInputRef] = createSignal<
     HTMLDivElement | undefined
   >();
-  const isPreview = !!useMaybePreviewPanel();
-  const [autoFocusOnMount, setAutoFocusOnMount] = createSignal(!isPreview);
+  const [autoFocusOnMount, setAutoFocusOnMount] = createSignal(true);
 
   const { navigatedFromJK } = useNavigatedFromJK();
 
