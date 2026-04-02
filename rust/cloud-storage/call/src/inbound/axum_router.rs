@@ -263,15 +263,15 @@ pub async fn webhook_handler<S: CallService>(
 pub async fn transcript_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
-    user: MacroUserExtractor,
+    _user: MacroUserExtractor,
     Json(segment): Json<TranscriptSegmentRequest>,
 ) -> Result<StatusCode, CallError> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let user_id = user.macro_user_id.as_ref();
 
-    if segment.speaker_id != user_id {
-        return Err(CallError::Auth);
-    }
+    // Note: we don't enforce speaker_id == authenticated user because the
+    // LiveKit transcription agent publishes text streams attributed to the
+    // original speaker, and any channel member's frontend may relay any
+    // speaker's segment.  The segment_id dedup constraint prevents duplicates.
 
     state
         .service
