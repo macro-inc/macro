@@ -10,6 +10,8 @@ import {
   type Component,
   createSignal,
   Match,
+  onCleanup,
+  onMount,
   Show,
   Suspense,
   Switch,
@@ -155,17 +157,23 @@ function NewChannelBlockAdapterInner(props: { channelId: string } & BlockChannel
   const sendTranscript = useSendTranscriptMutation();
 
   // Forward final transcript segments to the backend
-  call.callCtx.onTranscriptSegment((segment) => {
-    sendTranscript.mutate({
-      channelId: props.channelId,
-      segment: {
-        segmentId: segment.id,
-        speakerId: segment.participantIdentity,
-        content: segment.text,
-        startedAt: new Date().toISOString(),
-        isFinal: segment.isFinal,
-      },
+  let unsubTranscript: (() => void) | undefined;
+  onMount(() => {
+    unsubTranscript = call.callCtx.onTranscriptSegment((segment) => {
+      sendTranscript.mutate({
+        channelId: props.channelId,
+        segment: {
+          segmentId: segment.id,
+          speakerId: segment.participantIdentity,
+          content: segment.text,
+          startedAt: new Date().toISOString(),
+          isFinal: segment.isFinal,
+        },
+      });
     });
+  });
+  onCleanup(() => {
+    unsubTranscript?.();
   });
 
   const convertTargetMessage = (

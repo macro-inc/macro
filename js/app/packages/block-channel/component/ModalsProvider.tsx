@@ -46,8 +46,9 @@ function ModalsProviderInner(props: ParentProps) {
   const sendTranscript = useSendTranscriptMutation();
 
   // Forward final transcript segments to the backend
+  let unsubTranscript: (() => void) | undefined;
   onMount(() => {
-    call.callCtx.onTranscriptSegment((segment) => {
+    unsubTranscript = call.callCtx.onTranscriptSegment((segment) => {
       sendTranscript.mutate({
         channelId: blockId,
         segment: {
@@ -61,7 +62,7 @@ function ModalsProviderInner(props: ParentProps) {
     });
   });
   onCleanup(() => {
-    call.callCtx.onTranscriptSegment(() => {});
+    unsubTranscript?.();
   });
 
   return (

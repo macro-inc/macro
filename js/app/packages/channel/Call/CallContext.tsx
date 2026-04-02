@@ -64,8 +64,8 @@ export type CallState = {
   toggleScreenShare: () => Promise<void>;
   /** Transcript segments received via lk.transcription stream */
   transcriptSegments: () => TranscriptionSegment[];
-  /** Register a callback for when final transcript segments are received */
-  onTranscriptSegment: (cb: (segment: FinalTranscriptSegment) => void) => void;
+  /** Register a callback for when final transcript segments are received. Returns an unsubscribe function. */
+  onTranscriptSegment: (cb: (segment: FinalTranscriptSegment) => void) => () => void;
 };
 
 const CallContext = createContext<CallState>();
@@ -100,8 +100,7 @@ export function CallProvider(props: ParentProps) {
   const [transcriptSegments, setTranscriptSegments] = createSignal<
     TranscriptionSegment[]
   >([]);
-  let transcriptCallback: ((segment: FinalTranscriptSegment) => void) | null =
-    null;
+  const transcriptCallbacks: Array<(segment: FinalTranscriptSegment) => void> = [];
 
   function syncParticipants(r: Room) {
     setRemoteParticipants(new Map(r.remoteParticipants));
@@ -160,12 +159,15 @@ export function CallProvider(props: ParentProps) {
         };
         if (isFinal) {
           setTranscriptSegments((prev) => [...prev, segment]);
-          transcriptCallback?.({
+          const segment: FinalTranscriptSegment = {
             id: reader.info.id,
             text,
             participantIdentity: participantInfo?.identity ?? '',
             isFinal: true,
-          });
+          };
+          for (const cb of transcriptCallbacks) {
+            cb(segment);
+          }
         }
       }
     );
@@ -279,7 +281,11 @@ export function CallProvider(props: ParentProps) {
     toggleScreenShare,
     transcriptSegments,
     onTranscriptSegment: (cb) => {
-      transcriptCallback = cb;
+      transcriptCallbacks.push(cb);
+      return () => {
+        const idx = transcriptCallbacks.indexOf(cb);
+        if (idx !== -1) transcriptCallbacks.splice(idx, 1);
+      };
     },
   };
 
