@@ -248,7 +248,16 @@ export function CallProvider(props: ParentProps) {
     setIsScreenSharing(newSharing);
   }
 
+  const handleBeforeUnload = () => {
+    const r = room();
+    if (r) {
+      r.disconnect();
+    }
+  };
+  window.addEventListener('beforeunload', handleBeforeUnload);
+
   onCleanup(() => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
     const r = room();
     if (r) {
       r.disconnect();
