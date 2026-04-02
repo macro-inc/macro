@@ -58,6 +58,7 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
@@ -76,7 +77,6 @@ import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import { ReactiveFavicon } from './ReactiveFavicon';
-import { SuspenseContextComp } from './SuspenseContext';
 import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 
@@ -416,24 +416,6 @@ export function Root() {
 
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
-
-  let runRootWarningLog = false;
-  const RootSuspenseFallback = () => {
-    const runWarningLog = () => {
-      if (!runRootWarningLog) {
-        setTimeout(() => {
-          runRootWarningLog = true;
-        });
-        return;
-      }
-
-      console.warn('Root Suspsense Triggered');
-    };
-
-    runWarningLog();
-
-    return '';
-  };
 
   return (
     <MaybeTauriProvider>
