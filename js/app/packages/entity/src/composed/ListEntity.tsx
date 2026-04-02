@@ -666,7 +666,7 @@ function WideLayout(props: LayoutProps) {
           <Match when={isChannelEntity(props.entity) && props.entity}>
             {(entity) => (
               <>
-                <span class="w-(--title-width) shrink-0 truncate flex gap-2">
+                <span class="w-(--title-width) shrink truncate flex gap-2">
                   <Entity.Title entity={entity()} />
                 </span>
                 <Show when={!props.hasNotifications && entity().latestMessage}>
