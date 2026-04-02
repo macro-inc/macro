@@ -49,9 +49,13 @@ pub async fn handler(
         .context("Failed to fetch document basic info")?
         .ok_or_else(|| anyhow::anyhow!("document not found"))?;
 
-    let file_type = document_basic
-        .try_file_type()
-        .ok_or_else(|| anyhow::anyhow!("file type not found"))?;
+    let file_type = match document_basic.try_file_type() {
+        Some(file_type) => file_type,
+        None => {
+            tracing::trace!(document_id=?document_id, "no file type found");
+            return Ok(());
+        }
+    };
 
     let search_extractor_message = SearchExtractorMessage {
         user_id: document_basic.owner.to_string(),
