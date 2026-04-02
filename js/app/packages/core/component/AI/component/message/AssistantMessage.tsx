@@ -20,6 +20,7 @@ import {
   createSignal,
   For,
   Match,
+  mapArray,
   Show,
   Switch,
 } from 'solid-js';
@@ -301,6 +302,23 @@ function pairToolCalls(parts: AssistantMessagePart[]): AssistantMessagePart[] {
   return pairParts(parts, []);
 }
 
+function getAssistantPartKey(
+  part: AssistantMessagePart,
+  counts: Map<AssistantMessagePart['type'], number>
+): string {
+  if (
+    part.type === 'toolCall' ||
+    part.type === 'toolCallResponseJson' ||
+    part.type === 'toolCallErr'
+  ) {
+    return `${part.type}:${part.id}`;
+  }
+
+  const count = counts.get(part.type) ?? 0;
+  counts.set(part.type, count + 1);
+  return `${part.type}:${count}`;
+}
+
 function AssistantMessageParts(props: {
   parts: AssistantMessagePart[];
   message: ChatMessageWithAttachments;
@@ -327,20 +345,45 @@ function AssistantMessageParts(props: {
     return pairToolCalls(props.parts);
   });
 
+  const keyedParts = createMemo(() => {
+    const counts = new Map<AssistantMessagePart['type'], number>();
+    const partsByKey = new Map<string, AssistantMessagePart>();
+    const orderedKeys: string[] = [];
+
+    for (const part of parts()) {
+      const key = getAssistantPartKey(part, counts);
+      orderedKeys.push(key);
+      partsByKey.set(key, part);
+    }
+
+    return { orderedKeys, partsByKey };
+  });
+
+  const stableParts = mapArray(
+    () => keyedParts().orderedKeys,
+    (key) => createMemo(() => keyedParts().partsByKey.get(key))
+  );
+
   return (
-    <For each={parts()}>
+    <For each={stableParts()}>
       {(part, i) => {
-        if (part.type === 'toolCall') {
+        const currentPart = part();
+        if (!currentPart) return null;
+
+        if (currentPart.type === 'toolCall') {
+          const toolCall = () =>
+            currentPart as Extract<AssistantMessagePart, { type: 'toolCall' }>;
+
           return (
             <RenderTool
-              tool_id={part.id}
+              tool_id={toolCall().id}
               chat_id={'todo'}
-              json={part.json}
-              name={part.name}
+              json={toolCall().json}
+              name={toolCall().name}
               message_id={props.message.id}
               part_index={i()}
               type="call"
-              isComplete={isCompleteSelector(part.id)}
+              isComplete={isCompleteSelector(toolCall().id)}
               renderContext={{
                 renderContext: {
                   isStreaming: props.isStreaming,
@@ -348,14 +391,20 @@ function AssistantMessageParts(props: {
               }}
             />
           );
-        } else if (part.type === 'toolCallResponseJson') {
+        } else if (currentPart.type === 'toolCallResponseJson') {
+          const toolResponse = () =>
+            currentPart as Extract<
+              AssistantMessagePart,
+              { type: 'toolCallResponseJson' }
+            >;
+
           return (
             <RenderTool
               isComplete={true}
-              tool_id={part.id}
+              tool_id={toolResponse().id}
               chat_id={'todo'}
-              json={part.json}
-              name={part.name}
+              json={toolResponse().json}
+              name={toolResponse().name}
               message_id={props.message.id}
               part_index={i()}
               type="response"
@@ -366,11 +415,14 @@ function AssistantMessageParts(props: {
               }}
             />
           );
-        } else if (part.type === 'text') {
-          if (part.text.trim().length > 0)
+        } else if (currentPart.type === 'text') {
+          const textPart = () =>
+            currentPart as Extract<AssistantMessagePart, { type: 'text' }>;
+
+          if (textPart().text.trim().length > 0)
             return (
               <ChatMessageMarkdown
-                text={part.text}
+                text={textPart().text}
                 generating={() => props.isStreaming}
               />
             );

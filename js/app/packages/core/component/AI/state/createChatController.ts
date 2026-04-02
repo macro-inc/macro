@@ -3,8 +3,15 @@ import { asChatMessage } from '@core/component/AI/util/message';
 import { toast } from '@core/component/Toast/Toast';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
-import type { Accessor, Setter } from 'solid-js';
-import { createEffect, createSignal, on, untrack } from 'solid-js';
+import type { Accessor, Owner, Setter } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  getOwner,
+  on,
+  runWithOwner,
+  untrack,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type ChatEvent,
@@ -23,7 +30,7 @@ export type ChatController = {
   isWaiting: Accessor<boolean>;
 
   dispatch: (event: ChatEvent) => void;
-  attachStream: (stream: ChatMessageStream) => void;
+  attachStream: (stream: ChatMessageStream, owner?: Owner | null) => void;
   /** Escape hatch for debug components that set stream directly */
   setStream: Setter<ChatMessageStream | undefined>;
 };
@@ -64,46 +71,55 @@ export function createChatController(
     executeEffects(result.effects);
   }
 
-  function attachStream(newStream: ChatMessageStream) {
+  function attachStream(newStream: ChatMessageStream, owner = getOwner()) {
     setStream(newStream);
     dispatch({ type: 'stream_connected' });
 
-    // Watch stream data for user messages and errors
-    createEffect(
-      on(
-        () => newStream.data(),
-        (data) => {
-          const latest = data.at(-1);
-          if (!latest) return;
+    const watchStream = () => {
+      // Watch stream data for user messages and errors
+      createEffect(
+        on(
+          () => newStream.data(),
+          (data) => {
+            const latest = data.at(-1);
+            if (!latest) return;
 
-          if (latest.type === 'error') {
-            const streamError =
-              'stream_error' in latest ? latest.stream_error : undefined;
-            dispatch({
-              type: 'stream_error',
-              streamError: streamError as string | undefined,
-            });
-            return;
+            if (latest.type === 'error') {
+              const streamError =
+                'stream_error' in latest ? latest.stream_error : undefined;
+              dispatch({
+                type: 'stream_error',
+                streamError: streamError as string | undefined,
+              });
+              return;
+            }
+
+            if (latest.type === 'chat_user_message') {
+              dispatch({
+                type: 'stream_user_message',
+                messageId: latest.message_id,
+                content: latest.content,
+                attachments: latest.attachments,
+              });
+            }
           }
+        )
+      );
 
-          if (latest.type === 'chat_user_message') {
-            dispatch({
-              type: 'stream_user_message',
-              messageId: latest.message_id,
-              content: latest.content,
-              attachments: latest.attachments,
-            });
-          }
-        }
-      )
-    );
+      // Watch stream completion
+      createEffect(() => {
+        if (!newStream.isDone()) return;
+        const message = asChatMessage(newStream.data());
+        dispatch({ type: 'stream_done', message });
+      });
+    };
 
-    // Watch stream completion
-    createEffect(() => {
-      if (!newStream.isDone()) return;
-      const message = asChatMessage(newStream.data());
-      dispatch({ type: 'stream_done', message });
-    });
+    if (owner) {
+      runWithOwner(owner, watchStream);
+      return;
+    }
+
+    watchStream();
   }
 
   // Reconnect active streams on page refresh / chat switch
