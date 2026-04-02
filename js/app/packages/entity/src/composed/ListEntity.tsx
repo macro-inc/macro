@@ -13,7 +13,6 @@ import {
   isEmailEntity,
   isProjectContainedEntity,
   type ChannelEntity,
-  type ChannelMessageEntity,
   type EmailEntity,
   type ProjectEntity,
   type EntityData,
@@ -54,7 +53,6 @@ import { isSearchEntity } from '../types/search';
 import { UserIcon } from '@core/component/UserIcon';
 import { SearchContent } from '../extractors-search/search-content';
 import { SearchSender } from '../extractors-search/search-sender';
-import { SearchTimestamp } from '../extractors-search/search-timestamp';
 import { createEntityDraggable } from '../utils/draggable';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
