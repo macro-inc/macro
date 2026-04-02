@@ -428,6 +428,7 @@ type EntityIconData = Pick<EntityData, 'type'> & {
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
   const typeString = match(entity)
     .with({ type: 'channel' }, (e) => e.channelType || 'channel')
+    .with({ type: 'channel_message' }, (e) => e.channelType || 'channel')
     .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
     .with({ type: 'email', isRead: true }, () => 'emailRead')
     .with({ type: 'email' }, () => 'email')
