@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub use model_entity::EntityType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
@@ -230,6 +231,15 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
             _marker: PhantomData,
         }
     }
+}
+
+/// Information about a call's channel association and share permission.
+#[derive(Debug, Clone)]
+pub struct CallChannelInfo {
+    /// The channel the call belongs to.
+    pub channel_id: Uuid,
+    /// The share permission ID for this call.
+    pub share_permission_id: String,
 }
 
 /// Errors that can occur during access checking.

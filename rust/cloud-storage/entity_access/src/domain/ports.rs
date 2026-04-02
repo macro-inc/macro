@@ -4,8 +4,8 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, ChannelRoleResult, EntityAccessReceipt, EntityPermission,
-    RequiredPermission,
+    AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityAccessReceipt,
+    EntityPermission, RequiredPermission,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::future::Future;
@@ -109,6 +109,24 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         thread_id: &str,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Resolve a call ID to its channel ID and share permission ID.
+    ///
+    /// Checks both the `calls` table (active calls) and the `call_records` table
+    /// (archived calls). Returns `None` if the call does not exist in either table.
+    fn get_call_channel(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
+
+    /// Resolve a channel ID to the call's channel info and share permission ID.
+    ///
+    /// Checks both the `calls` table (active calls) and the `call_records` table
+    /// (archived calls). Returns `None` if no call exists for the channel.
+    fn get_call_channel_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
 }
 
 /// Service for checking entity access levels.
@@ -187,4 +205,20 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Resolve a call ID to its channel ID and share permission ID.
+    ///
+    /// Checks both `calls` (active) and `call_records` (archived) tables.
+    fn get_call_channel(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
+
+    /// Resolve a channel ID to the call's channel info and share permission ID.
+    ///
+    /// Checks both `calls` (active) and `call_records` (archived) tables.
+    fn get_call_channel_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
 }
