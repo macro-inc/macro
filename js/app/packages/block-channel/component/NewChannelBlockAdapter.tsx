@@ -27,6 +27,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { BlockChannelProps } from './Block';
 import { CallProvider, CallOverlay, useCall } from '@channel/Call';
 import { useSendTranscriptMutation } from '@queries/call/call';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { Button } from '@ui/components/Button';
 import PhoneIcon from '@icon/regular/phone.svg';
@@ -107,13 +108,15 @@ function NewTop(props: {
         activeTab={props.activeTab}
         onTabChange={props.onTabChange}
       />
-      <SplitHeaderRight>
-        <CallButton
-          joinCall={props.joinCall}
-          leaveCall={props.leaveCall}
-          isInCall={props.isInCall}
-        />
-      </SplitHeaderRight>
+      <Show when={ENABLE_CALLS}>
+        <SplitHeaderRight>
+          <CallButton
+            joinCall={props.joinCall}
+            leaveCall={props.leaveCall}
+            isInCall={props.isInCall}
+          />
+        </SplitHeaderRight>
+      </Show>
       <ChannelTopBarLiveIndicators />
     </Suspense>
   );

@@ -37,6 +37,7 @@ import { ParticipantManagerButton } from './ParticipantManager';
 import { useAnalytics } from '@app/component/analytics-context';
 import { Tabs, type TabItem } from '@core/component/Tabs';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -192,6 +193,7 @@ export function Top(props: TopProps) {
         }
       },
       isActive: () => channelModals.isInCall(),
+      condition: () => ENABLE_CALLS,
     },
     {
       label: 'Participants',

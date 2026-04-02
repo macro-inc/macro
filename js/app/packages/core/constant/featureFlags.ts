@@ -299,3 +299,5 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   'ENABLE_CLIENT_EMAIL_SIGNAL_FILTER',
   false
 );
+
+export const ENABLE_CALLS = resolveFeatureFlag('ENABLE_CALLS', DEV_MODE_ENV);
