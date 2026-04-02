@@ -63,15 +63,28 @@ function CallButton(props: {
     </Show>
   );
 
+  const [inFlight, setInFlight] = createSignal(false);
+
+  const handleClick = async () => {
+    if (inFlight()) return;
+    setInFlight(true);
+    try {
+      if (props.isInCall()) {
+        await props.leaveCall();
+      } else {
+        await props.joinCall();
+      }
+    } catch (e) {
+      console.error('Call action failed', e);
+    } finally {
+      setInFlight(false);
+    }
+  };
+
   return (
     <Button
-      onClick={() => {
-        if (props.isInCall()) {
-          props.leaveCall();
-        } else {
-          props.joinCall();
-        }
-      }}
+      onClick={handleClick}
+      disabled={inFlight()}
       tooltip={props.isInCall() ? 'Leave Call' : 'Call'}
       class={
         props.isInCall()

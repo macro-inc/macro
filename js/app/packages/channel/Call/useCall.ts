@@ -13,13 +13,26 @@ export function useCall(channelId: () => string) {
   async function joinCall() {
     const id = channelId();
     const tokenResponse = await joinMutation.mutateAsync(id);
-    await callCtx.connect(tokenResponse);
+    try {
+      await callCtx.connect(tokenResponse);
+    } catch (e) {
+      // Roll back the backend join so it doesn't think we're in the call
+      try {
+        await leaveMutation.mutateAsync(id);
+      } catch (leaveErr) {
+        console.error('Failed to roll back join after connect failure', leaveErr);
+      }
+      throw e;
+    }
   }
 
   async function leaveCall() {
-    await callCtx.disconnect();
     const id = channelId();
-    await leaveMutation.mutateAsync(id);
+    try {
+      await callCtx.disconnect();
+    } finally {
+      await leaveMutation.mutateAsync(id);
+    }
   }
 
   return {
