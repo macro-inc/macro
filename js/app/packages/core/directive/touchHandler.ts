@@ -9,6 +9,7 @@ export interface TouchHandlerOptions {
   onCancel?: () => void;
   delay?: number;
   moveThreshold?: number;
+  stopTouchStartPropagation?: boolean;
 }
 
 declare module 'solid-js' {
@@ -20,7 +21,7 @@ declare module 'solid-js' {
 }
 
 /**
- * This signal is used to check if a long press is currently active.
+ * This global signal can be used to check if a long press is currently active.
  * For example, it is used to prevent the clickOutside directive from triggering when a long press is active.
  */
 export const [longPressActivated, setLongPressActivated] = createSignal(false);
@@ -32,9 +33,9 @@ export const [longPressActivated, setLongPressActivated] = createSignal(false);
  */
 export function touchHandler(
   element: HTMLElement,
-  props: Accessor<TouchHandlerOptions>
+  options: Accessor<TouchHandlerOptions>
 ) {
-  if (!props().onLongPress && !props().onShortTouch) {
+  if (!options().onLongPress && !options().onShortTouch) {
     return;
   }
 
@@ -50,31 +51,44 @@ export function touchHandler(
     return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   }
 
-  function cancel() {
+  function resetState() {
     if (timer) {
       clearTimeout(timer);
       timer = 0;
     }
     startPosition = undefined;
+    longPressTriggered = false;
+    setValidShortTouch(true);
     setLongPressActivated(false);
-    props().onCancel?.();
+  }
+
+  function cancel() {
+    resetState();
+    options().onCancel?.();
   }
 
   function handleTouchStart(e: TouchEvent) {
-    if (e.touches.length > 1) return;
+    if (e.touches.length > 1) {
+      setValidShortTouch(false);
+      return;
+    }
     setValidShortTouch(true);
 
     const touch = e.touches[0];
     startPosition = { x: touch.clientX, y: touch.clientY };
 
+    if (options().stopTouchStartPropagation) {
+      e.stopPropagation();
+    }
+
     timer = window.setTimeout(() => {
       longPressTriggered = true;
       setLongPressActivated(true);
       void impactFeedback('medium');
-      props().onLongPress?.(
+      options().onLongPress?.(
         e as TouchEvent & { currentTarget: HTMLElement; target: Element }
       );
-    }, props().delay ?? 500);
+    }, options().delay ?? 500);
   }
 
   function handleTouchMove(e: TouchEvent) {
@@ -83,7 +97,7 @@ export function touchHandler(
     const touch = e.touches[0];
     const distance = getDistance(touch.clientX, touch.clientY);
 
-    if (distance > (props().moveThreshold ?? 10)) {
+    if (distance > (options().moveThreshold ?? 10)) {
       setValidShortTouch(false);
       cancel();
     }
@@ -97,38 +111,35 @@ export function touchHandler(
     );
     const isInternalLink = (e.target as Element)?.closest('[internal-link]');
 
+    const touchedSomethingSharp =
+      isAnchorElement || isButtonElement || isDocumentMention || isInternalLink;
+
     if (longPressTriggered) {
       e.stopPropagation();
-      longPressTriggered = false;
-    } else if (validShortTouch() && !longPressTriggered) {
-      if (
-        !isAnchorElement &&
-        !isButtonElement &&
-        !isDocumentMention &&
-        !isInternalLink
-      ) {
-        props().onShortTouch?.(
-          e as TouchEvent & { currentTarget: HTMLElement; target: Element }
-        );
-      }
-      setValidShortTouch(false);
-      cancel();
-    } else {
-      cancel();
+      e.preventDefault();
+    } else if (validShortTouch() && !touchedSomethingSharp) {
+      options().onShortTouch?.(
+        e as TouchEvent & { currentTarget: HTMLElement; target: Element }
+      );
     }
-    setLongPressActivated(false);
+    resetState();
+  }
+
+  function handleTouchCancel() {
+    resetState();
+    options().onCancel?.();
   }
 
   element.addEventListener('touchstart', handleTouchStart, { passive: true });
   element.addEventListener('touchmove', handleTouchMove, { passive: true });
-  element.addEventListener('touchend', handleTouchEnd, { passive: true });
-  element.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+  element.addEventListener('touchend', handleTouchEnd);
+  element.addEventListener('touchcancel', handleTouchCancel, { passive: true });
 
   onCleanup(() => {
     element.removeEventListener('touchstart', handleTouchStart);
     element.removeEventListener('touchmove', handleTouchMove);
     element.removeEventListener('touchend', handleTouchEnd);
-    element.removeEventListener('touchcancel', handleTouchEnd);
+    element.removeEventListener('touchcancel', handleTouchCancel);
     cancel();
   });
 }
