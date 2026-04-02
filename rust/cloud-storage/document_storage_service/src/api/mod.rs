@@ -93,6 +93,12 @@ fn api_router(state: ApiContext) -> Router {
         service: state.github_sync_service.clone(),
     };
 
+    // Webhook router is outside auth — LiveKit validates via its own JWT.
+    let webhook_router = Router::new().nest(
+        "/call",
+        call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
+    );
+
     let internal_router = Router::new()
         .nest(
             "/github",
@@ -186,6 +192,10 @@ fn api_router(state: ApiContext) -> Router {
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
         )
+        .nest(
+            "/call",
+            call::inbound::axum_router::call_router(state.call_state.clone()),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(
@@ -243,4 +253,5 @@ fn api_router(state: ApiContext) -> Router {
     Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
+        .merge(webhook_router)
 }

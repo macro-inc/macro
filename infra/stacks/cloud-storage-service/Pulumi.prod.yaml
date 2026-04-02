@@ -18,3 +18,6 @@ config:
   cloud-storage-service:github_sync_app_url: https://github.com/apps/macro-application
   cloud-storage-service:github_sync_app_pem: github-sync-app-pem-prod
   cloud-storage-service:github_sync_app_client_id: Iv23ct0BBwvcPqFORaCI
+  cloud-storage-service:livekit_server_url: livekit-server-url-prod
+  cloud-storage-service:livekit_api_key: livekit-api-key-prod
+  cloud-storage-service:livekit_api_secret: livekit-api-secret-prod

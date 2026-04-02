@@ -8,6 +8,11 @@ use crate::{
     service::s3::S3,
 };
 use anyhow::Context;
+use call::{
+    domain::service::CallServiceImpl,
+    inbound::axum_router::{CallRouterState, WebhookRouterState},
+    outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
+};
 use channels::{
     domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
     outbound::pg_channels_repo::PgChannelMessagesRepo,
@@ -347,6 +352,21 @@ async fn main() -> anyhow::Result<()> {
         GithubSyncClientImpl::default(),
     );
 
+    // Call service (LiveKit)
+    let livekit_rtc_client = LivekitRtcClient::new(
+        config.vars.livekit_server_url.as_ref(),
+        config.vars.livekit_api_key.as_ref(),
+        config.vars.livekit_api_secret.as_ref(),
+    );
+    let call_repo = PgCallRepo::new(db.clone());
+    let call_service = Arc::new(CallServiceImpl::new(
+        call_repo,
+        livekit_rtc_client,
+        config.vars.livekit_server_url.as_ref(),
+    ));
+    let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
+    let call_webhook_state = WebhookRouterState::new(call_service.clone());
+
     // Create the SQS worker for delete document processing before config is moved
     let delete_document_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&aws_config),
@@ -395,6 +415,8 @@ async fn main() -> anyhow::Result<()> {
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
             (*entity_access_service).clone(),
         ),
+        call_state,
+        call_webhook_state,
     };
 
     // Spawn the delete document worker

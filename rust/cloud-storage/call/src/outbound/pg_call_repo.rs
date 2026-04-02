@@ -1,0 +1,396 @@
+//! Postgres-backed repository for call state.
+
+#[cfg(test)]
+mod test;
+
+use chrono::Utc;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::domain::models::{Call, CallParticipant, TranscriptSegmentRequest};
+use crate::domain::ports::CallRepository;
+
+/// Postgres implementation of [`CallRepository`].
+pub struct PgCallRepo {
+    pool: PgPool,
+}
+
+impl PgCallRepo {
+    /// Create a new repo with the given connection pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl CallRepository for PgCallRepo {
+    type Err = sqlx::Error;
+
+    #[tracing::instrument(err, skip(self))]
+    async fn create_call(
+        &self,
+        call_id: &Uuid,
+        channel_id: &Uuid,
+        room_name: &str,
+        created_by: &str,
+    ) -> Result<Option<Call>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            INSERT INTO calls (id, channel_id, room_name, created_by)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (channel_id) DO NOTHING
+            RETURNING id, channel_id, room_name, created_by, created_at, egress_id
+            "#,
+            call_id,
+            channel_id,
+            room_name,
+            created_by,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| Call {
+            id: r.id,
+            channel_id: r.channel_id,
+            room_name: r.room_name,
+            created_by: r.created_by,
+            created_at: r.created_at,
+            egress_id: r.egress_id,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_by_channel_id(&self, channel_id: &Uuid) -> Result<Option<Call>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
+            FROM calls
+            WHERE channel_id = $1
+            "#,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| {
+            opt.map(|row| Call {
+                id: row.id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                created_at: row.created_at,
+                egress_id: row.egress_id,
+            })
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_by_room_name(&self, room_name: &str) -> Result<Option<Call>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
+            FROM calls
+            WHERE room_name = $1
+            "#,
+            room_name,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| {
+            opt.map(|row| Call {
+                id: row.id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                created_at: row.created_at,
+                egress_id: row.egress_id,
+            })
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn add_participant(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+    ) -> Result<CallParticipant, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            INSERT INTO call_participants (call_id, user_id)
+            VALUES ($1, $2)
+            ON CONFLICT (call_id, user_id) DO UPDATE SET left_at = NULL, joined_at = now()
+            RETURNING call_id, user_id, joined_at
+            "#,
+            call_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(CallParticipant {
+            call_id: row.call_id,
+            user_id: row.user_id,
+            joined_at: row.joined_at,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn remove_participant(&self, call_id: &Uuid, user_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE call_participants
+            SET left_at = now()
+            WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL
+            "#,
+            call_id,
+            user_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_participants(&self, call_id: &Uuid) -> Result<Vec<CallParticipant>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT call_id, user_id, joined_at
+            FROM call_participants
+            WHERE call_id = $1 AND left_at IS NULL
+            ORDER BY joined_at ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|row| CallParticipant {
+                    call_id: row.call_id,
+                    user_id: row.user_id,
+                    joined_at: row.joined_at,
+                })
+                .collect()
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_participant_count(&self, call_id: &Uuid) -> Result<i64, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) as "count!"
+            FROM call_participants
+            WHERE call_id = $1 AND left_at IS NULL
+            "#,
+            call_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn is_participant(&self, call_id: &Uuid, user_id: &str) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM call_participants
+                WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL
+            ) as "exists!"
+            "#,
+            call_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM calls WHERE id = $1
+            "#,
+            call_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn set_egress_id(&self, call_id: &Uuid, egress_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE calls SET egress_id = $2 WHERE id = $1
+            "#,
+            call_id,
+            egress_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
+        // Fetch and lock the active call so concurrent archive_call callers serialize.
+        let call = sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_url
+            FROM calls
+            WHERE id = $1
+            FOR UPDATE
+            "#,
+            call_id,
+        )
+        .fetch_optional(tx.as_mut())
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)?;
+
+        let now = Utc::now();
+        let duration_ms = now
+            .signed_duration_since(call.created_at)
+            .num_milliseconds()
+            .max(0);
+        let record_id = Uuid::now_v7();
+
+        // Insert into call_records (including egress_id and any early recording_url).
+        sqlx::query!(
+            r#"
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            "#,
+            record_id,
+            call.channel_id,
+            call.room_name,
+            call.created_by,
+            call.created_at,
+            now,
+            duration_ms,
+            call.egress_id,
+            call.recording_url,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // Copy all participants (including soft-deleted) to call_record_participants.
+        sqlx::query!(
+            r#"
+            INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
+            SELECT $1, user_id, joined_at, left_at
+            FROM call_participants
+            WHERE call_id = $2
+            "#,
+            record_id,
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // Copy transcripts to call_record_transcripts.
+        sqlx::query!(
+            r#"
+            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
+            SELECT $1, segment_id, speaker_id, content, started_at, ended_at, sequence_num
+            FROM call_transcripts
+            WHERE call_id = $2
+            "#,
+            record_id,
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // Delete the ephemeral call (cascades to call_participants and call_transcripts).
+        sqlx::query!(
+            r#"
+            DELETE FROM calls WHERE id = $1
+            "#,
+            call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        tx.commit().await?;
+        Ok(record_id)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn set_recording_url(
+        &self,
+        call_record_id: &Uuid,
+        recording_url: &str,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE call_records SET recording_url = $2 WHERE id = $1
+            "#,
+            call_record_id,
+            recording_url,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_record_by_egress_id(
+        &self,
+        egress_id: &str,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT id FROM call_records WHERE egress_id = $1
+            "#,
+            egress_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn set_active_call_recording_url(
+        &self,
+        egress_id: &str,
+        recording_url: &str,
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE calls SET recording_url = $2 WHERE egress_id = $1
+            "#,
+            egress_id,
+            recording_url,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(err, skip(self, segment))]
+    async fn create_transcript_segment(
+        &self,
+        call_id: &Uuid,
+        segment: &TranscriptSegmentRequest,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            INSERT INTO call_transcripts (call_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
+            VALUES ($1, $2, $3, $4, $5, $6, (
+                SELECT COALESCE(MAX(sequence_num), 0) + 1
+                FROM call_transcripts
+                WHERE call_id = $1
+            ))
+            ON CONFLICT (call_id, segment_id) DO NOTHING
+            "#,
+            call_id,
+            segment.segment_id,
+            segment.speaker_id,
+            segment.content,
+            segment.started_at,
+            segment.ended_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+}

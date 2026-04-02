@@ -3,6 +3,8 @@ import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { Accessor, JSXElement } from 'solid-js';
@@ -20,6 +22,7 @@ import {
 import { createStore } from 'solid-js/store';
 import { idStream, timeStream } from '../../util/stream/extendedStream';
 import { AssistantMessage } from './AssistantMessage';
+import { EmptyChatState } from './EmptyChatState';
 import { UserMessage } from './UserMessage';
 
 export type MessageActions = {};
@@ -191,87 +194,103 @@ export function ChatMessages(props: ChatMessagesProps) {
   };
 
   const activeIdSelector = createSelector(activeTargetMessageId);
+  const isEmptyChat = () =>
+    messages().length === 0 &&
+    !isMobileWidth() &&
+    !isTouchDevice() &&
+    !isStream() &&
+    !chat.isWaiting() &&
+    !generatingMessage();
 
   return (
     <StaticMarkdownContext theme={aiChatTheme}>
       <div class="relative flex flex-col w-full px-2 gap-y-2" ref={messagesRef}>
-        <For each={allButLastMessagePair()}>
-          {(msg) => (
-            <div
-              id={'chat-' + msg.id}
-              class="w-full transition-colors duration-300"
-              classList={{
-                'bg-accent': activeIdSelector(msg.id),
-              }}
-            >
-              <Switch>
-                <Match when={msg.role === 'user'}>
-                  <UserMessage message={msg} />
-                </Match>
-                <Match when={msg.role === 'assistant'}>
-                  <AssistantMessage
-                    message={msg}
-                    ttft={messageTimingMap[msg.id]}
-                  />
-                </Match>
-              </Switch>
-            </div>
-          )}
-        </For>
-
-        <Show when={isStream() || chat.isWaiting() || lastPair()}>
-          <div
-            class="shrink-0"
-            style={{
-              'min-height': `${parentHeight()}px`,
-            }}
-          >
-            <Show when={lastPair()}>
-              {(pair) => (
-                <For each={pair()}>
-                  {(msg) => (
-                    <div
-                      id={'chat-' + msg.id}
-                      class="w-full transition-colors duration-300"
-                      classList={{
-                        'bg-accent': activeIdSelector(msg.id),
-                      }}
-                    >
-                      <Switch>
-                        <Match when={msg.role === 'user'}>
-                          <UserMessage message={msg} />
-                        </Match>
-                        <Match when={msg.role === 'assistant'}>
-                          <AssistantMessage
-                            message={msg}
-                            ttft={messageTimingMap[msg.id]}
-                          />
-                        </Match>
-                      </Switch>
-                    </div>
-                  )}
-                </For>
-              )}
-            </Show>
-            <Show when={generatingMessage()}>
-              {(msg) => {
-                return (
-                  <div id={'chat-' + msg().id}>
-                    <AssistantMessage message={msg()} isStreaming />
+        <Show
+          when={isEmptyChat()}
+          fallback={
+            <>
+              <For each={allButLastMessagePair()}>
+                {(msg) => (
+                  <div
+                    id={'chat-' + msg.id}
+                    class="w-full transition-colors duration-300"
+                    classList={{
+                      'bg-accent': activeIdSelector(msg.id),
+                    }}
+                  >
+                    <Switch>
+                      <Match when={msg.role === 'user'}>
+                        <UserMessage message={msg} />
+                      </Match>
+                      <Match when={msg.role === 'assistant'}>
+                        <AssistantMessage
+                          message={msg}
+                          ttft={messageTimingMap[msg.id]}
+                        />
+                      </Match>
+                    </Switch>
                   </div>
-                );
-              }}
-            </Show>
-            <Show when={isStream() || chat.isWaiting()}>
-              <OnMount
-                onShow={() =>
-                  scrollToBottom(isNearBottom() ? 'instant' : 'smooth')
-                }
-              >
-                <PulsingStar kind="streamIndicator" animate />
-              </OnMount>
-            </Show>
-          </div>
+                )}
+              </For>
+
+              <Show when={isStream() || chat.isWaiting() || lastPair()}>
+                <div
+                  class="shrink-0"
+                  style={{
+                    'min-height': `${parentHeight()}px`,
+                  }}
+                >
+                  <Show when={lastPair()}>
+                    {(pair) => (
+                      <For each={pair()}>
+                        {(msg) => (
+                          <div
+                            id={'chat-' + msg.id}
+                            class="w-full transition-colors duration-300"
+                            classList={{
+                              'bg-accent': activeIdSelector(msg.id),
+                            }}
+                          >
+                            <Switch>
+                              <Match when={msg.role === 'user'}>
+                                <UserMessage message={msg} />
+                              </Match>
+                              <Match when={msg.role === 'assistant'}>
+                                <AssistantMessage
+                                  message={msg}
+                                  ttft={messageTimingMap[msg.id]}
+                                />
+                              </Match>
+                            </Switch>
+                          </div>
+                        )}
+                      </For>
+                    )}
+                  </Show>
+                  <Show when={generatingMessage()}>
+                    {(msg) => {
+                      return (
+                        <div id={'chat-' + msg().id}>
+                          <AssistantMessage message={msg()} isStreaming />
+                        </div>
+                      );
+                    }}
+                  </Show>
+                  <Show when={isStream() || chat.isWaiting()}>
+                    <OnMount
+                      onShow={() =>
+                        scrollToBottom(isNearBottom() ? 'instant' : 'smooth')
+                      }
+                    >
+                      <PulsingStar kind="streamIndicator" animate />
+                    </OnMount>
+                  </Show>
+                </div>
+              </Show>
+            </>
+          }
+        >
+          <EmptyChatState minHeight={Math.max(parentHeight(), 420)} />
         </Show>
       </div>
     </StaticMarkdownContext>

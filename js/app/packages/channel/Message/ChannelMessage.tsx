@@ -9,6 +9,7 @@ import {
   useMessageActionDrawer,
 } from './context';
 import type { MessageSelectionState } from './context';
+import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
 import { touchHandler } from '@core/directive/touchHandler';

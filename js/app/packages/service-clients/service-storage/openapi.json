@@ -594,6 +594,208 @@
         }
       }
     },
+    "/call/webhook": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/webhook`.",
+        "description": "Receives webhook events from the RTC provider (e.g. LiveKit).\nThe `Authorization` header contains the webhook auth token\nand the body contains the raw event payload.",
+        "operationId": "call_webhook",
+        "responses": {
+          "200": {
+            "description": "Event processed"
+          },
+          "401": {
+            "description": "Invalid webhook signature"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/{channel_id}": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/{channel_id}`.",
+        "description": "Gets or creates a call for the channel. If a call already exists, joins it;\notherwise creates a new one. Always returns a join token.",
+        "operationId": "get_or_create_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `DELETE /call/{channel_id}`.",
+        "operationId": "leave_or_end_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaveCallResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No active call",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/{channel_id}/transcript": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/{channel_id}/transcript`.",
+        "description": "Receives transcript segments from the frontend.\nRequires channel membership. Duplicate segments (same `segment_id`) are ignored.",
+        "operationId": "ingest_transcript",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscriptSegmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Segment ingested"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No active call",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/attachments": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -5499,6 +5701,35 @@
           }
         }
       },
+      "CallTokenResponse": {
+        "type": "object",
+        "description": "Response returned when creating or joining a call.",
+        "required": ["callId", "channelId", "token", "roomName", "serverUrl"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call is associated with."
+          },
+          "roomName": {
+            "type": "string",
+            "description": "The RTC room name."
+          },
+          "serverUrl": {
+            "type": "string",
+            "description": "The RTC server URL for the frontend SDK to connect to."
+          },
+          "token": {
+            "type": "string",
+            "description": "The RTC token for connecting to the room."
+          }
+        }
+      },
       "Channel": {
         "type": "object",
         "required": [
@@ -8277,6 +8508,17 @@
           }
         }
       },
+      "LeaveCallResponse": {
+        "type": "object",
+        "description": "Response for the leave/end call operation.",
+        "required": ["callEnded"],
+        "properties": {
+          "callEnded": {
+            "type": "boolean",
+            "description": "Whether the entire call was ended (room deleted)."
+          }
+        }
+      },
       "LocationResponseData": {
         "oneOf": [
           {
@@ -10472,6 +10714,45 @@
             "items": {
               "$ref": "#/components/schemas/CommentThread"
             }
+          }
+        }
+      },
+      "TranscriptSegmentRequest": {
+        "type": "object",
+        "description": "A transcript segment from LiveKit Inference STT.",
+        "required": [
+          "segmentId",
+          "speakerId",
+          "content",
+          "startedAt",
+          "isFinal"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The transcribed text content."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the speaker stopped talking for this segment."
+          },
+          "isFinal": {
+            "type": "boolean",
+            "description": "Whether this is a final transcription (not interim)."
+          },
+          "segmentId": {
+            "type": "string",
+            "description": "LiveKit segment ID (used for deduplication across multiple submitters)."
+          },
+          "speakerId": {
+            "type": "string",
+            "description": "The speaker's user ID (from `lk.transcribed_track_id`)."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the speaker started talking for this segment."
           }
         }
       },

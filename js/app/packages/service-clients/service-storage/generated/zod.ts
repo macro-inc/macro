@@ -811,6 +811,80 @@ export const createCommentResponse = zod
   );
 
 /**
+ * Gets or creates a call for the channel. If a call already exists, joins it;
+otherwise creates a new one. Always returns a join token.
+ * @summary Handler for `GET /call/{channel_id}`.
+ */
+export const getOrCreateCallParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const getOrCreateCallResponse = zod
+  .object({
+    callId: zod.string().uuid().describe('The call identifier.'),
+    channelId: zod
+      .string()
+      .uuid()
+      .describe('The channel this call is associated with.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Handler for `DELETE /call/{channel_id}`.
+ */
+export const leaveOrEndCallParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const leaveOrEndCallResponse = zod
+  .object({
+    callEnded: zod
+      .boolean()
+      .describe('Whether the entire call was ended (room deleted).'),
+  })
+  .describe('Response for the leave/end call operation.');
+
+/**
+ * Receives transcript segments from the frontend.
+Requires channel membership. Duplicate segments (same `segment_id`) are ignored.
+ * @summary Handler for `POST /call/{channel_id}/transcript`.
+ */
+export const ingestTranscriptParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const ingestTranscriptBody = zod
+  .object({
+    content: zod.string().describe('The transcribed text content.'),
+    endedAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('When the speaker stopped talking for this segment.'),
+    isFinal: zod
+      .boolean()
+      .describe('Whether this is a final transcription (not interim).'),
+    segmentId: zod
+      .string()
+      .describe(
+        'LiveKit segment ID (used for deduplication across multiple submitters).'
+      ),
+    speakerId: zod
+      .string()
+      .describe("The speaker's user ID (from `lk.transcribed_track_id`)."),
+    startedAt: zod
+      .string()
+      .datetime({})
+      .describe('When the speaker started talking for this segment.'),
+  })
+  .describe('A transcript segment from LiveKit Inference STT.');
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({

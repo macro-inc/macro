@@ -61,6 +61,9 @@ env_var! {
         pub ContactsQueue,
         pub GithubSyncAppUrl,
         pub GithubSyncAppClientId,
+        pub LivekitServerUrl,
+        pub LivekitApiKey,
+        pub LivekitApiSecret,
     }
 }
 

@@ -20,6 +20,8 @@ export type ThreadState = {
   setIsReplying: Setter<boolean>;
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
+  replyInputEl?: Accessor<HTMLElement | undefined>;
+  setReplyInputEl?: Setter<HTMLElement | undefined>;
 };
 
 export type MessageEditState = {
