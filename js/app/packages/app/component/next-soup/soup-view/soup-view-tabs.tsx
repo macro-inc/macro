@@ -26,7 +26,7 @@ import {
 } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import { impactFeedback } from '@tauri-apps/plugin-haptics';
+import { hapticImpact } from '@core/mobile/haptics';
 import { cn } from '@ui/utils/classname';
 
 type TabItem = SegmentedControlItem;
@@ -261,7 +261,7 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
     }
     const id = closest?.dataset.tabId;
     if (id && scrollActiveId() !== id) {
-      impactFeedback('light');
+      hapticImpact('light');
       setScrollActiveId(id);
     }
   };
@@ -292,7 +292,7 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   const handleItemClick = (tabValue: string, idx: number) => {
     const el = itemRefs[idx];
     if (el) scrollRef.scrollTo({ left: el.offsetLeft, behavior: 'smooth' });
-    impactFeedback('light');
+    hapticImpact('light');
     applyTabPreset(props.view, tabValue);
   };
 
