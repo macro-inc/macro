@@ -3,6 +3,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 
 /**
  * Get the URL type/path segment for an entity
@@ -11,8 +12,30 @@ const getEntityUrlType = (entity: EntityData): string => {
   if (entity.type === 'document') {
     const { fileType, subType } = entity;
     return fileTypeToBlockName(subType?.type ?? fileType);
+  } else if (entity.type === 'channel_message') {
+    return 'channel';
   }
   return entity.type;
+};
+
+const getEntityUrlId = (entity: EntityData): string => {
+  if (entity.type === 'channel_message') {
+    return entity.channelId;
+  }
+  return entity.id;
+};
+
+const getEntityUrlParams = (entity: EntityData): Record<string, string> => {
+  if (entity.type === 'channel_message') {
+    const params = {
+      [CHANNEL_PARAMS.message]: entity.messageId,
+    };
+    if (entity.threadId) {
+      params[CHANNEL_PARAMS.thread] = entity.threadId;
+    }
+    return params;
+  }
+  return {};
 };
 
 export const makeCopyLinkAction = () => {
@@ -26,12 +49,13 @@ export const makeCopyLinkAction = () => {
     const entity = entities[0];
     if (!entity) return;
 
-    const url = buildSimpleEntityUrl(
+    let url: string;
+    url = buildSimpleEntityUrl(
       {
         type: getEntityUrlType(entity),
-        id: entity.id,
+        id: getEntityUrlId(entity),
       },
-      {}
+      getEntityUrlParams(entity)
     );
 
     await navigator.clipboard.writeText(url);
