@@ -233,6 +233,11 @@ export function CallProvider(props: ParentProps) {
       throw e;
     }
 
+    // Sync participants that were already in the room when we connected
+    // (ParticipantConnected may not fire for pre-existing participants on rejoin)
+    setRemoteParticipants(new Map(targetRoom.remoteParticipants));
+    setTrackVersion((v) => v + 1);
+
     // Enable microphone by default, video off by default
     try {
       await targetRoom.localParticipant.setMicrophoneEnabled(true);
