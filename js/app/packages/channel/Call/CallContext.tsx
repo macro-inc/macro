@@ -162,14 +162,14 @@ export function CallProvider(props: ParentProps) {
         };
         if (isFinal) {
           setTranscriptSegments((prev) => [...prev, segment]);
-          const segment: FinalTranscriptSegment = {
+          const finalSegment: FinalTranscriptSegment = {
             id: reader.info.id,
             text,
             participantIdentity: participantInfo?.identity ?? '',
             isFinal: true,
           };
           for (const cb of transcriptCallbacks) {
-            cb(segment);
+            cb(finalSegment);
           }
         }
       }
