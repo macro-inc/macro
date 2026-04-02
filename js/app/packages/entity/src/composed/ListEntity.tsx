@@ -9,9 +9,11 @@ import { Entity } from '../entity';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import {
   isChannelEntity,
+  isChannelMessageEntity,
   isEmailEntity,
   isProjectContainedEntity,
   type ChannelEntity,
+  type ChannelMessageEntity,
   type EmailEntity,
   type ProjectEntity,
   type EntityData,
@@ -49,6 +51,10 @@ import {
 } from '@core/component/LexicalMarkdown/theme';
 import type { SearchLocation } from '../types/search';
 import { isSearchEntity } from '../types/search';
+import { UserIcon } from '@core/component/UserIcon';
+import { SearchContent } from '../extractors-search/search-content';
+import { SearchSender } from '../extractors-search/search-sender';
+import { SearchTimestamp } from '../extractors-search/search-timestamp';
 import { createEntityDraggable } from '../utils/draggable';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
@@ -566,6 +572,42 @@ function WideLayout(props: LayoutProps) {
                 </span>
               </>
             )}
+          </Match>
+          <Match when={isChannelMessageEntity(props.entity) && props.entity}>
+            {(entity) => {
+              const hit = () => {
+                const e = entity() as EntityData;
+                return isSearchEntity(e)
+                  ? e.search.contentHitData?.[0]
+                  : undefined;
+              };
+              return (
+                <>
+                  <span class="w-(--title-width) shrink-0 truncate flex gap-2 items-center">
+                    <Show when={entity().senderId}>
+                      {(id) => <UserIcon id={id()} size="xs" />}
+                    </Show>
+                    <span class="text-ink-muted truncate">
+                      {entity().channelName}
+                    </span>
+                    <Show when={hit()}>
+                      {(h) => (
+                        <span class="text-ink-extra-muted text-xs">
+                          <SearchSender hit={h()} />
+                        </span>
+                      )}
+                    </Show>
+                  </span>
+                  <Show when={hit()}>
+                    {(h) => (
+                      <span class="text-ink/50 font-medium truncate flex-1">
+                        <SearchContent hit={h()} />
+                      </span>
+                    )}
+                  </Show>
+                </>
+              );
+            }}
           </Match>
           <Match when={isChannelEntity(props.entity) && props.entity}>
             {(entity) => (
