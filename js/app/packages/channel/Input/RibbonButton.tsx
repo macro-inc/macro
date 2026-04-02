@@ -20,8 +20,10 @@ export function RibbonButton(props: RibbonButtonProps) {
           'bg-active': props.active,
         }
       )}
-      onClick={(event) => {
+      onPointerDown={(event) => {
         event.preventDefault();
+      }}
+      onClick={() => {
         props.onClick();
       }}
     >
