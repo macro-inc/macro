@@ -1,7 +1,9 @@
 import { Tooltip } from '@core/component/Tooltip';
+import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
 import { cn } from '@ui/utils/classname';
-import { type JSX, Show } from 'solid-js';
+import { Popover } from '@kobalte/core/popover';
+import { createSignal, type JSX, Show } from 'solid-js';
 
 type ReactionChipProps = {
   emoji: string;
@@ -55,40 +57,69 @@ function ReactionTooltipContent(props: {
 }
 
 export function ReactionChip(props: ReactionChipProps) {
+  const [showReactors, setShowReactors] = createSignal(false);
+
   return (
-    <Tooltip
-      tooltip={
-        <ReactionTooltipContent
-          users={props.users}
-          currentUserId={props.currentUserId}
-          emoji={props.emoji}
-        />
-      }
+    <Popover
+      open={showReactors()}
+      onOpenChange={setShowReactors}
       placement="top"
     >
-      <button
-        type="button"
-        data-message-reaction-chip
-        data-emoji={props.emoji}
-        class={cn(
-          'flex flex-row items-center gap-2 py-1 px-2 bg-menu border h-8',
-          {
-            'text-accent-ink border-accent': props.selected,
-            'border-edge-muted hover:bg-hover hover:scale-105 transition-none hover:transition':
-              !props.selected && props.interactive,
-            'border-edge-muted': !props.selected && !props.interactive,
-            'cursor-default': !props.interactive,
-            'pointer-events-auto': !props.interactive,
+      <Popover.Anchor>
+        <Tooltip
+          tooltip={
+            <ReactionTooltipContent
+              users={props.users}
+              currentUserId={props.currentUserId}
+              emoji={props.emoji}
+            />
           }
-        )}
-        disabled={!props.interactive}
-        onClick={(event) => props.onClick?.(event)}
-      >
-        <span class="text-md">{props.emoji}</span>
-        <Show when={props.count > 1}>
-          <span class="text-xs">{props.count}</span>
-        </Show>
-      </button>
-    </Tooltip>
+          placement="top"
+        >
+          <button
+            type="button"
+            data-message-reaction-chip
+            data-emoji={props.emoji}
+            ref={(el) =>
+              touchHandler(el, () => ({
+                onLongPress: () => {
+                  setShowReactors(true);
+                },
+                stopTouchStartPropagation: true,
+              }))
+            }
+            class={cn(
+              'flex flex-row items-center gap-2 py-1 px-2 bg-menu border h-8',
+              {
+                'text-accent-ink border-accent': props.selected,
+                'border-edge-muted hover:bg-hover hover:scale-105 transition-none hover:transition':
+                  !props.selected && props.interactive,
+                'border-edge-muted': !props.selected && !props.interactive,
+                'cursor-default': !props.interactive,
+                'pointer-events-auto': !props.interactive,
+              }
+            )}
+            disabled={!props.interactive}
+            onClick={(event) => {
+              props.onClick?.(event);
+            }}
+          >
+            <span class="text-md">{props.emoji}</span>
+            <Show when={props.count > 1}>
+              <span class="text-xs">{props.count}</span>
+            </Show>
+          </button>
+        </Tooltip>
+      </Popover.Anchor>
+      <Popover.Portal>
+        <Popover.Content class="z-modal bg-panel p-1.5 text-ink-muted text-xs rounded-sm border border-edge-muted">
+          <ReactionTooltipContent
+            users={props.users}
+            currentUserId={props.currentUserId}
+            emoji={props.emoji}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover>
   );
 }
