@@ -310,22 +310,17 @@ function NarrowLayout(props: LayoutProps) {
             };
             return (
               <span class="flex items-center gap-1 min-w-0 truncate">
-                <span class="shrink-0 text-ink-muted">
-                  {entity().channelName}
-                </span>
                 <Show when={entity().senderId}>
                   {(id) => <UserIcon id={id()} size="xs" />}
                 </Show>
+                <span class="shrink-0 text-ink-muted text-xs truncate max-w-[30%]">
+                  {entity().channelName}
+                </span>
                 <Show when={hit()}>
                   {(h) => (
-                    <>
-                      <span class="shrink-0 text-ink-extra-muted text-xs">
-                        <SearchSender hit={h()} />
-                      </span>
-                      <span class="text-ink/50 font-normal truncate">
-                        <SearchContent hit={h()} />
-                      </span>
-                    </>
+                    <span class="text-ink/50 font-normal truncate">
+                      <SearchContent hit={h()} />
+                    </span>
                   )}
                 </Show>
               </span>
@@ -649,20 +644,13 @@ function WideLayout(props: LayoutProps) {
               };
               return (
                 <>
-                  <span class="w-(--title-width) shrink-0 truncate flex gap-2 items-center">
+                  <span class="shrink-0 truncate flex gap-1 items-center max-w-[40%]">
                     <Show when={entity().senderId}>
                       {(id) => <UserIcon id={id()} size="xs" />}
                     </Show>
-                    <span class="text-ink-muted truncate">
+                    <span class="text-ink-muted truncate text-xs">
                       {entity().channelName}
                     </span>
-                    <Show when={hit()}>
-                      {(h) => (
-                        <span class="text-ink-extra-muted text-xs">
-                          <SearchSender hit={h()} />
-                        </span>
-                      )}
-                    </Show>
                   </span>
                   <Show when={hit()}>
                     {(h) => (
