@@ -1,0 +1,19 @@
+# Deploy the agent to LiveKit Cloud
+deploy:
+    lk agent deploy
+
+# Run the agent locally in console mode
+dev:
+    python transcriber.py console
+
+# Stream agent logs from LiveKit Cloud
+logs:
+    lk agent logs
+
+# Check agent deployment status
+status:
+    lk agent status
+
+# Install Python dependencies
+install:
+    pip install -r requirements.txt
