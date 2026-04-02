@@ -34,12 +34,6 @@ impl LivekitRtcClient {
     /// * `server_url` - LiveKit server URL (e.g. `https://my-livekit.example.com`)
     /// * `api_key` - LiveKit API key
     /// * `api_secret` - LiveKit API secret
-    /// Create a new LiveKit RTC client.
-    ///
-    /// # Arguments
-    /// * `server_url` - LiveKit server URL (e.g. `https://my-livekit.example.com`)
-    /// * `api_key` - LiveKit API key
-    /// * `api_secret` - LiveKit API secret
     /// * `transcription_agent_name` - If set, this agent is dispatched to new rooms for STT
     pub fn new(
         server_url: &str,
