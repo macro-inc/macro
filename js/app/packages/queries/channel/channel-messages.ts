@@ -6,7 +6,7 @@ import {
   type ChannelMessagesPage,
 } from '@service-comms/client';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
-import { type Accessor, createEffect, createMemo, on } from 'solid-js';
+import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { queryClient } from '../client';
@@ -570,33 +570,48 @@ export function softInvalidateChannelMessages(channelId: string) {
 export function createMessageIndex(
   data: Accessor<ChannelMessagesData | undefined>
 ) {
-  const buildIndex = () => {
-    const data_ = data();
+  const byId = new Map<string, ApiChannelMessage>();
+  let items: ApiChannelMessage[] = [];
 
-    const pages = data_?.pages;
+  const [listen, notify] = createSignal(undefined, { equals: false });
 
-    const items: ApiChannelMessage[] = [];
-    const keys: string[] = [];
-    const byId = new Map<string, ApiChannelMessage>();
+  const [messageIndex, setMessageIndex] = createStore<string[]>([]);
 
-    if (!pages?.length) return { items, keys, byId };
+  createEffect(
+    on(data, (data) => {
+      byId.clear();
+      items = [];
 
-    for (let i = pages.length - 1; i >= 0; i--) {
-      const pageItems = pages[i].items;
-      for (let j = pageItems.length - 1; j >= 0; j--) {
-        const message = pageItems[j];
-        items.push(message);
-        keys.push(message.id);
-        byId.set(message.id, message);
+      const pages = data?.pages;
+
+      const keys: string[] = [];
+
+      if (pages?.length) {
+        for (let i = pages.length - 1; i >= 0; i--) {
+          const pageItems = pages[i].items;
+          for (let j = pageItems.length - 1; j >= 0; j--) {
+            const message = pageItems[j];
+            items.push(message);
+            keys.push(message.id);
+            byId.set(message.id, message);
+          }
+        }
       }
-    }
 
-    return { items, keys, byId };
+      notify();
+      setMessageIndex(reconcile(keys));
+    })
+  );
+
+  return {
+    keys: () => messageIndex,
+    byId: () => {
+      listen();
+      return byId;
+    },
+    items: () => {
+      listen();
+      return items;
+    },
   };
-
-  const [messageIndex, setMessageIndex] = createStore(buildIndex());
-
-  createEffect(on(data, () => setMessageIndex(reconcile(buildIndex()))));
-
-  return messageIndex;
 }
