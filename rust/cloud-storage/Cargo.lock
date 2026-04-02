@@ -6901,6 +6901,8 @@ dependencies = [
  "itertools 0.14.0",
  "last_online_tracker",
  "macro_db_migrator",
+ "macro_env",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "model-entity",

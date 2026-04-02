@@ -152,6 +152,7 @@ pub async fn main() -> anyhow::Result<()> {
     let ingress_state = ::notification::inbound::http::NotificationRouterState::new(
         reader_service,
         &BLOCKABLE_NOTIFICATIONS,
+        hmac_key.clone(),
     );
 
     // Set up egress worker for delivering notifications from the queue

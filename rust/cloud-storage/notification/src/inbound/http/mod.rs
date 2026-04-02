@@ -6,13 +6,15 @@ pub mod preferences;
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
-    routing::{delete, patch},
+    routing::{delete, get, patch, put},
 };
+use hmac::Hmac;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{CreatedAt, CursorOptionExt, CursorWithValAndFilter};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use sha2::Sha256;
 use std::{collections::HashSet, sync::Arc};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -47,6 +49,8 @@ pub struct NotificationRouterState<S> {
     pub inner: Arc<S>,
     /// the statically known list of notification typenames which can be blocked by the user
     pub blockable_notification_typenames: &'static HashSet<&'static str>,
+    /// The value which is used to verify the presigned url requests
+    pub hmac_signing_key: Hmac<Sha256>,
 }
 
 impl<S> Clone for NotificationRouterState<S> {
@@ -54,16 +58,22 @@ impl<S> Clone for NotificationRouterState<S> {
         Self {
             inner: Arc::clone(&self.inner),
             blockable_notification_typenames: self.blockable_notification_typenames,
+            hmac_signing_key: self.hmac_signing_key.clone(),
         }
     }
 }
 
 impl<S: NotificationReader> NotificationRouterState<S> {
     /// create a new instance of self
-    pub fn new(val: S, blockable_notification_typenames: &'static HashSet<&'static str>) -> Self {
+    pub fn new(
+        val: S,
+        blockable_notification_typenames: &'static HashSet<&'static str>,
+        hmac_signing_key: Hmac<Sha256>,
+    ) -> Self {
         NotificationRouterState {
             inner: Arc::new(val),
             blockable_notification_typenames,
+            hmac_signing_key,
         }
     }
 }
@@ -82,15 +92,16 @@ pub fn router<S: NotificationReader, T: Serialize + DeserializeOwned + Send + 's
         )
         .route(
             "/preferences",
-            axum::routing::get(preferences::get_notification_type_preferences::<S>),
+            get(preferences::get_notification_type_preferences),
         )
         .route(
             "/preferences/{notification_event_type}/disable",
-            axum::routing::put(preferences::disable_notification_type::<S>),
+            put(preferences::disable_notification_type)
+                .get(preferences::presigned_disable_notification_type),
         )
         .route(
             "/preferences/{notification_event_type}/enable",
-            axum::routing::put(preferences::enable_notification_type::<S>),
+            put(preferences::enable_notification_type),
         )
 }
 
