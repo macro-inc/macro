@@ -260,7 +260,7 @@ impl CallRepository for PgCallRepo {
             INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_url)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
-            record_id,
+            call_id,
             call.channel_id,
             call.room_name,
             call.created_by,
@@ -281,7 +281,7 @@ impl CallRepository for PgCallRepo {
             FROM call_participants
             WHERE call_id = $2
             "#,
-            record_id,
+            call_id,
             call_id,
         )
         .execute(tx.as_mut())
@@ -295,7 +295,7 @@ impl CallRepository for PgCallRepo {
             FROM call_transcripts
             WHERE call_id = $2
             "#,
-            record_id,
+            call_id,
             call_id,
         )
         .execute(tx.as_mut())
