@@ -27,9 +27,7 @@ pub async fn delete_label(
         .delete_label(&gmail_access_token, &payload.provider_label_id)
         .await
     {
-        Ok(()) => {
-            tracing::debug!("Successfully deleted label from Gmail");
-        }
+        Ok(()) => {}
         Err(models_email::gmail::error::GmailError::NotFound(_)) => {
             tracing::warn!(
                 provider_label_id = %payload.provider_label_id,

@@ -33,9 +33,7 @@ pub async fn unblock_sender(
             })
         })?;
 
-    if result {
-        tracing::debug!("Successfully unblocked sender in Gmail");
-    } else {
+    if !result {
         tracing::warn!("No block filter found for sender in Gmail");
     }
 

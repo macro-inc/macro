@@ -49,7 +49,5 @@ pub async fn block_sender(
             })
         })?;
 
-    tracing::debug!("Successfully blocked sender in Gmail");
-
     Ok(())
 }
