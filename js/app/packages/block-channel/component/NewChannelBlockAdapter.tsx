@@ -39,18 +39,16 @@ function NewTop(props: {
 
   return (
     <Suspense>
-      <>
-        <ChannelTopLeft
-          channelId={props.channelId}
-          channelType={channelType()!}
-          participants={participants() ?? []}
-          channelName={channelName() ?? 'New Channel'}
-          tabs={tabs()}
-          activeTab={props.activeTab}
-          onTabChange={props.onTabChange}
-        />
-        <ChannelTopBarLiveIndicators />
-      </>
+      <ChannelTopLeft
+        channelId={props.channelId}
+        channelType={channelType()!}
+        participants={participants() ?? []}
+        channelName={channelName() ?? 'New Channel'}
+        tabs={tabs()}
+        activeTab={props.activeTab}
+        onTabChange={props.onTabChange}
+      />
+      <ChannelTopBarLiveIndicators />
     </Suspense>
   );
 }
