@@ -4,10 +4,7 @@ import {
   ConnectionState,
   Track,
   type RemoteParticipant,
-  type RemoteTrackPublication,
-  type RemoteTrack,
   type LocalTrackPublication,
-  type Participant,
   type TranscriptionSegment,
 } from 'livekit-client';
 import {
