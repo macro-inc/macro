@@ -1,4 +1,3 @@
-import { useMobileChannelInputVisibility } from '@channel/Channel/mobile-channel-input-visibility';
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
@@ -9,7 +8,6 @@ import { buildPostMessageRequest } from '../Input/message-payload';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
 import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
-import { scrollReplyInputAboveKeyboard } from '../scroll-utils';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
