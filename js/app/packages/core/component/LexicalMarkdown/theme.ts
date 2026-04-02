@@ -228,6 +228,12 @@ export const searchContentHitMarkdownTheme = createTheme({
   root: `${theme.root} pr-[2px] cursor-default overflow-x-auto`,
 });
 
+export const singleLineMarkdownTheme = createTheme({
+  ...unifiedListMarkdownTheme,
+  root: `${theme.root} pr-[2px] cursor-default overflow-hidden truncate`,
+  paragraph: 'md-p text-[1em] truncate',
+});
+
 export const twoLineClampMarkdownTheme = createTheme({
   ...unifiedListMarkdownTheme,
   root: `${theme.root} pr-[2px] cursor-default`,

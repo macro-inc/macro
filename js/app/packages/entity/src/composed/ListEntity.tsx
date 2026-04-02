@@ -318,8 +318,8 @@ function NarrowLayout(props: LayoutProps) {
                 </span>
                 <Show when={hit()}>
                   {(h) => (
-                    <span class="text-ink/50 font-normal truncate">
-                      <SearchContent hit={h()} />
+                    <span class="text-ink/50 font-normal truncate min-w-0">
+                      <SearchContent hit={h()} singleLine />
                     </span>
                   )}
                 </Show>
@@ -654,8 +654,8 @@ function WideLayout(props: LayoutProps) {
                   </span>
                   <Show when={hit()}>
                     {(h) => (
-                      <span class="text-ink/50 font-medium truncate flex-1">
-                        <SearchContent hit={h()} />
+                      <span class="text-ink/50 font-medium truncate flex-1 min-w-0">
+                        <SearchContent hit={h()} singleLine />
                       </span>
                     )}
                   </Show>
