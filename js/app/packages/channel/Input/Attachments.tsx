@@ -30,7 +30,7 @@ function RemoveButton(props: {
     <button
       type="button"
       class={cn(
-        'hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex',
+        'hover:bg-hover hover-transition-bg rounded-md p-1 [@media(hover:none)]:p-2 items-center flex',
         props.class
       )}
       onClick={(event) => {
@@ -39,7 +39,7 @@ function RemoveButton(props: {
       }}
       aria-label={`Remove ${props.attachment.name}`}
     >
-      <XIcon class="text-ink-muted group-hover:text-failure size-3" />
+      <XIcon class="text-ink-muted group-hover:text-failure size-3 [@media(hover:none)]:size-4" />
     </button>
   );
 }
@@ -71,12 +71,12 @@ function MediaAttachmentItem(props: {
                 class="size-full object-cover"
               />
               <MediaVideo.PlayOverlay />
-              <RemoveButton
-                attachment={props.attachment}
-                onRemove={props.onRemove}
-                class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-              />
             </MediaVideo.Root>
+            <RemoveButton
+              attachment={props.attachment}
+              onRemove={props.onRemove}
+              class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+            />
           </Show>
         }
       >
@@ -92,7 +92,7 @@ function MediaAttachmentItem(props: {
           <RemoveButton
             attachment={props.attachment}
             onRemove={props.onRemove}
-            class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
           />
         </MediaImage.Root>
       </Show>
