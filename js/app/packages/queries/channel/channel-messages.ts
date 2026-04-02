@@ -102,19 +102,6 @@ export function useChannelMessagesQuery(
   );
 }
 
-export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
-  const query = useChannelMessagesQuery(channelId, () => undefined);
-  const index = createMessageIndex(
-    () => query.data as ChannelMessagesData | undefined
-  );
-
-  return {
-    query,
-    index: () => index,
-    byId: createMemo(() => index.byId),
-  };
-}
-
 /** Returns the cache key for one channel message query variant. */
 export function getChannelMessagesQueryKey(
   channelId: string,
