@@ -128,7 +128,7 @@ export function Channel(props: ChannelProps) {
   );
 
   const messages = createMemo(() => messageIndex.items());
-  const messageById = createMemo(() => messageIndex.byId());
+  const messageById = () => messageIndex.byId();
 
   const participants = useChannelParticipants(() => props.channelId);
 
