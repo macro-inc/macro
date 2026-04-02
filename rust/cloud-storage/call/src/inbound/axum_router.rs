@@ -19,11 +19,13 @@ use axum::{
 use entity_access::{
     domain::models::MemberParticipantRole,
     domain::ports::EntityAccessService,
-    inbound::axum_extractors::{CallWithChannelIdAccessLevelExtractor, ChannelAccessLevelExtractor},
+    inbound::axum_extractors::{
+        CallWithChannelIdAccessLevelExtractor, ChannelAccessLevelExtractor,
+    },
 };
-use uuid::Uuid;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
+use uuid::Uuid;
 
 use crate::domain::models::{
     CallError, CallTokenResponse, LeaveCallResponse, TranscriptSegmentRequest,
