@@ -277,6 +277,7 @@ export function ThreadList(props: ThreadListProps) {
   return (
     <div
       ref={scrollRef}
+      data-channel-scroll
       {...scrollIntent.handlers}
       style={{
         width: '100%',

@@ -1,25 +1,24 @@
 use crate::domain::{
     models::{EmailErr, Link, UpdateThreadLabelsResult, label::system_labels},
-    ports::{EmailMessageEnqueuer, EmailRepo, GmailLabelModifier},
+    ports::{EmailMessageEnqueuer, EmailRepo},
 };
 use frecency::domain::ports::FrecencyQueryService;
-use futures::{StreamExt, stream};
 use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
-impl<T, U, E, G> EmailServiceImpl<T, U, E, G>
+impl<T, U, E> EmailServiceImpl<T, U, E>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
-    G: GmailLabelModifier,
     anyhow::Error: From<T::Err>,
+    anyhow::Error: From<E::Err>,
 {
-    #[tracing::instrument(err, skip(self, access_token, link))]
+    #[tracing::instrument(err, skip(self, _access_token, link))]
     pub(crate) async fn update_thread_labels_impl(
         &self,
-        access_token: &str,
+        _access_token: &str,
         link: &Link,
         thread_id: Uuid,
         label_id: Uuid,
@@ -48,128 +47,96 @@ where
             return Err(EmailErr::EmptyProviderLabelId);
         }
 
-        // Separate draft messages (no provider_id) from provider messages.
-        // Drafts only exist locally so we update their labels in the DB directly.
-        // Provider messages need a Gmail API call first.
-        let mut draft_ids = Vec::new();
-        let mut provider_messages = Vec::new();
-        for msg in &messages {
-            match &msg.provider_id {
-                Some(id) if !id.is_empty() => provider_messages.push(msg),
-                _ => draft_ids.push(msg.db_id),
-            }
-        }
+        let all_ids: Vec<Uuid> = messages.iter().map(|m| m.db_id).collect();
 
-        // Fan out Gmail API calls with limited concurrency.
-        // Take a reference to the modifier outside the loop so each future
-        // only borrows the modifier (not all of `self`), allowing true
-        // concurrent polling via buffer_unordered.
-        const MAX_CONCURRENT: usize = 10;
-        let modifier = &self.gmail_label_modifier;
-        let mut join_handles = Vec::with_capacity(provider_messages.len());
-        for msg in &provider_messages {
-            let db_id = msg.db_id;
-            let provider_msg_id = msg.provider_id.clone().unwrap();
-            let plid = provider_label_id.clone();
-            let token = access_token.to_owned();
-            let (to_add, to_remove) = if add {
-                (vec![plid], vec![])
-            } else {
-                (vec![], vec![plid])
-            };
-            join_handles.push(async move {
-                let result = modifier
-                    .modify_message_labels(&token, &provider_msg_id, &to_add, &to_remove)
-                    .await;
-                (db_id, result)
-            });
-        }
+        // Optimistic DB update: update all messages first
+        let db_result = if add {
+            self.email_repo
+                .insert_message_labels_batch(&all_ids, &provider_label_id, link.id)
+                .await
+        } else {
+            self.email_repo
+                .delete_message_labels_batch(&all_ids, &provider_label_id, link.id)
+                .await
+        };
 
-        let results: Vec<_> = stream::iter(join_handles)
-            .buffer_unordered(MAX_CONCURRENT)
-            .collect()
-            .await;
-
-        // Draft messages are always successful (no Gmail call needed)
-        let mut successful_ids = draft_ids;
-        let mut failed_ids = Vec::new();
-
-        for (msg_id, result) in results {
-            match result {
-                Ok(()) => successful_ids.push(msg_id),
-                Err(e) => {
-                    tracing::error!(error=?e, message_id=%msg_id, "failed to modify labels in Gmail");
-                    failed_ids.push(msg_id);
-                }
-            }
-        }
-
-        // Bulk DB update for successful messages
-        if !successful_ids.is_empty() {
-            let db_result = if add {
-                self.email_repo
-                    .insert_message_labels_batch(&successful_ids, &provider_label_id, link.id)
-                    .await
-            } else {
-                self.email_repo
-                    .delete_message_labels_batch(&successful_ids, &provider_label_id, link.id)
-                    .await
-            };
-
-            if let Err(e) = db_result {
-                let err = anyhow::Error::from(e);
-                tracing::error!(error=?err, "failed to update message labels in database");
-                failed_ids.append(&mut successful_ids);
-            }
+        if let Err(e) = db_result {
+            let err = anyhow::Error::from(e);
+            tracing::error!(error=?err, "failed to update message labels in database");
+            return Err(EmailErr::RepoErr(err));
         }
 
         // Side effects for system labels
-        if !successful_ids.is_empty() {
-            if provider_label_id == system_labels::UNREAD {
-                if let Err(e) = self
-                    .email_repo
-                    .update_message_read_status_batch(&successful_ids, link.id, !add)
-                    .await
-                {
-                    let err = anyhow::Error::from(e);
-                    tracing::error!(error=?err, "failed to update message read status");
-                }
-            } else if provider_label_id == system_labels::STARRED
+        if provider_label_id == system_labels::UNREAD {
+            if let Err(e) = self
+                .email_repo
+                .update_message_read_status_batch(&all_ids, link.id, !add)
+                .await
+            {
+                let err = anyhow::Error::from(e);
+                tracing::error!(error=?err, "failed to update message read status");
+            }
+        } else if provider_label_id == system_labels::STARRED
+            && let Err(e) = self
+                .email_repo
+                .update_message_starred_status_batch(&all_ids, link.id, add)
+                .await
+        {
+            let err = anyhow::Error::from(e);
+            tracing::error!(error=?err, "failed to update message starred status");
+        }
+
+        // When trashing a thread, cancel any pending scheduled sends for drafts
+        if add && provider_label_id == system_labels::TRASH {
+            let draft_message_ids: Vec<_> = messages
+                .iter()
+                .filter(|m| m.is_draft)
+                .map(|m| m.db_id)
+                .collect();
+
+            if !draft_message_ids.is_empty()
                 && let Err(e) = self
                     .email_repo
-                    .update_message_starred_status_batch(&successful_ids, link.id, add)
+                    .delete_scheduled_messages_batch(&draft_message_ids, link.id)
                     .await
             {
                 let err = anyhow::Error::from(e);
-                tracing::error!(error=?err, "failed to update message starred status");
-            }
-
-            // When trashing a thread, cancel any pending scheduled sends for drafts
-            if add && provider_label_id == system_labels::TRASH {
-                let draft_message_ids: Vec<_> = messages
-                    .iter()
-                    .filter(|m| m.is_draft && successful_ids.contains(&m.db_id))
-                    .map(|m| m.db_id)
-                    .collect();
-
-                if !draft_message_ids.is_empty()
-                    && let Err(e) = self
-                        .email_repo
-                        .delete_scheduled_messages_batch(&draft_message_ids, link.id)
-                        .await
-                {
-                    let err = anyhow::Error::from(e);
-                    tracing::error!(error=?err, "failed to cancel scheduled sends for trashed drafts");
-                }
+                tracing::error!(error=?err, "failed to cancel scheduled sends for trashed drafts");
             }
         }
 
-        successful_ids.sort();
-        failed_ids.sort();
+        // Enqueue Gmail API calls via the gmail_ops worker (provider messages only)
+        let provider_messages: Vec<(Uuid, String)> = messages
+            .iter()
+            .filter_map(|msg| {
+                msg.provider_id
+                    .as_ref()
+                    .filter(|pid| !pid.is_empty())
+                    .map(|pid| (msg.db_id, pid.clone()))
+            })
+            .collect();
+
+        if !provider_messages.is_empty() {
+            let (labels_to_add, labels_to_remove) = if add {
+                (vec![provider_label_id.clone()], vec![])
+            } else {
+                (vec![], vec![provider_label_id.clone()])
+            };
+
+            self.enqueuer
+                .enqueue_gmail_ops_modify_labels_batch(
+                    link.id,
+                    provider_messages,
+                    labels_to_add,
+                    labels_to_remove,
+                )
+                .await
+                .map_err(|e| EmailErr::EnqueueErr(anyhow::Error::from(e)))?;
+        }
 
         Ok(UpdateThreadLabelsResult {
-            successful_ids,
-            failed_ids,
+            successful_ids: all_ids,
+            failed_ids: vec![],
         })
     }
 }

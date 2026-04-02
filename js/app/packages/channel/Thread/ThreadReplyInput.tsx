@@ -1,7 +1,7 @@
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import type { Accessor, Setter } from 'solid-js';
+import { onCleanup, type Accessor, type Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import type { InputSnapshot } from '../Input';
 import { buildPostMessageRequest } from '../Input/message-payload';
@@ -20,9 +20,12 @@ type ThreadReplyInputProps = {
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
   setIsReplying: Setter<boolean>;
+  setReplyInputEl?: Setter<HTMLElement | undefined>;
 };
 
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
+  onCleanup(() => props.setReplyInputEl?.(undefined));
+
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
@@ -46,6 +49,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
     <div
       class="relative pt-2"
       style={{ 'margin-left': replyInputOffsetX }}
+      ref={(el) => props.setReplyInputEl?.(el)}
       data-reply-input
       data-reply-input-id={props.messageId}
     >

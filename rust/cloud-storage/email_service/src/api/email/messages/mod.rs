@@ -12,13 +12,7 @@ const BATCH_UPDATE_MESSAGE_LIMIT: usize = 10;
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .merge(send_router(state.email_service.clone()))
-        .route(
-            "/labels",
-            patch(labels::handler).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                crate::api::middleware::gmail_token::attach_gmail_token,
-            )),
-        )
+        .route("/labels", patch(labels::handler))
         .route("/batch", post(get::batch_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.email_service,

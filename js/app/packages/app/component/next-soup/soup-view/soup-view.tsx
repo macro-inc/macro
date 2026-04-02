@@ -125,6 +125,16 @@ const useSoupNotificationInvalidators = () => {
 
   createEffectOnEntityTypeNotification(
     notificationSource,
+    'chat',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'chat');
+      invalidateSoupEntity(notification.entity_id);
+      invalidateEntityNotifications(notification.entity_id);
+    }
+  );
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
     'email_thread',
     (notification) => {
       refetchSoupEntity(notification.entity_id, 'emailThread');

@@ -3,6 +3,7 @@
 //! These extractors validate that the requesting user has sufficient
 //! access to the entity being accessed.
 
+mod call;
 mod channel;
 mod chat;
 mod document;
@@ -11,6 +12,7 @@ mod history;
 mod project;
 mod thread;
 
+pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
 pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;
 pub use document::DocumentAccessExtractor;

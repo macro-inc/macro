@@ -3,7 +3,7 @@
 mod queries;
 
 use crate::domain::{
-    models::{AccessError, AccessLevel, ChannelRoleResult},
+    models::{AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult},
     ports::AccessRepository,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
@@ -136,5 +136,30 @@ impl AccessRepository for PgAccessRepository {
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         let raw = queries::thread_users::get_thread_users(&self.pool, thread_id).await?;
         Ok(parse_user_ids(raw))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_channel(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        let row = queries::call_channel::get_call_channel(&self.pool, call_id).await?;
+        Ok(row.map(|r| CallChannelInfo {
+            channel_id: r.channel_id,
+            share_permission_id: r.share_permission_id,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_channel_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        let row =
+            queries::call_channel::get_call_channel_by_channel_id(&self.pool, channel_id).await?;
+        Ok(row.map(|r| CallChannelInfo {
+            channel_id: r.channel_id,
+            share_permission_id: r.share_permission_id,
+        }))
     }
 }

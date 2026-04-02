@@ -1731,6 +1731,7 @@ dependencies = [
  "mockall",
  "model-error-response",
  "model_user",
+ "models_permissions",
  "serde",
  "sqlx",
  "thiserror 2.0.17",

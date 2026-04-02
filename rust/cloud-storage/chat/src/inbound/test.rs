@@ -290,6 +290,20 @@ impl EntityAccessService for MockAccessService {
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         Ok(vec![])
     }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &sqlx::types::Uuid,
+    ) -> Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError> {
+        unimplemented!()
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &sqlx::types::Uuid,
+    ) -> Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError> {
+        unimplemented!()
+    }
 }
 
 fn user_extension() -> Extension<UserContext> {

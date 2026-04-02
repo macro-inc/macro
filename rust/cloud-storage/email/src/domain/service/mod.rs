@@ -10,7 +10,7 @@ use crate::domain::{
         GetEmailsRequest, Link, LinkLabel, ParsedThread, Thread, UpdateThreadLabelsResult,
         UpsertEmailFilterInput,
     },
-    ports::{EmailMessageEnqueuer, EmailRepo, EmailService, GmailLabelModifier},
+    ports::{EmailMessageEnqueuer, EmailRepo, EmailService},
 };
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
@@ -20,39 +20,35 @@ use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct EmailServiceImpl<T, U, E, G> {
+pub struct EmailServiceImpl<T, U, E> {
     email_repo: T,
     frecency_service: U,
     enqueuer: E,
-    gmail_label_modifier: G,
     sent_undo_delay_secs: u32,
 }
 
-impl<T, U, E, G> EmailServiceImpl<T, U, E, G>
+impl<T, U, E> EmailServiceImpl<T, U, E>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
-    G: GmailLabelModifier,
 {
     pub fn new(
         email_repo: T,
         frecency_service: U,
         enqueuer: E,
-        gmail_label_modifier: G,
         sent_undo_delay_secs: u32,
-    ) -> EmailServiceImpl<T, U, E, G> {
+    ) -> EmailServiceImpl<T, U, E> {
         EmailServiceImpl {
             email_repo,
             frecency_service,
             enqueuer,
-            gmail_label_modifier,
             sent_undo_delay_secs,
         }
     }
 }
 
-impl<T, U, E, G> EmailServiceImpl<T, U, E, G> {
+impl<T, U, E> EmailServiceImpl<T, U, E> {
     /// Validate and normalize email filter input.
     fn validate_email_filter_input(
         input: UpsertEmailFilterInput,
@@ -112,12 +108,11 @@ impl<T, U, E, G> EmailServiceImpl<T, U, E, G> {
     }
 }
 
-impl<T, U, E, G> EmailService for EmailServiceImpl<T, U, E, G>
+impl<T, U, E> EmailService for EmailServiceImpl<T, U, E>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
-    G: GmailLabelModifier,
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {

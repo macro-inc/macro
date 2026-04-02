@@ -919,9 +919,13 @@ export function BaseInput(props: {
       }
     }
 
-    // We handle cleaning up the signature after we've sent the request because
-    // otherwise the `bodyMacro` signal would update after the clean up call and
-    // not contain the signature in the request data
+    // Failsafe: don't send if a scheduled send time is set
+    if (form().sendTime()) {
+      return;
+    }
+
+    // Append watermark after all validation passes so failed sends don't
+    // leave orphaned watermark nodes in the editor tree.
     const cleanupWatermark = $appendWatermarkNodeToLast(
       currentEditor,
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
@@ -939,6 +943,7 @@ export function BaseInput(props: {
         : undefined
     );
     if (!prepared) {
+      cleanupWatermark();
       return;
     }
 
@@ -948,12 +953,6 @@ export function BaseInput(props: {
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
     const currentDraftID = savedDraftId();
-
-    // Failsafe: don't send if a scheduled send time is set
-    if (form().sendTime()) {
-      cleanupWatermark();
-      return;
-    }
 
     sendMutation.mutate({
       message: {

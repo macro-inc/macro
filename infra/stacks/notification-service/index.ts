@@ -172,7 +172,7 @@ const notificationService = new NotificationService('notification-service', {
   containerEnvVars: [
     {
       name: 'RUST_LOG',
-      value: `error,notification_service=${stack === 'prod' ? 'debug' : 'trace'},notification_db_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
+      value: `error,notification_service=${stack === 'prod' ? 'debug' : 'trace'},notification=${stack === 'prod' ? 'debug' : 'trace'},notification_db_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
     },
     {
       name: 'ENVIRONMENT',

@@ -383,15 +383,7 @@ export async function blockSenderWithToast(senderEmail: string) {
   });
 
   if (isErr(result)) {
-    if (result[0].some((e) => e.code === 'FORBIDDEN')) {
-      toast.failure(
-        'Insufficient permissions',
-        'Enable new email permissions on sign-in.',
-        5_000
-      );
-    } else {
-      toast.failure('Failed to block sender', senderEmail);
-    }
+    toast.failure('Failed to block sender', senderEmail);
     return;
   }
 

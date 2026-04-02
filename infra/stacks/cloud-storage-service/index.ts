@@ -322,7 +322,10 @@ const cloudStorageService = new CloudStorageService(
         name: 'LIVEKIT_API_SECRET',
         value: pulumi.interpolate`${LIVEKIT_API_SECRET}`,
       },
-
+      {
+        name: 'LIVEKIT_TRANSCRIPTION_AGENT_NAME',
+        value: config.require('livekit_transcription_agent_name'),
+      },
       {
         name: 'OPENSEARCH_URL',
         value: OPENSEARCH_URL,

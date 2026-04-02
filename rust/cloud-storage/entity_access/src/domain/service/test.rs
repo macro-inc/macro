@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::domain::models::{
-    AdminParticipantRole, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
+    AdminParticipantRole, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
     MemberParticipantRole, OwnerParticipantRole, ParticipantRole, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -23,6 +23,7 @@ struct MockRepo {
     chat_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
 }
 
 impl MockRepo {
@@ -38,6 +39,7 @@ impl MockRepo {
             chat_users: Arc::new(Mutex::new(vec![])),
             project_users: Arc::new(Mutex::new(vec![])),
             thread_users: Arc::new(Mutex::new(vec![])),
+            call_channel: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -168,6 +170,20 @@ impl AccessRepository for MockRepo {
         _thread_id: &str,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         Ok(self.thread_users.lock().await.clone())
+    }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        Ok(self.call_channel.lock().await.clone())
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        Ok(self.call_channel.lock().await.clone())
     }
 }
 

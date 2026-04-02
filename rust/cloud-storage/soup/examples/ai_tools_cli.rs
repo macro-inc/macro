@@ -55,7 +55,6 @@ async fn main() {
         email_repo,
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
 

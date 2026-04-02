@@ -1,5 +1,6 @@
 pub mod backfill;
 pub(crate) mod context;
+pub mod gmail_ops;
 pub mod inbox_sync;
 pub mod link_manager;
 pub mod scheduled;

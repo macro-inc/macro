@@ -5,8 +5,8 @@ use std::str::FromStr;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, ChannelRoleResult, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission,
+        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, Entity, EntityAccessAuth,
+        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -218,6 +218,22 @@ where
                 "get_users_by_entity only supports Document, Chat, Project, and EmailThread",
             )),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_channel(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        self.repo.get_call_channel(call_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_channel_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        self.repo.get_call_channel_by_channel_id(channel_id).await
     }
 }
 

@@ -66,7 +66,16 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                     .map_err(|e| CallError::Internal(e.into()))?
                 {
                     Some(call) => {
-                        // We are the creator — start recording if configured.
+                        // We are the creator — dispatch transcription agent (best-effort).
+                        self.rtc_client
+                            .dispatch_transcription_agent(&room_name)
+                            .await
+                            .inspect_err(|e| {
+                                tracing::error!(error=?e, "failed to dispatch transcription agent")
+                            })
+                            .ok();
+
+                        // Start recording if configured.
                         if let Some(s3_config) = &self.egress_s3_config {
                             match self
                                 .rtc_client
@@ -134,26 +143,14 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
 
-        // Verify user is in the call.
-        let is_in_call = self
-            .repo
-            .is_participant(&call.id, user_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
-
-        if !is_in_call {
-            return Err(CallError::NotInCall);
-        }
-
-        // Remove participant from DB.
+        // Remove participant from DB (idempotent — no-op if already removed by webhook).
         self.repo
             .remove_participant(&call.id, user_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
-        // Remove from RTC (best-effort).
-        // LiveKit will fire participant_left and eventually room_finished webhooks,
-        // which handle call record archival and cleanup of the ephemeral tables.
+        // Kick from LiveKit. The resulting participant_left webhook
+        // handles archival and room deletion.
         self.rtc_client
             .remove_participant(&call.room_name, user_id)
             .await
@@ -162,12 +159,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
             )
             .ok();
 
-        // Check if this was the last participant.
-        let remaining = self
-            .repo
-            .get_participant_count(&call.id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+        let remaining = self.repo.get_participant_count(&call.id).await.unwrap_or(0);
 
         Ok(LeaveCallResponse {
             call_ended: remaining == 0,
@@ -256,18 +248,11 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                     return Ok(());
                 };
 
-                // Reconcile: remove participant from DB if still present (handles crash/disconnect).
-                if self
-                    .repo
-                    .is_participant(&call.id, participant_identity)
+                // Remove participant from DB (idempotent — no-op if already left).
+                self.repo
+                    .remove_participant(&call.id, participant_identity)
                     .await
-                    .map_err(|e| CallError::Internal(e.into()))?
-                {
-                    self.repo
-                        .remove_participant(&call.id, participant_identity)
-                        .await
-                        .map_err(|e| CallError::Internal(e.into()))?;
-                }
+                    .map_err(|e| CallError::Internal(e.into()))?;
 
                 // If no participants remain, archive the call and delete the room.
                 let remaining = self

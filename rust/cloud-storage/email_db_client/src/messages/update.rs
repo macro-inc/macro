@@ -89,13 +89,16 @@ where
     Ok(updated_count)
 }
 
-#[tracing::instrument(skip(pool), err)]
-pub async fn update_message_starred_status_batch(
-    pool: &sqlx::PgPool,
+#[tracing::instrument(skip(executor), err)]
+pub async fn update_message_starred_status_batch<'e, E>(
+    executor: E,
     message_ids: Vec<Uuid>,
     fusionauth_user_id: &str,
     is_starred: bool,
-) -> anyhow::Result<usize> {
+) -> anyhow::Result<usize>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     if message_ids.is_empty() {
         return Ok(0);
     }
@@ -117,7 +120,7 @@ pub async fn update_message_starred_status_batch(
         &message_ids,
         fusionauth_user_id
     )
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
 
     let updated_count = result.len();
