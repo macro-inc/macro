@@ -324,7 +324,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'LIVEKIT_TRANSCRIPTION_AGENT_NAME',
-        value: 'macro-transcriber', // not a secret
+        value: config.require('livekit_transcription_agent_name'),
       },
       {
         name: 'OPENSEARCH_URL',
