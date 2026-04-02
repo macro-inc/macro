@@ -69,7 +69,8 @@ const getEntityRenameData = (
   const { entity, newName } = operation;
   return {
     id: entity.id,
-    itemType: entity.type,
+    // TODO: this operation is not supported for channel message, do not type cast
+    itemType: entity.type as ItemType,
     oldName: entity.name,
     newName,
   };
@@ -93,6 +94,8 @@ const validateEntityRename = (entity: EntityData): void => {
     case 'chat':
     case 'project':
       return;
+    case 'channel_message':
+      throw new Error('Channel messages do not support renaming');
     default:
       throw new Error(`Unsupported entity type: ${entity.type}`);
   }

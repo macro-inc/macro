@@ -4,6 +4,7 @@ import { EntityType as BaseEntityType } from '@service-connection/generated/sche
 export const EntityType = {
   ...BaseEntityType,
   email: 'email',
+  channel_message: 'channel_message',
 } as const;
 
 export type EntityType = (typeof EntityType)[keyof typeof EntityType];

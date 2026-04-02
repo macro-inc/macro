@@ -484,8 +484,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
         ? fileTypeToResolvedBlockName(
             (entity as { fileType?: string }).fileType
           )
-        : entity.type;
-    registerPreviewEntity(panel.handle.id, { type, id: entity.id });
+        : entity.type === 'channel_message'
+          ? 'channel'
+          : entity.type;
+    // TODO: preview channel message entity directly
+    const previewId =
+      entity.type === 'channel_message' ? entity.channelId : entity.id;
+    registerPreviewEntity(panel.handle.id, { type, id: previewId });
   });
   onCleanup(() => {
     registerPreviewEntity(panel.handle.id, undefined);

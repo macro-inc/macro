@@ -57,6 +57,7 @@ export function getBlockNameForEntity(
   item: CommandMenuItem
 ): BlockName | BlockAlias | undefined {
   if (isEntityItem(item)) {
+    if (item.data.type === 'channel_message') return 'channel';
     return itemToBlockName(item.data);
   }
   return undefined; // no block for commands or users

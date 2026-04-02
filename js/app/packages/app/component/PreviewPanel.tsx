@@ -67,13 +67,19 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           baseType: 'md',
         } as BlockAliasContext)
       : undefined;
-    return props.orchestrator.createBlockInstance(
+    const blockType =
       props.selectedEntity.type === 'document'
         ? fileTypeToResolvedBlockName(props.selectedEntity.fileType)
-        : props.selectedEntity.type,
-      props.selectedEntity.id,
-      { aliasContext }
-    );
+        : props.selectedEntity.type === 'channel_message'
+          ? 'channel'
+          : props.selectedEntity.type;
+    const blockId =
+      props.selectedEntity.type === 'channel_message'
+        ? props.selectedEntity.channelId
+        : props.selectedEntity.id;
+    return props.orchestrator.createBlockInstance(blockType, blockId, {
+      aliasContext,
+    });
   };
   const [interactedWith, setInteractedWith] = createSignal(false);
 

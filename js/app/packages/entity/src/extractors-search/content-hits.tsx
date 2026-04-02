@@ -17,6 +17,7 @@ interface ExtractorContentHitsProps {
 export function ContentHits(props: ExtractorContentHitsProps) {
   const contentHits = () => {
     if (!isSearchEntity(props.entity)) return [];
+    if (props.entity.type === 'channel_message') return [];
     return props.entity.search.contentHitData ?? [];
   };
 
