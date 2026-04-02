@@ -2,13 +2,14 @@ import type { BlockAliasContext } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { NonNullableFields } from '@core/util/withRequired';
-import { type EntityData, isTaskEntity } from '@entity';
+import { type EntityData, isTaskEntity, isChannelMessageEntity } from '@entity';
 import {
   type Component,
   createRenderEffect,
   createSignal,
   Show,
 } from 'solid-js';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { Dynamic } from 'solid-js/web';
 import {
   SplitPanelContext,
@@ -88,6 +89,20 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     if (id !== prevId) {
       setInteractedWith(false);
     }
+
+    const entity = props.selectedEntity;
+    if (isChannelMessageEntity(entity)) {
+      const channelId = entity.channelId;
+      const messageId = entity.messageId;
+      const threadId = entity.threadId;
+      props.orchestrator.getBlockHandle(channelId).then((handle) => {
+        handle?.goToLocationFromParams({
+          [CHANNEL_PARAMS.message]: messageId,
+          [CHANNEL_PARAMS.thread]: threadId,
+        });
+      });
+    }
+
     return id;
   }, props.selectedEntity.id);
 
