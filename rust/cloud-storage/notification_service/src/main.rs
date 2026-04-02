@@ -24,12 +24,9 @@ use std::sync::Arc;
 
 mod api;
 mod config;
-#[allow(dead_code)]
 mod env;
 mod model;
 mod notification;
-#[allow(dead_code)]
-mod templates;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
