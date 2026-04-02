@@ -180,6 +180,7 @@ import { MarkdownPopup } from './MarkdownPopup';
 import { isMobile } from '@core/mobile/isMobile';
 import { isIOS } from '@solid-primitives/platform';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 
 false && fileFolderDrop;
 
@@ -315,8 +316,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     const item = event.draggable.data;
     const blockName = fileTypeToBlockName(item.fileType ?? item.type);
     if (!blockName) return;
+    let id = event.draggable.data.id as string;
+    if (event.draggable.data.type === 'channel_message') {
+      id = event.draggable.data.channelId;
+    }
     return {
-      id: event.draggable.data.id as string,
+      id,
       blockName: blockName as BlockName,
       mousePos,
       item,
@@ -347,10 +352,21 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     const mentionId = await trackMention(blockId, 'document', res.id);
 
     editor.update(() => {
+      let blockParams: Record<string, string> | undefined;
+      if (res.blockName === 'channel') {
+        blockParams = {};
+        if (res.item.messageId) {
+          blockParams[CHANNEL_PARAMS.message] = res.item.messageId;
+        }
+        if (res.item.threadId) {
+          blockParams[CHANNEL_PARAMS.thread] = res.item.threadId;
+        }
+      }
       const mention = $createDocumentMentionNode({
         documentId: res.id,
         documentName: res.item.name,
         blockName: res.blockName,
+        blockParams,
         mentionUuid: mentionId,
       });
 

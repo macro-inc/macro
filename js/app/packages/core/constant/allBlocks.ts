@@ -157,6 +157,8 @@ export function fileTypeToBlockName(
 ): BlockName | BlockAlias {
   if (!blockOrFiletype) return 'unknown';
 
+  if (blockOrFiletype === 'channel_message') return 'channel';
+
   if (ENABLE_DOCX_TO_PDF) {
     if (blockOrFiletype === 'docx' || blockOrFiletype === 'write') {
       return icon ? 'write' : 'pdf';
