@@ -90,7 +90,6 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   const isStream = () => {
     const s = stream();
-    console.log('isStream', Boolean(s));
     if (!s) return false;
     return !s.isDone();
   };
