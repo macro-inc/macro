@@ -134,12 +134,12 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   };
 
   const showTopGroup = () =>
-    canExecuteAny(markDone.canExecute) || canOpenInSplit();
+    canExecuteAll(markDone.canExecute) || canOpenInSplit();
 
   const showMiddleGroup = () =>
     canExecuteAll(renameAction.canExecute) ||
-    canExecuteAny(moveToProjectAction.canExecute) ||
-    canExecuteAny(copyAction.canExecute) ||
+    canExecuteAll(moveToProjectAction.canExecute) ||
+    canExecuteAll(copyAction.canExecute) ||
     props.entities.length === 1;
 
   const showSenderGroup = () => canExecuteAll(blockSenderAction.canExecute);
@@ -148,7 +148,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
 
   return (
     <>
-      <Show when={canExecuteAny(markDone.canExecute)}>
+      <Show when={canExecuteAll(markDone.canExecute)}>
         <MenuItem
           text="Mark Done"
           onClick={() => handleAction(markDone.executeWithSoup)}
@@ -170,14 +170,14 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         />
       </Show>
 
-      <Show when={canExecuteAny(moveToProjectAction.canExecute)}>
+      <Show when={canExecuteAll(moveToProjectAction.canExecute)}>
         <MenuItem
           text="Move to folder"
           onClick={() => handleAction(moveToProjectAction.executeWithSoup)}
         />
       </Show>
 
-      <Show when={canExecuteAny(copyAction.canExecute)}>
+      <Show when={canExecuteAll(copyAction.canExecute)}>
         <MenuItem
           text="Duplicate"
           onClick={() => handleAction(copyAction.executeWithSoup)}

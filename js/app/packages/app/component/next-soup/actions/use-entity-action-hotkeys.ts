@@ -125,7 +125,7 @@ export const useEntityActionHotkeys = (
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      if (!entities.some(markDone.canExecute)) return false;
+      if (!entities.every(markDone.canExecute)) return false;
 
       markDone.executeWithSoup(entities, soup, openNextEntity);
       return true;
@@ -133,7 +133,7 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.some(markDone.canExecute);
+      return entities.length > 0 && entities.every(markDone.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
@@ -203,7 +203,7 @@ export const useEntityActionHotkeys = (
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      if (!entities.some(copyAction.canExecute)) return false;
+      if (!entities.every(copyAction.canExecute)) return false;
 
       copyAction.executeWithSoup(entities, soup);
       return true;
@@ -211,7 +211,7 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.some(copyAction.canExecute);
+      return entities.length > 0 && entities.every(copyAction.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
@@ -229,7 +229,7 @@ export const useEntityActionHotkeys = (
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      if (!entities.some(moveToProjectAction.canExecute)) return false;
+      if (!entities.every(moveToProjectAction.canExecute)) return false;
 
       moveToProjectAction.executeWithSoup(entities, soup);
       return true;
@@ -237,7 +237,9 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.some(moveToProjectAction.canExecute);
+      return (
+        entities.length > 0 && entities.every(moveToProjectAction.canExecute)
+      );
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
