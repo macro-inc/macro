@@ -92,12 +92,13 @@ function commandsToItems(
       typeof command.description === 'function'
         ? command.description()
         : command.description;
+    const tags = command.tags?.join(' ') ?? '';
 
     return {
       id: `command-${description.replaceAll(' ', '-')}`,
       kind: 'command',
       bucket: 'command',
-      searchText: description,
+      searchText: [tags, description].filter(Boolean).join(' '),
       sortTimestamp: 0,
       timestamps: {},
       data: command,

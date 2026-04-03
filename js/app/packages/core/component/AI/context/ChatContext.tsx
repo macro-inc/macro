@@ -1,6 +1,5 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAttachments } from '@core/component/AI/signal/attachment';
-import { globalTabAttachments } from '@core/component/AI/signal/globalAttachments';
 import type {
   Attachment,
   Attachments,
@@ -9,20 +8,13 @@ import type {
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
-import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
 import {
   createChatController,
   type ChatController,
   type ChatControllerOptions,
 } from '@core/component/AI/state/createChatController';
 import type { Accessor, ParentProps } from 'solid-js';
-import {
-  createContext,
-  createEffect,
-  createSignal,
-  on,
-  useContext,
-} from 'solid-js';
+import { createContext, createSignal, useContext } from 'solid-js';
 
 // ---- Uncreated state (always present) ----
 
@@ -42,7 +34,6 @@ export function ChatInputProvider(
     model?: Model;
     isGenerating?: boolean;
     initialAttachments?: Attachment[];
-    autoAttach?: boolean;
   }
 ) {
   const [model, _setModel] = createSignal<Model>(props.model ?? DEFAULT_MODEL);
@@ -54,21 +45,6 @@ export function ChatInputProvider(
 
   const attachments = useAttachments(props.initialAttachments);
   const uploadQueue = useUploadAttachment();
-
-  if (ENABLE_AI_AUTO_TAB_ATTACHMENTS && props.autoAttach !== false) {
-    createEffect(
-      on(globalTabAttachments, (tabs, p) => {
-        for (const prev of p ?? []) {
-          if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
-            attachments.removeAttachment(prev.attachmentId);
-          }
-        }
-        for (const tab of tabs) {
-          attachments.addAttachment(tab);
-        }
-      })
-    );
-  }
 
   return (
     <ChatInputCtx.Provider

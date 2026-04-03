@@ -1,7 +1,7 @@
 import {
-  makeMessageIndex,
   type ChannelMessagesData,
   useChannelMessagesQuery,
+  createMessageIndex,
 } from '@queries/channel/channel-messages';
 import {
   createEffect,
@@ -90,12 +90,14 @@ export type ChannelHandle = {
 
 export function Channel(props: ChannelProps) {
   const userId = useUserId();
+
   const sendMessageMutation = useSendMessageMutation();
   const patchMessageMutation = usePatchMessageMutation();
   const deleteMessageMutation = useDeleteMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
+
   const [threadListNavigation, setThreadListNavigation] =
     createSignal<ThreadListNavigation>();
   const [threadListScrollState, setThreadListScrollState] =
@@ -107,7 +109,7 @@ export function Channel(props: ChannelProps) {
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
     initialTargetMessageReplyId: props.targetMessageReplyId,
-    messageKeys: () => messageIndex().keys,
+    messageKeys: () => messageIndex.keys(),
     navigation: threadListNavigation,
   });
 
@@ -118,11 +120,13 @@ export function Channel(props: ChannelProps) {
     () => props.channelId,
     targetMessageController.loadAroundMessageId
   );
-  const messageIndex = createMemo(() =>
-    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
+
+  const messageIndex = createMessageIndex(
+    () => messagesQuery.data as ChannelMessagesData | undefined
   );
-  const messages = createMemo(() => messageIndex().items);
-  const messageById = createMemo(() => messageIndex().byId);
+
+  const messages = createMemo(() => messageIndex.items());
+  const messageById = () => messageIndex.byId();
 
   const participants = useChannelParticipants(() => props.channelId);
 
@@ -200,7 +204,7 @@ export function Channel(props: ChannelProps) {
   });
 
   const selection = createMessageSelection({
-    keys: () => messageIndex().keys,
+    keys: () => messageIndex.keys(),
   });
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
@@ -296,7 +300,7 @@ export function Channel(props: ChannelProps) {
                 }}
               >
                 <ThreadList
-                  keys={() => messageIndex().keys}
+                  keys={() => messageIndex.keys()}
                   initialScrollTarget={threadListInitialScrollTarget()}
                   shift={shift}
                   prepend={threadPaginator.isPrepending}
@@ -309,7 +313,7 @@ export function Channel(props: ChannelProps) {
                     const message = () => messageById().get(item.id);
                     const state = threadManager.getOrCreateThreadState(item.id);
                     const isNewestThread = () =>
-                      item.id === messageIndex().keys.at(-1);
+                      item.id === messageIndex.keys().at(-1);
 
                     return (
                       <Show when={message()}>

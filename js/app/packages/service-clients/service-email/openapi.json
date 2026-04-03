@@ -373,7 +373,7 @@
     "/email/contacts/block": {
       "post": {
         "tags": ["Contacts"],
-        "summary": "Block a sender by creating a Gmail filter that sends their emails to trash.",
+        "summary": "Block a sender by creating a Gmail filter that sends their emails to trash.\nThe actual Gmail API call is performed asynchronously by the gmail_ops worker.",
         "operationId": "block_sender",
         "requestBody": {
           "content": {
@@ -386,15 +386,8 @@
           "required": true
         },
         "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BlockSenderResponse"
-                }
-              }
-            }
+          "200": {
+            "description": ""
           },
           "400": {
             "description": "",
@@ -407,26 +400,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -501,7 +474,7 @@
     "/email/contacts/unblock": {
       "post": {
         "tags": ["Contacts"],
-        "summary": "Unblock a sender by removing their block filter from Gmail.",
+        "summary": "Unblock a sender by removing their block filter from Gmail.\nThe actual Gmail API call is performed asynchronously by the gmail_ops worker.",
         "operationId": "unblock_sender",
         "requestBody": {
           "content": {
@@ -528,26 +501,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -3689,17 +3642,6 @@
           "email_address": {
             "type": "string",
             "description": "The email address of the sender to block."
-          }
-        }
-      },
-      "BlockSenderResponse": {
-        "type": "object",
-        "description": "Response after blocking a sender.",
-        "required": ["filter_id"],
-        "properties": {
-          "filter_id": {
-            "type": "string",
-            "description": "The ID of the filter created in Gmail."
           }
         }
       },

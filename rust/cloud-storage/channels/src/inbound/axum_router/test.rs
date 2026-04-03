@@ -144,6 +144,20 @@ impl EntityAccessService for TestAccessService {
             AccessMode::NotFound => Err(AccessError::NotFound("Channel not found")),
         }
     }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError> {
+        unimplemented!()
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError> {
+        unimplemented!()
+    }
 }
 
 // --- Mock services (business logic only, no auth concerns) ---

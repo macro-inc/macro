@@ -2,7 +2,7 @@ use crate::api::email::attachments::get::GetAttachmentResponse;
 use crate::api::email::attachments::get_document_id::GetAttachmentDocumentIDResponse;
 use crate::api::email::backfill::cancel::CancelBackfillParams;
 use crate::api::email::backfill::get::{GetActiveBackfillJobResponse, GetBackfillJobResponse};
-use crate::api::email::contacts::block_sender::{BlockSenderRequest, BlockSenderResponse};
+use crate::api::email::contacts::block_sender::BlockSenderRequest;
 use crate::api::email::contacts::list::ListContactsResponse;
 use crate::api::email::contacts::list_blocked::ListBlockedResponse;
 use crate::api::email::contacts::unblock_sender::UnblockSenderRequest;
@@ -148,7 +148,6 @@ use utoipa::OpenApi;
             ListContactsResponse,
             ContactInfoWithInteraction,
             BlockSenderRequest,
-            BlockSenderResponse,
             UnblockSenderRequest,
             ListBlockedResponse,
             // Email filter types

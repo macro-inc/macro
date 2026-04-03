@@ -45,7 +45,7 @@ import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
-import { createEffect, createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, getOwner, Show } from 'solid-js';
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
@@ -71,6 +71,7 @@ function ChatInner(props: {
   data: ChatData;
   loadedInputText: string | undefined;
 }) {
+  const owner = getOwner();
   const analytics = useAnalytics();
   const input = useChatInputContext();
   const chat = useChatContext();
@@ -160,7 +161,7 @@ function ChatInner(props: {
       return;
     }
 
-    chat.attachStream(result.stream);
+    chat.attachStream(result.stream, owner);
     invalidateUserQuota();
   });
 

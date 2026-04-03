@@ -52,7 +52,7 @@ export function AiChatEmptyState() {
   };
 
   return (
-    <div class="macro-message-margin w-full max-w-[760px] rounded-md border border-edge-muted bg-dialog/95 p-4 text-ink shadow-lg shadow-[#000]/5 backdrop-blur-sm md:p-5">
+    <div class="w-full p-4 text-ink md:p-5">
       <div class="flex flex-col gap-4">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div class="min-w-0">

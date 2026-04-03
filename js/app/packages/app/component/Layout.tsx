@@ -23,6 +23,7 @@ import {
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
+import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { CommandMenu } from './command';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
@@ -147,6 +148,7 @@ function LayoutInner(props: RouteSectionProps) {
           </Suspense>
           <GlobalBulkEditEntityModal />
           <GlobalShareModal />
+          <MacroMcpSetupModal />
         </Show>
         <Show
           when={

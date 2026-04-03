@@ -4,10 +4,13 @@
 //! egress recording, and webhook validation.
 
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
+use livekit_api::services::agent_dispatch::AgentDispatchClient;
 use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
 use livekit_api::webhooks::WebhookReceiver;
-use livekit_protocol::{EncodedFileOutput, S3Upload, encoded_file_output};
+use livekit_protocol::{
+    CreateAgentDispatchRequest, EncodedFileOutput, S3Upload, encoded_file_output,
+};
 
 use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use crate::domain::ports::CallRtcClient;
@@ -16,9 +19,12 @@ use crate::domain::ports::CallRtcClient;
 pub struct LivekitRtcClient {
     room_client: RoomClient,
     egress_client: EgressClient,
+    agent_dispatch_client: AgentDispatchClient,
     webhook_receiver: WebhookReceiver,
     api_key: String,
     api_secret: String,
+    /// If set, the named agent is dispatched to each new room for transcription.
+    transcription_agent_name: Option<String>,
 }
 
 impl LivekitRtcClient {
@@ -28,10 +34,12 @@ impl LivekitRtcClient {
     /// * `server_url` - LiveKit server URL (e.g. `https://my-livekit.example.com`)
     /// * `api_key` - LiveKit API key
     /// * `api_secret` - LiveKit API secret
+    /// * `transcription_agent_name` - If set, this agent is dispatched to new rooms for STT
     pub fn new(
         server_url: &str,
         api_key: impl Into<String>,
         api_secret: impl Into<String>,
+        transcription_agent_name: Option<String>,
     ) -> Self {
         let api_key = api_key.into();
         let api_secret = api_secret.into();
@@ -43,14 +51,18 @@ impl LivekitRtcClient {
             .replace("ws://", "http://");
         let room_client = RoomClient::with_api_key(&http_url, &api_key, &api_secret);
         let egress_client = EgressClient::with_api_key(&http_url, &api_key, &api_secret);
+        let agent_dispatch_client =
+            AgentDispatchClient::with_api_key(&http_url, &api_key, &api_secret);
         let verifier = TokenVerifier::with_api_key(&api_key, &api_secret);
         let webhook_receiver = WebhookReceiver::new(verifier);
         Self {
             room_client,
             egress_client,
+            agent_dispatch_client,
             webhook_receiver,
             api_key,
             api_secret,
+            transcription_agent_name,
         }
     }
 }
@@ -131,6 +143,24 @@ impl CallRtcClient for LivekitRtcClient {
     #[tracing::instrument(err, skip(self))]
     async fn stop_egress(&self, egress_id: &str) -> anyhow::Result<()> {
         self.egress_client.stop_egress(egress_id).await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn dispatch_transcription_agent(&self, room_name: &str) -> anyhow::Result<()> {
+        let Some(agent_name) = &self.transcription_agent_name else {
+            return Ok(());
+        };
+
+        self.agent_dispatch_client
+            .create_dispatch(CreateAgentDispatchRequest {
+                agent_name: agent_name.clone(),
+                room: room_name.to_owned(),
+                ..Default::default()
+            })
+            .await?;
+
+        tracing::info!(room_name, agent_name, "dispatched transcription agent");
         Ok(())
     }
 

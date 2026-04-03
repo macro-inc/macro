@@ -29,6 +29,12 @@ pub struct Config {
     /// to avoid backups for large inbox update operations
     pub gmail_inbox_sync_retry_queue: String,
 
+    /// The SQS queue name for async Gmail operations (label changes, block/unblock, etc.)
+    pub gmail_ops_queue: String,
+
+    /// The SQS queue name for retrying rate-limited Gmail operations
+    pub gmail_ops_retry_queue: String,
+
     /// The SQS queue name for search event
     pub search_event_queue: String,
 
@@ -79,6 +85,18 @@ pub struct Config {
 
     /// The queue max messages per poll for gmail retry inbox sync
     pub inbox_sync_retry_queue_max_messages: i32,
+
+    /// The number of workers we spawn for gmail ops
+    pub gmail_ops_queue_workers: i32,
+
+    /// The queue max messages per poll for gmail ops
+    pub gmail_ops_queue_max_messages: i32,
+
+    /// The number of workers we spawn for gmail ops retry
+    pub gmail_ops_retry_queue_workers: i32,
+
+    /// The queue max messages per poll for gmail ops retry
+    pub gmail_ops_retry_queue_max_messages: i32,
 
     /// The number of workers we spawn for sfs uploader
     pub sfs_uploader_workers: i32,
@@ -158,6 +176,12 @@ impl Config {
         let gmail_inbox_sync_retry_queue = std::env::var("GMAIL_INBOX_SYNC_RETRY_QUEUE")
             .context("GMAIL_INBOX_SYNC_RETRY_QUEUE must be provided")?;
 
+        let gmail_ops_queue =
+            std::env::var("GMAIL_OPS_QUEUE").context("GMAIL_OPS_QUEUE must be provided")?;
+
+        let gmail_ops_retry_queue = std::env::var("GMAIL_OPS_RETRY_QUEUE")
+            .context("GMAIL_OPS_RETRY_QUEUE must be provided")?;
+
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
@@ -228,6 +252,27 @@ impl Config {
                 .parse::<i32>()
                 .unwrap();
 
+        let gmail_ops_queue_workers: i32 = std::env::var("GMAIL_OPS_QUEUE_WORKERS")
+            .unwrap_or("5".to_string())
+            .parse::<i32>()
+            .unwrap();
+
+        let gmail_ops_queue_max_messages: i32 = std::env::var("GMAIL_OPS_QUEUE_MAX_MESSAGES")
+            .unwrap_or("10".to_string())
+            .parse::<i32>()
+            .unwrap();
+
+        let gmail_ops_retry_queue_workers: i32 = std::env::var("GMAIL_OPS_RETRY_QUEUE_WORKERS")
+            .unwrap_or("2".to_string())
+            .parse::<i32>()
+            .unwrap();
+
+        let gmail_ops_retry_queue_max_messages: i32 =
+            std::env::var("GMAIL_OPS_RETRY_QUEUE_MAX_MESSAGES")
+                .unwrap_or("10".to_string())
+                .parse::<i32>()
+                .unwrap();
+
         let sfs_uploader_workers: i32 = std::env::var("SFS_UPLOADER_WORKERS")
             .unwrap_or("3".to_string())
             .parse::<i32>()
@@ -292,6 +337,8 @@ impl Config {
             email_scheduled_queue,
             gmail_inbox_sync_queue,
             gmail_inbox_sync_retry_queue,
+            gmail_ops_queue,
+            gmail_ops_retry_queue,
             search_event_queue,
             gmail_gcp_queue,
             notification_queue,
@@ -310,6 +357,10 @@ impl Config {
             inbox_sync_queue_max_messages,
             inbox_sync_retry_queue_workers,
             inbox_sync_retry_queue_max_messages,
+            gmail_ops_queue_workers,
+            gmail_ops_queue_max_messages,
+            gmail_ops_retry_queue_workers,
+            gmail_ops_retry_queue_max_messages,
             sfs_uploader_workers,
             redis_rate_limit_reqs,
             redis_rate_limit_reqs_backfill,

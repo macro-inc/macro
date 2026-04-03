@@ -190,7 +190,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         EmailPgRepo::new(pool.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
     let user_repo = PgUserRepo::new(pool.clone());

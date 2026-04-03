@@ -1,0 +1,2 @@
+python-dotenv
+livekit-agents[silero]

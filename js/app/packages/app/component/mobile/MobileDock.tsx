@@ -6,7 +6,7 @@ import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { impactFeedback } from '@tauri-apps/plugin-haptics';
+import { hapticImpact } from '@core/mobile/haptics';
 import {
   type Component,
   createMemo,
@@ -47,7 +47,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
       type="button"
       ref={props.ref}
       onPointerDown={() => {
-        impactFeedback('light');
+        hapticImpact('light');
         setAnimating(true);
         setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
         props.onClick();
@@ -144,7 +144,7 @@ function FloatingCreateButton(props: {
         type="button"
         class="absolute bottom-full right-4 mb-14 w-11 h-11 rounded-full bg-panel text-accent flex items-center justify-center shadow-lg"
         onPointerDown={() => {
-          impactFeedback('light');
+          hapticImpact('light');
           setAnimating(true);
           setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
           createAction()?.();

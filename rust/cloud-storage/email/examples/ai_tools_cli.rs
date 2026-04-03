@@ -20,7 +20,7 @@ use ai::tool::types::RequestContext;
 use ai::types::Model;
 use email::domain::service::EmailServiceImpl;
 use email::inbound::toolset::{EmailToolContext, email_toolset};
-use email::outbound::{EmailPgRepo, GmailClientLabelModifier, GmailTokenProviderImpl};
+use email::outbound::{EmailPgRepo, GmailTokenProviderImpl};
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -68,9 +68,6 @@ async fn main() {
 
     let gmail_token_provider =
         Arc::new(GmailTokenProviderImpl::new(redis_conn, auth_service_client));
-    let gmail_client = Arc::new(gmail_client::GmailClient::new("unused".to_string()));
-    let gmail_label_modifier = GmailClientLabelModifier::new(gmail_client);
-
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage);
 
@@ -85,7 +82,6 @@ async fn main() {
         email_repo,
         frecency_service,
         email::domain::ports::NoOpEnqueuer,
-        gmail_label_modifier,
         0,
     );
 

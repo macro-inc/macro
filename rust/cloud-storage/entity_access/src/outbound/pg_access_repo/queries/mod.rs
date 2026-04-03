@@ -2,6 +2,7 @@
 //!
 //! Each module contains a single query function for checking access to a specific entity type.
 
+pub mod call_channel;
 pub mod channel_membership;
 pub mod channel_role;
 pub mod chat_access;

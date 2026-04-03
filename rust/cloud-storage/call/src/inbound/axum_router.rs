@@ -17,11 +17,11 @@ use axum::{
     routing::{get, post},
 };
 use entity_access::{
-    domain::{
-        models::{EntityAccessReceipt, MemberParticipantRole, RequiredPermission},
-        ports::EntityAccessService,
+    domain::models::MemberParticipantRole,
+    domain::ports::EntityAccessService,
+    inbound::axum_extractors::{
+        CallWithChannelIdAccessLevelExtractor, ChannelAccessLevelExtractor,
     },
-    inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
@@ -65,13 +65,6 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
     fn from_ref(state: &CallRouterState<S, Svc>) -> Self {
         state.access_service.clone()
     }
-}
-
-fn channel_id_from_receipt<T: RequiredPermission>(
-    receipt: &EntityAccessReceipt<T>,
-) -> Result<Uuid, CallError> {
-    Uuid::parse_str(&receipt.entity().entity_id)
-        .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))
 }
 
 /// Authenticated call router.
@@ -163,7 +156,8 @@ pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     user: MacroUserExtractor,
 ) -> Result<Json<CallTokenResponse>, CallError> {
-    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
+        .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
     let user_id = user.macro_user_id.as_ref();
 
     let response = state
@@ -192,10 +186,10 @@ pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService
 #[tracing::instrument(err, skip_all)]
 pub async fn leave_or_end_call_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+    access: CallWithChannelIdAccessLevelExtractor<MemberParticipantRole, Svc>,
     user: MacroUserExtractor,
 ) -> Result<Json<LeaveCallResponse>, CallError> {
-    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let channel_id = access.channel_id;
     let user_id = user.macro_user_id.as_ref();
 
     let response = state
@@ -262,16 +256,16 @@ pub async fn webhook_handler<S: CallService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn transcript_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
-    user: MacroUserExtractor,
+    access: CallWithChannelIdAccessLevelExtractor<MemberParticipantRole, Svc>,
+    _user: MacroUserExtractor,
     Json(segment): Json<TranscriptSegmentRequest>,
 ) -> Result<StatusCode, CallError> {
-    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let user_id = user.macro_user_id.as_ref();
+    let channel_id = access.channel_id;
 
-    if segment.speaker_id != user_id {
-        return Err(CallError::Auth);
-    }
+    // Note: we don't enforce speaker_id == authenticated user because the
+    // LiveKit transcription agent publishes text streams attributed to the
+    // original speaker, and any channel member's frontend may relay any
+    // speaker's segment.  The segment_id dedup constraint prevents duplicates.
 
     state
         .service

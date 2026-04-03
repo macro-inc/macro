@@ -14,7 +14,6 @@ import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
-  BlockSenderResponse,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
@@ -340,13 +339,10 @@ export const emailClient = {
     );
   },
   async blockSender(args: { email_address: string }) {
-    return mapOk(
-      await emailFetch<BlockSenderResponse>('/email/contacts/block', {
-        method: 'POST',
-        body: JSON.stringify({ email_address: args.email_address }),
-      }),
-      (result) => result
-    );
+    return emailFetch('/email/contacts/block', {
+      method: 'POST',
+      body: JSON.stringify({ email_address: args.email_address }),
+    });
   },
   async unblockSender(args: { email_address: string }) {
     return emailFetch('/email/contacts/unblock', {

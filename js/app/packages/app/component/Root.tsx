@@ -2,7 +2,7 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { TabAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
+import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -58,6 +58,7 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
@@ -76,7 +77,6 @@ import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import { ReactiveFavicon } from './ReactiveFavicon';
-import { SuspenseContextComp } from './SuspenseContext';
 import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 
@@ -417,24 +417,6 @@ export function Root() {
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
 
-  let runRootWarningLog = false;
-  const RootSuspenseFallback = () => {
-    const runWarningLog = () => {
-      if (!runRootWarningLog) {
-        setTimeout(() => {
-          runRootWarningLog = true;
-        });
-        return;
-      }
-
-      console.warn('Root Suspsense Triggered');
-    };
-
-    runWarningLog();
-
-    return '';
-  };
-
   return (
     <MaybeTauriProvider>
       <MetaProvider>
@@ -449,14 +431,12 @@ export function Root() {
                   <ChannelsContextProvider>
                     <QuickAccessProvider>
                       <SearchProvider>
-                        <TabAttachmentsInit />
+                        <ChatAttachmentsInit />
                         <ReactiveFavicon />
                         <Title>{tabTitle()}</Title>
                         <MacroJump />
                         <Visor />
-                        <SuspenseContextComp
-                          fallback={<RootSuspenseFallback />}
-                        >
+                        <Suspense>
                           <IsomorphicRouter
                             transformUrl={transformShortIdInUrlPathname}
                             root={Layout}
@@ -469,7 +449,7 @@ export function Root() {
                               children: ROUTES,
                             }}
                           </IsomorphicRouter>
-                        </SuspenseContextComp>
+                        </Suspense>
                         <ToastRegion />
                       </SearchProvider>
                     </QuickAccessProvider>

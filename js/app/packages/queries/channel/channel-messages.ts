@@ -6,7 +6,7 @@ import {
   type ChannelMessagesPage,
 } from '@service-comms/client';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createRenderEffect, createSignal, on } from 'solid-js';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { queryClient } from '../client';
@@ -19,6 +19,7 @@ import {
   replaceReplyReactionsInThreadPreview,
   restoreReplyToThreadPreview,
 } from './thread-preview';
+import { createStore, reconcile } from 'solid-js/store';
 
 export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPage,
@@ -99,18 +100,6 @@ export function useChannelMessagesQuery(
   return useInfiniteQuery(() =>
     channelMessagesQueryOptions(channelId(), loadAroundMessageId() ?? null)
   );
-}
-
-export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
-  const query = useChannelMessagesQuery(channelId, () => undefined);
-  const index = createMemo(() =>
-    makeMessageIndex(query.data as ChannelMessagesData | undefined)
-  );
-  return {
-    query,
-    index,
-    byId: createMemo(() => index().byId),
-  };
 }
 
 /** Returns the cache key for one channel message query variant. */
@@ -578,24 +567,51 @@ export function softInvalidateChannelMessages(channelId: string) {
  * Pages arrive newest-first, items within each page are newest-first,
  * so we reverse both layers in one pass.
  */
-export function makeMessageIndex(
-  data: ChannelMessagesData | undefined
-): IndexedChannelMessages {
-  const items: ApiChannelMessage[] = [];
-  const keys: string[] = [];
+export function createMessageIndex(
+  data: Accessor<ChannelMessagesData | undefined>
+) {
   const byId = new Map<string, ApiChannelMessage>();
+  let items: ApiChannelMessage[] = [];
 
-  if (!data?.pages?.length) return { items, keys, byId };
+  const [listen, notify] = createSignal(undefined, { equals: false });
 
-  for (let i = data.pages.length - 1; i >= 0; i--) {
-    const pageItems = data.pages[i].items;
-    for (let j = pageItems.length - 1; j >= 0; j--) {
-      const message = pageItems[j];
-      items.push(message);
-      keys.push(message.id);
-      byId.set(message.id, message);
-    }
-  }
+  const [messageIndex, setMessageIndex] = createStore<string[]>([]);
 
-  return { items, keys, byId };
+  createRenderEffect(
+    on(data, (data) => {
+      byId.clear();
+      items = [];
+
+      const pages = data?.pages;
+
+      const keys: string[] = [];
+
+      if (pages?.length) {
+        for (let i = pages.length - 1; i >= 0; i--) {
+          const pageItems = pages[i].items;
+          for (let j = pageItems.length - 1; j >= 0; j--) {
+            const message = pageItems[j];
+            items.push(message);
+            keys.push(message.id);
+            byId.set(message.id, message);
+          }
+        }
+      }
+
+      notify();
+      setMessageIndex(reconcile(keys));
+    })
+  );
+
+  return {
+    keys: () => messageIndex,
+    byId: () => {
+      listen();
+      return byId;
+    },
+    items: () => {
+      listen();
+      return items;
+    },
+  };
 }

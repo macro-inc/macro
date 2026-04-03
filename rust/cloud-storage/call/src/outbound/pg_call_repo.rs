@@ -4,6 +4,9 @@
 mod test;
 
 use chrono::Utc;
+use entity_access::domain::models::AccessLevel;
+use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -33,10 +36,54 @@ impl CallRepository for PgCallRepo {
         room_name: &str,
         created_by: &str,
     ) -> Result<Option<Call>, Self::Err> {
+        // Create share permission
+        let share_permission_id = uuid::Uuid::now_v7();
+        let share_permission = SharePermissionV2 {
+            id: share_permission_id.to_string(),
+            is_public: false,
+            public_access_level: None,
+            owner: created_by.to_string(),
+            channel_share_permissions: Some(vec![ChannelSharePermission {
+                channel_id: channel_id.to_string(),
+                access_level: AccessLevel::View,
+            }]),
+        };
+
+        let mut tx = self.pool.begin().await?;
+
+        // insert share permission
+        sqlx::query!(
+            r#"
+            INSERT INTO "SharePermission" ("id", "isPublic","publicAccessLevel", "createdAt", "updatedAt")
+            VALUES ($1, $2, $3, NOW(), NOW())
+        "#,
+            share_permission.id,
+            share_permission.is_public,
+            share_permission
+                .public_access_level
+                .as_ref()
+                .map(|s| s.to_string()),
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // insert channel share permission
+        sqlx::query!(
+            r#"
+            INSERT INTO "ChannelSharePermission" ("share_permission_id", "channel_id", "access_level")
+            VALUES ($1, $2, $3)
+            "#,
+            &share_permission.id,
+            &channel_id.to_string(),
+            share_permission.channel_share_permissions.as_ref().unwrap()[0].access_level as _,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
         let row = sqlx::query!(
             r#"
-            INSERT INTO calls (id, channel_id, room_name, created_by)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (channel_id) DO NOTHING
             RETURNING id, channel_id, room_name, created_by, created_at, egress_id
             "#,
@@ -44,18 +91,26 @@ impl CallRepository for PgCallRepo {
             channel_id,
             room_name,
             created_by,
+            &share_permission_id.to_string(),
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(tx.as_mut())
         .await?;
 
-        Ok(row.map(|r| Call {
-            id: r.id,
-            channel_id: r.channel_id,
-            room_name: r.room_name,
-            created_by: r.created_by,
-            created_at: r.created_at,
-            egress_id: r.egress_id,
-        }))
+        // only commit if there is a channel to create
+        if let Some(r) = row {
+            tx.commit().await?;
+
+            Ok(Some(Call {
+                id: r.id,
+                channel_id: r.channel_id,
+                room_name: r.room_name,
+                created_by: r.created_by,
+                created_at: r.created_at,
+                egress_id: r.egress_id,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -236,7 +291,7 @@ impl CallRepository for PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_url
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_url, share_permission_id
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -252,15 +307,14 @@ impl CallRepository for PgCallRepo {
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
-        let record_id = Uuid::now_v7();
-
         // Insert into call_records (including egress_id and any early recording_url).
+        // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_url)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_url, share_permission_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
-            record_id,
+            call_id,
             call.channel_id,
             call.room_name,
             call.created_by,
@@ -269,6 +323,7 @@ impl CallRepository for PgCallRepo {
             duration_ms,
             call.egress_id,
             call.recording_url,
+            &call.share_permission_id,
         )
         .execute(tx.as_mut())
         .await?;
@@ -281,7 +336,7 @@ impl CallRepository for PgCallRepo {
             FROM call_participants
             WHERE call_id = $2
             "#,
-            record_id,
+            call_id,
             call_id,
         )
         .execute(tx.as_mut())
@@ -295,7 +350,7 @@ impl CallRepository for PgCallRepo {
             FROM call_transcripts
             WHERE call_id = $2
             "#,
-            record_id,
+            call_id,
             call_id,
         )
         .execute(tx.as_mut())
@@ -312,7 +367,7 @@ impl CallRepository for PgCallRepo {
         .await?;
 
         tx.commit().await?;
-        Ok(record_id)
+        Ok(*call_id)
     }
 
     #[tracing::instrument(err, skip(self))]

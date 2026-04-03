@@ -1,7 +1,6 @@
-import { impactFeedback } from '@tauri-apps/plugin-haptics';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
 
-export const hasHaptics = false;
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { hapticImpact } from '@core/mobile/haptics';
 
 export interface TouchHandlerOptions {
   onLongPress?: (e: TouchEvent) => void;
@@ -87,7 +86,7 @@ export function touchHandler(
     timer = window.setTimeout(() => {
       longPressTriggered = true;
       setLongPressActivated(true);
-      void impactFeedback('medium');
+      hapticImpact('medium');
       options().onLongPress?.(e);
     }, options().delay ?? 500);
   }

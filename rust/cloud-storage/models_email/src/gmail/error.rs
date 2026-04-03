@@ -11,6 +11,9 @@ pub enum GmailError {
     #[error("Forbidden: Insufficient permissions (403)")]
     Forbidden,
 
+    #[error("Server Error ({0}): {1}")]
+    ServerError(u16, String),
+
     #[error("HTTP Request Error: {0}")]
     HttpRequest(String),
 

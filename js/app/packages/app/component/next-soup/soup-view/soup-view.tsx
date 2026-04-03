@@ -18,9 +18,7 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-import { registerPreviewEntity } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -480,25 +478,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     currentView,
     activeTab,
     applyTabPreset,
-  });
-
-  // Register previewed entity for auto-attach
-  createEffect(() => {
-    const entity = soup.previewEntity() ? soup.focus.item() : undefined;
-    if (!entity) {
-      registerPreviewEntity(panel.handle.id, undefined);
-      return;
-    }
-    const type =
-      entity.type === 'document'
-        ? fileTypeToResolvedBlockName(
-            (entity as { fileType?: string }).fileType
-          )
-        : entity.type;
-    registerPreviewEntity(panel.handle.id, { type, id: entity.id });
-  });
-  onCleanup(() => {
-    registerPreviewEntity(panel.handle.id, undefined);
   });
 
   // Create markDone action for swipe/click handlers

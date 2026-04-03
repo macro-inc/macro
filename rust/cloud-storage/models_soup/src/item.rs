@@ -88,17 +88,11 @@ impl SoupItem {
             (SoupItem::Project(soup_project), SimpleSortMethod::ViewedUpdated) => {
                 soup_project.viewed_at.unwrap_or(soup_project.updated_at)
             }
-            (SoupItem::EmailThread(thread), SimpleSortMethod::ViewedAt) => {
-                thread.thread.viewed_at.unwrap_or_default()
-            }
-            (SoupItem::EmailThread(thread), SimpleSortMethod::UpdatedAt) => {
-                thread.thread.updated_at
-            }
-            (SoupItem::EmailThread(thread), SimpleSortMethod::CreatedAt) => {
-                thread.thread.created_at
-            }
-            (SoupItem::EmailThread(thread), SimpleSortMethod::ViewedUpdated) => {
-                thread.thread.viewed_at.unwrap_or(thread.thread.updated_at)
+            (SoupItem::EmailThread(thread), _) => {
+                // Always use sort_ts for emails — this is the pre-computed effective_ts
+                // from the email SQL query, which is also what the cursor offset logic
+                // uses: (effective_ts, id) < (cursor_ts, cursor_id).
+                thread.thread.sort_ts
             }
             (SoupItem::Channel(soup_channel), SimpleSortMethod::ViewedAt) => {
                 soup_channel.viewed_at.unwrap_or_default()

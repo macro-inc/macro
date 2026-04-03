@@ -35,12 +35,8 @@ pub type ToolScribe =
 pub type ToolFrecencyService = FrecencyQueryServiceImpl<FrecencyPgStorage>;
 
 /// Type alias for the email service implementation
-pub type ToolEmailService = EmailServiceImpl<
-    EmailPgRepo,
-    ToolFrecencyService,
-    email::domain::ports::NoOpEnqueuer,
-    email::domain::ports::NoOpGmailLabelModifier,
->;
+pub type ToolEmailService =
+    EmailServiceImpl<EmailPgRepo, ToolFrecencyService, email::domain::ports::NoOpEnqueuer>;
 
 /// Type alias for the comms/channels service implementation
 pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
