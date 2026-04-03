@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { URL_PARAMS } from '@channel/Channel/link';
 import {
   buildMessageLink,
   canEditOrDeleteMessage,
@@ -61,8 +62,8 @@ describe('message-actions helpers', () => {
   it('builds message links with channel_message_id param', () => {
     const parsed = new URL(buildMessageLink('channel-123', 'msg-123'));
     expect(parsed.pathname).toBe('/app/channel/channel-123');
-    expect(parsed.searchParams.get('channel_message_id')).toBe('msg-123');
-    expect(parsed.searchParams.has('channel_thread_id')).toBe(false);
+    expect(parsed.searchParams.get(URL_PARAMS.message)).toBe('msg-123');
+    expect(parsed.searchParams.has(URL_PARAMS.thread)).toBe(false);
   });
 
   it('builds message links with thread param', () => {
@@ -70,7 +71,7 @@ describe('message-actions helpers', () => {
       buildMessageLink('channel-123', 'msg-123', 'thread-456')
     );
     expect(parsed.pathname).toBe('/app/channel/channel-123');
-    expect(parsed.searchParams.get('channel_message_id')).toBe('msg-123');
-    expect(parsed.searchParams.get('channel_thread_id')).toBe('thread-456');
+    expect(parsed.searchParams.get(URL_PARAMS.message)).toBe('msg-123');
+    expect(parsed.searchParams.get(URL_PARAMS.thread)).toBe('thread-456');
   });
 });
