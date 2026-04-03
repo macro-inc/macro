@@ -353,10 +353,9 @@ async function navigateToLocation(
   switch (location.type) {
     case 'channel': {
       // NOTE: this is handled by the channel block params but this can be used to re-flash an open channel
-      await blockHandle.goToLocationFromParams({
-        [CHANNEL_PARAMS.thread]: location.threadId,
-        [CHANNEL_PARAMS.message]: location.messageId,
-      });
+      await blockHandle.goToLocationFromParams(
+        getChannelParams(location.messageId, location.threadId)
+      );
       break;
     }
     case 'email': {
