@@ -1,4 +1,3 @@
-
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { hapticImpact } from '@core/mobile/haptics';
 
