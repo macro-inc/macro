@@ -1,9 +1,22 @@
-import type { Setter } from 'solid-js';
+import { createEffect, onCleanup, type Accessor, type Setter } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
 import { scrollElementAboveKeyboard } from '../scroll-utils';
 
 const INPUT_CONTAINER_SELECTOR = '[data-inline-input-container-id]';
 
 export function createInlineInputKeyboardHandler(
+  containerEl: Accessor<HTMLElement | undefined>,
+  setIsChannelInputHidden: Setter<boolean>
+): void {
+  createEffect(() => {
+    if (!isMobile()) return;
+    const el = containerEl();
+    if (!el) return;
+    onCleanup(attachInlineInputKeyboardHandler(el, setIsChannelInputHidden));
+  });
+}
+
+function attachInlineInputKeyboardHandler(
   containerEl: HTMLElement,
   setIsChannelInputHidden: Setter<boolean>
 ): () => void {

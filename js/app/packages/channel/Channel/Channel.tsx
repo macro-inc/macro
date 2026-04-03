@@ -8,7 +8,6 @@ import {
   createMemo,
   createSignal,
   on,
-  onCleanup,
   onMount,
   Show,
   type Accessor,
@@ -69,7 +68,6 @@ import {
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
 import { resetKeyboardModality } from './util';
-import { isMobile } from '@core/mobile/isMobile';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -227,17 +225,7 @@ export function Channel(props: ChannelProps) {
   });
 
   // On Mobile when a thread reply input is focused, we want to hide the main Channel input
-  if (isMobile()) {
-    createEffect(() => {
-      const el = messageListElement();
-      if (!el) return;
-      const cleanup = createInlineInputKeyboardHandler(
-        el,
-        setIsChannelInputHidden
-      );
-      onCleanup(cleanup);
-    });
-  }
+  createInlineInputKeyboardHandler(messageListElement, setIsChannelInputHidden);
 
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
