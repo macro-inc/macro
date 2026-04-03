@@ -517,7 +517,7 @@ export function PopupPreview(props: {
       'channel'
     );
 
-    handle?.goToLocationFromParams(props.documentInfo.params);
+    await handle?.goToLocationFromParams(props.documentInfo.params);
   });
 
   /**
