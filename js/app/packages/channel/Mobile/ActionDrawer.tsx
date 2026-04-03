@@ -5,6 +5,7 @@ import LinkIcon from '@icon/regular/link.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import TrashIcon from '@icon/regular/trash.svg';
+import { focusInput } from '@core/directive/focusInput';
 import {
   createSignal,
   For,
@@ -31,18 +32,44 @@ type ActionItem = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | string;
   onClick?: MessageActionHandler;
   destructive?: boolean;
+  getFocusTarget?: () => HTMLElement | null | undefined;
 };
 
-function buildActionItems(actions: MessageActions | undefined): ActionItem[] {
+function buildActionItems(
+  actions: MessageActions | undefined,
+  messageId: string | undefined
+): ActionItem[] {
   return [
-    { id: 'reply', label: 'Reply', icon: ReplyIcon, onClick: actions?.onReply },
+    {
+      id: 'reply',
+      label: 'Reply',
+      icon: ReplyIcon,
+      onClick: actions?.onReply,
+      getFocusTarget: messageId
+        ? () =>
+            document.querySelector<HTMLElement>(
+              `[data-input-id="thread-reply-input-${messageId}"] [contenteditable]`
+            )
+        : undefined,
+    },
     {
       id: 'copy-link',
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
     },
-    { id: 'edit', label: 'Edit', icon: PencilIcon, onClick: actions?.onEdit },
+    {
+      id: 'edit',
+      label: 'Edit',
+      icon: PencilIcon,
+      onClick: actions?.onEdit,
+      getFocusTarget: messageId
+        ? () =>
+            document.querySelector<HTMLElement>(
+              `[data-input-id="edit-message-input-${messageId}"] [contenteditable]`
+            )
+        : undefined,
+    },
     {
       id: 'delete',
       label: 'Delete',
@@ -128,7 +155,7 @@ export function ActionDrawer() {
     drawerState.close();
   };
 
-  const actionItems = () => buildActionItems(actions());
+  const actionItems = () => buildActionItems(actions(), message()?.id);
   const nonDestructiveActions = () =>
     actionItems().filter((item) => item.onClick && !item.destructive);
   const destructiveActions = () =>
@@ -204,6 +231,10 @@ export function ActionDrawer() {
                       type="button"
                       data-message-action={action.id}
                       class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:border-b border-page"
+                      ref={(el) => {
+                        const getTarget = action.getFocusTarget;
+                        if (getTarget) focusInput(el, () => ({ getTarget }));
+                      }}
                       onClick={(event) => handleAction(action.onClick, event)}
                     >
                       <span class="size-5 flex items-center justify-center shrink-0">
@@ -225,6 +256,10 @@ export function ActionDrawer() {
                       type="button"
                       data-message-action={action.id}
                       class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:border-b border-panel"
+                      ref={(el) => {
+                        const getTarget = action.getFocusTarget;
+                        if (getTarget) focusInput(el, () => ({ getTarget }));
+                      }}
                       onClick={(event) => handleAction(action.onClick, event)}
                     >
                       <span class="size-5 flex items-center justify-center shrink-0">
