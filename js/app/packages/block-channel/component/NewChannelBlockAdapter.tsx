@@ -26,6 +26,16 @@ import { ChannelDebouncedNotificationReadMarker } from '@notifications/component
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { BlockChannelProps } from './Block';
 
+type ChannelTargetMessageParams = {
+  [URL_PARAMS.message]?: string;
+  [URL_PARAMS.thread]?: string;
+};
+
+type ChannelPropsTargetMessage = Pick<
+  ChannelProps,
+  'targetMessageId' | 'targetMessageReplyId'
+>;
+
 function NewTop(props: {
   channelId: string;
   activeTab: ChannelTabId;
@@ -56,16 +66,6 @@ function NewTop(props: {
     </Suspense>
   );
 }
-
-type ChannelTargetMessageParams = {
-  [URL_PARAMS.message]?: string;
-  [URL_PARAMS.thread]?: string;
-};
-
-type ChannelPropsTargetMessage = Pick<
-  ChannelProps,
-  'targetMessageId' | 'targetMessageReplyId'
->;
 
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
   useBlockEntityCommands();
