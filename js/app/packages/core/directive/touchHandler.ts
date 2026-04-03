@@ -1,12 +1,14 @@
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
-import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 
 export const hasHaptics = false;
 
 export interface TouchHandlerOptions {
-  onLongPress?: JSX.EventHandler<HTMLElement, TouchEvent>;
-  onShortTouch?: JSX.EventHandler<HTMLElement, TouchEvent>;
+  onLongPress?: (e: TouchEvent) => void;
+  onTouchStart?: (e: TouchEvent) => void;
+  onShortTouch?: (e: TouchEvent) => void;
   onCancel?: () => void;
+  onTouchEnd?: (e: TouchEvent, longPressTriggered: boolean) => void;
   delay?: number;
   moveThreshold?: number;
   stopTouchStartPropagation?: boolean;
@@ -81,13 +83,12 @@ export function touchHandler(
       e.stopPropagation();
     }
 
+    options().onTouchStart?.(e);
     timer = window.setTimeout(() => {
       longPressTriggered = true;
       setLongPressActivated(true);
       void impactFeedback('medium');
-      options().onLongPress?.(
-        e as TouchEvent & { currentTarget: HTMLElement; target: Element }
-      );
+      options().onLongPress?.(e);
     }, options().delay ?? 500);
   }
 
@@ -104,6 +105,8 @@ export function touchHandler(
   }
 
   function handleTouchEnd(e: TouchEvent) {
+    options().onTouchEnd?.(e, longPressTriggered);
+
     const isAnchorElement = (e.target as Element)?.closest('a');
     const isButtonElement = (e.target as Element)?.closest('button');
     const isDocumentMention = (e.target as Element)?.closest(
@@ -118,9 +121,7 @@ export function touchHandler(
       e.stopPropagation();
       e.preventDefault();
     } else if (validShortTouch() && !touchedSomethingSharp) {
-      options().onShortTouch?.(
-        e as TouchEvent & { currentTarget: HTMLElement; target: Element }
-      );
+      options().onShortTouch?.(e);
     }
     resetState();
   }
