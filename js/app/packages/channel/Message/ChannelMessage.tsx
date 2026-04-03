@@ -8,7 +8,7 @@ import type { MessageSelectionState } from './context';
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
-import { touchHandler } from '@core/directive/touchHandler';
+import { longPressHighlight } from '@core/directive/longPressHighlight';
 
 type ChannelMessageProps = {
   channelId: string;
@@ -170,7 +170,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
       actions={props.actions}
       highlighted={props.highlighted}
       ref={(el) =>
-        touchHandler(el, () => ({
+        longPressHighlight(el, () => ({
           onLongPress: () => drawerManager?.open(props.message, props.actions),
         }))
       }

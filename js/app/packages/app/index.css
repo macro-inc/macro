@@ -733,6 +733,37 @@ html:not([data-touch-device="true"]) [data-channel-nav="keyboard"] [data-message
     @apply opacity-100;
 }
 
+/* Long-press animation */
+[data-message].long-press-animation {
+    animation: long-press-message-highlight 400ms ease-in both;
+}
+
+[data-message].long-press-animation > .message-accent-bar {
+    animation: long-press-accent-bar 400ms ease-in both;
+}
+
+@keyframes long-press-message-highlight {
+    from {
+        background-color: oklch(from var(--color-accent) l c h / 0%);
+        outline-width: 1px;
+        outline-style: solid;
+        outline-color: transparent;
+        outline-offset: -1px;
+    }
+    to {
+        background-color: oklch(from var(--color-accent) l c h / 5%);
+        outline-width: 1px;
+        outline-style: solid;
+        outline-color: oklch(from var(--color-accent) l c h / 20%);
+        outline-offset: -1px;
+    }
+}
+
+@keyframes long-press-accent-bar {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 html[data-modality="keyboard"] input:focus-visible::after,
 html[data-modality="keyboard"] textarea:focus-visible::after,
 html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {

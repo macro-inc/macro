@@ -64,7 +64,7 @@ export function touchHandler(
     setLongPressActivated(false);
   }
 
-  function cancel() {
+  function handleTouchCancel() {
     resetState();
     options().onCancel?.();
   }
@@ -100,7 +100,7 @@ export function touchHandler(
 
     if (distance > (options().moveThreshold ?? 10)) {
       setValidShortTouch(false);
-      cancel();
+      handleTouchCancel();
     }
   }
 
@@ -126,11 +126,6 @@ export function touchHandler(
     resetState();
   }
 
-  function handleTouchCancel() {
-    resetState();
-    options().onCancel?.();
-  }
-
   element.addEventListener('touchstart', handleTouchStart, { passive: true });
   element.addEventListener('touchmove', handleTouchMove, { passive: true });
   element.addEventListener('touchend', handleTouchEnd);
@@ -141,6 +136,5 @@ export function touchHandler(
     element.removeEventListener('touchmove', handleTouchMove);
     element.removeEventListener('touchend', handleTouchEnd);
     element.removeEventListener('touchcancel', handleTouchCancel);
-    cancel();
   });
 }
