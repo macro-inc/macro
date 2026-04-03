@@ -59,15 +59,18 @@ describe('message-actions helpers', () => {
   });
 
   it('builds message links with channel_message_id param', () => {
-    const url = buildMessageLink('channel-123', 'msg-123');
-    expect(url).toContain('/app/channel/channel-123');
-    expect(url).toContain('channel_message_id=msg-123');
+    const parsed = new URL(buildMessageLink('channel-123', 'msg-123'));
+    expect(parsed.pathname).toBe('/app/channel/channel-123');
+    expect(parsed.searchParams.get('channel_message_id')).toBe('msg-123');
+    expect(parsed.searchParams.has('channel_thread_id')).toBe(false);
   });
 
   it('builds message links with thread param', () => {
-    const url = buildMessageLink('channel-123', 'msg-123', 'thread-456');
-    expect(url).toContain('/app/channel/channel-123');
-    expect(url).toContain('channel_message_id=msg-123');
-    expect(url).toContain('channel_thread_id=thread-456');
+    const parsed = new URL(
+      buildMessageLink('channel-123', 'msg-123', 'thread-456')
+    );
+    expect(parsed.pathname).toBe('/app/channel/channel-123');
+    expect(parsed.searchParams.get('channel_message_id')).toBe('msg-123');
+    expect(parsed.searchParams.get('channel_thread_id')).toBe('thread-456');
   });
 });
