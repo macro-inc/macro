@@ -211,7 +211,10 @@ function PopupIconButton(props: {
   return (
     <Tooltip tooltip={props.tooltip}>
       <button
-        onClick={props.onClick}
+        onClick={(e) => {
+          e.stopPropagation();
+          props.onClick();
+        }}
         class="rounded-md py-1 hover:bg-hover transition flex items-center gap-1.5"
       >
         <div class="w-fit flex justify-right items-center mx-0.5 my-0.5 text-xs font-normal text-current/90">
