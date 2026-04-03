@@ -306,7 +306,7 @@ export const useSearchResponseItemMapper = () => {
               channelType,
               messageId: msg.message_id!,
               threadId: msg.thread_id ?? undefined,
-              senderId: msg.sender_id ?? '',
+              senderId: msg.sender_id!,
               content,
               name: channelName,
               ownerId,
