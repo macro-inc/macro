@@ -308,12 +308,19 @@ function NarrowLayout(props: LayoutProps) {
             };
             return (
               <span class="flex items-center gap-1 min-w-0 truncate">
+                <span class="shrink-0 text-ink-muted text-xs whitespace-nowrap">
+                  {entity().channelName}
+                </span>
                 <Show when={entity().senderId}>
                   {(id) => <UserIcon id={id()} size="xs" />}
                 </Show>
-                <span class="shrink-0 text-ink-muted text-xs truncate max-w-[30%]">
-                  {entity().channelName}
-                </span>
+                <Show when={hit()}>
+                  {(h) => (
+                    <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
+                      <SearchSender hit={h()} />
+                    </span>
+                  )}
+                </Show>
                 <span class="text-ink/50 font-normal truncate min-w-0">
                   <Show when={hit()} fallback={entity().content}>
                     {(h) => <SearchContent hit={h()} singleLine />}
@@ -642,19 +649,26 @@ function WideLayout(props: LayoutProps) {
               };
               return (
                 <>
-                  <span class="shrink-0 truncate flex gap-1 items-center max-w-[40%]">
+                  <span class="shrink-0 flex gap-1.5 items-center">
+                    <span class="text-ink-muted whitespace-nowrap">
+                      {entity().channelName}
+                    </span>
                     <Show when={entity().senderId}>
                       {(id) => <UserIcon id={id()} size="xs" />}
                     </Show>
-                    <span class="text-ink-muted truncate text-xs">
-                      {entity().channelName}
-                    </span>
+                    <Show when={hit()}>
+                      {(h) => (
+                        <span class="text-ink-extra-muted text-xs whitespace-nowrap">
+                          <SearchSender hit={h()} />
+                        </span>
+                      )}
+                    </Show>
                   </span>
-                  <span class="text-ink/50 font-medium truncate flex-1 min-w-0">
+                  <div class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden">
                     <Show when={hit()} fallback={entity().content}>
                       {(h) => <SearchContent hit={h()} singleLine />}
                     </Show>
-                  </span>
+                  </div>
                 </>
               );
             }}
