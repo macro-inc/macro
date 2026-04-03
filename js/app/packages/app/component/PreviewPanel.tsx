@@ -1,4 +1,4 @@
-import type { BlockAliasContext } from '@core/block';
+import type { BlockAliasContext, BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { NonNullableFields } from '@core/util/withRequired';
@@ -68,16 +68,20 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           baseType: 'md',
         } as BlockAliasContext)
       : undefined;
-    const blockType =
-      props.selectedEntity.type === 'document'
-        ? fileTypeToResolvedBlockName(props.selectedEntity.fileType)
-        : props.selectedEntity.type === 'channel_message'
-          ? 'channel'
-          : props.selectedEntity.type;
-    const blockId =
-      props.selectedEntity.type === 'channel_message'
-        ? props.selectedEntity.channelId
-        : props.selectedEntity.id;
+
+    let blockType: BlockName;
+    let blockId: string;
+    if (props.selectedEntity.type === 'document') {
+      blockType = fileTypeToResolvedBlockName(props.selectedEntity.fileType);
+      blockId = props.selectedEntity.id;
+    } else if (props.selectedEntity.type === 'channel_message') {
+      blockType = 'channel';
+      blockId = props.selectedEntity.channelId;
+    } else {
+      blockType = props.selectedEntity.type;
+      blockId = props.selectedEntity.id;
+    }
+
     return props.orchestrator.createBlockInstance(blockType, blockId, {
       aliasContext,
     });
