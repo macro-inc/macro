@@ -25,11 +25,11 @@ const getEntityUrlId = (entity: EntityData): string => {
   return entity.id;
 };
 
-const getEntityUrlParams = (entity: EntityData): Record<string, string> => {
-  if (entity.type === 'channel_message') {
-    return getChannelParams(entity.messageId, entity.threadId) ?? {};
-  }
-  return {};
+const getEntityUrlParams = (
+  entity: EntityData
+): Record<string, string> | undefined => {
+  if (entity.type !== 'channel_message') return undefined;
+  return getChannelParams(entity.messageId, entity.threadId);
 };
 
 const getEntityUrl = (entity: EntityData): string => {
