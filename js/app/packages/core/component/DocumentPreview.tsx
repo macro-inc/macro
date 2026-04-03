@@ -468,9 +468,26 @@ export function PopupPreview(props: {
     copyBranchNameToClipboard(props.documentInfo.id, docName);
   };
 
+  const isSplitAlreadyOpen = () => {
+    const splitManager = globalSplitManager();
+    if (!splitManager) return false;
+    return !!splitManager.getSplitByContent(
+      props.documentInfo.type,
+      props.documentInfo.id
+    );
+  };
+
   const openInNewSplit = createCallback(async () => {
     const splitManager = globalSplitManager();
-    if (splitManager) {
+    if (!splitManager) return;
+
+    const existing = splitManager.getSplitByContent(
+      props.documentInfo.type,
+      props.documentInfo.id
+    );
+    if (existing) {
+      existing.activate();
+    } else {
       splitManager.createNewSplit({
         content: {
           type: props.documentInfo.type,
@@ -479,17 +496,17 @@ export function PopupPreview(props: {
         },
         referredFrom: null,
       });
-
-      if (props.documentInfo.type !== 'channel') return;
-
-      const orchestrator = splitManager.getOrchestrator();
-      const handle = await orchestrator.getBlockHandle(
-        props.documentInfo.id,
-        'channel'
-      );
-
-      handle?.goToLocationFromParams(props.documentInfo.params);
     }
+
+    if (props.documentInfo.type !== 'channel') return;
+
+    const orchestrator = splitManager.getOrchestrator();
+    const handle = await orchestrator.getBlockHandle(
+      props.documentInfo.id,
+      'channel'
+    );
+
+    handle?.goToLocationFromParams(props.documentInfo.params);
   });
 
   /**
@@ -578,13 +595,15 @@ export function PopupPreview(props: {
         />
       );
 
-      buttons.push(
-        <PopupIconButton
-          tooltip="Open in New Split"
-          onClick={openInNewSplit}
-          icon={ColumnsPlusRight}
-        />
-      );
+      if (!isSplitAlreadyOpen()) {
+        buttons.push(
+          <PopupIconButton
+            tooltip="Open in New Split"
+            onClick={openInNewSplit}
+            icon={ColumnsPlusRight}
+          />
+        );
+      }
     }
 
     if (props.delete) {

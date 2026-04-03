@@ -84,9 +84,17 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const canOpenInSplit = () => {
     if (props.entities.length !== 1) return false;
     const entity = props.entities[0];
-    const splits = globalSplitManager()?.splits;
-    if (!splits) return false;
-    return !splits().some((split) => split.content.id === entity.id);
+    const splitManager = globalSplitManager();
+    if (!splitManager) return false;
+    const contentId =
+      entity.type === 'channel_message' ? entity.channelId : entity.id;
+    const contentType =
+      entity.type === 'document'
+        ? fileTypeToBlockName(entity.subType?.type ?? entity.fileType)
+        : entity.type === 'channel_message'
+          ? 'channel'
+          : entity.type;
+    return !splitManager.getSplitByContent(contentType, contentId);
   };
 
   const openInNewSplit = async () => {
