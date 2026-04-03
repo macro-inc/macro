@@ -35,7 +35,7 @@ export function propsToHref(props: { fileType?: string | null; id: string }) {
 
 export function buildSimpleEntityUrl(
   entity: { type: string; id: string },
-  params?: Record<string, any>
+  params?: Record<string, string>
 ): string {
   const urlString = `${getWebOrigin()}/app/${entity.type}/${entity.id}`;
   const url = new URL(urlString);
