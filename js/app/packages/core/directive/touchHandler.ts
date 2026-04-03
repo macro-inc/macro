@@ -51,28 +51,33 @@ export function touchHandler(
     return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   }
 
-  function resetState() {
+  function clearState() {
     if (timer) {
       clearTimeout(timer);
       timer = 0;
     }
     startPosition = undefined;
     longPressTriggered = false;
-    setValidShortTouch(true);
     setLongPressActivated(false);
   }
 
+  function initStateForNewTouch() {
+    clearState();
+    setValidShortTouch(true);
+  }
+
   function handleTouchCancel() {
-    resetState();
+    clearState();
     options().onCancel?.();
   }
 
   function handleTouchStart(e: TouchEvent) {
     if (e.touches.length > 1) {
+      clearState();
       setValidShortTouch(false);
       return;
     }
-    setValidShortTouch(true);
+    initStateForNewTouch();
 
     const touch = e.touches[0];
     startPosition = { x: touch.clientX, y: touch.clientY };
@@ -121,7 +126,7 @@ export function touchHandler(
     } else if (validShortTouch() && !touchedSomethingSharp) {
       options().onShortTouch?.(e);
     }
-    resetState();
+    clearState();
   }
 
   element.addEventListener('touchstart', handleTouchStart, { passive: true });
