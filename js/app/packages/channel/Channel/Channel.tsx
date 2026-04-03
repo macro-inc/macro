@@ -79,7 +79,7 @@ import {
   scrollReplyInputIntoView,
 } from '../scroll-utils';
 
-type ChannelProps = {
+export type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
   targetMessageReplyId?: string | undefined;

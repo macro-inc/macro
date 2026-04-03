@@ -11,7 +11,7 @@ export function ChannelBlockSwitch(props: BlockChannelProps) {
       enabledOverride={ENABLE_NEW_CHANNELS()}
       fallback={<BlockChannel {...props} />}
     >
-      <NewChannelBlockAdapter />
+      <NewChannelBlockAdapter {...props} />
     </ShowFeatureFlag>
   );
 }
