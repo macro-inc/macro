@@ -32,6 +32,16 @@ const getEntityUrlParams = (entity: EntityData): Record<string, string> => {
   return {};
 };
 
+const getEntityUrl = (entity: EntityData): string => {
+  return buildSimpleEntityUrl(
+    {
+      type: getEntityUrlType(entity),
+      id: getEntityUrlId(entity),
+    },
+    getEntityUrlParams(entity)
+  );
+};
+
 export const makeCopyLinkAction = () => {
   const canExecute = (_entity: EntityData): boolean => {
     // Can copy link for any entity type
@@ -43,14 +53,7 @@ export const makeCopyLinkAction = () => {
     const entity = entities[0];
     if (!entity) return;
 
-    let url: string;
-    url = buildSimpleEntityUrl(
-      {
-        type: getEntityUrlType(entity),
-        id: getEntityUrlId(entity),
-      },
-      getEntityUrlParams(entity)
-    );
+    const url = getEntityUrl(entity);
 
     await navigator.clipboard.writeText(url);
     toast.success('Link copied to clipboard');
