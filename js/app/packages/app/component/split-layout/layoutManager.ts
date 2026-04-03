@@ -1032,7 +1032,7 @@ export function createSplitLayout(
 
   function replaceAllSplits(
     content: SplitContent,
-    options: { referredFrom?: string | null } = {}
+    options: { referredFrom?: ReferredFrom } = {}
   ): SplitHandle {
     reconcileSplits([content]);
     const handle = getSplitByContent(content.type, content.id);
