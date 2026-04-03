@@ -1,6 +1,6 @@
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import shortuuid from 'short-uuid';
 import { getWebOrigin } from './webOrigin';
+
 const short = shortuuid(shortuuid.constants.flickrBase58, {
   consistentLength: false,
 });
@@ -25,12 +25,6 @@ export function transformShortIdInUrlPathname(pathname: string) {
   }
   const newPathname = newParts.join('/');
   return newPathname;
-}
-
-export function propsToHref(props: { fileType?: string | null; id: string }) {
-  const id = props.id;
-  const blockName = fileTypeToBlockName(props.fileType);
-  return `/${blockName}/${id}`;
 }
 
 export function buildSimpleEntityUrl(
