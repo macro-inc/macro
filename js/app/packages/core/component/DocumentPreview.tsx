@@ -465,7 +465,7 @@ export function PopupPreview(props: {
     copyBranchNameToClipboard(props.documentInfo.id, docName);
   };
 
-  const openInNewSplit = createCallback(() => {
+  const openInNewSplit = createCallback(async () => {
     const splitManager = globalSplitManager();
     if (splitManager) {
       splitManager.createNewSplit({
@@ -476,6 +476,16 @@ export function PopupPreview(props: {
         },
         referredFrom: null,
       });
+
+      if (props.documentInfo.type !== 'channel') return;
+
+      const orchestrator = splitManager.getOrchestrator();
+      const handle = await orchestrator.getBlockHandle(
+        props.documentInfo.id,
+        'channel'
+      );
+
+      handle?.goToLocationFromParams(props.documentInfo.params);
     }
   });
 
