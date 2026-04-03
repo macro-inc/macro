@@ -81,7 +81,7 @@ export function References(props: ReferenceProps) {
   const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
-  const messageLocation = async (
+  const goToMessageLocation = async (
     channelId: string,
     messageId: string,
     threadId?: string
@@ -123,7 +123,7 @@ export function References(props: ReferenceProps) {
       blockName: 'channel',
       blockId: channelId,
     });
-    messageLocation(channelId, messageId, threadId);
+    goToMessageLocation(channelId, messageId, threadId);
   };
 
   const navigateToGenericReference = (
