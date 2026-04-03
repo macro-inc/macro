@@ -1,6 +1,6 @@
 // URL params constants
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
-import { URL_PARAMS as URL_PARAMS_CHANNEL } from '@block-channel/constants';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
@@ -170,8 +170,8 @@ export const mentionsAccessories = (
   }
   // Channel block handling
   else if (blockName === 'channel') {
-    const threadId = params[URL_PARAMS_CHANNEL.thread];
-    const messageId = params[URL_PARAMS_CHANNEL.message];
+    const threadId = params[CHANNEL_PARAMS.thread];
+    const messageId = params[CHANNEL_PARAMS.message];
     if (threadId) {
       return {
         icon: 'thread',
@@ -384,9 +384,9 @@ export function PopupPreview(props: {
     let messageId: string | undefined;
     if (
       type === 'channel' &&
-      URL_PARAMS_CHANNEL.message in props.documentInfo.params
+      CHANNEL_PARAMS.message in props.documentInfo.params
     ) {
-      messageId = props.documentInfo.params[URL_PARAMS_CHANNEL.message];
+      messageId = props.documentInfo.params[CHANNEL_PARAMS.message];
     }
     return { id: props.documentInfo.id, type, messageId };
   };
