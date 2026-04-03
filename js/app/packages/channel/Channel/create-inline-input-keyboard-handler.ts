@@ -8,9 +8,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import {
-  scrollElementAboveKeyboard,
-} from '../scroll-utils';
+import { scrollElementAboveKeyboard } from '../scroll-utils';
 
 const INPUT_CONTAINER_SELECTOR = '[data-inline-input-container-id]';
 
