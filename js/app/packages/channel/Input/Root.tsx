@@ -28,7 +28,7 @@ export function Root(props: RootProps) {
   return (
     <div
       class={cn(
-        'relative max-w-full macro-message-width flex flex-col flex-1 items-center justify-between bg-input border border-edge-muted rounded-[5px]',
+        'relative macro-message-width flex flex-col flex-1 items-center justify-between bg-input border border-edge-muted rounded-[5px]',
         isMobile() &&
           !isReplyInput(local.input) &&
           'border-b-0 border-l-0 border-r-0 rounded-b-none',
