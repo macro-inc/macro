@@ -1,5 +1,4 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
-import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { NotificationType } from '@core/types';
@@ -8,6 +7,7 @@ import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import type { NotificationSource } from './notification-source';
+import { getChannelParams } from '@block-channel/utils/link';
 
 const CHANNEL_EVENT_TYPES = [
   'channel_mention',
@@ -64,13 +64,12 @@ async function openChannelNotification(
 
   openSplitIfNotOpen(layoutManager, 'channel', channelId, newSplit);
 
+  if (!messageId) return;
+
   const orchestrator = layoutManager.getOrchestrator();
   const handle = await orchestrator.getBlockHandle(channelId, 'channel');
 
-  handle?.goToLocationFromParams({
-    [CHANNEL_URL_PARAMS.message]: messageId,
-    [CHANNEL_URL_PARAMS.thread]: threadId,
-  });
+  handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
 }
 
 function safeFileTypeToBlockName(fileType: string | undefined | null) {
