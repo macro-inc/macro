@@ -7113,6 +7113,17 @@
             "type": ["string", "null"],
             "description": "The name of the document."
           },
+          "fileType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileTypeUpdate",
+                "description": "The new file type for the document (null to clear)."
+              }
+            ]
+          },
           "projectId": {
             "type": ["string", "null"],
             "description": "The new project id of the document."
@@ -7949,6 +7960,27 @@
           "img",
           "swf"
         ]
+      },
+      "FileTypeUpdate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Set the file type to a specific value.",
+            "required": ["set"],
+            "properties": {
+              "set": {
+                "$ref": "#/components/schemas/FileType",
+                "description": "Set the file type to a specific value."
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "Clear the file type (set to null).",
+            "enum": ["clear"]
+          }
+        ],
+        "description": "Represents a file type update: either set to a specific type or clear to null."
       },
       "FolderItem": {
         "type": "object",
