@@ -4,7 +4,7 @@ import type { EntityData } from '@entity';
 import { match } from 'ts-pattern';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { SplitContent } from '@app/component/split-layout/layoutManager';
-import { getChannelParams } from '@block-channel/utils/link';
+import { getChannelParams } from '@channel/Channel/link';
 
 /** size-23 = 92px */
 export const THUMB_SIZE = 92;
