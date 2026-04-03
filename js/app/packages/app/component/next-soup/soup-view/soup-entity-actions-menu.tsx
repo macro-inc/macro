@@ -21,7 +21,7 @@ import { useUserId } from '@core/context/user';
 import { useAnalytics } from '@app/component/analytics-context';
 import { Show } from 'solid-js';
 import { useSoupView } from './soup-view-context';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { getChannelParams } from '@block-channel/utils/link';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,
@@ -115,10 +115,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         content: {
           type: 'channel',
           id: entity.channelId,
-          params: {
-            [CHANNEL_PARAMS.message]: entity.messageId,
-            [CHANNEL_PARAMS.thread]: entity.threadId,
-          },
+          params: getChannelParams(entity.messageId, entity.threadId),
         },
         referredFrom: 'entity-actions-menu',
       });
