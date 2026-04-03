@@ -71,9 +71,6 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
 
-  const canExecuteAny = (canExecute: (e: EntityData) => boolean) =>
-    props.entities.some(canExecute);
-
   const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
     props.entities.length > 0 && props.entities.every(canExecute);
 
