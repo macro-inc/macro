@@ -314,13 +314,11 @@ function NarrowLayout(props: LayoutProps) {
                 <span class="shrink-0 text-ink-muted text-xs truncate max-w-[30%]">
                   {entity().channelName}
                 </span>
-                <Show when={hit()}>
-                  {(h) => (
-                    <span class="text-ink/50 font-normal truncate min-w-0">
-                      <SearchContent hit={h()} singleLine />
-                    </span>
-                  )}
-                </Show>
+                <span class="text-ink/50 font-normal truncate min-w-0">
+                  <Show when={hit()} fallback={entity().content}>
+                    {(h) => <SearchContent hit={h()} singleLine />}
+                  </Show>
+                </span>
               </span>
             );
           }}
@@ -652,13 +650,11 @@ function WideLayout(props: LayoutProps) {
                       {entity().channelName}
                     </span>
                   </span>
-                  <Show when={hit()}>
-                    {(h) => (
-                      <span class="text-ink/50 font-medium truncate flex-1 min-w-0">
-                        <SearchContent hit={h()} singleLine />
-                      </span>
-                    )}
-                  </Show>
+                  <span class="text-ink/50 font-medium truncate flex-1 min-w-0">
+                    <Show when={hit()} fallback={entity().content}>
+                      {(h) => <SearchContent hit={h()} singleLine />}
+                    </Show>
+                  </span>
                 </>
               );
             }}
