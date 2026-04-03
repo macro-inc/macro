@@ -4,7 +4,7 @@ import type { EntityData } from '@entity';
 import { match } from 'ts-pattern';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { SplitContent } from '@app/component/split-layout/layoutManager';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { getChannelParams } from '@block-channel/utils/link';
 
 /** size-23 = 92px */
 export const THUMB_SIZE = 92;
@@ -91,10 +91,7 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     .with({ type: 'channel_message' }, (e) => ({
       type: 'channel' as const,
       id: e.channelId,
-      params: {
-        [CHANNEL_PARAMS.message]: e.messageId,
-        [CHANNEL_PARAMS.thread]: e.threadId,
-      },
+      params: getChannelParams(e.messageId, e.threadId),
     }))
     .exhaustive();
 }
