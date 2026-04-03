@@ -27,6 +27,7 @@ import {
 } from '@queries/soup/cache';
 import { match } from 'ts-pattern';
 import { isAfter } from 'date-fns';
+import { getChannelParams } from '@block-channel/utils/link';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -298,20 +299,12 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
-  // Build params for channel entities with location
-  const params =
-    (entity.type === 'channel' || entity.type === 'channel_message') &&
-    location?.type === 'channel'
-      ? {
-          [CHANNEL_PARAMS.message]: location.messageId,
-          [CHANNEL_PARAMS.thread]: location.threadId,
-        }
-      : entity.type === 'channel_message'
-        ? {
-            [CHANNEL_PARAMS.message]: entity.messageId,
-            [CHANNEL_PARAMS.thread]: entity.threadId,
-          }
-        : undefined;
+  let params: Record<string, string> | undefined;
+  if (entity.type === 'channel' && location?.type === 'channel') {
+    params = getChannelParams(location.messageId, location.threadId);
+  } else if (entity.type === 'channel_message') {
+    params = getChannelParams(entity.messageId, entity.threadId);
+  }
 
   splitManager.openWithSplit(
     { ...content, params },
