@@ -3,12 +3,13 @@ use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use crate::share_permission;
 
 #[tracing::instrument(skip(transaction))]
+/// `file_type`: None = no change, Some(None) = set to NULL, Some(Some(ft)) = set to ft.
 pub async fn edit_document(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &str,
     document_name: Option<&str>,
     project_id: Option<&str>,
-    file_type: Option<model_file_type::FileType>,
+    file_type: Option<Option<&str>>,
     share_permission: Option<&UpdateSharePermissionRequestV2>,
 ) -> anyhow::Result<()> {
     let mut query = "UPDATE \"Document\" SET ".to_string();
@@ -29,10 +30,9 @@ pub async fn edit_document(
         }
     }
 
-    let file_type_str = file_type.map(|ft| ft.to_string());
-    if let Some(ref ft) = file_type_str {
+    if let Some(ft_update) = file_type {
         set_parts.push("\"fileType\" = $".to_string() + &(parameters.len() + 2).to_string());
-        parameters.push(Some(ft));
+        parameters.push(ft_update);
     }
 
     query += &set_parts.join(", ");

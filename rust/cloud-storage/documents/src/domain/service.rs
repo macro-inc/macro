@@ -31,7 +31,8 @@ use tracing;
 
 use super::models::{
     CloudFrontConfig, CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
-    EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+    EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs, FileTypeUpdate,
+    LocationQueryParams,
 };
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
@@ -609,7 +610,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             }
         }
 
-        if let Some(new_file_type) = &args.file_type {
+        if let Some(file_type_update) = &args.file_type {
             let current_file_type = document_context
                 .file_type
                 .as_ref()
@@ -621,20 +622,22 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
                 })?;
 
             let current_association = current_file_type.macro_app_path();
-            let new_association = new_file_type.macro_app_path();
 
-            if !matches!(new_association, FileAssociation::Code(_)) {
+            if !matches!(current_association, FileAssociation::Code(_)) {
                 return Err(DocumentError::BadRequest(
                     "file type changes are only supported for code files".to_string(),
                 ));
             }
 
-            if std::mem::discriminant(&current_association)
-                != std::mem::discriminant(&new_association)
-            {
-                return Err(DocumentError::BadRequest(
-                    "cannot change file type to a different association".to_string(),
-                ));
+            if let FileTypeUpdate::Set(new_file_type) = file_type_update {
+                let new_association = new_file_type.macro_app_path();
+                if std::mem::discriminant(&current_association)
+                    != std::mem::discriminant(&new_association)
+                {
+                    return Err(DocumentError::BadRequest(
+                        "cannot change file type to a different association".to_string(),
+                    ));
+                }
             }
         }
 
