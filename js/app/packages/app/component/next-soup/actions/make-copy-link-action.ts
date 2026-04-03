@@ -3,7 +3,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { getChannelParams } from '@block-channel/utils/link';
 
 /**
  * Get the URL type/path segment for an entity
@@ -27,13 +27,7 @@ const getEntityUrlId = (entity: EntityData): string => {
 
 const getEntityUrlParams = (entity: EntityData): Record<string, string> => {
   if (entity.type === 'channel_message') {
-    const params = {
-      [CHANNEL_PARAMS.message]: entity.messageId,
-    };
-    if (entity.threadId) {
-      params[CHANNEL_PARAMS.thread] = entity.threadId;
-    }
-    return params;
+    return getChannelParams(entity.messageId, entity.threadId) ?? {};
   }
   return {};
 };
