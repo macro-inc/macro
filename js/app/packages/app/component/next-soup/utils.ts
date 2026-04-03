@@ -318,9 +318,20 @@ export const openEntityInSplitFromUnifiedList = async (
   );
 
   // Navigate to specific location if provided
-  if (!location) return;
-
-  await navigateToLocation(content.id, location, blockOrchestrator);
+  if (location) {
+    await navigateToLocation(content.id, location, blockOrchestrator);
+  } else if (entity.type === 'channel_message') {
+    // NOTE: This will force target message navigation in case the split is already open.
+    await navigateToLocation(
+      entity.channelId,
+      {
+        type: 'channel',
+        messageId: entity.messageId,
+        threadId: entity.threadId,
+      },
+      blockOrchestrator
+    );
+  }
 };
 
 function getEntitySplitContent(entity: EntityData) {
