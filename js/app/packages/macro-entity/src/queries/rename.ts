@@ -18,12 +18,7 @@ import { ChannelTypeEnum } from '@service-comms/client';
 import type { ItemType } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 
-type RenamableEntityType = Exclude<EntityData['type'], 'channel_message'>;
-
-type RenamableEntity = Pick<
-  Extract<EntityData, { type: RenamableEntityType }>,
-  'id' | 'type' | 'name'
-> &
+type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
   Partial<EntityData>;
 
 type EntityRenameOperation = {
@@ -72,6 +67,9 @@ const getEntityRenameData = (
   operation: EntityRenameOperation
 ): EntityRenameData => {
   const { entity, newName } = operation;
+  if (entity.type === 'channel_message') {
+    throw new Error('Channel messages do not support renaming');
+  }
   return {
     id: entity.id,
     itemType: entity.type,
@@ -86,7 +84,7 @@ const performEntityRename = async (operation: EntityRenameOperation) => {
   return { success };
 };
 
-const validateEntityRename = <T extends RenamableEntity>(entity: T): void => {
+const validateEntityRename = (entity: EntityData): void => {
   switch (entity.type) {
     case 'channel':
       // NOTE: channel type is undefined if provided from the split modal due to casting in createEntityData
