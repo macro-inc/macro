@@ -7,7 +7,7 @@ import {
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
 import { debouncedDependent } from '@core/util/debounce';
-import type { EntityData } from '@entity';
+import { isChannelEntity, type EntityData } from '@entity';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import {
   useSearchSoupQuery,
@@ -18,6 +18,8 @@ import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+// Max number of non-channel local results to feature. Channels bypass this
+// limit since they are only searched locally, not via the backend search service.
 const FEATURED_COUNT = 3;
 
 const freshSearch = createSoupFreshSearch();
@@ -116,11 +118,17 @@ export const createSearchState = ({
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
     const activeFilters = getValidSearchFilters(soup.filters.active());
-    if (activeFilters.length === 0)
-      return localFuzzyResults().slice(0, FEATURED_COUNT);
-    const pools = activeFilters.map((f) => allFiltersResults().get(f.id) ?? []);
-    const merged = intersectEntityPools(pools);
-    return merged.slice(0, FEATURED_COUNT);
+    const results =
+      activeFilters.length === 0
+        ? localFuzzyResults()
+        : intersectEntityPools(
+            activeFilters.map((f) => allFiltersResults().get(f.id) ?? [])
+          );
+    const channels = results.filter((e) => isChannelEntity(e));
+    const nonChannels = results
+      .filter((e) => !isChannelEntity(e))
+      .slice(0, FEATURED_COUNT);
+    return [...channels, ...nonChannels];
   });
 
   const serviceSearchResults = createMemo<EntityData[]>(() => {
