@@ -9,6 +9,7 @@ import { Entity } from '../entity';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import {
   isChannelEntity,
+  isChannelMessageEntity,
   isEmailEntity,
   isProjectContainedEntity,
   type ChannelEntity,
@@ -49,6 +50,9 @@ import {
 } from '@core/component/LexicalMarkdown/theme';
 import type { SearchLocation } from '../types/search';
 import { isSearchEntity } from '../types/search';
+import { UserIcon } from '@core/component/UserIcon';
+import { SearchContent } from '../extractors-search/search-content';
+import { SearchSender } from '../extractors-search/search-sender';
 import { createEntityDraggable } from '../utils/draggable';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
@@ -291,7 +295,41 @@ function NarrowLayout(props: LayoutProps) {
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
-        <Entity.Title entity={props.entity} />
+        <Show
+          when={isChannelMessageEntity(props.entity) && props.entity}
+          fallback={<Entity.Title entity={props.entity} />}
+        >
+          {(entity) => {
+            const hit = () => {
+              const e = entity() as EntityData;
+              return isSearchEntity(e)
+                ? e.search.contentHitData?.[0]
+                : undefined;
+            };
+            return (
+              <span class="flex items-center gap-1 min-w-0 truncate">
+                <span class="shrink-0 text-ink-muted text-xs whitespace-nowrap">
+                  {entity().channelName}
+                </span>
+                <Show when={entity().senderId}>
+                  {(id) => <UserIcon id={id()} size="xs" />}
+                </Show>
+                <Show when={hit()}>
+                  {(h) => (
+                    <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
+                      <SearchSender hit={h()} />
+                    </span>
+                  )}
+                </Show>
+                <span class="text-ink/50 font-normal truncate min-w-0">
+                  <Show when={hit()} fallback={entity().content}>
+                    {(h) => <SearchContent hit={h()} singleLine />}
+                  </Show>
+                </span>
+              </span>
+            );
+          }}
+        </Show>
       </Entity.Slot>
 
       <Show
@@ -424,6 +462,38 @@ function NarrowInboxLayout(props: LayoutProps) {
       </Entity.Slot>
 
       <Switch>
+        <Match when={isChannelMessageEntity(props.entity) && props.entity}>
+          {(entity) => {
+            const hit = () => {
+              const e = entity() as EntityData;
+              return isSearchEntity(e)
+                ? e.search.contentHitData?.[0]
+                : undefined;
+            };
+            return (
+              <Entity.Slot
+                placement="body"
+                class="flex flex-col pb-2 min-h-[2lh] pr-4"
+              >
+                <Show when={hit()}>
+                  {(h) => (
+                    <>
+                      <span class="text-ink-muted text-xs flex items-center gap-1">
+                        <Show when={entity().senderId}>
+                          {(id) => <UserIcon id={id()} size="xs" />}
+                        </Show>
+                        <SearchSender hit={h()} />
+                      </span>
+                      <span class="text-ink-extra-muted truncate">
+                        <SearchContent hit={h()} />
+                      </span>
+                    </>
+                  )}
+                </Show>
+              </Entity.Slot>
+            );
+          }}
+        </Match>
         <Match
           when={isChannelEntity(props.entity) && props.entity.latestMessage}
         >
@@ -569,16 +639,59 @@ function WideLayout(props: LayoutProps) {
               </>
             )}
           </Match>
+          <Match when={isChannelMessageEntity(props.entity) && props.entity}>
+            {(entity) => {
+              const hit = () => {
+                const e = entity() as EntityData;
+                return isSearchEntity(e)
+                  ? e.search.contentHitData?.[0]
+                  : undefined;
+              };
+              return (
+                <>
+                  <span class="shrink-0 flex gap-1.5 items-center">
+                    <span class="text-ink-muted whitespace-nowrap">
+                      {entity().channelName}
+                    </span>
+                    <Show when={entity().senderId}>
+                      {(id) => <UserIcon id={id()} size="xs" />}
+                    </Show>
+                    <Show when={hit()}>
+                      {(h) => (
+                        <span class="text-ink-extra-muted text-xs whitespace-nowrap">
+                          <SearchSender hit={h()} />
+                        </span>
+                      )}
+                    </Show>
+                  </span>
+                  <div class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden">
+                    <Show when={hit()} fallback={entity().content}>
+                      {(h) => <SearchContent hit={h()} singleLine />}
+                    </Show>
+                  </div>
+                </>
+              );
+            }}
+          </Match>
           <Match when={isChannelEntity(props.entity) && props.entity}>
             {(entity) => (
-              <>
-                <span class="w-(--title-width) shrink-0 truncate flex gap-2">
-                  <Entity.Title entity={entity()} />
-                </span>
-                <Show when={!props.hasNotifications && entity().latestMessage}>
-                  {(msg) => <ChannelMessage message={msg()} />}
-                </Show>
-              </>
+              <Show
+                when={!props.hasNotifications && entity().latestMessage}
+                fallback={
+                  <span class="truncate flex gap-2">
+                    <Entity.Title entity={entity()} />
+                  </span>
+                }
+              >
+                {(msg) => (
+                  <>
+                    <span class="w-(--title-width) shrink truncate flex gap-2">
+                      <Entity.Title entity={entity()} />
+                    </span>
+                    <ChannelMessage message={msg()} />
+                  </>
+                )}
+              </Show>
             )}
           </Match>
           <Match when={props.entity}>

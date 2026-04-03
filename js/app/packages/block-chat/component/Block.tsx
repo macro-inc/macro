@@ -18,11 +18,11 @@ export default function ChatBlock() {
 
   return (
     <DocumentBlockContainer title={name()}>
-      <DebouncedNotificationReadMarker
-        notificationSource={notificationSource}
-        entity={{ type: 'chat', id: blockId }}
-      />
       <div class="size-full bracket-never" tabIndex={-1}>
+        <DebouncedNotificationReadMarker
+          notificationSource={notificationSource}
+          entity={{ type: 'chat', id: blockId }}
+        />
         <ModalsProvider>
           <Show when={chatBlockData()}>{(data) => <Chat data={data()} />}</Show>
         </ModalsProvider>

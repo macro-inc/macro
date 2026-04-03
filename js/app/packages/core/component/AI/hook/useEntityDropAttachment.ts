@@ -1,4 +1,4 @@
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant';
 import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
@@ -98,13 +98,16 @@ export function useEntityDropAttachment(
           },
         } satisfies Attachment;
       })
-      .with('channel', () => {
+      .with(P.union('channel', 'channel_message'), () => {
         const channelType =
           'channelType' in data ? data.channelType : 'organization';
+        const channelId =
+          'channelId' in data ? (data.channelId as string) : entityId;
 
+        // TODO: channel_message attachments only reference the full channel, not the message
         return {
-          id: `${entityId}-channel-attachment`,
-          attachmentId: entityId,
+          id: `${channelId}-channel-attachment`,
+          attachmentId: channelId,
           attachmentType: 'channel' satisfies AttachmentType,
           metadata: {
             type: 'channel',

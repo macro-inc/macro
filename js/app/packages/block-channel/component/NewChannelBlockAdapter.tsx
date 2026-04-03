@@ -1,6 +1,7 @@
 import {
   Channel as NewChannel,
   type ChannelHandle,
+  type ChannelProps,
 } from '@channel/Channel/Channel';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import { useBlockId } from '@core/block';
@@ -23,6 +24,17 @@ import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTa
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { ChannelDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import type { BlockChannelProps } from './Block';
+
+type ChannelTargetMessageParams = {
+  [URL_PARAMS.message]?: string;
+  [URL_PARAMS.thread]?: string;
+};
+
+type ChannelPropsTargetMessage = Pick<
+  ChannelProps,
+  'targetMessageId' | 'targetMessageReplyId'
+>;
 
 function NewTop(props: {
   channelId: string;
@@ -55,7 +67,7 @@ function NewTop(props: {
   );
 }
 
-export function NewChannelBlockAdapter() {
+export function NewChannelBlockAdapter(props: BlockChannelProps) {
   useBlockEntityCommands();
 
   const notificationSource = useGlobalNotificationSource();
@@ -65,21 +77,33 @@ export function NewChannelBlockAdapter() {
   const [activeTab, setActiveTab] =
     createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);
 
+  const convertTargetMessage = (
+    params: ChannelTargetMessageParams
+  ): ChannelPropsTargetMessage => {
+    const messageId = params[URL_PARAMS.message] as string | undefined;
+    const threadId = params[URL_PARAMS.thread] as string | undefined;
+
+    // For compatibility the naming is  a little strange here.
+    // New channels index by top level message and then separately handle replies.
+    // If we have a threadId that is actually the top level message and the reply is the message id.
+    const topLevelMessageId = threadId ? threadId : messageId;
+    const messageReplyId = threadId ? messageId : threadId;
+
+    return {
+      targetMessageId: topLevelMessageId,
+      targetMessageReplyId: messageReplyId,
+    };
+  };
+
   const onChannelReady = (handle: ChannelHandle) => {
     createMethodRegistration(blockHandle, {
-      goToLocationFromParams: async (params: Record<string, unknown>) => {
-        const threadId = params[URL_PARAMS.thread] as string | undefined;
-        const messageId = params[URL_PARAMS.message] as string | undefined;
+      goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
+        const { targetMessageId, targetMessageReplyId } =
+          convertTargetMessage(params);
 
-        // For compatibility the naming is  a little strange here.
-        // New channels index by top level message and then spertately handle replies.
-        // If we have a threadId that is actually the top level message and the reply is the message id.
-        const topLevelMessageId = threadId ? threadId : messageId;
-        const messageReplyId = threadId ? messageId : threadId;
-
-        if (topLevelMessageId && handle) {
+        if (targetMessageId && handle) {
           setActiveTab(DEFAULT_CHANNEL_TAB);
-          handle.goToMessage(topLevelMessageId, messageReplyId);
+          handle.goToMessage(targetMessageId, targetMessageReplyId);
         }
       },
     });
@@ -95,7 +119,11 @@ export function NewChannelBlockAdapter() {
       <div class="relative h-full flex flex-col">
         <Switch>
           <Match when={activeTab() === 'messages'}>
-            <NewChannel channelId={channelId} onHandleReady={onChannelReady} />
+            <NewChannel
+              channelId={channelId}
+              onHandleReady={onChannelReady}
+              {...convertTargetMessage(props)}
+            />
           </Match>
           <Match when={activeTab() === 'attachments'}>
             <ChannelAttachmentsTab channelId={channelId} />

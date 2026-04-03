@@ -517,6 +517,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       type === 'entity' ? args.entity : args.projectEntity
     ) as EntityData;
 
+    // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
       openEntityInNewTab({ entity, location });
       return;

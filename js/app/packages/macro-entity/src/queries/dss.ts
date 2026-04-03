@@ -28,9 +28,11 @@ export function createBulkDeleteDssItemsMutation() {
       }
 
       return await Promise.all(
-        entities.map((e) => {
-          return deleteItem({ id: e.id, itemType: e.type });
-        })
+        entities
+          .filter((e) => e.type !== 'channel_message')
+          .map((e) => {
+            return deleteItem({ id: e.id, itemType: e.type });
+          })
       );
     },
     onMutate: async (entities: EntityData[]) => {

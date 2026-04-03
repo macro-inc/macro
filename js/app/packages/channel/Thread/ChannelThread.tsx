@@ -5,7 +5,6 @@ import { MarkMessaageNotifications } from '@notifications/components/MarkMessage
 import { useUserId } from '@core/context/user';
 import { deferredGate } from '@core/util/debounce';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { focusAndOpenKeyboard } from '@core/mobile/focus-and-open-keyboard';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
 import type { ApiThreadReply } from '@service-comms/client';
@@ -263,16 +262,12 @@ export function ChannelThread(props: ThreadProps) {
                       </Show>
                       <Show when={shouldShowReplyButton()}>
                         <Thread.ReplyButton
-                          onClick={(e) => {
-                            focusAndOpenKeyboard(
-                              () =>
-                                (replyInputContainerRef?.querySelector(
-                                  '[contenteditable]'
-                                ) as HTMLElement | null) ?? null,
-                              e.currentTarget as HTMLElement
-                            );
-                            props.setIsReplying(true);
-                          }}
+                          getFocusTarget={() =>
+                            replyInputContainerRef?.querySelector<HTMLElement>(
+                              '[contenteditable]'
+                            ) ?? null
+                          }
+                          onClick={() => props.setIsReplying(true)}
                           aria-label="Reply"
                         />
                       </Show>

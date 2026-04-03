@@ -6,6 +6,7 @@ import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { useMessage, useMessageActions } from './context';
 import { ReactionChip } from './ReactionChip';
 import { renderIcon } from './render-icon';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 type ReactionsProps = {
   class?: string;
@@ -53,7 +54,7 @@ export function Reactions(props: ReactionsProps) {
           }}
         </For>
 
-        <Show when={canReact()}>
+        <Show when={canReact() && !isTouchDevice()}>
           <EmojiReactionPopover
             placement="top"
             open={emojiMenuOpen()}

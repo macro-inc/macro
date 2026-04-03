@@ -9,8 +9,13 @@ import { createSignal, Show } from 'solid-js';
 
 type ShareableEntityType = 'document' | 'chat' | 'project';
 
+export type ShareableEntityData = Extract<
+  EntityData,
+  { type: ShareableEntityType }
+>;
+
 export type GlobalShareModalProps = {
-  entity: EntityData;
+  entity: ShareableEntityData;
   onClose?: () => void;
 };
 
@@ -26,12 +31,14 @@ export const isShareableEntityType = (
   return type === 'document' || type === 'chat' || type === 'project';
 };
 
-const getEntityBlockAlias = (entity: EntityData): BlockName | BlockAlias => {
+const getEntityBlockAlias = (
+  entity: ShareableEntityData
+): BlockName | BlockAlias => {
   return itemToBlockName(entity) ?? 'unknown';
 };
 
-const getEntityItemType = (entity: EntityData): ItemType => {
-  return entity.type as ItemType;
+const getEntityItemType = (entity: ShareableEntityData): ItemType => {
+  return entity.type;
 };
 
 export const openGlobalShareModal = (props: GlobalShareModalProps) => {

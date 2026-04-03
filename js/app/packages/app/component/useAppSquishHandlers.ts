@@ -91,6 +91,11 @@ export function useAppSquishHandlers() {
     };
 
     onMount(() => {
+      document.documentElement.style.setProperty(
+        '--virtual-keyboard-height',
+        '0px'
+      );
+      document.documentElement.style.setProperty('--dvh', '1dvh');
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', handleResize);
         handleResize();

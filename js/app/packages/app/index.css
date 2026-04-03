@@ -722,14 +722,46 @@ html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focu
 }
 
 /* Channel message highlight: hover only in mouse nav, keyboard selection only in keyboard nav */
-[data-channel-nav="mouse"] [data-message]:hover,
-[data-channel-nav="keyboard"] [data-message][data-highlighted] {
+/* Suppressed on touch devices */
+html:not([data-touch-device="true"]) [data-channel-nav="mouse"] [data-message]:hover,
+html:not([data-touch-device="true"]) [data-channel-nav="keyboard"] [data-message][data-highlighted] {
     @apply bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px];
 }
 
-[data-channel-nav="mouse"] [data-message]:hover > .message-accent-bar,
-[data-channel-nav="keyboard"] [data-message][data-highlighted] > .message-accent-bar {
+html:not([data-touch-device="true"]) [data-channel-nav="mouse"] [data-message]:hover > .message-accent-bar,
+html:not([data-touch-device="true"]) [data-channel-nav="keyboard"] [data-message][data-highlighted] > .message-accent-bar {
     @apply opacity-100;
+}
+
+/* Long-press animation */
+[data-message].long-press-animation {
+    animation: long-press-message-highlight 400ms ease-in both;
+}
+
+[data-message].long-press-animation > .message-accent-bar {
+    animation: long-press-accent-bar 400ms ease-in both;
+}
+
+@keyframes long-press-message-highlight {
+    from {
+        background-color: oklch(from var(--color-accent) l c h / 0%);
+        outline-width: 1px;
+        outline-style: solid;
+        outline-color: transparent;
+        outline-offset: -1px;
+    }
+    to {
+        background-color: oklch(from var(--color-accent) l c h / 5%);
+        outline-width: 1px;
+        outline-style: solid;
+        outline-color: oklch(from var(--color-accent) l c h / 20%);
+        outline-offset: -1px;
+    }
+}
+
+@keyframes long-press-accent-bar {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 html[data-modality="keyboard"] input:focus-visible::after,

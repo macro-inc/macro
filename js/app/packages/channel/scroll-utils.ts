@@ -6,7 +6,7 @@ function getMessageElement(messageId: string) {
 
 function getReplyInputElement(messageId: string) {
   return document.querySelector<HTMLElement>(
-    `[data-reply-input-id="${messageId}"]`
+    `[data-inline-input-container-id="${messageId}"]`
   );
 }
 
@@ -19,7 +19,7 @@ function isElementInView(element: HTMLElement) {
   return rect.top >= 0 && rect.bottom <= window.innerHeight;
 }
 
-function scrollIntoViewIfNeeded(element: HTMLElement) {
+export function scrollIntoViewIfNeeded(element: HTMLElement) {
   if (isElementInView(element)) return false;
   element.scrollIntoView({ block: 'nearest' });
   return true;
@@ -48,25 +48,20 @@ export function scrollReplyInputIntoView(messageId: string) {
 }
 
 /**
- * Scrolls the channel's scroll container so the reply input is not hidden
+ * Scrolls the channel's scroll container so the given element is not hidden
  * behind the virtual keyboard. Call this after the keyboard has appeared and
- * its height is known. If the input's bottom edge falls within `keyboardHeight`
- * pixels of the windows bottom edge, the container is scrolled up
- * by the overlap.
+ * its height is known.
  */
-export function scrollReplyInputAboveKeyboard(
-  messageId: string,
+export function scrollElementAboveKeyboard(
+  el: HTMLElement,
   keyboardHeight: number
 ): boolean {
   if (keyboardHeight <= 0) return false;
 
-  const inputEl = getReplyInputElement(messageId);
-  if (!inputEl) return false;
-
-  const scrollContainer = getChannelScrollElement(inputEl);
+  const scrollContainer = getChannelScrollElement(el);
   if (!scrollContainer) return false;
 
-  const inputRect = inputEl.getBoundingClientRect();
+  const inputRect = el.getBoundingClientRect();
   const containerRect = scrollContainer.getBoundingClientRect();
   // The keyboard rises from the bottom of the screen, so the visible bottom of
   // the scroll container is capped at (screen bottom - keyboard height).

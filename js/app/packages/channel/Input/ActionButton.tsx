@@ -13,6 +13,7 @@ export function InputActionButton(props: {
       title={props.label}
       aria-label={props.label}
       tooltip={<LabelAndHotKey label={props.label} />}
+      onPointerDown={(event: PointerEvent) => event.preventDefault()}
       onClick={(event) => props.onClick?.(event)}
       classList={{ 'bg-active': props.active }}
       size="icon-sm"

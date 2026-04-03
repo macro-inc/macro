@@ -248,6 +248,12 @@ export type SplitManager = {
    */
   reconcile: (splits: SplitContent[]) => void;
 
+  /** Replace all splits with a single split containing the given content. */
+  replaceAllSplits: (
+    content: SplitContent,
+    options?: { referredFrom?: string | null }
+  ) => SplitHandle;
+
   /** Check if a split exists by its split id */
   hasSplit: (type: SplitContentType, id: string) => boolean;
 
@@ -1024,6 +1030,23 @@ export function createSplitLayout(
     }
   }
 
+  function replaceAllSplits(
+    content: SplitContent,
+    options: { referredFrom?: ReferredFrom } = {}
+  ): SplitHandle {
+    reconcileSplits([content]);
+    const handle = getSplitByContent(content.type, content.id);
+    if (handle) {
+      handle.activate();
+      return handle;
+    }
+    return createNewSplit({
+      content,
+      activate: true,
+      referredFrom: options.referredFrom ?? null,
+    });
+  }
+
   const activeSplit = () => {
     const id = state.activeSplitId;
     return id ? getSplit(id) : undefined;
@@ -1036,6 +1059,7 @@ export function createSplitLayout(
     lastActiveSplitId: () => state.lastActiveSplitId,
     events: lastEvent,
     reconcile: reconcileSplits,
+    replaceAllSplits,
     getSplit,
     openWithSplit,
     removeSplit,

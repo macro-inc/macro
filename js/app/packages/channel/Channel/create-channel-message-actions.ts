@@ -138,7 +138,12 @@ export function createChannelMessageActions(
         : undefined,
       onCopyLink: async () => {
         try {
-          const url = buildMessageLink(effects.getLocationHref(), message.id);
+          const channelId = options.channelId();
+          const url = buildMessageLink(
+            channelId,
+            message.id,
+            message.thread_id
+          );
           await effects.copyToClipboard(url);
           effects.notifyCopyLinkSuccess();
         } catch (error) {

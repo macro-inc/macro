@@ -1,12 +1,15 @@
-import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { hapticImpact } from '@core/mobile/haptics';
 
 export interface TouchHandlerOptions {
-  onLongPress?: JSX.EventHandler<HTMLElement, TouchEvent>;
-  onShortTouch?: JSX.EventHandler<HTMLElement, TouchEvent>;
+  onLongPress?: (e: TouchEvent) => void;
+  onTouchStart?: (e: TouchEvent) => void;
+  onShortTouch?: (e: TouchEvent) => void;
   onCancel?: () => void;
+  onTouchEnd?: (e: TouchEvent, longPressTriggered: boolean) => void;
   delay?: number;
   moveThreshold?: number;
+  stopTouchStartPropagation?: boolean;
 }
 
 declare module 'solid-js' {
@@ -18,7 +21,7 @@ declare module 'solid-js' {
 }
 
 /**
- * This signal is used to check if a long press is currently active.
+ * This global signal can be used to check if a long press is currently active.
  * For example, it is used to prevent the clickOutside directive from triggering when a long press is active.
  */
 export const [longPressActivated, setLongPressActivated] = createSignal(false);
@@ -30,9 +33,9 @@ export const [longPressActivated, setLongPressActivated] = createSignal(false);
  */
 export function touchHandler(
   element: HTMLElement,
-  props: Accessor<TouchHandlerOptions>
+  options: Accessor<TouchHandlerOptions>
 ) {
-  if (!props().onLongPress && !props().onShortTouch) {
+  if (!options().onLongPress && !options().onShortTouch) {
     return;
   }
 
@@ -48,31 +51,48 @@ export function touchHandler(
     return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   }
 
-  function cancel() {
+  function clearState() {
     if (timer) {
       clearTimeout(timer);
       timer = 0;
     }
     startPosition = undefined;
+    longPressTriggered = false;
     setLongPressActivated(false);
-    props().onCancel?.();
+  }
+
+  function initStateForNewTouch() {
+    clearState();
+    setValidShortTouch(true);
+  }
+
+  function handleTouchCancel() {
+    clearState();
+    options().onCancel?.();
   }
 
   function handleTouchStart(e: TouchEvent) {
-    if (e.touches.length > 1) return;
-    setValidShortTouch(true);
+    if (e.touches.length > 1) {
+      clearState();
+      setValidShortTouch(false);
+      return;
+    }
+    initStateForNewTouch();
 
     const touch = e.touches[0];
     startPosition = { x: touch.clientX, y: touch.clientY };
 
+    if (options().stopTouchStartPropagation) {
+      e.stopPropagation();
+    }
+
+    options().onTouchStart?.(e);
     timer = window.setTimeout(() => {
       longPressTriggered = true;
       setLongPressActivated(true);
       hapticImpact('medium');
-      props().onLongPress?.(
-        e as TouchEvent & { currentTarget: HTMLElement; target: Element }
-      );
-    }, props().delay ?? 500);
+      options().onLongPress?.(e);
+    }, options().delay ?? 500);
   }
 
   function handleTouchMove(e: TouchEvent) {
@@ -81,13 +101,15 @@ export function touchHandler(
     const touch = e.touches[0];
     const distance = getDistance(touch.clientX, touch.clientY);
 
-    if (distance > (props().moveThreshold ?? 10)) {
+    if (distance > (options().moveThreshold ?? 10)) {
       setValidShortTouch(false);
-      cancel();
+      handleTouchCancel();
     }
   }
 
   function handleTouchEnd(e: TouchEvent) {
+    options().onTouchEnd?.(e, longPressTriggered);
+
     const isAnchorElement = (e.target as Element)?.closest('a');
     const isButtonElement = (e.target as Element)?.closest('button');
     const isDocumentMention = (e.target as Element)?.closest(
@@ -95,38 +117,27 @@ export function touchHandler(
     );
     const isInternalLink = (e.target as Element)?.closest('[internal-link]');
 
+    const touchedSomethingSharp =
+      isAnchorElement || isButtonElement || isDocumentMention || isInternalLink;
+
     if (longPressTriggered) {
       e.stopPropagation();
-      longPressTriggered = false;
-    } else if (validShortTouch() && !longPressTriggered) {
-      if (
-        !isAnchorElement &&
-        !isButtonElement &&
-        !isDocumentMention &&
-        !isInternalLink
-      ) {
-        props().onShortTouch?.(
-          e as TouchEvent & { currentTarget: HTMLElement; target: Element }
-        );
-      }
-      setValidShortTouch(false);
-      cancel();
-    } else {
-      cancel();
+      e.preventDefault();
+    } else if (validShortTouch() && !touchedSomethingSharp) {
+      options().onShortTouch?.(e);
     }
-    setLongPressActivated(false);
+    clearState();
   }
 
   element.addEventListener('touchstart', handleTouchStart, { passive: true });
   element.addEventListener('touchmove', handleTouchMove, { passive: true });
-  element.addEventListener('touchend', handleTouchEnd, { passive: true });
-  element.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+  element.addEventListener('touchend', handleTouchEnd);
+  element.addEventListener('touchcancel', handleTouchCancel, { passive: true });
 
   onCleanup(() => {
     element.removeEventListener('touchstart', handleTouchStart);
     element.removeEventListener('touchmove', handleTouchMove);
     element.removeEventListener('touchend', handleTouchEnd);
-    element.removeEventListener('touchcancel', handleTouchEnd);
-    cancel();
+    element.removeEventListener('touchcancel', handleTouchCancel);
   });
 }

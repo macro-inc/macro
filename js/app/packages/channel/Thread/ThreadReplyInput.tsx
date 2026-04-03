@@ -51,7 +51,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
       style={{ 'margin-left': replyInputOffsetX }}
       ref={(el) => props.setReplyInputEl?.(el)}
       data-reply-input
-      data-reply-input-id={props.messageId}
+      data-inline-input-container-id={props.messageId}
     >
       <ThreadReplyInputConnector />
       {(() => {

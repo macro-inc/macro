@@ -21,6 +21,11 @@ type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
   kind?: InputAttachmentKind | 'media';
 };
 
+function truncateFilename(name: string, maxLength = 24): string {
+  if (name.length <= maxLength) return name;
+  return `${name.slice(0, maxLength)}…`;
+}
+
 function RemoveButton(props: {
   attachment: InputAttachmentData;
   onRemove: (attachment: InputAttachmentData) => void;
@@ -30,7 +35,7 @@ function RemoveButton(props: {
     <button
       type="button"
       class={cn(
-        'hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex',
+        'hover:bg-hover hover-transition-bg rounded-md p-1 [@media(hover:none)]:p-2 items-center flex',
         props.class
       )}
       onClick={(event) => {
@@ -39,7 +44,7 @@ function RemoveButton(props: {
       }}
       aria-label={`Remove ${props.attachment.name}`}
     >
-      <XIcon class="text-ink-muted group-hover:text-failure size-3" />
+      <XIcon class="text-ink-muted group-hover:text-failure size-3 [@media(hover:none)]:size-4" />
     </button>
   );
 }
@@ -71,12 +76,12 @@ function MediaAttachmentItem(props: {
                 class="size-full object-cover"
               />
               <MediaVideo.PlayOverlay />
-              <RemoveButton
-                attachment={props.attachment}
-                onRemove={props.onRemove}
-                class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-              />
             </MediaVideo.Root>
+            <RemoveButton
+              attachment={props.attachment}
+              onRemove={props.onRemove}
+              class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+            />
           </Show>
         }
       >
@@ -92,7 +97,7 @@ function MediaAttachmentItem(props: {
           <RemoveButton
             attachment={props.attachment}
             onRemove={props.onRemove}
-            class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
           />
         </MediaImage.Root>
       </Show>
@@ -115,7 +120,10 @@ function DocumentAttachmentItem(props: {
           size="xs"
         />
       </Show>
-      <span class="truncate max-w-[16rem]">{props.attachment.name}</span>
+      <span>
+        {/* Note: using javascript truncation here rather than CSS because `truncate` was causing a complex bug that made it impossible to horizontally scroll documents on mobile. */}
+        {truncateFilename(props.attachment.name)}
+      </span>
       <RemoveButton attachment={props.attachment} onRemove={props.onRemove} />
     </div>
   );
@@ -147,7 +155,9 @@ export function Attachments(props: AttachmentsProps) {
     <Show when={visibleAttachments().length > 0}>
       <div
         class={cn(
-          'flex flex-row w-full px-2 py-1 gap-2 flex-wrap',
+          'flex flex-row w-full px-2 py-2 gap-2 flex-wrap',
+          // On mobile, attachments scroll horizontally
+          'mobile:flex-nowrap mobile:[&>*]:shrink-0 mobile:overflow-x-auto mobile:scrollbar-hidden',
           local.class
         )}
         data-input-attachments={local.kind ?? 'all'}

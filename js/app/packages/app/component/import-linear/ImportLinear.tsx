@@ -331,7 +331,7 @@ export default function ImportLinear() {
                 {(id) => (
                   <a
                     class="text-sm text-ink underline underline-offset-2"
-                    href={buildSimpleEntityUrl({ type: 'task', id }, {})}
+                    href={buildSimpleEntityUrl({ type: 'task', id })}
                     target="_blank"
                     rel="noreferrer"
                   >

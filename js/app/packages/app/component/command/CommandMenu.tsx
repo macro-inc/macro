@@ -9,7 +9,6 @@ import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
 import { Tabs } from '@kobalte/core/tabs';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import type { BlockName, BlockAlias } from '@core/block';
 import {
   createEffect,
   createMemo,
@@ -52,15 +51,6 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
 const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
-
-export function getBlockNameForEntity(
-  item: CommandMenuItem
-): BlockName | BlockAlias | undefined {
-  if (isEntityItem(item)) {
-    return itemToBlockName(item.data);
-  }
-  return undefined; // no block for commands or users
-}
 
 export function CommandMenu() {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
@@ -168,7 +158,7 @@ export function CommandMenuInner(props: {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      const blockName = getBlockNameForEntity(item);
+      const blockName = itemToBlockName(item.data);
       if (blockName) {
         openWithSplit(
           { type: blockName, id: item.id },

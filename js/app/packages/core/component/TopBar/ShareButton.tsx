@@ -914,7 +914,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     if (code) {
       params.referral_code = code;
     }
-    return buildSimpleEntityUrl({ id: blockId ?? '', type: blockType }, params);
+    return buildSimpleEntityUrl({ id: blockId, type: blockType }, params);
   };
 
   const copyLink = createCallback(() => {

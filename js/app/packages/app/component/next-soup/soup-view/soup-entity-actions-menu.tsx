@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MenuItem } from '@core/component/Menu';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
 import {
   makeBlockSenderAction,
@@ -21,6 +21,7 @@ import { useUserId } from '@core/context/user';
 import { useAnalytics } from '@app/component/analytics-context';
 import { Show } from 'solid-js';
 import { useSoupView } from './soup-view-context';
+import { getChannelParams } from '@block-channel/utils/link';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,
@@ -70,9 +71,6 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
 
-  const canExecuteAny = (canExecute: (e: EntityData) => boolean) =>
-    props.entities.some(canExecute);
-
   const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
     props.entities.length > 0 && props.entities.every(canExecute);
 
@@ -86,12 +84,15 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const canOpenInSplit = () => {
     if (props.entities.length !== 1) return false;
     const entity = props.entities[0];
-    const splits = globalSplitManager()?.splits;
-    if (!splits) return false;
-    return !splits().some((split) => split.content.id === entity.id);
+    const splitManager = globalSplitManager();
+    if (!splitManager) return false;
+    const contentId =
+      entity.type === 'channel_message' ? entity.channelId : entity.id;
+    const contentType = itemToBlockName(entity);
+    return !splitManager.getSplitByContent(contentType, contentId);
   };
 
-  const openInNewSplit = () => {
+  const openInNewSplit = async () => {
     const entity = props.entities[0];
     if (!entity) return;
 
@@ -109,6 +110,25 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         },
         referredFrom: 'entity-actions-menu',
       });
+    } else if (entity.type === 'channel_message') {
+      splitManager.createNewSplit({
+        content: {
+          type: 'channel',
+          id: entity.channelId,
+          params: getChannelParams(entity.messageId, entity.threadId),
+        },
+        referredFrom: 'entity-actions-menu',
+      });
+
+      const orchestrator = splitManager.getOrchestrator();
+      const handle = await orchestrator.getBlockHandle(
+        entity.channelId,
+        'channel'
+      );
+
+      await handle?.goToLocationFromParams(
+        getChannelParams(entity.messageId, entity.threadId)
+      );
     } else {
       splitManager.createNewSplit({
         content: {
@@ -121,12 +141,12 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   };
 
   const showTopGroup = () =>
-    canExecuteAny(markDone.canExecute) || canOpenInSplit();
+    canExecuteAll(markDone.canExecute) || canOpenInSplit();
 
   const showMiddleGroup = () =>
     canExecuteAll(renameAction.canExecute) ||
-    canExecuteAny(moveToProjectAction.canExecute) ||
-    canExecuteAny(copyAction.canExecute) ||
+    canExecuteAll(moveToProjectAction.canExecute) ||
+    canExecuteAll(copyAction.canExecute) ||
     props.entities.length === 1;
 
   const showSenderGroup = () => canExecuteAll(blockSenderAction.canExecute);
@@ -135,7 +155,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
 
   return (
     <>
-      <Show when={canExecuteAny(markDone.canExecute)}>
+      <Show when={canExecuteAll(markDone.canExecute)}>
         <MenuItem
           text="Mark Done"
           onClick={() => handleAction(markDone.executeWithSoup)}
@@ -157,14 +177,14 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         />
       </Show>
 
-      <Show when={canExecuteAny(moveToProjectAction.canExecute)}>
+      <Show when={canExecuteAll(moveToProjectAction.canExecute)}>
         <MenuItem
           text="Move to folder"
           onClick={() => handleAction(moveToProjectAction.executeWithSoup)}
         />
       </Show>
 
-      <Show when={canExecuteAny(copyAction.canExecute)}>
+      <Show when={canExecuteAll(copyAction.canExecute)}>
         <MenuItem
           text="Duplicate"
           onClick={() => handleAction(copyAction.executeWithSoup)}

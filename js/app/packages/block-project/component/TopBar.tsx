@@ -61,13 +61,10 @@ export function TopBar() {
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
-      buildSimpleEntityUrl(
-        {
-          type: 'project',
-          id,
-        },
-        {}
-      )
+      buildSimpleEntityUrl({
+        type: 'project',
+        id,
+      })
     );
     toast.success('Link copied to clipboard');
   }

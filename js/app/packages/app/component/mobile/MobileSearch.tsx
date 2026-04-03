@@ -31,11 +31,11 @@ import {
 } from '../command/useCommandItems';
 import { SearchState } from './mobileSearchState';
 import { CommandItem } from '../command/CommandItem';
-import { getBlockNameForEntity } from '../command/CommandMenu';
 import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
 import { windowSearchMatch } from '@core/util/searchHighlight';
 import { TailSpinner } from '@core/component/TailSpinner';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { itemToBlockName } from '@core/constant/allBlocks';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -109,7 +109,7 @@ export function MobileSearchInner() {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      const blockName = getBlockNameForEntity(item);
+      const blockName = itemToBlockName(item.data);
       if (blockName) {
         openWithSplit(
           { type: blockName, id: item.id },

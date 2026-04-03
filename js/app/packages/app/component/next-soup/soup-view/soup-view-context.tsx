@@ -304,7 +304,7 @@ export const SoupViewContextProvider: FlowComponent<
     transformed = deduplicateEntities(next);
 
     const sorts = soup.sort.active();
-    if (sorts.length > 0) {
+    if (sorts.length > 0 && !search.isSearching()) {
       transformed.sort((a, b) => {
         for (const sort of sorts) {
           const result = sort.fn(a, b);

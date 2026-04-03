@@ -19,6 +19,7 @@ import type {
   ProjectEntity,
   EmailEntity,
   ChannelEntity,
+  ChannelMessageEntity,
 } from '@entity';
 import type { ChannelType } from '@service-comms/generated/models';
 import type {
@@ -177,10 +178,10 @@ export const useSearchResponseItemMapper = () => {
   return (
     result: UnifiedSearchResponseItem,
     searchQuery: string
-  ): WithSearch<EntityData> | undefined => {
+  ): (WithSearch<EntityData> | undefined)[] => {
     switch (result.type) {
       case 'document': {
-        if (!result.metadata || result.metadata.deleted_at) return;
+        if (!result.metadata || result.metadata.deleted_at) return [];
         const searchFileType =
           result.file_type === 'docx' ? 'pdf' : result.file_type;
         let search: SearchData;
@@ -201,19 +202,21 @@ export const useSearchResponseItemMapper = () => {
           });
         }
         const properties = result.properties ?? undefined;
-        return {
-          type: 'document',
-          subType: result.sub_type === 'task' ? { type: 'task' } : null,
-          id: result.document_id,
-          name: result.name || blockNameToDefaultFile(result.file_type),
-          ownerId: result.owner_id,
-          createdAt: result.metadata?.created_at,
-          updatedAt: result.metadata?.updated_at,
-          fileType: result.file_type || undefined,
-          projectId: result.metadata?.project_id ?? undefined,
-          properties,
-          search,
-        };
+        return [
+          {
+            type: 'document',
+            subType: result.sub_type === 'task' ? { type: 'task' } : null,
+            id: result.document_id,
+            name: result.name || blockNameToDefaultFile(result.file_type),
+            ownerId: result.owner_id,
+            createdAt: result.metadata?.created_at,
+            updatedAt: result.metadata?.updated_at,
+            fileType: result.file_type || undefined,
+            projectId: result.metadata?.project_id ?? undefined,
+            properties,
+            search,
+          },
+        ];
       }
       case 'email': {
         const search = getSearchData({
@@ -229,81 +232,99 @@ export const useSearchResponseItemMapper = () => {
           name: p.name ?? undefined,
         }));
 
-        return {
-          type: 'email',
-          id: result.thread_id,
-          name,
-          ownerId: result.owner_id,
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
-          viewedAt: result.viewed_at,
-          isRead: result.is_read,
-          isImportant: result.is_important,
-          isDraft: result.is_draft,
-          done: !result.inbox_visible,
-          participants,
-          search,
-          snippet: result.snippet ?? undefined,
-        };
+        return [
+          {
+            type: 'email',
+            id: result.thread_id,
+            name,
+            ownerId: result.owner_id,
+            createdAt: result.created_at,
+            updatedAt: result.updated_at,
+            viewedAt: result.viewed_at,
+            isRead: result.is_read,
+            isImportant: result.is_important,
+            isDraft: result.is_draft,
+            done: !result.inbox_visible,
+            participants,
+            search,
+            snippet: result.snippet ?? undefined,
+          },
+        ];
       }
       case 'chat': {
-        if (!result.metadata || result.metadata.deleted_at) return;
+        if (!result.metadata || result.metadata.deleted_at) return [];
         const search = getSearchData({
           results: result.chat_search_results,
         });
-        return {
-          type: 'chat',
-          id: result.chat_id,
-          name: result.name,
-          ownerId: result.user_id,
-          createdAt: result.metadata?.created_at,
-          updatedAt: result.metadata?.updated_at,
-          projectId: result.metadata?.project_id ?? undefined,
-          search,
-        };
+        return [
+          {
+            type: 'chat',
+            id: result.chat_id,
+            name: result.name,
+            ownerId: result.user_id,
+            createdAt: result.metadata?.created_at,
+            updatedAt: result.metadata?.updated_at,
+            projectId: result.metadata?.project_id ?? undefined,
+            search,
+          },
+        ];
       }
       case 'channel': {
         const channelWithLatest = channels().find(
           (c) => c.id === result.channel_id
         );
+        const channelName =
+          channelWithLatest?.name ?? blockNameToDefaultFile('channel');
+        const channelType = result.channel_type as ChannelType;
+        const ownerId = result.owner_id ?? '';
 
-        const search = getSearchData({
-          type: 'channel',
-          results: result.channel_message_search_results,
-        });
+        return result.channel_message_search_results
+          .filter((msg) => !!msg.message_id)
+          .map((msg): WithSearch<ChannelMessageEntity> => {
+            const search = getSearchData({
+              type: 'channel',
+              results: [msg],
+            });
 
-        return {
-          type: 'channel',
-          id: result.channel_id,
-          name: channelWithLatest?.name ?? blockNameToDefaultFile('channel'),
-          ownerId: result.owner_id ?? '',
-          createdAt: result.metadata?.created_at,
-          updatedAt: result.metadata?.updated_at,
-          channelType: result.channel_type as ChannelType,
-          interactedAt: result.metadata?.interacted_at,
-          participantIds: channelWithLatest?.participants?.map(
-            (p) => p.user_id
-          ),
-          search,
-        };
+            const content = search.contentHitData?.[0]?.content ?? '';
+
+            return {
+              type: 'channel_message',
+              id: `${result.channel_id}:${msg.message_id}`,
+              channelId: result.channel_id,
+              channelName,
+              channelType,
+              messageId: msg.message_id!,
+              threadId: msg.thread_id ?? undefined,
+              senderId: msg.sender_id!,
+              content,
+              name: channelName,
+              ownerId,
+              createdAt: msg.created_at,
+              updatedAt: msg.updated_at ?? msg.created_at,
+              search,
+            };
+          });
       }
 
       case 'project': {
-        if (!result.metadata || result.metadata.deleted_at) return;
+        if (!result.metadata || result.metadata.deleted_at) return [];
         const search = getSearchData({
           results: result.project_search_results,
         });
 
-        return {
-          type: 'project',
-          id: result.id,
-          name: result.name,
-          ownerId: result.owner_id,
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
-          projectId: result.metadata?.parent_project_id ?? undefined,
-          search,
-        };
+        return [
+          {
+            type: 'project',
+            id: result.id,
+            name: result.name,
+            ownerId: result.owner_id,
+            createdAt: result.created_at,
+            updatedAt: result.updated_at,
+            projectId: result.metadata?.parent_project_id ?? undefined,
+            search,
+          },
+        ];
       }
     }
   };
