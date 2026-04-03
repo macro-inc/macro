@@ -79,6 +79,8 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// New file type (None = no change).
+    pub file_type: Option<FileType>,
 }
 
 /// Arguments for the edit_document service call.
@@ -93,6 +95,8 @@ pub struct EditDocumentServiceArgs {
     /// Updated share permissions for the document.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// The new file type for the document.
+    pub file_type: Option<FileType>,
 }
 
 /// Query parameters for the location_v3 endpoint.

@@ -5916,6 +5916,7 @@ dependencies = [
  "mockall",
  "model",
  "model-entity",
+ "model_file_type",
  "models_dcs",
  "models_opensearch",
  "models_pagination",

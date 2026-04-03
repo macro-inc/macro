@@ -4,12 +4,13 @@ use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use sqlx::{Postgres, Transaction};
 
-/// Update document metadata (name, projectId, updatedAt).
+/// Update document metadata (name, projectId, fileType, updatedAt).
 pub(super) async fn update_document_metadata(
     transaction: &mut Transaction<'_, Postgres>,
     document_id: &str,
     document_name: Option<&str>,
     project_id: Option<&str>,
+    file_type: Option<model_file_type::FileType>,
 ) -> Result<(), sqlx::Error> {
     let mut query = "UPDATE \"Document\" SET ".to_string();
     let mut parameters: Vec<Option<&str>> = Vec::new();
@@ -27,6 +28,12 @@ pub(super) async fn update_document_metadata(
         } else {
             parameters.push(Some(project_id));
         }
+    }
+
+    let file_type_str = file_type.map(|ft| ft.to_string());
+    if let Some(ref ft) = file_type_str {
+        set_parts.push(format!("\"fileType\" = ${}", parameters.len() + 2));
+        parameters.push(Some(ft));
     }
 
     query += &set_parts.join(", ");

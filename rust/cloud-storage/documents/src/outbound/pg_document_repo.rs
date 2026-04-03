@@ -490,6 +490,7 @@ impl DocumentRepo for PgDocumentRepo {
             &args.document_id,
             args.document_name.as_deref(),
             args.project_id.as_deref(),
+            args.file_type,
         )
         .await?;
 
