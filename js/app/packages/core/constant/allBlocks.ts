@@ -220,12 +220,12 @@ type ItemLike = {
  * itemToBlockName({ type: 'document', fileType: 'py' }) // 'code'
  * itemToBlockName({ type: 'document', fileType: 'md', subType: { type: 'task', is_completed: false } }) // 'task'
  * itemToBlockName({ type: 'chat' }) // 'chat'
- * @return The block name or undefined if there is no appropriate block.
+ * @return The block name
  */
 export function itemToBlockName(
   item: ItemLike,
   icon?: boolean
-): BlockName | BlockAlias | undefined {
+): BlockName | BlockAlias {
   const subTypeName =
     item.subType && 'type' in item.subType
       ? (item.subType.type as string)
@@ -244,11 +244,10 @@ export function itemToBlockName(
  * aliases.
  * @example
  * itemToBlockName({ type: 'document', fileType: 'md', subType: 'task' }) // 'md'
- * @return The block name or undefined if there is no appropriate block.
+ * @return The block name
  */
 export function itemToResolvedBlockName(item: ItemLike) {
   const maybeAliased = itemToBlockName(item);
-  if (!maybeAliased) return;
   return resolveBlockAlias(maybeAliased);
 }
 

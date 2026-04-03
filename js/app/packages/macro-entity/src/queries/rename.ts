@@ -67,9 +67,6 @@ const getEntityRenameData = (
   operation: EntityRenameOperation
 ): EntityRenameData => {
   const { entity, newName } = operation;
-  if (entity.type === 'channel_message') {
-    throw new Error('Channel messages do not support renaming');
-  }
   return {
     id: entity.id,
     itemType: entity.type,
@@ -117,7 +114,7 @@ const renameDssSetData = (
           frecency_score: score,
         })
       );
-    } else if (itemType !== 'email') {
+    } else if (itemType !== 'email' && itemType !== 'channel_message') {
       txns.set(
         id,
         optimisticUpdateSoupEntity({

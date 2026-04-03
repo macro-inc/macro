@@ -120,7 +120,11 @@ export type Success = {
 };
 type SuccessResponse = { data: Success };
 
-export type ItemType = CloudStorageItemType | 'channel' | 'email';
+export type ItemType =
+  | CloudStorageItemType
+  | 'channel'
+  | 'email'
+  | 'channel_message';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 

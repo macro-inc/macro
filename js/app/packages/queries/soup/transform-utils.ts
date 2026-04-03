@@ -281,22 +281,12 @@ export const useSearchResponseItemMapper = () => {
         return result.channel_message_search_results
           .filter((msg) => !!msg.message_id)
           .map((msg): WithSearch<ChannelMessageEntity> => {
-            const contents = msg.highlight.content ?? [];
-            const content =
-              contents.length > 0 ? mergeAdjacentMacroEmTags(contents[0]) : '';
+            const search = getSearchData({
+              type: 'channel',
+              results: [msg],
+            });
 
-            const hitData: ContentHitData = {
-              type: 'channel' as const,
-              id: msg.message_id!,
-              content,
-              senderId: msg.sender_id!,
-              sentAt: msg.created_at!,
-              location: {
-                type: 'channel' as const,
-                threadId: msg.thread_id ?? undefined,
-                messageId: msg.message_id!,
-              },
-            };
+            const content = search.contentHitData?.[0]?.content ?? '';
 
             return {
               type: 'channel_message',
@@ -312,12 +302,7 @@ export const useSearchResponseItemMapper = () => {
               ownerId,
               createdAt: msg.created_at,
               updatedAt: msg.updated_at ?? msg.created_at,
-              search: {
-                nameHighlight: null,
-                senderHighlightTerms: null,
-                contentHitData: [hitData],
-                source: 'service',
-              },
+              search,
             };
           });
       }

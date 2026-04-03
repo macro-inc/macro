@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MenuItem } from '@core/component/Menu';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
 import {
   makeBlockSenderAction,
@@ -88,12 +88,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     if (!splitManager) return false;
     const contentId =
       entity.type === 'channel_message' ? entity.channelId : entity.id;
-    const contentType =
-      entity.type === 'document'
-        ? fileTypeToBlockName(entity.subType?.type ?? entity.fileType)
-        : entity.type === 'channel_message'
-          ? 'channel'
-          : entity.type;
+    const contentType = itemToBlockName(entity);
     return !splitManager.getSplitByContent(contentType, contentId);
   };
 
@@ -131,7 +126,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         'channel'
       );
 
-      handle?.goToLocationFromParams(
+      await handle?.goToLocationFromParams(
         getChannelParams(entity.messageId, entity.threadId)
       );
     } else {
