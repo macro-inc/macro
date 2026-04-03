@@ -3,9 +3,9 @@ import { touchHandler } from './touchHandler';
 
 export interface LongPressHighlightOptions {
   onLongPress?: () => void;
-  /** Delay (ms) before adding the longPress class on touch start. If touch ends before this delay, no exit animation plays. Default: 50 */
+  /** Delay (ms) before adding the `long-press-animation` class on touch start. If touch ends before this delay, no exit animation plays. Default: 100 */
   enterDelay?: number;
-  /** Delay (ms) before exiting animation after a long press. Default: 50 */
+  /** Delay (ms) before removing the `long-press-animation` class after a long press. Default: 50 */
   exitDelay?: number;
 }
 
@@ -18,8 +18,8 @@ declare module 'solid-js' {
 }
 
 /**
- * Wraps touchHandler to manage the longPress/longPressExit CSS class lifecycle on an element.
- * Pair with the corresponding CSS animations on .longPress and .longPressExit.
+ * Wraps touchHandler to manage the `long-press-animation` CSS class lifecycle on an element.
+ * Pair with the corresponding CSS animation on `.long-press-animation`.
  */
 export function longPressHighlight(
   element: HTMLElement,

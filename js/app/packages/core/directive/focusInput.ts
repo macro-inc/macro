@@ -90,6 +90,7 @@ export function focusInput(
   onCleanup(() => el.removeEventListener('click', handleClick));
 }
 
+// Naively checks if element is visible. E.g. will not catch elements with `position: fixed`. We can make this more complex when needed.
 function isVisible(el: HTMLElement): boolean {
   return el.offsetParent !== null;
 }
