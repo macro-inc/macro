@@ -1,12 +1,9 @@
 import { URL_PARAMS } from '@block-channel/constants';
 
 export function getChannelParams(
-  messageId?: string,
+  messageId: string,
   threadId?: string
-): Record<string, string> | undefined {
-  if (!messageId && !threadId) return undefined;
-  if (!messageId) throw new Error('messageId is required');
-
+): Record<string, string> {
   const params: Record<string, string> = {};
   params[URL_PARAMS.message] = messageId;
 
