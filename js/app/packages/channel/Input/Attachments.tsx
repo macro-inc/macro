@@ -21,6 +21,11 @@ type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
   kind?: InputAttachmentKind | 'media';
 };
 
+function truncateFilename(name: string, maxLength = 24): string {
+  if (name.length <= maxLength) return name;
+  return `${name.slice(0, maxLength)}…`;
+}
+
 function RemoveButton(props: {
   attachment: InputAttachmentData;
   onRemove: (attachment: InputAttachmentData) => void;
@@ -115,7 +120,10 @@ function DocumentAttachmentItem(props: {
           size="xs"
         />
       </Show>
-      <span class="truncate max-w-[16rem]">{props.attachment.name}</span>
+      <span>
+        {/* Note: using javascript truncation here rather than CSS because `truncate` was causing a complex bug that made it impossible to horizontally scroll documents on mobile. */}
+        {truncateFilename(props.attachment.name)}
+      </span>
       <RemoveButton attachment={props.attachment} onRemove={props.onRemove} />
     </div>
   );
@@ -147,7 +155,9 @@ export function Attachments(props: AttachmentsProps) {
     <Show when={visibleAttachments().length > 0}>
       <div
         class={cn(
-          'flex flex-row w-full px-2 py-1 gap-2 flex-wrap',
+          'flex flex-row w-full px-2 py-2 gap-2 flex-wrap',
+          // On mobile, attachments scroll horizontally
+          'mobile:flex-nowrap mobile:[&>*]:shrink-0 mobile:overflow-x-auto mobile:scrollbar-hidden',
           local.class
         )}
         data-input-attachments={local.kind ?? 'all'}
