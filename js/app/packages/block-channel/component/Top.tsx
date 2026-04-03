@@ -132,13 +132,10 @@ export function Top(props: TopProps) {
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
-      buildSimpleEntityUrl(
-        {
-          type: 'channel',
-          id: blockId,
-        },
-        {}
-      )
+      buildSimpleEntityUrl({
+        type: 'channel',
+        id: blockId,
+      })
     );
     toast.success('Link copied to clipboard');
   }

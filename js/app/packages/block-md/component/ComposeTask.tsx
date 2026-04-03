@@ -335,7 +335,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     );
 
     // Auto-copy link to clipboard
-    const url = buildSimpleEntityUrl({ type: 'task', id: documentId }, {});
+    const url = buildSimpleEntityUrl({ type: 'task', id: documentId });
     let linkCopied = false;
     try {
       await navigator.clipboard.writeText(url);
