@@ -92,7 +92,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     return !splits().some((split) => split.content.id === entity.id);
   };
 
-  const openInNewSplit = () => {
+  const openInNewSplit = async () => {
     const entity = props.entities[0];
     if (!entity) return;
 
@@ -119,6 +119,16 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         },
         referredFrom: 'entity-actions-menu',
       });
+
+      const orchestrator = splitManager.getOrchestrator();
+      const handle = await orchestrator.getBlockHandle(
+        entity.channelId,
+        'channel'
+      );
+
+      handle?.goToLocationFromParams(
+        getChannelParams(entity.messageId, entity.threadId)
+      );
     } else {
       splitManager.createNewSplit({
         content: {
