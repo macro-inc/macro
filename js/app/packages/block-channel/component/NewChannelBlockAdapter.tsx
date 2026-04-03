@@ -84,7 +84,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     const threadId = params[URL_PARAMS.thread] as string | undefined;
 
     // For compatibility the naming is  a little strange here.
-    // New channels index by top level message and then spertately handle replies.
+    // New channels index by top level message and then separately handle replies.
     // If we have a threadId that is actually the top level message and the reply is the message id.
     const topLevelMessageId = threadId ? threadId : messageId;
     const messageReplyId = threadId ? messageId : threadId;
