@@ -9,7 +9,6 @@ import {
   createSignal,
   Show,
 } from 'solid-js';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { Dynamic } from 'solid-js/web';
 import {
   SplitPanelContext,
@@ -19,6 +18,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { Suspense } from 'solid-js';
 import { createContextProvider } from '@solid-primitives/context';
 import { throttledDependent } from '@core/util/debounce';
+import { getChannelParams } from '@block-channel/utils/link';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
@@ -100,10 +100,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       const messageId = entity.messageId;
       const threadId = entity.threadId;
       props.orchestrator.getBlockHandle(channelId).then((handle) => {
-        handle?.goToLocationFromParams({
-          [CHANNEL_PARAMS.message]: messageId,
-          [CHANNEL_PARAMS.thread]: threadId,
-        });
+        handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
       });
     }
 
