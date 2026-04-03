@@ -67,10 +67,12 @@ const getEntityRenameData = (
   operation: EntityRenameOperation
 ): EntityRenameData => {
   const { entity, newName } = operation;
+  if (entity.type === 'channel_message') {
+    throw new Error('Channel messages do not support renaming');
+  }
   return {
     id: entity.id,
-    // TODO: this operation is not supported for channel message, do not type cast
-    itemType: entity.type as ItemType,
+    itemType: entity.type,
     oldName: entity.name,
     newName,
   };
