@@ -78,6 +78,8 @@ function attachInlineInputKeyboardHandler(
     if (currentKeyboardHeight > 0) {
       scrollElementAboveKeyboard(activeInputContainer, currentKeyboardHeight);
     } else {
+      if (keyboardWillShowHandler)
+        window.removeEventListener('keyboardWillShow', keyboardWillShowHandler);
       keyboardWillShowHandler = (event: Event) => {
         const height =
           (event as CustomEvent<{ height: number }>).detail?.height ?? 0;
