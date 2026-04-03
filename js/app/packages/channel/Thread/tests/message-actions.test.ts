@@ -58,13 +58,16 @@ describe('message-actions helpers', () => {
     );
   });
 
-  it('builds message links with targetMessageId and hash', () => {
-    const url = buildMessageLink(
-      'https://example.com/app/component/unified-list?foo=bar',
-      'msg-123'
-    );
-    expect(url).toContain('foo=bar');
-    expect(url).toContain('targetMessageId=msg-123');
-    expect(url).toContain('#message-msg-123');
+  it('builds message links with channel_message_id param', () => {
+    const url = buildMessageLink('channel-123', 'msg-123');
+    expect(url).toContain('/app/channel/channel-123');
+    expect(url).toContain('channel_message_id=msg-123');
+  });
+
+  it('builds message links with thread param', () => {
+    const url = buildMessageLink('channel-123', 'msg-123', 'thread-456');
+    expect(url).toContain('/app/channel/channel-123');
+    expect(url).toContain('channel_message_id=msg-123');
+    expect(url).toContain('channel_thread_id=thread-456');
   });
 });
