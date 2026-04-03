@@ -57,8 +57,6 @@ import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { Tooltip } from './Tooltip';
 import { useItemPreviewData } from './ItemPreview';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import type { SplitId } from '@app/component/split-layout/layoutManager';
 
 /**
  * Container for displaying mentions with optional collapsing
@@ -416,7 +414,6 @@ export function PopupPreview(props: {
     props.collapseInfo?.handleCollapse();
   };
 
-  const thisSplit = useSplitPanel();
   const openDocument = createCallback(async () => {
     const splitManager = globalSplitManager();
     if (!splitManager) {
@@ -432,53 +429,14 @@ export function PopupPreview(props: {
       return;
     }
 
-    // Close all existing splits and open this entity as the only split
-    const existingSplit = splitManager.getSplitByContent(
-      props.documentInfo.type,
-      props.documentInfo.id
-    );
-
-    let fullscreenSplitId: SplitId;
-    if (existingSplit) {
-      splitManager.activateSplit(existingSplit.id);
-      fullscreenSplitId = existingSplit.id;
-    } else {
-      const handle = splitManager.openWithSplit(
-        {
-          type: props.documentInfo.type,
-          id: props.documentInfo.id,
-          params: props.documentInfo.params,
-        },
-        {
-          activate: true,
-          referredFrom: null,
-        }
-      );
-      fullscreenSplitId = handle.id;
-    }
-
-    if (props.documentInfo.type === 'channel') {
-      const orchestrator = splitManager.getOrchestrator();
-      const handle = await orchestrator.getBlockHandle(
-        props.documentInfo.id,
-        'channel'
-      );
-      handle?.goToLocationFromParams(props.documentInfo.params);
-    }
-
-    const splits = splitManager.splits();
-    const thisSplitId = thisSplit?.handle.id;
-    for (const splitId of splits.map((s) => s.id)) {
-      if (splitId === fullscreenSplitId) continue;
-      if (splitId === thisSplitId) continue;
-      splitManager.removeSplit(splitId);
-    }
-    if (thisSplitId !== fullscreenSplitId) {
-      thisSplit?.handle.close();
-    }
+    splitManager.replaceAllSplits({
+      type: props.documentInfo.type,
+      id: props.documentInfo.id,
+      params: props.documentInfo.params,
+    });
   });
 
-  // Handle opening document in chat
+  // H opening document in chat
   const openChatForAttachment = useOpenChatForAttachment();
   const handleOpenInChat = () => {
     openChatForAttachment({
