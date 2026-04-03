@@ -159,8 +159,12 @@ export async function deleteItem(args: {
       return false;
     }
   } else {
-    if (itemType === 'channel') return false;
-    if (itemType === 'email') return false;
+    if (
+      itemType === 'channel' ||
+      itemType === 'email' ||
+      itemType === 'channel_message'
+    )
+      return false;
     const removed = await removeHistoryItem(itemType, id);
     if (!removed) return false;
   }
