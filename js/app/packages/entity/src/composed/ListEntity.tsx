@@ -661,14 +661,23 @@ function WideLayout(props: LayoutProps) {
           </Match>
           <Match when={isChannelEntity(props.entity) && props.entity}>
             {(entity) => (
-              <>
-                <span class="w-(--title-width) shrink truncate flex gap-2">
-                  <Entity.Title entity={entity()} />
-                </span>
-                <Show when={!props.hasNotifications && entity().latestMessage}>
-                  {(msg) => <ChannelMessage message={msg()} />}
-                </Show>
-              </>
+              <Show
+                when={!props.hasNotifications && entity().latestMessage}
+                fallback={
+                  <span class="truncate flex gap-2">
+                    <Entity.Title entity={entity()} />
+                  </span>
+                }
+              >
+                {(msg) => (
+                  <>
+                    <span class="w-(--title-width) shrink truncate flex gap-2">
+                      <Entity.Title entity={entity()} />
+                    </span>
+                    <ChannelMessage message={msg()} />
+                  </>
+                )}
+              </Show>
             )}
           </Match>
           <Match when={props.entity}>
