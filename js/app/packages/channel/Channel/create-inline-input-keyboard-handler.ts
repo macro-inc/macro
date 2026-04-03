@@ -1,6 +1,17 @@
-import { createEffect, onCleanup, type Accessor, type Setter } from 'solid-js';
+import {
+  createEffect,
+  on,
+  onCleanup,
+  type Accessor,
+  type Setter,
+} from 'solid-js';
 import { isMobile } from '@core/mobile/isMobile';
-import { scrollElementAboveKeyboard } from '../scroll-utils';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import {
+  scrollElementAboveKeyboard,
+  scrollIntoViewIfNeeded,
+} from '../scroll-utils';
 
 const INPUT_CONTAINER_SELECTOR = '[data-inline-input-container-id]';
 
@@ -8,18 +19,46 @@ export function createInlineInputKeyboardHandler(
   containerEl: Accessor<HTMLElement | undefined>,
   setIsChannelInputHidden: Setter<boolean>
 ): void {
+  let getActiveInputContainer: (() => HTMLElement | undefined) | undefined;
+
   createEffect(() => {
     if (!isMobile()) return;
     const el = containerEl();
     if (!el) return;
-    onCleanup(attachInlineInputKeyboardHandler(el, setIsChannelInputHidden));
+    const result = attachInlineInputKeyboardHandler(
+      el,
+      setIsChannelInputHidden
+    );
+    getActiveInputContainer = result.getActiveInputContainer;
+    onCleanup(() => {
+      result.cleanup();
+      getActiveInputContainer = undefined;
+    });
   });
+
+  // Mobile web fallback: watch for virtualKeyboardVisible signal, and scroll active input listner into view.
+  createEffect(
+    on(virtualKeyboardVisible, () => {
+      if (!isMobile() || isNativeMobilePlatform()) return;
+      if (!virtualKeyboardVisible()) return;
+      const container = getActiveInputContainer?.();
+      if (container) {
+        setTimeout(() => {
+          container.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 0);
+      }
+    }),
+    { defer: true }
+  );
 }
 
 function attachInlineInputKeyboardHandler(
   containerEl: HTMLElement,
   setIsChannelInputHidden: Setter<boolean>
-): () => void {
+): {
+  getActiveInputContainer: () => HTMLElement | undefined;
+  cleanup: () => void;
+} {
   let keyboardWillShowHandler: ((e: Event) => void) | undefined;
   let activeInputContainer: HTMLElement | undefined;
 
@@ -73,14 +112,17 @@ function attachInlineInputKeyboardHandler(
   containerEl.addEventListener('focusin', handleFocusIn);
   containerEl.addEventListener('focusout', handleFocusOut as EventListener);
 
-  return () => {
-    containerEl.removeEventListener('focusin', handleFocusIn);
-    containerEl.removeEventListener(
-      'focusout',
-      handleFocusOut as EventListener
-    );
-    if (keyboardWillShowHandler) {
-      window.removeEventListener('keyboardWillShow', keyboardWillShowHandler);
-    }
+  return {
+    getActiveInputContainer: () => activeInputContainer,
+    cleanup: () => {
+      containerEl.removeEventListener('focusin', handleFocusIn);
+      containerEl.removeEventListener(
+        'focusout',
+        handleFocusOut as EventListener
+      );
+      if (keyboardWillShowHandler) {
+        window.removeEventListener('keyboardWillShow', keyboardWillShowHandler);
+      }
+    },
   };
 }

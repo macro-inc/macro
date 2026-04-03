@@ -19,7 +19,7 @@ function isElementInView(element: HTMLElement) {
   return rect.top >= 0 && rect.bottom <= window.innerHeight;
 }
 
-function scrollIntoViewIfNeeded(element: HTMLElement) {
+export function scrollIntoViewIfNeeded(element: HTMLElement) {
   if (isElementInView(element)) return false;
   element.scrollIntoView({ block: 'nearest' });
   return true;
