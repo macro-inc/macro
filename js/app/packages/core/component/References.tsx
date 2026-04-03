@@ -19,8 +19,8 @@ import { createMemo, createResource, For, Show } from 'solid-js';
 import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { compareDateDesc, type DateValue } from '@core/util/date';
+import { getChannelParams } from '@block-channel/utils/link';
 
 export type ReferenceProps = {
   documentId: string;
@@ -30,6 +30,7 @@ export type ReferenceProps = {
 function isChannelReference(ref: EntityReference): ref is EntityReference & {
   channel_id: string;
   message_id: string;
+  thread_id?: string;
   sender_id: string;
   attachment_created_at: string;
   message_content?: string;
@@ -86,10 +87,9 @@ export function References(props: ReferenceProps) {
     threadId?: string
   ) => {
     const blockHandle = await blockOrchestrator.getBlockHandle(channelId);
-    await blockHandle?.goToLocationFromParams({
-      [CHANNEL_PARAMS.message]: messageId,
-      [CHANNEL_PARAMS.thread]: threadId,
-    });
+    await blockHandle?.goToLocationFromParams(
+      getChannelParams(messageId, threadId)
+    );
   };
 
   const navigateToItem = ({
@@ -190,6 +190,7 @@ export function References(props: ReferenceProps) {
                   event: e,
                   channelId: ref.channel_id,
                   messageId: ref.message_id,
+                  threadId: ref.thread_id,
                 })
               );
 
