@@ -130,10 +130,7 @@ mod tests {
         transaction.commit().await?;
 
         let document_metadata = get_document(&pool, "document-one").await?;
-        assert_eq!(
-            document_metadata.file_type,
-            Some("rs".to_string())
-        );
+        assert_eq!(document_metadata.file_type, Some("rs".to_string()));
 
         Ok(())
     }
