@@ -113,6 +113,53 @@ mod tests {
         Ok(())
     }
 
+    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
+    async fn test_edit_document_set_file_type(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        let mut transaction = pool.begin().await?;
+
+        edit_document(
+            &mut transaction,
+            "document-one",
+            None,
+            None,
+            Some(Some("rs")),
+            None,
+        )
+        .await?;
+
+        transaction.commit().await?;
+
+        let document_metadata = get_document(&pool, "document-one").await?;
+        assert_eq!(
+            document_metadata.file_type,
+            Some("rs".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
+    async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        let mut transaction = pool.begin().await?;
+
+        edit_document(
+            &mut transaction,
+            "document-one",
+            None,
+            None,
+            Some(None),
+            None,
+        )
+        .await?;
+
+        transaction.commit().await?;
+
+        let document_metadata = get_document(&pool, "document-one").await?;
+        assert_eq!(document_metadata.file_type, None);
+
+        Ok(())
+    }
+
     #[sqlx::test(fixtures(
         path = "../../../fixtures",
         scripts("basic_user_with_lots_of_documents")

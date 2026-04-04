@@ -6,7 +6,7 @@ use models_permissions::share_permission::channel_share_permission::{
 };
 use sqlx::{Pool, Postgres};
 
-use crate::domain::models::EditDocumentRepoArgs;
+use crate::domain::models::{EditDocumentRepoArgs, FileTypeUpdate};
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
 
@@ -127,6 +127,48 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
 
     let doc = repo.get_basic_document("document-one").await.unwrap();
     assert_eq!(doc.document_name, "new-name");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: None,
+        file_type: Some(FileTypeUpdate::Set(model_file_type::FileType::Rs)),
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.file_type, Some("rs".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: None,
+        file_type: Some(FileTypeUpdate::Clear),
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.file_type, None);
 }
 
 #[sqlx::test(
