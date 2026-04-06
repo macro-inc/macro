@@ -39,6 +39,9 @@ pub type ToolFrecencyService = FrecencyQueryServiceImpl<FrecencyPgStorage>;
 pub type ToolEmailService =
     EmailServiceImpl<EmailPgRepo, ToolFrecencyService, email::domain::ports::NoOpEnqueuer>;
 
+/// Type alias for the send-capable email service implementation used by user tools.
+pub type ToolUserEmailService = EmailServiceImpl<EmailPgRepo, ToolFrecencyService, sqs_client::SQS>;
+
 /// Type alias for the comms/channels service implementation
 pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
 
@@ -130,7 +133,7 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
 pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService>;
 
 /// Type alias for the email tool context
-pub type ToolEmailToolContext = EmailToolContext<ToolEmailService>;
+pub type ToolEmailToolContext = EmailToolContext<ToolUserEmailService>;
 
 /// The full service context containing all API clients.
 /// Individual tools should extract only the clients they need via `FromRef`.

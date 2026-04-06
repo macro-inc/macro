@@ -79,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
+        .email_scheduled_queue(&config.email_scheduled_queue)
         .search_event_queue(&config.search_event_queue);
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
@@ -280,7 +281,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(EmailServiceImpl::new(
             EmailPgRepo::new(db.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-            email::domain::ports::NoOpEnqueuer,
+            sqs_client.clone(),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),

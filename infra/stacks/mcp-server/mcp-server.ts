@@ -36,6 +36,7 @@ type CreateMcpServerArgs = {
   healthCheckPath: string;
   tags: { [key: string]: string };
   secretKeyArns: (pulumi.Output<string> | string)[];
+  queueArns: (pulumi.Output<string> | string)[];
   bucketArns: (pulumi.Output<string> | string)[];
 };
 
@@ -64,6 +65,7 @@ export class McpServer extends pulumi.ComponentResource {
       containerEnvVars,
       cloudStorageClusterName,
       secretKeyArns,
+      queueArns,
       bucketArns,
       tags,
     }: CreateMcpServerArgs,
@@ -166,6 +168,29 @@ export class McpServer extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const sqsPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-sqs-policy`,
+      {
+        name: `${BASE_NAME}-sqs-policy-${stack}`,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: [
+                'sqs:SendMessage',
+                'sqs:DeleteMessage',
+                'sqs:GetQueueAttributes',
+              ],
+              Resource: queueArns,
+              Effect: 'Allow',
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     this.role = new aws.iam.Role(
       `${BASE_NAME}-role`,
       {
@@ -183,7 +208,11 @@ export class McpServer extends pulumi.ComponentResource {
             },
           ],
         },
-        managedPolicyArns: [secretsManagerPolicy.arn, s3Policy.arn],
+        managedPolicyArns: [
+          secretsManagerPolicy.arn,
+          s3Policy.arn,
+          sqsPolicy.arn,
+        ],
         tags: this.tags,
       },
       { parent: this }

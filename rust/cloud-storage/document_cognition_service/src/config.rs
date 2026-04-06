@@ -26,6 +26,8 @@ pub struct Config {
     pub document_text_extractor_queue: String,
     /// The sqs queue to send chat delete jobs
     pub chat_delete_queue: String,
+    /// The sqs queue to enqueue outbound email sends
+    pub email_scheduled_queue: String,
     /// The sqs queue to send notifications to
     pub notification_queue: String,
     pub search_event_queue: String,
@@ -59,6 +61,7 @@ env_var!(
         pub DocumentStorageBucket,
         pub DocumentTextExtractorQueue,
         pub ChatDeleteQueue,
+        pub EmailScheduledQueue,
         pub NotificationQueue,
         pub DocumentStorageServiceUrl,
         pub SearchEventQueue,
@@ -105,6 +108,7 @@ impl Config {
             document_storage_bucket,
             document_text_extractor_queue,
             chat_delete_queue,
+            email_scheduled_queue,
             notification_queue,
             document_storage_service_url,
             search_event_queue,
@@ -131,6 +135,7 @@ impl Config {
             document_storage_service_url: document_storage_service_url.to_string(),
             document_text_extractor_queue: document_text_extractor_queue.to_string(),
             chat_delete_queue: chat_delete_queue.to_string(),
+            email_scheduled_queue: email_scheduled_queue.to_string(),
             notification_queue: notification_queue.to_string(),
             search_event_queue: search_event_queue.to_string(),
             sync_service_auth_key: sync_service_auth_key.to_string(),
@@ -163,6 +168,7 @@ impl Config {
             document_storage_service_url: Default::default(),
             document_text_extractor_queue: Default::default(),
             chat_delete_queue: Default::default(),
+            email_scheduled_queue: Default::default(),
             notification_queue: Default::default(),
             search_event_queue: Default::default(),
             sync_service_url: Default::default(),

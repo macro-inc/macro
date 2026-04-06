@@ -135,7 +135,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         .behavior_version(aws_sdk_sqs::config::BehaviorVersion::latest())
         .build();
     let aws_sqs_client = aws_sdk_sqs::Client::from_conf(sqs_config.clone());
-    let sqs_client = SQS::new(aws_sqs_client);
+    let sqs_client = SQS::new(aws_sqs_client).email_scheduled_queue("test-email-scheduled-queue");
 
     let document_storage_client = Arc::new(DocumentStorageServiceClient::new(
         "dummy_auth_key".into(),
@@ -268,7 +268,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             frecency::domain::services::FrecencyQueryServiceImpl::new(
                 frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
             ),
-            email::domain::ports::NoOpEnqueuer,
+            sqs_client.clone(),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),

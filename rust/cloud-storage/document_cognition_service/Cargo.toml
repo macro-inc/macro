@@ -118,6 +118,8 @@ sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "chat",
   "document_text_extractor",
+  "email",
+  "gmail",
   "search",
 ] }
 stream = { path = "../stream" }

@@ -99,6 +99,10 @@ const cloudStorageServiceStack = new pulumi.StackReference(
   }
 );
 
+const emailServiceStack = new pulumi.StackReference('email-service-stack', {
+  name: `macro-inc/email-service/${stack}`,
+});
+
 export const documentStorageServiceUrl: pulumi.Output<string> =
   cloudStorageServiceStack
     .getOutput('cloudStorageServiceUrl')
@@ -111,6 +115,14 @@ const docxUploadBucketName: pulumi.Output<string> = cloudStorageServiceStack
 const docxUploadBucketArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('docxUploadBucketArn')
   .apply((arn) => arn as string);
+
+const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueArn')
+  .apply((arn) => arn as string);
+
+const emailScheduledQueueName: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueName')
+  .apply((name) => name as string);
 
 const linksharingStack = new pulumi.StackReference('linksharing-stack', {
   name: `macro-inc/link-sharing/${stack}`,
@@ -151,6 +163,7 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
     cloudfrontPrivateKeySecretArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
   ],
+  queueArns: [emailScheduledQueueArn],
   bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
   serviceContainerPort: 8080,
   healthCheckPath: '/health',
@@ -212,6 +225,10 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
       value: `https://email-service${
         stack === 'prod' ? '' : `-${stack}`
       }.macro.com`,
+    },
+    {
+      name: 'EMAIL_SCHEDULED_QUEUE',
+      value: pulumi.interpolate`${emailScheduledQueueName}`,
     },
     {
       name: 'STATIC_FILE_SERVICE_URL',

@@ -131,6 +131,10 @@ const cloudStorageServiceStack = new pulumi.StackReference(
   }
 );
 
+const emailServiceStack = new pulumi.StackReference('email-service-stack', {
+  name: `macro-inc/email-service/${stack}`,
+});
+
 const linksharingStack = new pulumi.StackReference('linksharing-stack', {
   name: `macro-inc/link-sharing/${stack}`,
 });
@@ -158,6 +162,14 @@ const docxUploadBucketName: pulumi.Output<string> = cloudStorageServiceStack
 const docxUploadBucketArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('docxUploadBucketArn')
   .apply((arn) => arn as string);
+
+const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueArn')
+  .apply((arn) => arn as string);
+
+const emailScheduledQueueName: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueName')
+  .apply((name) => name as string);
 
 export const documentStorageServiceUrl: pulumi.Output<string> =
   cloudStorageServiceStack
@@ -238,6 +250,7 @@ const documentCognitionService = new DocumentCognitionService(
     queueArns: [
       documentTextExtractorQueueArn,
       deleteChatQueueArn,
+      emailScheduledQueueArn,
       searchEventQueueArn,
       notificationIngressQueueArn,
     ],
@@ -282,6 +295,10 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'CHAT_DELETE_QUEUE',
         value: pulumi.interpolate`${deleteChatQueueName}`,
+      },
+      {
+        name: 'EMAIL_SCHEDULED_QUEUE',
+        value: pulumi.interpolate`${emailScheduledQueueName}`,
       },
       {
         name: 'DOCUMENT_STORAGE_BUCKET',

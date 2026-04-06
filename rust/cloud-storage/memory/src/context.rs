@@ -33,6 +33,7 @@ use sync_service_client::SyncServiceClient;
 /// `SEARCH_SERVICE_URL`, `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`,
 /// `DOCUMENT_COGNITION_SERVICE_URL`, `STATIC_FILE_SERVICE_URL`,
 /// `DOCUMENT_STORAGE_BUCKET`, `DOCX_DOCUMENT_UPLOAD_BUCKET`,
+/// `EMAIL_SCHEDULED_QUEUE`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`
@@ -49,10 +50,14 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
         std::env::var("LEXICAL_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8096".into());
     let doc_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")?;
     let docx_bucket = std::env::var("DOCX_DOCUMENT_UPLOAD_BUCKET")?;
+    let email_scheduled_queue = std::env::var("EMAIL_SCHEDULED_QUEUE")?;
     let cf_dist_url = std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")?;
     let cf_key_id = std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID")?;
     let cf_private_key =
         std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME")?;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .email_scheduled_queue(&email_scheduled_queue);
 
     // Service clients
     let dss_client = Arc::new(DocumentStorageServiceClient::new(
@@ -151,7 +156,7 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
         Arc::new(EmailServiceImpl::new(
             EmailPgRepo::new(pool.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
-            email::domain::ports::NoOpEnqueuer,
+            sqs_client,
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),

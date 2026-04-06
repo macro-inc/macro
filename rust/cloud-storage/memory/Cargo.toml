@@ -20,6 +20,7 @@ sqlx = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
+aws-sdk-sqs = { workspace = true }
 model_user = { path = "../model_user", features = ["axum"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
@@ -43,6 +44,7 @@ readonly_pool = { path = "../readonly_pool" }
 soup = { path = "../soup", features = ["all"] }
 properties = { path = "../properties" }
 macro_aws_config = { path = "../macro_aws_config" }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 
 
 macro_db_migrator = { path = "../macro_db_migrator" }
