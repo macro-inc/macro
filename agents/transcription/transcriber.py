@@ -55,24 +55,75 @@ class Transcriber(Agent):
     ):
         content = new_message.text_content
         if content:
-            now = datetime.now(timezone.utc).isoformat()
+            message_time = datetime.now(timezone.utc)
+            if new_message.created_at is not None:
+                message_time = datetime.fromtimestamp(
+                    new_message.created_at, tz=timezone.utc
+                )
+            timestamp = message_time.isoformat()
+
+            extra = new_message.extra if isinstance(new_message.extra, dict) else {}
+            source_id = (
+                extra.get("provider_message_id")
+                or extra.get("providerMessageId")
+                or new_message.id
+            )
+            segment_seed = (
+                f"{self.channel_id}:{self.participant_identity}:{source_id}:{timestamp}"
+            )
+            segment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, segment_seed))
+
             segment = {
-                "segmentId": str(uuid.uuid4()),
+                "segmentId": segment_id,
                 "speakerId": self.participant_identity,
                 "content": content,
-                "startedAt": now,
-                "endedAt": now,
+                "startedAt": timestamp,
+                "endedAt": timestamp,
                 "isFinal": True,
             }
-            try:
-                resp = await self.http_client.post(
-                    f"{MACRO_API_URL}/call/{self.channel_id}/transcript",
-                    json=segment,
-                    headers={"x-macro-internal-call": INTERNAL_CALL_SECRET},
-                )
-                resp.raise_for_status()
-            except Exception:
-                logger.exception("failed to post transcript segment")
+            max_attempts = 3
+            delay_seconds = 0.25
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    resp = await self.http_client.post(
+                        f"{MACRO_API_URL}/call/{self.channel_id}/transcript",
+                        json=segment,
+                        headers={"x-macro-internal-call": INTERNAL_CALL_SECRET},
+                    )
+                    resp.raise_for_status()
+                    break
+                except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                    if attempt == max_attempts:
+                        logger.exception(
+                            "failed to post transcript segment segmentId=%s error=%s",
+                            segment_id,
+                            exc,
+                        )
+                        break
+                    await asyncio.sleep(delay_seconds)
+                    delay_seconds *= 2
+                except httpx.HTTPStatusError as exc:
+                    status_code = exc.response.status_code if exc.response else None
+                    is_transient = (
+                        status_code is not None and 500 <= status_code < 600
+                    )
+                    if is_transient and attempt < max_attempts:
+                        await asyncio.sleep(delay_seconds)
+                        delay_seconds *= 2
+                        continue
+                    logger.exception(
+                        "failed to post transcript segment segmentId=%s error=%s",
+                        segment_id,
+                        exc,
+                    )
+                    break
+                except Exception as exc:
+                    logger.exception(
+                        "failed to post transcript segment segmentId=%s error=%s",
+                        segment_id,
+                        exc,
+                    )
+                    break
         raise StopResponse()
 
 
