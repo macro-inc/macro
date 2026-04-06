@@ -1,5 +1,8 @@
 //! This module exposes the http adapter for inbound http requests via an axum router
 
+#[cfg(test)]
+mod test;
+
 pub mod device;
 pub mod preferences;
 

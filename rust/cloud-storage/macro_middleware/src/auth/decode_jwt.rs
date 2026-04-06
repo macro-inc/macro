@@ -14,7 +14,7 @@ use macro_auth::{headers::AccessTokenExtractor, middleware::decode_jwt::JwtValid
 pub async fn handler(
     access_token: Result<AccessTokenExtractor, StatusCode>,
     jwt_validation_args: State<JwtValidationArgs>,
-    params: Query<Option<Params>>,
+    Query(params): Query<Params>,
     mut req: Request,
     next: Next,
 ) -> Result<Response, DecodeJwtError> {

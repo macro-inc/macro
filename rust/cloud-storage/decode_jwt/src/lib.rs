@@ -38,7 +38,7 @@ pub struct JwtContext {
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Params {
-    macro_api_token: String,
+    macro_api_token: Option<String>,
 }
 
 /// The result of successfully decoding a JWT from a request.
@@ -64,15 +64,15 @@ where
         state: &S,
     ) -> Result<Self, Self::Rejection> {
         let args = JwtValidationArgs::from_ref(state);
-        let (access_token, query_params): (
+        let (access_token, Query(params)): (
             Result<AccessTokenExtractor, StatusCode>,
-            Query<Option<Params>>,
+            Query<Params>,
         ) = parts
             .extract()
             .await
             .map_err(|_| Either::E2(StatusCode::INTERNAL_SERVER_ERROR))?;
 
-        Self::new(access_token, query_params, &args).map_err(Either::E1)
+        Self::new(access_token, params, &args).map_err(Either::E1)
     }
 }
 
@@ -83,10 +83,10 @@ impl DecodedJwt {
     /// independently (e.g. from a non-middleware handler).
     pub fn new(
         access_token_header: Result<AccessTokenExtractor, StatusCode>,
-        query_params: Query<Option<Params>>,
+        query_params: Params,
         jwt_validation_args: &JwtValidationArgs,
     ) -> Result<DecodedJwt, DecodeJwtError> {
-        if cfg!(feature = "local_auth") {
+        if cfg!(feature = "local_auth") && std::env::var("LOCAL_USER_ID").is_ok() {
             let user_id =
                 std::env::var("LOCAL_USER_ID").unwrap_or("macro|orguser@org.com".to_string());
             let macro_user_id = MacroUserIdStr::parse_from_str(&user_id)
@@ -110,7 +110,10 @@ impl DecodedJwt {
             });
         }
 
-        let access_token = if let Query(Some(Params { macro_api_token })) = query_params {
+        let access_token = if let Params {
+            macro_api_token: Some(macro_api_token),
+        } = query_params
+        {
             tracing::trace!("macro-api-token found in query params");
             macro_api_token
         } else {

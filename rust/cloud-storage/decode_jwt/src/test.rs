@@ -10,7 +10,7 @@ fn query_extractor_decodes_percent_encoded_token() {
     let encoded = format!("macro-api-token={}", urlencoding::encode(token));
 
     let params: Params = serde_urlencoded::from_str(&encoded).unwrap();
-    assert_eq!(params.macro_api_token, token);
+    assert_eq!(params.macro_api_token.as_deref(), Some(token));
 }
 
 /// The old code collected into a `HashMap<String, String>` via
@@ -30,7 +30,10 @@ fn query_extractor_matches_form_urlencoded_parse() {
     // New approach
     let new: Params = serde_urlencoded::from_str(&query).unwrap();
 
-    assert_eq!(old.get("macro-api-token").unwrap(), &new.macro_api_token);
+    assert_eq!(
+        old.get("macro-api-token").unwrap(),
+        new.macro_api_token.as_ref().unwrap()
+    );
 }
 
 /// Percent-encoded special characters (e.g. `%2B` for `+`) must be decoded.
@@ -45,5 +48,5 @@ fn query_extractor_decodes_special_characters() {
     let new: Params = serde_urlencoded::from_str(query).unwrap();
 
     assert_eq!(old.get("macro-api-token").unwrap(), "a+b=c");
-    assert_eq!(new.macro_api_token, "a+b=c");
+    assert_eq!(new.macro_api_token.as_deref(), Some("a+b=c"));
 }
