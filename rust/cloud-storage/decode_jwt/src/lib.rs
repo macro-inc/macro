@@ -179,6 +179,7 @@ impl DecodedJwt {
 }
 
 /// Errors that can occur when decoding a JWT from a request.
+#[derive(Debug)]
 pub enum DecodeJwtError {
     /// No token was found in query params or headers.
     NoToken,
