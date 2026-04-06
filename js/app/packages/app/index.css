@@ -826,6 +826,8 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 @utility macro-message-width {
+    max-width: 100vw;
+    
     @media (min-width: 640px) {
         max-width: 800px;
         min-width: 250px;
