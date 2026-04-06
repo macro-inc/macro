@@ -10,7 +10,7 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { blockMetadataSignal } from '@core/signal/load';
+import { FileTypeChip } from '@core/component/FileTypeChip';
 import {
   ReferencesButton,
   REFERENCES_DRAWER_ID,
@@ -30,18 +30,6 @@ import Download from '@icon/regular/download.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Show } from 'solid-js';
-
-function FileTypeChip() {
-  const fileType = () => blockMetadataSignal()?.fileType;
-  return (
-    <Show when={fileType()}>
-      <span class="shrink-0 rounded px-1 py-0.5 text-[0.625rem] font-mono font-medium uppercase leading-none bg-image-bg text-image">
-        {fileType()}
-      </span>
-    </Show>
-  );
-}
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();

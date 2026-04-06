@@ -1,4 +1,5 @@
 import { useBlockId } from '@core/block';
+import { FileTypeChip } from '@core/component/FileTypeChip';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { Popover } from '@kobalte/core/popover';
@@ -74,14 +75,7 @@ export function CodeFileTypeChip() {
 
   return (
     <Show when={fileType()}>
-      <Show
-        when={canEdit()}
-        fallback={
-          <span class="shrink-0 rounded px-1 py-0.5 text-[0.625rem] font-mono font-medium uppercase leading-none bg-code-bg text-code">
-            {fileType()}
-          </span>
-        }
-      >
+      <Show when={canEdit()} fallback={<FileTypeChip />}>
         <Popover
           placement="bottom-start"
           open={open()}
