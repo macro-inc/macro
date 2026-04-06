@@ -18,6 +18,7 @@ import {
   hasPermissions,
   Permissions,
 } from '../SharePermissions';
+import type { FileType } from '@service-storage/generated/schemas/fileType';
 
 const DEFAULT_CHUNK_SIZE = 10;
 

@@ -1,28 +1,36 @@
 import { useBlockId } from '@core/block';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { storageServiceClient } from '@service-storage/client';
 import { Popover } from '@kobalte/core/popover';
 import { createSignal, For, Show, createMemo } from 'solid-js';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { codeFileExtensions } from '../util/languageSupport';
 import { createCallback } from '@solid-primitives/rootless';
-import { setFileType } from '@core/component/FileList/itemOperations.ts';
-
-const sortedExtensions = [...codeFileExtensions].sort();
+import { createUpdateFileTypeMutation } from '@macro-entity';
 
 export function CodeFileTypeChip() {
   const [blockMetadata, setBlockMetadata] = blockMetadataSignal;
   const fileType = () => blockMetadata()?.fileType;
+  const setFileType = (fileType: string) => {
+    setBlockMetadata((prev) => {
+      if (!prev) return prev;
+      if (prev.fileType === fileType) return prev;
+      return {
+        ...prev,
+        fileType,
+      };
+    });
+  };
   const canEdit = useCanEdit();
   const blockId = useBlockId();
   const [open, setOpen] = createSignal(false);
   const [search, setSearch] = createSignal('');
+  const updateFileType = createUpdateFileTypeMutation();
 
   const filteredExtensions = createMemo(() => {
     const query = search().toLowerCase();
-    if (!query) return sortedExtensions;
-    return sortedExtensions.filter((ext) => ext.includes(query));
+    if (!query) return codeFileExtensions;
+    return codeFileExtensions.filter((ext) => ext.includes(query));
   });
 
   let searchRef: HTMLInputElement | undefined;
@@ -30,13 +38,23 @@ export function CodeFileTypeChip() {
   const handleSelect = createCallback(async (ext: string) => {
     setOpen(false);
     setSearch('');
-    const metadata = blockMetadataSignal();
-    if (!metadata || ext === fileType()) return;
+    const metadata = blockMetadata();
+    const oldFileType = fileType() ?? undefined;
+    console.log(metadata, ext, oldFileType);
+    if (!metadata || ext === oldFileType) return;
 
-    const success = setFileType({ id: blockId, fileType: ext as FileType });
-    if (!success) return;
-
-    setBlockMetadata({ ...metadata, fileType: ext });
+    updateFileType.mutate(
+      {
+        id: blockId,
+        fileType: ext as FileType,
+        oldFileType,
+      },
+      {
+        onSuccess: () => {
+          setFileType(ext);
+        },
+      }
+    );
   });
 
   return (

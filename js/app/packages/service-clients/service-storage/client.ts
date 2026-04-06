@@ -86,7 +86,6 @@ import type {
   ValidateDocumentPermissionsTokenResponse,
 } from './service';
 import { fetchPresigned } from './util/fetchPresigned';
-import { formatDocumentName } from './util/filename';
 import {
   type GetDocxFileResponse,
   getDocxExpandedParts,
@@ -140,18 +139,6 @@ const itemTypeSet = new Set([
 export function isItemType(str: string): str is ItemType {
   return itemTypeSet.has(str);
 }
-
-const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
-  if (!('document_name' in preview)) return preview;
-
-  const name = formatDocumentName(preview.document_name, preview.file_type, {
-    fullyQualifiedBlockName: true,
-  });
-  return {
-    ...preview,
-    document_name: name,
-  };
-};
 
 export function blockNameToItemType(
   blockName: BlockName | BlockAlias
@@ -554,7 +541,7 @@ export const storageServiceClient = {
         body: JSON.stringify({ document_ids: args.document_ids }),
       }),
       (result) => ({
-        previews: result.previews.map(mapPreviewDocumentName),
+        previews: result.previews,
       })
     );
   },
