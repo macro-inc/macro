@@ -281,7 +281,7 @@ function ResultsContainer(props: {
           class="flex items-center px-2 text-sm gap-2 h-10"
         >
           <SearchIcon class="size-5 p-0.5" />
-          {`Search${props.query() ? ` "${props.query()}"` : ''}`}
+          {`Full-text search for${props.query() ? ` "${props.query()}"` : ''}`}
         </button>
       </Show>
     </div>
