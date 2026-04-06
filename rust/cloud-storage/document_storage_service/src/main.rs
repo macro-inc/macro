@@ -353,6 +353,12 @@ async fn main() -> anyhow::Result<()> {
     // Call service (LiveKit)
     let transcription_agent_name =
         config::LivekitTranscriptionAgentName::new().map(|v| v.as_ref().to_owned());
+    let internal_call_secret = config::InternalCallSecret::new().map(|v| v.as_ref().to_owned());
+    anyhow::ensure!(
+        transcription_agent_name.is_none() || internal_call_secret.is_some(),
+        "LIVEKIT_TRANSCRIPTION_AGENT_NAME is set but INTERNAL_CALL_SECRET is missing — \
+         the transcription agent will not be able to submit transcripts"
+    );
     let livekit_rtc_client = LivekitRtcClient::new(
         config.vars.livekit_server_url.as_ref(),
         config.vars.livekit_api_key.as_ref(),
@@ -360,7 +366,6 @@ async fn main() -> anyhow::Result<()> {
         transcription_agent_name,
     );
     let call_repo = PgCallRepo::new(db.clone());
-    let internal_call_secret = config::InternalCallSecret::new().map(|v| v.as_ref().to_owned());
     let mut call_service_builder = CallServiceImpl::new(
         call_repo,
         livekit_rtc_client,
