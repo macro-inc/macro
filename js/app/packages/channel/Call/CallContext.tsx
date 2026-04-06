@@ -248,8 +248,11 @@ export function CallProvider(props: ParentProps) {
   async function disconnect() {
     const r = room();
     if (r) {
-      await r.disconnect();
-      resetCallState();
+      try {
+        await r.disconnect();
+      } finally {
+        resetCallState();
+      }
     }
   }
 

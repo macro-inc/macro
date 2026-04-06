@@ -191,13 +191,24 @@ export function Top(props: TopProps) {
     {
       label: () => (channelModals.isInCall() ? 'Leave Call' : 'Call'),
       icon: CallIcon,
-      action: () => {
-        if (channelModals.isInCall()) {
-          channelModals.leaveCall();
-        } else {
-          channelModals.joinCall();
-        }
-      },
+      action: (() => {
+        let isTogglingCall = false;
+        return async () => {
+          if (isTogglingCall) return;
+          isTogglingCall = true;
+          try {
+            if (channelModals.isInCall()) {
+              await channelModals.leaveCall();
+            } else {
+              await channelModals.joinCall();
+            }
+          } catch (e) {
+            console.error('Call action failed', e);
+          } finally {
+            isTogglingCall = false;
+          }
+        };
+      })(),
       isActive: () => channelModals.isInCall(),
       condition: () => ENABLE_CALLS,
     },

@@ -3,6 +3,7 @@ import {
   For,
   Show,
   createEffect,
+  createSignal,
   onCleanup,
   type Component,
   type JSX,
@@ -24,7 +25,7 @@ function TrackRenderer(props: {
 }) {
   let containerRef!: HTMLDivElement;
   const callCtx = useCallContext();
-  let prevTrack: any = null;
+  let prevTrack: Track | null = null;
   let prevEl: HTMLMediaElement | null = null;
 
   function detachPrev() {
@@ -67,7 +68,7 @@ function TrackRenderer(props: {
 function LocalScreenSharePreview() {
   let containerRef!: HTMLDivElement;
   const callCtx = useCallContext();
-  let prevTrack: any = null;
+  let prevTrack: Track | null = null;
   let prevEl: HTMLMediaElement | null = null;
 
   function detachPrev() {
@@ -113,7 +114,7 @@ function LocalScreenSharePreview() {
 function LocalVideoPreview() {
   let containerRef!: HTMLDivElement;
   const callCtx = useCallContext();
-  let prevTrack: any = null;
+  let prevTrack: Track | null = null;
   let prevEl: HTMLMediaElement | null = null;
 
   function detachPrev() {
@@ -175,11 +176,13 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
       classList={{ 'ring-2 ring-accent-2': isSpeaking() }}
     >
-      {/* Attach remote audio so we can hear this participant */}
-      <TrackRenderer
-        participant={props.participant}
-        source={Track.Source.Microphone}
-      />
+      {/* Attach remote audio so we can hear this participant (visually hidden to avoid stealing layout) */}
+      <div class="absolute w-0 h-0 overflow-hidden">
+        <TrackRenderer
+          participant={props.participant}
+          source={Track.Source.Microphone}
+        />
+      </div>
       <Show
         when={hasVideo()}
         fallback={
@@ -203,21 +206,38 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
 }
 
 const ControlButton: Component<{
-  onClick: () => void;
+  onClick: () => Promise<void> | void;
   active?: boolean;
   danger?: boolean;
   children?: JSX.Element;
 }> = (props) => {
+  const [isPending, setIsPending] = createSignal(false);
+
+  const handleClick = async () => {
+    if (isPending()) return;
+    setIsPending(true);
+    try {
+      await props.onClick();
+    } catch (e) {
+      console.error('ControlButton action failed', e);
+    } finally {
+      setIsPending(false);
+    }
+  };
+
   return (
     <button
-      onClick={props.onClick}
+      onClick={handleClick}
+      disabled={isPending()}
       class="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
       classList={{
-        'bg-failure text-white hover:bg-failure/80': props.danger,
+        'opacity-50 cursor-not-allowed': isPending(),
+        'bg-failure text-panel hover:bg-failure/80':
+          props.danger && !isPending(),
         'bg-surface-2 text-ink hover:bg-surface-3':
-          !props.danger && !props.active,
-        'bg-accent-2 text-white hover:bg-accent-3':
-          !props.danger && props.active,
+          !props.danger && !props.active && !isPending(),
+        'bg-accent-2 text-panel hover:bg-accent-3':
+          !props.danger && props.active && !isPending(),
       }}
     >
       {props.children}
