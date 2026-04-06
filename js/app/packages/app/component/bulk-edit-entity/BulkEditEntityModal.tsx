@@ -77,7 +77,7 @@ const BulkEditEntityModalContent = (props: {
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay" />
         <div class="fixed inset-0 z-modal">
           <Dialog.Content>
-            <div class="pointer-events-auto max-w-xl bg-menu border border-edge-muted w-lg h-fit p-2 mt-[25vh] mx-auto">
+            <div class="pointer-events-auto max-w-[min(36rem,calc(100%-1rem))] bg-menu border border-edge-muted w-lg h-fit p-2 mt-[25vh] mx-auto">
               <div class="w-full my-1">
                 <Show when={props.view === 'rename'}>
                   <BulkRenameEntitiesView
