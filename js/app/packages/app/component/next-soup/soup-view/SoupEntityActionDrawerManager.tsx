@@ -1,6 +1,6 @@
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
-import { createSignal, type JSX } from 'solid-js';
+import { createEffect, createSignal, onCleanup, type JSX } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import { SoupEntityActionDrawer } from './SoupEntityActionDrawer';
 import {
@@ -34,9 +34,29 @@ export function MaybeSoupEntityActionDrawerManager(props: {
     close: () => setIsOpen(false),
   };
 
+  let wrapperEl!: HTMLDivElement;
+
+  // Block in-progress touch sequences (scroll, swipe) the moment the drawer opens.
+  createEffect(() => {
+    if (!isOpen()) return;
+    const block = (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    wrapperEl.addEventListener('touchmove', block, {
+      capture: true,
+      passive: false,
+    });
+    onCleanup(() =>
+      wrapperEl.removeEventListener('touchmove', block, { capture: true })
+    );
+  });
+
   return (
     <SoupEntityActionDrawerContextProvider value={ctx}>
-      {props.children}
+      <div class="size-full" ref={wrapperEl}>
+        {props.children}
+      </div>
       <SoupEntityActionDrawer />
     </SoupEntityActionDrawerContextProvider>
   );
