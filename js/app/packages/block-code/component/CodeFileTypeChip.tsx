@@ -3,9 +3,25 @@ import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { Popover } from '@kobalte/core/popover';
 import { createSignal, For, Show, createMemo } from 'solid-js';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { codeFileExtensions } from '../util/languageSupport';
+import { FileType } from '@service-storage/generated/schemas/fileType';
 import { createUpdateFileTypeMutation } from '@macro-entity';
+
+// NOTE: this attempts to match codemirror supported file types, see @block-code/util/languageSupport.ts
+const DROPDOWN_FILE_TYPES: FileType[] = [
+  FileType.c,
+  FileType.cpp,
+  FileType.css,
+  FileType.csv,
+  FileType.html,
+  FileType.js,
+  FileType.json,
+  FileType.jsx,
+  FileType.py,
+  FileType.ts,
+  FileType.tsx,
+  FileType.txt,
+  FileType.rs,
+];
 
 export function CodeFileTypeChip() {
   const [blockMetadata, setBlockMetadata] = blockMetadataSignal;
@@ -26,26 +42,26 @@ export function CodeFileTypeChip() {
   const [search, setSearch] = createSignal('');
   const updateFileType = createUpdateFileTypeMutation();
 
-  const filteredExtensions = createMemo(() => {
+  const filteredFileTypes = createMemo(() => {
     const query = search().toLowerCase();
-    if (!query) return codeFileExtensions;
-    return codeFileExtensions.filter((ext) => ext.includes(query));
+    if (!query) return DROPDOWN_FILE_TYPES;
+    return DROPDOWN_FILE_TYPES.filter((ft) => ft.includes(query));
   });
 
   let searchRef: HTMLInputElement | undefined;
 
-  const handleSelect = (ext: string) => {
+  const handleSelect = (ft: FileType) => {
     setOpen(false);
     setSearch('');
     const metadata = blockMetadata();
     const oldFileType = fileType() ?? undefined;
-    if (!metadata || ext === oldFileType) return;
+    if (!metadata || ft === oldFileType) return;
 
-    setFileType(ext);
+    setFileType(ft);
     updateFileType.mutate(
       {
         id: blockId,
-        fileType: ext as FileType,
+        fileType: ft,
         oldFileType,
       },
       {
@@ -90,7 +106,7 @@ export function CodeFileTypeChip() {
                   onInput={(e) => setSearch(e.currentTarget.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      const exts = filteredExtensions();
+                      const exts = filteredFileTypes();
                       if (exts.length > 0) {
                         handleSelect(exts[0]);
                       }
@@ -99,7 +115,7 @@ export function CodeFileTypeChip() {
                 />
               </div>
               <div class="max-h-48 overflow-y-auto p-1">
-                <For each={filteredExtensions()}>
+                <For each={filteredFileTypes()}>
                   {(ext) => (
                     <button
                       class="flex w-full items-center px-2 py-1 rounded text-xs font-mono uppercase hover:bg-hover transition-colors"
@@ -112,7 +128,7 @@ export function CodeFileTypeChip() {
                     </button>
                   )}
                 </For>
-                <Show when={filteredExtensions().length === 0}>
+                <Show when={filteredFileTypes().length === 0}>
                   <div class="px-2 py-1 text-xs text-ink-muted">No results</div>
                 </Show>
               </div>
