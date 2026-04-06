@@ -214,7 +214,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
       {/* Participants grid */}
       <div
-        class={`${hasAnyScreenShare() ? 'h-[140px] shrink-0' : 'flex-1'} grid ${gridCols()} gap-2 p-2 auto-rows-fr`}
+        class={`${hasAnyScreenShare() ? 'h-[140px] shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 p-2 auto-rows-fr overflow-hidden`}
       >
         {/* Local participant */}
         <div
