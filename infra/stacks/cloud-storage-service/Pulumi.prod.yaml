@@ -22,3 +22,4 @@ config:
   cloud-storage-service:livekit_api_key: livekit-api-key-prod
   cloud-storage-service:livekit_api_secret: livekit-api-secret-prod
   cloud-storage-service:livekit_transcription_agent_name: macro-transcriber
+  cloud-storage-service:call_internal_secret: call-internal-secret-prod

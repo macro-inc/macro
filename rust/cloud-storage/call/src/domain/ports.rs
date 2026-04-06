@@ -166,6 +166,9 @@ pub trait CallRtcClient: Send + Sync + 'static {
 
 /// Service interface for call operations.
 pub trait CallService: Send + Sync + 'static {
+    /// Validate an internal call token (e.g. from the `x-macro-internal-call` header).
+    fn validate_internal_call(&self, token: &str) -> bool;
+
     /// Get or create a call in a channel. If a call already exists, joins it;
     /// otherwise creates a new one. Always returns a join token.
     fn get_or_create_call(

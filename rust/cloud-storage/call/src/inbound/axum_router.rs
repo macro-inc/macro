@@ -7,12 +7,13 @@
 //! - [`webhook_router`] — RTC provider webhook ingestion.
 //!   Does **not** require auth middleware (LiveKit signs requests itself).
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
-    http::StatusCode,
+    extract::{FromRef, FromRequestParts, State},
+    http::{StatusCode, request::Parts},
     response::IntoResponse,
     routing::{get, post},
 };
@@ -72,7 +73,6 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 /// Routes:
 /// - `GET /{channel_id}` — get or create a call (join existing or start new)
 /// - `DELETE /{channel_id}` — leave or end a call
-/// - `POST /{channel_id}/transcript` — ingest a transcript segment (from authenticated frontend)
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -83,10 +83,6 @@ where
         .route(
             "/{channel_id}",
             get(get_or_create_call_handler::<S, Svc>).delete(leave_or_end_call_handler::<S, Svc>),
-        )
-        .route(
-            "/{channel_id}/transcript",
-            post(transcript_handler::<S, Svc>),
         )
         .with_state(state)
 }
@@ -127,6 +123,87 @@ where
     Router::new()
         .route("/webhook", post(webhook_handler::<S>))
         .with_state(state)
+}
+
+// ---------------------------------------------------------------------------
+// Internal call router (agent-authenticated via shared secret)
+// ---------------------------------------------------------------------------
+
+/// Router state for the internal transcript endpoint.
+pub struct InternalCallRouterState<S> {
+    service: Arc<S>,
+}
+
+impl<S> Clone for InternalCallRouterState<S> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+        }
+    }
+}
+
+impl<S: CallService> InternalCallRouterState<S> {
+    /// Create a new internal call router state wrapping the call service.
+    pub fn new(service: Arc<S>) -> Self {
+        Self { service }
+    }
+}
+
+impl<S> FromRef<InternalCallRouterState<S>> for Arc<S> {
+    fn from_ref(state: &InternalCallRouterState<S>) -> Self {
+        state.service.clone()
+    }
+}
+
+/// Internal call router for agent-submitted transcript segments.
+///
+/// Routes:
+/// - `POST /{channel_id}/transcript` — ingest a transcript segment (from internal agent)
+pub fn internal_call_router<S, T>(state: InternalCallRouterState<S>) -> Router<T>
+where
+    S: CallService,
+    T: Send + Sync,
+{
+    Router::new()
+        .route("/{channel_id}/transcript", post(transcript_handler::<S>))
+        .with_state(state)
+}
+
+// ---------------------------------------------------------------------------
+// Internal call access extractor
+// ---------------------------------------------------------------------------
+
+static INTERNAL_CALL_HEADER: &str = "x-macro-internal-call";
+
+/// Axum extractor that validates the `x-macro-internal-call` header against
+/// the shared secret stored in the [`CallService`].
+pub struct InternalCallAccessExtractor(());
+
+impl<S> FromRequestParts<InternalCallRouterState<S>> for InternalCallAccessExtractor
+where
+    S: CallService,
+{
+    type Rejection = (StatusCode, Cow<'static, str>);
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &InternalCallRouterState<S>,
+    ) -> Result<Self, Self::Rejection> {
+        let token = parts
+            .headers
+            .get(INTERNAL_CALL_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .ok_or((
+                StatusCode::BAD_REQUEST,
+                Cow::Borrowed("missing x-macro-internal-call header"),
+            ))?;
+
+        if state.service.validate_internal_call(token) {
+            Ok(InternalCallAccessExtractor(()))
+        } else {
+            Err((StatusCode::UNAUTHORIZED, Cow::Borrowed("unauthorized")))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -236,8 +313,9 @@ pub async fn webhook_handler<S: CallService>(
 
 /// Handler for `POST /call/{channel_id}/transcript`.
 ///
-/// Receives transcript segments from the frontend.
-/// Requires channel membership. Duplicate segments (same `segment_id`) are ignored.
+/// Receives transcript segments from the transcription agent.
+/// Authenticated via the `x-macro-internal-call` shared secret.
+/// Duplicate segments (same `segment_id`) are ignored.
 #[utoipa::path(
     post,
     operation_id = "ingest_transcript",
@@ -254,19 +332,12 @@ pub async fn webhook_handler<S: CallService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn transcript_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: CallWithChannelIdAccessLevelExtractor<MemberParticipantRole, Svc>,
-    _user: MacroUserExtractor,
+pub async fn transcript_handler<S: CallService>(
+    State(state): State<InternalCallRouterState<S>>,
+    _access: InternalCallAccessExtractor,
+    axum::extract::Path(channel_id): axum::extract::Path<Uuid>,
     Json(segment): Json<TranscriptSegmentRequest>,
 ) -> Result<StatusCode, CallError> {
-    let channel_id = access.channel_id;
-
-    // Note: we don't enforce speaker_id == authenticated user because the
-    // LiveKit transcription agent publishes text streams attributed to the
-    // original speaker, and any channel member's frontend may relay any
-    // speaker's segment.  The segment_id dedup constraint prevents duplicates.
-
     state
         .service
         .ingest_transcript_segment(&channel_id, segment)

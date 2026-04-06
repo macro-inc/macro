@@ -277,6 +277,10 @@ const LIVEKIT_API_SECRET = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require('livekit_api_secret') })
   .apply((secret) => secret.secretString);
 
+const INTERNAL_CALL_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('call_internal_secret') })
+  .apply((secret) => secret.secretString);
+
 const cloudStorageService = new CloudStorageService(
   `cloud-storage-service-${stack}`,
   {
@@ -310,6 +314,10 @@ const cloudStorageService = new CloudStorageService(
       githubSyncAppPemArn,
     ],
     containerEnvVars: [
+      {
+        name: 'INTERNAL_CALL_SECRET',
+        value: pulumi.interpolate`${INTERNAL_CALL_SECRET}`,
+      },
       {
         name: 'LIVEKIT_SERVER_URL',
         value: pulumi.interpolate`${LIVEKIT_SERVER_URL}`,
