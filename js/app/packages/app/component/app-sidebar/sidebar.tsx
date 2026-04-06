@@ -609,6 +609,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
               allowDuplicate: true,
               referredFrom: 'sidebar',
             });
+            layoutManager?.returnFocus();
           }}
         >
           <Show when={props.icon}>
