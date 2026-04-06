@@ -158,9 +158,9 @@ const GA_API_SECRET: pulumi.Output<string> = aws.secretsmanager
 
 const META_PIXEL_ID = config.require('meta_pixel_id');
 
-// const META_ACCESS_TOKEN: pulumi.Output<string> = aws.secretsmanager
-//   .getSecretVersionOutput({ secretId: config.require('meta_access_token') })
-//   .apply((secret) => secret.secretString);
+const META_ACCESS_TOKEN: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('meta_access_token') })
+  .apply((secret) => secret.secretString);
 
 const POSTHOG_HOST = config.require('posthog_host');
 const POSTHOG_API_KEY: pulumi.Output<string> = aws.secretsmanager
@@ -368,6 +368,10 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'GA_API_SECRET',
       value: pulumi.interpolate`${GA_API_SECRET}`,
+    },
+    {
+      name: 'META_ACCESS_TOKEN',
+      value: pulumi.interpolate`${META_ACCESS_TOKEN}`,
     },
     {
       name: 'META_PIXEL_ID',
