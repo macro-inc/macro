@@ -54,7 +54,7 @@
         "@solidjs/router": "^0.15.3",
         "@tailwindcss/vite": "^4.1.14",
         "@tanstack/pacer": "^0.17.3",
-        "@tanstack/solid-query": "^5.90.3",
+        "@tanstack/solid-query": "5.90.3",
         "@tanstack/solid-virtual": "^3.13.13",
         "@tauri-apps/plugin-haptics": "~2",
         "@tauri-apps/plugin-http": "~2",
@@ -302,11 +302,12 @@
     "esbuild",
   ],
   "patchedDependencies": {
+    "@tanstack/solid-query@5.90.3": "patches/@tanstack%2Fsolid-query@5.90.3.patch",
+    "solid-gesture@0.0.3": "patches/solid-gesture@0.0.3.patch",
     "@kobalte/core@0.13.11": "patches/@kobalte%2Fcore@0.13.11.patch",
     "virtua@0.48.8": "patches/virtua@0.48.8.patch",
     "@thisbeyond/solid-dnd@0.7.5": "patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
     "@lexical/markdown@0.32.1": "patches/@lexical%2Fmarkdown@0.32.1.patch",
-    "solid-gesture@0.0.3": "patches/solid-gesture@0.0.3.patch",
   },
   "overrides": {
     "ajv": ">=6.14.0",

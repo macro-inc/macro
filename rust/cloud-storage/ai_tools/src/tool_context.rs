@@ -11,6 +11,7 @@ use documents::{
 };
 use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
+    inbound::toolset::EmailToolContext,
     outbound::EmailPgRepo,
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
@@ -128,6 +129,9 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
 /// Type alias for the properties tool context
 pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService>;
 
+/// Type alias for the email tool context
+pub type ToolEmailToolContext = EmailToolContext<ToolEmailService>;
+
 /// The full service context containing all API clients.
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
@@ -136,8 +140,10 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
+    pub email_service: Arc<ToolEmailService>,
     pub document_tool_context: ToolDocumentToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
+    pub email_tool_context: ToolEmailToolContext,
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {
@@ -146,10 +152,11 @@ impl FromRef<ToolServiceContext> for ai_toolset::NoContext {
     }
 }
 
-impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService> {
+impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService, ToolEmailService> {
     fn from_ref(ctx: &ToolServiceContext) -> Self {
         SoupToolContext {
             service: ctx.soup_service.clone(),
+            email_service: ctx.email_service.clone(),
         }
     }
 }

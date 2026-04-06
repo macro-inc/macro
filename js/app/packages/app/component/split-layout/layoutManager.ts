@@ -842,58 +842,57 @@ export function createSplitLayout(
   }
 
   function reconcileSplits(newSplits: SplitContent[]) {
-    const newState: SplitState[] = [];
-    const currentCompositeSplits = state.splits.map(keyOfSplitState);
-    const newCompositeSplits = newSplits.map(keyOfSplitContent);
-    const changed =
-      newCompositeSplits.join(',') !== currentCompositeSplits.join(',');
+    const currentKeys = state.splits.map(keyOfSplitState);
+    const newKeys = newSplits.map(keyOfSplitContent);
+    const changed = newKeys.join(',') !== currentKeys.join(',');
 
     if (!changed) return;
 
-    const originalSplits = [...state.splits];
+    // Build the result array by position
+    const resultSplits: SplitState[] = [];
+    const usedIds = new Set<SplitId>();
 
-    const lookup = (type: BlockName | BlockAlias, id: string) =>
-      originalSplits.find(
-        (s) => s.content.type === type && s.content.id === id
-      );
+    for (let i = 0; i < newSplits.length; i++) {
+      const newContent = newSplits[i];
+      const splitAtSameIndex = state.splits[i];
 
-    const splitsToRemove = [
-      // just remount all the components
-      ...state.splits.filter((s) => s.content.type === 'component'),
-      // previous blocks that are not in the new splits
-      ...state.splits.filter(
-        (s) =>
-          s.content.type !== 'component' &&
-          !newCompositeSplits.includes(keyOfSplitState(s))
-      ),
-    ];
-
-    for (const splitToRemove of splitsToRemove) {
-      removeSplit(splitToRemove.id, false);
+      // Reuse split at same index if content matches
+      if (
+        splitAtSameIndex &&
+        sameContent(splitAtSameIndex.content, newContent)
+      ) {
+        resultSplits.push(splitAtSameIndex);
+        usedIds.add(splitAtSameIndex.id);
+      } else {
+        // Build new split with fresh history
+        const newSplit = buildSplit({
+          initialContent: newContent,
+          referredFrom: null,
+        });
+        // Reuse the ID from the split at the same index to keep ids stable
+        if (splitAtSameIndex) {
+          newSplit.id = splitAtSameIndex.id;
+          usedIds.add(splitAtSameIndex.id);
+        }
+        resultSplits.push(newSplit);
+      }
     }
 
-    for (const split of newSplits) {
-      if (split.type === 'component') {
-        newState.push(
-          buildSplit({
-            initialContent: split,
-            isDefault: false,
-            referredFrom: null,
+    // Clean up contentChangeListeners and splitNamesById for removed splits
+    for (const split of state.splits) {
+      if (!usedIds.has(split.id)) {
+        contentChangeListeners.delete(split.id);
+        setSplitNamesById(
+          produce((map) => {
+            delete map[split.id];
+            return map;
           })
-        );
-      } else {
-        newState.push(
-          lookup(split.type, split.id) ??
-            buildSplit({
-              initialContent: split,
-              isDefault: false,
-              referredFrom: null,
-            })
         );
       }
     }
 
-    setState('splits', reconcile(newState));
+    // Update state in a single batch
+    setState('splits', resultSplits);
   }
 
   const lastEvent = createMemo(() => state.events[state.events.length - 1]);

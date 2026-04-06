@@ -578,6 +578,245 @@
         }
       }
     },
+    "/chats/{chat_id}/tool/call": {
+      "post": {
+        "tags": ["chats"],
+        "summary": "Execute a pending tool call, optionally with updated arguments.",
+        "operationId": "call_tool",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "ID of the chat",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallToolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tool executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallToolResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation or execution failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Tool call not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chats/{chat_id}/tool/reject": {
+      "post": {
+        "tags": ["chats"],
+        "summary": "Reject a pending tool call.",
+        "operationId": "reject_tool_call",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "ID of the chat",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectToolCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tool call rejected"
+          },
+          "404": {
+            "description": "Tool call not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chats/{chat_id}/tool/response/update": {
+      "post": {
+        "tags": ["chats"],
+        "summary": "Update a tool response.",
+        "operationId": "update_tool_response",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "ID of the chat",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateToolResponseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tool response updated"
+          },
+          "404": {
+            "description": "Tool call not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chats/{chat_id}/tool/update": {
+      "post": {
+        "tags": ["chats"],
+        "summary": "Update a tool call's arguments after validation.",
+        "operationId": "update_tool_call",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "ID of the chat",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateToolCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tool call args updated"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Tool call not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/citations/{id}": {
       "get": {
         "tags": ["citations"],
@@ -974,6 +1213,34 @@
       "AttachmentType": {
         "type": "string",
         "enum": ["document", "image", "channel", "email", "project"]
+      },
+      "CallToolRequest": {
+        "type": "object",
+        "description": "Request body for executing a pending tool call.",
+        "required": ["messageId", "toolCallId"],
+        "properties": {
+          "args": {
+            "description": "Optional updated arguments. Uses original args if omitted."
+          },
+          "messageId": {
+            "type": "string",
+            "description": "The message ID containing the tool call."
+          },
+          "toolCallId": {
+            "type": "string",
+            "description": "The tool call ID to execute."
+          }
+        }
+      },
+      "CallToolResponse": {
+        "type": "object",
+        "description": "Response body for a successful tool call.",
+        "required": ["result"],
+        "properties": {
+          "result": {
+            "description": "The tool execution result."
+          }
+        }
       },
       "ChannelSharePermission": {
         "type": "object",
@@ -2549,6 +2816,21 @@
         "type": "string",
         "enum": ["openai", "google", "anthropic", "googleanthropic", "xai"]
       },
+      "RejectToolCallRequest": {
+        "type": "object",
+        "description": "Request body for rejecting a pending tool call.",
+        "required": ["messageId", "toolCallId"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "description": "The message ID containing the tool call."
+          },
+          "toolCallId": {
+            "type": "string",
+            "description": "The tool call ID to reject."
+          }
+        }
+      },
       "Role": {
         "type": "string",
         "enum": ["user", "assistant", "system"]
@@ -2818,6 +3100,43 @@
           }
         }
       },
+      "UpdateToolCallRequest": {
+        "type": "object",
+        "description": "Request body for updating a tool call's arguments.",
+        "required": ["messageId", "toolCallId", "args"],
+        "properties": {
+          "args": {
+            "description": "The new arguments for the tool call."
+          },
+          "messageId": {
+            "type": "string",
+            "description": "The message ID containing the tool call."
+          },
+          "toolCallId": {
+            "type": "string",
+            "description": "The tool call ID to update."
+          }
+        }
+      },
+      "UpdateToolResponseRequest": {
+        "type": "object",
+        "description": "Request body for updating a tool response.",
+        "required": ["messageId", "toolCallId", "response"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "description": "The message ID containing the tool response."
+          },
+          "response": {
+            "$ref": "#/components/schemas/UserToolResponse_Value",
+            "description": "The new user tool response."
+          },
+          "toolCallId": {
+            "type": "string",
+            "description": "The tool call ID whose response should be updated."
+          }
+        }
+      },
       "UserPdfRect": {
         "type": "object",
         "description": "UserPdfRect is in UserSpace\n(0,0) top left\npercent page units\n1-based page index",
@@ -2845,6 +3164,29 @@
             "format": "float"
           }
         }
+      },
+      "UserToolResponse_Value": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Tool has not yet been executed",
+            "enum": ["PendingUserExecution"]
+          },
+          {
+            "type": "string",
+            "description": "User rejected suggested tool execution",
+            "enum": ["Rejected"]
+          },
+          {
+            "type": "object",
+            "description": "Tool is executed and has whatever return type the wrapped tool returns",
+            "required": ["UserAction"],
+            "properties": {
+              "UserAction": {}
+            }
+          }
+        ],
+        "description": "User tools are pending until a user executes them"
       },
       "WebCitation": {
         "type": "object",

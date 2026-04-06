@@ -7,13 +7,17 @@ import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core
 import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
+import { logger } from '@observability/logger';
 import { cn } from '@ui/utils/classname';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
+  createEffect,
   createSignal,
   For,
   Match,
+  on,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -25,6 +29,7 @@ import { useCompose } from './ComposeContext';
 false && fileFolderDrop;
 
 export function ComposeBody(props: {
+  debugName?: string;
   inputRef?: (el: HTMLDivElement) => void;
   mobileScrollRef?: Accessor<HTMLElement | undefined>;
   onAddFiles?: (files: File[]) => void;
@@ -80,14 +85,58 @@ export function ComposeBody(props: {
 
   let bodyDiv!: HTMLDivElement;
 
+  const logComposeBody = (event: string, details?: Record<string, unknown>) => {
+    if (!props.debugName) return;
+    logger.log(`[ComposeBody] ${event}`, {
+      debugName: props.debugName,
+      ...details,
+    });
+  };
+
   const captureEditor = (ed: LexicalEditor) => {
+    logComposeBody('captureEditor called');
     setEditor(ed);
     ctx.captureEditor(ed);
   };
 
+  logComposeBody('mounted', {
+    initialHtmlLength: ctx.initialHtml()?.length ?? 0,
+    initialMarkdownLength: ctx.initialMarkdown?.()?.length ?? 0,
+  });
+
+  onCleanup(() => {
+    logComposeBody('unmounted');
+  });
+
+  createEffect(
+    on(
+      () => ctx.initialMarkdown?.(),
+      (next, prev) => {
+        logComposeBody('initialMarkdown changed', {
+          nextLength: next?.length ?? 0,
+          previousLength: prev?.length ?? 0,
+        });
+      },
+      { defer: true }
+    )
+  );
+
+  createEffect(
+    on(
+      () => ctx.initialHtml(),
+      (next, prev) => {
+        logComposeBody('initialHtml changed', {
+          nextLength: next?.length ?? 0,
+          previousLength: prev?.length ?? 0,
+        });
+      },
+      { defer: true }
+    )
+  );
+
   return (
     <>
-      <div class="w-full h-full min-h-60 sm:max-h-full mobile:flex-1 flex flex-col">
+      <div class="w-full h-full min-h-0 sm:max-h-full mobile:flex-1 flex flex-col flex-1">
         <div
           class="grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
           ref={bodyDiv}
@@ -107,11 +156,13 @@ export function ComposeBody(props: {
           <div class={cn('absolute inset-0', !isDragging() && 'hidden')}>
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
+
           <MarkdownTextarea
             domRef={props.inputRef}
             captureEditor={captureEditor}
             scrollRef={props.mobileScrollRef}
             initialHtml={ctx.initialHtml()}
+            initialValue={ctx.initialMarkdown?.()}
             class="text-sm break-words text-ink mobile:overflow-auto h-auto"
             editable={() => !ctx.disabled()}
             placeholder="Use `@` to reference files"

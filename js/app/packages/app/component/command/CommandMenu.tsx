@@ -7,7 +7,7 @@ import {
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
-import { Tabs } from '@kobalte/core/tabs';
+import { Tabs } from '@core/component/Tabs';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -598,38 +598,20 @@ function CommandMenuFooter(props: {
 }
 
 function CategoryFilterTabs() {
+  const list = CATEGORIES.map((c) => ({ value: c.id, label: c.label }));
+
   return (
-    <Tabs
-      value={CommandState.categoryFilter()}
-      onChange={(value) => {
-        if (value) {
-          CommandState.setCategoryFilter(value as CategoryFilter);
-          CommandState.setSelectedIndex(0);
-        }
-      }}
-    >
-      <Tabs.List class="p-1.5 border-b border-edge-muted/50">
-        <div class="text-sm rounded-xs overflow-clip border border-edge-muted inline-block">
-          <div class="flex">
-            <For each={CATEGORIES}>
-              {(category) => (
-                <Tabs.Trigger
-                  value={category.id}
-                  class={cn(
-                    'border-r-1 border-edge-muted last:border-r-0',
-                    'relative text-ink-muted/70 px-2.5 py-1 text-xs font-medium block hover:bg-ink/6 hover:text-ink',
-                    CommandState.categoryFilter() === category.id &&
-                      'text-ink bg-edge/50'
-                  )}
-                  tabIndex={-1}
-                >
-                  {category.label}
-                </Tabs.Trigger>
-              )}
-            </For>
-          </div>
-        </div>
-      </Tabs.List>
-    </Tabs>
+    <div class="px-1.5 py-1.5 border-b border-edge-muted/50">
+      <Tabs
+        list={list}
+        value={CommandState.categoryFilter()}
+        onChange={(value) => {
+          if (value) {
+            CommandState.setCategoryFilter(value as CategoryFilter);
+            CommandState.setSelectedIndex(0);
+          }
+        }}
+      />
+    </div>
   );
 }

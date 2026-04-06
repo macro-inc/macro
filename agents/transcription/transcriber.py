@@ -1,6 +1,10 @@
 import asyncio
 import logging
+import os
+import uuid
+from datetime import datetime, timezone
 
+import httpx
 from dotenv import load_dotenv
 from livekit import rtc
 from livekit.agents import (
@@ -24,28 +28,111 @@ load_dotenv()
 
 logger = logging.getLogger("macro-transcriber")
 
+MACRO_API_URL = os.environ.get("MACRO_API_URL", "http://localhost:8080")
+INTERNAL_CALL_SECRET = os.environ.get("INTERNAL_CALL_SECRET", "")
+
 
 class Transcriber(Agent):
     """STT-only agent bound to a single participant."""
 
-    def __init__(self, *, participant_identity: str):
+    def __init__(
+        self,
+        *,
+        participant_identity: str,
+        channel_id: str,
+        http_client: httpx.AsyncClient,
+    ):
         super().__init__(
             instructions="Transcribe user speech.",
             stt=inference.STT("deepgram/nova-3"),
         )
         self.participant_identity = participant_identity
+        self.channel_id = channel_id
+        self.http_client = http_client
 
     async def on_user_turn_completed(
         self, chat_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ):
+        content = new_message.text_content
+        if content:
+            message_time = datetime.now(timezone.utc)
+            if new_message.created_at is not None:
+                message_time = datetime.fromtimestamp(
+                    new_message.created_at, tz=timezone.utc
+                )
+            timestamp = message_time.isoformat()
+
+            extra = new_message.extra if isinstance(new_message.extra, dict) else {}
+            source_id = (
+                extra.get("provider_message_id")
+                or extra.get("providerMessageId")
+                or new_message.id
+            )
+            segment_seed = (
+                f"{self.channel_id}:{self.participant_identity}:{source_id}:{timestamp}"
+            )
+            segment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, segment_seed))
+
+            segment = {
+                "segmentId": segment_id,
+                "speakerId": self.participant_identity,
+                "content": content,
+                "startedAt": timestamp,
+                "endedAt": timestamp,
+                "isFinal": True,
+            }
+            max_attempts = 3
+            delay_seconds = 0.25
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    resp = await self.http_client.post(
+                        f"{MACRO_API_URL}/call/{self.channel_id}/transcript",
+                        json=segment,
+                        headers={"x-macro-internal-call": INTERNAL_CALL_SECRET},
+                    )
+                    resp.raise_for_status()
+                    break
+                except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                    if attempt == max_attempts:
+                        logger.exception(
+                            "failed to post transcript segment segmentId=%s error=%s",
+                            segment_id,
+                            exc,
+                        )
+                        break
+                    await asyncio.sleep(delay_seconds)
+                    delay_seconds *= 2
+                except httpx.HTTPStatusError as exc:
+                    status_code = exc.response.status_code if exc.response else None
+                    is_transient = (
+                        status_code is not None and 500 <= status_code < 600
+                    )
+                    if is_transient and attempt < max_attempts:
+                        await asyncio.sleep(delay_seconds)
+                        delay_seconds *= 2
+                        continue
+                    logger.exception(
+                        "failed to post transcript segment segmentId=%s error=%s",
+                        segment_id,
+                        exc,
+                    )
+                    break
+                except Exception as exc:
+                    logger.exception(
+                        "failed to post transcript segment segmentId=%s error=%s",
+                        segment_id,
+                        exc,
+                    )
+                    break
         raise StopResponse()
 
 
 class MultiUserTranscriber:
     """Manages one AgentSession per participant so all speakers are transcribed."""
 
-    def __init__(self, ctx: JobContext):
+    def __init__(self, ctx: JobContext, http_client: httpx.AsyncClient):
         self.ctx = ctx
+        self.http_client = http_client
         self._sessions: dict[str, AgentSession] = {}
         self._tasks: set[asyncio.Task] = set()
 
@@ -96,6 +183,9 @@ class MultiUserTranscriber:
     ) -> AgentSession:
         session = AgentSession(vad=self.ctx.proc.userdata["vad"])
 
+        # The room name is the channel_id.
+        channel_id = self.ctx.room.name
+
         # Create RoomIO per participant to avoid handler conflicts
         # when multiple sessions share the same room.
         rio = RoomIO(
@@ -111,7 +201,11 @@ class MultiUserTranscriber:
         await rio.start()
         is_first = len(self._sessions) == 0
         await session.start(
-            agent=Transcriber(participant_identity=participant.identity),
+            agent=Transcriber(
+                participant_identity=participant.identity,
+                channel_id=channel_id,
+                http_client=self.http_client,
+            ),
             record=is_first,
         )
         return session
@@ -122,14 +216,19 @@ class MultiUserTranscriber:
 
 
 async def entrypoint(ctx: JobContext):
-    transcriber = MultiUserTranscriber(ctx)
+    http_client = httpx.AsyncClient()
+    transcriber = MultiUserTranscriber(ctx, http_client)
     transcriber.start()
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
     for participant in ctx.room.remote_participants.values():
         transcriber.on_participant_connected(participant)
 
-    ctx.add_shutdown_callback(lambda: transcriber.aclose())
+    async def shutdown():
+        await transcriber.aclose()
+        await http_client.aclose()
+
+    ctx.add_shutdown_callback(shutdown)
 
 
 def prewarm(proc: JobProcess):

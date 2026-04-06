@@ -106,6 +106,7 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
         PgUserRepo::new(pool.clone()),
         frecency_storage,
     );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
         frecency_service,
@@ -145,12 +146,28 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
     let properties_tool_context =
         properties::inbound::toolset::PropertiesToolContext::new(properties_service);
 
+    // Email tool context
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        Arc::new(EmailServiceImpl::new(
+            EmailPgRepo::new(pool.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+            email::domain::ports::NoOpEnqueuer,
+            0,
+        )),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            pool.clone(),
+        ))),
+    );
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
         scribe,
         soup_service,
+        email_service: email_service_for_tools,
         document_tool_context,
         properties_tool_context,
+        email_tool_context,
     })
 }

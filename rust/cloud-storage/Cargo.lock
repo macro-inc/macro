@@ -1837,6 +1837,7 @@ name = "chat"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "ai_toolset",
  "anyhow",
  "axum",
  "chrono",
@@ -6276,6 +6277,7 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
+ "macro_env",
  "macro_user_id",
  "macro_uuid",
  "model_user",

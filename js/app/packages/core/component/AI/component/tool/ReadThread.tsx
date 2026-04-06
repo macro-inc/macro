@@ -4,7 +4,7 @@ import { createToolRenderer } from './ToolRenderer';
 
 const handler = createToolRenderer({
   name: 'ReadThread',
-  renderCall: (ctx) => (
+  render: (ctx) => (
     <BaseTool type="call" icon={EyeIcon} renderContext={ctx.renderContext}>
       Read{' '}
       <span class="text-accent">
@@ -13,7 +13,6 @@ const handler = createToolRenderer({
       </span>
     </BaseTool>
   ),
-  renderResponse: (_) => undefined,
 });
 
 export const readThreadHandler = handler;

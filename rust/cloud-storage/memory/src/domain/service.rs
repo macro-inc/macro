@@ -6,6 +6,7 @@ use ai_tools::{ToolServiceContext, ToolSetWithPrompt};
 use ai_toolset::RequestContext;
 use chrono::Utc;
 use futures::stream::StreamExt;
+use macro_env::Environment;
 use serde::Deserialize;
 
 static GENERATION_MODEL: Model = Model::Claude46Opus;
@@ -86,7 +87,7 @@ impl<Rpo> MemoryServiceImpl<Rpo> {
 }
 
 /// Default max age for memory freshness (7 days).
-const MAX_AGE: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
+const MAX_AGE: std::time::Duration = std::time::Duration::from_hours(24 * 7);
 
 impl<Rpo> MemoryService for MemoryServiceImpl<Rpo>
 where
@@ -107,7 +108,8 @@ where
             None => true,
         };
 
-        if needs_generation {
+        let env = Environment::new_or_prod();
+        if needs_generation && !matches!(env, Environment::Local) {
             let pool = self.db.clone();
             let tool_context = self.tool_context.clone();
             let toolset = self.tools.toolset.clone();

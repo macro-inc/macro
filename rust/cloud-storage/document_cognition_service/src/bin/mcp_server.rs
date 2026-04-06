@@ -164,6 +164,7 @@ async fn main() -> anyhow::Result<()> {
         PgUserRepo::new(db.clone()),
         frecency_storage,
     );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         frecency_service,
@@ -234,6 +235,20 @@ async fn main() -> anyhow::Result<()> {
     let properties_tool_context =
         properties::inbound::toolset::PropertiesToolContext::new(properties_service);
 
+    // Build email tool context
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        Arc::new(EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            email::domain::ports::NoOpEnqueuer,
+            0,
+        )),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            db.clone(),
+        ))),
+    );
+
     // Build the ToolServiceContext
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
@@ -259,8 +274,10 @@ async fn main() -> anyhow::Result<()> {
                 .with_static_file_client(static_file_service_client),
         ),
         soup_service,
+        email_service: email_service_for_tools,
         document_tool_context,
         properties_tool_context,
+        email_tool_context,
     };
 
     tracing::info!("initialized tool context");

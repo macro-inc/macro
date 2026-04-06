@@ -196,6 +196,14 @@ pub struct EntityAccessReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> EntityAccessReceipt<T> {
+    /// get the authenticated user or error
+    pub fn get_authenticated_user(&self) -> Result<&MacroUserIdStr<'static>, AccessError> {
+        match &self.auth {
+            EntityAccessAuth::Authenticated(user) => Ok(user),
+            _ => Err(AccessError::Unauthorized),
+        }
+    }
+
     /// Getter for auth
     pub fn auth(&self) -> &EntityAccessAuth {
         &self.auth

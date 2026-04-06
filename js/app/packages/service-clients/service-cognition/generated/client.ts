@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  CallToolRequest,
+  CallToolResponse,
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
   ChatMessageError,
@@ -20,8 +22,11 @@ import type {
   MemoryErrorBody,
   MemoryResponse,
   PatchChatRequest,
+  RejectToolCallRequest,
   SendChatMessageResponse,
   StringIDResponse,
+  UpdateToolCallRequest,
+  UpdateToolResponseRequest,
 } from './schemas';
 
 export type getChatsForAttachmentHandlerResponse200 = {
@@ -656,6 +661,245 @@ export const revertDeleteChat = async (
     status: res.status,
     headers: res.headers,
   } as revertDeleteChatResponse;
+};
+
+/**
+ * @summary Execute a pending tool call, optionally with updated arguments.
+ */
+export type callToolResponse200 = {
+  data: CallToolResponse;
+  status: 200;
+};
+
+export type callToolResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type callToolResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type callToolResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type callToolResponseSuccess = callToolResponse200 & {
+  headers: Headers;
+};
+export type callToolResponseError = (
+  | callToolResponse400
+  | callToolResponse404
+  | callToolResponse500
+) & {
+  headers: Headers;
+};
+
+export type callToolResponse = callToolResponseSuccess | callToolResponseError;
+
+export const getCallToolUrl = (chatId: string) => {
+  return `/chats/${chatId}/tool/call`;
+};
+
+export const callTool = async (
+  chatId: string,
+  callToolRequest: CallToolRequest,
+  options?: RequestInit
+): Promise<callToolResponse> => {
+  const res = await fetch(getCallToolUrl(chatId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(callToolRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: callToolResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as callToolResponse;
+};
+
+/**
+ * @summary Reject a pending tool call.
+ */
+export type rejectToolCallResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type rejectToolCallResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type rejectToolCallResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type rejectToolCallResponseSuccess = rejectToolCallResponse200 & {
+  headers: Headers;
+};
+export type rejectToolCallResponseError = (
+  | rejectToolCallResponse404
+  | rejectToolCallResponse500
+) & {
+  headers: Headers;
+};
+
+export type rejectToolCallResponse =
+  | rejectToolCallResponseSuccess
+  | rejectToolCallResponseError;
+
+export const getRejectToolCallUrl = (chatId: string) => {
+  return `/chats/${chatId}/tool/reject`;
+};
+
+export const rejectToolCall = async (
+  chatId: string,
+  rejectToolCallRequest: RejectToolCallRequest,
+  options?: RequestInit
+): Promise<rejectToolCallResponse> => {
+  const res = await fetch(getRejectToolCallUrl(chatId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rejectToolCallRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: rejectToolCallResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as rejectToolCallResponse;
+};
+
+/**
+ * @summary Update a tool response.
+ */
+export type updateToolResponseResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type updateToolResponseResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type updateToolResponseResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type updateToolResponseResponseSuccess =
+  updateToolResponseResponse200 & {
+    headers: Headers;
+  };
+export type updateToolResponseResponseError = (
+  | updateToolResponseResponse404
+  | updateToolResponseResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateToolResponseResponse =
+  | updateToolResponseResponseSuccess
+  | updateToolResponseResponseError;
+
+export const getUpdateToolResponseUrl = (chatId: string) => {
+  return `/chats/${chatId}/tool/response/update`;
+};
+
+export const updateToolResponse = async (
+  chatId: string,
+  updateToolResponseRequest: UpdateToolResponseRequest,
+  options?: RequestInit
+): Promise<updateToolResponseResponse> => {
+  const res = await fetch(getUpdateToolResponseUrl(chatId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateToolResponseRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateToolResponseResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateToolResponseResponse;
+};
+
+/**
+ * @summary Update a tool call's arguments after validation.
+ */
+export type updateToolCallResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type updateToolCallResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type updateToolCallResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type updateToolCallResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type updateToolCallResponseSuccess = updateToolCallResponse200 & {
+  headers: Headers;
+};
+export type updateToolCallResponseError = (
+  | updateToolCallResponse400
+  | updateToolCallResponse404
+  | updateToolCallResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateToolCallResponse =
+  | updateToolCallResponseSuccess
+  | updateToolCallResponseError;
+
+export const getUpdateToolCallUrl = (chatId: string) => {
+  return `/chats/${chatId}/tool/update`;
+};
+
+export const updateToolCall = async (
+  chatId: string,
+  updateToolCallRequest: UpdateToolCallRequest,
+  options?: RequestInit
+): Promise<updateToolCallResponse> => {
+  const res = await fetch(getUpdateToolCallUrl(chatId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateToolCallRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateToolCallResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateToolCallResponse;
 };
 
 export type getCitationHandlerResponse200 = {

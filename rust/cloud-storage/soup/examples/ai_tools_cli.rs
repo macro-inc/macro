@@ -68,12 +68,12 @@ async fn main() {
     let soup_service = SoupImpl::new(
         soup_repo,
         frecency_service,
-        ReadonlyEmailPreviewAdapter(email_service),
+        ReadonlyEmailPreviewAdapter(email_service.clone()),
         channels_service,
     );
 
     // Create the soup tool context
-    let soup_context = SoupToolContext::new(soup_service);
+    let soup_context = SoupToolContext::new(soup_service, email_service.clone());
 
     // Create the soup toolset
     let toolset = soup_toolset();

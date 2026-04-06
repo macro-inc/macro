@@ -10,7 +10,7 @@ use crate::{
 use anyhow::Context;
 use call::{
     domain::service::CallServiceImpl,
-    inbound::axum_router::{CallRouterState, WebhookRouterState},
+    inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
 };
 use channels::{
@@ -353,6 +353,12 @@ async fn main() -> anyhow::Result<()> {
     // Call service (LiveKit)
     let transcription_agent_name =
         config::LivekitTranscriptionAgentName::new().map(|v| v.as_ref().to_owned());
+    let internal_call_secret = config::InternalCallSecret::new().map(|v| v.as_ref().to_owned());
+    anyhow::ensure!(
+        transcription_agent_name.is_none() || internal_call_secret.is_some(),
+        "LIVEKIT_TRANSCRIPTION_AGENT_NAME is set but INTERNAL_CALL_SECRET is missing — \
+         the transcription agent will not be able to submit transcripts"
+    );
     let livekit_rtc_client = LivekitRtcClient::new(
         config.vars.livekit_server_url.as_ref(),
         config.vars.livekit_api_key.as_ref(),
@@ -360,13 +366,18 @@ async fn main() -> anyhow::Result<()> {
         transcription_agent_name,
     );
     let call_repo = PgCallRepo::new(db.clone());
-    let call_service = Arc::new(CallServiceImpl::new(
+    let mut call_service_builder = CallServiceImpl::new(
         call_repo,
         livekit_rtc_client,
         config.vars.livekit_server_url.as_ref(),
-    ));
+    );
+    if let Some(secret) = internal_call_secret {
+        call_service_builder = call_service_builder.with_internal_call_secret(secret);
+    }
+    let call_service = Arc::new(call_service_builder);
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
     // Create the SQS worker for delete document processing before config is moved
     let delete_document_worker = sqs_worker::SQSWorker::new(
@@ -418,6 +429,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         call_state,
         call_webhook_state,
+        call_internal_state,
     };
 
     // Spawn the delete document worker

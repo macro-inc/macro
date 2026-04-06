@@ -72,6 +72,11 @@ maybe_env_var! {
     pub struct LivekitTranscriptionAgentName;
 }
 
+maybe_env_var! {
+    /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
+    pub struct InternalCallSecret;
+}
+
 env_var! { struct Port; }
 env_var! { struct DocumentLimit; }
 env_var! { struct DocumentStorageServicePresignedUrlExpirySeconds; }

@@ -1,3 +1,8 @@
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderBadge,
+  StaticSplitLabel,
+} from '@app/component/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { EmailFormRecipients } from '@block-email/component/createEmailFormState';
 import {
@@ -15,7 +20,11 @@ import {
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import { useHasPaidAccess } from '@core/auth';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
+import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
@@ -49,8 +58,9 @@ import {
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import { debounce } from '@solid-primitives/scheduled';
+import { beveledCorners } from 'core/signal/beveledCorners';
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createMemo, createSignal, on } from 'solid-js';
+import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import {
   type ComposeContextValue,
@@ -626,11 +636,35 @@ export function EmailCompose(props: EmailComposeProps) {
 
   return (
     <ComposeProvider value={ctxValue}>
-      <ComposeLayout
-        toolbar={<EmailComposeToolbar editor={editor} />}
-        hasLinkError={hasLinkError}
-        previewName={previewName}
-      />
+      <Show when={!isMobile()}>
+        <SplitHeaderLeft>
+          <StaticSplitLabel
+            class="ph-no-capture"
+            label={ctxValue.subject() || previewName?.() || 'Draft email'}
+            iconType="email"
+            badges={[
+              <SplitHeaderBadge text="draft" tooltip="This is a Draft Email" />,
+            ]}
+          />
+        </SplitHeaderLeft>
+      </Show>
+      <div class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm">
+        <Show when={hasLinkError()}>
+          <EmailPermissionsBanner />
+        </Show>
+        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:hide-scrollbar mobile:min-h-full">
+          <WrapUnlessMobile
+            wrapper={(children) => (
+              <ClippedPanel tl={!beveledCorners()}>{children}</ClippedPanel>
+            )}
+          >
+            <ComposeLayout
+              toolbar={<EmailComposeToolbar editor={editor} />}
+              class="w-full h-full p-4 bg-input max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
+            />
+          </WrapUnlessMobile>
+        </div>
+      </div>
     </ComposeProvider>
   );
 }

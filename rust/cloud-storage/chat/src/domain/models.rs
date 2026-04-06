@@ -1,6 +1,7 @@
 //! Types and errors used by the chat domain ports.
 
-use ai::types::Model;
+use ai::types::{ChatMessageContent, Model};
+use entity_access::domain::models::AccessError;
 use model::chat::{ChatAttachmentWithName, ChatMessageWithAttachments};
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
@@ -19,6 +20,32 @@ pub enum ChatErr {
     /// Bad request
     #[error("bad request: {0}")]
     BadRequest(String),
+    /// Access denied.
+    #[error(transparent)]
+    Access(#[from] AccessError),
+}
+
+#[cfg(feature = "inbound")]
+impl axum::response::IntoResponse for ChatErr {
+    fn into_response(self) -> axum::response::Response {
+        use axum::http::StatusCode;
+
+        let (status, msg) = match &self {
+            ChatErr::NotFound => (StatusCode::NOT_FOUND, "Not found"),
+            ChatErr::BadRequest(_) => (StatusCode::BAD_REQUEST, "Bad request"),
+            ChatErr::Access(
+                AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_),
+            ) => (StatusCode::FORBIDDEN, "Forbidden"),
+            ChatErr::Access(AccessError::NotFound(_)) => (StatusCode::NOT_FOUND, "Not found"),
+            ChatErr::Access(AccessError::BadRequest(_)) => (StatusCode::BAD_REQUEST, "Bad request"),
+            ChatErr::Unknown(_) | ChatErr::Access(_) => {
+                tracing::error!(error=?self, "chat handler error");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+            }
+        };
+
+        (status, msg.to_string()).into_response()
+    }
 }
 
 /// Arguments for creating a new chat.
@@ -110,4 +137,13 @@ pub struct ChatResponse {
     pub web_citations: Vec<(String, Vec<WebCitation>)>,
     /// Whether the chat is persistent or not.
     pub is_persistent: bool,
+}
+
+/// Arguments for patching a chat message's content.
+#[derive(Debug)]
+pub struct PatchChatMessageArgs {
+    /// The message ID to patch.
+    pub message_id: String,
+    /// The new content for the message.
+    pub content: ChatMessageContent,
 }

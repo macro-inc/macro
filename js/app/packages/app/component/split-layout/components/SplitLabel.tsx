@@ -30,6 +30,7 @@ export function StaticSplitLabel(props: {
   icon?: JSX.Element;
   badges?: JSX.Element;
   class?: string;
+  colorIcon?: boolean;
 }) {
   const panel = useSplitPanelOrThrow();
   createEffect(() => {
@@ -47,7 +48,7 @@ export function StaticSplitLabel(props: {
           class="shrink-0"
           targetType={props.iconType}
           size="xs"
-          theme="monochrome"
+          theme={props.colorIcon ? undefined : 'monochrome'}
         />
       </Show>
       <Show when={props.icon}>

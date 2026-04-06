@@ -33,10 +33,7 @@ import { isChannelAdminOrOwner } from '@queries/channel/derived';
 import { useChannelModals } from './ModalsProvider';
 import { ParticipantManagerButton } from './ParticipantManager';
 import { useAnalytics } from '@app/component/analytics-context';
-import {
-  SegmentedControl,
-  type SegmentedControlItem,
-} from '@core/component/SegmentedControl';
+import { Tabs, type TabItem } from '@core/component/Tabs';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 
 type TopIconProps = {
@@ -73,7 +70,7 @@ type TopProps = {
 
 type ChannelTopLeftProps = TopProps & {
   lockRename?: boolean;
-  tabs?: readonly SegmentedControlItem[];
+  tabs?: readonly TabItem[];
   activeTab?: ChannelTabId;
   onTabChange?: (value: ChannelTabId) => void;
 };
@@ -101,8 +98,8 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
         </div>
         <Show when={props.tabs && props.activeTab && props.onTabChange}>
-          <div class="ph-no-capture min-w-0 shrink-0">
-            <SegmentedControl
+          <div class="ph-no-capture min-w-0 shrink-0 h-full">
+            <Tabs
               list={[...(props.tabs ?? [])]}
               value={props.activeTab}
               onChange={(value) => props.onTabChange?.(value as ChannelTabId)}

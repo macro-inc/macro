@@ -13,6 +13,7 @@ pub struct CallServiceImpl<R: CallRepository, C: CallRtcClient> {
     rtc_client: C,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
+    internal_call_secret: Option<String>,
 }
 
 impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
@@ -23,6 +24,7 @@ impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
             rtc_client,
             server_url: server_url.into(),
             egress_s3_config: None,
+            internal_call_secret: None,
         }
     }
 
@@ -31,9 +33,21 @@ impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
         self.egress_s3_config = Some(s3_config);
         self
     }
+
+    /// Set the shared secret used to validate internal call requests.
+    pub fn with_internal_call_secret(mut self, secret: String) -> Self {
+        self.internal_call_secret = Some(secret);
+        self
+    }
 }
 
 impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> {
+    fn validate_internal_call(&self, token: &str) -> bool {
+        self.internal_call_secret
+            .as_deref()
+            .is_some_and(|secret| secret == token)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_or_create_call(
         &self,

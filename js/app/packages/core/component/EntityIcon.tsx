@@ -230,8 +230,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   },
   emailInvite: {
     icon: WideCalendar,
-    foreground: 'text-email',
-    background: 'bg-email-bg',
+    foreground: 'text-calendar',
+    background: 'bg-calendar-bg',
     prettyName: 'Calendar Invite',
   },
   task: {

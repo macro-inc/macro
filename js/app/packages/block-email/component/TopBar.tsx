@@ -147,6 +147,7 @@ export function TopBar(props: {
         <StaticSplitLabel
           class="ph-no-capture"
           iconType={isInvite() ? 'emailInvite' : 'email'}
+          colorIcon={isInvite()}
           label={isMobile() ? '' : props.title}
           badges={
             props.isDraft

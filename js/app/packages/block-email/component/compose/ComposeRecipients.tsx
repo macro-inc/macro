@@ -126,6 +126,7 @@ export function ComposeRecipients(props: {
           hideBorder
           noBrackets
           disabled={ctx.disabled()}
+          includeSelf={ctx.includeSelf}
           onChipDragStart={(option, e) => handleChipDragStart('to', option, e)}
           onChipDragEnd={handleChipDragEnd}
         />

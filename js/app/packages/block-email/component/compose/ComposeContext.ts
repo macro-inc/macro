@@ -23,6 +23,7 @@ export interface ComposeContextValue {
   attachments: () => DraftFormAttachment[];
   sendTime: () => Date | null | undefined;
   initialHtml: () => string | undefined;
+  initialMarkdown?: () => string | undefined;
 
   // Form state (write)
   setRecipients: (
@@ -39,12 +40,14 @@ export interface ComposeContextValue {
 
   // Actions
   onSend: () => void;
+  onSaveDraft?: () => void | Promise<void>;
   onDelete?: () => void;
   onSendTimeChange?: (date: Date | null) => void;
 
   // Status
   disabled: Accessor<boolean>;
   isSending: Accessor<boolean>;
+  isSavingDraft?: Accessor<boolean>;
   hasDraft: Accessor<boolean>;
 
   // Validation
@@ -55,6 +58,8 @@ export interface ComposeContextValue {
   // Recipients config
   recipientOptions: () => Array<EmailRecipient>;
   focusRecipientsOnMount: boolean;
+  includeSelf?: boolean;
+  hideAttachments?: boolean;
 
   // Schedule send
   scheduleSendDisabled?: Accessor<boolean>;

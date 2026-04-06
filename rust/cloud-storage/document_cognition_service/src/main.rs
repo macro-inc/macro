@@ -157,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
         PgUserRepo::new(db.clone()),
         frecency_storage,
     );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         frecency_service,
@@ -274,21 +275,44 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized properties tool context");
 
-    // Build memory service
-    let memory_tool_context = ai_tools::ToolServiceContext {
+    // Build email tool context for AI tools
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        Arc::new(EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            email::domain::ports::NoOpEnqueuer,
+            0,
+        )),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            db.clone(),
+        ))),
+    );
+
+    tracing::info!("initialized email tool context");
+
+    // Build shared tool context and toolset
+    let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         scribe: scribe.clone(),
         soup_service: soup_service.clone(),
+        email_service: email_service_for_tools.clone(),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
+        email_tool_context: email_tool_context.clone(),
     };
+    let all_tools = ai_tools::all_tools();
+    let all_tools_toolset = all_tools.toolset.clone();
+    let all_tools_prompt = all_tools.prompt;
+
+    // Build memory service
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
         db.clone(),
         memory_repo,
-        memory_tool_context,
-        ai_tools::all_tools(),
+        tool_service_context.clone(),
+        all_tools,
     ));
 
     tracing::info!("initialized memory service");
@@ -307,10 +331,15 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress_service,
         connection_repo: connection_manager.persistence,
         soup_service,
+        email_service: email_service_for_tools,
         stream_repo,
         document_tool_context,
         memory_service,
         properties_tool_context,
+        email_tool_context: email_tool_context.clone(),
+        tool_service_context,
+        all_tools: all_tools_toolset,
+        all_tools_prompt,
     })
     .await
     .context("failed to setup and serve api")?;

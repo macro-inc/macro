@@ -47,7 +47,7 @@ impl Environment {
         Ok(Self::from_str(&v)?)
     }
 
-    /// attempt to create a new [Environment] falling back to local if we fail to construct
+    /// attempt to create a new [Environment] falling back to prod if we fail to construct
     pub fn new_or_prod() -> Self {
         Self::new_from_env().unwrap_or(Environment::Production)
     }

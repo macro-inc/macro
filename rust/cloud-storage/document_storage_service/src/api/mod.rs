@@ -99,6 +99,12 @@ fn api_router(state: ApiContext) -> Router {
         call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
     );
 
+    // Internal call router — agent-authenticated via x-macro-internal-call header.
+    let internal_call_router = Router::new().nest(
+        "/call",
+        call::inbound::axum_router::internal_call_router(state.call_internal_state.clone()),
+    );
+
     let internal_router = Router::new()
         .nest(
             "/github",
@@ -254,4 +260,5 @@ fn api_router(state: ApiContext) -> Router {
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
         .merge(webhook_router)
+        .merge(internal_call_router)
 }

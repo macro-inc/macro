@@ -850,8 +850,9 @@ export const leaveOrEndCallResponse = zod
   .describe('Response for the leave/end call operation.');
 
 /**
- * Receives transcript segments from the frontend.
-Requires channel membership. Duplicate segments (same `segment_id`) are ignored.
+ * Receives transcript segments from the transcription agent.
+Authenticated via the `x-macro-internal-call` shared secret.
+Duplicate segments (same `segment_id`) are ignored.
  * @summary Handler for `POST /call/{channel_id}/transcript`.
  */
 export const ingestTranscriptParams = zod.object({

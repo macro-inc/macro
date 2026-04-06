@@ -74,7 +74,8 @@ where
 }
 
 /// Trait object type for tools callable with `ToolSetContext`.
-type AsyncToolTraitObject<ToolSetContext> = Box<dyn ToolSetCallable<ToolSetContext> + Send + Sync>;
+pub(crate) type AsyncToolTraitObject<ToolSetContext> =
+    Box<dyn ToolSetCallable<ToolSetContext> + Send + Sync>;
 
 /// Adapter that wraps a `ToolSetCallable<SubContext>` to work with `ParentContext`.
 ///

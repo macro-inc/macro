@@ -1,8 +1,8 @@
 //! Toolset inbound adapter for the Email service.
 
-mod create_draft;
 mod get_thread;
 mod list_labels;
+mod send_email;
 mod update_thread_labels;
 
 #[cfg(test)]
@@ -17,9 +17,9 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
-pub use create_draft::{CreateDraft, CreateDraftResponse};
-pub use get_thread::{GetThread, GetThreadResponse};
+pub use get_thread::{GetThreadResponse, ReadThread};
 pub use list_labels::{ListLabels, ListLabelsResponse, ToolLabel};
+pub use send_email::{SendEmail, SendEmailResponse};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
 
 /// Service context for email AI tools.
@@ -97,8 +97,7 @@ where
     E: EntityAccessService,
 {
     AsyncToolSet::new()
-        .add_tool::<ListLabels, EmailToolContext<T, G, E>>()
         .add_tool::<UpdateThreadLabels, EmailToolContext<T, G, E>>()
-        .add_tool::<CreateDraft, EmailToolContext<T, G, E>>()
-        .add_tool::<GetThread, EmailToolContext<T, G, E>>()
+        .add_tool::<ReadThread, EmailToolContext<T, G, E>>()
+        .add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
 }

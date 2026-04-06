@@ -280,9 +280,7 @@ export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   true
 );
 
-const ENABLE_NEW_CHANNELS_OVERRIDE = getFeatureFlagOverride(
-  'ENABLE_NEW_CHANNELS'
-);
+const ENABLE_NEW_CHANNELS_OVERRIDE = true;
 
 export function ENABLE_NEW_CHANNELS(): boolean {
   if (ENABLE_NEW_CHANNELS_OVERRIDE !== undefined) {

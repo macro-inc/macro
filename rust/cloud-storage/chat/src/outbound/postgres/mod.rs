@@ -5,10 +5,11 @@ mod queries;
 mod test;
 
 use crate::domain::models::{
-    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs, WebCitation,
+    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs, PatchChatMessageArgs,
+    WebCitation,
 };
 use crate::domain::ports::ChatRepo;
-use ai::types::Model;
+use ai::types::{ChatMessageContent, Model};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatMessageWithAttachments;
@@ -306,5 +307,46 @@ impl ChatRepo for PgChatRepo {
 
         tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn patch_message(
+        &self,
+        chat_id: &str,
+        args: PatchChatMessageArgs,
+    ) -> Result<(), ChatErr> {
+        queries::update_message_content::update_message_content(
+            &self.pool,
+            chat_id,
+            &args.message_id,
+            &args.content,
+        )
+        .await
+        .map_err(to_chat_err)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_message_content(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+    ) -> Result<ChatMessageContent, ChatErr> {
+        queries::get_message_content::get_message_content(&self.pool, chat_id, message_id)
+            .await
+            .map_err(to_chat_err)
+    }
+
+    #[tracing::instrument(err, skip(self, content))]
+    async fn update_message_content(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        content: &ChatMessageContent,
+    ) -> Result<(), ChatErr> {
+        queries::update_message_content::update_message_content(
+            &self.pool, chat_id, message_id, content,
+        )
+        .await
+        .map_err(to_chat_err)
     }
 }

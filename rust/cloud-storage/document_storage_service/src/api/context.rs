@@ -2,7 +2,7 @@ use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use call::{
     domain::service::CallServiceImpl,
-    inbound::axum_router::{CallRouterState, WebhookRouterState},
+    inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
 };
 use channels::{
@@ -167,6 +167,9 @@ pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessServi
 /// Type alias for the call webhook router state.
 pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 
+/// Type alias for the internal call router state.
+pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
+
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
     GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
@@ -200,6 +203,7 @@ pub(crate) struct ApiContext {
     pub channels_state: DssChannelsState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
+    pub call_internal_state: DssCallInternalState,
 }
 
 env_var! {

@@ -212,7 +212,7 @@ export function ChatMessages(props: ChatMessagesProps) {
                 {(msg) => (
                   <div
                     id={'chat-' + msg.id}
-                    class="w-full transition-colors duration-300"
+                    class="w-full transition-colors duration-300 flex flex-col gap-y-2"
                     classList={{
                       'bg-accent': activeIdSelector(msg.id),
                     }}
@@ -234,7 +234,7 @@ export function ChatMessages(props: ChatMessagesProps) {
 
               <Show when={isStream() || chat.isWaiting() || lastPair()}>
                 <div
-                  class="shrink-0"
+                  class="shrink-0 flex flex-col gap-y-2"
                   style={{
                     'min-height': `${parentHeight()}px`,
                   }}

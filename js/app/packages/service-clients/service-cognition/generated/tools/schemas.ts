@@ -369,6 +369,48 @@ export const GetEntityPropertiesResponse = z.object({
   summary: z.string(),
 });
 
+export const GetThread = z
+  .object({
+    limit: z.union([z.number().int(), z.null()]).default(null),
+    threadId: z.string().uuid(),
+  })
+  .strict();
+
+export const GetThreadResponse = z.object({
+  isRead: z.boolean(),
+  messages: z.array(
+    z.object({
+      bodyParsed: z.union([z.string(), z.null()]).optional(),
+      cc: z.array(
+        z.object({
+          email: z.string(),
+          name: z.union([z.string(), z.null()]).optional(),
+        })
+      ),
+      date: z.union([z.string(), z.null()]).optional(),
+      from: z
+        .union([
+          z.object({
+            email: z.string(),
+            name: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
+      id: z.string().uuid(),
+      subject: z.union([z.string(), z.null()]).optional(),
+      to: z.array(
+        z.object({
+          email: z.string(),
+          name: z.union([z.string(), z.null()]).optional(),
+        })
+      ),
+    })
+  ),
+  summary: z.string(),
+  threadId: z.string().uuid(),
+});
+
 export const ListEntities = z
   .object({
     includeTypes: z.union([
@@ -513,8 +555,6 @@ export const ReadThread = z
       'channel-message',
       'chat-thread',
       'chat-message',
-      'email-thread',
-      'email-message',
       'project',
     ]),
     ids: z.array(z.string()),
@@ -550,24 +590,6 @@ export const ReadResponse = z.object({
         type: z.literal('chat'),
       }),
       z.object({
-        messages: z.array(
-          z.object({
-            bcc: z.array(z.string()),
-            cc: z.array(z.string()),
-            content: z.string(),
-            messageId: z.string(),
-            recipients: z.array(z.string()),
-            sender: z.string(),
-            sentAt: z
-              .union([z.string().datetime({ offset: true }), z.null()])
-              .optional(),
-          })
-        ),
-        subject: z.union([z.string(), z.null()]).optional(),
-        thread_id: z.string(),
-        type: z.literal('email'),
-      }),
-      z.object({
         formatted_preview: z.string(),
         type: z.literal('itemPreviews'),
       }),
@@ -588,6 +610,97 @@ export const ReadResponse = z.object({
       });
     }
   }),
+});
+
+export const SendEmail = z
+  .object({
+    bcc: z.array(
+      z
+        .object({
+          email: z.string(),
+          name: z.union([z.string(), z.null()]).default(null),
+        })
+        .strict()
+    ),
+    body: z.string(),
+    cc: z.array(
+      z
+        .object({
+          email: z.string(),
+          name: z.union([z.string(), z.null()]).default(null),
+        })
+        .strict()
+    ),
+    replyingToId: z.union([z.string().uuid(), z.null()]).default(null),
+    subject: z.string(),
+    to: z.array(
+      z
+        .object({
+          email: z.string(),
+          name: z.union([z.string(), z.null()]).default(null),
+        })
+        .strict()
+    ),
+  })
+  .strict();
+
+export const UserToolResponse = z.any().superRefine((x, ctx) => {
+  const schemas = [
+    z.literal('PendingUserExecution'),
+    z.literal('Rejected'),
+    z
+      .object({
+        UserAction: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('userEdited'),
+            z
+              .object({
+                sent: z.object({
+                  message_id: z.string().uuid(),
+                  thread_id: z.string().uuid(),
+                }),
+              })
+              .strict(),
+            z
+              .object({
+                convertedToDraft: z.object({ draft_id: z.string().uuid() }),
+              })
+              .strict(),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+      })
+      .strict(),
+  ];
+  const errors = schemas.reduce<z.ZodError[]>(
+    (errors, schema) =>
+      ((result) => (result.error ? [...errors, result.error] : errors))(
+        schema.safeParse(x)
+      ),
+    []
+  );
+  if (schemas.length - errors.length !== 1) {
+    ctx.addIssue({
+      path: ctx.path,
+      code: 'invalid_union',
+      unionErrors: errors,
+      message: 'Invalid input: Should pass single schema',
+    });
+  }
 });
 
 export const SetEntityProperty = z
@@ -769,6 +882,20 @@ export const TextEditorCodeExecutionResponse = z.object({
     }
   }),
   tool_use_id: z.string(),
+});
+
+export const UpdateThreadLabels = z
+  .object({
+    add: z.boolean(),
+    label_id: z.string().uuid(),
+    thread_id: z.string().uuid(),
+  })
+  .strict();
+
+export const UpdateThreadLabelsResponse = z.object({
+  failedCount: z.number().int().gte(0),
+  successfulCount: z.number().int().gte(0),
+  summary: z.string(),
 });
 
 export const WebFetchToolCall = z.object({ url: z.string() });

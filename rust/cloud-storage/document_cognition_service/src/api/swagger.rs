@@ -22,7 +22,9 @@ use ai::types::{ModelMetadata, Provider};
 
 use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
 use chat::inbound::{
-    self as chat_inbound, CreateChatRequest, GetChatPermissionsResponse, PatchChatRequest,
+    self as chat_inbound, CallToolRequest, CallToolResponse, CreateChatRequest,
+    GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
+    UpdateToolResponseRequest,
 };
 
 use model::{
@@ -59,6 +61,10 @@ use utoipa::OpenApi;
             chat_inbound::permanently_delete_chat_handler,
             chat_inbound::patch_chat_handler,
             chat_inbound::revert_delete_handler,
+            chat_inbound::update_tool_call_handler,
+            chat_inbound::update_tool_response_handler,
+            chat_inbound::call_tool_handler,
+            chat_inbound::reject_tool_call_handler,
             get_models::get_models_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
             citations::get_citation_handler,
@@ -111,6 +117,13 @@ use utoipa::OpenApi;
                 // Chat Response
                 GetChatPermissionsResponse,
                 GetChatResponse,
+
+                // Tool Operations
+                UpdateToolCallRequest,
+                UpdateToolResponseRequest,
+                CallToolRequest,
+                CallToolResponse,
+                RejectToolCallRequest,
 
                 // Share Permission
                 UpdateOperation,
