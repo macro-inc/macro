@@ -85,7 +85,7 @@ export const SoupViewCreateButton = () => {
           <Button
             variant="secondary"
             size="sm"
-            class="rounded-xs whitespace-nowrap px-2"
+            class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
             onClick={() => handleSelect(options()[0])}
           >
             <CreateOptionIcon id={options()[0].id} />
@@ -98,7 +98,7 @@ export const SoupViewCreateButton = () => {
             as={Button}
             variant="secondary"
             size="sm"
-            class="rounded-xs whitespace-nowrap px-2"
+            class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
           >
             <span>Create</span>
             <ChevronDownIcon class="size-3" />

@@ -248,7 +248,7 @@ export const SoupView = (props: SoupViewProps) => {
                 })}
               >
                 <Show when={!isMobile()}>
-                  <h1 class="font-medium text-ink-muted select-none text-sm shrink-0">
+                  <h1 class="font-semibold text-ink select-none text-sm shrink-0">
                     {props.viewName}
                   </h1>
                 </Show>
@@ -259,6 +259,7 @@ export const SoupView = (props: SoupViewProps) => {
                       priority={1}
                       expanded={<SoupViewTabs />}
                       collapsed={<CollapsedSoupViewTabs />}
+                      containerClass="h-full"
                     />
                   </Show>
                   <Show when={!isMobile()}>

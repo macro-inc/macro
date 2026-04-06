@@ -9,10 +9,7 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { useUserContext } from '@core/context/user';
-import {
-  SegmentedControl,
-  type SegmentedControlItem,
-} from '@core/component/SegmentedControl';
+import { Tabs, type TabItem } from '@core/component/Tabs';
 import {
   batch,
   createEffect,
@@ -28,8 +25,6 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import { hapticImpact } from '@core/mobile/haptics';
 import { cn } from '@ui/utils/classname';
-
-type TabItem = SegmentedControlItem;
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -150,14 +145,12 @@ const ViewTabs = (props: { view: TabbedListView }) => {
   const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
-    <div>
-      <SegmentedControl
-        list={list()}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS[props.view].default}
-        onChange={(value) => applyTabPreset(props.view, value)}
-      />
-    </div>
+    <Tabs
+      list={list()}
+      value={activeTab()}
+      defaultValue={VIEW_TAB_PRESETS[props.view].default}
+      onChange={(value) => applyTabPreset(props.view, value)}
+    />
   );
 };
 
