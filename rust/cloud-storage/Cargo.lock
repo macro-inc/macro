@@ -2762,6 +2762,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "macro_auth",
+ "macro_user_id",
  "model-error-response",
  "model_user",
  "serde",

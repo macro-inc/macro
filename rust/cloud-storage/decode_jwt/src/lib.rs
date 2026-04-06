@@ -10,9 +10,8 @@ mod test;
 
 use axum::{
     Json, RequestPartsExt,
-    extract::{FromRef, FromRequestParts, Query, Request, State},
+    extract::{FromRef, FromRequestParts, Query},
     http::StatusCode,
-    middleware::Next,
     response::{IntoResponse, Response},
 };
 use axum_extra::either::Either;
@@ -21,6 +20,7 @@ use macro_auth::{
     headers::AccessTokenExtractor,
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_error_response::ErrorResponse;
 use model_user::UserContext;
 use serde::Deserialize;
@@ -47,6 +47,9 @@ pub struct DecodedJwt {
     pub user_context: UserContext,
     /// Present only when the token is a macro-access-token.
     pub jwt_context: Option<JwtContext>,
+
+    /// the parsed macro user id of the user
+    pub macro_user_id: MacroUserIdStr<'static>,
 }
 
 impl<S> FromRequestParts<S> for DecodedJwt
@@ -84,10 +87,14 @@ impl DecodedJwt {
         jwt_validation_args: &JwtValidationArgs,
     ) -> Result<DecodedJwt, DecodeJwtError> {
         if cfg!(feature = "local_auth") {
+            let user_id =
+                std::env::var("LOCAL_USER_ID").unwrap_or("macro|orguser@org.com".to_string());
+            let macro_user_id = MacroUserIdStr::parse_from_str(&user_id)
+                .map(CowLike::into_owned)
+                .expect("local auth passed invalid macro_user_id str");
             return Ok(DecodedJwt {
                 user_context: UserContext {
-                    user_id: std::env::var("LOCAL_USER_ID")
-                        .unwrap_or("macro|orguser@org.com".to_string()),
+                    user_id,
                     fusion_user_id: std::env::var("LOCAL_FUSION_USER_ID")
                         .unwrap_or("set me!".to_string()),
                     organization_id: Some(
@@ -99,6 +106,7 @@ impl DecodedJwt {
                     permissions: None,
                 },
                 jwt_context: None,
+                macro_user_id,
             });
         }
 
@@ -146,6 +154,11 @@ impl DecodedJwt {
             None
         };
 
+        let Ok(macro_user_id) = MacroUserIdStr::parse_from_str(&user_id).map(CowLike::into_owned)
+        else {
+            return Err(DecodeJwtError::InvalidUserId(user_id));
+        };
+
         Ok(DecodedJwt {
             user_context: UserContext {
                 user_id,
@@ -154,6 +167,7 @@ impl DecodedJwt {
                 permissions: None,
             },
             jwt_context,
+            macro_user_id,
         })
     }
 }
@@ -166,6 +180,8 @@ pub enum DecodeJwtError {
     Expired,
     /// The token was present but validation failed.
     Invalid(MacroAuthError),
+    /// The macro user id could not be parsed
+    InvalidUserId(String),
 }
 
 impl IntoResponse for DecodeJwtError {
@@ -195,28 +211,16 @@ impl IntoResponse for DecodeJwtError {
                 )
                     .into_response()
             }
+            DecodeJwtError::InvalidUserId(id) => {
+                tracing::error!(error=%id, "invalid macro user id");
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(ErrorResponse {
+                        message: "invalid user id".into(),
+                    }),
+                )
+                    .into_response()
+            }
         }
     }
-}
-
-/// Axum middleware that decodes the JWT and attaches the user context to the request.
-///
-/// If in your request the user requires to be authenticated for all use cases, you can use this
-/// middleware. Otherwise, you should be using the `attach_user` middleware.
-pub async fn handler(
-    access_token: Result<AccessTokenExtractor, StatusCode>,
-    jwt_validation_args: State<JwtValidationArgs>,
-    params: Query<Option<Params>>,
-    mut req: Request,
-    next: Next,
-) -> Result<Response, Response> {
-    let decoded = DecodedJwt::new(access_token, params, &jwt_validation_args)
-        .map_err(IntoResponse::into_response)?;
-
-    req.extensions_mut().insert(decoded.user_context);
-    if let Some(jwt_context) = decoded.jwt_context {
-        req.extensions_mut().insert(jwt_context);
-    }
-
-    Ok(next.run(req).await)
 }

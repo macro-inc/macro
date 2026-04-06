@@ -11,6 +11,7 @@ local_auth = []
 axum = { workspace = true }
 axum-extra = { workspace = true }
 macro_auth = { path = "../macro_auth" }
+macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response" }
 model_user = { path = "../model_user" }
 serde = { workspace = true }
