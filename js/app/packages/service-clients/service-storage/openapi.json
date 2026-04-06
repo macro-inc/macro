@@ -735,7 +735,7 @@
       "post": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `POST /call/{channel_id}/transcript`.",
-        "description": "Receives transcript segments from the frontend.\nRequires channel membership. Duplicate segments (same `segment_id`) are ignored.",
+        "description": "Receives transcript segments from the transcription agent.\nAuthenticated via the `x-macro-internal-call` shared secret.\nDuplicate segments (same `segment_id`) are ignored.",
         "operationId": "ingest_transcript",
         "parameters": [
           {
