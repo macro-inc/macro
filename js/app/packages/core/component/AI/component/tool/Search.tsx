@@ -1,14 +1,12 @@
-import type { ToolContext } from '@service-cognition/generated/tools/tool';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import ChevronDown from '@icon/regular/caret-down.svg?component-solid';
-import ChevronUp from '@icon/regular/caret-up.svg?component-solid';
+import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { useChannelsContext } from '@core/context/channels';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
-import { createToolRenderer } from './ToolRenderer';
+import { createToolRenderer, type ToolRenderContext } from './ToolRenderer';
 import { ListEntity } from '@entity';
 import type { WithNotification } from '@entity/types/notification';
 import type {
@@ -229,8 +227,6 @@ function searchResultsToEntities(
 const UnifiedSearchToolResponse = (props: {
   results: UnifiedSearchResult[];
 }) => {
-  const [isExpanded, setIsExpanded] = createSignal(true);
-
   const channelsCtx = useChannelsContext();
   const entities = createMemo(() =>
     searchResultsToEntities(props.results, channelsCtx.channelsById())
@@ -260,87 +256,95 @@ const UnifiedSearchToolResponse = (props: {
   };
 
   return (
-    <div>
-      <Show
-        when={props.results.length > 0}
-        fallback={
-          <div class="flex items-center justify-between w-full text-left p-2 transition-colors">
-            No Results
-          </div>
-        }
-      >
-        <button
-          class={`flex items-center justify-between w-full text-left p-2 hover:bg-hover transition-colors`}
-          onClick={() => setIsExpanded((e) => !e)}
-        >
-          <div class="flex items-center gap-2">
-            <div class="text-sm font-medium text-ink">
-              Search Results ({entities().length})
-            </div>
-          </div>
-          <div class="flex items-center gap-1 text-ink-muted">
-            <Show
-              when={isExpanded()}
-              fallback={<ChevronDown class="w-4 h-4" />}
-            >
-              <ChevronUp class="w-4 h-4" />
-            </Show>
-          </div>
-        </button>
-      </Show>
-
-      <Show when={isExpanded()}>
-        <div class="max-h-[480px] overflow-y-auto">
-          <For each={entities()}>
-            {(entity) => {
-              const clickHandler = getClickHandler(entity);
-              return (
-                <ListEntity
-                  entity={entity as WithNotification<EntityData>}
-                  onClick={clickHandler}
-                />
-              );
-            }}
-          </For>
-        </div>
-      </Show>
+    <div class="max-h-[480px] overflow-y-auto">
+      <For each={entities()}>
+        {(entity) => {
+          const clickHandler = getClickHandler(entity);
+          return (
+            <ListEntity
+              entity={entity as WithNotification<EntityData>}
+              onClick={clickHandler}
+            />
+          );
+        }}
+      </For>
     </div>
   );
 };
 
 function SearchText(props: {
-  ctx: ToolContext<NamedTool<'ContentSearch' | 'NameSearch', 'call'>>;
+  ctx: ToolRenderContext<'ContentSearch' | 'NameSearch'>;
 }) {
   const ctx = props.ctx;
   const queryString =
     'query' in ctx.tool.data ? ctx.tool.data.query : ctx.tool.data.name;
 
   return (
-    <div>
+    <span>
       Search <span class="text-accent"> {queryString} </span>
-    </div>
+    </span>
   );
 }
 
 const createHandler = (name: 'NameSearch' | 'ContentSearch') =>
   createToolRenderer({
     name,
-    renderCall: (ctx) => (
-      <BaseTool
-        icon={MagnifyingGlass}
-        renderContext={ctx.renderContext}
-        type="call"
-      >
-        <SearchText ctx={ctx} />
-      </BaseTool>
-    ),
-    renderResponse: (ctx) => (
-      <BaseTool renderContext={ctx.renderContext} type="response">
-        <UnifiedSearchToolResponse
-          results={ctx.toolResponse.tool.data.results}
-        />
-      </BaseTool>
-    ),
+    render: (ctx) => {
+      const [isExpanded, setIsExpanded] = createSignal(false);
+      const results = () => ctx.response?.data.results ?? [];
+      const hitCount = () => results().length;
+      const hasResults = () => hitCount() > 0;
+      const statusText = () => {
+        if (!ctx.response) return undefined;
+        if (hitCount() === 0) return 'No Results';
+        if (hitCount() === 1) return '1 hit';
+        return `${hitCount()} hits`;
+      };
+
+      return (
+        <BaseTool
+          icon={MagnifyingGlass}
+          renderContext={ctx.renderContext}
+          type="call"
+          response={
+            hasResults() && isExpanded() ? (
+              <UnifiedSearchToolResponse results={results()} />
+            ) : undefined
+          }
+        >
+          <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+            <div class="flex min-w-0 flex-1 items-center gap-2">
+              <SearchText ctx={ctx} />
+            </div>
+            <div class="flex shrink-0 items-center gap-1">
+              <Show when={statusText()}>
+                {(text) => (
+                  <span class="text-xs text-ink-extra-muted">{text()}</span>
+                )}
+              </Show>
+              <Show when={hasResults()}>
+                <button
+                  type="button"
+                  class="shrink-0 text-ink-muted hover:text-ink p-1"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsExpanded((expanded) => !expanded);
+                  }}
+                >
+                  <CaretRight
+                    class="h-4 w-4 transition-transform"
+                    classList={{
+                      'rotate-90': isExpanded(),
+                    }}
+                  />
+                </button>
+              </Show>
+            </div>
+          </div>
+        </BaseTool>
+      );
+    },
   });
 
 export const nameSearchHandler = createHandler('NameSearch');

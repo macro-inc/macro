@@ -4,12 +4,11 @@ import { createToolRenderer } from './ToolRenderer';
 
 const handler = createToolRenderer({
   name: 'GetThread',
-  renderCall: (ctx) => (
+  render: (ctx) => (
     <BaseTool icon={EnvelopeOpen} renderContext={ctx.renderContext} type="call">
       Read thread
     </BaseTool>
   ),
-  renderResponse: (_) => undefined,
 });
 
 export const getThreadHandler = handler;

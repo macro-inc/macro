@@ -4,7 +4,6 @@
  */
 
 import { err, type MaybeResult, ok } from 'core/util/maybeResult';
-import type { Component } from 'solid-js';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -181,19 +180,6 @@ export type NamedTool<
   data: ToolDataMap[TName][TDirection];
 };
 
-export type ToolContext<TTool extends NamedTool = NamedTool> = {
-  tool: TTool;
-  chat_id: string;
-  message_id: string;
-  part_index: number;
-  isComplete: boolean;
-};
-
-export interface ToolHandler<T extends NamedTool, RenderContext> {
-  handle?: (context: ToolContext<T>) => void | Promise<void>;
-  render?: Component<ToolContext<T> & RenderContext>;
-}
-
 function deserializeTool<T extends NamedTool>(
   tool: NamedRawTool,
   direction: 'call' | 'response'
@@ -224,10 +210,3 @@ export function deserializeToolResponse(
 ): MaybeResult<'parse_error' | 'not_found', NamedTool<ToolName, 'response'>> {
   return deserializeTool(tool, 'response');
 }
-
-export type ToolHandlerMap<RenderContext> = {
-  [K in ToolName]: {
-    call: ToolHandler<NamedTool<K, 'call'>, RenderContext>;
-    response: ToolHandler<NamedTool<K, 'response'>, RenderContext>;
-  };
-};

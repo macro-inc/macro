@@ -4,7 +4,6 @@ import {
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
-import type { Component } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
@@ -22,15 +21,15 @@ import { sendEmailHandler } from './SendEmail';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import type {
   RenderContext,
-  ToolCallContext,
-  ToolRendererMap,
-  ToolResponseRenderContext,
+  ToolHandler,
+  ToolHandlerMap,
+  ToolRenderContext,
 } from './ToolRenderer';
 import { updateThreadLabelsHandler } from './UpdateThreadLabels';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
-const toolHandlers: ToolRendererMap<RenderContext> = {
+const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
   ListEntities: listEntitiesHandler,
   bash_code_execution: bashCodeExecutionHandler,
@@ -49,185 +48,111 @@ const toolHandlers: ToolRendererMap<RenderContext> = {
   web_search: webSearchHandler,
 };
 
-type BaseToolProps = {
+type ToolProps = {
   tool_id: string;
+  json: unknown;
   name: string;
+  response?: {
+    json: unknown;
+    name: string;
+  };
   part_index: number;
   chat_id: string;
   message_id: string;
+  isComplete: boolean;
   renderContext: RenderContext;
 };
 
-type ToolCallProps = BaseToolProps & {
-  type: 'call';
-  tool_call: unknown;
+type TriggerToolArgs = Omit<
+  ToolProps,
+  'renderContext' | 'response' | 'isComplete'
+> & {
+  type: 'call' | 'response' | 'error';
 };
 
-type ToolResponseProps = BaseToolProps & {
-  type: 'response';
-  call_part_index: number;
-  tool_call: unknown;
-  tool_response: unknown;
-};
-
-type RenderToolProps = ToolCallProps | ToolResponseProps;
-
-type TriggerToolCallArgs =
-  | Omit<ToolCallProps, 'renderContext'>
-  | (Omit<
-      ToolResponseProps,
-      'renderContext' | 'call_part_index' | 'tool_call'
-    > & {
-      type: 'response';
-    });
-
-const pendingToolCalls = new Map<string, ToolCallContext>();
-
-function createCallContext(args: {
-  tool_id: string;
-  tool_call: unknown;
-  name: string;
-  part_index: number;
-  chat_id: string;
-  message_id: string;
-}): ToolCallContext | null {
+export function RenderTool(props: ToolProps) {
   const maybeTool = deserializeToolCall({
-    id: args.tool_id,
-    json: args.tool_call,
-    name: args.name as ToolName,
+    id: props.tool_id,
+    json: props.json,
+    name: props.name as ToolName,
   });
-
   if (isErr(maybeTool)) return null;
 
-  return {
-    chat_id: args.chat_id,
-    isComplete: true,
-    message_id: args.message_id,
-    part_index: args.part_index,
-    tool: maybeTool[1],
+  const tool = maybeTool[1];
+  const handler = toolHandlers[tool.name] as ToolHandler<
+    ToolName,
+    RenderContext
+  >;
+  const context: Omit<ToolRenderContext<ToolName>, 'response'> = {
+    chat_id: props.chat_id,
+    message_id: props.message_id,
+    part_index: props.part_index,
+    tool,
+    isComplete: props.isComplete,
   };
-}
 
-function createResponseContext(args: {
-  tool_id: string;
-  tool_call: unknown;
-  tool_response: unknown;
-  name: string;
-  call_part_index: number;
-  part_index: number;
-  chat_id: string;
-  message_id: string;
-}): ToolResponseRenderContext | null {
-  const toolCall = createCallContext({
-    chat_id: args.chat_id,
-    message_id: args.message_id,
-    name: args.name,
-    part_index: args.call_part_index,
-    tool_call: args.tool_call,
-    tool_id: args.tool_id,
-  });
+  const response = () => {
+    if (!props.response) return undefined;
 
-  if (!toolCall) return null;
+    const maybeResponse = deserializeToolResponse({
+      id: props.tool_id,
+      json: props.response.json,
+      name: props.response.name as ToolName,
+    });
 
-  const maybeToolResponse = deserializeToolResponse({
-    id: args.tool_id,
-    json: args.tool_response,
-    name: args.name as ToolName,
-  });
-
-  if (isErr(maybeToolResponse)) return null;
-
-  return {
-    toolCall,
-    toolResponse: {
-      chat_id: args.chat_id,
-      isComplete: true,
-      message_id: args.message_id,
-      part_index: args.part_index,
-      tool: maybeToolResponse[1],
-    },
+    if (isErr(maybeResponse)) return undefined;
+    return maybeResponse[1];
   };
-}
-
-function renderWithContext<TContext extends Record<string, unknown>>(
-  handler:
-    | {
-        render?: Component<TContext & RenderContext>;
-      }
-    | undefined,
-  context: TContext,
-  renderContext: RenderContext
-) {
-  if (!handler?.render) return null;
 
   return (
     <Dynamic
       component={handler.render}
       {...context}
+      response={response()}
       renderContext={{
-        isStreaming: renderContext.renderContext.isStreaming,
+        isStreaming: props.renderContext.renderContext.isStreaming,
       }}
     />
   );
 }
 
-export function RenderToolCall(props: ToolCallProps) {
-  const context = createCallContext(props);
-  if (!context) return null;
+export async function triggerToolCall(args: TriggerToolArgs) {
+  const { tool_id, json, name, chat_id, message_id, part_index, type } = args;
 
-  return renderWithContext(
-    toolHandlers[context.tool.name].call,
-    context,
-    props.renderContext
-  );
-}
-
-export function RenderToolResponse(props: ToolResponseProps) {
-  const context = createResponseContext(props);
-  if (!context) return null;
-
-  return renderWithContext(
-    toolHandlers[context.toolResponse.tool.name].response,
-    context,
-    props.renderContext
-  );
-}
-
-export function RenderTool(props: RenderToolProps) {
-  if (props.type === 'call') {
-    return <RenderToolCall {...props} />;
+  if (type === 'error') {
+    return;
   }
 
-  return <RenderToolResponse {...props} />;
-}
+  const maybeTool =
+    type === 'call'
+      ? deserializeToolCall({
+          id: tool_id,
+          json,
+          name: name as ToolName,
+        })
+      : deserializeToolResponse({
+          id: tool_id,
+          json,
+          name: name as ToolName,
+        });
 
-export async function triggerToolCall(args: TriggerToolCallArgs) {
-  if (args.type === 'call') {
-    const context = createCallContext(args);
-    if (!context) return;
+  if (isErr(maybeTool)) return;
 
-    pendingToolCalls.set(context.tool.id, context);
-    return toolHandlers[context.tool.name].call.handle?.(context);
-  }
+  const tool = maybeTool[1];
+  const handler = toolHandlers[tool.name] as ToolHandler<
+    ToolName,
+    RenderContext
+  >;
+  const handle = type === 'call' ? handler.handleCall : handler.handleResponse;
+  if (!handle) return;
 
-  const toolCall = pendingToolCalls.get(args.tool_id);
-  if (!toolCall) return;
+  const context = {
+    chat_id,
+    message_id,
+    part_index,
+    tool,
+    isComplete: type !== 'call',
+  };
 
-  const context = createResponseContext({
-    chat_id: args.chat_id,
-    message_id: args.message_id,
-    name: args.name,
-    part_index: args.part_index,
-    call_part_index: toolCall.part_index,
-    tool_call: toolCall.tool.data,
-    tool_response: args.tool_response,
-    tool_id: args.tool_id,
-  });
-
-  if (!context) return;
-
-  pendingToolCalls.delete(args.tool_id);
-  return toolHandlers[context.toolResponse.tool.name].response.handle?.(
-    context
-  );
+  return handle(context as never);
 }

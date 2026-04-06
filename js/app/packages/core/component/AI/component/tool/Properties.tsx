@@ -5,30 +5,20 @@ import { createToolRenderer } from './ToolRenderer';
 
 const getHandler = createToolRenderer({
   name: 'GetEntityProperties',
-  renderCall: (ctx) => (
+  render: (ctx) => (
     <BaseTool icon={Sliders} renderContext={ctx.renderContext} type="call">
       Get properties for{' '}
       <span class="text-accent">{ctx.tool.data.entity_type}</span>
-    </BaseTool>
-  ),
-  renderResponse: (ctx) => (
-    <BaseTool renderContext={ctx.renderContext} type="response">
-      {ctx.toolResponse.tool.data.summary}
     </BaseTool>
   ),
 });
 
 const setHandler = createToolRenderer({
   name: 'SetEntityProperty',
-  renderCall: (ctx) => (
+  render: (ctx) => (
     <BaseTool icon={PencilSimple} renderContext={ctx.renderContext} type="call">
       Update property on{' '}
       <span class="text-accent">{ctx.tool.data.entity_type}</span>
-    </BaseTool>
-  ),
-  renderResponse: (ctx) => (
-    <BaseTool renderContext={ctx.renderContext} type="response">
-      {ctx.toolResponse.tool.data.message}
     </BaseTool>
   ),
 });

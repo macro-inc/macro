@@ -7,26 +7,24 @@ import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
 const MAX_COMMAND_LENGTH = 80;
-const MAX_OUTPUT_LINES = 3;
 
-function truncateCommand(command: string): string {
-  const firstLine = command.split('\n')[0] ?? '';
-  const needsTruncation =
-    command.includes('\n') || firstLine.length > MAX_COMMAND_LENGTH;
-
-  if (needsTruncation) {
-    return `${firstLine.slice(0, MAX_COMMAND_LENGTH)}...`;
-  }
-  return firstLine;
-}
-
-function CodeFence(props: { content: string; maxLines: number }) {
+function CodeFence(props: {
+  content: string;
+  maxLines?: number;
+  collapsible?: boolean;
+}) {
   const [expanded, setExpanded] = createSignal(false);
+  const isCollapsible = () => props.collapsible ?? true;
 
   const lines = () => props.content.split('\n');
-  const needsTruncation = () =>
-    lines().length > props.maxLines ||
-    props.content.length > MAX_COMMAND_LENGTH;
+  const needsTruncation = () => {
+    if (!isCollapsible()) return false;
+
+    return (
+      lines().length > (props.maxLines ?? Number.MAX_SAFE_INTEGER) ||
+      props.content.length > MAX_COMMAND_LENGTH
+    );
+  };
 
   const displayContent = () => {
     if (expanded() || !needsTruncation()) {
@@ -40,7 +38,7 @@ function CodeFence(props: { content: string; maxLines: number }) {
 
   return (
     <div class="relative">
-      <Show when={needsTruncation()}>
+      <Show when={isCollapsible() && needsTruncation()}>
         <button
           type="button"
           class="text-ink-extra-muted hover:text-ink-muted absolute top-1 right-1 p-1"
@@ -54,7 +52,8 @@ function CodeFence(props: { content: string; maxLines: number }) {
       <pre
         class="text-ink-muted bg-background-secondary overflow-x-auto rounded p-2 pr-8 font-mono text-xs whitespace-pre-wrap"
         classList={{
-          'max-h-24 overflow-hidden': !expanded() && needsTruncation(),
+          'max-h-24 overflow-hidden':
+            isCollapsible() && !expanded() && needsTruncation(),
         }}
       >
         {displayContent()}
@@ -83,7 +82,7 @@ function BashResult(props: { result: BashCodeExecutionResult }) {
         <span class="text-ink-error">Exit code {props.result.return_code}</span>
       </Show>
       <Show when={hasOutput()}>
-        <CodeFence content={output()} maxLines={MAX_OUTPUT_LINES} />
+        <CodeFence content={output()} collapsible={false} />
       </Show>
       <Show when={!hasOutput() && props.result.return_code === 0}>
         <span class="text-ink-muted">No output</span>
@@ -94,31 +93,63 @@ function BashResult(props: { result: BashCodeExecutionResult }) {
 
 const handler = createToolRenderer({
   name: 'bash_code_execution',
-  renderCall: (ctx) => (
-    <BaseTool icon={Terminal} renderContext={ctx.renderContext} type="call">
-      <code class="text-ink-muted font-mono text-xs">
-        {truncateCommand(ctx.tool.data.command)}
-      </code>
-    </BaseTool>
-  ),
-  renderResponse: (ctx) => {
-    const isError =
-      ctx.toolResponse.tool.data.content.type ===
-      'bash_code_execution_tool_result_error';
+  render: (ctx) => {
+    const [isExpanded, setIsExpanded] = createSignal(false);
+
     return (
-      <BaseTool renderContext={ctx.renderContext} type="response">
-        <Switch>
-          <Match when={isError}>
-            <span class="text-ink-error">Execution failed</span>
-          </Match>
-          <Match when={!isError}>
-            <BashResult
-              result={
-                ctx.toolResponse.tool.data.content as BashCodeExecutionResult
-              }
+      <BaseTool
+        icon={Terminal}
+        renderContext={ctx.renderContext}
+        type="call"
+        response={
+          isExpanded() ? (
+            <div class="flex flex-col gap-2">
+              <CodeFence content={ctx.tool.data.command} collapsible={false} />
+              <Show when={ctx.response}>
+                {(response) => {
+                  const isError =
+                    response().data.content.type ===
+                    'bash_code_execution_tool_result_error';
+
+                  return (
+                    <Switch>
+                      <Match when={isError}>
+                        <span class="text-ink-error">Execution failed</span>
+                      </Match>
+                      <Match when={!isError}>
+                        <BashResult
+                          result={
+                            response().data.content as BashCodeExecutionResult
+                          }
+                        />
+                      </Match>
+                    </Switch>
+                  );
+                }}
+              </Show>
+            </div>
+          ) : undefined
+        }
+      >
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <span>Code execution</span>
+          <button
+            type="button"
+            class="shrink-0 text-ink-muted hover:text-ink p-1"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setIsExpanded((expanded) => !expanded);
+            }}
+          >
+            <CaretRight
+              class="h-4 w-4 transition-transform"
+              classList={{
+                'rotate-90': isExpanded(),
+              }}
             />
-          </Match>
-        </Switch>
+          </button>
+        </div>
       </BaseTool>
     );
   },

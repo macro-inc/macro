@@ -4,12 +4,11 @@ import { createToolRenderer } from './ToolRenderer';
 
 const handler = createToolRenderer({
   name: 'UpdateThreadLabels',
-  renderCall: (ctx) => (
+  render: (ctx) => (
     <BaseTool icon={TagSimple} renderContext={ctx.renderContext} type="call">
       {ctx.tool.data.add ? 'Add' : 'Remove'} label on thread
     </BaseTool>
   ),
-  renderResponse: (_) => undefined,
 });
 
 export const updateThreadLabelsHandler = handler;

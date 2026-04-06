@@ -21,11 +21,11 @@ export function registerToolHandler(stream: () => StreamLike | undefined) {
         ) {
           await triggerToolCall({
             chat_id: latest.chat_id,
+            json: latest.content.json,
             message_id: latest.message_id,
             name: latest.content.name,
             part_index: -1,
             tool_id: latest.content.id,
-            tool_call: latest.content.json,
             type: 'call',
           });
         } else if (
@@ -34,11 +34,11 @@ export function registerToolHandler(stream: () => StreamLike | undefined) {
         ) {
           await triggerToolCall({
             chat_id: latest.chat_id,
+            json: latest.content.json,
             message_id: latest.message_id,
             name: latest.content.name,
             part_index: -1,
             tool_id: latest.content.id,
-            tool_response: latest.content.json,
             type: 'response',
           });
         }

@@ -1,7 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
-import ChevronDown from '@icon/regular/caret-down.svg?component-solid';
-import ChevronUp from '@icon/regular/caret-up.svg?component-solid';
+import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import List from '@phosphor-icons/core/regular/list.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { useSplitLayout } from 'app/component/split-layout/layout';
@@ -19,8 +18,6 @@ const ListEntitiesToolResponse = (props: {
   items: ListEntitiesItem[];
   summary: string;
 }) => {
-  const [isExpanded, setIsExpanded] = createSignal(false);
-
   const results = createMemo(() => {
     const seen = new Set<string>();
     return props.items.filter((item) => {
@@ -94,104 +91,127 @@ const ListEntitiesToolResponse = (props: {
   };
 
   return (
-    <div class="border border-edge rounded w-full">
-      <Show
-        when={props.items.length > 0}
-        fallback={
-          <div class="flex items-center justify-between w-full text-left p-2 hover:bg-hover transition-colors">
-            No Results
-          </div>
-        }
+    <div class="max-h-[480px] overflow-hidden">
+      <VList
+        data={results()}
+        bufferSize={5 * 32}
+        itemSize={32}
+        style={{
+          height: `${Math.min(results().length * 32, 480)}px`,
+          contain: 'content',
+        }}
       >
-        <button
-          class={`flex items-center justify-between w-full text-left p-2 hover:bg-hover transition-colors ${
-            isExpanded() ? 'rounded-t border-b border-edge' : 'rounded'
-          }`}
-          onClick={() => setIsExpanded((e) => !e)}
-        >
-          <div class="flex items-center gap-2">
-            <div class="text-sm font-medium text-ink">
-              Found
-              <span class="text-accent pr-1"> {results().length}</span>
-              Items
-            </div>
-          </div>
-          <div class="flex items-center gap-1 text-ink-muted">
-            <Show
-              when={isExpanded()}
-              fallback={<ChevronDown class="w-4 h-4" />}
+        {(item) => {
+          const clickHandler = getClickHandler(item);
+
+          return (
+            <div
+              class="flex items-center w-full h-8 px-2 hover:bg-hover transition-colors"
+              onClick={clickHandler}
             >
-              <ChevronUp class="w-4 h-4" />
-            </Show>
-          </div>
-        </button>
-      </Show>
-
-      <Show when={isExpanded()}>
-        <div class="max-h-[480px] overflow-hidden">
-          <VList
-            data={results()}
-            bufferSize={5 * 32}
-            itemSize={32}
-            style={{
-              height: `${Math.min(results().length * 32, 480)}px`,
-              contain: 'content',
-            }}
-          >
-            {(item) => {
-              const clickHandler = getClickHandler(item);
-
-              return (
-                <div
-                  class="flex items-center w-full h-8 px-2 hover:bg-hover transition-colors"
-                  onClick={clickHandler}
-                >
-                  <div class="flex items-center flex-1 min-w-0 gap-2">
-                    <EntityIcon
-                      size="sm"
-                      targetType={getIconType(item)}
-                      shared={false}
-                    />
-                    <div class="flex-1 min-w-0">
-                      <TruncatedText size="sm">
-                        <span>{getItemTitle(item)}</span>
-                      </TruncatedText>
-                    </div>
-                  </div>
+              <div class="flex items-center flex-1 min-w-0 gap-2">
+                <EntityIcon
+                  size="sm"
+                  targetType={getIconType(item)}
+                  shared={false}
+                />
+                <div class="flex-1 min-w-0">
+                  <TruncatedText size="sm">
+                    <span>{getItemTitle(item)}</span>
+                  </TruncatedText>
                 </div>
-              );
-            }}
-          </VList>
-        </div>
-      </Show>
+              </div>
+            </div>
+          );
+        }}
+      </VList>
     </div>
   );
 };
 
 const handler = createToolRenderer({
   name: 'ListEntities',
-  renderCall: (ctx) => (
-    <BaseTool icon={List} renderContext={ctx.renderContext} type="call">
-      Filter for{' '}
-      <span class="text-accent">
-        {ctx.tool.data.includeTypes
-          ? ctx.tool.data.includeTypes.join(', ')
-          : 'All'}
-      </span>{' '}
-      ordered by{' '}
-      <span class="text-accent">
-        {ctx.tool.data.sortBy.split('_').join(' ')}
-      </span>
-    </BaseTool>
-  ),
-  renderResponse: (ctx) => (
-    <BaseTool renderContext={ctx.renderContext} type="response">
-      <ListEntitiesToolResponse
-        items={ctx.toolResponse.tool.data.items}
-        summary={ctx.toolResponse.tool.data.summary}
-      />
-    </BaseTool>
-  ),
+  render: (ctx) => {
+    const [isExpanded, setIsExpanded] = createSignal(false);
+    const items = () => ctx.response?.data.items ?? [];
+    const dedupedCount = () => {
+      const seen = new Set<string>();
+      let count = 0;
+
+      for (const item of items()) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        count += 1;
+      }
+
+      return count;
+    };
+    const hasResults = () => dedupedCount() > 0;
+    const statusText = () => {
+      if (!ctx.response) return undefined;
+      if (dedupedCount() === 0) return 'No Results';
+      if (dedupedCount() === 1) return '1 item';
+      return `${dedupedCount()} items`;
+    };
+
+    return (
+      <BaseTool
+        icon={List}
+        renderContext={ctx.renderContext}
+        type="call"
+        response={
+          hasResults() && isExpanded() ? (
+            <ListEntitiesToolResponse
+              items={items()}
+              summary={ctx.response?.data.summary ?? ''}
+            />
+          ) : undefined
+        }
+      >
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <div class="flex min-w-0 flex-1 items-center gap-2">
+            <span>
+              Filter for{' '}
+              <span class="text-accent">
+                {ctx.tool.data.includeTypes
+                  ? ctx.tool.data.includeTypes.join(', ')
+                  : 'All'}
+              </span>{' '}
+              ordered by{' '}
+              <span class="text-accent">
+                {ctx.tool.data.sortBy.split('_').join(' ')}
+              </span>
+            </span>
+          </div>
+          <div class="flex shrink-0 items-center gap-1">
+            <Show when={statusText()}>
+              {(text) => (
+                <span class="text-xs text-ink-extra-muted">{text()}</span>
+              )}
+            </Show>
+            <Show when={hasResults()}>
+              <button
+                type="button"
+                class="shrink-0 text-ink-muted hover:text-ink p-1"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsExpanded((expanded) => !expanded);
+                }}
+              >
+                <CaretRight
+                  class="h-4 w-4 transition-transform"
+                  classList={{
+                    'rotate-90': isExpanded(),
+                  }}
+                />
+              </button>
+            </Show>
+          </div>
+        </div>
+      </BaseTool>
+    );
+  },
 });
 
 export const listEntitiesHandler = handler;

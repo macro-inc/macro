@@ -1,14 +1,14 @@
-import { ComposeTool } from './email/ChatCompose';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
-import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import CaretRight from '@icon/regular/caret-right.svg';
-import { Match, Switch } from 'solid-js';
+import type { NamedTool } from '@service-cognition/generated/tools/tool';
+import type { SendEmail } from '@service-cognition/generated/tools/types';
+import { Show, Match, Switch } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
-import { cn } from '@ui/utils/classname';
-import type { SendEmail } from '@service-cognition/generated/tools/types';
+import { ComposeTool } from './email/ChatCompose';
 
 type SendEmailResponse = NamedTool<'SendEmail', 'response'>['data'];
 
@@ -29,7 +29,7 @@ function getRecipientsLabel(data: SendEmail) {
   return `${labels[0]}, ${labels[1]}, +${labels.length - 2} more`;
 }
 
-function getUserAction(response: SendEmailResponse) {
+function getUserAction(response: SendEmailResponse | undefined) {
   if (
     typeof response === 'object' &&
     response !== null &&
@@ -41,7 +41,7 @@ function getUserAction(response: SendEmailResponse) {
   return null;
 }
 
-function getSentResponse(response: SendEmailResponse) {
+function getSentResponse(response: SendEmailResponse | undefined) {
   const userAction = getUserAction(response);
   if (
     typeof userAction === 'object' &&
@@ -54,7 +54,7 @@ function getSentResponse(response: SendEmailResponse) {
   return null;
 }
 
-function getDraftResponse(response: SendEmailResponse) {
+function getDraftResponse(response: SendEmailResponse | undefined) {
   const userAction = getUserAction(response);
   if (
     typeof userAction === 'object' &&
@@ -179,61 +179,63 @@ function DraftEmailResponse(props: {
 
 const handler = createToolRenderer({
   name: 'SendEmail',
-  renderCall: () => undefined,
-  renderResponse: (ctx) => {
-    const response = ctx.toolResponse.tool.data;
-    const args = ctx.toolCall.tool.data;
-    const userAction = getUserAction(response);
-    const sentResponse = getSentResponse(response);
-    const draftResponse = getDraftResponse(response);
+  render: (ctx) => {
+    const response = () => ctx.response?.data;
+    const args = ctx.tool.data;
+    const userAction = getUserAction(response());
+    const sentResponse = getSentResponse(response());
+    const draftResponse = getDraftResponse(response());
 
     return (
-      <Switch>
-        <Match
-          when={
-            response === 'PendingUserExecution' || userAction === 'userEdited'
-          }
-        >
-          <ComposeTool
-            chatId={ctx.toolResponse.chat_id}
-            initialData={ctx.toolCall.tool.data}
-            messageId={ctx.toolResponse.message_id}
-            toolCallId={ctx.toolCall.tool.id}
-            streamLocked={ctx.renderContext.isStreaming}
-            header={
-              ctx.renderContext.isStreaming ? (
-                <div class="text-xs text-ink-extra-muted/60">
-                  Waiting for the response to finish before this email can be
-                  edited.
-                </div>
-              ) : undefined
+      <Show when={ctx.response}>
+        <Switch>
+          <Match
+            when={
+              response() === 'PendingUserExecution' ||
+              userAction === 'userEdited'
             }
-          />
-        </Match>
-        <Match when={response === 'Rejected'}>
-          <BaseTool renderContext={ctx.renderContext} type="response">
-            Email send rejected
-          </BaseTool>
-        </Match>
-        <Match when={sentResponse}>
-          <SentEmailResponse
-            args={args}
-            chatId={ctx.toolResponse.chat_id}
-            messageId={ctx.toolResponse.message_id}
-            renderContext={ctx.renderContext}
-            threadId={sentResponse!.thread_id}
-            toolCallId={ctx.toolCall.tool.id}
-          />
-        </Match>
-        <Match when={draftResponse}>
-          <DraftEmailResponse
-            args={args}
-            draftId={draftResponse!.draft_id}
-            renderContext={ctx.renderContext}
-            threadId={draftResponse!.thread_id}
-          />
-        </Match>
-      </Switch>
+          >
+            <ComposeTool
+              chatId={ctx.chat_id}
+              initialData={ctx.tool.data}
+              messageId={ctx.message_id}
+              toolCallId={ctx.tool.id}
+              streamLocked={ctx.renderContext.isStreaming}
+              header={
+                ctx.renderContext.isStreaming ? (
+                  <div class="text-xs text-ink-extra-muted/60">
+                    Waiting for the response to finish before this email can be
+                    edited.
+                  </div>
+                ) : undefined
+              }
+            />
+          </Match>
+          <Match when={response() === 'Rejected'}>
+            <BaseTool renderContext={ctx.renderContext} type="response">
+              Email send rejected
+            </BaseTool>
+          </Match>
+          <Match when={sentResponse}>
+            <SentEmailResponse
+              args={args}
+              chatId={ctx.chat_id}
+              messageId={ctx.message_id}
+              renderContext={ctx.renderContext}
+              threadId={sentResponse!.thread_id}
+              toolCallId={ctx.tool.id}
+            />
+          </Match>
+          <Match when={draftResponse}>
+            <DraftEmailResponse
+              args={args}
+              draftId={draftResponse!.draft_id}
+              renderContext={ctx.renderContext}
+              threadId={draftResponse!.thread_id}
+            />
+          </Match>
+        </Switch>
+      </Show>
     );
   },
 });
