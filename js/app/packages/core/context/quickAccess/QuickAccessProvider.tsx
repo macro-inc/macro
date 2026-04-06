@@ -69,7 +69,7 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
     case 'document': {
       const fileType =
         item.subType?.type === 'task' ? 'md' : (item.fileType ?? undefined);
-      const name = formatDocumentName(item.name, fileType, {
+      const name = formatDocumentName(item.rawName ?? item.name, fileType, {
         fullyQualifiedBlockName: true,
       });
       return {
