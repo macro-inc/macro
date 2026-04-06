@@ -367,12 +367,15 @@ function AssistantMessageParts(props: {
   return (
     <For each={stableParts()}>
       {(part, i) => {
-        const currentPart = part();
-        if (!currentPart) return null;
+        const currentPart = () => part();
+        if (!currentPart()) return null;
 
-        if (currentPart.type === 'toolCall') {
+        if (currentPart()!.type === 'toolCall') {
           const toolCall = () =>
-            currentPart as Extract<AssistantMessagePart, { type: 'toolCall' }>;
+            currentPart()! as Extract<
+              AssistantMessagePart,
+              { type: 'toolCall' }
+            >;
 
           return (
             <RenderTool
@@ -391,9 +394,9 @@ function AssistantMessageParts(props: {
               }}
             />
           );
-        } else if (currentPart.type === 'toolCallResponseJson') {
+        } else if (currentPart()!.type === 'toolCallResponseJson') {
           const toolResponse = () =>
-            currentPart as Extract<
+            currentPart()! as Extract<
               AssistantMessagePart,
               { type: 'toolCallResponseJson' }
             >;
@@ -415,9 +418,9 @@ function AssistantMessageParts(props: {
               }}
             />
           );
-        } else if (currentPart.type === 'text') {
+        } else if (currentPart()!.type === 'text') {
           const textPart = () =>
-            currentPart as Extract<AssistantMessagePart, { type: 'text' }>;
+            currentPart()! as Extract<AssistantMessagePart, { type: 'text' }>;
 
           if (textPart().text.trim().length > 0)
             return (
