@@ -116,15 +116,17 @@ export function UserIcon(props: UserIconProps) {
             <Trash class={`${sizeClasses().icon} shrink-0`} />
           </div>
         </Match>
-        <Match when={props.id}>
-          <ProfilePicture id={props.id} sizeClass={sizeClasses()} />
+        <Match when={props.id} keyed>
+          {(id) => <ProfilePicture id={id} sizeClass={sizeClasses()} />}
         </Match>
-        <Match when={!props.id && props.email}>
-          <ProfilePicture
-            id={undefined}
-            email={props.email}
-            sizeClass={sizeClasses()}
-          />
+        <Match when={!props.id && props.email} keyed>
+          {(email) => (
+            <ProfilePicture
+              id={undefined}
+              email={email}
+              sizeClass={sizeClasses()}
+            />
+          )}
         </Match>
       </Switch>
     </div>
