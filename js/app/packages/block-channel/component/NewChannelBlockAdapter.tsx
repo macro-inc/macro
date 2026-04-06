@@ -160,7 +160,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   );
 }
 
-function NewChannelBlockAdapterInner(props: { channelId: string } & BlockChannelProps) {
+function NewChannelBlockAdapterInner(
+  props: { channelId: string } & BlockChannelProps
+) {
   const blockHandle = blockHandleSignal.get;
   const [activeTab, setActiveTab] =
     createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);

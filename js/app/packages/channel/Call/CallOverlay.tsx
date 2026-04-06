@@ -41,8 +41,8 @@ function TrackView(props: {
           transform: props.mirror ? 'scaleX(-1)' : '',
         });
         ref.appendChild(el);
-      },
-    ),
+      }
+    )
   );
 
   return <div ref={ref} class="w-full h-full" />;
@@ -53,7 +53,8 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
 
   const micTrack = () => {
     callCtx.trackVersion();
-    return props.participant.getTrackPublication(Track.Source.Microphone)?.track;
+    return props.participant.getTrackPublication(Track.Source.Microphone)
+      ?.track;
   };
 
   const cameraTrack = () => {
