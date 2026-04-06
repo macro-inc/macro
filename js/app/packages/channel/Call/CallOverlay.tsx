@@ -154,7 +154,8 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 export function CallOverlay(props: { onLeave: () => void }) {
   const callCtx = useCallContext();
 
-  const participants = () => Array.from(callCtx.remoteParticipants().values());
+  const participants = () =>
+    Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
 
   const isLocalSpeaking = () => callCtx.isLocalSpeaking();
 
