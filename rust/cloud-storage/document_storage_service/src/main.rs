@@ -374,7 +374,24 @@ async fn main() -> anyhow::Result<()> {
     if let Some(secret) = internal_call_secret {
         call_service_builder = call_service_builder.with_internal_call_secret(secret);
     }
+    if let (Some(bucket), Some(region), Some(access_key), Some(secret)) = (
+        config::CallRecordingS3Bucket::new(),
+        config::CallRecordingS3Region::new(),
+        config::CallRecordingS3AccessKey::new(),
+        config::CallRecordingS3Secret::new(),
+    ) {
+        tracing::info!(bucket = bucket.as_ref(), "call recording enabled");
+        call_service_builder =
+            call_service_builder.with_egress(call::domain::models::EgressS3Config {
+                bucket: bucket.as_ref().to_string(),
+                region: region.as_ref().to_string(),
+                access_key: access_key.as_ref().to_string(),
+                secret: secret.as_ref().to_string(),
+            });
+    }
+
     let call_service = Arc::new(call_service_builder);
+
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
     let call_internal_state = InternalCallRouterState::new(call_service.clone());

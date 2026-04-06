@@ -77,6 +77,23 @@ maybe_env_var! {
     pub struct InternalCallSecret;
 }
 
+maybe_env_var! {
+    /// S3 bucket for call recording egress.
+    pub struct CallRecordingS3Bucket;
+}
+maybe_env_var! {
+    /// AWS region for the call recording S3 bucket.
+    pub struct CallRecordingS3Region;
+}
+maybe_env_var! {
+    /// AWS access key for call recording S3 uploads.
+    pub struct CallRecordingS3AccessKey;
+}
+maybe_env_var! {
+    /// AWS secret key for call recording S3 uploads.
+    pub struct CallRecordingS3Secret;
+}
+
 env_var! { struct Port; }
 env_var! { struct DocumentLimit; }
 env_var! { struct DocumentStorageServicePresignedUrlExpirySeconds; }
