@@ -51,7 +51,11 @@ export function createUpdateFileTypeMutation() {
     { soupTransaction: SoupTransaction }
   >(() => ({
     mutationFn: async ({ id, fileType }) => {
-      return setFileType({ id, fileType });
+      const success = await setFileType({ id, fileType });
+      if (!success) {
+        throw new Error('Failed to update file type');
+      }
+      return true;
     },
     onMutate: ({ id, fileType }) => {
       return performOptimisticFileTypeUpdate(id, fileType);

@@ -5,13 +5,12 @@ import { Popover } from '@kobalte/core/popover';
 import { createSignal, For, Show, createMemo } from 'solid-js';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { codeFileExtensions } from '../util/languageSupport';
-import { createCallback } from '@solid-primitives/rootless';
 import { createUpdateFileTypeMutation } from '@macro-entity';
 
 export function CodeFileTypeChip() {
   const [blockMetadata, setBlockMetadata] = blockMetadataSignal;
   const fileType = () => blockMetadata()?.fileType;
-  const setFileType = (fileType: string) => {
+  const setFileType = (fileType: string | undefined) => {
     setBlockMetadata((prev) => {
       if (!prev) return prev;
       if (prev.fileType === fileType) return prev;
@@ -35,14 +34,14 @@ export function CodeFileTypeChip() {
 
   let searchRef: HTMLInputElement | undefined;
 
-  const handleSelect = createCallback(async (ext: string) => {
+  const handleSelect = (ext: string) => {
     setOpen(false);
     setSearch('');
     const metadata = blockMetadata();
     const oldFileType = fileType() ?? undefined;
-    console.log(metadata, ext, oldFileType);
     if (!metadata || ext === oldFileType) return;
 
+    setFileType(ext);
     updateFileType.mutate(
       {
         id: blockId,
@@ -50,12 +49,12 @@ export function CodeFileTypeChip() {
         oldFileType,
       },
       {
-        onSuccess: () => {
-          setFileType(ext);
+        onError: () => {
+          setFileType(oldFileType);
         },
       }
     );
-  });
+  };
 
   return (
     <Show when={fileType()}>
