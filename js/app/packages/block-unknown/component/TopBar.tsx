@@ -10,6 +10,7 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
+import { blockMetadataSignal } from '@core/signal/load';
 import {
   ReferencesButton,
   REFERENCES_DRAWER_ID,
@@ -28,8 +29,20 @@ import DownloadSimple from '@icon/regular/download-simple.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { Show } from 'solid-js';
 import { toast } from 'core/component/Toast/Toast';
 import { useGetFileBlob } from '../signal/blockData';
+
+function FileTypeChip() {
+  const fileType = () => blockMetadataSignal()?.fileType;
+  return (
+    <Show when={fileType()}>
+      <span class="shrink-0 rounded px-1 py-0.5 text-[0.625rem] font-mono font-medium uppercase leading-none bg-surface-secondary text-ink-muted">
+        {fileType()}
+      </span>
+    </Show>
+  );
+}
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();
@@ -90,7 +103,7 @@ export function TopBar() {
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel />
+        <BlockItemSplitLabel badges={<FileTypeChip />} />
       </SplitHeaderLeft>
 
       <ResponsivePermissionsBadge />
