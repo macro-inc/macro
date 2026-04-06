@@ -215,6 +215,9 @@
   --color-rss: var(--theme-rss);
   --color-rss-bg: color-mix(in srgb, var(--color-rss), var(--color-panel) 90%);
 
+  --color-calendar: oklch(0.8159 0.2849 98.77);
+  --color-calendar-bg: color-mix(in srgb, var(--color-calendar), var(--color-panel) 90%);
+
   --color-contact: oklch(0.8617 0.1837 93.83);
   --color-contact-bg: color-mix(in srgb, var(--color-contact), var(--color-panel) 90%);
 
@@ -239,7 +242,7 @@
   --color-accent-330: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 330deg));
 }
 
-@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default},{tauri-ios:}{hidden}");
+@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
 
 @custom-variant tauri (&:where(.tauri *));
 @custom-variant ios (&:where(.tauri-ios *));
