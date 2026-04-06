@@ -734,11 +734,11 @@ html:not([data-touch-device="true"]) [data-channel-nav="keyboard"] [data-message
 }
 
 /* Long-press animation */
-[data-message].long-press-animation {
+[data-message].long-press-animation, .long-press-animation [data-swipe-content] {
     animation: long-press-message-highlight 400ms ease-in both;
 }
 
-[data-message].long-press-animation > .message-accent-bar {
+[data-message].long-press-animation > .message-accent-bar, .long-press-animation [data-accent-bar] {
     animation: long-press-accent-bar 400ms ease-in both;
 }
 

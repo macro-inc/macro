@@ -989,6 +989,7 @@ export function ListEntity(props: ListEntityProps) {
       onMouseMove={props.onMouseMove}
     >
       <div
+        data-accent-bar
         class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
           'opacity-100': props.highlighted && !isMobile(),
         })}
