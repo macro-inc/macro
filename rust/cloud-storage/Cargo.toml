@@ -23,6 +23,7 @@ members = [
   "contacts_service",
   "convert_service",
   "cowlike",
+  "decode_jwt",
   "dataloss_prevention_handler",
   "delete_chat_handler",
   "deleted_item_poller",

@@ -2756,6 +2756,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "decode_jwt"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "macro_auth",
+ "model-error-response",
+ "model_user",
+ "serde",
+ "serde_urlencoded",
+ "tracing",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
 name = "deflate64"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6021,6 +6037,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
+ "decode_jwt",
  "http-body-util",
  "ip_extractor",
  "macro_auth",
