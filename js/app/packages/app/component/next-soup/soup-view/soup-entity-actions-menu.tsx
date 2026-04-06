@@ -32,16 +32,11 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
           </Show>
           <For each={group.items}>
             {(action) => (
-              <div
-                class={
-                  action.destructive ? 'text-failure-ink w-full' : undefined
-                }
-              >
-                <MenuItem
-                  text={action.label}
-                  onClick={() => handleAction(action.onClick)}
-                />
-              </div>
+              <MenuItem
+                text={action.label}
+                onClick={() => handleAction(action.onClick)}
+                class={action.destructive ? 'text-failure-ink' : undefined}
+              />
             )}
           </For>
         </>
