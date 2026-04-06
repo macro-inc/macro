@@ -842,58 +842,62 @@ export function createSplitLayout(
   }
 
   function reconcileSplits(newSplits: SplitContent[]) {
-    const newState: SplitState[] = [];
-    const currentCompositeSplits = state.splits.map(keyOfSplitState);
-    const newCompositeSplits = newSplits.map(keyOfSplitContent);
-    const changed =
-      newCompositeSplits.join(',') !== currentCompositeSplits.join(',');
+    const currentKeys = state.splits.map(keyOfSplitState);
+    const newKeys = newSplits.map(keyOfSplitContent);
+    const changed = newKeys.join(',') !== currentKeys.join(',');
 
     if (!changed) return;
 
-    const originalSplits = [...state.splits];
-
-    const lookup = (type: BlockName | BlockAlias, id: string) =>
-      originalSplits.find(
-        (s) => s.content.type === type && s.content.id === id
-      );
-
-    const splitsToRemove = [
-      // just remount all the components
-      ...state.splits.filter((s) => s.content.type === 'component'),
-      // previous blocks that are not in the new splits
-      ...state.splits.filter(
-        (s) =>
-          s.content.type !== 'component' &&
-          !newCompositeSplits.includes(keyOfSplitState(s))
-      ),
-    ];
-
-    for (const splitToRemove of splitsToRemove) {
-      removeSplit(splitToRemove.id, false);
+    // Build a map of current splits by their content key for efficient lookup
+    const currentSplitsByKey = new Map<SplitKey, SplitState>();
+    for (const split of state.splits) {
+      currentSplitsByKey.set(keyOfSplitState(split), split);
     }
 
-    for (const split of newSplits) {
-      if (split.type === 'component') {
-        newState.push(
-          buildSplit({
-            initialContent: split,
-            isDefault: false,
-            referredFrom: null,
-          })
-        );
+    // Build the result array
+    const resultSplits: SplitState[] = [];
+    const usedIds = new Set<SplitId>();
+
+    for (let i = 0; i < newSplits.length; i++) {
+      const newContent = newSplits[i];
+      const key = keyOfSplitContent(newContent);
+      const existingSplit = currentSplitsByKey.get(key);
+
+      if (existingSplit) {
+        // Reuse existing split - content matches by key
+        resultSplits.push(existingSplit);
+        usedIds.add(existingSplit.id);
       } else {
-        newState.push(
-          lookup(split.type, split.id) ??
-            buildSplit({
-              initialContent: split,
-              isDefault: false,
-              referredFrom: null,
-            })
+        // Build new split with fresh history
+        const newSplit = buildSplit({
+          initialContent: newContent,
+          referredFrom: null,
+        });
+        // Reuse the ID from the split at the same index if not already used
+        const splitAtSameIndex = state.splits[i];
+        if (splitAtSameIndex && !usedIds.has(splitAtSameIndex.id)) {
+          newSplit.id = splitAtSameIndex.id;
+        }
+        resultSplits.push(newSplit);
+        usedIds.add(newSplit.id);
+      }
+    }
+
+    // Clean up contentChangeListeners and splitNamesById for removed splits
+    for (const split of state.splits) {
+      if (!usedIds.has(split.id)) {
+        contentChangeListeners.delete(split.id);
+        setSplitNamesById(
+          produce((map) => {
+            delete map[split.id];
+            return map;
+          })
         );
       }
     }
 
-    setState('splits', reconcile(newState));
+    // Update state in a single batch
+    setState('splits', reconcile(resultSplits));
   }
 
   const lastEvent = createMemo(() => state.events[state.events.length - 1]);
