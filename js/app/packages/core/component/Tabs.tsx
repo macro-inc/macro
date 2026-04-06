@@ -54,7 +54,7 @@ export const Tabs = (
       defaultValue={local.defaultValue ?? local.list[0]?.value}
       disabled={local.disabled}
       {...rootProps}
-      class={cn('h-full', rootProps.class)}
+      class="h-full"
     >
       <div ref={listRef} class="relative flex items-center h-full">
         <For each={local.list}>
