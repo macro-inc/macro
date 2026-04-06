@@ -14,6 +14,7 @@ import {
   onCleanup,
   type ParentProps,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import type { CallTokenResponse } from '@service-call/client';
 
 export type CallParticipantInfo = {
@@ -30,6 +31,30 @@ export type FinalTranscriptSegment = {
   isFinal: boolean;
 };
 
+type CallStoreState = {
+  connectionState: ConnectionState;
+  activeChannelId: string | null;
+  remoteParticipants: Map<string, RemoteParticipant>;
+  isAudioMuted: boolean;
+  isVideoMuted: boolean;
+  isScreenSharing: boolean;
+  trackVersion: number;
+  speakerVersion: number;
+  transcriptSegments: TranscriptionSegment[];
+};
+
+const initialState: CallStoreState = {
+  connectionState: ConnectionState.Disconnected,
+  activeChannelId: null,
+  remoteParticipants: new Map(),
+  isAudioMuted: false,
+  isVideoMuted: true,
+  isScreenSharing: false,
+  trackVersion: 0,
+  speakerVersion: 0,
+  transcriptSegments: [],
+};
+
 export type CallState = {
   /** The LiveKit Room instance, null when not in a call */
   room: () => Room | null;
@@ -43,8 +68,10 @@ export type CallState = {
   remoteParticipants: () => Map<string, RemoteParticipant>;
   /** Incremented when track subscription/mute state changes */
   trackVersion: () => number;
-  /** Incremented when active speakers change */
-  speakerVersion: () => number;
+  /** Whether the local participant is currently speaking */
+  isLocalSpeaking: () => boolean;
+  /** Whether a remote participant is currently speaking (reactive) */
+  isParticipantSpeaking: (participant: RemoteParticipant) => boolean;
   /** Whether local audio is muted */
   isAudioMuted: () => boolean;
   /** Whether local video is muted */
@@ -83,72 +110,56 @@ export function useCallContextOptional(): CallState | undefined {
   return useContext(CallContext);
 }
 
-export function CallProvider(props: ParentProps) {
+/**
+ * Primitive that manages the LiveKit room lifecycle, event listeners,
+ * and all readonly call state. Returns reactive state + mutation actions.
+ */
+function createCallState() {
   const [room, setRoom] = createSignal<Room | null>(null);
-  const [connectionState, setConnectionState] = createSignal<ConnectionState>(
-    ConnectionState.Disconnected
-  );
-  const [activeChannelId, setActiveChannelId] = createSignal<string | null>(
-    null
-  );
-  const [remoteParticipants, setRemoteParticipants] = createSignal<
-    Map<string, RemoteParticipant>
-  >(new Map());
-  const [isAudioMuted, setIsAudioMuted] = createSignal(false);
-  const [isVideoMuted, setIsVideoMuted] = createSignal(true);
-  const [isScreenSharing, setIsScreenSharing] = createSignal(false);
-  const [trackVersion, setTrackVersion] = createSignal(0);
-  const [speakerVersion, setSpeakerVersion] = createSignal(0);
-  const [transcriptSegments, setTranscriptSegments] = createSignal<
-    TranscriptionSegment[]
-  >([]);
+  const [store, setStore] = createStore<CallStoreState>({ ...initialState });
   const transcriptCallbacks: Array<(segment: FinalTranscriptSegment) => void> =
     [];
 
+  // --- internal helpers ---
+
+  function bumpTrackVersion() {
+    setStore('trackVersion', (v) => v + 1);
+  }
+
   function syncParticipantMap(r: Room) {
-    setRemoteParticipants(new Map(r.remoteParticipants));
-    setTrackVersion((v) => v + 1);
+    setStore('remoteParticipants', new Map(r.remoteParticipants));
+    bumpTrackVersion();
+  }
+
+  function resetState() {
+    setStore({ ...initialState });
   }
 
   function attachRoomListeners(r: Room) {
     r.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
-      setConnectionState(state);
+      setStore('connectionState', state);
     });
 
-    // Participant join/leave: need new Map + trackVersion
     r.on(RoomEvent.ParticipantConnected, () => syncParticipantMap(r));
     r.on(RoomEvent.ParticipantDisconnected, () => syncParticipantMap(r));
 
-    // Track state changes: only bump trackVersion (state lives on participant objects)
-    r.on(RoomEvent.TrackSubscribed, () => {
-      setTrackVersion((v) => v + 1);
-    });
-    r.on(RoomEvent.TrackUnsubscribed, () => {
-      setTrackVersion((v) => v + 1);
-    });
-    r.on(RoomEvent.TrackMuted, () => {
-      setTrackVersion((v) => v + 1);
-    });
-    r.on(RoomEvent.TrackUnmuted, () => {
-      setTrackVersion((v) => v + 1);
-    });
+    r.on(RoomEvent.TrackSubscribed, bumpTrackVersion);
+    r.on(RoomEvent.TrackUnsubscribed, bumpTrackVersion);
+    r.on(RoomEvent.TrackMuted, bumpTrackVersion);
+    r.on(RoomEvent.TrackUnmuted, bumpTrackVersion);
 
-    // Speaking changes: separate signal, no Map recreation or trackVersion bump
     r.on(RoomEvent.ActiveSpeakersChanged, () => {
-      setSpeakerVersion((v) => v + 1);
+      setStore('speakerVersion', (v) => v + 1);
     });
 
     r.on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
       if (pub.source === Track.Source.ScreenShare) {
-        setIsScreenSharing(false);
+        setStore('isScreenSharing', false);
       }
-      setTrackVersion((v) => v + 1);
+      bumpTrackVersion();
     });
-    r.on(RoomEvent.Disconnected, () => {
-      resetCallState();
-    });
+    r.on(RoomEvent.Disconnected, resetState);
 
-    // Register lk.transcription text stream handler
     r.registerTextStreamHandler(
       'lk.transcription',
       async (_reader, participantInfo) => {
@@ -167,7 +178,7 @@ export function CallProvider(props: ParentProps) {
           lastReceivedTime: Date.now(),
         };
         if (isFinal) {
-          setTranscriptSegments((prev) => [...prev, segment]);
+          setStore('transcriptSegments', (prev) => [...prev, segment]);
           const finalSegment: FinalTranscriptSegment = {
             id: reader.info.id,
             text,
@@ -182,30 +193,22 @@ export function CallProvider(props: ParentProps) {
     );
   }
 
-  function resetCallState() {
-    setConnectionState(ConnectionState.Disconnected);
-    setActiveChannelId(null);
-    setRemoteParticipants(new Map());
-    setIsAudioMuted(false);
-    setIsVideoMuted(true);
-    setIsScreenSharing(false);
-    setTranscriptSegments([]);
-  }
-
   function destroyRoom() {
     const r = room();
     if (r) {
       r.removeAllListeners();
       setRoom(null);
     }
-    resetCallState();
+    resetState();
   }
+
+  // --- mutations ---
 
   async function connect(tokenResponse: CallTokenResponse) {
     const existingRoom = room();
 
     // If switching to a different channel, tear down the old room entirely
-    if (existingRoom && activeChannelId() !== tokenResponse.channelId) {
+    if (existingRoom && store.activeChannelId !== tokenResponse.channelId) {
       await existingRoom.disconnect();
       destroyRoom();
     }
@@ -220,7 +223,7 @@ export function CallProvider(props: ParentProps) {
       setRoom(targetRoom);
     }
 
-    setActiveChannelId(tokenResponse.channelId);
+    setStore('activeChannelId', tokenResponse.channelId);
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
@@ -231,9 +234,8 @@ export function CallProvider(props: ParentProps) {
     }
 
     // Sync participants that were already in the room when we connected
-    // (ParticipantConnected may not fire for pre-existing participants on rejoin)
-    setRemoteParticipants(new Map(targetRoom.remoteParticipants));
-    setTrackVersion((v) => v + 1);
+    setStore('remoteParticipants', new Map(targetRoom.remoteParticipants));
+    bumpTrackVersion();
 
     // Enable microphone by default, video off by default
     try {
@@ -241,8 +243,8 @@ export function CallProvider(props: ParentProps) {
     } catch (e) {
       console.error('failed to enable microphone', e);
     }
-    setIsAudioMuted(false);
-    setIsVideoMuted(true);
+    setStore('isAudioMuted', false);
+    setStore('isVideoMuted', true);
   }
 
   async function disconnect() {
@@ -251,7 +253,7 @@ export function CallProvider(props: ParentProps) {
       try {
         await r.disconnect();
       } finally {
-        resetCallState();
+        resetState();
       }
     }
   }
@@ -259,26 +261,28 @@ export function CallProvider(props: ParentProps) {
   async function toggleAudio() {
     const r = room();
     if (!r) return;
-    const newMuted = !isAudioMuted();
+    const newMuted = !store.isAudioMuted;
     await r.localParticipant.setMicrophoneEnabled(!newMuted);
-    setIsAudioMuted(newMuted);
+    setStore('isAudioMuted', newMuted);
   }
 
   async function toggleVideo() {
     const r = room();
     if (!r) return;
-    const newMuted = !isVideoMuted();
+    const newMuted = !store.isVideoMuted;
     await r.localParticipant.setCameraEnabled(!newMuted);
-    setIsVideoMuted(newMuted);
+    setStore('isVideoMuted', newMuted);
   }
 
   async function toggleScreenShare() {
     const r = room();
     if (!r) return;
-    const newSharing = !isScreenSharing();
+    const newSharing = !store.isScreenSharing;
     await r.localParticipant.setScreenShareEnabled(newSharing);
-    setIsScreenSharing(newSharing);
+    setStore('isScreenSharing', newSharing);
   }
+
+  // --- cleanup ---
 
   const handleBeforeUnload = () => {
     const r = room();
@@ -297,23 +301,35 @@ export function CallProvider(props: ParentProps) {
     }
   });
 
+  // --- public API ---
+
   const state: CallState = {
+    // readonly state
     room,
-    connectionState,
-    isInCall: () => connectionState() === ConnectionState.Connected,
-    activeChannelId,
-    remoteParticipants,
-    trackVersion,
-    speakerVersion,
-    isAudioMuted,
-    isVideoMuted,
-    isScreenSharing,
+    connectionState: () => store.connectionState,
+    isInCall: () => store.connectionState === ConnectionState.Connected,
+    activeChannelId: () => store.activeChannelId,
+    remoteParticipants: () => store.remoteParticipants,
+    trackVersion: () => store.trackVersion,
+    isLocalSpeaking: () => {
+      store.speakerVersion;
+      return room()?.localParticipant.isSpeaking ?? false;
+    },
+    isParticipantSpeaking: (participant: RemoteParticipant) => {
+      store.speakerVersion;
+      return participant.isSpeaking;
+    },
+    isAudioMuted: () => store.isAudioMuted,
+    isVideoMuted: () => store.isVideoMuted,
+    isScreenSharing: () => store.isScreenSharing,
+    transcriptSegments: () => store.transcriptSegments,
+
+    // mutations
     connect,
     disconnect,
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
-    transcriptSegments,
     onTranscriptSegment: (cb) => {
       transcriptCallbacks.push(cb);
       return () => {
@@ -322,6 +338,12 @@ export function CallProvider(props: ParentProps) {
       };
     },
   };
+
+  return state;
+}
+
+export function CallProvider(props: ParentProps) {
+  const state = createCallState();
 
   return (
     <CallContext.Provider value={state}>{props.children}</CallContext.Provider>

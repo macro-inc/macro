@@ -56,6 +56,7 @@ function CallButton(props: {
   joinCall: () => Promise<void>;
   leaveCall: () => Promise<void>;
   isInCall: () => boolean;
+  isPending: () => boolean;
 }) {
   const CallIcon: Component = (iconProps) => (
     <Show when={props.isInCall()} fallback={<PhoneIcon {...iconProps} />}>
@@ -63,11 +64,8 @@ function CallButton(props: {
     </Show>
   );
 
-  const [inFlight, setInFlight] = createSignal(false);
-
   const handleClick = async () => {
-    if (inFlight()) return;
-    setInFlight(true);
+    if (props.isPending()) return;
     try {
       if (props.isInCall()) {
         await props.leaveCall();
@@ -76,15 +74,13 @@ function CallButton(props: {
       }
     } catch (e) {
       console.error('Call action failed', e);
-    } finally {
-      setInFlight(false);
     }
   };
 
   return (
     <Button
       onClick={handleClick}
-      disabled={inFlight()}
+      disabled={props.isPending()}
       tooltip={props.isInCall() ? 'Leave Call' : 'Call'}
       class={
         props.isInCall()
@@ -105,6 +101,7 @@ function NewTop(props: {
   joinCall: () => Promise<void>;
   leaveCall: () => Promise<void>;
   isInCall: () => boolean;
+  isPending: () => boolean;
 }) {
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
@@ -133,6 +130,7 @@ function NewTop(props: {
             joinCall={props.joinCall}
             leaveCall={props.leaveCall}
             isInCall={props.isInCall}
+            isPending={props.isPending}
           />
         </SplitHeaderRight>
       </Show>
@@ -250,6 +248,7 @@ function NewChannelBlockAdapterInner(props: { channelId: string } & BlockChannel
         joinCall={call.joinCall}
         leaveCall={call.leaveCall}
         isInCall={call.isInThisChannel}
+        isPending={() => call.isJoining() || call.isLeaving()}
       />
     </div>
   );

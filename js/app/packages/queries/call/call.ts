@@ -1,50 +1,33 @@
 import { throwOnErr } from '@core/util/maybeResult';
 import {
   callServiceClient,
-  type CallTokenResponse,
-  type LeaveCallResponse,
   type TranscriptSegmentRequest,
 } from '@service-call/client';
-import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { useMutation } from '@tanstack/solid-query';
 
-export function useJoinCallMutation(
-  callbacks?: MutationCallbacks<CallTokenResponse, Error, string>
-) {
+export function useJoinCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (channelId: string) =>
       await throwOnErr(
         async () => await callServiceClient.getOrCreateCall(channelId)
       ),
-    ...withCallbacks(
-      {
-        onError(error) {
-          console.error('failed to join call', error);
-        },
-      },
-      callbacks
-    ),
+    onError(error: Error) {
+      console.error('failed to join call', error);
+    },
   }));
 }
 
-export function useLeaveCallMutation(
-  callbacks?: MutationCallbacks<LeaveCallResponse, Error, string>
-) {
+export function useLeaveCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (channelId: string) =>
       await throwOnErr(
         async () => await callServiceClient.leaveCall(channelId)
       ),
-    ...withCallbacks(
-      {
-        onError(error) {
-          console.error('failed to leave call', error);
-        },
-      },
-      callbacks
-    ),
+    onError(error: Error) {
+      console.error('failed to leave call', error);
+    },
   }));
 }
 

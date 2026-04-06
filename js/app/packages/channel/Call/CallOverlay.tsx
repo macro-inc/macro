@@ -4,7 +4,7 @@ import {
   Show,
   createEffect,
   createSignal,
-  onCleanup,
+  on,
   type Component,
   type JSX,
 } from 'solid-js';
@@ -17,159 +17,52 @@ import Screencast from '@icon/regular/screencast.svg';
 import { useCallContext } from './CallContext';
 
 /**
- * Attaches a video or audio track's media element to a container div.
+ * Generic track view that attaches/detaches a LiveKit track's media element.
+ * Callers resolve the track; this component handles the DOM lifecycle.
  */
-function TrackRenderer(props: {
-  participant: RemoteParticipant;
-  source: Track.Source;
+function TrackView(props: {
+  track: Track | undefined;
+  fit?: 'cover' | 'contain';
+  mirror?: boolean;
 }) {
-  let containerRef!: HTMLDivElement;
-  const callCtx = useCallContext();
-  let prevTrack: Track | null = null;
-  let prevEl: HTMLMediaElement | null = null;
+  let ref!: HTMLDivElement;
 
-  function detachPrev() {
-    if (prevTrack && prevEl) {
-      prevTrack.detach(prevEl);
-      prevEl.remove();
-      prevTrack = null;
-      prevEl = null;
-    }
-  }
+  createEffect(
+    on(
+      () => props.track,
+      (track, prev) => {
+        prev?.detach().forEach((el) => el.remove());
+        if (!track) return;
+        const el = track.attach();
+        Object.assign(el.style, {
+          width: '100%',
+          height: '100%',
+          objectFit: props.fit ?? 'cover',
+          transform: props.mirror ? 'scaleX(-1)' : '',
+        });
+        ref.appendChild(el);
+      },
+    ),
+  );
 
-  createEffect(() => {
-    callCtx.trackVersion();
-    const pub = props.participant.getTrackPublication(props.source);
-    const track = pub?.track;
-
-    if (!containerRef || !track) {
-      detachPrev();
-      return;
-    }
-    if (track === prevTrack) return;
-
-    detachPrev();
-
-    const el = track.attach();
-    el.style.width = '100%';
-    el.style.height = '100%';
-    el.style.objectFit =
-      props.source === Track.Source.ScreenShare ? 'contain' : 'cover';
-    containerRef.appendChild(el);
-    prevTrack = track;
-    prevEl = el;
-
-    onCleanup(detachPrev);
-  });
-
-  return <div ref={containerRef} class="w-full h-full" />;
-}
-
-function LocalScreenSharePreview() {
-  let containerRef!: HTMLDivElement;
-  const callCtx = useCallContext();
-  let prevTrack: Track | null = null;
-  let prevEl: HTMLMediaElement | null = null;
-
-  function detachPrev() {
-    if (prevTrack && prevEl) {
-      prevTrack.detach(prevEl);
-      prevEl.remove();
-      prevTrack = null;
-      prevEl = null;
-    }
-  }
-
-  createEffect(() => {
-    callCtx.trackVersion();
-    const r = callCtx.room();
-    if (!r || !callCtx.isScreenSharing()) {
-      detachPrev();
-      return;
-    }
-
-    const pub = r.localParticipant.getTrackPublication(
-      Track.Source.ScreenShare
-    );
-    const track = pub?.track;
-    if (!track || !containerRef) return;
-    if (track === prevTrack) return;
-
-    detachPrev();
-
-    const el = track.attach();
-    el.style.width = '100%';
-    el.style.height = '100%';
-    el.style.objectFit = 'contain';
-    containerRef.appendChild(el);
-    prevTrack = track;
-    prevEl = el;
-
-    onCleanup(detachPrev);
-  });
-
-  return <div ref={containerRef} class="w-full h-full" />;
-}
-
-function LocalVideoPreview() {
-  let containerRef!: HTMLDivElement;
-  const callCtx = useCallContext();
-  let prevTrack: Track | null = null;
-  let prevEl: HTMLMediaElement | null = null;
-
-  function detachPrev() {
-    if (prevTrack && prevEl) {
-      prevTrack.detach(prevEl);
-      prevEl.remove();
-      prevTrack = null;
-      prevEl = null;
-    }
-  }
-
-  createEffect(() => {
-    callCtx.trackVersion();
-    const r = callCtx.room();
-    if (!r || callCtx.isVideoMuted()) {
-      detachPrev();
-      return;
-    }
-
-    const pub = r.localParticipant.getTrackPublication(Track.Source.Camera);
-    const track = pub?.track;
-    if (!track || !containerRef) return;
-    if (track === prevTrack) return;
-
-    detachPrev();
-
-    const el = track.attach();
-    el.style.width = '100%';
-    el.style.height = '100%';
-    el.style.objectFit = 'cover';
-    el.style.transform = 'scaleX(-1)';
-    containerRef.appendChild(el);
-    prevTrack = track;
-    prevEl = el;
-
-    onCleanup(detachPrev);
-  });
-
-  return <div ref={containerRef} class="w-full h-full" />;
+  return <div ref={ref} class="w-full h-full" />;
 }
 
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
 
-  const hasVideo = () => {
-    // Subscribe to trackVersion so this re-evaluates when remote tracks change
+  const micTrack = () => {
     callCtx.trackVersion();
-    const pub = props.participant.getTrackPublication(Track.Source.Camera);
-    return pub?.isSubscribed && !pub.isMuted;
+    return props.participant.getTrackPublication(Track.Source.Microphone)?.track;
   };
 
-  const isSpeaking = () => {
-    callCtx.speakerVersion();
-    return props.participant.isSpeaking;
+  const cameraTrack = () => {
+    callCtx.trackVersion();
+    const pub = props.participant.getTrackPublication(Track.Source.Camera);
+    return pub?.isSubscribed && !pub.isMuted ? pub.track : undefined;
   };
+
+  const isSpeaking = () => callCtx.isParticipantSpeaking(props.participant);
 
   return (
     <div
@@ -178,13 +71,10 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
     >
       {/* Attach remote audio so we can hear this participant (visually hidden to avoid stealing layout) */}
       <div class="absolute w-0 h-0 overflow-hidden">
-        <TrackRenderer
-          participant={props.participant}
-          source={Track.Source.Microphone}
-        />
+        <TrackView track={micTrack()} />
       </div>
       <Show
-        when={hasVideo()}
+        when={cameraTrack()}
         fallback={
           <div class="flex items-center justify-center w-full h-full p-4">
             <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
@@ -193,10 +83,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
           </div>
         }
       >
-        <TrackRenderer
-          participant={props.participant}
-          source={Track.Source.Camera}
-        />
+        <TrackView track={cameraTrack()} />
       </Show>
       <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs truncate max-w-[80%]">
         {props.participant.identity}
@@ -246,12 +133,16 @@ const ControlButton: Component<{
 };
 
 function ScreenShareTile(props: { participant: RemoteParticipant }) {
+  const callCtx = useCallContext();
+  const screenTrack = () => {
+    callCtx.trackVersion();
+    return props.participant.getTrackPublication(Track.Source.ScreenShare)
+      ?.track;
+  };
+
   return (
     <div class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2">
-      <TrackRenderer
-        participant={props.participant}
-        source={Track.Source.ScreenShare}
-      />
+      <TrackView track={screenTrack()} fit="contain" />
       <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs truncate max-w-[80%]">
         {props.participant.identity}'s screen
       </div>
@@ -264,9 +155,21 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
   const participants = () => Array.from(callCtx.remoteParticipants().values());
 
-  const isLocalSpeaking = () => {
-    callCtx.speakerVersion();
-    return callCtx.room()?.localParticipant.isSpeaking;
+  const isLocalSpeaking = () => callCtx.isLocalSpeaking();
+
+  const localVideoTrack = () => {
+    callCtx.trackVersion();
+    const r = callCtx.room();
+    if (!r || callCtx.isVideoMuted()) return undefined;
+    return r.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+  };
+
+  const localScreenTrack = () => {
+    callCtx.trackVersion();
+    const r = callCtx.room();
+    if (!r || !callCtx.isScreenSharing()) return undefined;
+    return r.localParticipant.getTrackPublication(Track.Source.ScreenShare)
+      ?.track;
   };
 
   const remoteScreenShares = () => {
@@ -295,7 +198,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
           <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
             <Show when={callCtx.isScreenSharing()}>
               <div class="relative w-full h-full">
-                <LocalScreenSharePreview />
+                <TrackView track={localScreenTrack()} fit="contain" />
                 <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs">
                   Your screen
                 </div>
@@ -329,7 +232,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
               </div>
             }
           >
-            <LocalVideoPreview />
+            <TrackView track={localVideoTrack()} mirror />
           </Show>
           <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs">
             You
