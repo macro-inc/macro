@@ -2,7 +2,7 @@ import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
-import { createEffect, createSignal, For } from 'solid-js';
+import { createEffect, createSignal, For, splitProps } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
 export type TabItem = {
@@ -17,6 +17,13 @@ export const Tabs = (
     defaultValue?: string;
   } & Omit<SegmentedControlRootProps, 'defaultValue'>
 ) => {
+  const [local, rootProps] = splitProps(props, [
+    'list',
+    'value',
+    'defaultValue',
+    'disabled',
+  ]);
+
   let listRef!: HTMLDivElement;
   const itemRefs: HTMLElement[] = [];
 
@@ -36,24 +43,25 @@ export const Tabs = (
   };
 
   createEffect(() => {
-    const val = props.value ?? props.defaultValue ?? props.list[0]?.value;
-    const idx = props.list.findIndex((t) => t.value === val);
+    const val = local.value ?? local.defaultValue ?? local.list[0]?.value;
+    const idx = local.list.findIndex((t) => t.value === val);
     if (idx >= 0 && itemRefs[idx]) updateIndicatorPosition(itemRefs[idx]);
   });
 
   return (
     <KSegmentedControl
-      value={props.value}
-      defaultValue={props.defaultValue ?? props.list[0]?.value}
-      disabled={props.disabled}
-      class="h-full"
+      value={local.value}
+      defaultValue={local.defaultValue ?? local.list[0]?.value}
+      disabled={local.disabled}
+      {...rootProps}
+      class={cn('h-full', rootProps.class)}
     >
       <div ref={listRef} class="relative flex items-center h-full">
-        <For each={props.list}>
+        <For each={local.list}>
           {(item, i) => (
             <KSegmentedControl.Item
               value={item.value}
-              disabled={props.disabled}
+              disabled={local.disabled}
               ref={(el) => {
                 itemRefs[i()] = el;
               }}
@@ -65,7 +73,7 @@ export const Tabs = (
                   'text-ink-extra-muted',
                   'data-[checked]:text-accent hover:text-accent'
                 )}
-                onPointerDown={() => props.onChange?.(item.value)}
+                onPointerDown={() => rootProps.onChange?.(item.value)}
               >
                 {item.label}
               </KSegmentedControl.ItemLabel>

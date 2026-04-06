@@ -98,7 +98,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
         </div>
         <Show when={props.tabs && props.activeTab && props.onTabChange}>
-          <div class="ph-no-capture min-w-0 shrink-0">
+          <div class="ph-no-capture min-w-0 shrink-0 h-full">
             <Tabs
               list={[...(props.tabs ?? [])]}
               value={props.activeTab}
