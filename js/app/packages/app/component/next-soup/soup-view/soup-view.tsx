@@ -929,6 +929,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 Searching...
                               </div>
                             </Show>
+                            <Show when={i() === rows().length - 1}>
+                              <div class="h-15" />
+                            </Show>
                           </>
                         );
                       }}
