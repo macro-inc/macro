@@ -153,6 +153,7 @@ pub async fn main() -> anyhow::Result<()> {
         reader_service,
         &BLOCKABLE_NOTIFICATIONS,
         hmac_key.clone(),
+        jwt_args.clone(),
     );
 
     // Set up egress worker for delivering notifications from the queue

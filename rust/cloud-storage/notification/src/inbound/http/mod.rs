@@ -5,10 +5,11 @@ pub mod preferences;
 
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{FromRef, Path, Query, State},
     routing::{delete, get, patch, put},
 };
 use hmac::Hmac;
+use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{CreatedAt, CursorOptionExt, CursorWithValAndFilter};
@@ -51,6 +52,14 @@ pub struct NotificationRouterState<S> {
     pub blockable_notification_typenames: &'static HashSet<&'static str>,
     /// The value which is used to verify the presigned url requests
     pub hmac_signing_key: Hmac<Sha256>,
+    /// the args used to validate jwts
+    pub jwt_args: JwtValidationArgs,
+}
+
+impl<S> FromRef<NotificationRouterState<S>> for JwtValidationArgs {
+    fn from_ref(input: &NotificationRouterState<S>) -> Self {
+        input.jwt_args.clone()
+    }
 }
 
 impl<S> Clone for NotificationRouterState<S> {
@@ -59,6 +68,7 @@ impl<S> Clone for NotificationRouterState<S> {
             inner: Arc::clone(&self.inner),
             blockable_notification_typenames: self.blockable_notification_typenames,
             hmac_signing_key: self.hmac_signing_key.clone(),
+            jwt_args: self.jwt_args.clone(),
         }
     }
 }
@@ -69,11 +79,13 @@ impl<S: NotificationReader> NotificationRouterState<S> {
         val: S,
         blockable_notification_typenames: &'static HashSet<&'static str>,
         hmac_signing_key: Hmac<Sha256>,
+        jwt_args: JwtValidationArgs,
     ) -> Self {
         NotificationRouterState {
             inner: Arc::new(val),
             blockable_notification_typenames,
             hmac_signing_key,
+            jwt_args,
         }
     }
 }
