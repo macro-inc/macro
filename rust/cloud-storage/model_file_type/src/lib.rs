@@ -2,6 +2,9 @@
 
 //! This crate is used to define an enumeration of all the [FileType] and [ContentType] that are compatible with Macro
 
+#[cfg(test)]
+mod test;
+
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::marker::PhantomData;
@@ -45,14 +48,27 @@ macro_rules! generate_file_types {
         ///   - From<FileType> for ContentType - Maps FileType to ContentType
         ///   - ContentType::mime_type() - Gets MIME type for ContentType
         ///
-        #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Copy, Clone, EnumIter)]
+        #[derive(Eq, PartialEq, Debug, Copy, Clone, EnumIter)]
         #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-        #[serde(rename_all = "lowercase")]
         pub enum FileType {
             $(
                 #[expect(missing_docs)]
+                #[cfg_attr(feature = "utoipa", schema(rename = $str_name))]
                 $variant,
             )*
+        }
+
+        impl Serialize for FileType {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serializer.serialize_str(self.as_str())
+            }
+        }
+
+        impl<'de> Deserialize<'de> for FileType {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                let s = String::deserialize(deserializer)?;
+                FileType::from_str(&s).map_err(serde::de::Error::custom)
+            }
         }
 
         impl FromStr for FileType {
