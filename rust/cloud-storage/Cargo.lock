@@ -7039,6 +7039,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "decode_jwt",
  "email_formatting",
  "email_validator",
  "hmac",

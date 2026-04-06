@@ -7,11 +7,11 @@ use axum::{
     response::Html,
 };
 use cowlike::CowLike;
+use decode_jwt::DecodedJwt;
 use macro_env::Environment;
 use macro_service_urls::EnvExtMacroServiceUrls;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -46,12 +46,12 @@ pub struct GetNotificationTypePreferencesResponse {
 )]
 pub async fn get_notification_type_preferences<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
 ) -> Result<Json<GetNotificationTypePreferencesResponse>, (StatusCode, Json<ErrorResponse<'static>>)>
 {
     let disabled = state
         .inner
-        .get_disabled_notification_types(macro_user.macro_user_id)
+        .get_disabled_notification_types(decoded_jwt.macro_user_id)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get notification type preferences");
@@ -88,14 +88,14 @@ pub async fn get_notification_type_preferences<S: NotificationReader>(
 )]
 pub async fn disable_notification_type<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Path(NotificationEventTypePath {
         notification_event_type,
     }): Path<NotificationEventTypePath>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     disable_notification_type_inner(
         &state,
-        macro_user.macro_user_id.copied(),
+        decoded_jwt.macro_user_id.copied(),
         notification_event_type.as_str(),
     )
     .await
@@ -201,14 +201,14 @@ async fn disable_notification_type_inner<S: NotificationReader>(
 )]
 pub async fn enable_notification_type<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Path(NotificationEventTypePath {
         notification_event_type,
     }): Path<NotificationEventTypePath>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
         .inner
-        .enable_notification_type(macro_user.macro_user_id, &notification_event_type)
+        .enable_notification_type(decoded_jwt.macro_user_id, &notification_event_type)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to enable notification type");

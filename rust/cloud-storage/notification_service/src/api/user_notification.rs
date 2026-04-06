@@ -169,7 +169,7 @@ pub fn router<S: ::notification::domain::service::NotificationReader>()
 )]
 async fn list_typed_notifications<S: ::notification::domain::service::NotificationReader>(
     State(state): State<::notification::inbound::http::NotificationRouterState<S>>,
-    macro_user: model_user::axum_extractor::MacroUserExtractor,
+    decoded_jwt: decode_jwt::DecodedJwt,
     query: axum::extract::Query<::notification::inbound::http::Params>,
     cursor: Option<
         models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
@@ -181,11 +181,11 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
         axum::Json<model_error_response::ErrorResponse<'static>>,
     ),
 > {
-    let user = macro_user.macro_user_id.clone();
+    let user = decoded_jwt.macro_user_id.clone();
     let axum::Json(response) = ::notification::inbound::http::list_user_notifications::<
         S,
         serde_json::Value,
-    >(&state, macro_user, query, cursor)
+    >(&state, decoded_jwt, query, cursor)
     .await?;
 
     let (notifs, failed): (Vec<_>, Vec<_>) = response
@@ -277,7 +277,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
     S: ::notification::domain::service::NotificationReader,
 >(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
-    macro_user: model_user::axum_extractor::MacroUserExtractor,
+    decoded_jwt: decode_jwt::DecodedJwt,
     query: axum::extract::Query<::notification::inbound::http::Params>,
     cursor: Option<
         models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
@@ -293,7 +293,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
     let axum::Json(response) = ::notification::inbound::http::bulk_get_by_event_item_ids::<
         S,
         serde_json::Value,
-    >(state, macro_user, query, cursor, body)
+    >(state, decoded_jwt, query, cursor, body)
     .await?;
 
     let items = response
@@ -332,7 +332,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
 )]
 async fn get_typed_by_event_item_id<S: ::notification::domain::service::NotificationReader>(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
-    macro_user: model_user::axum_extractor::MacroUserExtractor,
+    decoded_jwt: decode_jwt::DecodedJwt,
     path: axum::extract::Path<::notification::inbound::http::EventItemIdPath>,
     query: axum::extract::Query<::notification::inbound::http::Params>,
     cursor: Option<
@@ -348,7 +348,7 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
     let axum::Json(response) = ::notification::inbound::http::get_by_event_item_id::<
         S,
         serde_json::Value,
-    >(state, macro_user, path, query, cursor)
+    >(state, decoded_jwt, path, query, cursor)
     .await?;
 
     let items = response
@@ -386,7 +386,7 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
 )]
 async fn get_typed_notification_by_id<S: ::notification::domain::service::NotificationReader>(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
-    macro_user: model_user::axum_extractor::MacroUserExtractor,
+    decoded_jwt: decode_jwt::DecodedJwt,
     path: axum::extract::Path<::notification::inbound::http::NotificationIdPath>,
 ) -> Result<
     axum::Json<ApiUserNotification>,
@@ -398,7 +398,7 @@ async fn get_typed_notification_by_id<S: ::notification::domain::service::Notifi
     let axum::Json(row) = ::notification::inbound::http::get_notification_by_id::<
         S,
         serde_json::Value,
-    >(state, macro_user, path)
+    >(state, decoded_jwt, path)
     .await?;
 
     let typed = to_typed_row(row).map_err(|e| {

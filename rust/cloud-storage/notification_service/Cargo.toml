@@ -26,6 +26,7 @@ aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+decode_jwt = { path = "../decode_jwt" }
 email_formatting = { path = "../email_formatting" }
 email_validator = { path = "../email_validator" }
 hmac = { workspace = true }
