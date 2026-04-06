@@ -848,38 +848,33 @@ export function createSplitLayout(
 
     if (!changed) return;
 
-    // Build a map of current splits by their content key for efficient lookup
-    const currentSplitsByKey = new Map<SplitKey, SplitState>();
-    for (const split of state.splits) {
-      currentSplitsByKey.set(keyOfSplitState(split), split);
-    }
-
-    // Build the result array
+    // Build the result array by position
     const resultSplits: SplitState[] = [];
     const usedIds = new Set<SplitId>();
 
     for (let i = 0; i < newSplits.length; i++) {
       const newContent = newSplits[i];
-      const key = keyOfSplitContent(newContent);
-      const existingSplit = currentSplitsByKey.get(key);
+      const splitAtSameIndex = state.splits[i];
 
-      if (existingSplit) {
-        // Reuse existing split - content matches by key
-        resultSplits.push(existingSplit);
-        usedIds.add(existingSplit.id);
+      // Reuse split at same index if content matches
+      if (
+        splitAtSameIndex &&
+        sameContent(splitAtSameIndex.content, newContent)
+      ) {
+        resultSplits.push(splitAtSameIndex);
+        usedIds.add(splitAtSameIndex.id);
       } else {
         // Build new split with fresh history
         const newSplit = buildSplit({
           initialContent: newContent,
           referredFrom: null,
         });
-        // Reuse the ID from the split at the same index if not already used
-        const splitAtSameIndex = state.splits[i];
-        if (splitAtSameIndex && !usedIds.has(splitAtSameIndex.id)) {
+        // Reuse the ID from the split at the same index to keep ids stable
+        if (splitAtSameIndex) {
           newSplit.id = splitAtSameIndex.id;
+          usedIds.add(splitAtSameIndex.id);
         }
         resultSplits.push(newSplit);
-        usedIds.add(newSplit.id);
       }
     }
 
@@ -897,7 +892,7 @@ export function createSplitLayout(
     }
 
     // Update state in a single batch
-    setState('splits', reconcile(resultSplits));
+    setState('splits', resultSplits);
   }
 
   const lastEvent = createMemo(() => state.events[state.events.length - 1]);
