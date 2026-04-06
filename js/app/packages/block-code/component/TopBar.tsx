@@ -12,6 +12,7 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 import { useAnalytics } from '@app/component/analytics-context';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
+import { CodeFileTypeChip } from './CodeFileTypeChip';
 import {
   DocumentPropertiesButton,
   PROPERTIES_DRAWER_ID,
@@ -121,7 +122,7 @@ export const TopBar: Component<{
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel />
+        <BlockItemSplitLabel badges={<CodeFileTypeChip />} />
       </SplitHeaderLeft>
 
       <ResponsivePermissionsBadge />
