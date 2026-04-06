@@ -6280,6 +6280,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_user_id",
  "macro_uuid",
  "model_user",

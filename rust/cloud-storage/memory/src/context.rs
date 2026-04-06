@@ -27,6 +27,8 @@ use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
+use crate::config::Config;
+
 /// Builds a [`ToolServiceContext`] from environment variables and a database pool.
 ///
 /// Required env vars: `INTERNAL_API_SECRET_KEY`, `DOCUMENT_STORAGE_SERVICE_URL`,
@@ -37,48 +39,43 @@ use sync_service_client::SyncServiceClient;
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`
-#[tracing::instrument(skip(pool), err)]
-pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<ToolServiceContext> {
-    let internal_auth_key =
-        std::env::var("INTERNAL_API_SECRET_KEY").unwrap_or_else(|_| "local".into());
-    let dss_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")?;
-    let search_url = std::env::var("SEARCH_SERVICE_URL")?;
-    let email_url = std::env::var("EMAIL_SERVICE_URL")?;
-    let sync_url = std::env::var("SYNC_SERVICE_URL")?;
-    let sfs_url = std::env::var("STATIC_FILE_SERVICE_URL")?;
-    let lexical_url =
-        std::env::var("LEXICAL_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8096".into());
-    let doc_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")?;
-    let docx_bucket = std::env::var("DOCX_DOCUMENT_UPLOAD_BUCKET")?;
-    let email_scheduled_queue = std::env::var("EMAIL_SCHEDULED_QUEUE")?;
-    let cf_dist_url = std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")?;
-    let cf_key_id = std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID")?;
-    let cf_private_key =
-        std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME")?;
+#[tracing::instrument(skip(pool, config), err)]
+pub async fn build_tool_service_context(
+    pool: sqlx::PgPool,
+    config: &Config,
+) -> anyhow::Result<ToolServiceContext> {
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .email_scheduled_queue(&email_scheduled_queue);
+        .email_scheduled_queue(&config.email_scheduled_queue);
 
     // Service clients
     let dss_client = Arc::new(DocumentStorageServiceClient::new(
-        internal_auth_key.clone(),
-        dss_url,
+        config.internal_api_secret_key.clone(),
+        config.document_storage_service_url.clone(),
     ));
     let search_client = Arc::new(SearchServiceClient::new(
-        internal_auth_key.clone(),
-        search_url,
+        config.internal_api_secret_key.clone(),
+        config.search_service_url.clone(),
     ));
-    let sync_client = Arc::new(SyncServiceClient::new(internal_auth_key.clone(), sync_url));
+    let sync_client = Arc::new(SyncServiceClient::new(
+        config.internal_api_secret_key.clone(),
+        config.sync_service_url.clone(),
+    ));
     let email_client = Arc::new(EmailServiceClient::new(
-        internal_auth_key.clone(),
-        email_url.clone(),
+        config.internal_api_secret_key.clone(),
+        config.email_service_url.clone(),
     ));
     let sfs_client = Arc::new(StaticFileServiceClient::new(
-        internal_auth_key.clone(),
-        sfs_url,
+        config.internal_api_secret_key.clone(),
+        config.static_file_service_url.clone(),
     ));
-    let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_url));
-    let lexical_client = LexicalClient::new(internal_auth_key, lexical_url);
+    let email_ext_client = Arc::new(EmailServiceClientExternal::new(
+        config.email_service_url.clone(),
+    ));
+    let lexical_client = LexicalClient::new(
+        config.internal_api_secret_key.clone(),
+        config.lexical_service_url.clone(),
+    );
 
     // Scribe
     let scribe = Arc::new(
@@ -121,12 +118,22 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
 
     // Document tool context
     let s3_client = macro_aws_config::s3_client().await;
-    let s3_upload_adapter = S3UploadUrlAdapter::new(s3_client, &doc_bucket, &docx_bucket);
+    let s3_upload_adapter = S3UploadUrlAdapter::new(
+        s3_client,
+        &config.document_storage_bucket,
+        &config.docx_document_upload_bucket,
+    );
     let document_repo = PgDocumentRepo::new(pool.clone());
     let cloudfront_config = CloudFrontConfig {
-        distribution_url: cf_dist_url,
-        signer_public_key_id: cf_key_id,
-        signer_private_key: cf_private_key,
+        distribution_url: config
+            .document_storage_service_cloudfront_distribution_url
+            .clone(),
+        signer_public_key_id: config
+            .document_storage_service_cloudfront_signer_public_key_id
+            .clone(),
+        signer_private_key: config
+            .document_storage_service_cloudfront_signer_private_key_secret_name
+            .clone(),
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
