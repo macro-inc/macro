@@ -13,9 +13,6 @@ export function isTouchDevice(): boolean {
     return false;
   }
 
-  const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
-  const hasNoHover = window.matchMedia('(hover: none)').matches;
-
-  cachedIsTouchDevice = hasCoarsePointer && hasNoHover;
+  cachedIsTouchDevice = window.matchMedia('(pointer: coarse)').matches;
   return cachedIsTouchDevice;
 }
