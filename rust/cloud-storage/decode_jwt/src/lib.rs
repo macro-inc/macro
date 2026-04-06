@@ -89,20 +89,23 @@ impl DecodedJwt {
         if cfg!(feature = "local_auth") && std::env::var("LOCAL_USER_ID").is_ok() {
             let user_id =
                 std::env::var("LOCAL_USER_ID").unwrap_or("macro|orguser@org.com".to_string());
-            let macro_user_id = MacroUserIdStr::parse_from_str(&user_id)
-                .map(CowLike::into_owned)
-                .expect("local auth passed invalid macro_user_id str");
+            let Ok(macro_user_id) =
+                MacroUserIdStr::parse_from_str(&user_id).map(CowLike::into_owned)
+            else {
+                return Err(DecodeJwtError::InvalidUserId(user_id));
+            };
+            let org_id: i32 = std::env::var("LOCAL_ORG_ID")
+                .unwrap_or("1".to_string())
+                .parse()
+                .map_err(|_| {
+                    DecodeJwtError::InvalidUserId("LOCAL_ORG_ID is not a valid i32".to_string())
+                })?;
             return Ok(DecodedJwt {
                 user_context: UserContext {
                     user_id,
                     fusion_user_id: std::env::var("LOCAL_FUSION_USER_ID")
                         .unwrap_or("set me!".to_string()),
-                    organization_id: Some(
-                        std::env::var("LOCAL_ORG_ID")
-                            .unwrap_or("1".to_string())
-                            .parse()
-                            .unwrap(),
-                    ),
+                    organization_id: Some(org_id),
                     permissions: None,
                 },
                 jwt_context: None,

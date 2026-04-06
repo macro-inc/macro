@@ -14,6 +14,7 @@ use crate::constant::{
     MACRO_ACCESS_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_HEADER,
 };
 
+/// Extracts the access token from a cookie. Returns `UNAUTHORIZED` if the cookie is missing.
 pub struct AccessTokenCookieExtractor(pub Cookie<'static>);
 
 impl<S> FromRequestParts<S> for AccessTokenCookieExtractor
@@ -26,7 +27,7 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let jar: CookieJar = parts.extract().await.expect("This extractor is infallibe");
+        let jar: CookieJar = parts.extract().await.expect("This extractor is infallible");
         static ACCESS_COOKIE_NAME: LazyLock<String> =
             LazyLock::new(|| match Environment::new_or_prod() {
                 Environment::Production => MACRO_ACCESS_TOKEN_COOKIE.to_string(),
@@ -40,6 +41,7 @@ where
         }
     }
 }
+/// Extracts the refresh token from a cookie. Returns `UNAUTHORIZED` if the cookie is missing.
 pub struct RefreshTokenCookieExtractor(pub Cookie<'static>);
 
 impl<S> FromRequestParts<S> for RefreshTokenCookieExtractor
@@ -52,7 +54,7 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let jar: CookieJar = parts.extract().await.expect("This extractor is infallibe");
+        let jar: CookieJar = parts.extract().await.expect("This extractor is infallible");
         static REFRESH_COOKIE_NAME: LazyLock<String> =
             LazyLock::new(|| match Environment::new_or_prod() {
                 Environment::Production => MACRO_REFRESH_TOKEN_COOKIE.to_string(),
@@ -67,6 +69,8 @@ where
     }
 }
 
+/// Extracts the access token from either the `Authorization: Bearer` header or a cookie.
+/// Returns `UNAUTHORIZED` if neither source provides a token.
 pub enum AccessTokenExtractor {
     Header(TypedHeader<Authorization<Bearer>>),
     Cookie(AccessTokenCookieExtractor),
@@ -102,6 +106,7 @@ where
     }
 }
 
+/// Extracts the refresh token from a custom header. Returns `BAD_REQUEST` if the header is missing.
 pub struct RefreshTokenHeaderExtractor(pub String);
 
 impl<S> FromRequestParts<S> for RefreshTokenHeaderExtractor
@@ -125,6 +130,8 @@ where
     }
 }
 
+/// Extracts the refresh token from either a custom header or a cookie.
+/// Returns `UNAUTHORIZED` if neither source provides a token.
 pub enum RefreshTokenExtractor {
     Header(RefreshTokenHeaderExtractor),
     Cookie(RefreshTokenCookieExtractor),

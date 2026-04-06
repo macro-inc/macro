@@ -14,12 +14,28 @@ const SIG_PARAM: &str = "sig";
 pub struct SignedUrl(Url);
 
 impl SignedUrl {
-    /// Create a signed URL by computing an HMAC-SHA256 over the URL string
-    /// and appending the hex-encoded signature as the `sig` query parameter.
-    pub fn new(mut u: Url, mac: Hmac<Sha256>) -> Self {
-        let sig = hex::encode(Self::compute_mac(&u, mac).into_bytes());
-        u.query_pairs_mut().append_pair(SIG_PARAM, &sig);
-        Self(u)
+    /// Create a signed URL by computing an HMAC-SHA256 over the canonicalized
+    /// URL string and appending the hex-encoded signature as the `sig` query parameter.
+    pub fn new(u: Url, mac: Hmac<Sha256>) -> Self {
+        let canonical = Self::canonicalize(&u);
+        let sig = hex::encode(Self::compute_mac(&canonical, mac).into_bytes());
+        let mut signed = canonical;
+        signed.query_pairs_mut().append_pair(SIG_PARAM, &sig);
+        Self(signed)
+    }
+
+    /// Canonicalize a URL by re-serializing its query pairs through
+    /// `query_pairs()`/`extend_pairs()` so that both `new()` and `verify()`
+    /// MAC the same byte representation.
+    fn canonicalize(u: &Url) -> Url {
+        let pairs: Vec<(Cow<'_, str>, Cow<'_, str>)> = u.query_pairs().collect();
+        let mut canonical = u.clone();
+        canonical
+            .query_pairs_mut()
+            .clear()
+            .extend_pairs(pairs)
+            .finish();
+        canonical
     }
 
     fn compute_mac(u: &Url, mut mac: Hmac<Sha256>) -> hmac::digest::CtOutput<Hmac<Sha256>> {

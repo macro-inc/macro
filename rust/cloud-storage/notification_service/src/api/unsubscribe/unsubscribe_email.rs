@@ -1,13 +1,11 @@
 use axum::{
-    Extension, Json,
+    Json,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model::{
-    response::{EmptyResponse, ErrorResponse},
-    user::UserContext,
-};
+use decode_jwt::DecodedJwt;
+use model::response::{EmptyResponse, ErrorResponse};
 
 use crate::api::context::ApiContext;
 
@@ -22,12 +20,12 @@ use crate::api::context::ApiContext;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, decoded_jwt))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    decoded_jwt: DecodedJwt,
 ) -> Result<Response, Response> {
-    let email = user_context.user_id.replace("macro|", "");
+    let email = decoded_jwt.user_context.user_id.replace("macro|", "");
     notification_db_client::unsubscribe::email::upsert_email_unsubscribe(&ctx.db, &email)
         .await
         .map_err(|e| {

@@ -1,3 +1,6 @@
+#![deny(missing_docs)]
+//! Service URL resolution based on the current environment.
+
 use macro_env::Environment;
 use url::Url;
 

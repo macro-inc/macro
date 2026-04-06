@@ -117,7 +117,7 @@ pub async fn presigned_disable_notification_type<S: NotificationReader>(
     }): Path<NotificationEventTypePath>,
     Query(params): Query<PresignedQueryParams>,
     original_uri: OriginalUri,
-) -> Result<Html<String>, Html<String>> {
+) -> Result<Html<String>, (StatusCode, Html<String>)> {
     let env = Environment::new_or_prod();
     let notification_service_url = env.notification_service();
     let to_verify = notification_service_url.join(
@@ -128,11 +128,14 @@ pub async fn presigned_disable_notification_type<S: NotificationReader>(
     );
 
     let Ok(to_verify) = to_verify else {
-        return Err(Html("Invalid link".to_string()));
+        return Err((StatusCode::BAD_REQUEST, Html("Invalid link".to_string())));
     };
 
     let Some(_verified) = SignedUrl::verify(to_verify, state.hmac_signing_key.clone()) else {
-        return Err(Html("Invalid signature".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Html("Invalid signature".to_string()),
+        ));
     };
 
     disable_notification_type_inner(&state, params.id, notification_event_type.as_str())
@@ -142,7 +145,7 @@ pub async fn presigned_disable_notification_type<S: NotificationReader>(
                 "You have been unsubscribed from {notification_event_type}"
             ))
         })
-        .map_err(|(_, Json(ErrorResponse { message }))| Html(message.to_string()))
+        .map_err(|(status, Json(ErrorResponse { message }))| (status, Html(message.to_string())))
 }
 
 /// internal implementation of the GET/PUT methods to DRY up the code

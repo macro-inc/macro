@@ -535,7 +535,7 @@
     },
     "/v1/user_notifications/preferences": {
       "get": {
-        "tags": ["user_notification"],
+        "tags": ["notification_crate::inbound::http::preferences"],
         "summary": "Get the notification types that the user has disabled.",
         "operationId": "get_notification_type_preferences",
         "responses": {
@@ -574,7 +574,7 @@
     },
     "/v1/user_notifications/preferences/{notification_event_type}/disable": {
       "put": {
-        "tags": ["user_notification"],
+        "tags": ["notification_crate::inbound::http::preferences"],
         "summary": "Disable a notification type for the authenticated user.",
         "operationId": "disable_notification_type",
         "parameters": [
@@ -627,7 +627,7 @@
     },
     "/v1/user_notifications/preferences/{notification_event_type}/enable": {
       "put": {
-        "tags": ["user_notification"],
+        "tags": ["notification_crate::inbound::http::preferences"],
         "summary": "Re-enable a notification type for the authenticated user.",
         "operationId": "enable_notification_type",
         "parameters": [

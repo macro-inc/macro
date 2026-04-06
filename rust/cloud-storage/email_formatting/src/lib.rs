@@ -85,13 +85,16 @@ impl EmailDigestNotification {
         let preview_len = notifs.len();
         let num_truncated = input_len - preview_len;
 
-        let mut contacts_url = env.contacts_service();
-        contacts_url.set_path("/todo");
-        contacts_url
+        let mut unsubscribe_url = env.notification_service();
+        unsubscribe_url.set_path(&format!(
+            "/user_notifications/preferences/{}/disable",
+            Self::TYPE_NAME
+        ));
+        unsubscribe_url
             .query_pairs_mut()
             .append_pair("id", digest.user_id.as_ref())
             .finish();
-        let unsubscribe_url = SignedUrl::new(contacts_url, sha);
+        let unsubscribe_url = SignedUrl::new(unsubscribe_url, sha);
 
         let inner_html_string = DigestTemplate {
             notifs,

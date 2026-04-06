@@ -21,7 +21,7 @@ pub fn device_router<S: NotificationReader>() -> Router<NotificationRouterState<
 }
 
 /// Register a device for push notifications.
-#[tracing::instrument(skip(state, macro_user_id, req), fields(user_id=?macro_user_id))]
+#[tracing::instrument(skip(state, macro_user_id, req))]
 async fn register_device<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
     DecodedJwt { macro_user_id, .. }: DecodedJwt,
