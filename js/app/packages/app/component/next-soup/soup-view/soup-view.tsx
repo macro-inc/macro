@@ -857,10 +857,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 More Results
                               </div>
                             </Show>
-                            <SoupEntityContextMenu
-                              entity={row.original}
-                              entityTimestamp={timestamp()}
-                            >
+                            <SoupEntityContextMenu entity={row.original}>
                               <ListEntity
                                 entity={row.original}
                                 timestamp={timestamp()}

@@ -1,5 +1,4 @@
 import { ContextMenuContent } from '@core/component/Menu';
-import type { DateValue } from '@core/util/date';
 import { isMobile } from '@core/mobile/isMobile';
 import { longPressHighlight } from '@core/directive/longPressHighlight';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -11,7 +10,6 @@ import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
 
 interface SoupEntityContextMenuProps {
   entity: EntityData;
-  entityTimestamp?: DateValue | null;
   onOpenChange?: (open: boolean) => void;
 }
 

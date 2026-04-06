@@ -68,8 +68,8 @@ export function SoupEntityActionDrawer() {
                           'flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:border-b border-page',
                           action.destructive ? 'text-failure-ink' : 'text-ink'
                         )}
-                        onClick={() => {
-                          void action.onClick();
+                        onClick={async () => {
+                          await action.onClick();
                           drawerState.close();
                         }}
                       >
