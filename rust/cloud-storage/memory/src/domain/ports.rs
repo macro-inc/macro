@@ -22,13 +22,13 @@ pub type Result<T> = std::result::Result<T, MemoryError>;
 
 pub type Memory = String;
 
-/// A memory record with its creation timestamp.
+/// A memory record with its latest refresh timestamp.
 #[derive(Debug)]
 pub struct MemoryRecord {
     /// The memory text.
     pub memory: Memory,
-    /// When this memory was generated.
-    pub created_at: DateTime<Utc>,
+    /// When this memory was last generated or refreshed.
+    pub updated_at: DateTime<Utc>,
 }
 
 pub trait MemoryRepo: Send + Sync + 'static {

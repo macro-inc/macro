@@ -41,10 +41,10 @@ impl MemoryRepo for PgMemoryRepo {
     async fn get_latest_memory(&self, user: MacroUserIdStr<'_>) -> Result<Option<MemoryRecord>> {
         let row = sqlx::query!(
             r#"
-            SELECT memory, created_at as "created_at!"
+            SELECT memory, updated_at as "updated_at!"
             FROM memory
             WHERE user_id = $1
-            ORDER BY created_at DESC
+            ORDER BY updated_at DESC
             LIMIT 1
             "#,
             user.as_ref(),
@@ -54,7 +54,7 @@ impl MemoryRepo for PgMemoryRepo {
 
         Ok(row.map(|r| MemoryRecord {
             memory: r.memory,
-            created_at: r.created_at,
+            updated_at: r.updated_at,
         }))
     }
 

@@ -102,7 +102,7 @@ where
 
         let needs_generation = match &record {
             Some(r) => {
-                let age = Utc::now() - r.created_at;
+                let age = Utc::now() - r.updated_at;
                 age > chrono::Duration::from_std(MAX_AGE).unwrap_or(chrono::TimeDelta::MAX)
             }
             None => true,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT memory, created_at as \"created_at!\"\n            FROM memory\n            WHERE user_id = $1\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT memory, updated_at as \"updated_at!\"\n            FROM memory\n            WHERE user_id = $1\n            ORDER BY updated_at DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "created_at!",
+        "name": "updated_at!",
         "type_info": "Timestamptz"
       }
     ],
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "343e4f6931752a30ceb2e078834aacd0a8486948494a4dc14b62e943590e97f6"
+  "hash": "a0ccb1b43344dc0501f538d62f7b3209dfe7e2e60fa1396cfb3efff85e9d8c4d"
 }
