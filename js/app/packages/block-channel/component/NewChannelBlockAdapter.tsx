@@ -10,8 +10,6 @@ import {
   type Component,
   createSignal,
   Match,
-  onCleanup,
-  onMount,
   Show,
   Suspense,
   Switch,
@@ -35,7 +33,6 @@ import { ChannelDebouncedNotificationReadMarker } from '@notifications/component
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { BlockChannelProps } from './Block';
 import { CallProvider, CallOverlay, useCall } from '@channel/Call';
-import { useSendTranscriptMutation } from '@queries/call/call';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { Button } from '@ui/components/Button';
@@ -167,27 +164,6 @@ function NewChannelBlockAdapterInner(
   const [activeTab, setActiveTab] =
     createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);
   const call = useCall(() => props.channelId);
-  const sendTranscript = useSendTranscriptMutation();
-
-  // Forward final transcript segments to the backend
-  let unsubTranscript: (() => void) | undefined;
-  onMount(() => {
-    unsubTranscript = call.callCtx.onTranscriptSegment((segment) => {
-      sendTranscript.mutate({
-        channelId: props.channelId,
-        segment: {
-          segmentId: segment.id,
-          speakerId: segment.participantIdentity,
-          content: segment.text,
-          startedAt: new Date().toISOString(),
-          isFinal: segment.isFinal,
-        },
-      });
-    });
-  });
-  onCleanup(() => {
-    unsubTranscript?.();
-  });
 
   const convertTargetMessage = (
     params: ChannelTargetMessageParams

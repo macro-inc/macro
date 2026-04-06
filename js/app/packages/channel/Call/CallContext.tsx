@@ -5,7 +5,6 @@ import {
   Track,
   type RemoteParticipant,
   type LocalTrackPublication,
-  type TranscriptionSegment,
 } from 'livekit-client';
 import {
   createContext,
@@ -24,13 +23,6 @@ export type CallParticipantInfo = {
   hasVideo: boolean;
 };
 
-export type FinalTranscriptSegment = {
-  id: string;
-  text: string;
-  participantIdentity: string;
-  isFinal: boolean;
-};
-
 type CallStoreState = {
   connectionState: ConnectionState;
   activeChannelId: string | null;
@@ -40,7 +32,6 @@ type CallStoreState = {
   isScreenSharing: boolean;
   trackVersion: number;
   speakerVersion: number;
-  transcriptSegments: TranscriptionSegment[];
 };
 
 const initialState: CallStoreState = {
@@ -52,7 +43,6 @@ const initialState: CallStoreState = {
   isScreenSharing: false,
   trackVersion: 0,
   speakerVersion: 0,
-  transcriptSegments: [],
 };
 
 export type CallState = {
@@ -88,12 +78,6 @@ export type CallState = {
   toggleVideo: () => Promise<void>;
   /** Toggle screen sharing */
   toggleScreenShare: () => Promise<void>;
-  /** Transcript segments received via lk.transcription stream */
-  transcriptSegments: () => TranscriptionSegment[];
-  /** Register a callback for when final transcript segments are received. Returns an unsubscribe function. */
-  onTranscriptSegment: (
-    cb: (segment: FinalTranscriptSegment) => void
-  ) => () => void;
 };
 
 const CallContext = createContext<CallState>();
@@ -117,8 +101,6 @@ export function useCallContextOptional(): CallState | undefined {
 function createCallState() {
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({ ...initialState });
-  const transcriptCallbacks: Array<(segment: FinalTranscriptSegment) => void> =
-    [];
 
   // --- internal helpers ---
 
@@ -159,38 +141,6 @@ function createCallState() {
       bumpTrackVersion();
     });
     r.on(RoomEvent.Disconnected, resetState);
-
-    r.registerTextStreamHandler(
-      'lk.transcription',
-      async (_reader, participantInfo) => {
-        const reader = _reader;
-        const text = await reader.readAll();
-        const isFinal =
-          reader.info.attributes?.['lk.transcription_final'] === 'true';
-        const segment: TranscriptionSegment = {
-          id: reader.info.id,
-          text,
-          language: reader.info.attributes?.['lk.language'] ?? '',
-          startTime: 0,
-          endTime: 0,
-          final: isFinal,
-          firstReceivedTime: Date.now(),
-          lastReceivedTime: Date.now(),
-        };
-        if (isFinal) {
-          setStore('transcriptSegments', (prev) => [...prev, segment]);
-          const finalSegment: FinalTranscriptSegment = {
-            id: reader.info.id,
-            text,
-            participantIdentity: participantInfo?.identity ?? '',
-            isFinal: true,
-          };
-          for (const cb of transcriptCallbacks) {
-            cb(finalSegment);
-          }
-        }
-      }
-    );
   }
 
   function destroyRoom() {
@@ -322,7 +272,6 @@ function createCallState() {
     isAudioMuted: () => store.isAudioMuted,
     isVideoMuted: () => store.isVideoMuted,
     isScreenSharing: () => store.isScreenSharing,
-    transcriptSegments: () => store.transcriptSegments,
 
     // mutations
     connect,
@@ -330,13 +279,6 @@ function createCallState() {
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
-    onTranscriptSegment: (cb) => {
-      transcriptCallbacks.push(cb);
-      return () => {
-        const idx = transcriptCallbacks.indexOf(cb);
-        if (idx !== -1) transcriptCallbacks.splice(idx, 1);
-      };
-    },
   };
 
   return state;
