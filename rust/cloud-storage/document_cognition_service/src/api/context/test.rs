@@ -198,6 +198,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_repo,
         frecency_storage,
     );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
         frecency_service,
@@ -283,6 +284,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_service_client: email_service_client_external.clone(),
         scribe: scribe.clone(),
         soup_service: soup_service.clone(),
+        email_service: email_service_for_tools.clone(),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
@@ -313,6 +315,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
         soup_service,
+        email_service: email_service_for_tools,
         stream_repo: MockStreamRepo::new(),
         document_tool_context,
         memory_service,

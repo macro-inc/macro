@@ -157,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
         PgUserRepo::new(db.clone()),
         frecency_storage,
     );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         frecency_service,
@@ -296,6 +297,7 @@ async fn main() -> anyhow::Result<()> {
         email_service_client: email_service_client_external.clone(),
         scribe: scribe.clone(),
         soup_service: soup_service.clone(),
+        email_service: email_service_for_tools.clone(),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
@@ -329,6 +331,7 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress_service,
         connection_repo: connection_manager.persistence,
         soup_service,
+        email_service: email_service_for_tools,
         stream_repo,
         document_tool_context,
         memory_service,

@@ -42,7 +42,7 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
 pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = AsyncToolSet::new()
         .add_toolset(search_toolset())
-        .add_tool::<ListEntities, SoupToolContext<ToolSoupService>>()
+        .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_tool::<read::ReadThread, Arc<ToolScribe>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())

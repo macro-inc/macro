@@ -140,6 +140,7 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
+    pub email_service: Arc<ToolEmailService>,
     pub document_tool_context: ToolDocumentToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
@@ -151,10 +152,11 @@ impl FromRef<ToolServiceContext> for ai_toolset::NoContext {
     }
 }
 
-impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService> {
+impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService, ToolEmailService> {
     fn from_ref(ctx: &ToolServiceContext) -> Self {
         SoupToolContext {
             service: ctx.soup_service.clone(),
+            email_service: ctx.email_service.clone(),
         }
     }
 }
