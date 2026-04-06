@@ -25,6 +25,8 @@ import type {
   QuickAccessEntity,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
+import { formatDocumentName } from '@service-storage/util/filename';
+import { extractRawTitle } from '@entity/extractors/entity-title';
 
 /**
  * index entry for sorted lists.

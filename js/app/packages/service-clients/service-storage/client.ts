@@ -141,32 +141,6 @@ export function isItemType(str: string): str is ItemType {
   return itemTypeSet.has(str);
 }
 
-const mapMetadataDocumentName = (
-  metadata: DocumentMetadata
-): DocumentMetadata => {
-  const name = formatDocumentName(metadata.documentName, metadata.fileType, {
-    fullyQualifiedBlockName: true,
-  });
-
-  return {
-    ...metadata,
-    documentName: name,
-  };
-};
-
-const mapItemDocumentName = (item: Item): Item => {
-  if (item.type !== 'document') return item;
-
-  const name = formatDocumentName(item.name, item.fileType, {
-    fullyQualifiedBlockName: true,
-  });
-
-  return {
-    ...item,
-    name,
-  };
-};
-
 const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
   if (!('document_name' in preview)) return preview;
 
@@ -282,7 +256,7 @@ export const storageServiceClient = {
   },
   async getUsersHistory() {
     return mapOk(await dssFetch<{ data: Item[] }>(`/history`), (result) => ({
-      data: result.data.map(mapItemDocumentName),
+      data: result.data,
     }));
   },
 
@@ -331,7 +305,7 @@ export const storageServiceClient = {
         };
       }>(`/documents?limit=${params.limit}&offset=${params.offset}`),
       (result) => ({
-        documents: result.data.documents.map(mapMetadataDocumentName),
+        documents: result.data.documents,
         total: result.data.total,
         nextOffset: result.data.next_offset,
       })
@@ -423,7 +397,7 @@ export const storageServiceClient = {
         const data = result.data;
         return {
           ...data,
-          documentMetadata: mapMetadataDocumentName(data.documentMetadata),
+          documentMetadata: data.documentMetadata,
         };
       }
     );
