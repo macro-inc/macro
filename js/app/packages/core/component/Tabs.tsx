@@ -15,6 +15,8 @@ export const Tabs = (
     list: TabItem[];
     value?: string;
     defaultValue?: string;
+    indicatorPosition?: 'top' | 'bottom';
+    class?: string;
   } & Omit<SegmentedControlRootProps, 'defaultValue'>
 ) => {
   const [local, rootProps] = splitProps(props, [
@@ -22,6 +24,8 @@ export const Tabs = (
     'value',
     'defaultValue',
     'disabled',
+    'indicatorPosition',
+    'class',
   ]);
 
   let listRef!: HTMLDivElement;
@@ -54,7 +58,7 @@ export const Tabs = (
       defaultValue={local.defaultValue ?? local.list[0]?.value}
       disabled={local.disabled}
       {...rootProps}
-      class="h-full"
+      class={cn('h-full', local.class)}
     >
       <div ref={listRef} class="relative flex items-center h-full">
         <For each={local.list}>
@@ -81,7 +85,13 @@ export const Tabs = (
           )}
         </For>
         <div
-          class="absolute bottom-0 h-[1px] bg-accent transition-[left,width] duration-150 pointer-events-none"
+          data-indicator
+          class={cn(
+            'absolute h-[2px] bg-accent transition-[left,width] duration-150 pointer-events-none',
+            (local.indicatorPosition ?? 'bottom') === 'top'
+              ? 'top-0'
+              : 'bottom-0'
+          )}
           style={{
             left: `${indicatorStyle().left}px`,
             width: `${indicatorStyle().width}px`,

@@ -10,21 +10,9 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { useUserContext } from '@core/context/user';
 import { Tabs, type TabItem } from '@core/component/Tabs';
-import {
-  batch,
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  on,
-  onMount,
-  Switch,
-} from 'solid-js';
+import { batch, createMemo, For, Match, Switch } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import { hapticImpact } from '@core/mobile/haptics';
-import { cn } from '@ui/utils/classname';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -205,129 +193,35 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <Switch>
-      <For
-        each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
-      >
-        {(v) => (
-          <Match when={listView() === v}>
-            <MobileViewTabs view={v} />
-          </Match>
-        )}
-      </For>
-    </Switch>
+    <div class="bg-panel border-t border-edge-muted h-11 px-1">
+      <Switch>
+        <For
+          each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
+        >
+          {(v) => (
+            <Match when={listView() === v}>
+              <MobileViewTabs view={v} />
+            </Match>
+          )}
+        </For>
+      </Switch>
+    </div>
   );
 };
 
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
-
-  let scrollRef!: HTMLDivElement;
-  let spacerRef!: HTMLDivElement;
-  const itemRefs: HTMLDivElement[] = [];
-  const textRefs: HTMLSpanElement[] = [];
-
-  const tabs = () => VIEW_TAB_LISTS[props.view];
-
-  const [scrollActiveId, setScrollActiveId] = createSignal<string>();
-  const [activeWidth, setActiveWidth] = createSignal(0);
-
-  createEffect(
-    on(scrollActiveId, (id) => {
-      const idx = tabs().findIndex((t) => t.value === id);
-      const el = textRefs[idx];
-      if (el) setActiveWidth(el.offsetWidth);
-    })
-  );
-
-  const updateActiveFromScroll = () => {
-    const scrollLeft = scrollRef.scrollLeft;
-    let closest: HTMLDivElement | null = null;
-    let closestDist = Infinity;
-    for (const el of itemRefs) {
-      const dist = Math.abs(el.offsetLeft - scrollLeft);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closest = el;
-      }
-    }
-    const id = closest?.dataset.tabId;
-    if (id && scrollActiveId() !== id) {
-      hapticImpact('light');
-      setScrollActiveId(id);
-    }
-  };
-
-  const updateSpacer = () => {
-    const last = itemRefs[itemRefs.length - 1];
-    if (last) {
-      spacerRef.style.width = `${scrollRef.clientWidth - last.offsetWidth}px`;
-    }
-  };
-
-  onMount(() => {
-    updateSpacer();
-    const tab = activeTab();
-    const idx = tabs().findIndex((t) => t.value === tab);
-    const startIdx = idx >= 0 ? idx : 0;
-    scrollRef.scrollLeft = itemRefs[startIdx]?.offsetLeft ?? 0;
-    setScrollActiveId(tabs()[startIdx]?.value);
-  });
-
-  const handleTouchEnd = () => {
-    const id = scrollActiveId();
-    if (id) {
-      applyTabPreset(props.view, id);
-    }
-  };
-
-  const handleItemClick = (tabValue: string, idx: number) => {
-    const el = itemRefs[idx];
-    if (el) scrollRef.scrollTo({ left: el.offsetLeft, behavior: 'smooth' });
-    hapticImpact('light');
-    applyTabPreset(props.view, tabValue);
-  };
+  const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
-    <div class="relative bg-panel border-t border-edge-muted [--tab-padding-l:1rem]">
-      <div
-        ref={scrollRef}
-        class="flex flex-row overflow-x-scroll scrollbar-hidden"
-        style="scroll-snap-type: x mandatory;"
-        onScroll={updateActiveFromScroll}
-        onTouchEnd={handleTouchEnd}
-      >
-        <For each={tabs()}>
-          {(tab, i) => (
-            <div
-              ref={(el) => {
-                itemRefs[i()] = el;
-              }}
-              data-tab-id={tab.value}
-              class={cn(
-                'flex-shrink-0 flex items-center pl-(--tab-padding-l) pt-3 pb-3 min-h-11 text-sm cursor-pointer',
-                scrollActiveId() === tab.value ? 'text-ink' : 'text-ink/60'
-              )}
-              style="scroll-snap-align: start;"
-              onClick={() => handleItemClick(tab.value, i())}
-            >
-              <span
-                ref={(el) => {
-                  textRefs[i()] = el;
-                }}
-              >
-                {tab.label}
-              </span>
-            </div>
-          )}
-        </For>
-        <div ref={spacerRef} class="flex-shrink-0" />
-      </div>
-      <div
-        class="absolute top-0 left-(--tab-padding-l) h-[3px] bg-accent transition-[width] duration-150 pointer-events-none"
-        style={{ width: `${activeWidth()}px` }}
-      />
-    </div>
+    <Tabs
+      list={list()}
+      value={activeTab()}
+      defaultValue={VIEW_TAB_PRESETS[props.view].default}
+      onChange={(value) => applyTabPreset(props.view, value)}
+      indicatorPosition="top"
+      class="[&_[data-indicator]]:h-[3px]"
+    />
   );
 };
