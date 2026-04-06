@@ -1,0 +1,12 @@
+diff --git a/build/dev.js b/build/dev.js
+index d1b3addc6fc214c5508f903fda375f38e14acfd7..cc27b37db9ab24a07ed6ec0bfd31da3fd1a6bd8b 100644
+--- a/build/dev.js
++++ b/build/dev.js
+@@ -191,6 +191,7 @@ function useBaseQuery(options, Observer, queryClient) {
+     },
+     {
+       storage: createDeepSignal,
++      initialValue: !observerResult.isLoading ? observerResult : undefined,
+       get deferStream() {
+         return options().deferStream;
+       },
