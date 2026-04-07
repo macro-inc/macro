@@ -147,7 +147,7 @@ export const modifyPolicyArn = modifyPolicy.arn;
 
 const serviceUser = new aws.iam.User(`macro-call-recording-svc-${stack}`, {
   name: `macro-call-recording-svc-${stack}`,
-  tags,
+  tags: { ...tags, 'call-recording-access': 'true' },
 });
 
 new aws.iam.UserPolicyAttachment(`macro-call-recording-svc-crud-${stack}`, {
@@ -188,40 +188,41 @@ new aws.secretsmanager.SecretVersion(
 );
 
 // ---------------------------------------------------------------------------
-// 3. Bucket Policy — deny everything unless caller is allowed
+// 3. Bucket Policy — tag-based access control
 // ---------------------------------------------------------------------------
-
-const allowedPrincipalArns: pulumi.Input<string>[] = [
-  `arn:aws:iam::569036502058:root`,
-  `arn:aws:iam::569036502058:user/hutch`,
-  serviceUser.arn,
-];
+// Denies all access unless the caller's principal is tagged with
+// call-recording-access: "true". This blocks broad dev IAM permissions.
+//
+// When attaching crudPolicy or modifyPolicy to a user/role, also tag them
+// with { 'call-recording-access': 'true' } to grant access.
 
 const bucketPolicy = new aws.s3.BucketPolicy(
   `macro-call-recording-policy-${stack}`,
   {
     bucket: callRecordingBucket.id,
-    policy: pulumi
-      .all([callRecordingBucket.arn, ...allowedPrincipalArns])
-      .apply(([bucketArn, ...principals]) =>
-        JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'DenyUnauthorizedAccess',
-              Effect: 'Deny',
-              Principal: '*',
-              Action: 's3:*',
-              Resource: [bucketArn, `${bucketArn}/*`],
-              Condition: {
-                StringNotLike: {
-                  'aws:PrincipalArn': principals,
-                },
+    policy: callRecordingBucket.arn.apply((bucketArn) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'DenyWithoutTag',
+            Effect: 'Deny',
+            Principal: '*',
+            Action: 's3:*',
+            Resource: [bucketArn, `${bucketArn}/*`],
+            Condition: {
+              StringNotEquals: {
+                'aws:PrincipalTag/call-recording-access': 'true',
+              },
+              // Never deny the account root — prevents lockout
+              ArnNotEquals: {
+                'aws:PrincipalArn': `arn:aws:iam::569036502058:root`,
               },
             },
-          ],
-        })
-      ),
+          },
+        ],
+      })
+    ),
   }
 );
 

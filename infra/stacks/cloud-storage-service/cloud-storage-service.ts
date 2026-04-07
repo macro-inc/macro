@@ -172,7 +172,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
             },
           ],
         },
-        tags: this.tags,
+        tags: { ...this.tags, 'call-recording-access': 'true' },
       },
       { parent: this }
     );
