@@ -3,10 +3,8 @@ export type CategoryFilter =
   | 'commands'
   | 'channels'
   | 'dms'
-  | 'notes'
   | 'tasks'
   | 'documents'
-  | 'channels'
   | 'chats'
   | 'projects'
   | 'people';
