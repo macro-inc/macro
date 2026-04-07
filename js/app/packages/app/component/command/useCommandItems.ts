@@ -53,7 +53,7 @@ function createSearchConfig(hasQuery: boolean) {
     useViewedAt: true,
     dmBoost: hasQuery ? 1.8 : 1.0,
     fuzzyWeight: hasQuery ? 0.7 : 0.0,
-    timeWeight: hasQuery ? 0.3 : 0.9,
+    timeWeight: hasQuery ? 0.5 : 0.9,
     minFuzzyThreshold: hasQuery ? 0.1 : 0,
     commaSeparatedChannelMatch: true,
   };
