@@ -23,7 +23,6 @@ use crate::domain::ports::{
 use cowlike::CowLike;
 use either::Either;
 use futures::stream::{FuturesUnordered, StreamExt};
-use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
@@ -356,12 +355,6 @@ where
                 ClaimResult::Ready(batch) => batch,
                 v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
             };
-
-        if batch.user_id.email_part().domain_part() != "macro.com" {
-            return Err(report!(
-                "Sending digest for non-macro user is currently disabled"
-            ));
-        }
 
         let recipient: MacroUserIdStr<'static> = batch.user_id.clone();
         let email_notif = f(batch)?;
