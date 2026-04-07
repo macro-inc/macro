@@ -12,9 +12,13 @@ env_var!(
         pub(crate) NotificationIngressQueue,
         pub(crate) ConnectionGatewayUrl,
         pub(crate) RedisUri,
-        pub(crate) AppleBundleId,
-        pub(crate) UnsubscribeHmacSecret
+        pub(crate) AppleBundleId
     }
+);
+
+env_var!(
+    #[derive(Clone)]
+    pub(crate) struct UrlSigningHmac;
 );
 
 #[derive(Debug)]

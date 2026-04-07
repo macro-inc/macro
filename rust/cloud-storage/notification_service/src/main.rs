@@ -66,9 +66,13 @@ pub async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
 
+    let unsubscribe_hmac_secret = secretsmanager_client
+        .get_maybe_secret_value(config.environment, config::UrlSigningHmac::new()?)
+        .await?;
+
     let vars = config::Vars::new()?;
 
-    let hmac_key = Hmac::<Sha256>::new_from_slice(vars.unsubscribe_hmac_secret.as_ref().as_bytes())
+    let hmac_key = Hmac::<Sha256>::new_from_slice(unsubscribe_hmac_secret.as_ref().as_bytes())
         .expect("HMAC accepts any key size");
 
     let redis_client =
