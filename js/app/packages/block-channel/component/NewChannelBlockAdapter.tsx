@@ -4,16 +4,13 @@ import {
   type ChannelProps,
 } from '@channel/Channel/Channel';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
+import {
+  ChannelTabProvider,
+  useChannelTab,
+} from '@channel/Channel/ChannelTabContext';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
-import {
-  type Component,
-  createSignal,
-  Match,
-  Show,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import { blockHandleSignal } from '@core/signal/load';
 import { createMethodRegistration } from '@core/orchestrator';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -32,12 +29,14 @@ import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipant
 import { ChannelDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { BlockChannelProps } from './Block';
-import { CallProvider, CallOverlay, useCall } from '@channel/Call';
+import {
+  CallProvider,
+  ChannelCallButton,
+  ChannelCallTab,
+  useCall,
+} from '@channel/Call';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { Button } from '@ui/components/Button';
-import PhoneIcon from '@icon/regular/phone.svg';
-import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
 
 type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
@@ -49,66 +48,33 @@ type ChannelPropsTargetMessage = Pick<
   'targetMessageId' | 'targetMessageReplyId'
 >;
 
-const CallIcon: Component<{ isInCall: () => boolean }> = (props) => (
-  <Show when={props.isInCall()} fallback={<PhoneIcon />}>
-    <PhoneDisconnectIcon />
-  </Show>
-);
-
-function CallButton(props: {
-  joinCall: () => Promise<void>;
-  leaveCall: () => Promise<void>;
-  isInCall: () => boolean;
-  isPending: () => boolean;
-}) {
-  const handleClick = async () => {
-    if (props.isPending()) return;
-    try {
-      if (props.isInCall()) {
-        await props.leaveCall();
-      } else {
-        await props.joinCall();
-      }
-    } catch (e) {
-      console.error('Call action failed', e);
-    }
-  };
-
+function CallTabLabel() {
   return (
-    <Button
-      onClick={handleClick}
-      disabled={props.isPending()}
-      tooltip={props.isInCall() ? 'Leave Call' : 'Call'}
-      class={
-        props.isInCall()
-          ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent-ink'
-          : 'px-1'
-      }
-      size="icon-sm"
-    >
-      <CallIcon isInCall={props.isInCall} />
-    </Button>
+    <span class="flex items-center gap-1.5">
+      <span class="size-1.5 rounded-full bg-accent animate-pulse" />
+      Call
+    </span>
   );
 }
 
-function NewTop(props: {
-  channelId: string;
-  activeTab: ChannelTabId;
-  onTabChange: (value: ChannelTabId) => void;
-  joinCall: () => Promise<void>;
-  leaveCall: () => Promise<void>;
-  isInCall: () => boolean;
-  isPending: () => boolean;
-}) {
+function NewTop(props: { channelId: string }) {
+  const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
+  const call = useCall(() => props.channelId);
   const participants = () =>
     participantsQuery.isLoading ? [] : participantsQuery.data;
-  const tabs = () =>
-    channelType() === ChannelTypeEnum.DirectMessage
-      ? CHANNEL_TABS.filter((tab) => tab.value !== 'participants')
-      : CHANNEL_TABS;
+  const tabs = () => {
+    let filtered = [...CHANNEL_TABS];
+    if (channelType() === ChannelTypeEnum.DirectMessage)
+      filtered = filtered.filter((tab) => tab.value !== 'participants');
+    if (!ENABLE_CALLS() || !call.isInThisChannel())
+      filtered = filtered.filter((tab) => tab.value !== 'call');
+    return filtered.map((tab) =>
+      tab.value === 'call' ? { ...tab, label: <CallTabLabel /> } : tab
+    );
+  };
 
   return (
     <Suspense>
@@ -118,17 +84,12 @@ function NewTop(props: {
         participants={participants() ?? []}
         channelName={channelName() ?? 'New Channel'}
         tabs={tabs()}
-        activeTab={props.activeTab}
-        onTabChange={props.onTabChange}
+        activeTab={activeTab()}
+        onTabChange={setActiveTab}
       />
       <Show when={ENABLE_CALLS()}>
         <SplitHeaderRight>
-          <CallButton
-            joinCall={props.joinCall}
-            leaveCall={props.leaveCall}
-            isInCall={props.isInCall}
-            isPending={props.isPending}
-          />
+          <ChannelCallButton channelId={props.channelId} />
         </SplitHeaderRight>
       </Show>
       <ChannelTopBarLiveIndicators />
@@ -140,30 +101,10 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   useBlockEntityCommands();
 
   const notificationSource = useGlobalNotificationSource();
-
   const channelId = useBlockId();
-
-  return (
-    <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <ChannelDebouncedNotificationReadMarker
-        notificationSource={notificationSource}
-        channelId={channelId}
-        debounceTime={500}
-      />
-      <CallProvider>
-        <NewChannelBlockAdapterInner channelId={channelId} {...props} />
-      </CallProvider>
-    </EntityPermissionsGate>
-  );
-}
-
-function NewChannelBlockAdapterInner(
-  props: { channelId: string } & BlockChannelProps
-) {
   const blockHandle = blockHandleSignal.get;
   const [activeTab, setActiveTab] =
     createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);
-  const call = useCall(() => props.channelId);
 
   const convertTargetMessage = (
     params: ChannelTargetMessageParams
@@ -171,7 +112,7 @@ function NewChannelBlockAdapterInner(
     const messageId = params[URL_PARAMS.message] as string | undefined;
     const threadId = params[URL_PARAMS.thread] as string | undefined;
 
-    // For compatibility the naming is  a little strange here.
+    // For compatibility the naming is a little strange here.
     // New channels index by top level message and then separately handle replies.
     // If we have a threadId that is actually the top level message and the reply is the message id.
     const topLevelMessageId = threadId ? threadId : messageId;
@@ -198,36 +139,37 @@ function NewChannelBlockAdapterInner(
   };
 
   return (
-    <div class="relative h-full flex flex-col">
-      <Switch>
-        <Match when={activeTab() === 'messages'}>
-          <NewChannel
-            channelId={props.channelId}
-            onHandleReady={onChannelReady}
-            {...convertTargetMessage(props)}
-          />
-        </Match>
-        <Match when={activeTab() === 'attachments'}>
-          <ChannelAttachmentsTab channelId={props.channelId} />
-        </Match>
-        <Match when={activeTab() === 'participants'}>
-          <ChannelParticipantsTab channelId={props.channelId} />
-        </Match>
-      </Switch>
-      <Show when={call.isInThisChannel()}>
-        <div class="absolute inset-0 z-50">
-          <CallOverlay onLeave={call.leaveCall} />
-        </div>
-      </Show>
-      <NewTop
-        channelId={props.channelId}
-        activeTab={activeTab()}
-        onTabChange={setActiveTab}
-        joinCall={call.joinCall}
-        leaveCall={call.leaveCall}
-        isInCall={call.isInThisChannel}
-        isPending={() => call.isJoining() || call.isLeaving()}
+    <EntityPermissionsGate entityType="channel" entityId={channelId}>
+      <ChannelDebouncedNotificationReadMarker
+        notificationSource={notificationSource}
+        channelId={channelId}
+        debounceTime={500}
       />
-    </div>
+      <CallProvider>
+        <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
+          <div class="h-full flex flex-col">
+            <Switch>
+              <Match when={activeTab() === 'messages'}>
+                <NewChannel
+                  channelId={channelId}
+                  onHandleReady={onChannelReady}
+                  {...convertTargetMessage(props)}
+                />
+              </Match>
+              <Match when={activeTab() === 'attachments'}>
+                <ChannelAttachmentsTab channelId={channelId} />
+              </Match>
+              <Match when={activeTab() === 'participants'}>
+                <ChannelParticipantsTab channelId={channelId} />
+              </Match>
+              <Match when={activeTab() === 'call'}>
+                <ChannelCallTab channelId={channelId} />
+              </Match>
+            </Switch>
+            <NewTop channelId={channelId} />
+          </div>
+        </ChannelTabProvider>
+      </CallProvider>
+    </EntityPermissionsGate>
   );
 }
