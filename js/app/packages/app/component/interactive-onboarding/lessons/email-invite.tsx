@@ -61,9 +61,8 @@ function EmailInviteContent(props: LessonContentProps) {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
       <p>
-        Macro is better with your team. Invite collaborators to your workspace
-        by email. Get $100 in Macro credits for each person you invite who
-        signs up.
+        Invite friends and teammates to Macro. You'll get $100 in credits for
+        each person who signs up.
       </p>
       <div class="flex flex-col gap-2">
         <textarea
