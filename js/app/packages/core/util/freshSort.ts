@@ -3,8 +3,7 @@
  * alongside freshness.
  */
 import type { Accessor } from 'solid-js';
-import type { FilterResult } from 'fuzzy';
-import fuzzy from 'fuzzy';
+import uFuzzy from '@leeoniya/ufuzzy';
 import { differenceInMilliseconds } from 'date-fns';
 import type { DateValue } from './date';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
@@ -12,6 +11,14 @@ import {
   type ParsedDuration,
   parsedDurationToMilliseconds,
 } from './dateSearch/dateParser';
+
+const uf = new uFuzzy({});
+
+interface FuzzyFilterResult<T> {
+  original: T;
+  string: string;
+  score: number;
+}
 
 type BoostFn<T> = (item: T) => number;
 
@@ -62,7 +69,6 @@ export interface FreshSortResult<T> {
   timeScore: number;
   brevityScore: number;
   combinedScore: number;
-  fuzzyResult?: FilterResult<T>;
 }
 
 const DEFAULT_CONFIG = {
@@ -132,8 +138,45 @@ function calculateBrevityScore(text: string): number {
   return Math.exp(-2 * normalizedLength);
 }
 
+function ufuzzyFilter<T>(
+  items: T[],
+  getName: NameFn<T>,
+  query: string
+): FuzzyFilterResult<T>[] {
+  const haystack = items.map(getName);
+  const idxs = uf.filter(haystack, query);
+
+  if (!idxs || idxs.length === 0) return [];
+
+  const info = uf.info(idxs, haystack, query);
+  const order = uf.sort(info, haystack, query);
+
+  if (!order || order.length === 0) return [];
+
+  const queryLen = query.length;
+  return order.map((orderIdx) => {
+    const haystackIdx = info.idx[orderIdx];
+    const ranges = info.ranges[orderIdx];
+
+    let matchSpan = queryLen;
+    if (ranges && ranges.length >= 2) {
+      matchSpan = ranges[ranges.length - 1] - ranges[0];
+    }
+
+    const gapPenalty = matchSpan > 0 ? queryLen / matchSpan : 1;
+    const startBonus = 1 / (1 + (info.start[orderIdx] ?? 0) * 0.05);
+    const score = gapPenalty * startBonus * 100;
+
+    return {
+      original: items[haystackIdx],
+      string: haystack[haystackIdx],
+      score,
+    };
+  });
+}
+
 function freshSort<T>(
-  filterResults: FilterResult<T>[],
+  filterResults: FuzzyFilterResult<T>[],
   config: FreshSortConfig<T> = {},
   isChannelItem: BooleanFn<T>,
   isDmItem: BooleanFn<T>,
@@ -199,7 +242,6 @@ function freshSort<T>(
       timeScore,
       brevityScore,
       combinedScore,
-      fuzzyResult: result,
     };
   });
 
@@ -230,9 +272,23 @@ export function createFreshSearch<T>({
     const useMultiTermChannelMatch =
       finalConfig.commaSeparatedChannelMatch && (hasComma || hasSpace);
 
+    if (!query) {
+      const allResults: FuzzyFilterResult<T>[] = items.map((item) => ({
+        original: item,
+        string: getName(item),
+        score: 1,
+      }));
+      return freshSort(
+        allResults,
+        config,
+        isChannelItem,
+        isDmItem,
+        getTimestamp
+      );
+    }
+
     if (useMultiTermChannelMatch) {
-      // For comma or space-separated queries, handle channel items specially
-      const channelResults: FilterResult<T>[] = [];
+      const channelResults: FuzzyFilterResult<T>[] = [];
       const nonChannelItems: T[] = [];
 
       for (const item of items) {
@@ -243,8 +299,7 @@ export function createFreshSearch<T>({
             channelResults.push({
               original: item,
               string: name,
-              score: score * 100, // Scale to match fuzzy library scoring
-              index: 0,
+              score: score * 100,
             });
           }
         } else {
@@ -252,12 +307,7 @@ export function createFreshSearch<T>({
         }
       }
 
-      // Get fuzzy results for non-channel items using regular matching
-      const nonChannelResults = fuzzy.filter(query, nonChannelItems, {
-        extract: getName,
-      });
-
-      // Combine results
+      const nonChannelResults = ufuzzyFilter(nonChannelItems, getName, query);
       const allResults = [...channelResults, ...nonChannelResults];
       return freshSort(
         allResults,
@@ -268,9 +318,7 @@ export function createFreshSearch<T>({
       );
     }
 
-    const fuzzyResults = fuzzy.filter(query, items, {
-      extract: getName,
-    });
+    const fuzzyResults = ufuzzyFilter(items, getName, query);
     return freshSort(
       fuzzyResults,
       config,
