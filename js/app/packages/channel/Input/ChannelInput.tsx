@@ -40,6 +40,8 @@ export type ChannelInputProps = InputCallbacks & {
   participants?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
+  /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
+  autofocus?: boolean;
 };
 
 function DefaultActions(props: { input: InputData }) {
@@ -175,7 +177,7 @@ export function ChannelInput(props: ChannelInputProps) {
                 config={markdownEditor}
                 placeholder={inputState.view().placeholder}
                 initialValue={inputState.view().value}
-                autofocus={!isMobile()}
+                autofocus={props.autofocus ?? !isMobile()}
                 class="text-sm"
               />
             </Input.Editor>

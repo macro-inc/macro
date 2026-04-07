@@ -37,6 +37,7 @@ import {
 } from '@channel/Call';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 
 type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
@@ -100,6 +101,7 @@ function NewTop(props: { channelId: string }) {
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
   useBlockEntityCommands();
 
+  const isPreview = !!useMaybePreviewPanel();
   const notificationSource = useGlobalNotificationSource();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
@@ -153,6 +155,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
                 <NewChannel
                   channelId={channelId}
                   onHandleReady={onChannelReady}
+                  autofocus={!isPreview}
                   {...convertTargetMessage(props)}
                 />
               </Match>

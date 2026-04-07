@@ -80,6 +80,8 @@ export type ChannelProps = {
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
   onHandleReady?: (handle: ChannelHandle) => void;
+  /** Whether to auto-focus the channel input on mount. Defaults to `!isMobile()`. */
+  autofocus?: boolean;
 };
 
 export type ChannelHandle = {
@@ -357,6 +359,7 @@ export function Channel(props: ChannelProps) {
                 isHidden={isChannelInputHidden()}
               >
                 <ChannelInput
+                  autofocus={props.autofocus}
                   input={{
                     mode: 'channel',
                     id: `channel-input-${props.channelId}`,
