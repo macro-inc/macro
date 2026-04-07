@@ -81,6 +81,10 @@ export const InviteModal = () => {
             </div>
 
             <div class="p-3 flex flex-col gap-3">
+              <p class="text-sm text-ink/60">
+                Get $100 in Macro credits for each person you invite who
+                signs up.
+              </p>
               <div class="flex flex-col gap-2">
                 <textarea
                   ref={(el) => {
