@@ -212,24 +212,36 @@ function createCallState() {
     const r = room();
     if (!r) return;
     const newMuted = !store.isAudioMuted;
-    await r.localParticipant.setMicrophoneEnabled(!newMuted);
-    setStore('isAudioMuted', newMuted);
+    try {
+      await r.localParticipant.setMicrophoneEnabled(!newMuted);
+      setStore('isAudioMuted', newMuted);
+    } catch (e) {
+      console.error('failed to toggle audio', e);
+    }
   }
 
   async function toggleVideo() {
     const r = room();
     if (!r) return;
     const newMuted = !store.isVideoMuted;
-    await r.localParticipant.setCameraEnabled(!newMuted);
-    setStore('isVideoMuted', newMuted);
+    try {
+      await r.localParticipant.setCameraEnabled(!newMuted);
+      setStore('isVideoMuted', newMuted);
+    } catch (e) {
+      console.error('failed to toggle video', e);
+    }
   }
 
   async function toggleScreenShare() {
     const r = room();
     if (!r) return;
     const newSharing = !store.isScreenSharing;
-    await r.localParticipant.setScreenShareEnabled(newSharing);
-    setStore('isScreenSharing', newSharing);
+    try {
+      await r.localParticipant.setScreenShareEnabled(newSharing);
+      setStore('isScreenSharing', newSharing);
+    } catch (e) {
+      console.error('failed to toggle screen share', e);
+    }
   }
 
   // --- cleanup ---
@@ -262,10 +274,12 @@ function createCallState() {
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
+      // Intentionally read store.speakerVersion to make this reactive so room()?.localParticipant.isSpeaking updates on speakerVersion changes.
       store.speakerVersion;
       return room()?.localParticipant.isSpeaking ?? false;
     },
     isParticipantSpeaking: (participant: RemoteParticipant) => {
+      // Intentionally read store.speakerVersion to make this reactive so participant.isSpeaking updates on speakerVersion changes.
       store.speakerVersion;
       return participant.isSpeaking;
     },

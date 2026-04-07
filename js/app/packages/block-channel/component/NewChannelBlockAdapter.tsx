@@ -49,18 +49,18 @@ type ChannelPropsTargetMessage = Pick<
   'targetMessageId' | 'targetMessageReplyId'
 >;
 
+const CallIcon: Component<{ isInCall: () => boolean }> = (props) => (
+  <Show when={props.isInCall()} fallback={<PhoneIcon />}>
+    <PhoneDisconnectIcon />
+  </Show>
+);
+
 function CallButton(props: {
   joinCall: () => Promise<void>;
   leaveCall: () => Promise<void>;
   isInCall: () => boolean;
   isPending: () => boolean;
 }) {
-  const CallIcon: Component = (iconProps) => (
-    <Show when={props.isInCall()} fallback={<PhoneIcon {...iconProps} />}>
-      <PhoneDisconnectIcon {...iconProps} />
-    </Show>
-  );
-
   const handleClick = async () => {
     if (props.isPending()) return;
     try {
@@ -86,7 +86,7 @@ function CallButton(props: {
       }
       size="icon-sm"
     >
-      <CallIcon />
+      <CallIcon isInCall={props.isInCall} />
     </Button>
   );
 }
