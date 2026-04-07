@@ -1153,7 +1153,7 @@ export interface SendEmail {
   /**
    * The plain text body of the email. Used to populate the draft editor.
    */
-  body?: string | null;
+  body: string | null;
   /**
    * The base64url-encoded HTML body of the email. Used as the actual email
    * body when sending.

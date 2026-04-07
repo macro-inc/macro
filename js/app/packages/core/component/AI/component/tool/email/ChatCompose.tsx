@@ -202,7 +202,8 @@ export function ComposeTool(props: ComposeToolProps) {
       });
     }
 
-    if (!body().trim()) {
+    const prepared = prepareEmailBody(editor());
+    if (!prepared?.bodyHtml && !body().trim()) {
       errors.push({ type: 'no_message', message: 'Write a message' });
     }
 

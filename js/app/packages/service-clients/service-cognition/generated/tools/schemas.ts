@@ -622,7 +622,7 @@ export const SendEmail = z
         })
         .strict()
     ),
-    body: z.union([z.string(), z.null()]).optional().default(null),
+    body: z.union([z.string(), z.null()]).default(null),
     bodyHtml: z.string(),
     cc: z.array(
       z
