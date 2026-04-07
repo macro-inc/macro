@@ -338,10 +338,10 @@ const resolveDocumentEntityName = (
     name: entity.name,
     fileType: entity.fileType,
     subType:
-      entity.subType === null || entity.subType === undefined
+      entity.subType == null
         ? null
         : {
-            type: entity.subType.type as 'task',
+            type: entity.subType.type,
             is_completed: entity.subType.is_completed,
           },
   });
