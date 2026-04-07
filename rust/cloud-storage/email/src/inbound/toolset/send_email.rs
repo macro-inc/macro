@@ -45,8 +45,12 @@ impl From<EmailRecipient> for ContactInfo {
 pub struct SendEmail {
     /// The subject line of the email.
     pub subject: String,
-    /// The plain text body of the email.
-    pub body: String,
+    /// The plain text body of the email. Used to populate the draft editor.
+    #[serde(default)]
+    pub body: Option<String>,
+    /// The base64url-encoded HTML body of the email. Used as the actual email
+    /// body when sending.
+    pub body_html: String,
     /// The primary recipients (To field).
     pub to: Vec<EmailRecipient>,
     /// Carbon copy recipients (optional).
@@ -112,8 +116,8 @@ where
             to: self.to.iter().cloned().map(ContactInfo::from).collect(),
             cc: self.cc.iter().cloned().map(ContactInfo::from).collect(),
             bcc: self.bcc.iter().cloned().map(ContactInfo::from).collect(),
-            body_text: Some(self.body.clone()),
-            body_html: None,
+            body_text: None,
+            body_html: Some(self.body_html.clone()),
             body_macro: None,
             headers_json: None,
             send_time: None,
