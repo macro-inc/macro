@@ -26,6 +26,9 @@ ports = ["dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }
+connection = { path = "../connection", default-features = false, features = [
+  "ports",
+] }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = [
@@ -38,6 +41,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_permissions = { path = "../models_permissions", optional = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }

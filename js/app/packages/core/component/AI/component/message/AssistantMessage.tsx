@@ -25,7 +25,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { match } from 'ts-pattern';
 
 function messageContentIsEmpty(content: ChatMessageContent) {
   if (typeof content === 'string' || Array.isArray(content)) {
@@ -310,41 +309,68 @@ function AssistantMessageParts(props: {
         const currentPart = () => part();
         if (!currentPart()) return null;
 
-        return match(currentPart()!)
-          .with({ type: 'toolCall' }, (toolCall) => (
-            <RenderTool
-              tool_id={toolCall.id}
-              chat_id={chat.chatId()}
-              json={toolCall.json}
-              name={toolCall.name}
-              response={responseById().get(toolCall.id)}
-              message_id={props.message.id}
-              part_index={i()}
-              isComplete={isCompleteSelector(toolCall.id)}
-              renderContext={{
-                renderContext: {
-                  isStreaming: props.isStreaming,
-                },
-              }}
-            />
-          ))
-          .with({ type: 'toolCallErr' }, (toolError) => (
-            <div class="px-2 py-1 text-sm text-ink-muted">
-              Tool `{toolError.name}` failed: {toolError.description}
-            </div>
-          ))
-          .with({ type: 'toolCallResponseJson' }, () => null)
-          .with({ type: 'text' }, (textPart) => {
-            if (textPart.text.trim().length === 0) return null;
+        const type = () => currentPart()?.type;
 
-            return (
-              <ChatMessageMarkdown
-                text={textPart.text}
-                generating={() => props.isStreaming}
-              />
-            );
-          })
-          .exhaustive();
+        return (
+          <Switch>
+            <Match when={type() === 'toolCall'}>
+              {(() => {
+                const toolCall = () =>
+                  currentPart() as Extract<
+                    AssistantMessagePart,
+                    { type: 'toolCall' }
+                  >;
+                return (
+                  <RenderTool
+                    tool_id={toolCall().id}
+                    chat_id={chat.chatId()}
+                    json={toolCall().json}
+                    name={toolCall().name}
+                    response={responseById().get(toolCall().id)}
+                    message_id={props.message.id}
+                    part_index={i()}
+                    isComplete={isCompleteSelector(toolCall().id)}
+                    renderContext={{
+                      renderContext: {
+                        isStreaming: props.isStreaming,
+                      },
+                    }}
+                  />
+                );
+              })()}
+            </Match>
+            <Match when={type() === 'toolCallErr'}>
+              {(() => {
+                const toolError = () =>
+                  currentPart() as Extract<
+                    AssistantMessagePart,
+                    { type: 'toolCallErr' }
+                  >;
+                return (
+                  <div class="px-2 py-1 text-sm text-ink-muted">
+                    Tool `{toolError().name}` failed: {toolError().description}
+                  </div>
+                );
+              })()}
+            </Match>
+            <Match when={type() === 'text'}>
+              {(() => {
+                const text = () => {
+                  const p = currentPart();
+                  return p?.type === 'text' ? p.text : '';
+                };
+                return (
+                  <Show when={text().trim().length > 0}>
+                    <ChatMessageMarkdown
+                      text={text()}
+                      generating={() => props.isStreaming}
+                    />
+                  </Show>
+                );
+              })()}
+            </Match>
+          </Switch>
+        );
       }}
     </For>
   );

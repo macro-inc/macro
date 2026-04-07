@@ -106,7 +106,9 @@ function MobileDrawerSection<T extends ValidComponent = 'div'>(
  * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
-  (props: ComponentProps<typeof Drawer>) => <Drawer {...props} />,
+  (props: ComponentProps<typeof Drawer>) => (
+    <Drawer breakPoints={[0.8]} {...props} />
+  ),
   {
     Trigger: Drawer.Trigger,
     Portal: Drawer.Portal,

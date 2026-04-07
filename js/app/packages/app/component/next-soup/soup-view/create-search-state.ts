@@ -6,6 +6,7 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
+import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { isChannelEntity, type EntityData } from '@entity';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
@@ -138,10 +139,11 @@ export const createSearchState = ({
     return searchQuery.data ?? [];
   });
 
-  const featuredIds = createMemo(() => {
-    const ids = filteredLocalFuzzyResults().map((r) => r.id);
-    return ids;
-  });
+  const featuredIds = createMemo<string[]>(
+    () => filteredLocalFuzzyResults().map((r) => r.id),
+    [],
+    { equals: arrayEquals }
+  );
 
   const isLocalSearchSettling = createMemo(
     () => isSearching() && trimmedSearchText() !== debouncedSearchForLocal()

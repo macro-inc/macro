@@ -78,6 +78,16 @@ impl ConnectionService for NoOpConnectionService {
     ) -> Result<(), connection::domain::models::ConnectionError> {
         Ok(())
     }
+
+    async fn send_channel_message(
+        &self,
+        _channel_id: &str,
+        _message_type: &str,
+        _message: serde_json::Value,
+        _triggered_by: connection::domain::models::EntityAccessAuth,
+    ) -> Result<(), connection::domain::models::ConnectionError> {
+        Ok(())
+    }
 }
 
 /// Type alias for the document service implementation used by AI tools

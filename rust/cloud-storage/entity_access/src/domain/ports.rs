@@ -110,6 +110,12 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         thread_id: &str,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// Get all active participant user IDs in a channel.
+    fn get_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
     /// Checks both the `calls` table (active calls) and the `call_records` table
@@ -192,14 +198,12 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<EntityPermission, AccessError>> + Send;
 
-    /// Get all user IDs that have access to a given entity via `UserItemAccess`.
+    /// Get all user IDs that have access to a given entity.
     ///
-    /// Returns user IDs with direct access to the entity or inherited access
-    /// through the project hierarchy. Only considers `UserItemAccess` grants,
-    /// not public share permissions.
-    ///
-    /// Supported entity types: Document, Chat, Project, EmailThread.
-    /// Returns `AccessError::BadRequest` for unsupported types (Channel, Team, User).
+    /// For Document, Chat, Project, and EmailThread: returns user IDs with direct
+    /// access or inherited access through the project hierarchy via `UserItemAccess`.
+    /// For Channel: returns active channel participants.
+    /// Returns `AccessError::BadRequest` for unsupported types (Team, User).
     fn get_users_by_entity(
         &self,
         entity_id: &str,

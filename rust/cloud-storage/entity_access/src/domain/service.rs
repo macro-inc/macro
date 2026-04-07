@@ -214,8 +214,14 @@ where
             EntityType::Chat => self.repo.get_chat_users(entity_id).await,
             EntityType::Project => self.repo.get_project_users(entity_id).await,
             EntityType::EmailThread => self.repo.get_thread_users(entity_id).await,
+            EntityType::Channel => {
+                let channel_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid channel_id for get_users_by_entity")
+                })?;
+                self.repo.get_channel_users(&channel_id).await
+            }
             _ => Err(AccessError::BadRequest(
-                "get_users_by_entity only supports Document, Chat, Project, and EmailThread",
+                "get_users_by_entity does not support this entity type",
             )),
         }
     }

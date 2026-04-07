@@ -250,9 +250,9 @@ registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
   return <EmailCompose draftID={params?.draftID} />;
 });
-registerComponent('task-compose', () => {
+registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
-  return <ComposeTask />;
+  return <ComposeTask initialContent={params?.initialContent} />;
 });
 registerComponent(
   'import-linear',

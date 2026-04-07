@@ -1,5 +1,7 @@
 //! Call service implementation.
 
+use connection::domain::models::EntityAccessAuth;
+use connection::domain::ports::ConnectionService;
 use uuid::Uuid;
 
 use super::models::{
@@ -8,20 +10,27 @@ use super::models::{
 use super::ports::{CallRepository, CallRtcClient, CallService};
 
 /// The concrete call service implementation.
-pub struct CallServiceImpl<R: CallRepository, C: CallRtcClient> {
+pub struct CallServiceImpl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> {
     repo: R,
     rtc_client: C,
+    connection_service: Cn,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
 }
 
-impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
+impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallServiceImpl<R, C, Cn> {
     /// Create a new call service.
-    pub fn new(repo: R, rtc_client: C, server_url: impl Into<String>) -> Self {
+    pub fn new(
+        repo: R,
+        rtc_client: C,
+        connection_service: Cn,
+        server_url: impl Into<String>,
+    ) -> Self {
         Self {
             repo,
             rtc_client,
+            connection_service,
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
@@ -39,9 +48,40 @@ impl<R: CallRepository, C: CallRtcClient> CallServiceImpl<R, C> {
         self.internal_call_secret = Some(secret);
         self
     }
+
+    /// Send a call event to all channel members (best-effort).
+    async fn send_call_event(
+        &self,
+        channel_id: &Uuid,
+        message_type: &str,
+        message: &serde_json::Value,
+        triggered_by_user_id: Option<&str>,
+    ) {
+        let triggered_by = match triggered_by_user_id {
+            Some(uid) => uid
+                .to_string()
+                .try_into()
+                .map(EntityAccessAuth::Authenticated)
+                .unwrap_or(EntityAccessAuth::Internal),
+            None => EntityAccessAuth::Internal,
+        };
+
+        let _ = self
+            .connection_service
+            .send_channel_message(
+                &channel_id.to_string(),
+                message_type,
+                message.clone(),
+                triggered_by,
+            )
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call event"));
+    }
 }
 
-impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> {
+impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
+    for CallServiceImpl<R, C, Cn>
+{
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
             .as_deref()
@@ -107,6 +147,19 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                                 }
                             }
                         }
+
+                        // Notify channel members about the new call (best-effort).
+                        self.send_call_event(
+                            channel_id,
+                            "call_started",
+                            &serde_json::json!({
+                                "channel_id": channel_id,
+                                "call_id": call.id,
+                                "created_by": user_id,
+                            }),
+                            Some(user_id),
+                        )
+                        .await;
 
                         call
                     }
@@ -206,10 +259,22 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                         .map_err(|e| CallError::Internal(e.into()))?
                 {
                     tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
+                    let channel_id = call.channel_id;
                     self.repo
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+
+                    self.send_call_event(
+                        &channel_id,
+                        "call_ended",
+                        &serde_json::json!({
+                            "channel_id": channel_id,
+                            "call_id": call.id,
+                        }),
+                        None,
+                    )
+                    .await;
                 }
             }
             "participant_joined" => {
@@ -277,6 +342,7 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
 
                 if remaining == 0 {
                     tracing::info!(call_id = %call.id, room_name, "last participant left, archiving call");
+                    let channel_id = call.channel_id;
                     self.repo
                         .archive_call(&call.id)
                         .await
@@ -287,6 +353,17 @@ impl<R: CallRepository, C: CallRtcClient> CallService for CallServiceImpl<R, C> 
                         .await
                         .inspect_err(|e| tracing::error!(error=?e, "failed to delete RTC room"))
                         .ok();
+
+                    self.send_call_event(
+                        &channel_id,
+                        "call_ended",
+                        &serde_json::json!({
+                            "channel_id": channel_id,
+                            "call_id": call.id,
+                        }),
+                        None,
+                    )
+                    .await;
                 }
             }
             "egress_started" | "egress_updated" => {

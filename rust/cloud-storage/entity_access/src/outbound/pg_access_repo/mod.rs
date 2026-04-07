@@ -139,6 +139,15 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let raw = queries::channel_users::get_channel_users(&self.pool, channel_id).await?;
+        Ok(parse_user_ids(raw))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_call_channel(
         &self,
         call_id: &Uuid,

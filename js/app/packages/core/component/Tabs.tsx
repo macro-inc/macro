@@ -2,12 +2,18 @@ import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
-import { createEffect, createSignal, For, splitProps } from 'solid-js';
+import {
+  type JSX,
+  createEffect,
+  createSignal,
+  For,
+  splitProps,
+} from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
 export type TabItem = {
   value: string;
-  label: string;
+  label: string | JSX.Element;
 };
 
 export const Tabs = (

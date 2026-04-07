@@ -161,7 +161,7 @@ function ChatInner(props: {
       return;
     }
 
-    chat.attachStream(result.stream, owner);
+    chat.dispatch({ type: 'stream_connected', stream: result.stream, owner });
     invalidateUserQuota();
   });
 

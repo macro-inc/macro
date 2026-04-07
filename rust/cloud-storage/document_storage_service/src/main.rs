@@ -313,10 +313,10 @@ async fn main() -> anyhow::Result<()> {
         config.vars.docx_document_upload_bucket.as_ref(),
     );
 
-    let connection_service = ConnectionServiceImpl::new(
-        entity_access_service.clone(),
-        Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone())),
-    );
+    let connection_gateway = Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone()));
+
+    let connection_service =
+        ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
 
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
@@ -365,10 +365,13 @@ async fn main() -> anyhow::Result<()> {
         config.vars.livekit_api_secret.as_ref(),
         transcription_agent_name,
     );
+    let call_connection_service =
+        ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
     let call_repo = PgCallRepo::new(db.clone());
     let mut call_service_builder = CallServiceImpl::new(
         call_repo,
         livekit_rtc_client,
+        call_connection_service,
         config.vars.livekit_server_url.as_ref(),
     );
     if let Some(secret) = internal_call_secret {

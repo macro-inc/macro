@@ -7,7 +7,7 @@ import {
   exclude,
 } from '@core/context/quickAccess';
 import type { HotkeyCommand } from '@core/hotkey/types';
-import { createFreshSearch } from '@core/util/freshSort';
+import { createFreshSearch, type FreshSortConfig } from '@core/util/freshSort';
 import { createMemo } from 'solid-js';
 import type { CategoryFilter } from './types';
 import {
@@ -48,12 +48,12 @@ function isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
 }
 
-function createSearchConfig(hasQuery: boolean) {
+function createSearchConfig(hasQuery: boolean): FreshSortConfig {
   return {
     useViewedAt: true,
     dmBoost: hasQuery ? 1.8 : 1.0,
     fuzzyWeight: hasQuery ? 0.7 : 0.0,
-    timeWeight: hasQuery ? 0.3 : 0.9,
+    timeWeight: hasQuery ? 0.7 : 0.9,
     minFuzzyThreshold: hasQuery ? 0.1 : 0,
     commaSeparatedChannelMatch: true,
   };

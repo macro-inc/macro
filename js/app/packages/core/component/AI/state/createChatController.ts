@@ -20,6 +20,16 @@ import {
   transition,
 } from './chatState';
 
+type StreamConnectedEvent = {
+  type: 'stream_connected';
+  stream: ChatMessageStream;
+  owner?: Owner | null;
+};
+
+type ControllerEvent =
+  | Exclude<ChatEvent, { type: 'stream_connected' }>
+  | StreamConnectedEvent;
+
 export type ChatController = {
   chatId: Accessor<string>;
   phase: Accessor<ChatPhase>;
@@ -29,8 +39,7 @@ export type ChatController = {
   isGenerating: Accessor<boolean>;
   isWaiting: Accessor<boolean>;
 
-  dispatch: (event: ChatEvent) => void;
-  attachStream: (stream: ChatMessageStream, owner?: Owner | null) => void;
+  dispatch: (event: ControllerEvent) => void;
   /** Escape hatch for debug components that set stream directly */
   setStream: Setter<ChatMessageStream | undefined>;
 };
@@ -58,7 +67,63 @@ export function createChatController(
     }
   }
 
-  function dispatch(event: ChatEvent) {
+  function watchStream(newStream: ChatMessageStream) {
+    // Watch stream data for user messages and errors
+    createEffect(
+      on(
+        () => newStream.data(),
+        (data) => {
+          const latest = data.at(-1);
+          if (!latest) return;
+
+          match(latest)
+            .with({ type: 'error' }, (r) => {
+              const streamError =
+                'stream_error' in r ? r.stream_error : undefined;
+              dispatch({
+                type: 'stream_error',
+                streamError: streamError as string | undefined,
+              });
+            })
+            .with({ type: 'chat_user_message' }, (r) => {
+              dispatch({
+                type: 'stream_user_message',
+                messageId: r.message_id,
+                content: r.content,
+                attachments: r.attachments,
+              });
+            })
+            .otherwise(() => {});
+        }
+      )
+    );
+
+    // Watch stream completion
+    createEffect(() => {
+      if (!newStream.isDone()) return;
+      const message = asChatMessage(newStream.data());
+      dispatch({ type: 'stream_done', message });
+    });
+  }
+
+  function dispatch(event: ControllerEvent) {
+    // Handle stream attachment through the state transition
+    if (event.type === 'stream_connected' && 'stream' in event) {
+      const { stream: newStream, owner = getOwner() } = event;
+      setStream(newStream);
+
+      const result = transition(untrack(phase), { type: 'stream_connected' });
+      setPhase(result.phase);
+      executeEffects(result.effects);
+
+      if (owner) {
+        runWithOwner(owner, () => watchStream(newStream));
+      } else {
+        watchStream(newStream);
+      }
+      return;
+    }
+
     const result = transition(untrack(phase), event);
     setPhase(result.phase);
     if (result.messages) {
@@ -69,57 +134,6 @@ export function createChatController(
       setStream(undefined);
     }
     executeEffects(result.effects);
-  }
-
-  function attachStream(newStream: ChatMessageStream, owner = getOwner()) {
-    setStream(newStream);
-    dispatch({ type: 'stream_connected' });
-
-    const watchStream = () => {
-      // Watch stream data for user messages and errors
-      createEffect(
-        on(
-          () => newStream.data(),
-          (data) => {
-            const latest = data.at(-1);
-            if (!latest) return;
-
-            if (latest.type === 'error') {
-              const streamError =
-                'stream_error' in latest ? latest.stream_error : undefined;
-              dispatch({
-                type: 'stream_error',
-                streamError: streamError as string | undefined,
-              });
-              return;
-            }
-
-            if (latest.type === 'chat_user_message') {
-              dispatch({
-                type: 'stream_user_message',
-                messageId: latest.message_id,
-                content: latest.content,
-                attachments: latest.attachments,
-              });
-            }
-          }
-        )
-      );
-
-      // Watch stream completion
-      createEffect(() => {
-        if (!newStream.isDone()) return;
-        const message = asChatMessage(newStream.data());
-        dispatch({ type: 'stream_done', message });
-      });
-    };
-
-    if (owner) {
-      runWithOwner(owner, watchStream);
-      return;
-    }
-
-    watchStream();
   }
 
   // Reconnect active streams on page refresh / chat switch
@@ -144,7 +158,7 @@ export function createChatController(
         continue;
       }
 
-      attachStream(s);
+      dispatch({ type: 'stream_connected', stream: s });
       break;
     }
   });
@@ -159,7 +173,6 @@ export function createChatController(
     isWaiting: () => phase().type === 'sending',
 
     dispatch,
-    attachStream,
     setStream,
   };
 }

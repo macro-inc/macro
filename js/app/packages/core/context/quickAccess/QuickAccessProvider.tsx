@@ -26,6 +26,7 @@ import type {
   QuickAccessEntity,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
+import { itemToSafeName } from '@core/constant/allBlocks';
 
 /**
  * index entry for sorted lists.
@@ -67,11 +68,20 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
       } as QuickAccessEntity;
 
     case 'document': {
-      const fileType =
-        item.subType?.type === 'task' ? 'md' : (item.fileType ?? undefined);
-      const name = formatDocumentName(item.rawName ?? item.name, fileType, {
-        fullyQualifiedBlockName: true,
-      });
+      const fileType = item.fileType ?? undefined;
+      const subType = item.subType ?? undefined;
+      const name = formatDocumentName(
+        itemToSafeName({
+          name: item.rawName ?? item.name,
+          type: item.type,
+          fileType,
+          subType,
+        }),
+        fileType,
+        {
+          fullyQualifiedBlockName: true,
+        }
+      );
       return {
         ...base,
         name,

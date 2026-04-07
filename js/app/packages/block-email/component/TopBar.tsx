@@ -4,6 +4,7 @@ import {
   trashEmails,
 } from '@app/component/next-soup/utils';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
@@ -21,6 +22,7 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import CheckIcon from '@icon/regular/check.svg';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import ProhibitIcon from '@icon/regular/prohibit.svg';
@@ -29,7 +31,9 @@ import {
   EmailPropertiesButton,
   PROPERTIES_DRAWER_ID,
 } from './EmailPropertiesModal';
+import { createSignal } from 'solid-js';
 import { useEmailContext } from './EmailContext';
+import { buildMentionMarkdownString } from '@lexical-core';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { isMobile } from '@core/mobile/isMobile';
 
@@ -39,6 +43,7 @@ export function TopBar(props: {
   isDraft?: boolean;
 }) {
   const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const { popoverSplit } = useSplitLayout();
   const shareCtx = useShareDialogContext();
   const emailCtx = useEmailContext();
   const soup = useMaybeSoup();
@@ -99,6 +104,23 @@ export function TopBar(props: {
     });
   };
 
+  const openTaskCompose = () => {
+    const threadId = emailCtx.thread()?.db_id;
+    if (!threadId) return;
+    popoverSplit({
+      type: 'component',
+      id: 'task-compose',
+      params: {
+        initialContent: buildMentionMarkdownString({
+          type: 'document',
+          documentId: threadId,
+          documentName: props.title,
+          blockName: 'email',
+        }),
+      },
+    });
+  };
+
   const tools: BlockTool[] = [
     {
       label: 'Done',
@@ -132,10 +154,30 @@ export function TopBar(props: {
       buttonComponent: () => <EmailPropertiesButton buttonSize="sm" />,
     },
     {
+      label: 'Create Task',
+      icon: AnimatedTaskIcon,
+      action: openTaskCompose,
+      buttonComponent: () => {
+        const [hovering, setHovering] = createSignal(false);
+        return (
+          <button
+            class="h-7 px-2 flex items-center gap-1 rounded-xs text-xs hover:bg-hover hover-transition-bg"
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            onClick={openTaskCompose}
+          >
+            <div class="size-4 text-task">
+              <AnimatedTaskIcon triggerAnimation={hovering()} />
+            </div>
+            <span class="text-ink">Task</span>
+          </button>
+        );
+      },
+    },
+    {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       condition: () => ENABLE_EMAIL_SHARING,
       buttonComponent: () => <ShareTrigger />,
     },

@@ -226,6 +226,27 @@ export const registerSidebarHotkeys = ({
         resetHotkeysState();
         debounceResetHotkeysState.clear();
       }
+
+      if (link.id === 'search' && !e?.shiftKey) {
+        const activeSplit = globalSplitManager()?.activeSplit();
+        const content = activeSplit?.content();
+        if (
+          activeSplit &&
+          content?.type === 'component' &&
+          content.id === 'search'
+        ) {
+          const splitEl = document.querySelector(
+            `[data-split-id="${activeSplit.id}"]`
+          );
+          const searchInput =
+            splitEl?.querySelector<HTMLInputElement>('[data-soup-search]');
+          if (searchInput) {
+            searchInput.focus();
+            return true;
+          }
+        }
+      }
+
       openWithSplit(
         {
           type: 'component',

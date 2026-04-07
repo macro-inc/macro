@@ -238,10 +238,10 @@ function ChannelMessage(props: {
   const hasContent = () => Boolean(props.message.content?.trim());
   return (
     <>
-      <span class="ph-no-capture font-semibold truncate min-w-min max-w-1/3">
+      <span class="ph-no-capture font-semibold truncate min-w-min max-w-1/3 shrink-0">
         <DisplayName id={props.message.senderId} format="firstName" />
       </span>
-      <span class="ph-no-capture text-ink/50 font-medium truncate inline-flex items-center shrink">
+      <span class="ph-no-capture text-ink/50 font-medium truncate inline-flex items-center shrink min-w-0">
         <Show
           when={hasContent()}
           fallback={<span class="italic">Attached Items</span>}
@@ -680,7 +680,7 @@ function WideLayout(props: LayoutProps) {
               >
                 {(msg) => (
                   <>
-                    <span class="w-(--title-width) shrink truncate flex gap-2">
+                    <span class="w-(--title-width) shrink-0 truncate flex gap-2">
                       <Entity.Title entity={entity()} />
                     </span>
                     <ChannelMessage message={msg()} />

@@ -57,7 +57,7 @@ export function ChatMessages(props: ChatMessagesProps) {
   const messages = chat.messages;
   const stream = chat.stream;
 
-  const extendedStream = createMemo(() => {
+  const timedStream = createMemo(() => {
     const s = stream();
     if (!s) return;
     return timeStream(idStream(s));
@@ -66,7 +66,7 @@ export function ChatMessages(props: ChatMessagesProps) {
   const [messageTimingMap, setTiming] = createStore<Record<string, number>>({});
 
   createEffect(() => {
-    const s = extendedStream();
+    const s = timedStream();
     if (!s) return;
     const ttft = s.timeToFirstMessageMs();
     const id = s.messageId();

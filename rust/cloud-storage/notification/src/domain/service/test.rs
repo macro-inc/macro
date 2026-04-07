@@ -1865,64 +1865,6 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
     assert!(published[0]["content"]["Email"].is_object());
 }
 
-/// temporary test which asserts we can't send to external users
-/// This test should be removed in the future
-#[tokio::test]
-async fn it_fails_to_send_to_non_macro_users() {
-    use std::sync::Arc;
-
-    let user = test_user_id("digest@test.com");
-    let notif = UserNotificationRow {
-        owner_id: user.clone(),
-        notification_id: Uuid::nil(),
-        notification_event_type: "test_notification".to_string(),
-        entity: EntityType::Document.with_entity_str("doc-1"),
-        sent: false,
-        done: false,
-        created_at: None,
-        viewed_at: None,
-        updated_at: None,
-        deleted_at: None,
-        notification_metadata: serde_json::to_value(TestNotification {
-            message: "hello from digest".to_string(),
-        })
-        .unwrap(),
-        sender_id: None,
-    };
-
-    let batch = DigestBatch {
-        user_id: user.clone(),
-        notifications: vec![notif.into_tagged()],
-    };
-
-    let batcher = ReadyDigestBatcher {
-        batch: Mutex::new(Some(batch)),
-    };
-
-    let queue = Arc::new(MockQueue::new());
-    let service = NotificationEgressService {
-        queue: queue.clone(),
-        repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
-        mobile: MockMobileSender,
-        email: MockEmailSender,
-        rate_limiter: allowing_rate_limiter(),
-        state_machine: MockEgressStateMachine,
-        digest_batcher: batcher,
-    };
-
-    fn digest_to_notif(batch: DigestBatch) -> Result<TestNotification, Report> {
-        Ok(TestNotification {
-            message: format!("You have {} notification(s)", batch.notifications.len()),
-        })
-    }
-
-    service
-        .poll_email_digests(&digest_to_notif)
-        .await
-        .unwrap_err();
-}
-
 #[tokio::test]
 async fn test_poll_email_digests_noop_when_empty() {
     let service = create_egress_service(allowing_rate_limiter());
@@ -2293,4 +2235,132 @@ impl NotificationSender for std::sync::Arc<TrackingMobileSender> {
             .send_android_push_notification(endpoint_arn, notification, attributes)
             .await
     }
+}
+
+// ============================================================================
+// Egress Type-Disabled Digest Guard Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_poll_email_digests_skips_publish_when_user_disabled_type() {
+    use std::sync::Arc;
+
+    let user = test_user_id("digest@macro.com");
+    let notif = UserNotificationRow {
+        owner_id: user.clone(),
+        notification_id: Uuid::nil(),
+        notification_event_type: "test_notification".to_string(),
+        entity: EntityType::Document.with_entity_str("doc-1"),
+        sent: false,
+        done: false,
+        created_at: None,
+        viewed_at: None,
+        updated_at: None,
+        deleted_at: None,
+        notification_metadata: serde_json::to_value(TestNotification {
+            message: "hello from digest".to_string(),
+        })
+        .unwrap(),
+        sender_id: None,
+    };
+
+    let batch = DigestBatch {
+        user_id: user.clone(),
+        notifications: vec![notif.into_tagged()],
+    };
+
+    let batcher = ReadyDigestBatcher {
+        batch: Mutex::new(Some(batch)),
+    };
+
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationEgressService {
+        queue: queue.clone(),
+        repository: MockRepository::new().with_type_disabled_user(user),
+        websocket: MockWebSocketSender,
+        mobile: MockMobileSender,
+        email: MockEmailSender,
+        rate_limiter: allowing_rate_limiter(),
+        state_machine: MockEgressStateMachine,
+        digest_batcher: batcher,
+    };
+
+    fn digest_to_notif(batch: DigestBatch) -> Result<TestNotification, Report> {
+        Ok(TestNotification {
+            message: format!("You have {} notification(s)", batch.notifications.len()),
+        })
+    }
+
+    let result = service.poll_email_digests(&digest_to_notif).await.unwrap();
+
+    // Should still return Ready (batch was consumed) but nothing published
+    assert!(matches!(result, ClaimResult::Ready(())));
+    assert!(
+        queue.get_published().is_empty(),
+        "No message should be published when user has disabled the notification type"
+    );
+}
+
+#[tokio::test]
+async fn test_poll_email_digests_publishes_when_user_has_not_disabled_type() {
+    use std::sync::Arc;
+
+    let user = test_user_id("digest@macro.com");
+    let other_user = test_user_id("other@macro.com");
+    let notif = UserNotificationRow {
+        owner_id: user.clone(),
+        notification_id: Uuid::nil(),
+        notification_event_type: "test_notification".to_string(),
+        entity: EntityType::Document.with_entity_str("doc-1"),
+        sent: false,
+        done: false,
+        created_at: None,
+        viewed_at: None,
+        updated_at: None,
+        deleted_at: None,
+        notification_metadata: serde_json::to_value(TestNotification {
+            message: "hello from digest".to_string(),
+        })
+        .unwrap(),
+        sender_id: None,
+    };
+
+    let batch = DigestBatch {
+        user_id: user.clone(),
+        notifications: vec![notif.into_tagged()],
+    };
+
+    let batcher = ReadyDigestBatcher {
+        batch: Mutex::new(Some(batch)),
+    };
+
+    let queue = Arc::new(MockQueue::new());
+    // A different user has the type disabled, not the digest recipient
+    let service = NotificationEgressService {
+        queue: queue.clone(),
+        repository: MockRepository::new().with_type_disabled_user(other_user),
+        websocket: MockWebSocketSender,
+        mobile: MockMobileSender,
+        email: MockEmailSender,
+        rate_limiter: allowing_rate_limiter(),
+        state_machine: MockEgressStateMachine,
+        digest_batcher: batcher,
+    };
+
+    fn digest_to_notif(batch: DigestBatch) -> Result<TestNotification, Report> {
+        Ok(TestNotification {
+            message: format!("You have {} notification(s)", batch.notifications.len()),
+        })
+    }
+
+    let result = service.poll_email_digests(&digest_to_notif).await.unwrap();
+
+    assert!(matches!(result, ClaimResult::Ready(())));
+    let published = queue.get_published();
+    assert_eq!(
+        published.len(),
+        1,
+        "Message should be published when user has not disabled the type"
+    );
+    assert!(published[0]["content"]["Email"].is_object());
 }
