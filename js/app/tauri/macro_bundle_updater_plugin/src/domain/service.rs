@@ -156,7 +156,12 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 }))
             }
             UpdateStatus::UnzipingBundle(unzip_status) => {
-                let (req, rx) = UnzipRequest::new(&unzip_status.zip_filename);
+                let archive_target = unzip_status
+                    .zip_filename
+                    .parent()
+                    .unwrap_or(&unzip_status.zip_filename)
+                    .to_path_buf();
+                let (req, rx) = UnzipRequest::new(unzip_status.zip_filename, archive_target);
 
                 let status_tx = self.status_tx.clone();
                 tokio::task::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
@@ -227,8 +232,8 @@ impl AutoUpdateService for Service {
         let Some(tx) = self.handle.grant_tx.take() else {
             return Err(report!("Already granted"));
         };
-        Ok(tx
+        tx
             .send(grant)
-            .map_err(|e| rootcause::report!("Failed to send {e:?}. The rx channel was dropped"))?)
+            .map_err(|e| rootcause::report!("Failed to send {e:?}. The rx channel was dropped"))
     }
 }

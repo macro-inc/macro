@@ -21,8 +21,7 @@ impl FsRepo for FileSystem {
         &self,
         request: UnzipRequest,
     ) -> Result<std::path::PathBuf, crate::domain::models::UnzipError> {
-        Ok(
-            tokio::task::spawn_blocking(move || -> Result<PathBuf, UnzipError> {
+        tokio::task::spawn_blocking(move || -> Result<PathBuf, UnzipError> {
                 let UnzipRequest {
                     archive_path,
                     archive_target,
@@ -40,8 +39,7 @@ impl FsRepo for FileSystem {
                 Ok(archive_target)
             })
             .await
-            .map_err(rootcause::Report::from)??,
-        )
+            .map_err(rootcause::Report::from)?
     }
 
     fn create_dir_all<P: AsRef<std::path::Path> + Send>(

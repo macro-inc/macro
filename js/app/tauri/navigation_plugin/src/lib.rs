@@ -137,7 +137,7 @@ fn transform_external_url(mut url: Url) -> Url {
             .as_str(),
         ));
     }
-    if let None = url.query_pairs().find(|(k, _v)| k.as_ref() == "is_mobile") {
+    if url.query_pairs().find(|(k, _v)| k.as_ref() == "is_mobile").is_none() {
         url.query_pairs_mut().append_pair("is_mobile", "true");
     }
     url
