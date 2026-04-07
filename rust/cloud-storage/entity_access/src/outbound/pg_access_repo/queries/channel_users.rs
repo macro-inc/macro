@@ -11,7 +11,7 @@ pub async fn get_channel_users(
 ) -> Result<Vec<String>, sqlx::Error> {
     let users: Vec<String> = sqlx::query_scalar!(
         r#"
-        SELECT cp.user_id
+        SELECT DISTINCT cp.user_id
         FROM comms_channel_participants cp
         WHERE cp.channel_id = $1 AND cp.left_at IS NULL
         "#,
