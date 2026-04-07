@@ -23,7 +23,7 @@ struct Worker<U, Fs, Q> {
 }
 
 struct WorkerHandle {
-    handle: tokio::task::JoinHandle<()>,
+    _handle: tokio::task::JoinHandle<()>,
     status_rx: tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>>,
     grant_tx: Option<tokio::sync::oneshot::Sender<UpdateApproval>>,
 }
@@ -46,7 +46,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         .run_background();
 
         WorkerHandle {
-            handle,
+            _handle: handle,
             status_rx,
             grant_tx: Some(grant_tx),
         }
@@ -134,6 +134,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .await
                     .context(UpdateError::IoErr)?;
 
+                let expected_checksum = status.update.checksum.clone();
                 let (req, rx) = status.update.into_download_request(&download_filename);
 
                 let status_tx = self.status_tx.clone();
@@ -152,10 +153,16 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .context(UpdateError::DownloadErr)?;
                 Ok(UpdateStatus::UnzipingBundle(UnzipStatus {
                     zip_filename: download_filename,
+                    expected_checksum,
                     progress: ProgressPercentage::default(),
                 }))
             }
             UpdateStatus::UnzipingBundle(unzip_status) => {
+                self.fs_repo
+                    .verify_checksum(&unzip_status.zip_filename, &unzip_status.expected_checksum)
+                    .await
+                    .context(UpdateError::Unzip)?;
+
                 let archive_target = unzip_status
                     .zip_filename
                     .parent()
@@ -232,8 +239,7 @@ impl AutoUpdateService for Service {
         let Some(tx) = self.handle.grant_tx.take() else {
             return Err(report!("Already granted"));
         };
-        tx
-            .send(grant)
+        tx.send(grant)
             .map_err(|e| rootcause::report!("Failed to send {e:?}. The rx channel was dropped"))
     }
 }

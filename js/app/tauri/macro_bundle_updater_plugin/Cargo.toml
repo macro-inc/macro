@@ -6,7 +6,9 @@ version = "0.1.0"
 [dependencies]
 rootcause = { workspace = true }
 futures = { version = "0.3" }
+digest = "0.10"
 reqwest = { workspace = true, features = ["json", "stream"] }
+sha2 = "0.10"
 semver = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 strum = { version = "0.27", features = ["derive"] }

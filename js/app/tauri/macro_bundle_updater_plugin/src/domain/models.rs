@@ -58,6 +58,8 @@ pub struct BundleUpdate {
     pub notes: Option<String>,
     /// the fully qualified Url where the update bundle exists
     pub url: Url,
+    /// the expected SHA-256 hex digest of the downloaded zip file
+    pub checksum: String,
 }
 
 impl BundleUpdate {
@@ -154,6 +156,8 @@ impl UnzipRequest {
 pub enum UnzipError {
     #[error("Could not find the archive at {path}")]
     ArchiveNotFound { path: PathBuf },
+    #[error("Checksum mismatch: expected {expected}, got {actual}")]
+    ChecksumMismatch { expected: String, actual: String },
     #[error(transparent)]
     IoErr(#[from] std::io::Error),
     #[error("{report}")]
@@ -227,6 +231,7 @@ pub struct UpdateDownloadingStatus {
 #[derive(Debug, Clone)]
 pub struct UnzipStatus {
     pub zip_filename: PathBuf,
+    pub expected_checksum: String,
     pub progress: ProgressPercentage,
 }
 

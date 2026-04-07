@@ -2566,11 +2566,13 @@ dependencies = [
 name = "macro_bundle_updater_plugin"
 version = "0.1.0"
 dependencies = [
+ "digest",
  "futures",
  "reqwest",
  "rootcause",
  "semver",
  "serde",
+ "sha2",
  "strum",
  "tauri",
  "thiserror 2.0.18",

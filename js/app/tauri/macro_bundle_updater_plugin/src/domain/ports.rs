@@ -19,6 +19,12 @@ pub trait UpdateRepo: Send + Sync + 'static {
 }
 
 pub trait FsRepo: Send + Sync + 'static {
+    fn verify_checksum<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+        expected: &str,
+    ) -> impl Future<Output = Result<(), UnzipError>> + Send;
+
     fn unzip(
         &self,
         request: UnzipRequest,
