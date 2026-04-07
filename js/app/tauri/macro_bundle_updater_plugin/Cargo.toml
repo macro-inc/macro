@@ -4,7 +4,7 @@ name = "macro_bundle_updater_plugin"
 version = "0.1.0"
 
 [dependencies]
-anyhow = { workspace = true }
+rootcause = { workspace = true }
 futures = { version = "0.3" }
 reqwest = { workspace = true, features = ["json", "stream"] }
 semver = { workspace = true, features = ["serde"] }

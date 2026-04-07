@@ -38,7 +38,7 @@ impl<R: Runtime> SystemInfo<R> {
 }
 
 impl<R: Runtime> SystemQuery for SystemInfo<R> {
-    async fn get_system_info(&self) -> Result<AppInfo, anyhow::Error> {
+    async fn get_system_info(&self) -> Result<AppInfo, rootcause::Report> {
         Ok(AppInfo {
             current_version: self.get_version(),
             arch: self.get_arch(),

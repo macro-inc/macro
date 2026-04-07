@@ -12,7 +12,7 @@ struct FileSystem;
 fn map_zip_err(err: ZipError) -> UnzipError {
     match err {
         ZipError::Io(error) => UnzipError::IoErr(error),
-        x => UnzipError::Other(anyhow::Error::from(x)),
+        x => UnzipError::Other { report: rootcause::Report::from(x) },
     }
 }
 
@@ -40,7 +40,7 @@ impl FsRepo for FileSystem {
                 Ok(archive_target)
             })
             .await
-            .map_err(anyhow::Error::from)??,
+            .map_err(rootcause::Report::from)??,
         )
     }
 

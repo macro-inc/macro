@@ -1,10 +1,11 @@
 use crate::domain::{
     models::{
-        CompletedStatus, GrantErr, ProgressPercentage, UnzipRequest, UnzipStatus, UpdateApproval,
+        CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus, UpdateApproval,
         UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateRequested, UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
+use rootcause::{Report, prelude::ResultExt, report};
 use semver::Version;
 use std::path::{Path, PathBuf};
 use tokio::task::JoinHandle;
@@ -17,13 +18,13 @@ struct Worker<U, Fs, Q> {
     update_repo: U,
     fs_repo: Fs,
     system_query: Q,
-    status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, UpdateError>>,
+    status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, Report<UpdateError>>>,
     grant_rx: Option<tokio::sync::oneshot::Receiver<UpdateApproval>>,
 }
 
 struct WorkerHandle {
     handle: tokio::task::JoinHandle<()>,
-    status_rx: tokio::sync::watch::Receiver<Result<UpdateStatus, UpdateError>>,
+    status_rx: tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>>,
     grant_tx: Option<tokio::sync::oneshot::Sender<UpdateApproval>>,
 }
 
@@ -70,15 +71,26 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         })
     }
 
-    async fn next_status(&mut self, status: UpdateStatus) -> Result<UpdateStatus, UpdateError> {
+    async fn next_status(
+        &mut self,
+        status: UpdateStatus,
+    ) -> Result<UpdateStatus, Report<UpdateError>> {
         match status {
             UpdateStatus::Idle => {
-                let app_info = self.system_query.get_system_info().await?;
+                let app_info = self
+                    .system_query
+                    .get_system_info()
+                    .await
+                    .context(UpdateError::Other)?;
 
                 Ok(UpdateStatus::CheckingForDownload(app_info))
             }
             UpdateStatus::CheckingForDownload(app_info) => {
-                let res = self.update_repo.check_for_update(app_info).await?;
+                let res = self
+                    .update_repo
+                    .check_for_update(app_info)
+                    .await
+                    .context(UpdateError::DownloadErr)?;
 
                 match res {
                     Some(update) => Ok(UpdateStatus::UpdateFound(UpdateFoundStatus {
@@ -90,10 +102,13 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             }
             UpdateStatus::UpdateFound(update_found_status) => {
                 let Some(rx) = self.grant_rx.take() else {
-                    return Err(UpdateError::GrantErr(GrantErr::AlreadyGranted));
+                    return Err(
+                        report!("Already granted permission").context(UpdateError::GrantErr)
+                    );
                 };
                 let res = rx.await.map_err(|e| {
-                    anyhow::anyhow!("Failed to receive grant {e:?}. The sender was dropped")
+                    rootcause::report!("Failed to receive grant {e:?}. The sender was dropped")
+                        .context(UpdateError::GrantErr)
                 })?;
                 match res {
                     UpdateApproval::Granted(grant) => {
@@ -108,11 +123,16 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             }
             UpdateStatus::NoUpdateNeeded => Ok(UpdateStatus::NoUpdateNeeded),
             UpdateStatus::DownloadingBundle(status) => {
-                let update_dir = self.system_query.get_update_dir().await?;
+                let update_dir = self
+                    .system_query
+                    .get_update_dir()
+                    .await
+                    .context(UpdateError::IoErr)?;
 
                 let download_filename = self
                     .create_download_directory(update_dir, &status.update.version)
-                    .await?;
+                    .await
+                    .context(UpdateError::IoErr)?;
 
                 let (req, rx) = status.update.into_download_request(&download_filename);
 
@@ -125,7 +145,11 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     _ => false,
                 }));
 
-                let () = self.update_repo.get_update_bundle(req).await?;
+                let () = self
+                    .update_repo
+                    .get_update_bundle(req)
+                    .await
+                    .context(UpdateError::DownloadErr)?;
                 Ok(UpdateStatus::UnzipingBundle(UnzipStatus {
                     zip_filename: download_filename,
                     progress: ProgressPercentage::default(),
@@ -143,7 +167,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     _ => false,
                 }));
 
-                let mut entrypoint = self.fs_repo.unzip(req).await?;
+                let mut entrypoint = self.fs_repo.unzip(req).await.context(UpdateError::Unzip)?;
                 entrypoint.push(ENTRYPOINT_NAME);
                 Ok(UpdateStatus::Completed(CompletedStatus { entrypoint }))
             }
@@ -170,7 +194,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
 /// returning true if the value in the sender channel was modified
 async fn glue_channels<F>(
     mut rx: tokio::sync::mpsc::Receiver<ProgressPercentage>,
-    status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, UpdateError>>,
+    status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, Report<UpdateError>>>,
     mut f: F,
 ) where
     F: FnMut(&mut UpdateStatus, ProgressPercentage) -> bool + 'static + Send,
@@ -195,16 +219,16 @@ impl Service {
 }
 
 impl AutoUpdateService for Service {
-    fn status(&self) -> &tokio::sync::watch::Receiver<Result<UpdateStatus, UpdateError>> {
+    fn status(&self) -> &tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>> {
         &self.handle.status_rx
     }
 
-    fn grant_or_deny(&mut self, grant: UpdateApproval) -> Result<(), super::models::GrantErr> {
+    fn grant_or_deny(&mut self, grant: UpdateApproval) -> Result<(), Report> {
         let Some(tx) = self.handle.grant_tx.take() else {
-            return Err(GrantErr::AlreadyGranted);
+            return Err(report!("Already granted"));
         };
         Ok(tx
             .send(grant)
-            .map_err(|e| anyhow::anyhow!("Failed to send {e:?}. The rx channel was dropped"))?)
+            .map_err(|e| rootcause::report!("Failed to send {e:?}. The rx channel was dropped"))?)
     }
 }

@@ -117,10 +117,10 @@ pub struct DownloadBundleRequest<P> {
 
 #[derive(Debug, Error)]
 pub enum DownloadBundleError {
-    #[error(transparent)]
-    FileError(#[from] std::io::Error),
-    #[error(transparent)]
-    OtherError(#[from] anyhow::Error),
+    #[error("An error occurred reading the file")]
+    FileError,
+    #[error("An unknown error occurred")]
+    OtherError,
 }
 
 #[non_exhaustive]
@@ -156,22 +156,28 @@ pub enum UnzipError {
     ArchiveNotFound { path: PathBuf },
     #[error(transparent)]
     IoErr(#[from] std::io::Error),
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    #[error("{report}")]
+    Other { report: rootcause::Report },
+}
+
+impl From<rootcause::Report> for UnzipError {
+    fn from(report: rootcause::Report) -> Self {
+        Self::Other { report }
+    }
 }
 
 #[derive(Debug, Error)]
 pub enum UpdateError {
-    #[error(transparent)]
-    DownloadErr(#[from] DownloadBundleError),
-    #[error(transparent)]
-    Unzip(#[from] UnzipError),
-    #[error(transparent)]
-    GrantErr(#[from] GrantErr),
-    #[error(transparent)]
-    IoErr(#[from] std::io::Error),
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    #[error("Failed to download the update")]
+    DownloadErr,
+    #[error("Failed to unzip the update")]
+    Unzip,
+    #[error("Failed to grant permission to update")]
+    GrantErr,
+    #[error("An io error occurred")]
+    IoErr,
+    #[error("An unknown error occurred")]
+    Other,
 }
 
 /// denotes that an update has been found and we are requesting approval
@@ -189,14 +195,6 @@ pub struct UpdateDenied(());
 pub enum UpdateApproval {
     Granted(UpdateGranted),
     Denied(UpdateDenied),
-}
-
-#[derive(Debug, Error)]
-pub enum GrantErr {
-    #[error("The update was already either granted or denied")]
-    AlreadyGranted,
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
 }
 
 impl UpdateRequested {

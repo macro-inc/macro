@@ -1,7 +1,7 @@
 [package]
 authors = ["you"]
 description = "A Tauri App"
-edition = "2024"
+edition.workspace = true
 license = ""
 name = "app"
 repository = ""

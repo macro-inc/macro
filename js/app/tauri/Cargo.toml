@@ -1,12 +1,21 @@
 [workspace]
+members = [
+  "input_accessory_plugin",
+  "logger",
+  "macro_bundle_updater_plugin",
+  "navigation_plugin",
+  "src-tauri",
+]
+package.edition = "2024"
 resolver = "2"
-members = ["src-tauri", "navigation_plugin", "logger", "input_accessory_plugin"]
 
 [workspace.dependencies]
-rootcause = "0.10"
+reqwest = "0.13"
+rootcause = "0.12"
+semver = "1"
+serde = "1"
+tauri = { version = "2.7.0" }
+thiserror = "2"
+tokio = "1"
 tracing = "0.1"
 url = "2.5.4"
-anyhow = "1"
-serde = "1"
-tauri  = { version = "2.7.0" }
-thiserror = "2"
