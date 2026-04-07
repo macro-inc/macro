@@ -1,56 +1,63 @@
 //! Query for document access level.
 
-use crate::domain::models::AccessLevel;
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
 use sqlx::PgPool;
 use std::str::FromStr;
 
 /// Get the highest access level a user has for a document.
-///
-/// Considers both explicit grants (UserItemAccess) and public access
-/// (SharePermission) inherited through the project hierarchy.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_document_access(
     pool: &PgPool,
-    document_id: &str,
-    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    document_id: &uuid::Uuid,
+    source_ids: &SourceIds,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
-    let user_id = user_id.map(AsRef::as_ref).unwrap_or("");
+    // Check share permission access only
+    if source_ids.0.is_empty() {
+        let access_level = sqlx::query_scalar!(
+            r#"
+            SELECT
+                "publicAccessLevel" as "access_level!"
+            FROM "SharePermission"
+            WHERE "isPublic" = true
+            AND "publicAccessLevel" IS NOT NULL
+            AND id IN (
+                SELECT "sharePermissionId" FROM "DocumentPermission" WHERE "documentId" = $1
+            )
+             
+            "#,
+            &document_id.to_string()
+        )
+        .fetch_optional(pool)
+        .await?;
+
+        return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
+    }
+
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
-        WITH RECURSIVE project_hierarchy AS (
-            SELECT p.id as project_id
-            FROM "Document" d
-            JOIN "Project" p ON d."projectId" = p.id AND p."deletedAt" IS NULL
-            WHERE d.id = $1 AND d."deletedAt" IS NULL
-            UNION ALL
-            SELECT parent.id as project_id
-            FROM project_hierarchy ph
-            JOIN "Project" parent ON parent.id = (
-                SELECT "parentId" FROM "Project" WHERE id = ph.project_id AND "parentId" IS NOT NULL AND "deletedAt" IS NULL
-            )
-        )
         SELECT access_level FROM (
-            -- Source 1: Cast the AccessLevel enum to text.
-            SELECT access_level::text FROM "UserItemAccess"
-            WHERE user_id = $2 AND item_id IN (
-                SELECT $1
-                UNION
-                SELECT project_id FROM project_hierarchy
-            )
+            -- Source 1: entity_access source_id match
+            SELECT
+                access_level::text FROM entity_access
+            WHERE entity_id = $1
+            AND entity_type = 'document'
+            AND source_id = ANY($2)
+
             UNION ALL
-            -- Source 2: Select the publicAccessLevel (which is already text).
-            SELECT "publicAccessLevel" as access_level
+            -- Source 2: items share permission
+            SELECT
+                "publicAccessLevel" as "access_level!"
             FROM "SharePermission"
-            WHERE "isPublic" = true AND "publicAccessLevel" IS NOT NULL AND id IN (
-                SELECT "sharePermissionId" FROM "DocumentPermission" WHERE "documentId" = $1
-                UNION
-                SELECT "sharePermissionId" FROM "ProjectPermission" WHERE "projectId" IN (SELECT project_id FROM project_hierarchy)
-            )
-        ) as all_levels
+            WHERE "isPublic" = true
+            AND "publicAccessLevel" IS NOT NULL
+            AND id IN (
+                SELECT "sharePermissionId" FROM "DocumentPermission" WHERE "documentId" = $3
+            )                
+        )
         "#,
         document_id,
-        user_id
+        &source_ids.0,
+        &document_id.to_string()
     )
     .fetch_all(pool)
     .await?;
