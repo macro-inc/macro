@@ -621,6 +621,11 @@ export function ComposeTask(props: ComposeTaskProps) {
         <MarkdownShell
           config={editorConfig}
           initialState={initialState.editorState}
+          initialValue={
+            initialState.editorState
+              ? undefined
+              : initialState.content || undefined
+          }
           placeholder={props.placeholder ?? 'Add description...'}
           portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
           class="shrink-1 min-h-0 h-[unset] text-base m-2 overflow-y-auto"
