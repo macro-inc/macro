@@ -1,10 +1,11 @@
 use crate::api::context::ApiContext;
+use crate::api::context::EntityAccessService;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json, extract};
+use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use macro_db_client::share_permission::edit::edit_thread_permission;
-use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use macro_middleware::cloud_storage::ensure_access::thread::ThreadAccessLevelExtractor;
 use macro_share_permissions::user_item_access::update_user_item_access;
 use model::response::{
@@ -45,7 +46,11 @@ pub async fn edit_thread_handler(
     user_context: Extension<UserContext>,
     thread_context: Extension<EmailThreadPermission>,
     extract::Path(ThreadParams { thread_id }): extract::Path<ThreadParams>,
-    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, PatchThreadRequestV2>,
+    project: ProjectBodyAccessLevelExtractor<
+        EditAccessLevel,
+        PatchThreadRequestV2,
+        EntityAccessService,
+    >,
 ) -> Result<Response, Response> {
     let req = project.into_inner();
 
