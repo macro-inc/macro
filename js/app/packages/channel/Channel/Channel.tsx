@@ -60,6 +60,7 @@ import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import {
+  clearStaleRestoredChannelData,
   createTargetMessageController,
   type TargetMessageController,
 } from './create-target-message-controller';
@@ -102,6 +103,12 @@ export function Channel(props: ChannelProps) {
     createSignal<ThreadListScrollState>();
   const [messageListElement, setMessageListElement] =
     createSignal<HTMLDivElement>();
+
+  // When opening without a target, clear stale data that was previously
+  // restored from a load-around session so the query fetches from the bottom.
+  if (!props.targetMessageId) {
+    clearStaleRestoredChannelData(props.channelId);
+  }
 
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,

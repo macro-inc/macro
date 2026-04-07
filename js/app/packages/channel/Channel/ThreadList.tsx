@@ -118,7 +118,7 @@ export function ThreadList(props: ThreadListProps) {
     initialScrollStarted = false;
     initialScrollRetried = false;
     initialScrollTarget = DEFAULT_INITIAL_SCROLL_TARGET;
-  }
+  };
 
   const resolveTargetIndex = (target: ThreadListScrollTarget): number => {
     const keys = props.keys();
