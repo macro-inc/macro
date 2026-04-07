@@ -180,19 +180,19 @@ export function ComposeTool(props: ComposeToolProps) {
   let toolFinalized = false;
   let lastPersistedSnapshot = createSendEmailSnapshot(props.initialData);
 
-  function collectArgs(): SendEmail {
-    const prepared = prepareEmailBody(editor());
+  function collectArgs(bodyHtml: string): SendEmail {
     return {
       to: fromEmailRecipients(recipients().to),
       cc: fromEmailRecipients(recipients().cc),
       bcc: fromEmailRecipients(recipients().bcc),
       subject: subject(),
-      bodyHtml: prepared?.bodyHtml ?? '',
+      body: null,
+      bodyHtml,
       replyingToId: props.initialData.replyingToId,
     };
   }
 
-  function validate(): boolean {
+  function validate(bodyHtml: string | undefined): boolean {
     const errors: ComposeValidationError[] = [];
 
     if (recipients().to.length === 0) {
@@ -202,8 +202,7 @@ export function ComposeTool(props: ComposeToolProps) {
       });
     }
 
-    const prepared = prepareEmailBody(editor());
-    if (!prepared?.bodyHtml && !body().trim()) {
+    if (!bodyHtml && !body().trim()) {
       errors.push({ type: 'no_message', message: 'Write a message' });
     }
 
@@ -221,7 +220,8 @@ export function ComposeTool(props: ComposeToolProps) {
   async function flushUpdate() {
     if (toolFinalized) return;
 
-    const args = collectArgs();
+    const prepared = prepareEmailBody(editor());
+    const args = collectArgs(prepared?.bodyHtml ?? '');
     const nextSnapshot = createSendEmailSnapshot(args);
 
     if (sameSendEmailSnapshot(nextSnapshot, lastPersistedSnapshot)) {
@@ -259,10 +259,12 @@ export function ComposeTool(props: ComposeToolProps) {
 
   async function handleSend() {
     if (ownerGateDisabled()) return;
-    if (!validate()) return;
+
+    const prepared = prepareEmailBody(editor());
+    if (!validate(prepared?.bodyHtml)) return;
 
     setIsSending(true);
-    const args = collectArgs();
+    const args = collectArgs(prepared?.bodyHtml ?? '');
 
     const result = await cognitionApiServiceClient.callTool<'SendEmail'>({
       chat_id: props.chatId,
