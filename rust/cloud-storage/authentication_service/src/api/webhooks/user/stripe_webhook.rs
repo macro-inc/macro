@@ -12,11 +12,11 @@ use axum::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::Email;
+use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
 use roles_and_permissions::domain::{model::ProductTier, port::UserRolesAndPermissionsService};
 use serde::Serialize;
-use miniserde::json::Value as JsonValue;
 use stripe_webhook::{EventObject, EventType};
 
 /// Extracts the previous status from the previous_attributes JSON value.
@@ -146,9 +146,10 @@ async fn handle_customer_subscription_event(
     // For subscription.updated events, check if we're transitioning from incomplete
     // to active/trialing. If so, this is effectively a "new" subscription activation.
     let previous_status = extract_previous_status(&previous_attributes);
-    let is_transition_from_incomplete = matches!(event_type, EventType::CustomerSubscriptionUpdated)
-        && previous_status.as_deref() == Some("incomplete")
-        && matches!(current_status, "active" | "trialing");
+    let is_transition_from_incomplete =
+        matches!(event_type, EventType::CustomerSubscriptionUpdated)
+            && previous_status.as_deref() == Some("incomplete")
+            && matches!(current_status, "active" | "trialing");
 
     if is_transition_from_incomplete {
         tracing::info!(
