@@ -47,4 +47,26 @@ impl ConnectionGateway for ConnectionGatewayImpl {
 
         Ok(())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn batch_send_message<'a>(
+        &self,
+        users: &[MacroUserId<Lowercase<'a>>],
+        message_type: &str,
+        message: serde_json::Value,
+    ) -> Result<(), Self::Err> {
+        let entities = users
+            .iter()
+            .map(|u| model_entity::EntityType::User.with_entity_str(u.as_ref()))
+            .collect();
+
+        let result = self
+            .client
+            .batch_send_message(message_type.to_string(), message, entities)
+            .await?;
+
+        tracing::trace!(result=?result, "batch send message");
+
+        Ok(())
+    }
 }
