@@ -540,8 +540,8 @@ export const UnifiedFilterDropdown = () => {
       }
     }
     return [
-      noAssigneeOption,
       ...(meOption ? [meOption] : []),
+      noAssigneeOption,
       ...otherContactOptions,
     ];
   });
