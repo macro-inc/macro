@@ -281,6 +281,39 @@ const INTERNAL_CALL_SECRET = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require('call_internal_secret') })
   .apply((secret) => secret.secretString);
 
+const callRecordingStack = new pulumi.StackReference('call-recording-stack', {
+  name: `macro-inc/call-recording/${stack}`,
+});
+
+const callRecordingCrudPolicyArn: pulumi.Output<string> = callRecordingStack
+  .getOutput('crudPolicyArn')
+  .apply((t) => t as string);
+
+const CALL_RECORDING_S3_BUCKET: pulumi.Output<string> = callRecordingStack
+  .getOutput('callRecordingBucketId')
+  .apply((t) => t as string);
+
+const CALL_RECORDING_S3_REGION = 'us-east-1';
+const callRecordingServiceUserSecretId: pulumi.Output<string> =
+  callRecordingStack.getOutput('serviceUserSecretId').apply((t) => t as string);
+
+const callRecordingCreds = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: callRecordingServiceUserSecretId })
+  .apply(
+    (secret) =>
+      JSON.parse(secret.secretString) as {
+        accessKey: string;
+        secretAccessKey: string;
+      }
+  );
+
+const CALL_RECORDING_S3_ACCESS_KEY = callRecordingCreds.apply(
+  (c) => c.accessKey
+);
+const CALL_RECORDING_S3_SECRET = callRecordingCreds.apply(
+  (c) => c.secretAccessKey
+);
+
 const cloudStorageService = new CloudStorageService(
   `cloud-storage-service-${stack}`,
   {
@@ -313,7 +346,24 @@ const cloudStorageService = new CloudStorageService(
       githubWebhookSecretKeyArn,
       githubSyncAppPemArn,
     ],
+    callRecordingCrudPolicyArn,
     containerEnvVars: [
+      {
+        name: 'CALL_RECORDING_S3_BUCKET',
+        value: pulumi.interpolate`${CALL_RECORDING_S3_BUCKET}`,
+      },
+      {
+        name: 'CALL_RECORDING_S3_REGION',
+        value: CALL_RECORDING_S3_REGION,
+      },
+      {
+        name: 'CALL_RECORDING_S3_ACCESS_KEY',
+        value: CALL_RECORDING_S3_ACCESS_KEY,
+      },
+      {
+        name: 'CALL_RECORDING_S3_SECRET',
+        value: CALL_RECORDING_S3_SECRET,
+      },
       {
         name: 'INTERNAL_CALL_SECRET',
         value: pulumi.interpolate`${INTERNAL_CALL_SECRET}`,
