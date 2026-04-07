@@ -4,6 +4,7 @@ import {
   Show,
   createEffect,
   createSignal,
+  onCleanup,
   on,
   type Component,
   type JSX,
@@ -26,14 +27,24 @@ function TrackView(props: {
   mirror?: boolean;
 }) {
   let ref!: HTMLDivElement;
+  let attachedTrack: Track | undefined;
+  let attachedElement: Element | undefined;
 
   createEffect(
     on(
       () => props.track,
       (track, prev) => {
+        if (prev === track) return;
+
         prev?.detach().forEach((el) => el.remove());
+        attachedTrack = undefined;
+        attachedElement = undefined;
+
         if (!track) return;
+
         const el = track.attach();
+        attachedTrack = track;
+        attachedElement = el;
         Object.assign(el.style, {
           width: '100%',
           height: '100%',
@@ -44,6 +55,14 @@ function TrackView(props: {
       }
     )
   );
+
+  onCleanup(() => {
+    if (attachedTrack) {
+      attachedTrack.detach().forEach((el) => el.remove());
+    } else {
+      attachedElement?.remove();
+    }
+  });
 
   return <div ref={ref} class="w-full h-full" />;
 }

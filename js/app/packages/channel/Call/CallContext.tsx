@@ -203,7 +203,7 @@ function createCallState() {
       try {
         await r.disconnect();
       } finally {
-        resetState();
+        destroyRoom();
       }
     }
   }
