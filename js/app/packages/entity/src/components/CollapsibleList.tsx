@@ -2,6 +2,50 @@ import ChevronDownIcon from '@icon/regular/caret-down.svg?component-solid';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
+interface ToggleButtonProps {
+  hasMore: boolean;
+  toggleRef: (el: HTMLDivElement) => void;
+  showAll: boolean;
+  collapse: (e: MouseEvent) => void;
+  setShowAll: (value: boolean) => void;
+  getExpandTextFn: (count: number) => string;
+  visibleCount: number;
+  itemsLength: number;
+}
+
+function ToggleButton(props: ToggleButtonProps) {
+  return (
+    <Show when={props.hasMore}>
+      <div ref={props.toggleRef} class="w-full flex items-center gap-2 my-2">
+        <button
+          type="button"
+          class="flex items-center gap-1 text-xs bracket-never hover:text-accent"
+          data-collapsible-toggle
+          data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
+          onClick={(e) => {
+            if (props.showAll) {
+              props.collapse(e);
+            } else {
+              e.stopPropagation();
+              props.setShowAll(true);
+            }
+          }}
+        >
+          <ChevronDownIcon
+            class={cn('w-3 h-3 transition-transform duration-100', {
+              'rotate-180': props.showAll,
+            })}
+          />
+          <Show when={!props.showAll} fallback="Collapse">
+            {props.getExpandTextFn(props.itemsLength - props.visibleCount)}
+          </Show>
+        </button>
+        <div class="border-t border-edge-muted/50 grow" />
+      </div>
+    </Show>
+  );
+}
+
 interface CollapsibleListProps<T> {
   items: T[];
   visibleCount?: number;
@@ -66,47 +110,29 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
     }
   };
 
-  const ToggleButton = () => (
-    <Show when={hasMore()}>
-      <div ref={toggleRef} class="w-full flex items-center gap-2 my-2">
-        <button
-          type="button"
-          class="flex items-center gap-1 text-xs bracket-never hover:text-accent"
-          data-collapsible-toggle
-          data-collapsible-state={showAll() ? 'expanded' : 'collapsed'}
-          onClick={(e) => {
-            if (showAll()) {
-              collapse(e);
-            } else {
-              e.stopPropagation();
-              setShowAll(true);
-            }
-          }}
-        >
-          <ChevronDownIcon
-            class={cn('w-3 h-3 transition-transform duration-100', {
-              'rotate-180': showAll(),
-            })}
-          />
-          <Show when={!showAll()} fallback="Collapse">
-            {getExpandTextFn()(props.items.length - visibleCount())}
-          </Show>
-        </button>
-        <div class="border-t border-edge-muted/50 grow" />
-      </div>
-    </Show>
-  );
+  const toggleButtonProps = () => ({
+    hasMore: hasMore(),
+    toggleRef: (el: HTMLDivElement) => {
+      toggleRef = el;
+    },
+    showAll: showAll(),
+    collapse,
+    setShowAll,
+    getExpandTextFn: getExpandTextFn(),
+    visibleCount: visibleCount(),
+    itemsLength: props.items.length,
+  });
 
   return (
     <>
       <Show when={position() === 'top'}>
-        <ToggleButton />
+        <ToggleButton {...toggleButtonProps()} />
       </Show>
       <For each={visibleItems()}>
         {(child, index) => props.children(child, index(), count())}
       </For>
       <Show when={position() === 'bottom'}>
-        <ToggleButton />
+        <ToggleButton {...toggleButtonProps()} />
       </Show>
     </>
   );
