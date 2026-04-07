@@ -324,6 +324,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,
+        entity_access_service: Arc::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            ),
+        ),
     };
     Arc::new(api_context)
 }

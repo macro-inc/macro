@@ -341,6 +341,9 @@ async fn main() -> anyhow::Result<()> {
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,
+        entity_access_service: Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            db.clone(),
+        ))),
     })
     .await
     .context("failed to setup and serve api")?;

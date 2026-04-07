@@ -1,4 +1,3 @@
-pub mod chat;
 pub mod history;
 pub mod pin;
 pub mod project;

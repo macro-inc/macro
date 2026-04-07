@@ -6,6 +6,7 @@ use ai_tools::{
 use axum::extract::FromRef;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use notification::domain::service::SqsNotificationIngress;
@@ -19,6 +20,9 @@ use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use std::sync::{Arc, OnceLock};
 use stream::domain::StreamRepo;
+
+/// Type alias for the entity access service.
+pub type DcsEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
 #[cfg(test)]
 mod test;
@@ -57,6 +61,7 @@ pub struct ApiContext {
     pub tool_service_context: ToolServiceContext,
     pub all_tools: Arc<AiToolSet>,
     pub all_tools_prompt: &'static str,
+    pub entity_access_service: Arc<DcsEntityAccessService>,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();
