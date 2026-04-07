@@ -66,10 +66,10 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     cleanupDisconnectListener = null;
     try {
       await callCtx.disconnect();
+      options?.onLeave?.();
     } finally {
       await leaveMutation.mutateAsync(id);
     }
-    options?.onLeave?.();
   }
 
   return {
