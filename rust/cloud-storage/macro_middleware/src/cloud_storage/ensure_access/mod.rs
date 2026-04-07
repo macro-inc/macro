@@ -1,6 +1,5 @@
 pub mod history;
 pub mod pin;
-pub mod thread;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
