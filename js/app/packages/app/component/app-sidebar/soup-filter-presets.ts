@@ -249,7 +249,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               },
             ],
           },
-          clientFilters: {},
+          clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
         };
       },
       'created-by-me': (ctx) => {
