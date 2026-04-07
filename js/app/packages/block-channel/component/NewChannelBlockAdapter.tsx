@@ -38,6 +38,7 @@ import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHe
 import { Button } from '@ui/components/Button';
 import PhoneIcon from '@icon/regular/phone.svg';
 import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
+import { unwrap } from 'solid-js/store';
 
 type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
@@ -170,7 +171,6 @@ function NewChannelBlockAdapterInner(
   ): ChannelPropsTargetMessage => {
     const messageId = params[URL_PARAMS.message] as string | undefined;
     const threadId = params[URL_PARAMS.thread] as string | undefined;
-
     // For compatibility the naming is  a little strange here.
     // New channels index by top level message and then separately handle replies.
     // If we have a threadId that is actually the top level message and the reply is the message id.
