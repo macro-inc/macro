@@ -3854,6 +3854,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
+ "cached",
  "cool_asserts",
  "macro_user_id",
  "mockall",
