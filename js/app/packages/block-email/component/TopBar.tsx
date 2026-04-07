@@ -104,6 +104,23 @@ export function TopBar(props: {
     });
   };
 
+  const openTaskCompose = () => {
+    const threadId = emailCtx.thread()?.db_id;
+    if (!threadId) return;
+    popoverSplit({
+      type: 'component',
+      id: 'task-compose',
+      params: {
+        initialContent: buildMentionMarkdownString({
+          type: 'document',
+          documentId: threadId,
+          documentName: props.title,
+          blockName: 'email',
+        }),
+      },
+    });
+  };
+
   const tools: BlockTool[] = [
     {
       label: 'Done',
@@ -139,22 +156,7 @@ export function TopBar(props: {
     {
       label: 'Create Task',
       icon: AnimatedTaskIcon,
-      action: () => {
-        const threadId = emailCtx.thread()?.db_id;
-        if (!threadId) return;
-        popoverSplit({
-          type: 'component',
-          id: 'task-compose',
-          params: {
-            initialContent: buildMentionMarkdownString({
-              type: 'document',
-              documentId: threadId,
-              documentName: props.title,
-              blockName: 'email',
-            }),
-          },
-        });
-      },
+      action: openTaskCompose,
       buttonComponent: () => {
         const [hovering, setHovering] = createSignal(false);
         return (
@@ -162,22 +164,7 @@ export function TopBar(props: {
             class="h-7 px-2 flex items-center gap-1 rounded-xs text-xs hover:bg-hover hover-transition-bg"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
-            onClick={() => {
-              const threadId = emailCtx.thread()?.db_id;
-              if (!threadId) return;
-              popoverSplit({
-                type: 'component',
-                id: 'task-compose',
-                params: {
-                  initialContent: buildMentionMarkdownString({
-                    type: 'document',
-                    documentId: threadId,
-                    documentName: props.title,
-                    blockName: 'email',
-                  }),
-                },
-              });
-            }}
+            onClick={openTaskCompose}
           >
             <div class="size-4 text-task">
               <AnimatedTaskIcon triggerAnimation={hovering()} />
