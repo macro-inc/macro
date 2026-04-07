@@ -60,7 +60,7 @@ jobs:
         hdd=40,
         spot=false,
         ssh=false,
-        'run-id=${{github.run_id}}',
+        'run-id=${{github.run_id}}-${{ matrix.service }}',
       ]
     strategy:
       fail-fast: false
