@@ -53,6 +53,10 @@ export interface FreshSortConfig<T> {
   commaSeparatedChannelMatch?: boolean;
   /** Function to calculate per-item boost. Returns a boost multiplier (e.g., 0.2 for +20% boost). Default: undefined */
   boostFn?: BoostFn<T>;
+  /** How much to penalize matches with gaps between characters. Higher values penalize spread-out matches more. Default: 1.0 */
+  gapPenaltyWeight?: number;
+  /** How much to penalize matches that start later in the string. Higher values penalize later starts more. Default: 0.05 */
+  startBonusDecay?: number;
 }
 
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
@@ -83,6 +87,8 @@ const DEFAULT_CONFIG = {
   dmBoost: 1.0,
   commaSeparatedChannelMatch: false,
   boostFn: undefined,
+  gapPenaltyWeight: 1.0,
+  startBonusDecay: 0.05,
 } as const;
 
 function extractTimestamp(
@@ -141,7 +147,9 @@ function calculateBrevityScore(text: string): number {
 function ufuzzyFilter<T>(
   items: T[],
   getName: NameFn<T>,
-  query: string
+  query: string,
+  gapPenaltyWeight: number,
+  startBonusDecay: number
 ): FuzzyFilterResult<T>[] {
   const haystack = items.map(getName);
   const idxs = uf.filter(haystack, query);
@@ -163,8 +171,9 @@ function ufuzzyFilter<T>(
       matchSpan = ranges[ranges.length - 1] - ranges[0];
     }
 
-    const gapPenalty = matchSpan > 0 ? queryLen / matchSpan : 1;
-    const startBonus = 1 / (1 + (info.start[orderIdx] ?? 0) * 0.05);
+    const rawGapPenalty = matchSpan > 0 ? queryLen / matchSpan : 1;
+    const gapPenalty = 1 - (1 - rawGapPenalty) * gapPenaltyWeight;
+    const startBonus = 1 / (1 + (info.start[orderIdx] ?? 0) * startBonusDecay);
     const score = gapPenalty * startBonus * 100;
 
     return {
@@ -307,7 +316,13 @@ export function createFreshSearch<T>({
         }
       }
 
-      const nonChannelResults = ufuzzyFilter(nonChannelItems, getName, query);
+      const nonChannelResults = ufuzzyFilter(
+        nonChannelItems,
+        getName,
+        query,
+        finalConfig.gapPenaltyWeight,
+        finalConfig.startBonusDecay
+      );
       const allResults = [...channelResults, ...nonChannelResults];
       return freshSort(
         allResults,
@@ -318,7 +333,13 @@ export function createFreshSearch<T>({
       );
     }
 
-    const fuzzyResults = ufuzzyFilter(items, getName, query);
+    const fuzzyResults = ufuzzyFilter(
+      items,
+      getName,
+      query,
+      finalConfig.gapPenaltyWeight,
+      finalConfig.startBonusDecay
+    );
     return freshSort(
       fuzzyResults,
       config,
