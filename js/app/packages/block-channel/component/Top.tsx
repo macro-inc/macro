@@ -210,7 +210,7 @@ export function Top(props: TopProps) {
         };
       })(),
       isActive: () => channelModals.isInCall(),
-      condition: () => ENABLE_CALLS,
+      condition: () => ENABLE_CALLS(),
     },
     {
       label: 'Participants',

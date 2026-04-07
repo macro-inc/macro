@@ -300,4 +300,13 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   false
 );
 
-export const ENABLE_CALLS = resolveFeatureFlag('ENABLE_CALLS', DEV_MODE_ENV);
+// skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
+const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+export function ENABLE_CALLS(): boolean {
+  if (ENABLE_CALLS_OVERRIDE !== undefined) {
+    return ENABLE_CALLS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
+}

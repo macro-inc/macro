@@ -121,7 +121,7 @@ function NewTop(props: {
         activeTab={props.activeTab}
         onTabChange={props.onTabChange}
       />
-      <Show when={ENABLE_CALLS}>
+      <Show when={ENABLE_CALLS()}>
         <SplitHeaderRight>
           <CallButton
             joinCall={props.joinCall}
