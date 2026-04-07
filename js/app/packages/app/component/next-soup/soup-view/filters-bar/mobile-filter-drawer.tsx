@@ -132,14 +132,32 @@ export const MobileFilterDrawer = () => {
       label: 'Unassigned',
       icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
     };
-    const contactOptions = contacts().map((contact) => ({
-      id: contact.id,
-      label: buildContactLabel(contact, currentUserId),
-      icon: () => (
-        <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }));
-    return [noAssigneeOption, ...contactOptions];
+    let meOption: typeof noAssigneeOption | undefined;
+    const otherContactOptions: (typeof noAssigneeOption)[] = [];
+    for (const contact of contacts()) {
+      const opt = {
+        id: contact.id,
+        label: buildContactLabel(contact, currentUserId),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="xs"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === currentUserId) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [
+      ...(meOption ? [meOption] : []),
+      noAssigneeOption,
+      ...otherContactOptions,
+    ];
   });
 
   const filteredAssigneeOptions = createMemo(() => {
