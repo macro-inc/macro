@@ -275,13 +275,14 @@ export function createFreshSearch<T>({
 }: CreateFreshSearchArgs<T>) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
+    const trimmedQuery = query.trim();
 
-    const hasComma = query.includes(',');
-    const hasSpace = query.includes(' ');
+    const hasComma = trimmedQuery.includes(',');
+    const hasSpace = trimmedQuery.includes(' ');
     const useMultiTermChannelMatch =
       finalConfig.commaSeparatedChannelMatch && (hasComma || hasSpace);
 
-    if (!query) {
+    if (!trimmedQuery) {
       const allResults: FuzzyFilterResult<T>[] = items.map((item) => ({
         original: item,
         string: getName(item),
@@ -303,7 +304,7 @@ export function createFreshSearch<T>({
       for (const item of items) {
         if (isChannelItem(item)) {
           const name = getName(item);
-          const score = fuzzyScoreCommaSpaceSeparated(query, name);
+          const score = fuzzyScoreCommaSpaceSeparated(trimmedQuery, name);
           if (score >= 0) {
             channelResults.push({
               original: item,
@@ -319,7 +320,7 @@ export function createFreshSearch<T>({
       const nonChannelResults = ufuzzyFilter(
         nonChannelItems,
         getName,
-        query,
+        trimmedQuery,
         finalConfig.gapPenaltyWeight,
         finalConfig.startBonusDecay
       );
