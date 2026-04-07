@@ -53,7 +53,7 @@ export interface FreshSortConfig<T> {
   commaSeparatedChannelMatch?: boolean;
   /** Function to calculate per-item boost. Returns a boost multiplier (e.g., 0.2 for +20% boost). Default: undefined */
   boostFn?: BoostFn<T>;
-  /** How much to penalize matches with gaps between characters. Higher values penalize spread-out matches more. Default: 1.0 */
+  /** How much to penalize matches with gaps between characters (0-1). Higher values penalize spread-out matches more. Default: 1.0 */
   gapPenaltyWeight?: number;
   /** How much to penalize matches that start later in the string. Higher values penalize later starts more. Default: 0.05 */
   startBonusDecay?: number;
