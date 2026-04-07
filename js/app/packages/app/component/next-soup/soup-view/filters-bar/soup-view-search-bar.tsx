@@ -97,6 +97,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           />
           <input
             ref={setRef}
+            data-soup-search
             type="text"
             value={searchText()}
             onInput={(e) => setSearchText(e.currentTarget.value)}

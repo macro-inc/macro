@@ -239,7 +239,7 @@ export const registerSidebarHotkeys = ({
             `[data-split-id="${activeSplit.id}"]`
           );
           const searchInput =
-            splitEl?.querySelector<HTMLInputElement>('input[type="text"]');
+            splitEl?.querySelector<HTMLInputElement>('[data-soup-search]');
           if (searchInput) {
             searchInput.focus();
             return true;
