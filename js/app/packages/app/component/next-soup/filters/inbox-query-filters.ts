@@ -3,7 +3,6 @@ import type { NotificationFilters } from '@service-storage/generated/schemas';
 
 const INBOX_DONE = false;
 const INBOX_IMPORTANCE = true;
-const INBOX_TASK_BYPASS = true;
 const OTHER_IMPORTANCE = false;
 
 const isNonEmptyObject = (obj: Record<string, unknown>) =>
@@ -59,13 +58,7 @@ export function applyInboxQueryFilters(
     channel_filters: withInboxNotification(filters.channel_filters),
     chat_filters: withInboxNotification(filters.chat_filters),
     project_filters: withInboxNotification(filters.project_filters),
-    document_filters: {
-      ...withInboxNotification(filters.document_filters),
-      task_filters: {
-        ...filters.document_filters?.task_filters,
-        include_cbm_atm_nc: INBOX_TASK_BYPASS,
-      },
-    },
+    document_filters: withInboxNotification(filters.document_filters),
     email_filters: { ...filters.email_filters, importance: INBOX_IMPORTANCE },
   };
 }
@@ -77,26 +70,7 @@ export function removeInboxQueryFilters(
   const channel_filters = withoutInboxNotification(filters.channel_filters);
   const chat_filters = withoutInboxNotification(filters.chat_filters);
   const project_filters = withoutInboxNotification(filters.project_filters);
-
-  const docWithoutNotif = withoutInboxNotification(filters.document_filters);
-  const { task_filters: taskFiltersAfterNotif, ...docWithoutTaskFilters } =
-    docWithoutNotif ?? {};
-  const task_filters =
-    taskFiltersAfterNotif ?? filters.document_filters?.task_filters;
-  const taskFiltersClean =
-    task_filters?.include_cbm_atm_nc === INBOX_TASK_BYPASS
-      ? (() => {
-          const { include_cbm_atm_nc: _, ...rest } = task_filters;
-          return isNonEmptyObject(rest) ? rest : undefined;
-        })()
-      : task_filters;
-  const document_filters =
-    isNonEmptyObject(docWithoutTaskFilters) || taskFiltersClean
-      ? {
-          ...docWithoutTaskFilters,
-          ...(taskFiltersClean ? { task_filters: taskFiltersClean } : {}),
-        }
-      : undefined;
+  const document_filters = withoutInboxNotification(filters.document_filters);
 
   // Strip `importance` if it was set by Inbox (true) or Other (false).
   // If importance was set externally, leave email_filters untouched.
