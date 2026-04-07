@@ -110,6 +110,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 });
 
                 props.setReplyInputState(undefined);
+                props.setIsReplying(false);
               }}
             />
           </div>
