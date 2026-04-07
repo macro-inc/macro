@@ -137,6 +137,7 @@ export function NotificationStacks(props: NotificationStacksProps) {
       <CollapsibleList
         items={stacks}
         visibleCount={props.visibleCount ?? DEFAULT_VISIBLE_COUNT}
+        togglePosition="bottom"
       >
         {(stack) => (
           <NotificationStackRow stack={stack} onClick={props.onClick} />
