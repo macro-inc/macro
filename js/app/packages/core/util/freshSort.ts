@@ -171,9 +171,12 @@ function ufuzzyFilter<T>(
       matchSpan = ranges[ranges.length - 1] - ranges[0];
     }
 
+    const clampedGapWeight = Math.max(0, Math.min(1, gapPenaltyWeight));
+    const clampedStartDecay = Math.max(0, startBonusDecay);
     const rawGapPenalty = matchSpan > 0 ? queryLen / matchSpan : 1;
-    const gapPenalty = 1 - (1 - rawGapPenalty) * gapPenaltyWeight;
-    const startBonus = 1 / (1 + (info.start[orderIdx] ?? 0) * startBonusDecay);
+    const gapPenalty = 1 - (1 - rawGapPenalty) * clampedGapWeight;
+    const startBonus =
+      1 / (1 + (info.start[orderIdx] ?? 0) * clampedStartDecay);
     const score = gapPenalty * startBonus * 100;
 
     return {
