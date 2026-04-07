@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::api::context::EntityAccessService;
 use crate::{api::context::ApiContext, service::conn_gateway::update_live_comment_state};
 use axum::{
     Json,
@@ -8,8 +9,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_db_client::annotations::create_anchor::create_unthreaded_anchor;
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::{
     annotations::{
         AnnotationIncrementalUpdate,
@@ -47,7 +48,7 @@ pub struct Params {
     )]
 #[axum::debug_handler(state = ApiContext)]
 pub async fn create_anchor_handler(
-    _access: DocumentAccessExtractor<CommentAccessLevel>,
+    _access: DocumentAccessExtractor<CommentAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
     State(connection_gateway_client): State<Arc<ConnectionGatewayClient>>,
     user_context: Extension<UserContext>,

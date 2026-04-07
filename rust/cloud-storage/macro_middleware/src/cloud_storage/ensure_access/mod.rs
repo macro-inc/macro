@@ -1,5 +1,4 @@
 pub mod chat;
-pub mod document;
 pub mod history;
 pub mod pin;
 pub mod project;

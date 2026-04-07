@@ -1,9 +1,10 @@
+use crate::api::context::EntityAccessService;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json},
 };
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::response::GenericErrorResponse;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use sqlx::PgPool;
@@ -35,7 +36,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(db, _access))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {

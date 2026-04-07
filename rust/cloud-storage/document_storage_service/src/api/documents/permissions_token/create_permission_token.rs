@@ -1,12 +1,14 @@
+use crate::api::context::EntityAccessService;
 use axum::{
     Extension, Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use entity_access::domain::models::EntityPermission;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::{document::DocumentPermissionsToken, response::ErrorResponse, user::UserContext};
-use models_permissions::share_permission::access_level::ViewAccessLevel;
+use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use utoipa::ToSchema;
@@ -44,7 +46,7 @@ pub struct DocumentPermissionsTokenResponse {
 pub async fn handler(
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
-    users_access_level: DocumentAccessExtractor<ViewAccessLevel>,
+    users_access_level: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {
     // Get the current time
@@ -62,7 +64,10 @@ pub async fn handler(
     let document_permissions_token = DocumentPermissionsToken {
         user_id,
         document_id,
-        access_level: users_access_level.access_level,
+        access_level: match users_access_level.entity_access_receipt.entity_permission() {
+            EntityPermission::AccessLevel { access_level } => *access_level,
+            _ => AccessLevel::View,
+        },
         exp: now + 3600, // Token expires in 1 hour
         iss: "document_storage_service".to_string(),
     };

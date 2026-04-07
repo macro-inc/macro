@@ -14,9 +14,10 @@ use axum::{
     response::IntoResponse,
 };
 
+use crate::api::context::EntityAccessService;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::StreamExt;
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::{response::GenericErrorResponse, user::UserContext};
 
 use model::{
@@ -48,11 +49,11 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(state, document_context, user_context, req), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, document_context, user_context, req, _access), fields(user_id=?user_context.user_id))]
 #[allow(deprecated, reason = "we just want deprecated to show up in utoipa")]
 #[deprecated(note = "we no longer support editing docx files as they are now converted to pdf.")]
 pub async fn presave_document_handler(
-    access: DocumentAccessExtractor<EditAccessLevel>,
+    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,

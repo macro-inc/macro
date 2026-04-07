@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::api::context::EntityAccessService;
 use crate::{
     api::context::ApiContext,
     model::response::annotations::{AnchorResponse, ThreadResponse},
@@ -10,8 +11,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_db_client::annotations::get::{get_document_comments, get_pdf_anchors};
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::{
     annotations::Anchor,
     document::{DocumentBasic, FileType},
@@ -46,7 +47,7 @@ pub struct Params {
 #[tracing::instrument(skip(_access, db))]
 pub async fn get_document_comments_handler(
     Path(Params { document_id }): Path<Params>,
-    _access: DocumentAccessExtractor<ViewAccessLevel>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
 ) -> Result<Response, Response> {
     match get_document_comments(&db, &document_id).await {
@@ -72,7 +73,7 @@ pub async fn get_document_comments_handler(
     )]
 #[tracing::instrument(skip(_access, db))]
 pub async fn get_document_anchors_handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { document_id }): Path<Params>,
     State(db): State<PgPool>,
     document_context: Extension<DocumentBasic>,
