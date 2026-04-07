@@ -42,7 +42,16 @@ impl AccessRepository for PgAccessRepository {
         document_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(queries::document_access::get_document_access(&self.pool, document_id, user_id).await?)
+        let document_uuid = document_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid document ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(
+            queries::document_access::get_document_access(&self.pool, &document_uuid, &source_ids)
+                .await?,
+        )
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -51,7 +60,13 @@ impl AccessRepository for PgAccessRepository {
         chat_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(queries::chat_access::get_chat_access(&self.pool, chat_id, user_id).await?)
+        let chat_uuid = chat_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid chat ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(queries::chat_access::get_chat_access(&self.pool, &chat_uuid, &source_ids).await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -60,7 +75,16 @@ impl AccessRepository for PgAccessRepository {
         project_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(queries::project_access::get_project_access(&self.pool, project_id, user_id).await?)
+        let project_uuid = project_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid project ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(
+            queries::project_access::get_project_access(&self.pool, &project_uuid, &source_ids)
+                .await?,
+        )
     }
 
     #[tracing::instrument(err, skip(self))]
