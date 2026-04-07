@@ -7,7 +7,7 @@ use cowlike::CowLike;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, str::FromStr};
 pub use strum::ParseError;
-use strum::{Display, EnumString, IntoStaticStr};
+use strum::{AsRefStr, Display, EnumString, IntoStaticStr};
 use utoipa::ToSchema;
 
 #[cfg(test)]
@@ -27,6 +27,7 @@ mod tests;
     ToSchema,
     Eq,
     IntoStaticStr,
+    AsRefStr,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
