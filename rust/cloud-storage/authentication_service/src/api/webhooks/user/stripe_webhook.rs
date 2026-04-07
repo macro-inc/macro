@@ -144,10 +144,11 @@ async fn handle_customer_subscription_event(
     }
 
     // For subscription.updated events, check if we're transitioning from incomplete
-    // to a new status. If so, this is effectively a "new" subscription activation.
+    // to active/trialing. If so, this is effectively a "new" subscription activation.
     let previous_status = extract_previous_status(&previous_attributes);
     let is_transition_from_incomplete = matches!(event_type, EventType::CustomerSubscriptionUpdated)
-        && previous_status.as_deref() == Some("incomplete");
+        && previous_status.as_deref() == Some("incomplete")
+        && matches!(current_status, "active" | "trialing");
 
     if is_transition_from_incomplete {
         tracing::info!(
