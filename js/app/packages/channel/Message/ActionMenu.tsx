@@ -1,7 +1,3 @@
-import { useBlockId } from '@core/block';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { buildMentionMarkdownString } from '@lexical-core';
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
@@ -60,9 +56,6 @@ export function ActionMenu(props: ActionMenuProps) {
   const actions = useMessageActions();
   const selection = useMessageSelection();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
-  const channelId = useBlockId();
-  const channelName = useBlockDocumentName();
-  const { popoverSplit } = useSplitLayout();
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
     void actions?.onReact?.({
@@ -148,30 +141,20 @@ export function ActionMenu(props: ActionMenuProps) {
             />
           </Show>
 
-          <button
-            type="button"
-            title="Task"
-            aria-label="Task"
-            data-message-action="create-task"
-            class="size-8 flex items-center justify-center text-task hover:bg-hover hover-transition-bg"
-            onClick={() => {
-              popoverSplit({
-                type: 'component',
-                id: 'task-compose',
-                params: {
-                  initialContent: buildMentionMarkdownString({
-                    type: 'document',
-                    documentId: channelId,
-                    documentName: channelName() ?? '',
-                    blockName: 'channel',
-                    blockParams: { channel_message_id: message().id },
-                  }),
-                },
-              });
-            }}
-          >
-            <AnimatedTaskIcon class="size-4 opacity-60" />
-          </button>
+          <Show when={actions?.onCreateTask}>
+            <button
+              type="button"
+              title="Task"
+              aria-label="Task"
+              data-message-action="create-task"
+              class="size-8 flex items-center justify-center text-task hover:bg-hover hover-transition-bg"
+              onClick={(event) => {
+                actions?.onCreateTask?.({ message: message(), event });
+              }}
+            >
+              <AnimatedTaskIcon class="size-4 opacity-60" />
+            </button>
+          </Show>
 
           <For each={visibleActions}>
             {(action) => (

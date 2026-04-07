@@ -40,8 +40,10 @@ import {
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { createChannelMessageActions } from './create-channel-message-actions';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useChannelName, useChannelActivity } from '@core/context/channels';
+import { buildMentionMarkdownString } from '@lexical-core';
 import { createActivityTracker } from '@channel/activity-tracker';
-import { useChannelActivity } from '@core/context/channels';
 import {
   invalidateChannelsActivity,
   useUpdateChannelsActivityMutation,
@@ -194,6 +196,9 @@ export function Channel(props: ChannelProps) {
     attachmentTracker,
   });
 
+  const channelName = useChannelName(props.channelId);
+  const { popoverSplit } = useSplitLayout();
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
@@ -207,6 +212,21 @@ export function Channel(props: ChannelProps) {
     },
     onEdit: ({ message }) => {
       messageEditor.start(message);
+    },
+    onCreateTask: (ctx) => {
+      popoverSplit({
+        type: 'component',
+        id: 'task-compose',
+        params: {
+          initialContent: buildMentionMarkdownString({
+            type: 'document',
+            documentId: props.channelId,
+            documentName: channelName() ?? '',
+            blockName: 'channel',
+            blockParams: { channel_message_id: ctx.message.id },
+          }),
+        },
+      });
     },
   });
 

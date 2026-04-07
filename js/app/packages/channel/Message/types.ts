@@ -32,4 +32,5 @@ export type MessageActions = {
   onCopyLink?: MessageActionHandler;
   onEdit?: MessageActionHandler;
   onDelete?: MessageActionHandler;
+  onCreateTask?: MessageActionHandler;
 };

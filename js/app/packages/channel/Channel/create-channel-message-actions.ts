@@ -54,6 +54,7 @@ export type CreateChannelMessageActionsOptions = {
   removeReaction: (input: RemoveReactionInput) => void;
   onReply?: MessageActionHandler;
   onEdit?: MessageActionHandler;
+  onCreateTask?: MessageActionHandler;
   effects?: Partial<ChannelMessageActionEffects>;
 };
 
@@ -162,6 +163,7 @@ export function createChannelMessageActions(
             });
           }
         : undefined,
+      onCreateTask: options.onCreateTask,
     };
   };
 }
