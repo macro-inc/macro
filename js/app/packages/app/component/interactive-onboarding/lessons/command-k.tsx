@@ -32,9 +32,8 @@ const CATEGORY_TO_BUCKETS: Record<CategoryFilter, string[] | null> = {
   all: null, // no filter
   channels: ['channel'],
   dms: ['dm'],
-  notes: ['note'],
+  documents: ['note', 'document'],
   tasks: ['task'],
-  documents: ['document'],
   chats: ['chat'],
   projects: ['project'],
   commands: [], // sandbox has no commands — show nothing
