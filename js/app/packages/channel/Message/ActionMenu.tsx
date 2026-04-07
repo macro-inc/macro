@@ -1,6 +1,6 @@
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
 import LinkIcon from '@icon/regular/link.svg';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import TaskIcon from '@macro-icons/wide/task.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import TrashIcon from '@icon/regular/trash.svg';
@@ -14,7 +14,7 @@ import type { MessageActionEvent, MessageActionHandler } from './types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
 
-type ActionId = 'reply' | 'copy-link' | 'edit' | 'delete';
+type ActionId = 'reply' | 'copy-link' | 'create-task' | 'edit' | 'delete';
 
 type ActionItem = {
   id: ActionId;
@@ -22,6 +22,7 @@ type ActionItem = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | string;
   onClick?: MessageActionHandler;
   destructive?: boolean;
+  class?: string;
 };
 
 type ActionMenuProps = {
@@ -42,7 +43,8 @@ function ActionButton(props: {
         'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
         {
           'text-failure-ink': props.action.destructive,
-        }
+        },
+        props.action.class
       )}
       onClick={props.onClick}
     >
@@ -68,6 +70,13 @@ export function ActionMenu(props: ActionMenuProps) {
   const hasReactAction = () => actions?.onReact !== undefined;
 
   const actionItems: ActionItem[] = [
+    {
+      id: 'create-task',
+      label: 'Task',
+      icon: TaskIcon,
+      onClick: actions?.onCreateTask,
+      class: 'text-task',
+    },
     {
       id: 'reply',
       label: 'Reply',
@@ -139,21 +148,6 @@ export function ActionMenu(props: ActionMenuProps) {
                   'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
               }}
             />
-          </Show>
-
-          <Show when={actions?.onCreateTask}>
-            <button
-              type="button"
-              title="Task"
-              aria-label="Task"
-              data-message-action="create-task"
-              class="size-8 flex items-center justify-center text-task hover:bg-hover hover-transition-bg"
-              onClick={(event) => {
-                actions?.onCreateTask?.({ message: message(), event });
-              }}
-            >
-              <AnimatedTaskIcon class="size-4 opacity-60" />
-            </button>
           </Show>
 
           <For each={visibleActions}>
