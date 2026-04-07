@@ -149,7 +149,7 @@ export function TopBar(props: {
             initialContent: buildMentionMarkdownString({
               type: 'document',
               documentId: threadId,
-              documentName: '',
+              documentName: props.title,
               blockName: 'email',
             }),
           },
