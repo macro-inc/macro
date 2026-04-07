@@ -610,6 +610,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "maud",
+ "miniserde",
  "mockall",
  "model",
  "model-entity",
@@ -6400,9 +6401,9 @@ dependencies = [
 
 [[package]]
 name = "mini-internal"
-version = "0.1.43"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "560f32b6891d8d9bade8942c45a27694f16d789d3b4b8e6b7135a5240de0a8af"
+checksum = "2a8df435db5df1dd82a74f77e3c3addf6ab7665079c31e222a64f34f7475d87e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6417,13 +6418,13 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniserde"
-version = "0.1.43"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac79f4123c070de643a7a93b9339abf18c30005c622bf4b1c29c2c0960f52d39"
+checksum = "8c48e83ec09ab8a51d4e6be46608bf2a1293a79e2f7ea60246a2ce50eaef44ba"
 dependencies = [
  "itoa",
  "mini-internal",
- "ryu",
+ "zmij",
 ]
 
 [[package]]
@@ -12473,6 +12474,12 @@ name = "zlib-rs"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3be3d40e40a133f9c916ee3f9f4fa2d9d63435b5fbe1bfc6d9dae0aa0ada1513"
+
+[[package]]
+name = "zmij"
+version = "1.0.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zopfli"
