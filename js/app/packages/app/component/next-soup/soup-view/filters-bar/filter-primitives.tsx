@@ -35,7 +35,12 @@ export const FilterSelect = (props: FilterSelectProps) => {
       item={itemProps.item}
       class="w-full flex items-center gap-2.5 p-2 rounded-xs text-left text-xs hover:bg-ink/5 group"
     >
-      <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge-muted group-data-[selected]:bg-accent group-data-[selected]:border-accent">
+      <span
+        class={cn(
+          'size-4 flex items-center justify-center shrink-0 border border-edge-muted group-data-[selected]:bg-accent group-data-[selected]:border-accent',
+          multiple() ? 'rounded-xs' : 'rounded-full'
+        )}
+      >
         <KSelect.ItemIndicator>
           <CheckIcon class="size-2.5 text-page" />
         </KSelect.ItemIndicator>
