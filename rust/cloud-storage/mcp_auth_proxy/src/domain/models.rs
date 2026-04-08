@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt, time::Instant};
+use std::fmt;
 
 /// Upstream OAuth access token.
 #[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -94,8 +94,6 @@ pub struct PendingAuthorization {
     pub client_state: String,
     /// Where to redirect back to the client with the authorization code.
     pub client_redirect_uri: String,
-    /// When this flow expires.
-    pub expires_at: Instant,
 }
 
 /// An authorization code issued by this broker and backed by an upstream token.
@@ -110,17 +108,6 @@ pub struct IssuedAuthorizationCode {
     /// The redirect URI from the authorization request, used for exact-match
     /// validation during token exchange.
     pub redirect_uri: String,
-    /// When this code expires.
-    pub expires_at: Instant,
-}
-
-/// Refreshable upstream credentials tracked by the broker.
-#[derive(Clone)]
-pub struct RefreshCredentials {
-    /// Current access token associated with this refresh token.
-    pub access_token: AccessToken,
-    /// When these refresh credentials expire in the broker cache.
-    pub expires_at: Instant,
 }
 
 /// OAuth authorize request from the MCP client.

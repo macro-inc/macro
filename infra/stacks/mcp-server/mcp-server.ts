@@ -303,7 +303,6 @@ export class McpServer extends pulumi.ComponentResource {
       },
       { parent: this }
     );
-
   }
 
   initializeSecurityGroups({

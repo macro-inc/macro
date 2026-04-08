@@ -2,3 +2,5 @@
 
 /// FusionAuth-backed upstream OAuth provider.
 pub mod fusionauth;
+/// Redis-backed in-flight OAuth state store.
+pub mod redis;

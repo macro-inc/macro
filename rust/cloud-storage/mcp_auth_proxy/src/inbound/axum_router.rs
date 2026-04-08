@@ -12,7 +12,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use crate::domain::{
     models::{AuthorizeRequest, CallbackRequest, TokenRequest},
     service::{
-        CompleteCallbackError, McpAuthProxyService, McpAuthProxyServiceImpl,
+        CompleteCallbackError, InflightAuthStore, McpAuthProxyService, McpAuthProxyServiceImpl,
         StartAuthorizationError, TokenExchangeError,
     },
 };
@@ -22,30 +22,30 @@ async fn health() -> &'static str {
     "ok"
 }
 
-async fn authorization_server_metadata(
-    State(auth_proxy): State<McpAuthProxyServiceImpl>,
+async fn authorization_server_metadata<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
 ) -> Json<serde_json::Value> {
     Json(auth_proxy.authorization_server_metadata())
 }
 
-async fn protected_resource_metadata(
-    State(auth_proxy): State<McpAuthProxyServiceImpl>,
+async fn protected_resource_metadata<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
 ) -> Json<serde_json::Value> {
     Json(auth_proxy.protected_resource_metadata())
 }
 
-async fn register(
-    State(auth_proxy): State<McpAuthProxyServiceImpl>,
+async fn register<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
     axum::Json(body): axum::Json<serde_json::Value>,
 ) -> Json<serde_json::Value> {
     Json(auth_proxy.register_client(body))
 }
 
-async fn authorize(
-    State(auth_proxy): State<McpAuthProxyServiceImpl>,
+async fn authorize<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
     Query(params): Query<AuthorizeRequest>,
 ) -> Response {
-    match auth_proxy.start_authorization(params) {
+    match auth_proxy.start_authorization(params).await {
         Ok(url) => Redirect::temporary(&url).into_response(),
         Err(StartAuthorizationError::UnsupportedResponseType) => (
             axum::http::StatusCode::BAD_REQUEST,
@@ -62,6 +62,14 @@ async fn authorize(
             "redirect_uri must be a loopback address",
         )
             .into_response(),
+        Err(StartAuthorizationError::InflightStore(error)) => {
+            tracing::error!(error=?error, "failed to persist inflight auth state");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to persist inflight auth state",
+            )
+                .into_response()
+        }
         Err(StartAuthorizationError::ConstructAuthorizeUrl(error)) => {
             tracing::error!(error=?error, "failed to construct upstream authorize URL");
             (
@@ -73,8 +81,8 @@ async fn authorize(
     }
 }
 
-async fn oauth_callback(
-    State(auth_proxy): State<McpAuthProxyServiceImpl>,
+async fn oauth_callback<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
     Query(params): Query<CallbackRequest>,
 ) -> Response {
     match auth_proxy.complete_callback(params).await {
@@ -92,6 +100,14 @@ async fn oauth_callback(
             "unknown or expired session",
         )
             .into_response(),
+        Err(CompleteCallbackError::InflightStore(error)) => {
+            tracing::error!(error=?error, "failed to access inflight auth state");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to access inflight auth state",
+            )
+                .into_response()
+        }
         Err(CompleteCallbackError::AuthorizationCodeExchangeFailed(error)) => {
             tracing::error!(error=?error, "upstream authorization code grant failed");
             (
@@ -103,8 +119,8 @@ async fn oauth_callback(
     }
 }
 
-async fn token(
-    State(auth_proxy): State<McpAuthProxyServiceImpl>,
+async fn token<I: InflightAuthStore + 'static>(
+    State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
     axum::Form(params): axum::Form<TokenRequest>,
 ) -> Response {
     match auth_proxy.exchange_token(params).await {
@@ -122,9 +138,6 @@ async fn token(
             "invalid or expired code",
         )
             .into_response(),
-        Err(TokenExchangeError::CodeExpired) => {
-            (axum::http::StatusCode::BAD_REQUEST, "code expired").into_response()
-        }
         Err(TokenExchangeError::RedirectUriMismatch) => {
             (axum::http::StatusCode::BAD_REQUEST, "redirect_uri mismatch").into_response()
         }
@@ -146,8 +159,13 @@ async fn token(
             "refresh_token required",
         )
             .into_response(),
-        Err(TokenExchangeError::InvalidRefreshToken) => {
-            (axum::http::StatusCode::BAD_REQUEST, "invalid refresh token").into_response()
+        Err(TokenExchangeError::InflightStore(error)) => {
+            tracing::error!(error=?error, "failed to access inflight auth state");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to access inflight auth state",
+            )
+                .into_response()
         }
         Err(TokenExchangeError::RefreshFailed(error)) => {
             tracing::error!(error=?error, "upstream refresh token exchange failed");
@@ -162,12 +180,13 @@ async fn token(
 
 /// Builds the complete MCP router: unauthenticated OAuth broker routes plus
 /// the Bearer-protected `/mcp` service route.
-pub fn mcp_router<S>(
-    auth_proxy: McpAuthProxyServiceImpl,
+pub fn mcp_router<I, S>(
+    auth_proxy: McpAuthProxyServiceImpl<I>,
     jwt_args: JwtValidationArgs,
     mcp_service: S,
 ) -> Router
 where
+    I: InflightAuthStore + Clone + Send + Sync + 'static,
     S: tower::Service<axum::http::Request<axum::body::Body>, Error = std::convert::Infallible>
         + Clone
         + Send

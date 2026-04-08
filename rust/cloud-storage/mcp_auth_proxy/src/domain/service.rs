@@ -1,24 +1,19 @@
 //! Service implementation for the MCP OAuth broker.
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use dashmap::DashMap;
 use sha2::{Digest, Sha256};
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{future::Future, sync::Arc, time::Duration};
 
 use super::{
     models::{
         AuthorizeRequest, CallbackRequest, IssuedAuthorizationCode, PendingAuthorization,
-        RefreshCredentials, RefreshToken, TokenRequest, TokenResponse,
+        TokenRequest, TokenResponse,
     },
     ports::OAuthProvider,
 };
 
-const PENDING_AUTH_TTL: Duration = Duration::from_secs(10 * 60);
-const AUTHORIZATION_CODE_TTL: Duration = Duration::from_secs(5 * 60);
-const REFRESH_CREDENTIAL_TTL: Duration = Duration::from_secs(60 * 60 * 24 * 30);
+pub(crate) const PENDING_AUTH_TTL: Duration = Duration::from_secs(10 * 60);
+pub(crate) const AUTHORIZATION_CODE_TTL: Duration = Duration::from_secs(5 * 60);
 
 /// Domain interface for the MCP OAuth broker.
 pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
@@ -32,7 +27,7 @@ pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
     fn start_authorization(
         &self,
         params: AuthorizeRequest,
-    ) -> Result<String, StartAuthorizationError>;
+    ) -> impl Future<Output = Result<String, StartAuthorizationError>> + Send;
     /// Completes the upstream callback and returns the loopback redirect URL.
     fn complete_callback(
         &self,
@@ -43,27 +38,71 @@ pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
         &self,
         params: TokenRequest,
     ) -> impl Future<Output = Result<TokenResponse, TokenExchangeError>> + Send;
-    /// Removes expired broker state from in-memory storage.
-    fn cleanup_expired(&self);
+    /// Removes expired broker state when required by the backing store.
+    fn cleanup_expired(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Storage for short-lived in-flight OAuth handshake state.
+pub trait InflightAuthStore: Send + Sync {
+    /// Inserts a pending authorization flow keyed by broker session ID.
+    fn insert_pending(
+        &self,
+        session_id: &str,
+        pending: PendingAuthorization,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Removes and returns a pending authorization flow, if present.
+    fn take_pending(
+        &self,
+        session_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<PendingAuthorization>>> + Send;
+
+    /// Inserts a broker-issued authorization code.
+    fn insert_issued(
+        &self,
+        code: &str,
+        issued: IssuedAuthorizationCode,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Removes and returns a broker-issued authorization code, if present.
+    fn take_issued(
+        &self,
+        code: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<IssuedAuthorizationCode>>> + Send;
+
+    /// Removes expired entries when the backing store requires manual cleanup.
+    fn cleanup_expired(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// Domain service backing the MCP OAuth broker.
-#[derive(Clone)]
-pub struct McpAuthProxyServiceImpl {
-    pending: Arc<DashMap<String, PendingAuthorization>>,
-    codes: Arc<DashMap<String, IssuedAuthorizationCode>>,
-    refresh_credentials: Arc<DashMap<RefreshToken, RefreshCredentials>>,
+pub struct McpAuthProxyServiceImpl<I> {
+    inflight_auth: Arc<I>,
     oauth_provider: Arc<dyn OAuthProvider>,
     public_url: String,
 }
 
-impl McpAuthProxyServiceImpl {
-    /// Creates a new auth proxy service backed by an upstream OAuth provider.
-    pub fn new(public_url: String, oauth_provider: Arc<dyn OAuthProvider>) -> Self {
+impl<I> Clone for McpAuthProxyServiceImpl<I> {
+    fn clone(&self) -> Self {
         Self {
-            pending: Arc::new(DashMap::new()),
-            codes: Arc::new(DashMap::new()),
-            refresh_credentials: Arc::new(DashMap::new()),
+            inflight_auth: Arc::clone(&self.inflight_auth),
+            oauth_provider: Arc::clone(&self.oauth_provider),
+            public_url: self.public_url.clone(),
+        }
+    }
+}
+
+impl<I> McpAuthProxyServiceImpl<I>
+where
+    I: InflightAuthStore + 'static,
+{
+    /// Creates a new auth proxy service backed by an upstream OAuth provider.
+    pub fn new(
+        public_url: String,
+        inflight_auth: Arc<I>,
+        oauth_provider: Arc<dyn OAuthProvider>,
+    ) -> Self {
+        Self {
+            inflight_auth,
             oauth_provider,
             public_url,
         }
@@ -77,29 +116,11 @@ impl McpAuthProxyServiceImpl {
             .refresh_token
             .ok_or(TokenExchangeError::RefreshTokenRequired)?;
 
-        let existing = self
-            .refresh_credentials
-            .remove(&refresh_token)
-            .map(|(_, credentials)| credentials)
-            .ok_or(TokenExchangeError::InvalidRefreshToken)?;
-
-        if existing.expires_at < Instant::now() {
-            return Err(TokenExchangeError::InvalidRefreshToken);
-        }
-
         let (access_token, new_refresh_token) = self
             .oauth_provider
-            .refresh_access_token(&existing.access_token, &refresh_token)
+            .refresh_access_token(&refresh_token)
             .await
             .map_err(TokenExchangeError::RefreshFailed)?;
-
-        self.refresh_credentials.insert(
-            new_refresh_token.clone(),
-            RefreshCredentials {
-                access_token: access_token.clone(),
-                expires_at: Instant::now() + REFRESH_CREDENTIAL_TTL,
-            },
-        );
 
         Ok(TokenResponse {
             access_token,
@@ -108,24 +129,21 @@ impl McpAuthProxyServiceImpl {
         })
     }
 
-    fn exchange_authorization_code_token(
+    async fn exchange_authorization_code_token(
         &self,
         params: TokenRequest,
     ) -> Result<TokenResponse, TokenExchangeError> {
         let issued = self
-            .codes
-            .remove(
+            .inflight_auth
+            .take_issued(
                 params
                     .code
                     .as_deref()
                     .ok_or(TokenExchangeError::CodeRequired)?,
             )
-            .map(|(_, code)| code)
+            .await
+            .map_err(TokenExchangeError::InflightStore)?
             .ok_or(TokenExchangeError::InvalidOrExpiredCode)?;
-
-        if issued.expires_at < Instant::now() {
-            return Err(TokenExchangeError::CodeExpired);
-        }
 
         match &params.redirect_uri {
             Some(uri) if *uri != issued.redirect_uri => {
@@ -146,25 +164,18 @@ impl McpAuthProxyServiceImpl {
             None => return Err(TokenExchangeError::CodeVerifierRequired),
         }
 
-        let access_token = issued.access_token;
-        let refresh_token = issued.refresh_token;
-        self.refresh_credentials.insert(
-            refresh_token.clone(),
-            RefreshCredentials {
-                access_token: access_token.clone(),
-                expires_at: Instant::now() + REFRESH_CREDENTIAL_TTL,
-            },
-        );
-
         Ok(TokenResponse {
-            access_token,
-            refresh_token,
+            access_token: issued.access_token,
+            refresh_token: issued.refresh_token,
             token_type: "Bearer",
         })
     }
 }
 
-impl McpAuthProxyService for McpAuthProxyServiceImpl {
+impl<I> McpAuthProxyService for McpAuthProxyServiceImpl<I>
+where
+    I: InflightAuthStore + 'static,
+{
     /// Authorization server discovery metadata.
     fn authorization_server_metadata(&self) -> serde_json::Value {
         tracing::debug!("oauth-authorization-server metadata requested");
@@ -214,33 +225,40 @@ impl McpAuthProxyService for McpAuthProxyServiceImpl {
     fn start_authorization(
         &self,
         params: AuthorizeRequest,
-    ) -> Result<String, StartAuthorizationError> {
-        if params.response_type != "code" {
-            return Err(StartAuthorizationError::UnsupportedResponseType);
-        }
-        if params.code_challenge_method != "S256" {
-            return Err(StartAuthorizationError::UnsupportedCodeChallengeMethod);
-        }
-        if !is_allowed_redirect_uri(&params.redirect_uri) {
-            return Err(StartAuthorizationError::InvalidRedirectUri);
-        }
+    ) -> impl Future<Output = Result<String, StartAuthorizationError>> + Send {
+        let service = self.clone();
+        async move {
+            if params.response_type != "code" {
+                return Err(StartAuthorizationError::UnsupportedResponseType);
+            }
+            if params.code_challenge_method != "S256" {
+                return Err(StartAuthorizationError::UnsupportedCodeChallengeMethod);
+            }
+            if !is_allowed_redirect_uri(&params.redirect_uri) {
+                return Err(StartAuthorizationError::InvalidRedirectUri);
+            }
 
-        let session_id = uuid::Uuid::new_v4().to_string();
-        tracing::info!(%session_id, "starting OAuth authorize flow");
+            let session_id = uuid::Uuid::new_v4().to_string();
+            tracing::info!(%session_id, "starting OAuth authorize flow");
 
-        self.pending.insert(
-            session_id.clone(),
-            PendingAuthorization {
-                code_challenge: params.code_challenge,
-                client_state: params.state,
-                client_redirect_uri: params.redirect_uri,
-                expires_at: Instant::now() + PENDING_AUTH_TTL,
-            },
-        );
+            service
+                .inflight_auth
+                .insert_pending(
+                    &session_id,
+                    PendingAuthorization {
+                        code_challenge: params.code_challenge,
+                        client_state: params.state,
+                        client_redirect_uri: params.redirect_uri,
+                    },
+                )
+                .await
+                .map_err(StartAuthorizationError::InflightStore)?;
 
-        self.oauth_provider
-            .construct_authorize_url(&session_id)
-            .map_err(StartAuthorizationError::ConstructAuthorizeUrl)
+            service
+                .oauth_provider
+                .construct_authorize_url(&session_id)
+                .map_err(StartAuthorizationError::ConstructAuthorizeUrl)
+        }
     }
 
     /// Completes the upstream OAuth callback and returns the redirect URL for
@@ -255,16 +273,13 @@ impl McpAuthProxyService for McpAuthProxyServiceImpl {
             .map(|state| state.trim_matches('"').to_string())
             .ok_or(CompleteCallbackError::MissingState)?;
 
-        tracing::info!(
-            %session_id,
-            pending_count = self.pending.len(),
-            "oauth callback received"
-        );
+        tracing::info!(%session_id, "oauth callback received");
 
         let pending = self
-            .pending
-            .remove(&session_id)
-            .map(|(_, pending)| pending)
+            .inflight_auth
+            .take_pending(&session_id)
+            .await
+            .map_err(CompleteCallbackError::InflightStore)?
             .ok_or(CompleteCallbackError::UnknownOrExpiredSession)?;
 
         let (access_token, refresh_token) = self
@@ -274,16 +289,18 @@ impl McpAuthProxyService for McpAuthProxyServiceImpl {
             .map_err(CompleteCallbackError::AuthorizationCodeExchangeFailed)?;
 
         let issued_code = uuid::Uuid::new_v4().to_string();
-        self.codes.insert(
-            issued_code.clone(),
-            IssuedAuthorizationCode {
-                access_token,
-                refresh_token,
-                code_challenge: pending.code_challenge,
-                redirect_uri: pending.client_redirect_uri.clone(),
-                expires_at: Instant::now() + AUTHORIZATION_CODE_TTL,
-            },
-        );
+        self.inflight_auth
+            .insert_issued(
+                &issued_code,
+                IssuedAuthorizationCode {
+                    access_token,
+                    refresh_token,
+                    code_challenge: pending.code_challenge,
+                    redirect_uri: pending.client_redirect_uri.clone(),
+                },
+            )
+            .await
+            .map_err(CompleteCallbackError::InflightStore)?;
 
         Ok(format!(
             "{}?code={}&state={}",
@@ -300,19 +317,15 @@ impl McpAuthProxyService for McpAuthProxyServiceImpl {
         params: TokenRequest,
     ) -> Result<TokenResponse, TokenExchangeError> {
         match params.grant_type.as_str() {
-            "authorization_code" => self.exchange_authorization_code_token(params),
+            "authorization_code" => self.exchange_authorization_code_token(params).await,
             "refresh_token" => self.refresh_token_exchange(params).await,
             _ => Err(TokenExchangeError::UnsupportedGrantType),
         }
     }
 
     /// Removes expired pending sessions and broker-issued codes.
-    fn cleanup_expired(&self) {
-        let now = Instant::now();
-        self.pending.retain(|_, value| value.expires_at > now);
-        self.codes.retain(|_, value| value.expires_at > now);
-        self.refresh_credentials
-            .retain(|_, value| value.expires_at > now);
+    async fn cleanup_expired(&self) -> anyhow::Result<()> {
+        self.inflight_auth.cleanup_expired().await
     }
 }
 
@@ -336,6 +349,9 @@ pub enum StartAuthorizationError {
     /// Only loopback redirect URIs are allowed.
     #[error("redirect_uri must be a loopback address")]
     InvalidRedirectUri,
+    /// Inflight auth state could not be persisted.
+    #[error("failed to persist inflight auth state")]
+    InflightStore(anyhow::Error),
     /// Upstream authorize URL construction failed.
     #[error("failed to construct authorize URL")]
     ConstructAuthorizeUrl(anyhow::Error),
@@ -350,6 +366,9 @@ pub enum CompleteCallbackError {
     /// Pending broker session was missing or expired.
     #[error("unknown or expired session")]
     UnknownOrExpiredSession,
+    /// Inflight auth state could not be loaded or updated.
+    #[error("failed to access inflight auth state")]
+    InflightStore(anyhow::Error),
     /// Upstream code exchange failed.
     #[error("authorization code exchange failed")]
     AuthorizationCodeExchangeFailed(anyhow::Error),
@@ -367,9 +386,6 @@ pub enum TokenExchangeError {
     /// Broker-issued code was missing or already used.
     #[error("invalid or expired code")]
     InvalidOrExpiredCode,
-    /// Broker-issued code expired.
-    #[error("code expired")]
-    CodeExpired,
     /// Redirect URI did not match the authorization request.
     #[error("redirect_uri mismatch")]
     RedirectUriMismatch,
@@ -385,9 +401,9 @@ pub enum TokenExchangeError {
     /// Refresh token is required for refresh_token grants.
     #[error("refresh_token required")]
     RefreshTokenRequired,
-    /// Refresh token was missing, expired, or unknown to the broker.
-    #[error("invalid refresh token")]
-    InvalidRefreshToken,
+    /// Inflight auth state could not be loaded or updated.
+    #[error("failed to access inflight auth state")]
+    InflightStore(anyhow::Error),
     /// Upstream refresh failed.
     #[error("refresh token exchange failed")]
     RefreshFailed(anyhow::Error),

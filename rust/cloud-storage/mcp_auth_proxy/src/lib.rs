@@ -13,11 +13,6 @@
 //! 6. exchange that code at `/token` after redirect URI and PKCE validation
 //! 7. support refresh-token exchanges against the upstream provider
 //!
-//! Current limitation:
-//! refresh-token bookkeeping is process-local. The broker keeps the
-//! `refresh_token -> current access_token` mapping in memory because the
-//! FusionAuth refresh API currently requires both values.
-//!
 //! Module layout:
 //! - `domain`: auth proxy state, models, ports, and service logic
 //! - `inbound`: axum router and HTTP middleware

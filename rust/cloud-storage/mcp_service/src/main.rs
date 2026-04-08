@@ -50,10 +50,7 @@ async fn main() -> anyhow::Result<()> {
         let mut interval = tokio::time::interval(AUTH_PROXY_CLEANUP_INTERVAL);
         loop {
             interval.tick().await;
-            let cleanup_state = cleanup_state.clone();
-            if let Err(error) =
-                tokio::task::spawn_blocking(move || cleanup_state.cleanup_expired()).await
-            {
+            if let Err(error) = cleanup_state.cleanup_expired().await {
                 tracing::error!(error=?error, "auth proxy cleanup task failed");
             }
         }

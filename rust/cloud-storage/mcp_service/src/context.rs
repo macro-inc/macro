@@ -24,7 +24,8 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use mcp_auth_proxy::{
-    domain::service::McpAuthProxyServiceImpl, outbound::fusionauth::FusionAuthOAuthProvider,
+    domain::service::McpAuthProxyServiceImpl,
+    outbound::{fusionauth::FusionAuthOAuthProvider, redis::RedisInflightAuth},
 };
 use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
@@ -57,6 +58,7 @@ env_var!(
         FusionauthClientSecretKey,
         GoogleClientId,
         GoogleClientSecretKey,
+        RedisUrl,
     }
 );
 
@@ -64,7 +66,7 @@ env_var!(
 pub struct McpContext {
     pub jwt_args: JwtValidationArgs,
     pub tool_context: ToolServiceContext,
-    pub auth_proxy: McpAuthProxyServiceImpl,
+    pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
 }
 
 pub async fn build_context() -> anyhow::Result<McpContext> {
@@ -287,7 +289,7 @@ async fn build_tool_context(
 async fn build_auth_proxy(
     env_vars: &McpEnvVars,
     secretsmanager_client: &secretsmanager_client::SecretsManager,
-) -> anyhow::Result<McpAuthProxyServiceImpl> {
+) -> anyhow::Result<McpAuthProxyServiceImpl<RedisInflightAuth>> {
     let mcp_public_url: String = env_vars.mcp_public_url.as_ref().to_owned();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
 
@@ -326,9 +328,12 @@ async fn build_auth_proxy(
     let auth_provider = FusionAuthOAuthProvider::new(fusionauth_client)
         .await
         .context("failed to initialize MCP auth provider")?;
+    let redis_client = redis::Client::open(env_vars.redis_url.as_ref().to_owned())
+        .context("failed to initialize redis client for MCP auth proxy")?;
 
     Ok(McpAuthProxyServiceImpl::new(
         mcp_public_url,
+        Arc::new(RedisInflightAuth::new(redis_client)),
         Arc::new(auth_provider),
     ))
 }

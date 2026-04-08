@@ -36,6 +36,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 macro_user_id = { path = "../macro_user_id" }
 properties = { path = "../properties", features = ["ai_tools"] }
 readonly_pool = { path = "../readonly_pool" }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
 rmcp = { version = "1.2.0", features = ["transport-streamable-http-server"] }
 scribe = { path = "../scribe", features = [
   "channel",

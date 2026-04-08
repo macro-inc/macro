@@ -1,12 +1,12 @@
 //! FusionAuth adapter for the MCP OAuth broker.
 
 use anyhow::Context;
-use std::{pin::Pin, sync::Arc};
+use std::sync::Arc;
 use tracing::Instrument;
 
 use crate::domain::{
-    models::{AccessToken, RefreshToken},
-    ports::OAuthProvider,
+    models::RefreshToken,
+    ports::{OAuthProvider, TokenPairFuture},
 };
 
 /// FusionAuth-backed OAuth provider for the MCP auth proxy.
@@ -43,11 +43,7 @@ impl OAuthProvider for FusionAuthOAuthProvider {
         )
     }
 
-    fn exchange_authorization_code<'a>(
-        &'a self,
-        code: &'a str,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<(AccessToken, RefreshToken)>> + Send + 'a>>
-    {
+    fn exchange_authorization_code<'a>(&'a self, code: &'a str) -> TokenPairFuture<'a> {
         let span = tracing::debug_span!("FusionAuthOAuthProvider::exchange_authorization_code");
         Box::pin(
             async move {
@@ -63,18 +59,13 @@ impl OAuthProvider for FusionAuthOAuthProvider {
         )
     }
 
-    fn refresh_access_token<'a>(
-        &'a self,
-        access_token: &'a AccessToken,
-        refresh_token: &'a RefreshToken,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<(AccessToken, RefreshToken)>> + Send + 'a>>
-    {
+    fn refresh_access_token<'a>(&'a self, refresh_token: &'a RefreshToken) -> TokenPairFuture<'a> {
         let span = tracing::debug_span!("FusionAuthOAuthProvider::refresh_access_token");
         Box::pin(
             async move {
                 let (access_token, refresh_token) = self
                     .client
-                    .refresh_token(access_token.as_str(), refresh_token.as_str())
+                    .complete_refresh_token_grant(refresh_token.as_str())
                     .await
                     .map_err(anyhow::Error::from)?;
 
