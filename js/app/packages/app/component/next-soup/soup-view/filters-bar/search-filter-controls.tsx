@@ -83,13 +83,18 @@ export const SearchIndexFilter = () => {
     });
   };
 
+  const indexLabel = createMemo(() => {
+    const active = activeIndex();
+    return active.length > 0 ? active[0].label : 'All';
+  });
+
   const isChannelsActive = () =>
     activeIndex().some((o) => o.value === 'channels');
 
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
-        label="Index"
+        label={indexLabel()}
         options={INDEX_SELECT_OPTIONS}
         active={activeIndex()}
         onChange={handleChange}
@@ -126,6 +131,13 @@ const InChannelFilter = () => {
     return channelOptions().filter((opt) => ids.includes(opt.value));
   });
 
+  const inLabel = createMemo(() => {
+    const active = activeChannelFilter();
+    if (active.length === 0) return 'In';
+    if (active.length === 1) return `In: ${active[0].label}`;
+    return `In: ${active.length} channels`;
+  });
+
   const handleChange = (selected: Option[]) => {
     const ids = selected.map((opt) => opt.value);
     setQueryFilters((prev) => ({
@@ -139,7 +151,7 @@ const InChannelFilter = () => {
 
   return (
     <FilterCombobox
-      label="In"
+      label={inLabel()}
       options={channelOptions()}
       active={activeChannelFilter()}
       onChange={handleChange}
@@ -185,6 +197,13 @@ const FromSenderFilter = () => {
     return senderOptions().filter((opt) => ids.includes(opt.value));
   });
 
+  const fromLabel = createMemo(() => {
+    const active = activeSenderFilter();
+    if (active.length === 0) return 'From';
+    if (active.length === 1) return `From: ${active[0].label}`;
+    return `From: ${active.length} people`;
+  });
+
   const handleChange = (selected: Option[]) => {
     const ids = selected.map((opt) => opt.value);
     setQueryFilters((prev) => ({
@@ -198,7 +217,7 @@ const FromSenderFilter = () => {
 
   return (
     <FilterCombobox
-      label="From"
+      label={fromLabel()}
       options={senderOptions()}
       active={activeSenderFilter()}
       onChange={handleChange}
