@@ -78,36 +78,11 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<ChannelRoleResult, AccessError>> + Send;
 
-    /// Get all user IDs with access to a document via `UserItemAccess`.
-    ///
-    /// Includes users with direct access and users with access through the project hierarchy.
-    fn get_document_users(
+    /// Gets all the user's that have access to a given entity.
+    fn get_entity_users(
         &self,
-        document_id: &str,
-    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
-
-    /// Get all user IDs with access to a chat via `UserItemAccess`.
-    ///
-    /// Includes users with direct access and users with access through the project hierarchy.
-    fn get_chat_users(
-        &self,
-        chat_id: &str,
-    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
-
-    /// Get all user IDs with access to a project via `UserItemAccess`.
-    ///
-    /// Includes users with direct access and users with access through the project hierarchy.
-    fn get_project_users(
-        &self,
-        project_id: &str,
-    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
-
-    /// Get all user IDs with access to an email thread via `UserItemAccess`.
-    ///
-    /// Includes users with direct access and users with access through the project hierarchy.
-    fn get_thread_users(
-        &self,
-        thread_id: &str,
+        entity_id: &uuid::Uuid,
+        entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
     /// Get all active participant user IDs in a channel.
