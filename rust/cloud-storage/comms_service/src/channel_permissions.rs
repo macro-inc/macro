@@ -20,7 +20,7 @@ use uuid::Uuid;
 /// 1. Validates the user has access to the item
 /// 2. Creates a channel share permission linking the item to the channel
 /// 3. Grants all channel participants view access to the item
-#[tracing::instrument(skip(db, entity_access_service))]
+#[tracing::instrument(skip(db, entity_access_service), err)]
 pub async fn update_channel_share_permission(
     db: &PgPool,
     entity_access_service: &impl EntityAccessService,
@@ -58,7 +58,7 @@ pub async fn update_channel_share_permission(
     let user_access_level = entity_access_service
         .get_access_level(Some(&user_id_parsed), item_id, entity_type)
         .await
-        .map_err(|e| anyhow::anyhow!("failed to get user access level: {}", e))?;
+        .context("failed to get user access level")?;
 
     if user_access_level.is_none() {
         tracing::info!("user does not have access to the item, not modifying share permissions");
