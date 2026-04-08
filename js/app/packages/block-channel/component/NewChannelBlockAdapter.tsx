@@ -28,7 +28,6 @@ import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTa
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { ChannelDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import type { BlockChannelProps } from './Block';
 import {
   CallProvider,
   ChannelCallButton,
@@ -43,6 +42,10 @@ type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
   [URL_PARAMS.thread]?: string;
 };
+
+type IncomingParams = Record<string, string>;
+
+export type BlockChannelProps = IncomingParams & {};
 
 type ChannelPropsTargetMessage = Pick<
   ChannelProps,

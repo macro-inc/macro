@@ -248,11 +248,11 @@ export function optimisticDeleteChannelMessage(
     target,
   };
 
-    context.targetSnapshot = captureDeleteSnapshotForTarget(
-      vars.channelId,
-      target
-    );
-    removeMessageFromTargetCaches(vars.channelId, target);
+  context.targetSnapshot = captureDeleteSnapshotForTarget(
+    vars.channelId,
+    target
+  );
+  removeMessageFromTargetCaches(vars.channelId, target);
 
   return context;
 }
@@ -330,13 +330,12 @@ export function rollbackUpdateChannelMessage(
   channelId: string,
   context: UpdateMessageContext
 ): void {
-
-    replaceTargetMessageState(channelId, context.target, {
-      content: context.previousContent,
-      editedAt: normalizeDateValue(context.previousEditedAt),
-      updatedAt: normalizeDateValue(context.previousUpdatedAt) ?? '',
-      attachments: context.previousAttachments,
-    });
+  replaceTargetMessageState(channelId, context.target, {
+    content: context.previousContent,
+    editedAt: normalizeDateValue(context.previousEditedAt),
+    updatedAt: normalizeDateValue(context.previousUpdatedAt) ?? '',
+    attachments: context.previousAttachments,
+  });
 }
 
 type SendMessageParams = {
@@ -413,14 +412,14 @@ export function useSendMessageMutation(
           }
         },
         onSettled: (_data, _error, variables) => {
-            softInvalidateTargetCaches(
-              variables.channelID,
-              resolveMessageTarget({
-                channelId: variables.channelID,
-                messageId: variables.optimisticId,
-                threadId: variables.message.thread_id ?? undefined,
-              })
-            );
+          softInvalidateTargetCaches(
+            variables.channelID,
+            resolveMessageTarget({
+              channelId: variables.channelID,
+              messageId: variables.optimisticId,
+              threadId: variables.message.thread_id ?? undefined,
+            })
+          );
         },
       },
       callbacks
@@ -486,14 +485,14 @@ export function useDeleteMessageMutation(
         },
         onSettled: (_data, _error, vars) => {
           deleteNonce.cleanup(vars);
-            softInvalidateTargetCaches(
-              vars.channelID,
-              resolveMessageTarget({
-                channelId: vars.channelID,
-                messageId: vars.messageID,
-                threadId: vars.threadID,
-              })
-            );
+          softInvalidateTargetCaches(
+            vars.channelID,
+            resolveMessageTarget({
+              channelId: vars.channelID,
+              messageId: vars.messageID,
+              threadId: vars.threadID,
+            })
+          );
         },
       },
       callbacks
@@ -568,13 +567,13 @@ export function usePatchMessageMutation(
         },
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);
-            softInvalidateTargetCaches(
-              vars.channelID,
-              resolveMessageTarget({
-                channelId: vars.channelID,
-                messageId: vars.messageID,
-              })
-            );
+          softInvalidateTargetCaches(
+            vars.channelID,
+            resolveMessageTarget({
+              channelId: vars.channelID,
+              messageId: vars.messageID,
+            })
+          );
         },
       },
       callbacks
