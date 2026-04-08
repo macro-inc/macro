@@ -1,8 +1,7 @@
 import { createEffect, onCleanup, type Accessor } from 'solid-js';
 import type { ThreadListNavigation } from './ThreadList';
 import { isPlatform } from '@core/util/platform';
-
-const NEAR_BOTTOM_THRESHOLD = 50;
+import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
 /**
  * On native ios app, when the main channel input is focused and the user was near the
@@ -11,7 +10,8 @@ const NEAR_BOTTOM_THRESHOLD = 50;
  */
 export function createMainInputKeyboardHandler(
   inputContainerEl: Accessor<HTMLElement | undefined>,
-  navigation: Accessor<ThreadListNavigation | undefined>
+  navigation: Accessor<ThreadListNavigation | undefined>,
+  channelRoot: Accessor<HTMLElement | undefined>
 ): void {
   if (!isPlatform('ios')) return;
 
@@ -21,9 +21,8 @@ export function createMainInputKeyboardHandler(
   let wasNearBottom = false;
 
   const captureNearBottom = () => {
-    const scrollEl = document.querySelector<HTMLElement>(
-      '[data-channel-scroll]'
-    );
+    const root = channelRoot();
+    const scrollEl = root?.querySelector<HTMLElement>('[data-channel-scroll]');
     if (!scrollEl) {
       wasNearBottom = false;
       return;

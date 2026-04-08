@@ -229,7 +229,11 @@ export function Channel(props: ChannelProps) {
   // On Mobile when a thread reply input is focused, we want to hide the main Channel input
   createInlineInputKeyboardHandler(messageListElement, setIsChannelInputHidden);
   // On Native iOS app, when the main channel input is focused, scroll to bottom if already near bottom
-  createMainInputKeyboardHandler(channelInputEl, threadListNavigation);
+  createMainInputKeyboardHandler(
+    channelInputEl,
+    threadListNavigation,
+    messageListElement
+  );
 
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
