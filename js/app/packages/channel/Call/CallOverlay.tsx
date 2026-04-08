@@ -15,6 +15,7 @@ import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext } from './CallContext';
 
 /**
@@ -69,6 +70,8 @@ function TrackView(props: {
 
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
+  const macroId = () => tryMacroId(props.participant.identity);
+  const [displayName] = useDisplayName(macroId());
 
   const micTrack = () => {
     callCtx.trackVersion();
@@ -98,7 +101,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
         fallback={
           <div class="flex items-center justify-center w-full h-full p-4">
             <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
-              {props.participant.identity.charAt(0).toUpperCase()}
+              {displayName().charAt(0).toUpperCase()}
             </div>
           </div>
         }
@@ -106,7 +109,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
         <TrackView track={cameraTrack()} />
       </Show>
       <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs truncate max-w-[80%]">
-        {props.participant.identity}
+        {displayName()}
       </div>
     </div>
   );
@@ -154,6 +157,8 @@ const ControlButton: Component<{
 
 function ScreenShareTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
+  const macroId = () => tryMacroId(props.participant.identity);
+  const [displayName] = useDisplayName(macroId());
   const screenTrack = () => {
     callCtx.trackVersion();
     return props.participant.getTrackPublication(Track.Source.ScreenShare)
@@ -164,7 +169,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
     <div class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2">
       <TrackView track={screenTrack()} fit="contain" />
       <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs truncate max-w-[80%]">
-        {props.participant.identity}'s screen
+        {displayName()}'s screen
       </div>
     </div>
   );
