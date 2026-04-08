@@ -153,16 +153,31 @@ const FromSenderFilter = () => {
   const { setQueryFilters, queryFilters } = useSoupView();
   const { useList } = useQuickAccess();
   const contacts = useList('person');
+  const userId = useUserId();
 
-  const senderOptions = createMemo((): Option[] =>
-    contacts().map((c) => ({
-      value: c.id,
-      label: c.data.name || c.id,
-      icon: () => (
-        <UserIcon id={c.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }))
-  );
+  const senderOptions = createMemo((): Option[] => {
+    const currentUserId = userId();
+    let me: Option | undefined;
+    const others: Option[] = [];
+    for (const c of contacts()) {
+      const opt: Option = {
+        value: c.id,
+        label:
+          c.id === currentUserId
+            ? `${c.data.name || 'Me'} (me)`
+            : c.data.name || c.id,
+        icon: () => (
+          <UserIcon id={c.id} size="xs" suppressClick showTooltip={false} />
+        ),
+      };
+      if (c.id === currentUserId) {
+        me = opt;
+      } else {
+        others.push(opt);
+      }
+    }
+    return [...(me ? [me] : []), ...others];
+  });
 
   const activeSenderFilter = createMemo((): Option[] => {
     const ids = queryFilters().channel_filters?.sender_ids;
