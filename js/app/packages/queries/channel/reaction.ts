@@ -1,5 +1,4 @@
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
@@ -10,7 +9,6 @@ import type { PostReactionRequest } from '@service-comms/generated/models';
 import type { GetChannelResponse } from './types';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce } from '../nonce';
 import {
@@ -146,24 +144,7 @@ export function optimisticAddReaction(
     target,
   };
 
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-
-      return {
-        ...prev,
-        reactions: {
-          ...prev.reactions,
-          [vars.message_id]: result.reactions,
-        },
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    replaceTargetReactions(vars.channelId, context.target, result.reactions);
-  }
+  replaceTargetReactions(vars.channelId, context.target, result.reactions);
 
   return context;
 }
@@ -175,34 +156,7 @@ export function rollbackAddReaction(
   channelId: string,
   context: AddReactionContext
 ): void {
-  const queryKey = channelKeys.withID(channelId).queryKey;
-
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-      if (context.previousReactions.length === 0) {
-        const { [context.messageId]: _, ...rest } = prev.reactions;
-        return { ...prev, reactions: rest };
-      }
-
-      return {
-        ...prev,
-        reactions: {
-          ...prev.reactions,
-          [context.messageId]: context.previousReactions,
-        },
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    replaceTargetReactions(
-      channelId,
-      context.target,
-      context.previousReactions
-    );
-  }
+  replaceTargetReactions(channelId, context.target, context.previousReactions);
 }
 
 /**
@@ -239,26 +193,7 @@ export function optimisticRemoveReaction(
     target,
   };
 
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-
-      if (result.reactions.length === 0) {
-        const { [vars.message_id]: _, ...rest } = prev.reactions;
-        return { ...prev, reactions: rest };
-      }
-
-      return {
-        ...prev,
-        reactions: { ...prev.reactions, [vars.message_id]: result.reactions },
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    replaceTargetReactions(vars.channelId, context.target, result.reactions);
-  }
+  replaceTargetReactions(vars.channelId, context.target, result.reactions);
 
   return context;
 }
@@ -270,36 +205,7 @@ export function rollbackRemoveReaction(
   channelId: string,
   context: RemoveReactionContext
 ): void {
-  const queryKey = channelKeys.withID(channelId).queryKey;
-
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        reactions:
-          context.previousReactions.length === 0
-            ? Object.fromEntries(
-                Object.entries(prev.reactions).filter(
-                  ([messageId]) => messageId !== context.messageId
-                )
-              )
-            : {
-                ...prev.reactions,
-                [context.messageId]: context.previousReactions,
-              },
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    replaceTargetReactions(
-      channelId,
-      context.target,
-      context.previousReactions
-    );
-  }
+  replaceTargetReactions(channelId, context.target, context.previousReactions);
 }
 
 type ReactionParams = {
@@ -379,17 +285,14 @@ export function useAddReactionMutation(
         },
         onSettled: (_, __, vars) => {
           addReactionNonce.cleanup(vars);
-          softInvalidateChannelWithID(vars.channelId);
-          if (ENABLE_NEW_CHANNELS()) {
-            softInvalidateTargetCaches(
-              vars.channelId,
-              resolveMessageTarget({
-                channelId: vars.channelId,
-                messageId: vars.messageId,
-                threadId: vars.threadId,
-              })
-            );
-          }
+          softInvalidateTargetCaches(
+            vars.channelId,
+            resolveMessageTarget({
+              channelId: vars.channelId,
+              messageId: vars.messageId,
+              threadId: vars.threadId,
+            })
+          );
         },
       },
       callbacks
@@ -452,17 +355,14 @@ export function useRemoveReactionMutation(
         },
         onSettled: (_, __, vars) => {
           removeReactionNonce.cleanup(vars);
-          softInvalidateChannelWithID(vars.channelId);
-          if (ENABLE_NEW_CHANNELS()) {
-            softInvalidateTargetCaches(
-              vars.channelId,
-              resolveMessageTarget({
-                channelId: vars.channelId,
-                messageId: vars.messageId,
-                threadId: vars.threadId,
-              })
-            );
-          }
+          softInvalidateTargetCaches(
+            vars.channelId,
+            resolveMessageTarget({
+              channelId: vars.channelId,
+              messageId: vars.messageId,
+              threadId: vars.threadId,
+            })
+          );
         },
       },
       callbacks

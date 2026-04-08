@@ -1,16 +1,16 @@
-import { SplitHeaderLeft } from "@app/component/split-layout/components/SplitHeader";
-import { SplitLabel } from "@app/component/split-layout/components/SplitLabel";
-import { useBlockId } from "@core/block";
-import { useChannelName } from "@core/context/channels";
-import { UserIcon } from "@core/component/UserIcon";
-import HashIcon from "@icon/regular/hash.svg";
-import type { ChannelParticipant } from "@queries/channel/types";
-import type { ChannelType } from "@service-comms/generated/models/channelType";
-import { ChannelTypeEnum } from "@service-comms/client";
-import { useUserId } from "@core/context/user";
-import { Show } from "solid-js";
-import { Tabs, type TabItem } from "@core/component/Tabs";
-import type { ChannelTabId } from "@channel/Channel/channel-tabs";
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { useBlockId } from '@core/block';
+import { useChannelName } from '@core/context/channels';
+import { UserIcon } from '@core/component/UserIcon';
+import HashIcon from '@icon/regular/hash.svg';
+import type { ChannelParticipant } from '@queries/channel/types';
+import type { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelTypeEnum } from '@service-comms/client';
+import { useUserId } from '@core/context/user';
+import { Show } from 'solid-js';
+import { Tabs, type TabItem } from '@core/component/Tabs';
+import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -55,7 +55,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
   const blockId = useBlockId();
   const channelName = useChannelName(
     blockId,
-    props.channelName ?? "New Channel",
+    props.channelName ?? 'New Channel'
   );
 
   return (
@@ -67,7 +67,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
             participants={props.participants}
           />
           <SplitLabel
-            label={channelName() ?? "New Channel"}
+            label={channelName() ?? 'New Channel'}
             id={props.channelId}
             itemType="channel"
             lockRename={props.lockRename}
