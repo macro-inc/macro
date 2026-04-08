@@ -1,5 +1,6 @@
 //! Query for users in a channel via comms_channel_participants.
 
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -8,8 +9,8 @@ use uuid::Uuid;
 pub async fn get_channel_users(
     pool: &PgPool,
     channel_id: &Uuid,
-) -> Result<Vec<String>, sqlx::Error> {
-    let users: Vec<String> = sqlx::query_scalar!(
+) -> Result<Vec<MacroUserIdStr<'static>>, sqlx::Error> {
+    let users = sqlx::query_scalar!(
         r#"
         SELECT DISTINCT cp.user_id
         FROM comms_channel_participants cp
@@ -18,7 +19,14 @@ pub async fn get_channel_users(
         channel_id
     )
     .fetch_all(pool)
-    .await?;
+    .await?
+    .into_iter()
+    .filter_map(|u| {
+        MacroUserIdStr::parse_from_str(u.as_str())
+            .ok()
+            .map(|u| u.into_owned())
+    })
+    .collect();
 
     Ok(users)
 }
