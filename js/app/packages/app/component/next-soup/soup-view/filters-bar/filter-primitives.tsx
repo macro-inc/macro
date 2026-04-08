@@ -67,7 +67,8 @@ export const FilterSelect = (props: FilterSelectProps) => {
     if (multiple()) {
       props.onChange(selected as Option[]);
     } else {
-      props.onChange(selected ? [selected as Option] : []);
+      if (!selected) return;
+      props.onChange([selected as Option]);
     }
   };
 
