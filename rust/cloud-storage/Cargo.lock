@@ -6966,6 +6966,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "native_app_server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "macro_env",
+ "native_app_service",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "native_app_service"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,12 @@
+[package]
+name = "native_app_server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { workspace = true }
+macro_env = { path = "../../macro_env", features = ["frontend_url"] }
+native_app_service = { path = "../../native_app_service" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
