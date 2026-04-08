@@ -168,7 +168,7 @@ type PersistedSoupViewState = {
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 2;
+const PERSISTED_STATE_VERSION = 1;
 
 // Tracks how many SoupViewList instances are mounted per contentId.
 // Used to detect duplicate splits showing the same view.
