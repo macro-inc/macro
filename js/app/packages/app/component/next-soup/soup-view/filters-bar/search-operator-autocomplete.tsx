@@ -23,29 +23,24 @@ export const INDEX_OPTIONS: AutocompleteOption[] = [
     icon: () => <EntityIcon targetType="md" size="xs" />,
   },
   {
-    id: 'email',
-    label: 'Email',
-    icon: () => <EntityIcon targetType="email" size="xs" />,
-  },
-  {
     id: 'task',
     label: 'Tasks',
     icon: () => <EntityIcon targetType="task" size="xs" />,
   },
   {
-    id: 'people',
-    label: 'People',
-    icon: () => <EntityIcon targetType="direct_message" size="xs" />,
+    id: 'email',
+    label: 'Email',
+    icon: () => <EntityIcon targetType="email" size="xs" />,
+  },
+  {
+    id: 'folders',
+    label: 'Folders',
+    icon: () => <EntityIcon targetType="project" size="xs" />,
   },
   {
     id: 'agent',
     label: 'Agents',
     icon: () => <EntityIcon targetType="chat" size="xs" />,
-  },
-  {
-    id: 'file',
-    label: 'Files',
-    icon: () => <EntityIcon targetType="unknown" size="xs" />,
   },
 ];
 

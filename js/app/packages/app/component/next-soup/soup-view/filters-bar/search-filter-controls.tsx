@@ -19,13 +19,7 @@ const INDEX_OPTIONS: (Option & { queryFilters: Record<string, unknown> })[] = [
     value: 'document',
     label: 'Documents',
     icon: () => <EntityIcon targetType="md" size="xs" />,
-    queryFilters: QUERY_FILTERS.document,
-  },
-  {
-    value: 'email',
-    label: 'Email',
-    icon: () => <EntityIcon targetType="email" size="xs" />,
-    queryFilters: QUERY_FILTERS.email,
+    queryFilters: QUERY_FILTERS.documentAndFile,
   },
   {
     value: 'task',
@@ -34,16 +28,22 @@ const INDEX_OPTIONS: (Option & { queryFilters: Record<string, unknown> })[] = [
     queryFilters: QUERY_FILTERS.task,
   },
   {
+    value: 'email',
+    label: 'Email',
+    icon: () => <EntityIcon targetType="email" size="xs" />,
+    queryFilters: QUERY_FILTERS.email,
+  },
+  {
+    value: 'folders',
+    label: 'Folders',
+    icon: () => <EntityIcon targetType="project" size="xs" />,
+    queryFilters: QUERY_FILTERS.folders,
+  },
+  {
     value: 'agent',
     label: 'Agents',
     icon: () => <EntityIcon targetType="chat" size="xs" />,
     queryFilters: QUERY_FILTERS.agent,
-  },
-  {
-    value: 'file',
-    label: 'Files',
-    icon: () => <EntityIcon targetType="unknown" size="xs" />,
-    queryFilters: QUERY_FILTERS.file,
   },
 ];
 

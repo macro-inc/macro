@@ -29,12 +29,11 @@ const INDEX_QUERY_FILTERS: Record<
   (typeof QUERY_FILTERS)[keyof typeof QUERY_FILTERS] | undefined
 > = {
   channels: QUERY_FILTERS.channels,
-  document: QUERY_FILTERS.document,
-  email: QUERY_FILTERS.email,
+  document: QUERY_FILTERS.documentAndFile,
   task: QUERY_FILTERS.task,
-  people: QUERY_FILTERS.people,
+  email: QUERY_FILTERS.email,
+  folders: QUERY_FILTERS.folders,
   agent: QUERY_FILTERS.agent,
-  file: QUERY_FILTERS.file,
 };
 
 type SearchbarVariant = 'filled' | 'secondary';
