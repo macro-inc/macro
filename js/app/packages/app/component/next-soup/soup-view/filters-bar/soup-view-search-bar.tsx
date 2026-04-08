@@ -5,6 +5,7 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { ENABLE_SEARCH_QUERY_OPERATORS } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import {
   createSignal,
@@ -65,6 +66,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const [highlightedIndex, setHighlightedIndex] = createSignal(0);
 
   const activeOperator = createMemo(() => {
+    if (!ENABLE_SEARCH_QUERY_OPERATORS) return null;
     if (!searchFocused()) return null;
     return detectActiveOperator(searchText(), cursorPos());
   });

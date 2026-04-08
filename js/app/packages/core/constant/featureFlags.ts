@@ -280,6 +280,11 @@ export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   true
 );
 
+export const ENABLE_SEARCH_QUERY_OPERATORS = resolveFeatureFlag(
+  'ENABLE_SEARCH_QUERY_OPERATORS',
+  false
+);
+
 const ENABLE_NEW_CHANNELS_OVERRIDE = true;
 
 export function ENABLE_NEW_CHANNELS(): boolean {
