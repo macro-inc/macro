@@ -5,6 +5,7 @@ import {
   Track,
   type RemoteParticipant,
   type LocalTrackPublication,
+  type LocalTrack,
 } from 'livekit-client';
 import {
   createContext,
@@ -23,6 +24,12 @@ export type CallParticipantInfo = {
   hasVideo: boolean;
 };
 
+export type MediaDeviceInfo = {
+  deviceId: string;
+  label: string;
+  kind: MediaDeviceKind;
+};
+
 type CallStoreState = {
   connectionState: ConnectionState;
   activeChannelId: string | null;
@@ -32,6 +39,12 @@ type CallStoreState = {
   isScreenSharing: boolean;
   trackVersion: number;
   speakerVersion: number;
+  audioInputDevices: MediaDeviceInfo[];
+  audioOutputDevices: MediaDeviceInfo[];
+  videoInputDevices: MediaDeviceInfo[];
+  activeAudioInputDeviceId: string | null;
+  activeAudioOutputDeviceId: string | null;
+  activeVideoInputDeviceId: string | null;
 };
 
 const initialState: CallStoreState = {
@@ -43,6 +56,12 @@ const initialState: CallStoreState = {
   isScreenSharing: false,
   trackVersion: 0,
   speakerVersion: 0,
+  audioInputDevices: [],
+  audioOutputDevices: [],
+  videoInputDevices: [],
+  activeAudioInputDeviceId: null,
+  activeAudioOutputDeviceId: null,
+  activeVideoInputDeviceId: null,
 };
 
 export type CallState = {
@@ -68,6 +87,18 @@ export type CallState = {
   isVideoMuted: () => boolean;
   /** Whether local screen share is active */
   isScreenSharing: () => boolean;
+  /** Available audio input devices (microphones) */
+  audioInputDevices: () => MediaDeviceInfo[];
+  /** Available audio output devices (speakers) */
+  audioOutputDevices: () => MediaDeviceInfo[];
+  /** Available video input devices (cameras) */
+  videoInputDevices: () => MediaDeviceInfo[];
+  /** Currently active audio input device ID */
+  activeAudioInputDeviceId: () => string | null;
+  /** Currently active audio output device ID */
+  activeAudioOutputDeviceId: () => string | null;
+  /** Currently active video input device ID */
+  activeVideoInputDeviceId: () => string | null;
   /** Connect to a call using a token response */
   connect: (tokenResponse: CallTokenResponse) => Promise<void>;
   /** Disconnect from the current call */
@@ -78,6 +109,12 @@ export type CallState = {
   toggleVideo: () => Promise<void>;
   /** Toggle screen sharing */
   toggleScreenShare: () => Promise<void>;
+  /** Switch active audio input device */
+  switchAudioInput: (deviceId: string) => Promise<void>;
+  /** Switch active audio output device */
+  switchAudioOutput: (deviceId: string) => Promise<void>;
+  /** Switch active video input device */
+  switchVideoInput: (deviceId: string) => Promise<void>;
 };
 
 const CallContext = createContext<CallState>();
@@ -152,6 +189,115 @@ function createCallState() {
     resetState();
   }
 
+  // --- device enumeration ---
+
+  async function enumerateDevices() {
+    try {
+      const devices = await Room.getLocalDevices('audioinput');
+      setStore(
+        'audioInputDevices',
+        devices.map((d) => ({
+          deviceId: d.deviceId,
+          label: d.label || `Microphone (${d.deviceId.slice(0, 5)})`,
+          kind: d.kind,
+        }))
+      );
+    } catch (e) {
+      console.error('failed to enumerate audio input devices', e);
+    }
+
+    try {
+      const devices = await Room.getLocalDevices('audiooutput');
+      setStore(
+        'audioOutputDevices',
+        devices.map((d) => ({
+          deviceId: d.deviceId,
+          label: d.label || `Speaker (${d.deviceId.slice(0, 5)})`,
+          kind: d.kind,
+        }))
+      );
+    } catch (e) {
+      console.error('failed to enumerate audio output devices', e);
+    }
+
+    try {
+      const devices = await Room.getLocalDevices('videoinput');
+      setStore(
+        'videoInputDevices',
+        devices.map((d) => ({
+          deviceId: d.deviceId,
+          label: d.label || `Camera (${d.deviceId.slice(0, 5)})`,
+          kind: d.kind,
+        }))
+      );
+    } catch (e) {
+      console.error('failed to enumerate video input devices', e);
+    }
+  }
+
+  function trackActiveDevices(r: Room) {
+    const micPub = r.localParticipant.getTrackPublication(
+      Track.Source.Microphone
+    );
+    if (micPub?.track) {
+      const settings = (
+        micPub.track as LocalTrack
+      ).mediaStreamTrack?.getSettings();
+      if (settings?.deviceId) {
+        setStore('activeAudioInputDeviceId', settings.deviceId);
+      }
+    }
+
+    const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
+    if (camPub?.track) {
+      const settings = (
+        camPub.track as LocalTrack
+      ).mediaStreamTrack?.getSettings();
+      if (settings?.deviceId) {
+        setStore('activeVideoInputDeviceId', settings.deviceId);
+      }
+    }
+  }
+
+  async function switchAudioInput(deviceId: string) {
+    const r = room();
+    if (!r) return;
+    try {
+      await r.switchActiveDevice('audioinput', deviceId);
+      setStore('activeAudioInputDeviceId', deviceId);
+    } catch (e) {
+      console.error('failed to switch audio input device', e);
+    }
+  }
+
+  async function switchAudioOutput(deviceId: string) {
+    const r = room();
+    if (!r) return;
+    try {
+      await r.switchActiveDevice('audiooutput', deviceId);
+      setStore('activeAudioOutputDeviceId', deviceId);
+    } catch (e) {
+      console.error('failed to switch audio output device', e);
+    }
+  }
+
+  async function switchVideoInput(deviceId: string) {
+    const r = room();
+    if (!r) return;
+    try {
+      await r.switchActiveDevice('videoinput', deviceId);
+      setStore('activeVideoInputDeviceId', deviceId);
+    } catch (e) {
+      console.error('failed to switch video input device', e);
+    }
+  }
+
+  // Re-enumerate when devices change (e.g. headphones plugged in)
+  const handleDeviceChange = () => {
+    enumerateDevices();
+  };
+  navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
+
   // --- mutations ---
 
   async function connect(tokenResponse: CallTokenResponse) {
@@ -195,6 +341,10 @@ function createCallState() {
     }
     setStore('isAudioMuted', false);
     setStore('isVideoMuted', true);
+
+    // Enumerate available devices and track active ones
+    await enumerateDevices();
+    trackActiveDevices(targetRoom);
   }
 
   async function disconnect() {
@@ -256,6 +406,10 @@ function createCallState() {
 
   onCleanup(() => {
     window.removeEventListener('beforeunload', handleBeforeUnload);
+    navigator.mediaDevices?.removeEventListener(
+      'devicechange',
+      handleDeviceChange
+    );
     const r = room();
     if (r) {
       r.disconnect();
@@ -286,6 +440,12 @@ function createCallState() {
     isAudioMuted: () => store.isAudioMuted,
     isVideoMuted: () => store.isVideoMuted,
     isScreenSharing: () => store.isScreenSharing,
+    audioInputDevices: () => store.audioInputDevices,
+    audioOutputDevices: () => store.audioOutputDevices,
+    videoInputDevices: () => store.videoInputDevices,
+    activeAudioInputDeviceId: () => store.activeAudioInputDeviceId,
+    activeAudioOutputDeviceId: () => store.activeAudioOutputDeviceId,
+    activeVideoInputDeviceId: () => store.activeVideoInputDeviceId,
 
     // mutations
     connect,
@@ -293,6 +453,9 @@ function createCallState() {
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
+    switchAudioInput,
+    switchAudioOutput,
+    switchVideoInput,
   };
 
   return state;
