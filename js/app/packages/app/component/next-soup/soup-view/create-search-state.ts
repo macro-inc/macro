@@ -116,8 +116,14 @@ export const createSearchState = ({
     return filterToResultMap;
   });
 
+  const hasChannelQueryFilters = createMemo(() => {
+    const cf = queryFilters().channel_filters;
+    return !!(cf?.channel_ids?.length || cf?.sender_ids?.length);
+  });
+
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
+    if (hasChannelQueryFilters()) return [];
     const activeFilters = getValidSearchFilters(soup.filters.active());
     const results =
       activeFilters.length === 0
