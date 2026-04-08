@@ -210,10 +210,16 @@ where
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         match entity_type {
-            EntityType::Document => self.repo.get_document_users(entity_id).await,
-            EntityType::Chat => self.repo.get_chat_users(entity_id).await,
-            EntityType::Project => self.repo.get_project_users(entity_id).await,
-            EntityType::EmailThread => self.repo.get_thread_users(entity_id).await,
+            EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread => {
+                let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid entity_id for get_users_by_entity")
+                })?;
+
+                self.repo.get_entity_users(&entity_id, entity_type).await
+            }
             EntityType::Channel => {
                 let channel_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid channel_id for get_users_by_entity")
