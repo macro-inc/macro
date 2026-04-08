@@ -52,8 +52,7 @@ pub async fn update_channel_share_permission(
     };
 
     // Parse user_id
-    let user_id_parsed =
-        MacroUserIdStr::parse_from_str(user_id).context("invalid user id")?;
+    let user_id_parsed = MacroUserIdStr::parse_from_str(user_id).context("invalid user id")?;
 
     // Get user's max access level to the item
     let user_access_level = entity_access_service

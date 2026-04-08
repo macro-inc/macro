@@ -300,7 +300,12 @@ async fn update_channel_share_permissions_for_items(
     tracing::trace!(items=?items, "updating channel share permissions for items");
     for (item_id, item_type) in items {
         if let Err(e) = channel_permissions::update_channel_share_permission(
-            db, entity_access_service, user_id, channel_id, &item_id, &item_type,
+            db,
+            entity_access_service,
+            user_id,
+            channel_id,
+            &item_id,
+            &item_type,
         )
         .await
         {

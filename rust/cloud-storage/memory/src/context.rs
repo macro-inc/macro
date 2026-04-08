@@ -140,13 +140,19 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
     );
     let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone()));
     let entity_access_service = Arc::new(entity_access_service);
-    let document_tool_context =
-        DocumentToolContext::new(document_service, (*entity_access_service).clone(), lexical_client);
+    let document_tool_context = DocumentToolContext::new(
+        document_service,
+        (*entity_access_service).clone(),
+        lexical_client,
+    );
 
     // Properties tool context
     let properties_service = properties::PropertiesServiceImpl::new(
         properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(pool.clone(), entity_access_service.clone())),
+        Some(properties::PermissionServiceImpl::new(
+            pool.clone(),
+            entity_access_service.clone(),
+        )),
         Some(NoOpNotificationService),
     );
     let properties_tool_context =
