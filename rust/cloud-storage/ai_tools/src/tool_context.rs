@@ -125,7 +125,7 @@ impl properties::NotificationService for NoOpNotificationService {
 /// Type alias for the properties service implementation used by AI tools
 pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PropertiesPgRepo,
-    properties::PermissionServiceImpl,
+    properties::PermissionServiceImpl<ToolEntityAccessService>,
     NoOpNotificationService,
 >;
 

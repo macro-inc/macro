@@ -240,13 +240,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_tools::NoOpTaskProperties,
         ai_tools::NoOpConnectionService,
     );
-    let entity_access_service = entity_access::domain::service::EntityAccessServiceImpl::new(
+    let entity_access_service = Arc::new(entity_access::domain::service::EntityAccessServiceImpl::new(
         entity_access::outbound::PgAccessRepository::new(pool.clone()),
-    );
+    ));
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
         document_service,
-        entity_access_service,
+        (*entity_access_service).clone(),
         test_lexical_client,
     );
 
@@ -256,7 +256,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     // Build properties tool context
     let properties_service = properties::PropertiesServiceImpl::new(
         properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(pool.clone())),
+        Some(properties::PermissionServiceImpl::new(pool.clone(), entity_access_service.clone())),
         Some(ai_tools::NoOpNotificationService),
     );
     let properties_tool_context =

@@ -248,7 +248,13 @@ async fn main() -> anyhow::Result<()> {
     });
     tracing::trace!("initialized notification ingress service");
 
-    let permission_checker = PermissionServiceImpl::new(db.clone());
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+    );
+
+    let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
     let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
@@ -272,12 +278,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Create the CommsRouterState for comms_service routes
     let comms_state = CommsRouterState::new(channel_service_for_comms);
-
-    let entity_access_service = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
-        ),
-    );
 
     let s3 = Arc::new(S3::new(
         s3_client,

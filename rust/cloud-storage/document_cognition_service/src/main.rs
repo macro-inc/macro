@@ -234,11 +234,11 @@ async fn main() -> anyhow::Result<()> {
         NoOpTaskProperties,
         NoOpConnectionService,
     );
-    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
-        entity_access_service,
+        (*entity_access_service).clone(),
         lexical_client_for_tools,
     );
 
@@ -268,7 +268,7 @@ async fn main() -> anyhow::Result<()> {
     // Build properties tool context for AI tools
     let properties_service = properties::PropertiesServiceImpl::new(
         properties::PropertiesPgRepo::new(db.clone()),
-        Some(properties::PermissionServiceImpl::new(db.clone())),
+        Some(properties::PermissionServiceImpl::new(db.clone(), entity_access_service.clone())),
         Some(NoOpNotificationService),
     );
     let properties_tool_context =

@@ -84,7 +84,7 @@ type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRep
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
-    PermissionServiceImpl,
+    PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
 >;
 
@@ -216,6 +216,7 @@ impl From<&ApiContext> for PropertiesHandlerState {
         PropertiesHandlerState {
             db: ctx.db.clone(),
             properties_service: ctx.properties_service.clone(),
+            entity_access_service: ctx.entity_access_service.clone(),
         }
     }
 }
