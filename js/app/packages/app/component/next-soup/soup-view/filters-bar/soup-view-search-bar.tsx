@@ -19,6 +19,7 @@ import {
   stripOperatorAtRange,
 } from './parse-search-operators';
 import {
+  INDEX_OPTIONS,
   SearchOperatorAutocomplete,
   type AutocompleteOption,
 } from './search-operator-autocomplete';
@@ -127,35 +128,74 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
     switch (type) {
       case 'index': {
+        for (const opt of INDEX_OPTIONS) {
+          if (soup.filters.isActive(opt.id)) {
+            soup.filters.toggle({ or: [opt.id] });
+          }
+        }
         soup.filters.toggle({ or: [option.id] });
         const qf = INDEX_QUERY_FILTERS[option.id];
         if (qf) setQueryFilters(qf);
         break;
       }
-      case 'in':
-        setQueryFilters((prev) => ({
-          ...prev,
-          channel_filters: {
-            ...prev.channel_filters,
-            channel_ids: [
-              ...(prev.channel_filters?.channel_ids ?? []),
-              option.id,
-            ],
-          },
-        }));
+      case 'in': {
+        if (!soup.filters.isActive('channels')) {
+          for (const opt of INDEX_OPTIONS) {
+            if (soup.filters.isActive(opt.id)) {
+              soup.filters.toggle({ or: [opt.id] });
+            }
+          }
+          soup.filters.toggle({ or: ['channels'] });
+          setQueryFilters({
+            ...QUERY_FILTERS.channels,
+            channel_filters: {
+              ...QUERY_FILTERS.channels.channel_filters,
+              channel_ids: [option.id],
+            },
+          });
+        } else {
+          setQueryFilters((prev) => ({
+            ...prev,
+            channel_filters: {
+              ...prev.channel_filters,
+              channel_ids: [
+                ...(prev.channel_filters?.channel_ids ?? []),
+                option.id,
+              ],
+            },
+          }));
+        }
         break;
-      case 'from':
-        setQueryFilters((prev) => ({
-          ...prev,
-          channel_filters: {
-            ...prev.channel_filters,
-            sender_ids: [
-              ...(prev.channel_filters?.sender_ids ?? []),
-              option.id,
-            ],
-          },
-        }));
+      }
+      case 'from': {
+        if (!soup.filters.isActive('channels')) {
+          for (const opt of INDEX_OPTIONS) {
+            if (soup.filters.isActive(opt.id)) {
+              soup.filters.toggle({ or: [opt.id] });
+            }
+          }
+          soup.filters.toggle({ or: ['channels'] });
+          setQueryFilters({
+            ...QUERY_FILTERS.channels,
+            channel_filters: {
+              ...QUERY_FILTERS.channels.channel_filters,
+              sender_ids: [option.id],
+            },
+          });
+        } else {
+          setQueryFilters((prev) => ({
+            ...prev,
+            channel_filters: {
+              ...prev.channel_filters,
+              sender_ids: [
+                ...(prev.channel_filters?.sender_ids ?? []),
+                option.id,
+              ],
+            },
+          }));
+        }
         break;
+      }
     }
 
     queueMicrotask(() => ref()?.focus());
