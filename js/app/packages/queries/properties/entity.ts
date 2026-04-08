@@ -334,7 +334,6 @@ function propertyEntityTypeToSoupTag(
       () => 'document' as const
     )
     .with(EntityType.PROJECT, () => 'project' as const)
-
     .exhaustive();
 }
 

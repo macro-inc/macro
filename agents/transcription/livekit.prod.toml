@@ -1,0 +1,5 @@
+[project]
+  subdomain = "macro-prod-ght70vsh"
+
+[agent]
+  id = "CA_N9bSwTxA8arc"

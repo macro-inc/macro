@@ -135,7 +135,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         .behavior_version(aws_sdk_sqs::config::BehaviorVersion::latest())
         .build();
     let aws_sqs_client = aws_sdk_sqs::Client::from_conf(sqs_config.clone());
-    let sqs_client = SQS::new(aws_sqs_client);
+    let sqs_client = SQS::new(aws_sqs_client).email_scheduled_queue("test-email-scheduled-queue");
 
     let document_storage_client = Arc::new(DocumentStorageServiceClient::new(
         "dummy_auth_key".into(),
@@ -190,7 +190,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         EmailPgRepo::new(pool.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
     let user_repo = PgUserRepo::new(pool.clone());
@@ -199,6 +198,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_repo,
         frecency_storage,
     );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
         frecency_service,
@@ -240,13 +240,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_tools::NoOpTaskProperties,
         ai_tools::NoOpConnectionService,
     );
-    let entity_access_service = entity_access::domain::service::EntityAccessServiceImpl::new(
-        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        ),
     );
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
         document_service,
-        entity_access_service,
+        (*entity_access_service).clone(),
         test_lexical_client,
     );
 
@@ -256,26 +258,48 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     // Build properties tool context
     let properties_service = properties::PropertiesServiceImpl::new(
         properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(pool.clone())),
+        Some(properties::PermissionServiceImpl::new(
+            pool.clone(),
+            entity_access_service.clone(),
+        )),
         Some(ai_tools::NoOpNotificationService),
     );
     let properties_tool_context =
         properties::inbound::toolset::PropertiesToolContext::new(properties_service);
 
-    let memory_tool_context = ai_tools::ToolServiceContext {
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        Arc::new(email::domain::service::EmailServiceImpl::new(
+            email::outbound::EmailPgRepo::new(pool.clone()),
+            frecency::domain::services::FrecencyQueryServiceImpl::new(
+                frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
+            ),
+            sqs_client.clone(),
+            0,
+        )),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        entity_access_service.clone(),
+    );
+
+    let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         scribe: scribe.clone(),
         soup_service: soup_service.clone(),
+        email_service: email_service_for_tools.clone(),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
+        email_tool_context: email_tool_context.clone(),
     };
+    let all_tools = ai_tools::all_tools();
+    let all_tools_toolset = all_tools.toolset.clone();
+    let all_tools_prompt = all_tools.prompt;
+
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
         pool.clone(),
         memory_repo,
-        memory_tool_context,
-        ai_tools::all_tools(),
+        tool_service_context.clone(),
+        all_tools,
     ));
 
     let api_context = ApiContext {
@@ -292,10 +316,16 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
         soup_service,
+        email_service: email_service_for_tools,
         stream_repo: MockStreamRepo::new(),
         document_tool_context,
         memory_service,
         properties_tool_context,
+        email_tool_context,
+        tool_service_context,
+        all_tools: all_tools_toolset,
+        all_tools_prompt,
+        entity_access_service,
     };
     Arc::new(api_context)
 }

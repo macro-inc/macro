@@ -11,12 +11,14 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         email::inbound::list_labels_router::<ApiContext, crate::api::context::EmailSvc>();
 
     Router::new()
-        .route("/", post(create::handler))
+        .route(
+            "/",
+            post(create::handler).layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::api::middleware::gmail_token::attach_gmail_token,
+            )),
+        )
         .route("/{id}", delete(delete::handler))
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            crate::api::middleware::gmail_token::attach_gmail_token,
-        ))
         .layer(axum::middleware::from_fn_with_state(
             state.email_service,
             crate::api::middleware::link::attach_link_context,

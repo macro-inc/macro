@@ -3,8 +3,15 @@ import { asChatMessage } from '@core/component/AI/util/message';
 import { toast } from '@core/component/Toast/Toast';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
-import type { Accessor, Setter } from 'solid-js';
-import { createEffect, createSignal, on, untrack } from 'solid-js';
+import type { Accessor, Owner, Setter } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  getOwner,
+  on,
+  runWithOwner,
+  untrack,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type ChatEvent,
@@ -12,6 +19,16 @@ import {
   type SideEffect,
   transition,
 } from './chatState';
+
+type StreamConnectedEvent = {
+  type: 'stream_connected';
+  stream: ChatMessageStream;
+  owner?: Owner | null;
+};
+
+type ControllerEvent =
+  | Exclude<ChatEvent, { type: 'stream_connected' }>
+  | StreamConnectedEvent;
 
 export type ChatController = {
   chatId: Accessor<string>;
@@ -22,8 +39,7 @@ export type ChatController = {
   isGenerating: Accessor<boolean>;
   isWaiting: Accessor<boolean>;
 
-  dispatch: (event: ChatEvent) => void;
-  attachStream: (stream: ChatMessageStream) => void;
+  dispatch: (event: ControllerEvent) => void;
   /** Escape hatch for debug components that set stream directly */
   setStream: Setter<ChatMessageStream | undefined>;
 };
@@ -51,23 +67,7 @@ export function createChatController(
     }
   }
 
-  function dispatch(event: ChatEvent) {
-    const result = transition(untrack(phase), event);
-    setPhase(result.phase);
-    if (result.messages) {
-      setMessages(result.messages);
-    }
-    // Clear stream on transition to idle
-    if (result.phase.type === 'idle' && untrack(stream)) {
-      setStream(undefined);
-    }
-    executeEffects(result.effects);
-  }
-
-  function attachStream(newStream: ChatMessageStream) {
-    setStream(newStream);
-    dispatch({ type: 'stream_connected' });
-
+  function watchStream(newStream: ChatMessageStream) {
     // Watch stream data for user messages and errors
     createEffect(
       on(
@@ -76,24 +76,24 @@ export function createChatController(
           const latest = data.at(-1);
           if (!latest) return;
 
-          if (latest.type === 'error') {
-            const streamError =
-              'stream_error' in latest ? latest.stream_error : undefined;
-            dispatch({
-              type: 'stream_error',
-              streamError: streamError as string | undefined,
-            });
-            return;
-          }
-
-          if (latest.type === 'chat_user_message') {
-            dispatch({
-              type: 'stream_user_message',
-              messageId: latest.message_id,
-              content: latest.content,
-              attachments: latest.attachments,
-            });
-          }
+          match(latest)
+            .with({ type: 'error' }, (r) => {
+              const streamError =
+                'stream_error' in r ? r.stream_error : undefined;
+              dispatch({
+                type: 'stream_error',
+                streamError: streamError as string | undefined,
+              });
+            })
+            .with({ type: 'chat_user_message' }, (r) => {
+              dispatch({
+                type: 'stream_user_message',
+                messageId: r.message_id,
+                content: r.content,
+                attachments: r.attachments,
+              });
+            })
+            .otherwise(() => {});
         }
       )
     );
@@ -104,6 +104,36 @@ export function createChatController(
       const message = asChatMessage(newStream.data());
       dispatch({ type: 'stream_done', message });
     });
+  }
+
+  function dispatch(event: ControllerEvent) {
+    // Handle stream attachment through the state transition
+    if (event.type === 'stream_connected' && 'stream' in event) {
+      const { stream: newStream, owner = getOwner() } = event;
+      setStream(newStream);
+
+      const result = transition(untrack(phase), { type: 'stream_connected' });
+      setPhase(result.phase);
+      executeEffects(result.effects);
+
+      if (owner) {
+        runWithOwner(owner, () => watchStream(newStream));
+      } else {
+        watchStream(newStream);
+      }
+      return;
+    }
+
+    const result = transition(untrack(phase), event);
+    setPhase(result.phase);
+    if (result.messages) {
+      setMessages(result.messages);
+    }
+    // Clear stream on transition to idle
+    if (result.phase.type === 'idle' && untrack(stream)) {
+      setStream(undefined);
+    }
+    executeEffects(result.effects);
   }
 
   // Reconnect active streams on page refresh / chat switch
@@ -128,7 +158,7 @@ export function createChatController(
         continue;
       }
 
-      attachStream(s);
+      dispatch({ type: 'stream_connected', stream: s });
       break;
     }
   });
@@ -143,7 +173,6 @@ export function createChatController(
     isWaiting: () => phase().type === 'sending',
 
     dispatch,
-    attachStream,
     setStream,
   };
 }

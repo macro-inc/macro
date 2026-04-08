@@ -14,9 +14,9 @@
             "kind": {
               "Enum": [
                 "view",
+                "comment",
                 "edit",
-                "owner",
-                "comment"
+                "owner"
               ]
             }
           }

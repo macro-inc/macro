@@ -2,7 +2,7 @@ use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use call::{
     domain::service::CallServiceImpl,
-    inbound::axum_router::{CallRouterState, WebhookRouterState},
+    inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
 };
 use channels::{
@@ -68,7 +68,6 @@ type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
-    email::domain::ports::NoOpGmailLabelModifier,
 >;
 
 type DssSoupState = SoupRouterState<
@@ -85,7 +84,7 @@ type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRep
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
-    PermissionServiceImpl,
+    PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
 >;
 
@@ -159,14 +158,22 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 pub(crate) type DssChannelsState =
     ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, EntityAccessService>;
 
+/// Type alias for the call connection service.
+pub(crate) type CallConnectionService =
+    ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
+
 /// Type alias for the call service.
-pub(crate) type DssCallService = CallServiceImpl<PgCallRepo, LivekitRtcClient>;
+pub(crate) type DssCallService =
+    CallServiceImpl<PgCallRepo, LivekitRtcClient, CallConnectionService>;
 
 /// Type alias for the call router state.
 pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessService>;
 
 /// Type alias for the call webhook router state.
 pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
+
+/// Type alias for the internal call router state.
+pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
@@ -201,6 +208,7 @@ pub(crate) struct ApiContext {
     pub channels_state: DssChannelsState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
+    pub call_internal_state: DssCallInternalState,
 }
 
 env_var! {
@@ -213,6 +221,7 @@ impl From<&ApiContext> for PropertiesHandlerState {
         PropertiesHandlerState {
             db: ctx.db.clone(),
             properties_service: ctx.properties_service.clone(),
+            entity_access_service: ctx.entity_access_service.clone(),
         }
     }
 }
@@ -249,6 +258,7 @@ impl From<&ApiContext> for CommsHandlerState {
             permissions_token_secret: ctx.permissions_token_secret.clone(),
             frecency_storage: ctx.frecency_storage.clone(),
             comms_state: ctx.comms_state.clone(),
+            entity_access_service: ctx.entity_access_service.clone(),
         }
     }
 }

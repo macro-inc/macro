@@ -21,7 +21,6 @@ export function registerToolHandler(stream: () => StreamLike | undefined) {
         ) {
           await triggerToolCall({
             chat_id: latest.chat_id,
-            isComplete: false,
             json: latest.content.json,
             message_id: latest.message_id,
             name: latest.content.name,
@@ -35,7 +34,6 @@ export function registerToolHandler(stream: () => StreamLike | undefined) {
         ) {
           await triggerToolCall({
             chat_id: latest.chat_id,
-            isComplete: false,
             json: latest.content.json,
             message_id: latest.message_id,
             name: latest.content.name,

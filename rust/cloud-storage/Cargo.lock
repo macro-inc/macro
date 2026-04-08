@@ -125,6 +125,7 @@ dependencies = [
  "serde_json",
  "soup",
  "sqlx",
+ "sqs_client",
  "strum",
  "tokio",
  "tracing",
@@ -609,6 +610,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "maud",
+ "miniserde",
  "mockall",
  "model",
  "model-entity",
@@ -1382,7 +1384,9 @@ dependencies = [
  "axum",
  "axum-core",
  "bytes",
+ "cookie",
  "futures-util",
+ "headers",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -1437,6 +1441,21 @@ dependencies = [
  "cool_asserts",
  "quote",
  "unsynn",
+]
+
+[[package]]
+name = "backfill_entity_access"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "macro_entrypoint",
+ "macro_env_var",
+ "macro_uuid",
+ "models_permissions",
+ "sqlx",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1723,6 +1742,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "connection",
  "entity_access",
  "livekit-api",
  "livekit-protocol",
@@ -1731,7 +1751,9 @@ dependencies = [
  "mockall",
  "model-error-response",
  "model_user",
+ "models_permissions",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
@@ -1836,6 +1858,7 @@ name = "chat"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "ai_toolset",
  "anyhow",
  "axum",
  "chrono",
@@ -2052,6 +2075,7 @@ dependencies = [
  "comms_db_client",
  "connection_gateway_client",
  "doppleganger",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",
@@ -2748,6 +2772,29 @@ dependencies = [
  "chrono",
  "lazy_static",
  "regex",
+]
+
+[[package]]
+name = "decode_jwt"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "cookie",
+ "http-body-util",
+ "jsonwebtoken 10.3.0 (git+https://github.com/whutchinson98/jsonwebtoken)",
+ "macro_auth",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "url",
+ "urlencoding",
 ]
 
 [[package]]
@@ -3564,11 +3611,15 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "chrono",
+ "hmac",
+ "macro_env",
+ "macro_service_urls",
  "macro_user_id",
  "model_notifications",
  "notification",
  "rootcause",
  "serde",
+ "sha2",
  "tracing",
 ]
 
@@ -4565,6 +4616,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7382cf6263419f2d8df38c55d7da83da5c18aef87fc7a7fc1fb1e344edfe14c1"
 dependencies = [
  "hashbrown 0.15.2",
+]
+
+[[package]]
+name = "headers"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3314d5adb5d94bcdf56771f2e50dbbc80bb4bdf88967526706205ac9eff24eb"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "headers-core",
+ "http 1.3.1",
+ "httpdate",
+ "mime",
+ "sha1",
+]
+
+[[package]]
+name = "headers-core"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54b4a22553d4242c49fddb9ba998a99962b5cc6f22cb5a3482bec22522403ce4"
+dependencies = [
+ "http 1.3.1",
 ]
 
 [[package]]
@@ -5838,6 +5913,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-extra",
  "cookie",
  "jsonwebtoken 10.3.0 (git+https://github.com/whutchinson98/jsonwebtoken)",
  "macro_env",
@@ -5915,6 +5991,7 @@ dependencies = [
  "mockall",
  "model",
  "model-entity",
+ "model_file_type",
  "models_dcs",
  "models_opensearch",
  "models_pagination",
@@ -5985,6 +6062,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-extra",
+ "decode_jwt",
  "http-body-util",
  "ip_extractor",
  "macro_auth",
@@ -6002,12 +6081,14 @@ dependencies = [
  "remote_env_var",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
  "tracing",
  "url",
+ "urlencoding",
  "user_quota",
  "uuid",
 ]
@@ -6037,6 +6118,14 @@ name = "macro_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "macro_service_urls"
+version = "0.1.0"
+dependencies = [
+ "macro_env",
+ "url",
 ]
 
 [[package]]
@@ -6260,6 +6349,7 @@ dependencies = [
  "ai_tools",
  "ai_toolset",
  "anyhow",
+ "aws-sdk-sqs",
  "axum",
  "chrono",
  "comms",
@@ -6274,6 +6364,8 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
  "macro_user_id",
  "macro_uuid",
  "model_user",
@@ -6285,6 +6377,7 @@ dependencies = [
  "serde_json",
  "soup",
  "sqlx",
+ "sqs_client",
  "static_file_service_client",
  "sync_service_client",
  "thiserror 2.0.17",
@@ -6325,9 +6418,9 @@ dependencies = [
 
 [[package]]
 name = "mini-internal"
-version = "0.1.43"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "560f32b6891d8d9bade8942c45a27694f16d789d3b4b8e6b7135a5240de0a8af"
+checksum = "2a8df435db5df1dd82a74f77e3c3addf6ab7665079c31e222a64f34f7475d87e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6342,13 +6435,13 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniserde"
-version = "0.1.43"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac79f4123c070de643a7a93b9339abf18c30005c622bf4b1c29c2c0960f52d39"
+checksum = "8c48e83ec09ab8a51d4e6be46608bf2a1293a79e2f7ea60246a2ce50eaef44ba"
 dependencies = [
  "itoa",
  "mini-internal",
- "ryu",
+ "zmij",
 ]
 
 [[package]]
@@ -6875,12 +6968,18 @@ dependencies = [
  "axum",
  "chrono",
  "cowlike",
+ "decode_jwt",
  "either",
  "futures",
  "hex",
+ "hmac",
+ "http-body-util",
  "itertools 0.14.0",
  "last_online_tracker",
+ "macro_auth",
  "macro_db_migrator",
+ "macro_env",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "model-entity",
@@ -6899,7 +6998,9 @@ dependencies = [
  "strum",
  "thiserror 2.0.17",
  "tokio",
+ "tower 0.5.2",
  "tracing",
+ "url",
  "utoipa",
  "uuid",
 ]
@@ -6933,8 +7034,10 @@ dependencies = [
  "chrono",
  "either",
  "email_formatting",
+ "hmac",
  "inquire",
  "macro_aws_config",
+ "macro_env",
  "macro_user_id",
  "model-entity",
  "model_notifications",
@@ -6945,6 +7048,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "tokio",
  "tracing",
@@ -6963,8 +7067,10 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "decode_jwt",
  "email_formatting",
  "email_validator",
+ "hmac",
  "http-body-util",
  "itertools 0.14.0",
  "last_online_tracker",
@@ -6997,6 +7103,7 @@ dependencies = [
  "serde",
  "serde_json",
  "ses_client",
+ "sha2",
  "sns_client",
  "sqlx",
  "thiserror 2.0.17",
@@ -8026,6 +8133,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "email_db_client",
+ "entity_access",
  "futures",
  "macro_db_client",
  "macro_db_migrator",
@@ -8080,6 +8188,7 @@ dependencies = [
  "axum",
  "chrono",
  "email_db_client",
+ "entity_access",
  "http-body-util",
  "last_online_tracker",
  "macro_auth",
@@ -8088,8 +8197,10 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_user_id",
  "macro_uuid",
  "model",
+ "model-entity",
  "models_permissions",
  "models_properties",
  "notification",
@@ -12384,6 +12495,12 @@ name = "zlib-rs"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3be3d40e40a133f9c916ee3f9f4fa2d9d63435b5fbe1bfc6d9dae0aa0ada1513"
+
+[[package]]
+name = "zmij"
+version = "1.0.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zopfli"

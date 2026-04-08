@@ -147,12 +147,11 @@ export function ChatInput(props: ChatInputComponentProps) {
       <Match when={!isTouchDevice()}>
         <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
           {props.extraRightControls?.()}
-          <Tooltip tooltip="Enter to send with Opus" placement="top">
-            <div class="flex items-center gap-1">
+          <Tooltip tooltip="Enter to send" placement="top">
+            <div class="flex items-center">
               <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
                 <Hotkey shortcut="Enter" />
               </div>
-              <span>Opus</span>
             </div>
           </Tooltip>
         </div>

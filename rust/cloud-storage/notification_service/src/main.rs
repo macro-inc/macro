@@ -1,5 +1,7 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
+use crate::api::user_notification::BLOCKABLE_NOTIFICATIONS;
+use ::notification::domain::models::email_notification_digest::ports::DigestBatch;
 use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
@@ -10,22 +12,21 @@ use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
 use config::Config;
 use email_formatting::EmailDigestNotification;
+use hmac::{Hmac, Mac};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use secretsmanager_client::SecretManager;
+use sha2::Sha256;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 
 mod api;
 mod config;
-#[allow(dead_code)]
 mod env;
 mod model;
 mod notification;
-#[allow(dead_code)]
-mod templates;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
@@ -65,7 +66,15 @@ pub async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
 
+    let unsubscribe_hmac_secret = secretsmanager_client
+        .get_maybe_secret_value(config.environment, config::UrlSigningHmac::new()?)
+        .await?;
+
     let vars = config::Vars::new()?;
+
+    let hmac_key = Hmac::<Sha256>::new_from_slice(unsubscribe_hmac_secret.as_ref().as_bytes())
+        .expect("HMAC accepts any key size");
+
     let redis_client =
         redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
 
@@ -144,7 +153,12 @@ pub async fn main() -> anyhow::Result<()> {
         sns_endpoint_manager,
         platform_config,
     );
-    let ingress_state = ::notification::inbound::http::NotificationRouterState::new(reader_service);
+    let ingress_state = ::notification::inbound::http::NotificationRouterState::new(
+        reader_service,
+        &BLOCKABLE_NOTIFICATIONS,
+        hmac_key.clone(),
+        jwt_args.clone(),
+    );
 
     // Set up egress worker for delivering notifications from the queue
     let egress_repository =
@@ -206,11 +220,15 @@ pub async fn main() -> anyhow::Result<()> {
         tracing::info!("starting notification egress worker");
         worker_clone.run_notifications().await
     });
+
+    let env = config.environment;
+    let digest_batch_to_email = move |batch: DigestBatch| {
+        EmailDigestNotification::new_from_digest_batch(batch, env, hmac_key.clone())
+    };
+
     tokio::spawn(async move {
         tracing::info!("starting digest worker");
-        worker
-            .run_digests(EmailDigestNotification::new_from_digest_batch)
-            .await
+        worker.run_digests(digest_batch_to_email).await
     });
 
     // Set up ingress worker for processing notification requests from the ingress queue

@@ -1,0 +1,30 @@
+[package]
+edition = "2024"
+name = "decode_jwt"
+publish = false
+version = "0.1.0"
+
+[features]
+local_auth = []
+
+[dependencies]
+axum = { workspace = true }
+axum-extra = { workspace = true }
+macro_auth = { path = "../macro_auth" }
+macro_user_id = { path = "../macro_user_id" }
+model-error-response = { path = "../model-error-response" }
+model_user = { path = "../model_user" }
+serde = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+cookie = { workspace = true }
+http-body-util = { workspace = true }
+jsonwebtoken = { workspace = true }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+serde_json = { workspace = true }
+serde_urlencoded = "0.7"
+tokio = { workspace = true, features = ["macros", "rt"] }
+tower = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }

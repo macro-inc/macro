@@ -42,7 +42,10 @@ pub fn generate_session_code() -> String {
 /// Returns the default redirect url based on the environment
 pub fn default_redirect_url() -> Url {
     match Environment::new_or_prod() {
-        Environment::Local => "http://localhost:3000".parse().unwrap(), // We don't really care about redirect in local
+        Environment::Local => {
+            let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+            format!("http://localhost:{port}").parse().unwrap()
+        }
         Environment::Develop => "https://dev.macro.com/app".parse().unwrap(),
         Environment::Production => "https://macro.com/app".parse().unwrap(),
     }

@@ -1,13 +1,17 @@
 use askama::Template;
 use chrono::{DateTime, Utc};
+use hmac::Hmac;
+use macro_env::Environment;
+use macro_service_urls::EnvExtMacroServiceUrls;
 use macro_user_id::cowlike::CowLike;
 use model_notifications::{NotifEvent, NotificationTitle};
 use notification::domain::models::{
     Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, UserNotificationRow,
-    email_notification_digest::ports::DigestBatch, queue_message::EmailContent,
+    email_notification_digest::ports::DigestBatch, queue_message::EmailContent, signing::SignedUrl,
 };
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::time::Duration;
 
 #[derive(Template)]
@@ -16,6 +20,8 @@ struct DigestTemplate {
     notifs: Vec<NotifPreview>,
     num_truncated: usize,
     total_count: usize,
+    /// the signed url which allows a client to unsubscribe from the email in an unauthenticated context
+    unsubscribe_url: SignedUrl,
 }
 
 struct NotifPreview {
@@ -50,7 +56,11 @@ pub struct EmailDigestNotification {
 }
 
 impl EmailDigestNotification {
-    pub fn new_from_digest_batch(digest: DigestBatch) -> Result<Self, Report> {
+    pub fn new_from_digest_batch(
+        digest: DigestBatch,
+        env: Environment,
+        sha: Hmac<Sha256>,
+    ) -> Result<Self, Report> {
         let DigestBatch {
             user_id: _,
             notifications,
@@ -75,10 +85,22 @@ impl EmailDigestNotification {
         let preview_len = notifs.len();
         let num_truncated = input_len - preview_len;
 
+        let mut unsubscribe_url = env.notification_service();
+        unsubscribe_url.set_path(&format!(
+            "/user_notifications/preferences/{}/disable",
+            Self::TYPE_NAME
+        ));
+        unsubscribe_url
+            .query_pairs_mut()
+            .append_pair("id", digest.user_id.as_ref())
+            .finish();
+        let unsubscribe_url = SignedUrl::new(unsubscribe_url, sha);
+
         let inner_html_string = DigestTemplate {
             notifs,
             num_truncated,
             total_count: input_len,
+            unsubscribe_url,
         }
         .render()?;
 

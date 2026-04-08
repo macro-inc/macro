@@ -47,6 +47,7 @@ use sync_service_client::SyncServiceClient;
 env_var!(
     struct McpEnvVars {
         DatabaseUrl,
+        EmailScheduledQueue,
         DocumentStorageServiceUrl,
         SyncServiceUrl,
         SyncServiceAuthKey,
@@ -102,6 +103,9 @@ async fn main() -> anyhow::Result<()> {
 
     let macro_env = macro_env::Environment::new_or_prod();
     let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
+    let sqs_client = sqs_client::SQS::new(queue_aws_client)
+        .email_scheduled_queue(env_vars.email_scheduled_queue.as_ref());
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -157,7 +161,6 @@ async fn main() -> anyhow::Result<()> {
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
     let channels_service = ChannelServiceImpl::new(
@@ -165,6 +168,7 @@ async fn main() -> anyhow::Result<()> {
         PgUserRepo::new(db.clone()),
         frecency_storage,
     );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         frecency_service,
@@ -218,22 +222,41 @@ async fn main() -> anyhow::Result<()> {
         NoOpTaskProperties,
         NoOpConnectionService,
     );
-    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
+    )));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
-        entity_access_service,
+        (*entity_access_service).clone(),
         lexical_client_for_tools,
     );
 
     // Build properties tool context
     let properties_service = properties::PropertiesServiceImpl::new(
         properties::PropertiesPgRepo::new(db.clone()),
-        Some(properties::PermissionServiceImpl::new(db.clone())),
+        Some(properties::PermissionServiceImpl::new(
+            db.clone(),
+            entity_access_service.clone(),
+        )),
         Some(NoOpNotificationService),
     );
     let properties_tool_context =
         properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+
+    // Build email tool context
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        Arc::new(EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            sqs_client.clone(),
+            0,
+        )),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            db.clone(),
+        ))),
+    );
 
     // Build the ToolServiceContext
     let tool_context = ToolServiceContext {
@@ -260,8 +283,10 @@ async fn main() -> anyhow::Result<()> {
                 .with_static_file_client(static_file_service_client),
         ),
         soup_service,
+        email_service: email_service_for_tools,
         document_tool_context,
         properties_tool_context,
+        email_tool_context,
     };
 
     tracing::info!("initialized tool context");

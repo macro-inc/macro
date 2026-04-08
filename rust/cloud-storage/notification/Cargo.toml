@@ -29,11 +29,16 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 cowlike = { path = "../cowlike" }
+decode_jwt = { path = "../decode_jwt" }
 either = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+hmac = { workspace = true }
 itertools = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
+macro_auth = { path = "../macro_auth" }
+macro_env = { path = "../macro_env" }
+macro_service_urls = { path = "../macro_service_urls" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
@@ -57,10 +62,14 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
+url = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+http-body-util = { workspace = true }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 rate_limit = { path = "../rate_limit", features = ["testing"] }
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+tower = { workspace = true }

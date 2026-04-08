@@ -5,7 +5,7 @@ import { createToolRenderer } from './ToolRenderer';
 // Runtime type for successful web fetch (schema differs from generated types)
 const handler = createToolRenderer({
   name: 'web_fetch',
-  renderCall: (ctx) => (
+  render: (ctx) => (
     <BaseTool icon={Globe} renderContext={ctx.renderContext} type="call">
       Fetched{' '}
       <a
@@ -18,7 +18,6 @@ const handler = createToolRenderer({
       </a>
     </BaseTool>
   ),
-  renderResponse: (_) => undefined,
 });
 
 export const webFetchHandler = handler;

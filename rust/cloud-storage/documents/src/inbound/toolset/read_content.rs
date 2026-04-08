@@ -68,7 +68,7 @@ where
 {
     type Output = ReadContentResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, document_id=?self.document_id), err)]
     async fn call(
         &self,
         service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,

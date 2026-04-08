@@ -29,6 +29,7 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export default function InteractiveOnboarding() {
   const analytics = useAnalytics();
@@ -38,10 +39,15 @@ export default function InteractiveOnboarding() {
   const tutorialCompleted = useTutorialCompleted();
   const location = useLocation();
 
+  const isTouch = isTouchDevice();
+
   const hasPaid = useHasPaidAccess();
-  const lessons = hasPaid()
+  const allLessons = hasPaid()
     ? LESSONS.filter((l) => l.id !== 'choose-plan')
     : LESSONS;
+  const lessons = isTouch
+    ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'choose-plan')
+    : allLessons;
 
   const testMode = new URLSearchParams(location.search).has('test');
   if (testMode) {
@@ -233,13 +239,24 @@ export default function InteractiveOnboarding() {
   );
 
   // Mark tutorial complete on the backend once the email-invite lesson is
-  // completed or skipped — before the paywall step.
+  // completed or skipped — before the paywall step. On touch devices there is
+  // no email-invite step, so we complete after the welcome lesson instead.
   createEffect(() => {
-    const invite = state
-      .lessons()
-      .find((l) => l.definition.id === 'email-invite');
-    if (invite && (invite.completed || invite.skipped) && !testMode) {
-      completeTutorial.mutate(undefined);
+    if (testMode) return;
+    if (isTouch) {
+      const welcome = state
+        .lessons()
+        .find((l) => l.definition.id === 'welcome');
+      if (welcome && (welcome.completed || welcome.skipped)) {
+        completeTutorial.mutate(undefined);
+      }
+    } else {
+      const invite = state
+        .lessons()
+        .find((l) => l.definition.id === 'email-invite');
+      if (invite && (invite.completed || invite.skipped)) {
+        completeTutorial.mutate(undefined);
+      }
     }
   });
 
@@ -351,7 +368,63 @@ export default function InteractiveOnboarding() {
               }
             >
               {(lesson) => (
-                <>
+                <Show
+                  when={!isTouch}
+                  fallback={
+                    /* Touch layout — single vertical column */
+                    <div class="size-full flex flex-col items-center overflow-y-auto p-6">
+                      <div
+                        style={bodyStyle()}
+                        class="flex flex-col items-center text-center gap-6 w-full max-w-md my-auto"
+                      >
+                        <div class="w-24 opacity-20">
+                          <MacroLogo class="fill-ink" />
+                        </div>
+                        <h2 class="text-3xl font-semibold text-ink">
+                          {lesson().definition.title}
+                        </h2>
+                        <Show when={lesson().definition.subtitle}>
+                          <p class="text-base text-ink/60">
+                            {lesson().definition.subtitle}
+                          </p>
+                        </Show>
+                        <div class="onboarding-stagger">
+                          <Dynamic
+                            component={lesson().definition.content}
+                            onComplete={handleLessonComplete}
+                            isActive={true}
+                            scopeId={scopeId}
+                          />
+                        </div>
+                        {/* Show plan cards inline on touch for choose-plan */}
+                        <Show when={lesson().definition.demo}>
+                          {(Demo) => (
+                            <div class="w-full">
+                              <Dynamic
+                                component={Demo()}
+                                onComplete={handleLessonComplete}
+                                isActive={true}
+                                scopeId={scopeId}
+                              />
+                            </div>
+                          )}
+                        </Show>
+                        <Show when={!lesson().definition.hideContinue}>
+                          <div class="w-full flex flex-col gap-2 mt-2">
+                            <ContinueButton
+                              ref={(el) => {
+                                continueButtonRef = el;
+                              }}
+                              onClick={handleContinue}
+                              label={continueLabel()}
+                              disabled={!readyToContinue()}
+                            />
+                          </div>
+                        </Show>
+                      </div>
+                    </div>
+                  }
+                >
                   {/* Left panel — text content (~1/3) */}
                   <div class="w-1/3 h-full min-w-0 flex flex-col border-r border-edge-muted">
                     {/* Header */}
@@ -436,7 +509,7 @@ export default function InteractiveOnboarding() {
                       </Show>
                     </div>
                   </div>
-                </>
+                </Show>
               )}
             </Show>
           </div>

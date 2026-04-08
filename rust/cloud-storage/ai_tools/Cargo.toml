@@ -19,7 +19,7 @@ connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }
 documents = { path = "../documents", features = ["ai_tools"] }
-email = { path = "../email", features = ["ai_schema", "axum", "outbound"] }
+email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
@@ -49,6 +49,7 @@ serde.workspace = true
 serde_json.workspace = true
 properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 sqlx.workspace = true
 strum.workspace = true
 tokio.workspace = true

@@ -1,5 +1,4 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
-import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { NotificationType } from '@core/types';
@@ -8,6 +7,7 @@ import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import type { NotificationSource } from './notification-source';
+import { getChannelParams } from '@block-channel/utils/link';
 
 const CHANNEL_EVENT_TYPES = [
   'channel_mention',
@@ -22,7 +22,7 @@ function openSplitIfNotOpen(
   layoutManager: SplitManager,
   type: BlockName | BlockAlias | 'component',
   id: string,
-  newSplit: boolean = false
+  options: { newSplit?: boolean; params?: Record<string, string> } = {}
 ) {
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
@@ -30,11 +30,11 @@ function openSplitIfNotOpen(
     return;
   }
   layoutManager.openWithSplit(
-    { type, id },
+    { type, id, params: options.params },
     {
       activate: true,
       referredFrom: null,
-      preferNewSplit: newSplit,
+      preferNewSplit: options.newSplit,
     }
   );
 }
@@ -62,15 +62,21 @@ async function openChannelNotification(
     threadId = notification.notification_metadata.content.threadId;
   }
 
-  openSplitIfNotOpen(layoutManager, 'channel', channelId, newSplit);
+  const params = messageId ? getChannelParams(messageId, threadId) : undefined;
 
+  openSplitIfNotOpen(layoutManager, 'channel', channelId, {
+    newSplit,
+    params,
+  });
+
+  if (!messageId) return;
+
+  // Also call goToLocationFromParams for already-open channels where
+  // the split existed before and params weren't applied as initial props.
   const orchestrator = layoutManager.getOrchestrator();
   const handle = await orchestrator.getBlockHandle(channelId, 'channel');
 
-  handle?.goToLocationFromParams({
-    [CHANNEL_URL_PARAMS.message]: messageId,
-    [CHANNEL_URL_PARAMS.thread]: threadId,
-  });
+  handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
 }
 
 function safeFileTypeToBlockName(fileType: string | undefined | null) {
@@ -105,20 +111,22 @@ function getSupportedHandler(
       'ai_response',
       () =>
         async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, 'chat', notification.entity_id, newSplit)
+          openSplitIfNotOpen(lm, 'chat', notification.entity_id, { newSplit })
     )
     .with('new_email', () => {
       const meta = notification.notification_metadata;
       if (meta.tag !== 'new_email') return null;
       return async (lm: SplitManager, newSplit: boolean = false) => {
-        openSplitIfNotOpen(lm, 'email', meta.content.threadId, newSplit);
+        openSplitIfNotOpen(lm, 'email', meta.content.threadId, { newSplit });
       };
     })
     .with(
       'channel_invite',
       () =>
         async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, 'channel', notification.entity_id, newSplit)
+          openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
+            newSplit,
+          })
     )
     .with('document_mention', () => {
       const meta = notification.notification_metadata;
@@ -128,7 +136,7 @@ function getSupportedHandler(
           lm,
           safeFileTypeToBlockName(meta.content.fileType),
           notification.entity_id,
-          newSplit
+          { newSplit }
         );
     })
     .with('invite_to_team', () => null)
@@ -136,7 +144,7 @@ function getSupportedHandler(
       const meta = notification.notification_metadata;
       if (meta.tag !== 'task_assigned') return null;
       return async (lm: SplitManager, newSplit: boolean = false) => {
-        openSplitIfNotOpen(lm, 'task', meta.content.taskId, newSplit);
+        openSplitIfNotOpen(lm, 'task', meta.content.taskId, { newSplit });
       };
     })
     .with('mentioned_in_document_comment', () => {
@@ -147,7 +155,7 @@ function getSupportedHandler(
           lm,
           safeFileTypeToBlockName(meta.content.fileType),
           notification.entity_id,
-          newSplit
+          { newSplit }
         );
     })
     .with('replied_to_document_comment_thread', () => {
@@ -158,7 +166,7 @@ function getSupportedHandler(
           lm,
           safeFileTypeToBlockName(meta.content.fileType),
           notification.entity_id,
-          newSplit
+          { newSplit }
         );
     })
     .with('commented_on_document', () => {
@@ -169,7 +177,7 @@ function getSupportedHandler(
           lm,
           safeFileTypeToBlockName(meta.content.fileType),
           notification.entity_id,
-          newSplit
+          { newSplit }
         );
     })
     .exhaustive();

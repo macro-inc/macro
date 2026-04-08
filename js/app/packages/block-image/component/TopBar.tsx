@@ -10,6 +10,7 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
+import { FileTypeChip } from '@core/component/FileTypeChip';
 import {
   ReferencesButton,
   REFERENCES_DRAWER_ID,
@@ -85,7 +86,7 @@ export function TopBar() {
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel />
+        <BlockItemSplitLabel badges={<FileTypeChip />} />
       </SplitHeaderLeft>
 
       <ResponsivePermissionsBadge />

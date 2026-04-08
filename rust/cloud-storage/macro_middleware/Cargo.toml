@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 all = ["auth", "cloud_storage", "tracking", "user_permissions"]
-auth = ["dep:macro_auth", "dep:url"]
+auth = ["dep:decode_jwt", "dep:macro_auth", "dep:url"]
 cloud_storage = [
   "dep:macro_share_permissions",
   "dep:macro_user_id",
@@ -15,7 +15,7 @@ cloud_storage = [
   "macro_db_client",
 ]
 default = ["all"]
-local_auth = []
+local_auth = ["decode_jwt/local_auth"]
 macro_db_client = ["dep:macro_db_client", "dep:sqlx"]
 tracking = ["dep:ip_extractor"]
 user_permissions = ["dep:macro_user_id", "dep:user_quota", "macro_db_client"]
@@ -23,12 +23,14 @@ user_permissions = ["dep:macro_user_id", "dep:user_quota", "macro_db_client"]
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
+axum-extra = { workspace = true }
+decode_jwt = { path = "../decode_jwt", optional = true }
 http-body-util = { workspace = true }
 ip_extractor = { path = "../ip_extractor", optional = true }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_db_client = { path = "../macro_db_client", optional = true }
-macro_env_var = { path = "../macro_env_var" }
 macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
 macro_share_permissions = { path = "../macro_share_permissions", optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
 macro_uuid = { path = "../macro_uuid" }
@@ -48,3 +50,7 @@ tracing = { workspace = true }
 url = { workspace = true, optional = true }
 user_quota = { path = "../user_quota", optional = true }
 uuid = { workspace = true }
+
+[dev-dependencies]
+serde_urlencoded = "0.7"
+urlencoding = { workspace = true }

@@ -10,6 +10,7 @@ import {
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
 import type { ChannelEntity } from '@entity';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { queryReadyGate } from '@queries/gate';
@@ -25,6 +26,7 @@ import type {
   QuickAccessEntity,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
+import { itemToSafeName } from '@core/constant/allBlocks';
 
 /**
  * index entry for sorted lists.
@@ -66,18 +68,25 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
       } as QuickAccessEntity;
 
     case 'document': {
-      if (item.subType?.type === 'task') {
-        return {
-          ...base,
-          type: 'document',
-          fileType: 'md',
-          subType: item.subType,
-        } as QuickAccessEntity;
-      }
+      const fileType = item.fileType ?? undefined;
+      const subType = item.subType ?? undefined;
+      const name = formatDocumentName(
+        itemToSafeName({
+          name: item.rawName ?? item.name,
+          type: item.type,
+          fileType,
+          subType,
+        }),
+        fileType,
+        {
+          fullyQualifiedBlockName: true,
+        }
+      );
       return {
         ...base,
+        name,
         type: 'document',
-        fileType: item.fileType ?? undefined,
+        fileType,
         subType: item.subType,
       } as QuickAccessEntity;
     }

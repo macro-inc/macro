@@ -16,15 +16,10 @@ function getGaClientId(): Promise<string | undefined> {
 
     const timeout = setTimeout(() => resolve(undefined), 500);
 
-    gtag(
-      'get',
-      import.meta.env.VITE_GA_MEASUREMENT_ID,
-      'client_id',
-      (clientId: string) => {
-        clearTimeout(timeout);
-        resolve(clientId);
-      }
-    );
+    gtag('get', 'G-52HPEL3FTV', 'client_id', (clientId: string) => {
+      clearTimeout(timeout);
+      resolve(clientId);
+    });
   });
 }
 

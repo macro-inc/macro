@@ -50,6 +50,15 @@ export function setHistoryItemName(itemId: string, name: string) {
     ...prev,
     name,
     rawName: name,
+    updatedAt: new Date().toISOString(),
+  }));
+}
+
+export function setHistoryItemFileType(itemId: string, fileType: string) {
+  return setHistoryItemData(itemId, (prev) => ({
+    ...prev,
+    fileType,
+    updatedAt: new Date().toISOString(),
   }));
 }
 

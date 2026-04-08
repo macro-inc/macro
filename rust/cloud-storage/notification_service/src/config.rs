@@ -16,6 +16,11 @@ env_var!(
     }
 );
 
+env_var!(
+    #[derive(Clone)]
+    pub(crate) struct UrlSigningHmac;
+);
+
 #[derive(Debug)]
 pub struct Config {
     /// The services base url including the scheme.

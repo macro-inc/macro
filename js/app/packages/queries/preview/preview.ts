@@ -90,6 +90,11 @@ function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
   );
 }
 
+export function setPreviewFileType(itemId: string, fileType: string) {
+  const prev = getPreviewData(itemId);
+  if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, fileType }));
+}
+
 /** Sets the preview name in the cache. If the item is not in the cache,
  * we will optimistically update the name and prefetch the item. */
 export function setPreviewName({
@@ -102,7 +107,12 @@ export function setPreviewName({
   itemType?: ItemType;
 }) {
   const prev = getPreviewData(itemId);
-  if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, name }));
+  if (prev)
+    return setPreviewData(itemId, (prev) => ({
+      ...prev,
+      rawName: name,
+      name,
+    }));
 
   if (!itemType) {
     console.warn('no preview item type provided for cache miss, using default');
@@ -110,6 +120,7 @@ export function setPreviewName({
 
   let defaultPreviewItem: AccessiblePreviewItem = {
     id: itemId,
+    rawName: name,
     name,
     loading: false,
     access: 'access',

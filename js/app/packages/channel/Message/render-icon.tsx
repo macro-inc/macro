@@ -1,12 +1,14 @@
 import type { Component, JSX } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 
 export function renderIcon(
-  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | string
+  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | string,
+  className?: string
 ): JSX.Element {
   if (typeof icon === 'string') {
-    return <img src={icon} alt="" class="size-4" />;
+    return <img src={icon} alt="" class={cn('size-4', className)} />;
   }
 
   const Icon = icon;
-  return <Icon class="size-4" />;
+  return <Icon class={cn('size-4', className)} />;
 }

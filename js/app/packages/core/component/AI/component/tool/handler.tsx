@@ -2,26 +2,30 @@ import { isErr } from '@core/util/maybeResult';
 import {
   deserializeToolCall,
   deserializeToolResponse,
-  type NamedTool,
-  type ToolContext,
-  type ToolHandler,
-  type ToolHandlerMap,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
+import { getThreadHandler } from './GetThread';
 import { listEntitiesHandler } from './ListEntities';
 import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
-import { readThreadHandler } from './ReadThread';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
+import { readThreadHandler } from './ReadThread';
 import { contentSearchHandler, nameSearchHandler } from './Search';
+import { sendEmailHandler } from './SendEmail';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
-import type { RenderContext } from './ToolRenderer';
+import type {
+  RenderContext,
+  ToolHandler,
+  ToolHandlerMap,
+  ToolRenderContext,
+} from './ToolRenderer';
+import { updateThreadLabelsHandler } from './UpdateThreadLabels';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
@@ -31,12 +35,15 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   bash_code_execution: bashCodeExecutionHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
+  GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
   ReadThread: readThreadHandler,
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
+  SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
   text_editor_code_execution: textEditorCodeExecutionHandler,
+  UpdateThreadLabels: updateThreadLabelsHandler,
   web_fetch: webFetchHandler,
   web_search: webSearchHandler,
 };
@@ -45,61 +52,63 @@ type ToolProps = {
   tool_id: string;
   json: unknown;
   name: string;
+  response?: {
+    json: unknown;
+    name: string;
+  };
   part_index: number;
   chat_id: string;
   message_id: string;
-  type: 'call' | 'response' | 'error';
-  // TODO: this should be removed. Render one of "call" | "response" | "error"
   isComplete: boolean;
   renderContext: RenderContext;
 };
 
-export function RenderTool(props: ToolProps) {
-  let handler: ToolHandler<NamedTool, RenderContext>;
-  let context: ToolContext<NamedTool>;
+type TriggerToolArgs = Omit<
+  ToolProps,
+  'renderContext' | 'response' | 'isComplete'
+> & {
+  type: 'call' | 'response' | 'error';
+};
 
-  if (props.type === 'call') {
-    const maybeTool = deserializeToolCall({
+export function RenderTool(props: ToolProps) {
+  const maybeTool = deserializeToolCall({
+    id: props.tool_id,
+    json: props.json,
+    name: props.name as ToolName,
+  });
+  if (isErr(maybeTool)) return null;
+
+  const tool = maybeTool[1];
+  const handler = toolHandlers[tool.name] as ToolHandler<
+    ToolName,
+    RenderContext
+  >;
+  const context: Omit<ToolRenderContext<ToolName>, 'response'> = {
+    chat_id: props.chat_id,
+    message_id: props.message_id,
+    part_index: props.part_index,
+    tool,
+    isComplete: props.isComplete,
+  };
+
+  const response = () => {
+    if (!props.response) return undefined;
+
+    const maybeResponse = deserializeToolResponse({
       id: props.tool_id,
-      json: props.json,
-      name: props.name as ToolName,
+      json: props.response.json,
+      name: props.response.name as ToolName,
     });
-    if (isErr(maybeTool)) return null;
-    const tool = maybeTool[1];
-    handler = toolHandlers[tool.name].call;
-    const ctx: ToolContext<NamedTool<ToolName, 'call'>> = {
-      chat_id: props.chat_id,
-      message_id: props.message_id,
-      part_index: props.part_index,
-      tool,
-      isComplete: props.isComplete,
-    };
-    context = ctx;
-  } else if (props.type === 'response') {
-    const maybeTool = deserializeToolResponse({
-      id: props.tool_id,
-      json: props.json,
-      name: props.name as ToolName,
-    });
-    if (isErr(maybeTool)) return null;
-    const tool = maybeTool[1];
-    handler = toolHandlers[tool.name].response;
-    const ctx: ToolContext<NamedTool<ToolName, 'response'>> = {
-      chat_id: props.chat_id,
-      message_id: props.message_id,
-      part_index: props.part_index,
-      tool,
-      isComplete: props.isComplete,
-    };
-    context = ctx;
-  } else {
-    return;
-  }
+
+    if (isErr(maybeResponse)) return undefined;
+    return maybeResponse[1];
+  };
 
   return (
     <Dynamic
       component={handler.render}
       {...context}
+      response={response()}
       renderContext={{
         isStreaming: props.renderContext.renderContext.isStreaming,
       }}
@@ -107,7 +116,7 @@ export function RenderTool(props: ToolProps) {
   );
 }
 
-export async function triggerToolCall(args: Omit<ToolProps, 'renderContext'>) {
+export async function triggerToolCall(args: TriggerToolArgs) {
   const { tool_id, json, name, chat_id, message_id, part_index, type } = args;
 
   if (type === 'error') {
@@ -130,9 +139,14 @@ export async function triggerToolCall(args: Omit<ToolProps, 'renderContext'>) {
   if (isErr(maybeTool)) return;
 
   const tool = maybeTool[1];
-  const handler = toolHandlers[tool.name][type];
-  if (!handler.handle) return;
-  const context: ToolContext<NamedTool> = {
+  const handler = toolHandlers[tool.name] as ToolHandler<
+    ToolName,
+    RenderContext
+  >;
+  const handle = type === 'call' ? handler.handleCall : handler.handleResponse;
+  if (!handle) return;
+
+  const context = {
     chat_id,
     message_id,
     part_index,
@@ -140,6 +154,5 @@ export async function triggerToolCall(args: Omit<ToolProps, 'renderContext'>) {
     isComplete: type !== 'call',
   };
 
-  // TODO
-  return handler.handle(context as any);
+  return handle(context as never);
 }

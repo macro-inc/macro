@@ -31,7 +31,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ], optional = true }
 hex = { workspace = true }
-hmac = "0.12.1"
+hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_env = { path = "../macro_env", features = ["frontend_url"] }
 regex = { workspace = true }

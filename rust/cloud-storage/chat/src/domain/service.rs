@@ -4,36 +4,49 @@ use crate::domain::{
     models::{ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs},
     ports::{ChatRepo, ChatService},
 };
+use ai::types::{AssistantMessagePart, ChatMessageContent};
+use ai_toolset::{AsyncToolSet, RequestContext, tool_object::UserToolResponse};
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
+use std::sync::Arc;
 use unicode_segmentation::UnicodeSegmentation;
 
-/// Concrete service implementation that delegates to a [`ChatRepo`].
-pub struct ChatServiceImpl<R> {
+/// Concrete service implementation that delegates to a [`ChatRepo`]
+pub struct ChatServiceImpl<R, ToolSetContext>
+where
+    ToolSetContext: Clone + Send + Sync + 'static,
+{
+    // toolset should be replaced with trait;
+    toolset: Arc<AsyncToolSet<ToolSetContext>>,
+    context: ToolSetContext,
     repo: R,
 }
 
-impl<R: ChatRepo> ChatServiceImpl<R> {
-    /// Create a new [`ChatServiceImpl`] wrapping the given repo.
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+impl<R: ChatRepo, ToolSetContext> ChatServiceImpl<R, ToolSetContext>
+where
+    ToolSetContext: Clone + Send + Sync + 'static,
+{
+    /// Create a new [`ChatServiceImpl`] wrapping the given repo and tool executor.
+    pub fn new(
+        repo: R,
+        toolset: Arc<AsyncToolSet<ToolSetContext>>,
+        context: ToolSetContext,
+    ) -> Self {
+        Self {
+            repo,
+            toolset,
+            context,
+        }
     }
 }
 
-/// Extract an authenticated user ID from an [`EntityAccessReceipt`], or return an error.
-fn extract_user_id<T: entity_access::domain::models::RequiredPermission>(
-    receipt: &EntityAccessReceipt<T>,
-) -> Result<MacroUserIdStr<'static>, ChatErr> {
-    match receipt.auth() {
-        EntityAccessAuth::Authenticated(id) => Ok(id.clone()),
-        _ => Err(ChatErr::Unknown(anyhow::anyhow!("unauthenticated"))),
-    }
-}
-
-impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
+impl<R: ChatRepo, ToolSetContext> ChatService for ChatServiceImpl<R, ToolSetContext>
+where
+    ToolSetContext: Clone + Send + Sync + 'static,
+{
     #[tracing::instrument(err, skip(self))]
     async fn create(
         &self,
@@ -52,12 +65,12 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<GetChatResponse, ChatErr> {
-        let user_id = extract_user_id(&entity_access_receipt)?;
+        let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
 
         let (chat, access_level) = tokio::join!(
             self.repo.get_chat(chat_id),
-            self.repo.get_access_level(user_id, chat_id),
+            self.repo.get_access_level(user_id.to_owned(), chat_id),
         );
 
         Ok(GetChatResponse {
@@ -71,13 +84,13 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, ChatErr> {
-        let user_id = extract_user_id(&entity_access_receipt)?;
+        let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
 
         let chat = self.repo.get_metadata(chat_id).await?;
         self.repo
             .copy_chat(
-                user_id,
+                user_id.to_owned(),
                 chat_id,
                 CopyChatArgs {
                     name: format!("{} Copy", chat.name),
@@ -116,10 +129,9 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         {
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }
-
-        let user_id = extract_user_id(&entity_access_receipt)?;
+        let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
-        self.repo.patch(user_id, chat_id, args).await
+        self.repo.patch(user_id.to_owned(), chat_id, args).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -141,5 +153,219 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
     ) -> Result<SharePermissionV2, ChatErr> {
         let chat_id = &entity_access_receipt.entity().entity_id;
         self.repo.get_permissions(chat_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, new_args))]
+    async fn update_tool_call(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+        new_args: serde_json::Value,
+    ) -> Result<(), ChatErr> {
+        let chat_id = &entity_access_receipt.entity().entity_id;
+
+        let mut parts = self
+            .get_tool_call_parts(chat_id, message_id, tool_call_id)
+            .await?;
+
+        let Some((name, _)) = find_tool_call(&parts, tool_call_id) else {
+            return Err(ChatErr::NotFound);
+        };
+
+        if !self.toolset.is_valid_tool(name, &new_args) {
+            return Err(ChatErr::BadRequest("Invalid tool".into()));
+        }
+
+        update_tool_call_args(&mut parts, tool_call_id, new_args);
+
+        let content = ChatMessageContent::AssistantMessageParts(parts);
+        self.repo
+            .update_message_content(chat_id, message_id, &content)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, response))]
+    async fn update_tool_response(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+        response: UserToolResponse<serde_json::Value>,
+    ) -> Result<(), ChatErr> {
+        let chat_id = &entity_access_receipt.entity().entity_id;
+        let mut parts = self
+            .get_tool_call_parts(chat_id, message_id, tool_call_id)
+            .await?;
+
+        let response_json = serde_json::to_value(response).map_err(anyhow::Error::from)?;
+        update_tool_response_json(&mut parts, tool_call_id, response_json);
+
+        let content = ChatMessageContent::AssistantMessageParts(parts);
+        self.repo
+            .update_message_content(chat_id, message_id, &content)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn call_tool(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+        args: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, ChatErr> {
+        let user_id = entity_access_receipt.get_authenticated_user()?.to_owned();
+        let chat_id = entity_access_receipt.entity().entity_id.clone();
+
+        let parts = self
+            .get_tool_call_parts(&chat_id, message_id, tool_call_id)
+            .await?;
+
+        let Some((tool_name, stored_args)) = find_tool_call(&parts, tool_call_id) else {
+            return Err(ChatErr::NotFound);
+        };
+        let tool_name = tool_name.to_owned();
+        let args = match args {
+            Some(args) => {
+                self.update_tool_call(
+                    entity_access_receipt,
+                    message_id,
+                    tool_call_id,
+                    args.clone(),
+                )
+                .await?;
+                args
+            }
+            None => stored_args.clone(),
+        };
+
+        let request_context = RequestContext { user_id };
+
+        let outcome = self
+            .toolset
+            .try_user_tool_call(self.context.clone(), request_context, &tool_name, &args)
+            .await
+            // this should never happen (validation prevents)
+            .map_err(anyhow::Error::from)?;
+
+        let response_json = match outcome {
+            Ok(user_response) => {
+                serde_json::to_value(user_response).map_err(anyhow::Error::from)?
+            }
+            Err(tool_err) => serde_json::json!({ "error": tool_err.description }),
+        };
+
+        // re-fetch parts since update_tool_call modified them
+        let mut parts = self
+            .get_tool_call_parts(&chat_id, message_id, tool_call_id)
+            .await?;
+
+        update_tool_response_json(&mut parts, tool_call_id, response_json.clone());
+
+        let content = ChatMessageContent::AssistantMessageParts(parts);
+        self.repo
+            .update_message_content(&chat_id, message_id, &content)
+            .await?;
+
+        Ok(response_json)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn reject_tool_call(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        message_id: &str,
+        tool_call_id: &str,
+    ) -> Result<(), ChatErr> {
+        let rejected_json =
+            serde_json::to_value(UserToolResponse::Rejected::<()>).map_err(anyhow::Error::from)?;
+
+        let chat_id = &entity_access_receipt.entity().entity_id;
+        let mut parts = self
+            .get_tool_call_parts(chat_id, message_id, tool_call_id)
+            .await?;
+
+        update_tool_response_json(&mut parts, tool_call_id, rejected_json);
+
+        let content = ChatMessageContent::AssistantMessageParts(parts);
+        self.repo
+            .update_message_content(chat_id, message_id, &content)
+            .await
+    }
+}
+
+impl<R: ChatRepo, ToolSetContext> ChatServiceImpl<R, ToolSetContext>
+where
+    ToolSetContext: Clone + Send + Sync + 'static,
+{
+    /// Fetch a message's content and extract its AssistantMessageParts,
+    /// verifying the tool_call_id exists within it.
+    async fn get_tool_call_parts(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        tool_call_id: &str,
+    ) -> Result<Vec<AssistantMessagePart>, ChatErr> {
+        let content = self.repo.get_message_content(chat_id, message_id).await?;
+        match content {
+            ChatMessageContent::AssistantMessageParts(parts) => {
+                let has_tool = parts.iter().any(|part| {
+                    matches!(part, AssistantMessagePart::ToolCall { id, .. } if id == tool_call_id)
+                });
+                if has_tool {
+                    Ok(parts)
+                } else {
+                    Err(ChatErr::NotFound)
+                }
+            }
+            _ => Err(ChatErr::BadRequest(
+                "message does not contain tool calls".to_string(),
+            )),
+        }
+    }
+}
+
+fn find_tool_call<'a>(
+    parts: &'a [AssistantMessagePart],
+    tool_call_id: &str,
+) -> Option<(&'a str, &'a serde_json::Value)> {
+    parts.iter().find_map(|part| match part {
+        AssistantMessagePart::ToolCall { id, name, json } if id == tool_call_id => {
+            Some((name.as_str(), json))
+        }
+        _ => None,
+    })
+}
+
+/// Update the json field of the ToolCall part matching the given tool_call_id.
+fn update_tool_call_args(
+    parts: &mut [AssistantMessagePart],
+    tool_call_id: &str,
+    new_args: serde_json::Value,
+) {
+    for part in parts.iter_mut() {
+        if let AssistantMessagePart::ToolCall { id, json, .. } = part
+            && id == tool_call_id
+        {
+            *json = new_args;
+            return;
+        }
+    }
+}
+
+/// Update the json field of the ToolCallResponseJson part matching the given tool_call_id.
+fn update_tool_response_json(
+    parts: &mut [AssistantMessagePart],
+    tool_call_id: &str,
+    new_json: serde_json::Value,
+) {
+    for part in parts.iter_mut() {
+        if let AssistantMessagePart::ToolCallResponseJson { id, json, .. } = part
+            && id == tool_call_id
+        {
+            *json = new_json;
+            return;
+        }
     }
 }

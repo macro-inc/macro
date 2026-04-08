@@ -20,7 +20,7 @@ use frecency::domain::{
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
-    Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
+    Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod, SortOn,
 };
 use models_soup::{
     comms::SoupChannel,
@@ -385,15 +385,33 @@ where
                 let (main_soup, email_soup, comms_soup) =
                     tokio::join!(main_soup_fut, email_soup_fut, comms_soup_fut);
 
-                Ok(Either::Left(
-                    main_soup?
-                        .chain(email_soup?)
-                        .chain(comms_soup?)
-                        .paginate_on(limit.into(), sort_method)
-                        .filter_on(entity_filter)
-                        .sort_desc()
-                        .into_page(),
-                ))
+                let page = main_soup?
+                    .chain(email_soup?)
+                    .chain(comms_soup?)
+                    .paginate_on(limit.into(), sort_method)
+                    .filter_on(entity_filter.clone())
+                    .sort_desc()
+                    .into_page();
+
+                // Email queries use CROSS JOIN LATERAL which can filter out
+                // threads after the initial LIMIT, making the standard
+                // "len < limit means last page" heuristic unreliable.
+                // Force a cursor when emails are in the response.
+                let has_emails = page
+                    .items
+                    .iter()
+                    .any(|item| matches!(&item.item, SoupItem::EmailThread(_)));
+                let page = if has_emails {
+                    page.ensure_cursor(
+                        limit.into(),
+                        FrecencySoupItem::sort_on(sort_method),
+                        entity_filter,
+                    )
+                } else {
+                    page
+                };
+
+                Ok(Either::Left(page))
             }
             SoupQuery::Frecency(FrecencyQueryInner(cursor)) => Ok(Either::Right(
                 self.handle_advanced_sort(cursor, req.soup_type, req.user, limit)

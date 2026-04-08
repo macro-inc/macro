@@ -28,6 +28,14 @@ import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendCha
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
+import type * as toolTypes from './generated/tools/tool.ts';
+
+type ToolCallArgs = {
+  [K in toolTypes.ToolName]: toolTypes.NamedTool<K, 'call'>['data'];
+};
+type ToolResponseArgs = {
+  [K in toolTypes.ToolName]: toolTypes.NamedTool<K, 'response'>['data'];
+};
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
@@ -227,6 +235,75 @@ export const cognitionApiServiceClient = {
       (result) => result
     );
   },
+  /** Update a tool call's arguments (validates against tool schema server-side). */
+  async updateToolCall<T extends keyof ToolCallArgs>(args: {
+    chat_id: string;
+    messageId: string;
+    toolCallId: string;
+    args: ToolCallArgs[T];
+  }) {
+    return await dcsFetch(`/chats/${args.chat_id}/tool/update`, {
+      method: 'POST',
+      body: JSON.stringify({
+        messageId: args.messageId,
+        toolCallId: args.toolCallId,
+        args: args.args,
+      }),
+    });
+  },
+
+  /** Update a tool response. */
+  async updateToolResponse<T extends keyof ToolResponseArgs>(args: {
+    chat_id: string;
+    messageId: string;
+    toolCallId: string;
+    response: ToolResponseArgs[T];
+  }) {
+    return await dcsFetch(`/chats/${args.chat_id}/tool/response/update`, {
+      method: 'POST',
+      body: JSON.stringify({
+        messageId: args.messageId,
+        toolCallId: args.toolCallId,
+        response: args.response,
+      }),
+    });
+  },
+
+  /** Execute a pending tool call, optionally with updated arguments. */
+  async callTool<T extends keyof ToolCallArgs>(args: {
+    chat_id: string;
+    messageId: string;
+    toolCallId: string;
+    args?: ToolCallArgs[T];
+  }) {
+    return mapOk(
+      await dcsFetch<{ result: unknown }>(`/chats/${args.chat_id}/tool/call`, {
+        method: 'POST',
+        body: JSON.stringify({
+          messageId: args.messageId,
+          toolCallId: args.toolCallId,
+          args: args.args,
+        }),
+      }),
+      (result) => result.result
+    );
+  },
+
+  /** Reject a pending tool call. */
+  async rejectToolCall(args: {
+    chat_id: string;
+    messageId: string;
+    toolCallId: string;
+  }) {
+    return await dcsFetch(`/chats/${args.chat_id}/tool/reject`, {
+      method: 'POST',
+      body: JSON.stringify({
+        messageId: args.messageId,
+        toolCallId: args.toolCallId,
+      }),
+    });
+  },
+
   /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
   async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
     return mapOk(

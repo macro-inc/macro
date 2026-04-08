@@ -10,6 +10,10 @@ import {
 import type { ListView } from '@app/constants/list-views';
 import type { SoupBody } from '@queries/soup/items';
 import { SharedEmailFilter } from '@service-storage/generated/schemas';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 
 /** Shared query filters for the "Signal" tab across Inbox and Email views. */
 export const SIGNAL_QUERY_FILTERS = {
@@ -228,10 +232,22 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...QUERY_FILTERS.task,
-            document_filters: {
-              ...QUERY_FILTERS.task.document_filters,
-              owners: [ctx.userId],
-            },
+            property_filters: [
+              {
+                property_definition_id: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+                entity_type: 'TASK',
+                entity_ids: [ctx.userId],
+              },
+              {
+                property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
+                entity_type: 'TASK',
+                option_ids: [
+                  PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+                  PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+                  PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+                ],
+              },
+            ],
           },
           clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
         };
@@ -328,7 +344,7 @@ type ContextOptionalView = Exclude<ListView, ContextRequiredView>;
  * if the default requires context values that aren't provided.
  *
  * @param view - The list view to get the preset for
- * @param ctx - User context (required for agents, documents, tasks, files)
+ * @param ctx - User context (required for agents, documents, tasks, folders)
  */
 export function getDefaultListViewPreset(
   view: ContextRequiredView,

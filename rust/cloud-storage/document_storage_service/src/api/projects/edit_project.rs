@@ -1,4 +1,5 @@
 use crate::api::context::ApiContext;
+use crate::api::context::EntityAccessService;
 use anyhow::Context;
 use axum::{
     Extension,
@@ -6,7 +7,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::cloud_storage::ensure_access::project::{
+use entity_access::domain::models::EntityPermission;
+use entity_access::inbound::axum_extractors::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor,
 };
 use macro_share_permissions::user_item_access::update_user_item_access;
@@ -46,14 +48,18 @@ pub async fn edit_project_handler_v2(
 }
 
 /// Edits a project.
-#[tracing::instrument(skip(ctx, user_context, project, id), fields(user_id=?user_context.user_id, project_id=?id))]
+#[tracing::instrument(skip(ctx, user_context, project, id, access), fields(user_id=?user_context.user_id, project_id=?id))]
 pub async fn edit_project_handler(
-    ProjectAccessLevelExtractor { access_level, .. }: ProjectAccessLevelExtractor<EditAccessLevel>,
+    access: ProjectAccessLevelExtractor<EditAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     project_context: Extension<BasicProject>,
     Path(Params { id }): Path<Params>,
-    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, PatchProjectRequestV2>,
+    project: ProjectBodyAccessLevelExtractor<
+        EditAccessLevel,
+        PatchProjectRequestV2,
+        EntityAccessService,
+    >,
 ) -> Result<Response, Response> {
     let req = project.into_inner();
 
@@ -66,6 +72,11 @@ pub async fn edit_project_handler(
         )
             .into_response());
     }
+
+    let access_level = match access.entity_access_receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => *access_level,
+        _ => AccessLevel::Edit,
+    };
 
     edit_project_v2(&ctx, user_context, project_context, access_level, id, req)
         .await

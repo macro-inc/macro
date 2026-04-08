@@ -1,12 +1,14 @@
+use crate::api::context::EntityAccessService;
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use entity_access::domain::models::EntityPermission;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_db_client::document::get_document_version;
 use macro_db_client::user_document_view_location::get::get_user_document_view_location;
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::document::response::{GetDocumentResponse, GetDocumentResponseData};
 use model::response::{GenericErrorResponse, GenericResponse};
 use model::user::UserContext;
-use models_permissions::share_permission::access_level::ViewAccessLevel;
+use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
 use sqlx::PgPool;
 
@@ -33,9 +35,9 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, access_level), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user_context, access), fields(user_id=?user_context.user_id))]
 pub async fn handler(
-    DocumentAccessExtractor { access_level, .. }: DocumentAccessExtractor<ViewAccessLevel>,
+    access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
     user_context: Extension<UserContext>,
     Path(Params {
@@ -73,9 +75,14 @@ pub async fn handler(
             }
         };
 
+    let user_access_level = match access.entity_access_receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => *access_level,
+        _ => AccessLevel::View,
+    };
+
     let response_data = GetDocumentResponseData {
         document_metadata,
-        user_access_level: access_level,
+        user_access_level,
         view_location: view_location.map(|v| v.location),
     };
     GenericResponse::builder()

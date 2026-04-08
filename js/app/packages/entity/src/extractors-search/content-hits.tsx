@@ -17,6 +17,9 @@ interface ExtractorContentHitsProps {
 export function ContentHits(props: ExtractorContentHitsProps) {
   const contentHits = () => {
     if (!isSearchEntity(props.entity)) return [];
+    // channel_message entities render their content inline in the row,
+    // so skip the expandable content hits section to avoid duplication
+    if (props.entity.type === 'channel_message') return [];
     return props.entity.search.contentHitData ?? [];
   };
 

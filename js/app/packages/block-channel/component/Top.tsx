@@ -21,23 +21,23 @@ import Bell from '@icon/regular/bell.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import PhoneIcon from '@icon/regular/phone.svg';
+import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { createMemo, Show } from 'solid-js';
+import { type Component, createMemo, Show } from 'solid-js';
 import { AttachmentsButton } from './AttachmentsModal';
 import { useChannelContext } from '@block-channel/hooks/channel';
 import { isChannelAdminOrOwner } from '@queries/channel/derived';
 import { useChannelModals } from './ModalsProvider';
 import { ParticipantManagerButton } from './ParticipantManager';
 import { useAnalytics } from '@app/component/analytics-context';
-import {
-  SegmentedControl,
-  type SegmentedControlItem,
-} from '@core/component/SegmentedControl';
+import { Tabs, type TabItem } from '@core/component/Tabs';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -73,7 +73,7 @@ type TopProps = {
 
 type ChannelTopLeftProps = TopProps & {
   lockRename?: boolean;
-  tabs?: readonly SegmentedControlItem[];
+  tabs?: readonly TabItem[];
   activeTab?: ChannelTabId;
   onTabChange?: (value: ChannelTabId) => void;
 };
@@ -101,8 +101,8 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
         </div>
         <Show when={props.tabs && props.activeTab && props.onTabChange}>
-          <div class="ph-no-capture min-w-0 shrink-0">
-            <SegmentedControl
+          <div class="ph-no-capture min-w-0 shrink-0 h-full">
+            <Tabs
               list={[...(props.tabs ?? [])]}
               value={props.activeTab}
               onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
@@ -113,6 +113,18 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
     </SplitHeaderLeft>
   );
 }
+
+const CallIcon: Component = (iconProps) => {
+  const channelModals = useChannelModals();
+  return (
+    <Show
+      when={channelModals.isInCall()}
+      fallback={<PhoneIcon {...iconProps} />}
+    >
+      <PhoneDisconnectIcon {...iconProps} />
+    </Show>
+  );
+};
 
 export function Top(props: TopProps) {
   const analytics = useAnalytics();
@@ -132,13 +144,10 @@ export function Top(props: TopProps) {
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
-      buildSimpleEntityUrl(
-        {
-          type: 'channel',
-          id: blockId,
-        },
-        {}
-      )
+      buildSimpleEntityUrl({
+        type: 'channel',
+        id: blockId,
+      })
     );
     toast.success('Link copied to clipboard');
   }
@@ -178,6 +187,30 @@ export function Top(props: TopProps) {
       buttonComponent: () => (
         <AttachmentsButton attachments={channelModals.attachments} />
       ),
+    },
+    {
+      label: () => (channelModals.isInCall() ? 'Leave Call' : 'Call'),
+      icon: CallIcon,
+      action: (() => {
+        let isTogglingCall = false;
+        return async () => {
+          if (isTogglingCall) return;
+          isTogglingCall = true;
+          try {
+            if (channelModals.isInCall()) {
+              await channelModals.leaveCall();
+            } else {
+              await channelModals.joinCall();
+            }
+          } catch (e) {
+            console.error('Call action failed', e);
+          } finally {
+            isTogglingCall = false;
+          }
+        };
+      })(),
+      isActive: () => channelModals.isInCall(),
+      condition: () => ENABLE_CALLS(),
     },
     {
       label: 'Participants',

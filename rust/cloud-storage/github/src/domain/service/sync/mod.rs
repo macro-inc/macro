@@ -374,7 +374,10 @@ fn create_macro_task_comment_link(name: &str, id: &str) -> String {
     let url = match macro_env::Environment::new_or_prod() {
         macro_env::Environment::Production => "https://macro.com/app/task",
         macro_env::Environment::Develop => "https://dev.macro.com/app/task",
-        macro_env::Environment::Local => "http://localhost:3000/app/task",
+        macro_env::Environment::Local => {
+            let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+            return format!("[{name}](http://localhost:{port}/app/task/{id})");
+        }
     };
 
     format!("[{name}]({url}/{id})")

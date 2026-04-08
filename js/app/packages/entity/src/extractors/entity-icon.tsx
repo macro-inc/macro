@@ -10,7 +10,11 @@ import { Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { PulsingStar } from '../components/PulsingStar';
 import type { ChannelEntity, EntityData } from '../types/entity';
-import { isChannelEntity, isTaskEntity } from '../types/entity';
+import {
+  isChannelEntity,
+  isChannelMessageEntity,
+  isTaskEntity,
+} from '../types/entity';
 
 interface EntityIconProps {
   entity: EntityData;
@@ -54,6 +58,7 @@ export function EntityIcon(props: EntityIconProps) {
   const iconType = () => {
     return match(props.entity)
       .when(isChannelEntity, ({ channelType }) => channelType)
+      .when(isChannelMessageEntity, ({ channelType }) => channelType)
       .when(isTaskEntity, () => 'task')
       .with({ type: 'document' }, ({ fileType }) => {
         return fileType ?? 'default';

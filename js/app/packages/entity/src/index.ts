@@ -13,7 +13,7 @@ export { ListEntity, ListLayoutProvider } from './composed/ListEntity';
 
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { MultiSelectCheckbox } from './components/MultiSelectCheckbox';
-export { DraftBadge, InviteBadge, SharedBadge } from './components/Badges';
+export { DraftBadge, SharedBadge } from './components/Badges';
 export { DisplayName } from './components/DisplayName';
 export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 

@@ -8,6 +8,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { entityTypeToItemType } from '../utils';
 import { match } from 'ts-pattern';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 
 const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'DOCUMENT',
@@ -164,7 +165,7 @@ export function usePropertyEntityDisplay(
 
     return match(entityType())
       .with('THREAD', () => ({ email_message_id: messageId }))
-      .with('CHANNEL', () => ({ channel_message_id: messageId }))
+      .with('CHANNEL', () => ({ [CHANNEL_PARAMS.message]: messageId }))
       .with('CHAT', () => ({ message_id: messageId }))
       .otherwise(() => undefined);
   });

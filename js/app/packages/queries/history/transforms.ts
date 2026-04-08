@@ -1,11 +1,19 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
 import type { Item } from '@service-storage/generated/schemas/item';
 import type { HistoryItem, HistoryQueryResponse } from './types';
+import { formatDocumentName } from '@service-storage/util/filename';
 
 export function transformHistoryItem(item: Item): HistoryItem {
+  const safeName = itemToSafeName(item);
+  const name =
+    item.type === 'document'
+      ? formatDocumentName(safeName, item.fileType, {
+          fullyQualifiedBlockName: true,
+        })
+      : safeName;
   const base = {
     id: item.id,
-    name: itemToSafeName(item),
+    name,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     deletedAt: item.deletedAt,

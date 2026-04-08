@@ -23,7 +23,7 @@ impl<S> DerefMut for ServiceContext<S> {
 }
 
 /// Request context passed into tool calls, containing per-request data like user identity.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RequestContext {
     /// The ID of the user making the request.
     pub user_id: MacroUserIdStr<'static>,

@@ -87,7 +87,7 @@ async fn memories_are_scoped_to_user(pool: Pool<Postgres>) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn get_latest_includes_created_at(pool: Pool<Postgres>) {
+async fn get_latest_includes_updated_at(pool: Pool<Postgres>) {
     let repo = PgMemoryRepo::new(pool);
     let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
 
@@ -96,5 +96,36 @@ async fn get_latest_includes_created_at(pool: Pool<Postgres>) {
         .unwrap();
 
     let record = repo.get_latest_memory(user).await.unwrap().unwrap();
-    assert!(record.created_at <= chrono::Utc::now());
+    assert!(record.updated_at <= chrono::Utc::now());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_latest_uses_refresh_time_for_staleness(pool: Pool<Postgres>) {
+    let repo = PgMemoryRepo::new(pool.clone());
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    repo.save_memory(&"first memory".to_string(), user.clone())
+        .await
+        .unwrap();
+
+    sqlx::query!(
+        r#"
+        UPDATE memory
+        SET created_at = NOW() - INTERVAL '10 days',
+            updated_at = NOW() - INTERVAL '10 days'
+        WHERE user_id = $1
+        "#,
+        user.as_ref()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    repo.save_memory(&"fresh memory".to_string(), user.clone())
+        .await
+        .unwrap();
+
+    let record = repo.get_latest_memory(user).await.unwrap().unwrap();
+    assert_eq!(record.memory, "fresh memory");
+    assert!(record.updated_at > chrono::Utc::now() - chrono::Duration::minutes(1));
 }

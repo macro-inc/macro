@@ -5,8 +5,8 @@ use axum::{
     extract::State,
     routing::{delete, post},
 };
+use decode_jwt::DecodedJwt;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use reqwest::StatusCode;
 
 use crate::domain::models::device::DeviceRequest;
@@ -21,15 +21,15 @@ pub fn device_router<S: NotificationReader>() -> Router<NotificationRouterState<
 }
 
 /// Register a device for push notifications.
-#[tracing::instrument(skip(state, macro_user, req), fields(user_id=?macro_user.macro_user_id))]
+#[tracing::instrument(skip(state, macro_user_id, req))]
 async fn register_device<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    DecodedJwt { macro_user_id, .. }: DecodedJwt,
     Json(req): Json<DeviceRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
         .inner
-        .register_device(macro_user.macro_user_id, &req.token, &req.device_type)
+        .register_device(macro_user_id, &req.token, &req.device_type)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to register device");
@@ -48,7 +48,7 @@ async fn register_device<S: NotificationReader>(
 #[tracing::instrument(skip(state, _macro_user, req))]
 async fn unregister_device<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
-    _macro_user: MacroUserExtractor,
+    _macro_user: DecodedJwt,
     Json(req): Json<DeviceRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state

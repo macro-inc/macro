@@ -131,13 +131,13 @@ export const createAppViteConfig = ({
         ],
       },
       server: {
-        port: 3000,
+        port: Number(process.env.PORT || 3000),
         host: '0.0.0.0',
         strictPort: true,
         hmr: {
           protocol: 'ws',
           host: process.env.TAURI_DEV_HOST || 'localhost',
-          port: 3000,
+          port: Number(process.env.PORT || 3000),
         },
         cors: true,
         watch: {

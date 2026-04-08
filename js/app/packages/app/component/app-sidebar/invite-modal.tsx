@@ -8,7 +8,8 @@ import { isOk } from '@core/util/maybeResult';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import { Button } from '@ui/components/Button';
 import { toast } from '@core/component/Toast/Toast';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CloseIcon from '@icon/regular/x.svg';
+import ClipboardIcon from '@icon/regular/clipboard.svg';
 
 function parseEmails(raw: string): string[] {
   return raw
@@ -71,16 +72,20 @@ export const InviteModal = () => {
       <Dialog.Portal>
         <DialogWrapper>
           <div class="flex flex-col text-ink">
-            <div class="shrink-0 flex flex-row items-center px-2 gap-2 border-b-1 border-b-edge-muted h-[40px]">
+            <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
               <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                 <CloseIcon />
               </Dialog.CloseButton>
               <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-                Invite Your Team
+                Invite
               </Dialog.Title>
             </div>
 
             <div class="p-3 flex flex-col gap-3">
+              <p>
+                Invite friends and teammates to Macro. You’ll get $100 in
+                credits for each person who signs up.
+              </p>
               <div class="flex flex-col gap-2">
                 <textarea
                   ref={(el) => {
@@ -96,13 +101,35 @@ export const InviteModal = () => {
                 />
               </div>
 
+              <div class="flex justify-end gap-1 pt-2">
+                <Button
+                  variant="ghost"
+                  class="rounded-xs"
+                  onClick={handleClose}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSend}
+                  variant={
+                    sending() || !parseEmails(value()).length
+                      ? 'ghost'
+                      : 'accent'
+                  }
+                  disabled={sending() || !parseEmails(value()).length}
+                  class="rounded-xs font-semibold"
+                >
+                  {sending() ? 'Sending…' : 'Send Invites'}
+                </Button>
+              </div>
+
               <Show when={referralUrl()}>
                 {(url) => (
-                  <div class="flex flex-col gap-1.5 pt-3 border-t border-edge-muted">
+                  <div class="flex flex-col gap-1.5 pt-3 ">
                     <p class="text-xs text-ink/50">
                       Or share your personal referral link:
                     </p>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-stretch gap-2">
                       <input
                         type="text"
                         readOnly
@@ -110,31 +137,20 @@ export const InviteModal = () => {
                         class="flex-1 px-3 py-1.5 text-xs border border-edge-muted rounded-xs bg-input text-ink/70 outline-none select-all"
                         onClick={(e) => e.currentTarget.select()}
                       />
-                      <button
+                      <Button
                         type="button"
                         onClick={handleCopy}
-                        class="px-3 py-1.5 text-xs font-medium rounded-xs border border-edge-muted bg-panel text-ink hover:bg-hover/60 transition-colors whitespace-nowrap"
+                        size="md"
+                        variant="secondary"
+                        class="font-medium rounded-xs border px-2"
                       >
+                        <ClipboardIcon class="size-3" />
                         {copied() ? 'Copied!' : 'Copy'}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
               </Show>
-
-              <div class="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" onClick={handleClose}>
-                  Cancel
-                </Button>
-                <button
-                  type="button"
-                  onClick={handleSend}
-                  disabled={sending() || !parseEmails(value()).length}
-                  class="py-1.5 px-3 text-sm font-medium rounded-xs bg-accent text-menu hover:bg-accent/90 transition-colors disabled:opacity-50"
-                >
-                  {sending() ? 'Sending…' : 'Send Invites'}
-                </button>
-              </div>
             </div>
           </div>
         </DialogWrapper>

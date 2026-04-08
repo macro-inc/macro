@@ -133,6 +133,21 @@ impl DigestBatcher for RedisDigestBatcher {
             return Ok(ClaimResult::Wait(Duration::from_secs(wait_secs as u64)));
         }
 
+        // Discard stale digests older than 48 hours to avoid sending a backlog
+        // of accumulated notifications (e.g. after removing the macro.com domain gate)
+        const STALENESS_THRESHOLD: Duration = Duration::from_hours(48);
+        let age_secs = now - score as i64;
+        if age_secs > STALENESS_THRESHOLD.as_secs() as i64 {
+            let digest_key = self.digest_key(&user_id_str);
+            conn.del::<_, ()>(&digest_key).await?;
+            tracing::warn!(
+                user_id = %user_id_str,
+                age_hours = age_secs / 3600,
+                "Discarding stale email digest older than 48 hours"
+            );
+            return Ok(ClaimResult::Empty);
+        }
+
         let digest_key = self.digest_key(&user_id_str);
         let processing_key = self.processing_key(&user_id_str);
 

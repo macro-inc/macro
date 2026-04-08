@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::api::context::EntityAccessService;
 use crate::{
     api::{context::ApiContext, documents::utils},
     model::response::documents::save::{SaveDocumentResponse, SaveDocumentResponseData},
@@ -11,7 +12,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::document::response::DocumentResponseMetadata;
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt},
@@ -47,7 +48,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(_access, state, user_context, document_context, multipart), fields(user_id=?user_context.user_id))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<EditAccessLevel>,
+    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,

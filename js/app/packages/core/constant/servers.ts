@@ -62,10 +62,21 @@ function selectLocalServers(): Servers {
   }
   const servers = selectedLocalServers
     .split(',')
-    .filter(assertValidName)
-    .reduce((acc: Servers, key: keyof Servers) => {
-      acc[key] = serverHostLocal[key];
-      console.log(`Using local server ${key}: ${acc}`);
+    .reduce((acc: Servers, entry: string) => {
+      // Support "service-name:port" to override the default local port
+      const [name, portOverride] = entry.split(':') as [
+        string,
+        string | undefined,
+      ];
+      if (!assertValidName(name)) return acc;
+      if (portOverride) {
+        const url = new URL(serverHostLocal[name]);
+        url.port = portOverride;
+        acc[name] = url.toString().replace(/\/$/, '');
+      } else {
+        acc[name] = serverHostLocal[name];
+      }
+      console.log(`Using local server ${name}: ${acc[name]}`);
       return acc;
     }, serverHostRemote);
   return servers;

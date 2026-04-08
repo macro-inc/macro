@@ -32,9 +32,8 @@ const CATEGORY_TO_BUCKETS: Record<CategoryFilter, string[] | null> = {
   all: null, // no filter
   channels: ['channel'],
   dms: ['dm'],
-  notes: ['note'],
+  documents: ['note', 'document'],
   tasks: ['task'],
-  documents: ['document'],
   chats: ['chat'],
   projects: ['project'],
   commands: [], // sandbox has no commands — show nothing
@@ -71,7 +70,7 @@ function CommandKContent(_props: LessonContentProps) {
         <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
           <Hotkey shortcut="arrowdown" class="space-x-1" />
         </span>
-        to move the cursor, then select an item to continue.
+        to move the cursor.
       </p>
     </div>
   );
@@ -80,8 +79,21 @@ function CommandKContent(_props: LessonContentProps) {
 function CommandKDemo(props: LessonContentProps) {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
 
+  const [hasOpened, setHasOpened] = createSignal(false);
+
   onMount(() => {
     CommandState.forceReset();
+  });
+
+  // Complete the lesson the first time the command menu closes after being opened.
+  createEffect(() => {
+    const open = commandKOpen();
+    if (open) {
+      setHasOpened(true);
+    } else if (hasOpened() && !completed()) {
+      setCompleted(true);
+      props.onComplete();
+    }
   });
 
   onCleanup(() => {

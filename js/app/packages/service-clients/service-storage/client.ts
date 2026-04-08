@@ -87,7 +87,6 @@ import type {
   ValidateDocumentPermissionsTokenResponse,
 } from './service';
 import { fetchPresigned } from './util/fetchPresigned';
-import { formatDocumentName } from './util/filename';
 import {
   type GetDocxFileResponse,
   getDocxExpandedParts,
@@ -121,7 +120,11 @@ export type Success = {
 };
 type SuccessResponse = { data: Success };
 
-export type ItemType = CloudStorageItemType | 'channel' | 'email';
+export type ItemType =
+  | CloudStorageItemType
+  | 'channel'
+  | 'email'
+  | 'channel_message';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
@@ -137,44 +140,6 @@ const itemTypeSet = new Set([
 export function isItemType(str: string): str is ItemType {
   return itemTypeSet.has(str);
 }
-
-const mapMetadataDocumentName = (
-  metadata: DocumentMetadata
-): DocumentMetadata => {
-  const name = formatDocumentName(metadata.documentName, metadata.fileType, {
-    fullyQualifiedBlockName: true,
-  });
-
-  return {
-    ...metadata,
-    documentName: name,
-  };
-};
-
-const mapItemDocumentName = (item: Item): Item => {
-  if (item.type !== 'document') return item;
-
-  const name = formatDocumentName(item.name, item.fileType, {
-    fullyQualifiedBlockName: true,
-  });
-
-  return {
-    ...item,
-    name,
-  };
-};
-
-const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
-  if (!('document_name' in preview)) return preview;
-
-  const name = formatDocumentName(preview.document_name, preview.file_type, {
-    fullyQualifiedBlockName: true,
-  });
-  return {
-    ...preview,
-    document_name: name,
-  };
-};
 
 export function blockNameToItemType(
   blockName: BlockName | BlockAlias
@@ -293,7 +258,7 @@ export const storageServiceClient = {
   },
   async getUsersHistory() {
     return mapOk(await dssFetch<{ data: Item[] }>(`/history`), (result) => ({
-      data: result.data.map(mapItemDocumentName),
+      data: result.data,
     }));
   },
 
@@ -342,7 +307,7 @@ export const storageServiceClient = {
         };
       }>(`/documents?limit=${params.limit}&offset=${params.offset}`),
       (result) => ({
-        documents: result.data.documents.map(mapMetadataDocumentName),
+        documents: result.data.documents,
         total: result.data.total,
         nextOffset: result.data.next_offset,
       })
@@ -434,7 +399,7 @@ export const storageServiceClient = {
         const data = result.data;
         return {
           ...data,
-          documentMetadata: mapMetadataDocumentName(data.documentMetadata),
+          documentMetadata: data.documentMetadata,
         };
       }
     );
@@ -591,7 +556,7 @@ export const storageServiceClient = {
         body: JSON.stringify({ document_ids: args.document_ids }),
       }),
       (result) => ({
-        previews: result.previews.map(mapPreviewDocumentName),
+        previews: result.previews,
       })
     );
   },

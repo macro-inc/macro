@@ -3,6 +3,7 @@ import type { LessonContentProps, LessonDefinition } from '../types';
 import { stripeServiceClient } from '@service-stripe/client';
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 const PLANS: {
   tier: string;
@@ -70,7 +71,13 @@ function ChoosePlanDemo() {
 
   return (
     <div class="h-full w-full flex items-center justify-center px-8">
-      <div class="flex gap-4 w-full max-w-2xl items-start">
+      <div
+        class="w-full max-w-2xl items-start"
+        classList={{
+          'flex flex-col gap-3': isTouchDevice(),
+          'flex gap-4': !isTouchDevice(),
+        }}
+      >
         <For each={PLANS}>
           {(plan) => (
             <div class="flex-1 flex flex-col">

@@ -66,11 +66,17 @@ export function emailFilter(entity: EntityData): boolean {
 }
 
 export function peopleFilter(entity: EntityData): boolean {
-  return entity.type === 'channel' && entity.channelType === 'direct_message';
+  return (
+    (entity.type === 'channel' || entity.type === 'channel_message') &&
+    entity.channelType === 'direct_message'
+  );
 }
 
 export function teamsFilter(entity: EntityData): boolean {
-  return entity.type === 'channel' && entity.channelType !== 'direct_message';
+  return (
+    (entity.type === 'channel' || entity.type === 'channel_message') &&
+    entity.channelType !== 'direct_message'
+  );
 }
 
 export function agentFilter(entity: EntityData): boolean {
@@ -88,7 +94,7 @@ export function fileFilter(entity: EntityData): boolean {
 }
 
 export function channelsFilter(entity: EntityData): boolean {
-  return entity.type === 'channel';
+  return entity.type === 'channel' || entity.type === 'channel_message';
 }
 
 export function filesAndFolderFilter(entity: EntityData): boolean {

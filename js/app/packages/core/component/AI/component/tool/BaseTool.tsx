@@ -6,6 +6,7 @@ type ToolCallProps = {
   renderContext: RenderContext['renderContext'];
   type: 'call';
   children: JSX.Element;
+  response?: JSX.Element;
 };
 type ToolResponseProps = {
   children: JSX.Element;
@@ -16,12 +17,13 @@ type ToolResponseProps = {
 function BaseToolCall(props: ToolCallProps) {
   return (
     <div class="relative text-sm text-ink-extra-muted border-l pl-4 border-edge">
-      <div class="flex gap-x-2 items-center">
-        <Show when={props.type === 'call'}>
-          <props.icon class="h-[20px] w-[20px] shrink-0 text-accent" />
-          <div class="p-2">{props.children}</div>
-        </Show>
+      <div class="flex w-full items-center gap-x-2">
+        <props.icon class="h-[20px] w-[20px] shrink-0 text-accent" />
+        <div class="min-w-0 flex-1 p-2">{props.children}</div>
       </div>
+      <Show when={props.response}>
+        <div class="pl-8 mb-2">{props.response}</div>
+      </Show>
     </div>
   );
 }

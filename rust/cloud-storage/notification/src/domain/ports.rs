@@ -295,9 +295,13 @@ pub trait NotificationEgress: Send + Sync + 'static {
     -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
 
     /// Poll for ready digest batches, template them as emails, and send.
-    fn poll_email_digests<'a, T: NotificationExtEmail>(
+    fn poll_email_digests<
+        'a,
+        T: NotificationExtEmail,
+        F: Fn(DigestBatch) -> Result<T, Report> + Send + Sync + 'static,
+    >(
         &'a self,
-        f: fn(DigestBatch) -> Result<T, Report>,
+        f: &'a F,
     ) -> impl Future<Output = Result<ClaimResult<()>, Report>> + Send + 'a;
 }
 

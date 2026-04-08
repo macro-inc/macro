@@ -57,6 +57,8 @@ pub struct ListLabelsResponse {
     title = "ListLabels",
     description = "List the user's email labels including system labels (INBOX, SENT, DRAFTS, etc.) and any custom user-created labels. Use this to understand how the user's email is organized before filtering or searching by label."
 )]
+#[allow(unused)]
+// empty structs can't be deserialized;
 pub struct ListLabels {}
 
 #[async_trait]

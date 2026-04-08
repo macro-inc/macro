@@ -4,6 +4,9 @@
 //! which was previously handled via calls to the document storage service.
 
 use anyhow::Context;
+use entity_access::domain::models::EntityType;
+use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::user_item_access::UserItemAccess;
 use sqlx::PgPool;
@@ -17,9 +20,10 @@ use uuid::Uuid;
 /// 1. Validates the user has access to the item
 /// 2. Creates a channel share permission linking the item to the channel
 /// 3. Grants all channel participants view access to the item
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, entity_access_service), err)]
 pub async fn update_channel_share_permission(
     db: &PgPool,
+    entity_access_service: &impl EntityAccessService,
     user_id: &str,
     channel_id: &str,
     item_id: &str,
@@ -37,13 +41,24 @@ pub async fn update_channel_share_permission(
             .context("failed to insert thread share permissions")?;
     }
 
+    // Map item_type string to EntityType
+    let entity_type = match item_type {
+        "document" => EntityType::Document,
+        "chat" => EntityType::Chat,
+        "project" => EntityType::Project,
+        "thread" => EntityType::EmailThread,
+        "channel" => EntityType::Channel,
+        _ => anyhow::bail!("unsupported item type: {}", item_type),
+    };
+
+    // Parse user_id
+    let user_id_parsed = MacroUserIdStr::parse_from_str(user_id).context("invalid user id")?;
+
     // Get user's max access level to the item
-    let user_access_level =
-        macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2(
-            db, user_id, item_id, item_type,
-        )
+    let user_access_level = entity_access_service
+        .get_access_level(Some(&user_id_parsed), item_id, entity_type)
         .await
-        .map_err(|e| anyhow::anyhow!("failed to get user access level: {}", e.1))?;
+        .context("failed to get user access level")?;
 
     if user_access_level.is_none() {
         tracing::info!("user does not have access to the item, not modifying share permissions");

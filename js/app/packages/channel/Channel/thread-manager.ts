@@ -13,6 +13,9 @@ export function createThreadManager() {
     const [replyInputState, setReplyInputState] = createSignal<
       InputSnapshot | undefined
     >();
+    const [replyInputEl, setReplyInputEl] = createSignal<
+      HTMLElement | undefined
+    >();
 
     /** If you set replying from false -> true this means it must be expanded **/
     const setIsReplying: Setter<boolean> = (val) => {
@@ -31,6 +34,8 @@ export function createThreadManager() {
       setIsReplying,
       replyInputState,
       setReplyInputState,
+      replyInputEl,
+      setReplyInputEl,
     };
 
     setThreadStore(threadId, state);

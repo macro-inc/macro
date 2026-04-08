@@ -5,8 +5,8 @@ use std::str::FromStr;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, ChannelRoleResult, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission,
+        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, Entity, EntityAccessAuth,
+        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -214,10 +214,32 @@ where
             EntityType::Chat => self.repo.get_chat_users(entity_id).await,
             EntityType::Project => self.repo.get_project_users(entity_id).await,
             EntityType::EmailThread => self.repo.get_thread_users(entity_id).await,
+            EntityType::Channel => {
+                let channel_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid channel_id for get_users_by_entity")
+                })?;
+                self.repo.get_channel_users(&channel_id).await
+            }
             _ => Err(AccessError::BadRequest(
-                "get_users_by_entity only supports Document, Chat, Project, and EmailThread",
+                "get_users_by_entity does not support this entity type",
             )),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_channel(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        self.repo.get_call_channel(call_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_channel_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        self.repo.get_call_channel_by_channel_id(channel_id).await
     }
 }
 

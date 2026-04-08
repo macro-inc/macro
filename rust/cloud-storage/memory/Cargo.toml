@@ -20,10 +20,13 @@ sqlx = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
+aws-sdk-sqs = { workspace = true }
 model_user = { path = "../model_user", features = ["axum"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
 
 # For building ToolServiceContext
 comms = { path = "../comms" }
@@ -42,6 +45,7 @@ readonly_pool = { path = "../readonly_pool" }
 soup = { path = "../soup", features = ["all"] }
 properties = { path = "../properties" }
 macro_aws_config = { path = "../macro_aws_config" }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 
-[dev-dependencies]
+
 macro_db_migrator = { path = "../macro_db_migrator" }

@@ -5,6 +5,9 @@ import { transformHistoryResponse } from '../transforms';
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name?: string }) => item.name || 'Untitled',
 }));
+vi.mock('@service-storage/util/filename', () => ({
+  formatDocumentName: (name: string) => name,
+}));
 
 function createItem(overrides: Partial<Item> = {}): Item {
   return {

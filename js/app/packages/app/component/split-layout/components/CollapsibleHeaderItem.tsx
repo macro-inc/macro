@@ -1,5 +1,6 @@
 import { createSignal, type JSX, Show } from 'solid-js';
 import { useRegisterCollapsibleHeaderItem } from '../layoutUtils';
+import { cn } from '@ui/utils/classname';
 
 type CollapsibleHeaderItemProps = {
   id: string;
@@ -7,6 +8,7 @@ type CollapsibleHeaderItemProps = {
   expanded: JSX.Element;
   collapsed: JSX.Element;
   onCollapsedChange?: (isCollapsed: boolean) => void;
+  containerClass?: string;
 };
 
 export function CollapsibleHeaderItem(props: CollapsibleHeaderItemProps) {
@@ -26,12 +28,18 @@ export function CollapsibleHeaderItem(props: CollapsibleHeaderItemProps) {
   return (
     <>
       <Show when={!isCollapsed()}>
-        <div ref={setExpandedRef} class="flex items-center">
+        <div
+          ref={setExpandedRef}
+          class={cn('flex items-center', props.containerClass)}
+        >
           {props.expanded}
         </div>
       </Show>
       <Show when={isCollapsed()}>
-        <div ref={setCollapsedRef} class="flex items-center">
+        <div
+          ref={setCollapsedRef}
+          class={cn('flex items-center', props.containerClass)}
+        >
           {props.collapsed}
         </div>
       </Show>

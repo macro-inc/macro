@@ -3,7 +3,10 @@
  * When the keyboard appears or the cursor moves into the safe zone near the
  * keyboard, this scrolls the cursor into view.
  */
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import {
+  virtualKeyboardHeight,
+  virtualKeyboardVisible,
+} from '@core/mobile/virtualKeyboard';
 import type { Accessor } from 'solid-js';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createRoot, on } from 'solid-js';
@@ -28,7 +31,15 @@ export function iosCursorScrollPlugin(options: IosCursorScrollPluginOptions) {
         if (!caretRect) return;
 
         const scrollRect = scrollEl.getBoundingClientRect();
-        const safeZoneBottom = scrollRect.bottom - CURSOR_PADDING;
+        // Cap the safe zone at the visual viewport bottom minus any native keyboard
+        // height. On iOS web, visualViewport.height already reflects the reduced
+        // viewport. On native mobile, virtualKeyboardHeight() holds the keyboard
+        // height that isn't reflected in the visual viewport.
+        const viewportBottom =
+          (window.visualViewport?.height ?? window.innerHeight) -
+          virtualKeyboardHeight();
+        const safeZoneBottom =
+          Math.min(scrollRect.bottom, viewportBottom) - CURSOR_PADDING;
 
         if (caretRect.bottom > safeZoneBottom) {
           const scrollAmount = caretRect.bottom - safeZoneBottom;

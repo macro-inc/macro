@@ -6,13 +6,15 @@ use crate::domain::{
 };
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
-use email::domain::models::PreviewView;
+use email::domain::{models::PreviewView, ports::EmailService};
 use item_filters::EntityFilters;
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_soup::item::SoupItem;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use cowlike::CowLike;
 
 use super::SoupToolContext;
 
@@ -130,21 +132,32 @@ pub struct ListEntities {
 }
 
 #[async_trait]
-impl<T> AsyncTool<SoupToolContext<T>> for ListEntities
+impl<T, E> AsyncTool<SoupToolContext<T, E>> for ListEntities
 where
     T: SoupService,
+    E: EmailService,
 {
     type Output = ListEntitiesResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<SoupToolContext<T>>,
+        service_context: ServiceContext<SoupToolContext<T, E>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List entities");
 
         let sort_method = SimpleSortMethod::from(self.sort_by);
+
+        let link_id = service_context
+            .email_service
+            .get_link_by_macro_id(request_context.user_id.copied())
+            .await
+            .map_err(|e| ToolCallError {
+                description: format!("Failed to resolve email link: {e}"),
+                internal_error: e.into(),
+            })?
+            .map(|link| link.id);
 
         let result = service_context
             .service
@@ -154,7 +167,7 @@ where
                 cursor: SoupQuery::new_sort_simple(sort_method, EntityFilters::default()),
                 user: request_context.user_id,
                 email_preview_view: PreviewView::default(),
-                link_id: None,
+                link_id,
             })
             .await
             .map_err(|e| ToolCallError {

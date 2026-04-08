@@ -1,10 +1,11 @@
 use std::str::FromStr;
 
 use crate::api::context::ApiContext;
+use crate::api::context::EntityAccessService;
 use crate::model::response::documents::get::{GetDocumentKeyResponse, GetDocumentKeyResponseData};
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::document::FileType;
 use model::response::GenericErrorResponse;
 use model::{document::DocumentBasic, response::GenericResponse, user::UserContext};
@@ -34,7 +35,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(state, user_context, document_context, _access), fields(user_id=?user_context.user_id, file_type=?document_context.file_type))]
 pub async fn get_document_key_handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,

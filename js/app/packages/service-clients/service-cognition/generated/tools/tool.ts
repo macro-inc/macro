@@ -4,7 +4,6 @@
  */
 
 import { err, type MaybeResult, ok } from 'core/util/maybeResult';
-import type { Component } from 'solid-js';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -25,6 +24,7 @@ type ToolParserMap = {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
+  GetThread: { call: types.GetThread; response: types.GetThreadResponse };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
@@ -36,6 +36,7 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
@@ -43,6 +44,10 @@ type ToolParserMap = {
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;
+  };
+  UpdateThreadLabels: {
+    call: types.UpdateThreadLabels;
+    response: types.UpdateThreadLabelsResponse;
   };
   web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
@@ -68,6 +73,7 @@ const toolParserMap = {
     call: schemas.GetEntityProperties,
     response: schemas.GetEntityPropertiesResponse,
   },
+  GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
@@ -85,6 +91,7 @@ const toolParserMap = {
     response: schemas.ReadMetadataResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
     response: schemas.SetEntityPropertyResponse,
@@ -92,6 +99,10 @@ const toolParserMap = {
   text_editor_code_execution: {
     call: schemas.TextEditorCodeExecutionToolCall,
     response: schemas.TextEditorCodeExecutionResponse,
+  },
+  UpdateThreadLabels: {
+    call: schemas.UpdateThreadLabels,
+    response: schemas.UpdateThreadLabelsResponse,
   },
   web_fetch: {
     call: schemas.WebFetchToolCall,
@@ -128,6 +139,7 @@ type ToolDataMap = {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
+  GetThread: { call: types.GetThread; response: types.GetThreadResponse };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
@@ -139,6 +151,7 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
@@ -146,6 +159,10 @@ type ToolDataMap = {
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;
+  };
+  UpdateThreadLabels: {
+    call: types.UpdateThreadLabels;
+    response: types.UpdateThreadLabelsResponse;
   };
   web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
@@ -162,19 +179,6 @@ export type NamedTool<
   name: TName;
   data: ToolDataMap[TName][TDirection];
 };
-
-export type ToolContext<TTool extends NamedTool = NamedTool> = {
-  tool: TTool;
-  chat_id: string;
-  message_id: string;
-  part_index: number;
-  isComplete: boolean;
-};
-
-export interface ToolHandler<T extends NamedTool, RenderContext> {
-  handle?: (context: ToolContext<T>) => void | Promise<void>;
-  render?: Component<ToolContext<T> & RenderContext>;
-}
 
 function deserializeTool<T extends NamedTool>(
   tool: NamedRawTool,
@@ -206,10 +210,3 @@ export function deserializeToolResponse(
 ): MaybeResult<'parse_error' | 'not_found', NamedTool<ToolName, 'response'>> {
   return deserializeTool(tool, 'response');
 }
-
-export type ToolHandlerMap<RenderContext> = {
-  [K in ToolName]: {
-    call: ToolHandler<NamedTool<K, 'call'>, RenderContext>;
-    response: ToolHandler<NamedTool<K, 'response'>, RenderContext>;
-  };
-};

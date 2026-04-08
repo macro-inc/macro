@@ -75,6 +75,8 @@ export function ChannelThread(props: ThreadProps) {
 
   const isThreadFocused = () => isSelected() && !!replySelection.selectedId();
 
+  let replyInputContainerRef: HTMLDivElement | undefined;
+
   const { attachReplyInputRef } = createThreadHotkeys({
     messageListScopeId: props.messageListScopeId!,
     replySelection,
@@ -219,7 +221,13 @@ export function ChannelThread(props: ThreadProps) {
                   />
 
                   <Show when={props.isReplying()}>
-                    <div ref={attachReplyInputRef} class="ph-no-capture">
+                    <div
+                      ref={(el) => {
+                        attachReplyInputRef(el);
+                        replyInputContainerRef = el;
+                      }}
+                      class="ph-no-capture"
+                    >
                       <Show when={!hasReplies()}>
                         <Thread.ReplyAuthor
                           userId={replyUserId()}
@@ -232,6 +240,7 @@ export function ChannelThread(props: ThreadProps) {
                         replyInputState={props.replyInputState}
                         setReplyInputState={props.setReplyInputState}
                         setIsReplying={props.setIsReplying}
+                        setReplyInputEl={props.setReplyInputEl}
                       />
                     </div>
                   </Show>
@@ -253,6 +262,11 @@ export function ChannelThread(props: ThreadProps) {
                       </Show>
                       <Show when={shouldShowReplyButton()}>
                         <Thread.ReplyButton
+                          getFocusTarget={() =>
+                            replyInputContainerRef?.querySelector<HTMLElement>(
+                              '[contenteditable]'
+                            ) ?? null
+                          }
                           onClick={() => props.setIsReplying(true)}
                           aria-label="Reply"
                         />

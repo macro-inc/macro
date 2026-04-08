@@ -25,6 +25,7 @@ type BasePreviewItem<T extends ItemType = ItemType> = {
 type PreviewItemAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
+  rawName: string;
   name: string;
   fileType?: FileType;
   subType?: SubType;
@@ -34,6 +35,7 @@ type PreviewItemAccess = {
 type PreviewProjectAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
+  rawName: string;
   name: string;
   fileType?: never;
   subType?: never;
@@ -43,6 +45,7 @@ type PreviewProjectAccess = {
 type PreviewDocumentAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
+  rawName: string;
   name: string;
   fileType?: FileType;
   subType?: SubType;
@@ -54,6 +57,7 @@ export type MessageContext = Message;
 export type PreviewChannelAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
+  rawName: string;
   name: string;
   fileType?: never;
   subType?: never;

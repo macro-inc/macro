@@ -1,11 +1,14 @@
 use crate::model::stream::ToolSet;
-use ai_tools::{ToolSetWithPrompt, all_tools, no_tools};
 
 use crate::model::stream::SendChatMessagePayload;
 
-pub fn choose_toolset(request: &SendChatMessagePayload) -> ToolSetWithPrompt {
+/// Returns the appropriate system prompt for the requested toolset.
+pub fn choose_tools_prompt(
+    request: &SendChatMessagePayload,
+    all_tools_prompt: &'static str,
+) -> &'static str {
     match request.toolset {
-        ToolSet::All => all_tools(),
-        ToolSet::None => no_tools(),
+        ToolSet::All => all_tools_prompt,
+        ToolSet::None => ai_tools::prompts::BASE_PROMPT,
     }
 }

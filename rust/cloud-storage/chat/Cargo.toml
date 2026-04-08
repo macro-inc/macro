@@ -18,6 +18,7 @@ ports = []
 [dependencies]
 # Domain (always included)
 ai = { path = "../ai" }
+ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }

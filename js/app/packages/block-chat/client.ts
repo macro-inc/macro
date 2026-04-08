@@ -2,8 +2,6 @@ import type { BlockName } from '@core/block';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
-import { propsToHref } from '@core/util/url';
-import { postNewHistoryItem } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 
 export function useOpenChatForAttachment() {
@@ -54,26 +52,4 @@ export function useOpenChatForAttachment() {
       recent_id = data?.id;
     }
   };
-}
-
-export async function copyChat(args: { id: string; name: string }) {
-  const { showPaywall } = usePaywallState();
-  const result = await cognitionApiServiceClient.copyChat({
-    chat_id: args.id,
-    name: args.name,
-  });
-  if (isPaymentError(result)) {
-    showPaywall();
-    throw result[0];
-  }
-  if (isErr(result)) {
-    throw result[0];
-  }
-  const [_, { id }] = result;
-  postNewHistoryItem('chat', id);
-  const href = propsToHref({
-    id,
-    fileType: 'chat',
-  });
-  return { id, href };
 }

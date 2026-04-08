@@ -7,9 +7,8 @@ import {
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
-import { Tabs } from '@kobalte/core/tabs';
+import { Tabs } from '@core/component/Tabs';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import type { BlockName, BlockAlias } from '@core/block';
 import {
   createEffect,
   createMemo,
@@ -40,27 +39,17 @@ import { useAnalytics } from '@app/component/analytics-context';
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'channels', label: 'Channels' },
-  { id: 'dms', label: 'Dms' },
-  { id: 'notes', label: 'Docs' },
+  { id: 'dms', label: 'DMs' },
+  { id: 'documents', label: 'Documents' },
   { id: 'tasks', label: 'Tasks' },
-  { id: 'documents', label: 'Files' },
   { id: 'chats', label: 'Agents' },
-  { id: 'projects', label: 'Projects' },
+  { id: 'projects', label: 'Folders' },
   { id: 'commands', label: 'Commands' },
 ];
 
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
 const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
-
-export function getBlockNameForEntity(
-  item: CommandMenuItem
-): BlockName | BlockAlias | undefined {
-  if (isEntityItem(item)) {
-    return itemToBlockName(item.data);
-  }
-  return undefined; // no block for commands or users
-}
 
 export function CommandMenu() {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
@@ -168,7 +157,7 @@ export function CommandMenuInner(props: {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      const blockName = getBlockNameForEntity(item);
+      const blockName = itemToBlockName(item.data);
       if (blockName) {
         openWithSplit(
           { type: blockName, id: item.id },
@@ -608,38 +597,20 @@ function CommandMenuFooter(props: {
 }
 
 function CategoryFilterTabs() {
+  const list = CATEGORIES.map((c) => ({ value: c.id, label: c.label }));
+
   return (
-    <Tabs
-      value={CommandState.categoryFilter()}
-      onChange={(value) => {
-        if (value) {
-          CommandState.setCategoryFilter(value as CategoryFilter);
-          CommandState.setSelectedIndex(0);
-        }
-      }}
-    >
-      <Tabs.List class="p-1.5 border-b border-edge-muted/50">
-        <div class="text-sm rounded-xs overflow-clip border border-edge-muted inline-block">
-          <div class="flex">
-            <For each={CATEGORIES}>
-              {(category) => (
-                <Tabs.Trigger
-                  value={category.id}
-                  class={cn(
-                    'border-r-1 border-edge-muted last:border-r-0',
-                    'relative text-ink-muted/70 px-2.5 py-1 text-xs font-medium block hover:bg-ink/6 hover:text-ink',
-                    CommandState.categoryFilter() === category.id &&
-                      'text-ink bg-edge/50'
-                  )}
-                  tabIndex={-1}
-                >
-                  {category.label}
-                </Tabs.Trigger>
-              )}
-            </For>
-          </div>
-        </div>
-      </Tabs.List>
-    </Tabs>
+    <div class="px-1.5 py-1.5 border-b border-edge-muted/50">
+      <Tabs
+        list={list}
+        value={CommandState.categoryFilter()}
+        onChange={(value) => {
+          if (value) {
+            CommandState.setCategoryFilter(value as CategoryFilter);
+            CommandState.setSelectedIndex(0);
+          }
+        }}
+      />
+    </div>
   );
 }

@@ -54,6 +54,7 @@ export type CreateChannelMessageActionsOptions = {
   removeReaction: (input: RemoveReactionInput) => void;
   onReply?: MessageActionHandler;
   onEdit?: MessageActionHandler;
+  onCreateTask?: MessageActionHandler;
   effects?: Partial<ChannelMessageActionEffects>;
 };
 
@@ -138,7 +139,12 @@ export function createChannelMessageActions(
         : undefined,
       onCopyLink: async () => {
         try {
-          const url = buildMessageLink(effects.getLocationHref(), message.id);
+          const channelId = options.channelId();
+          const url = buildMessageLink(
+            channelId,
+            message.id,
+            message.thread_id
+          );
           await effects.copyToClipboard(url);
           effects.notifyCopyLinkSuccess();
         } catch (error) {
@@ -157,6 +163,7 @@ export function createChannelMessageActions(
             });
           }
         : undefined,
+      onCreateTask: options.onCreateTask,
     };
   };
 }

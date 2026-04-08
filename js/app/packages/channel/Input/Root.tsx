@@ -2,6 +2,7 @@ import { splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { InputProvider } from './context';
 import { isReplyInput, type InputCommands, type InputData } from './types';
+import { isMobile } from '@core/mobile/isMobile';
 
 const NoopInputCommands: InputCommands = {
   send: async () => false,
@@ -28,10 +29,11 @@ export function Root(props: RootProps) {
     <div
       class={cn(
         'relative macro-message-width flex flex-col flex-1 items-center justify-between bg-input border border-edge-muted rounded-[5px]',
-        local.class,
-        {
-          'rounded-b-[5px] border-b mb-4': isReplyInput(local.input),
-        }
+        isMobile() &&
+          !isReplyInput(local.input) &&
+          'border-b-0 border-l-0 border-r-0 rounded-b-none',
+        isReplyInput(local.input) && 'rounded-b-[5px] mb-4',
+        local.class
       )}
       data-input
       data-input-id={local.input.id}

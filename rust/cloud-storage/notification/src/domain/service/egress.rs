@@ -20,9 +20,9 @@ use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
     RateLimitService, WebSocketSender,
 };
+use cowlike::CowLike;
 use either::Either;
 use futures::stream::{FuturesUnordered, StreamExt};
-use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
@@ -339,9 +339,13 @@ where
     }
 
     // #[tracing::instrument(err, skip(self))]
-    async fn poll_email_digests<T: NotificationExtEmail>(
-        &self,
-        f: fn(DigestBatch) -> Result<T, Report>,
+    async fn poll_email_digests<
+        'a,
+        T: NotificationExtEmail,
+        F: Fn(DigestBatch) -> Result<T, Report> + Send + Sync + 'static,
+    >(
+        &'a self,
+        f: &'a F,
     ) -> Result<ClaimResult<()>, Report> {
         let batch =
             match tokio::time::timeout(DELIVERY_TIMEOUT, self.digest_batcher.claim_ready_digest())
@@ -352,17 +356,27 @@ where
                 v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
             };
 
-        if batch.user_id.email_part().domain_part() != "macro.com" {
-            return Err(report!(
-                "Sending digest for non-macro user is currently disabled"
-            ));
-        }
-
         let recipient: MacroUserIdStr<'static> = batch.user_id.clone();
         let email_notif = f(batch)?;
-        let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
 
         let typename = NotificationTypeName::new_from_notif(&email_notif);
+
+        // Check if the user has disabled this notification type
+        let type_disabled_users = self
+            .repository
+            .get_users_with_type_disabled(typename.as_ref(), &[recipient.copied()])
+            .await?;
+
+        if type_disabled_users.contains(&recipient) {
+            tracing::info!(
+                user_id = %recipient,
+                notification_type = %typename.as_ref(),
+                "Skipping email digest publish — user has disabled this notification type"
+            );
+            return Ok(ClaimResult::Ready(()));
+        }
+
+        let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
 
         let message: QueueMessage<'static, T, ()> =
             QueueMessage::new_from_email(email_content, &typename);

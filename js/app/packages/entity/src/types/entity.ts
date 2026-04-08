@@ -35,6 +35,17 @@ export type ChannelEntity = EntityBase & {
   };
 };
 
+export type ChannelMessageEntity = EntityBase & {
+  type: 'channel_message';
+  channelId: string;
+  channelName: string;
+  channelType: ChannelEntity['channelType'];
+  messageId: string;
+  threadId?: string;
+  senderId: string;
+  content: string;
+};
+
 export type ChatEntity = EntityBase & {
   type: 'chat';
   projectId?: string;
@@ -110,6 +121,7 @@ export type ProjectEntity = EntityBase & {
 
 export type EntityData =
   | ChannelEntity
+  | ChannelMessageEntity
   | ChatEntity
   | DocumentEntity
   | TaskEntity
@@ -140,6 +152,12 @@ export const isChannelEntity = (
   entity: EntityData
 ): entity is ChannelEntity => {
   return entity.type === 'channel';
+};
+
+export const isChannelMessageEntity = (
+  entity: EntityData
+): entity is ChannelMessageEntity => {
+  return entity.type === 'channel_message';
 };
 
 export const isChatEntity = (entity: EntityData): entity is ChatEntity => {

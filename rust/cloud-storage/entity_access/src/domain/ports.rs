@@ -4,8 +4,8 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, ChannelRoleResult, EntityAccessReceipt, EntityPermission,
-    RequiredPermission,
+    AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityAccessReceipt,
+    EntityPermission, RequiredPermission,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::future::Future;
@@ -109,6 +109,30 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         thread_id: &str,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Get all active participant user IDs in a channel.
+    fn get_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Resolve a call ID to its channel ID and share permission ID.
+    ///
+    /// Checks both the `calls` table (active calls) and the `call_records` table
+    /// (archived calls). Returns `None` if the call does not exist in either table.
+    fn get_call_channel(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
+
+    /// Resolve a channel ID to the call's channel info and share permission ID.
+    ///
+    /// Checks both the `calls` table (active calls) and the `call_records` table
+    /// (archived calls). Returns `None` if no call exists for the channel.
+    fn get_call_channel_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
 }
 
 /// Service for checking entity access levels.
@@ -174,17 +198,31 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<EntityPermission, AccessError>> + Send;
 
-    /// Get all user IDs that have access to a given entity via `UserItemAccess`.
+    /// Get all user IDs that have access to a given entity.
     ///
-    /// Returns user IDs with direct access to the entity or inherited access
-    /// through the project hierarchy. Only considers `UserItemAccess` grants,
-    /// not public share permissions.
-    ///
-    /// Supported entity types: Document, Chat, Project, EmailThread.
-    /// Returns `AccessError::BadRequest` for unsupported types (Channel, Team, User).
+    /// For Document, Chat, Project, and EmailThread: returns user IDs with direct
+    /// access or inherited access through the project hierarchy via `UserItemAccess`.
+    /// For Channel: returns active channel participants.
+    /// Returns `AccessError::BadRequest` for unsupported types (Team, User).
     fn get_users_by_entity(
         &self,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Resolve a call ID to its channel ID and share permission ID.
+    ///
+    /// Checks both `calls` (active) and `call_records` (archived) tables.
+    fn get_call_channel(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
+
+    /// Resolve a channel ID to the call's channel info and share permission ID.
+    ///
+    /// Checks both `calls` (active) and `call_records` (archived) tables.
+    fn get_call_channel_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
 }

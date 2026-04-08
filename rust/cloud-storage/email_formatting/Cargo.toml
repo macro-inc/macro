@@ -7,9 +7,13 @@ version = "0.1.0"
 [dependencies]
 askama = { workspace = true }
 chrono = { workspace = true }
+hmac = { workspace = true }
+macro_env = { path = "../macro_env" }
+macro_service_urls = { path = "../macro_service_urls" }
 macro_user_id = { path = "../macro_user_id" }
 model_notifications = { path = "../model_notifications" }
 notification = { path = "../notification" }
 rootcause = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+sha2 = { workspace = true }
 tracing = { workspace = true }

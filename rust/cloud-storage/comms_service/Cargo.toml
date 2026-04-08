@@ -37,6 +37,7 @@ comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client", optional = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 doppleganger = { workspace = true }
+entity_access = { path = "../entity_access" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 http-body-util = { workspace = true }

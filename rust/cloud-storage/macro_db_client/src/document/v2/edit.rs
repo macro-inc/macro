@@ -3,11 +3,13 @@ use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use crate::share_permission;
 
 #[tracing::instrument(skip(transaction))]
+/// `file_type`: None = no change, Some(None) = set to NULL, Some(Some(ft)) = set to ft.
 pub async fn edit_document(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &str,
     document_name: Option<&str>,
     project_id: Option<&str>,
+    file_type: Option<Option<&str>>,
     share_permission: Option<&UpdateSharePermissionRequestV2>,
 ) -> anyhow::Result<()> {
     let mut query = "UPDATE \"Document\" SET ".to_string();
@@ -26,6 +28,11 @@ pub async fn edit_document(
         } else {
             parameters.push(Some(project_id));
         }
+    }
+
+    if let Some(ft_update) = file_type {
+        set_parts.push("\"fileType\" = $".to_string() + &(parameters.len() + 2).to_string());
+        parameters.push(ft_update);
     }
 
     query += &set_parts.join(", ");
@@ -78,6 +85,7 @@ mod tests {
             "document-one",
             Some("new-name"),
             Some("new-project"),
+            None,
             Some(&UpdateSharePermissionRequestV2 {
                 is_public: Some(true),
                 public_access_level: Some(AccessLevel::Edit),
@@ -99,8 +107,52 @@ mod tests {
             document_metadata.project_id,
             Some("new-project".to_string())
         );
-        edit_document(&mut transaction, "document-one", None, None, None).await?;
+        edit_document(&mut transaction, "document-one", None, None, None, None).await?;
         transaction.commit().await?;
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
+    async fn test_edit_document_set_file_type(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        let mut transaction = pool.begin().await?;
+
+        edit_document(
+            &mut transaction,
+            "document-one",
+            None,
+            None,
+            Some(Some("rs")),
+            None,
+        )
+        .await?;
+
+        transaction.commit().await?;
+
+        let document_metadata = get_document(&pool, "document-one").await?;
+        assert_eq!(document_metadata.file_type, Some("rs".to_string()));
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
+    async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        let mut transaction = pool.begin().await?;
+
+        edit_document(
+            &mut transaction,
+            "document-one",
+            None,
+            None,
+            Some(None),
+            None,
+        )
+        .await?;
+
+        transaction.commit().await?;
+
+        let document_metadata = get_document(&pool, "document-one").await?;
+        assert_eq!(document_metadata.file_type, None);
 
         Ok(())
     }
@@ -119,7 +171,7 @@ mod tests {
         );
 
         let mut transaction = pool.begin().await?;
-        edit_document(&mut transaction, "document-one", None, Some(""), None).await?;
+        edit_document(&mut transaction, "document-one", None, Some(""), None, None).await?;
         transaction.commit().await?;
 
         let document_metadata = get_document(&pool, "document-one").await?;

@@ -15,6 +15,7 @@ use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
 use documents::inbound::toolset::document_toolset;
+use email::inbound::toolset::email_toolset;
 use properties::inbound::toolset::properties_toolset;
 use search::web::anthropic_web_search::anthropic_web_search_tool;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
@@ -41,10 +42,11 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
 pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = AsyncToolSet::new()
         .add_toolset(search_toolset())
-        .add_tool::<ListEntities, SoupToolContext<ToolSoupService>>()
+        .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_tool::<read::ReadThread, Arc<ToolScribe>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
-        .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset());
+        .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
+        .add_subtoolset::<ToolEmailToolContext>(email_toolset());
     let prompt = prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt { toolset, prompt }

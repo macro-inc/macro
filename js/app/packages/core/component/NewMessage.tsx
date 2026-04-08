@@ -50,13 +50,10 @@ function CopyLinkButton() {
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
-      buildSimpleEntityUrl(
-        {
-          type: blockName,
-          id: blockId,
-        },
-        {}
-      )
+      buildSimpleEntityUrl({
+        type: blockName,
+        id: blockId,
+      })
     );
     toast.success('Link copied to clipboard');
   }

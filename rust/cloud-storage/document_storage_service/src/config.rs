@@ -1,5 +1,5 @@
 pub use macro_env::Environment;
-use macro_env_var::env_var;
+use macro_env_var::{env_var, maybe_env_var};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 /// The configuration parameters for the application.
@@ -65,6 +65,33 @@ env_var! {
         pub LivekitApiKey,
         pub LivekitApiSecret,
     }
+}
+
+maybe_env_var! {
+    /// Optional name of the LiveKit agent to dispatch for call transcription.
+    pub struct LivekitTranscriptionAgentName;
+}
+
+maybe_env_var! {
+    /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
+    pub struct InternalCallSecret;
+}
+
+maybe_env_var! {
+    /// S3 bucket for call recording egress.
+    pub struct CallRecordingS3Bucket;
+}
+maybe_env_var! {
+    /// AWS region for the call recording S3 bucket.
+    pub struct CallRecordingS3Region;
+}
+maybe_env_var! {
+    /// AWS access key for call recording S3 uploads.
+    pub struct CallRecordingS3AccessKey;
+}
+maybe_env_var! {
+    /// AWS secret key for call recording S3 uploads.
+    pub struct CallRecordingS3Secret;
 }
 
 env_var! { struct Port; }

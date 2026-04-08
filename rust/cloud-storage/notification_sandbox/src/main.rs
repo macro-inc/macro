@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use email_formatting::EmailDigestNotification;
+use hmac::{Hmac, Mac};
+use macro_env::Environment;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -371,12 +373,20 @@ async fn poll_email_digests(egress: &impl NotificationEgress) -> Result<(), Repo
     fn digest_to_sandbox(
         batch: notification::domain::models::email_notification_digest::ports::DigestBatch,
     ) -> Result<SandboxNotification, Report> {
+        let secret = std::env::var("URL_SIGNING_HMAC")
+            .unwrap_or_else(|_| "sandbox-default-hmac-secret".to_string());
+        let hmac_key = Hmac::<sha2::Sha256>::new_from_slice(secret.as_bytes())
+            .expect("HMAC accepts any key size");
         Ok(SandboxNotification {
-            inner: EmailDigestNotification::new_from_digest_batch(batch)?,
+            inner: EmailDigestNotification::new_from_digest_batch(
+                batch,
+                Environment::Local,
+                hmac_key,
+            )?,
         })
     }
 
-    let res = egress.poll_email_digests(digest_to_sandbox).await?;
+    let res = egress.poll_email_digests(&digest_to_sandbox).await?;
     println!("{res:?}");
     Ok(())
 }

@@ -44,9 +44,9 @@ use crate::{
                 notification_crate::inbound::http::bulk_mark_undone,
 
                 /// /user_notifications/preferences
-                user_notification::get_notification_type_preferences,
-                user_notification::disable_notification_type,
-                user_notification::enable_notification_type,
+                notification_crate::inbound::http::preferences::get_notification_type_preferences,
+                notification_crate::inbound::http::preferences::disable_notification_type,
+                notification_crate::inbound::http::preferences::enable_notification_type,
 
                 /// /unsubscribe
                 unsubscribe::get_unsubscribes::handler,
@@ -87,7 +87,7 @@ use crate::{
                         user_notification::ApiUserNotification,
                         user_notification::GetAllUserNotificationsResponse,
                         notification_crate::inbound::http::BulkGetByEventItemIdsRequest,
-                        user_notification::GetNotificationTypePreferencesResponse,
+                        notification_crate::inbound::http::preferences::GetNotificationTypePreferencesResponse,
                 ),
         ),
         tags(

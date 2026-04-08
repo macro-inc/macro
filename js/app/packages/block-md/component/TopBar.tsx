@@ -90,10 +90,7 @@ export function TopBar() {
   const isTask = blockAliasedName === 'task';
 
   const copyLink = () => {
-    const url = buildSimpleEntityUrl(
-      { id: blockId, type: blockAliasedName },
-      {}
-    );
+    const url = buildSimpleEntityUrl({ id: blockId, type: blockAliasedName });
     navigator.clipboard.writeText(url);
     toast.success(
       'Link copied to clipboard.',

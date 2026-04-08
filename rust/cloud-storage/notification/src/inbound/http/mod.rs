@@ -1,18 +1,25 @@
 //! This module exposes the http adapter for inbound http requests via an axum router
 
+#[cfg(test)]
+mod test;
+
 pub mod device;
+pub mod preferences;
 
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
-    routing::{delete, patch},
+    extract::{FromRef, Path, Query, State},
+    routing::{delete, get, patch, put},
 };
+use decode_jwt::DecodedJwt;
+use hmac::Hmac;
+use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{CreatedAt, CursorOptionExt, CursorWithValAndFilter};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::sync::Arc;
+use sha2::Sha256;
+use std::{collections::HashSet, sync::Arc};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -44,21 +51,44 @@ pub struct NotificationIdPath {
 pub struct NotificationRouterState<S> {
     /// the inner S wrapped in an [Arc]
     pub inner: Arc<S>,
+    /// the statically known list of notification typenames which can be blocked by the user
+    pub blockable_notification_typenames: &'static HashSet<&'static str>,
+    /// The value which is used to verify the presigned url requests
+    pub hmac_signing_key: Hmac<Sha256>,
+    /// the args used to validate jwts
+    pub jwt_args: JwtValidationArgs,
+}
+
+impl<S> FromRef<NotificationRouterState<S>> for JwtValidationArgs {
+    fn from_ref(input: &NotificationRouterState<S>) -> Self {
+        input.jwt_args.clone()
+    }
 }
 
 impl<S> Clone for NotificationRouterState<S> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
+            blockable_notification_typenames: self.blockable_notification_typenames,
+            hmac_signing_key: self.hmac_signing_key.clone(),
+            jwt_args: self.jwt_args.clone(),
         }
     }
 }
 
 impl<S: NotificationReader> NotificationRouterState<S> {
     /// create a new instance of self
-    pub fn new(val: S) -> Self {
+    pub fn new(
+        val: S,
+        blockable_notification_typenames: &'static HashSet<&'static str>,
+        hmac_signing_key: Hmac<Sha256>,
+        jwt_args: JwtValidationArgs,
+    ) -> Self {
         NotificationRouterState {
             inner: Arc::new(val),
+            blockable_notification_typenames,
+            hmac_signing_key,
+            jwt_args,
         }
     }
 }
@@ -66,14 +96,28 @@ impl<S: NotificationReader> NotificationRouterState<S> {
 /// construct the router
 pub fn router<S: NotificationReader, T: Serialize + DeserializeOwned + Send + 'static>()
 -> Router<NotificationRouterState<S>> {
-    Router::new().nest(
-        "/bulk",
-        Router::new()
-            .route("/", delete(bulk_delete_notifications))
-            .route("/seen", patch(bulk_mark_seen))
-            .route("/done", patch(bulk_mark_done))
-            .route("/undone", patch(bulk_mark_undone)),
-    )
+    Router::new()
+        .nest(
+            "/bulk",
+            Router::new()
+                .route("/", delete(bulk_delete_notifications))
+                .route("/seen", patch(bulk_mark_seen))
+                .route("/done", patch(bulk_mark_done))
+                .route("/undone", patch(bulk_mark_undone)),
+        )
+        .route(
+            "/preferences",
+            get(preferences::get_notification_type_preferences),
+        )
+        .route(
+            "/preferences/{notification_event_type}/disable",
+            put(preferences::disable_notification_type)
+                .get(preferences::presigned_disable_notification_type),
+        )
+        .route(
+            "/preferences/{notification_event_type}/enable",
+            put(preferences::enable_notification_type),
+        )
 }
 
 /// the params for pagination
@@ -98,14 +142,14 @@ pub async fn list_user_notifications<
     T: Serialize + DeserializeOwned + Send,
 >(
     service: &NotificationRouterState<S>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Query(Params { limit }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let query = cursor.into_query(CreatedAt, ());
     let result = service
         .inner
-        .get_user_notifications::<T>(macro_user.macro_user_id, limit, query)
+        .get_user_notifications::<T>(decoded_jwt.macro_user_id, limit, query)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get user notifications");
@@ -153,7 +197,7 @@ pub async fn bulk_get_by_event_item_ids<
     T: Serialize + DeserializeOwned + Send,
 >(
     State(service): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Query(Params { limit }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
     Json(req): Json<BulkGetByEventItemIdsRequest>,
@@ -161,7 +205,7 @@ pub async fn bulk_get_by_event_item_ids<
     let result = service
         .inner
         .get_user_notifications_by_event_item_ids::<T>(GetNotificationsByEventItemIdsRequest {
-            user_id: macro_user.macro_user_id,
+            user_id: decoded_jwt.macro_user_id,
             event_item_ids: &req.event_item_ids,
             limit,
             cursor: cursor.into_query(CreatedAt, ()),
@@ -206,10 +250,10 @@ pub struct NotificationBulkRequest {
 )]
 pub async fn bulk_mark_seen<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    bulk_update(&service, &macro_user, &req, NotificationStatus::Seen).await
+    bulk_update(&service, &decoded_jwt, &req, NotificationStatus::Seen).await
 }
 
 /// Mark notifications as done.
@@ -227,10 +271,10 @@ pub async fn bulk_mark_seen<S: NotificationReader>(
 )]
 pub async fn bulk_mark_done<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    bulk_update(&service, &macro_user, &req, NotificationStatus::Done(true)).await
+    bulk_update(&service, &decoded_jwt, &req, NotificationStatus::Done(true)).await
 }
 
 /// Mark notifications as not done.
@@ -248,22 +292,28 @@ pub async fn bulk_mark_done<S: NotificationReader>(
 )]
 pub async fn bulk_mark_undone<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    bulk_update(&service, &macro_user, &req, NotificationStatus::Done(false)).await
+    bulk_update(
+        &service,
+        &decoded_jwt,
+        &req,
+        NotificationStatus::Done(false),
+    )
+    .await
 }
 
 async fn bulk_update<S: NotificationReader>(
     service: &NotificationRouterState<S>,
-    macro_user: &MacroUserExtractor,
+    decoded_jwt: &DecodedJwt,
     req: &NotificationBulkRequest,
     status: NotificationStatus,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     service
         .inner
         .update_notifications(UpdateNotificationsRequest {
-            user_id: macro_user.macro_user_id.clone(),
+            user_id: decoded_jwt.macro_user_id.clone(),
             notification_ids: &req.notification_ids,
             status,
         })
@@ -300,7 +350,7 @@ async fn bulk_update<S: NotificationReader>(
 )]
 pub async fn get_by_event_item_id<S: NotificationReader, T: Serialize + DeserializeOwned + Send>(
     State(service): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Path(EventItemIdPath { event_item_id }): Path<EventItemIdPath>,
     Query(Params { limit }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
@@ -308,7 +358,7 @@ pub async fn get_by_event_item_id<S: NotificationReader, T: Serialize + Deserial
     let result = service
         .inner
         .get_user_notifications_by_event_item_ids::<T>(GetNotificationsByEventItemIdsRequest {
-            user_id: macro_user.macro_user_id,
+            user_id: decoded_jwt.macro_user_id,
             event_item_ids: &[event_item_id],
             limit,
             cursor: cursor.into_query(CreatedAt, ()),
@@ -351,12 +401,12 @@ pub async fn get_notification_by_id<
     T: Serialize + DeserializeOwned + Send,
 >(
     State(service): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Path(NotificationIdPath { notification_id }): Path<NotificationIdPath>,
 ) -> Result<Json<UserNotificationRow<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let result = service
         .inner
-        .get_user_notification_by_id::<T>(macro_user.macro_user_id, notification_id)
+        .get_user_notification_by_id::<T>(decoded_jwt.macro_user_id, notification_id)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get user notification by id");
@@ -397,12 +447,12 @@ pub async fn get_notification_by_id<
 )]
 pub async fn delete_notification<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Path(NotificationIdPath { notification_id }): Path<NotificationIdPath>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     service
         .inner
-        .delete_user_notification(macro_user.macro_user_id, notification_id)
+        .delete_user_notification(decoded_jwt.macro_user_id, notification_id)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to delete user notification");
@@ -432,12 +482,12 @@ pub async fn delete_notification<S: NotificationReader>(
 )]
 pub async fn bulk_delete_notifications<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
-    macro_user: MacroUserExtractor,
+    decoded_jwt: DecodedJwt,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     service
         .inner
-        .bulk_delete_user_notifications(macro_user.macro_user_id, &req.notification_ids)
+        .bulk_delete_user_notifications(decoded_jwt.macro_user_id, &req.notification_ids)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to delete user notifications");

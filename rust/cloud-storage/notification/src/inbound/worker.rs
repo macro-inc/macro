@@ -71,12 +71,15 @@ where
     /// runs the digest worker forever which will pick digest batch messages out of redis
     /// template them into emails via the templater fn f
     /// then place the formatted messages into the queue to be delievered
-    pub async fn run_digests<T: NotificationExtEmail>(
+    pub async fn run_digests<
+        T: NotificationExtEmail,
+        F: Fn(DigestBatch) -> Result<T, Report> + Send + Sync + 'static,
+    >(
         &self,
-        f: fn(DigestBatch) -> Result<T, Report>,
+        f: F,
     ) -> ! {
         loop {
-            let sleep_duration = match self.service.poll_email_digests(f).await {
+            let sleep_duration = match self.service.poll_email_digests(&f).await {
                 Ok(ClaimResult::Empty) => Duration::from_secs(5),
                 Ok(ClaimResult::Wait(duration)) => duration,
                 Ok(ClaimResult::Ready(())) => Duration::default(),

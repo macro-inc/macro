@@ -1,6 +1,5 @@
 use crate::GmailClient;
 use anyhow::Context;
-use futures::{StreamExt, stream};
 use models_email::email::service;
 use models_email::gmail::ModifyLabelsRequest;
 use models_email::gmail::error::GmailError;
@@ -20,7 +19,7 @@ pub async fn modify_message_labels(
     provider_message_id: &str,
     label_ids_to_add: &[String],
     label_ids_to_remove: &[String],
-) -> anyhow::Result<()> {
+) -> Result<(), GmailError> {
     let url = format!(
         "{}/users/me/messages/{}/modify",
         client.base_url, provider_message_id
@@ -39,7 +38,7 @@ pub async fn modify_message_labels(
         .json(&payload)
         .send()
         .await
-        .context("Failed to send request to Gmail API (modify message labels)")?;
+        .map_err(|e| GmailError::HttpRequest(e.to_string()))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -47,83 +46,21 @@ pub async fn modify_message_labels(
             .text()
             .await
             .unwrap_or_else(|_| "Failed to read error body".to_string());
-        anyhow::bail!(
-            "Gmail API error {} (modify message labels) for provider_message_id: {}: {}",
-            status,
-            provider_message_id,
-            error_body
-        );
+
+        return Err(match status.as_u16() {
+            401 => GmailError::Unauthorized,
+            403 => GmailError::Forbidden,
+            404 => GmailError::NotFound(error_body),
+            429 => GmailError::RateLimitExceeded,
+            s if s >= 500 => GmailError::ServerError(s, error_body),
+            _ => GmailError::ApiError(format!(
+                "Gmail API error {} (modify message labels): {}",
+                status, error_body
+            )),
+        });
     }
 
     Ok(())
-}
-
-#[tracing::instrument(skip_all, fields(message_count = db_provider_id_tuples.len()))]
-pub async fn batch_modify_labels(
-    client: &GmailClient,
-    gmail_access_token: &str,
-    db_provider_id_tuples: Vec<(Uuid, String)>,
-    labels_to_add: Vec<String>,
-    labels_to_remove: Vec<String>,
-) -> (Vec<Uuid>, Vec<Uuid>) {
-    let label_tasks = db_provider_id_tuples
-        .clone()
-        .into_iter()
-        .map(move |message| {
-            let client = client.clone();
-            let gmail_access_token = gmail_access_token.to_string();
-            let labels_to_add = labels_to_add.clone();
-            let labels_to_remove = labels_to_remove.clone();
-
-            async move {
-                let db_id = message.0;
-                let provider_id = message.1;
-                let labels_to_add = labels_to_add;
-                let labels_to_remove = labels_to_remove;
-
-                // Update in Gmail - remove the label
-                let gmail_result = client
-                    .modify_message_labels(
-                        &gmail_access_token,
-                        &provider_id,
-                        &labels_to_add,
-                        &labels_to_remove,
-                    )
-                    .await;
-
-                if let Err(e) = gmail_result {
-                    tracing::error!(
-                        error = ?e,
-                        message_id = %db_id,
-                        provider_id = %provider_id,
-                        "Failed to remove label in Gmail"
-                    );
-                    return (db_id, Err(e));
-                }
-
-                (db_id, Ok(()))
-            }
-        });
-
-    // Process tasks with limited concurrency
-    const MAX_CONCURRENT: usize = 20;
-    let results = stream::iter(label_tasks)
-        .buffer_unordered(MAX_CONCURRENT)
-        .collect::<Vec<_>>()
-        .await;
-
-    // Separate successful and failed messages
-    let mut successful_msg_ids = Vec::new();
-    let mut failed_msg_ids = Vec::new();
-
-    for (msg_id, result) in results {
-        match result {
-            Ok(_) => successful_msg_ids.push(msg_id),
-            Err(_) => failed_msg_ids.push(msg_id),
-        }
-    }
-
-    (successful_msg_ids, failed_msg_ids)
 }
 
 #[tracing::instrument(skip(client, access_token), err)]

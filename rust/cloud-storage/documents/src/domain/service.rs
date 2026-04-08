@@ -21,7 +21,7 @@ use model::document::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadata,
     GetDocumentResponseData, LocationResponseData, LocationResponseV3,
 };
-use model::document::{ContentType, DocumentBasic, FileType, FileTypeExt};
+use model::document::{ContentType, DocumentBasic, FileAssociation, FileType, FileTypeExt};
 use model::response::PresignedUrl;
 use s3_key::{
     build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
@@ -31,7 +31,8 @@ use tracing;
 
 use super::models::{
     CloudFrontConfig, CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
-    EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+    EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs, FileTypeUpdate,
+    LocationQueryParams,
 };
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
@@ -609,6 +610,37 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             }
         }
 
+        if let Some(file_type_update) = &args.file_type {
+            let current_file_type = document_context
+                .file_type
+                .as_ref()
+                .and_then(|ft| FileType::from_str(ft).ok())
+                .ok_or_else(|| {
+                    DocumentError::BadRequest(
+                        "cannot change file type of a document with no file type".to_string(),
+                    )
+                })?;
+
+            let current_association = current_file_type.macro_app_path();
+
+            if !matches!(current_association, FileAssociation::Code(_)) {
+                return Err(DocumentError::BadRequest(
+                    "file type changes are only supported for code files".to_string(),
+                ));
+            }
+
+            if let FileTypeUpdate::Set(new_file_type) = file_type_update {
+                let new_association = new_file_type.macro_app_path();
+                if std::mem::discriminant(&current_association)
+                    != std::mem::discriminant(&new_association)
+                {
+                    return Err(DocumentError::BadRequest(
+                        "cannot change file type to a different association".to_string(),
+                    ));
+                }
+            }
+        }
+
         // Clean the document name (remove file extension if present)
         let document_name = args
             .document_name
@@ -620,6 +652,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
                 document_name,
                 project_id: args.project_id.clone(),
                 share_permission: args.share_permission,
+                file_type: args.file_type,
             })
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;

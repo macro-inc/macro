@@ -9,9 +9,7 @@ import {
   isCodeEditorExtensionSupported,
 } from '@core/util/languageQuery';
 import { isOk } from '@core/util/maybeResult';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
-import CaretRight from '@phosphor-icons/core/regular/caret-right.svg';
-import File from '@phosphor-icons/core/regular/file.svg';
+import Terminal from '@phosphor-icons/core/regular/terminal.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   TextEditorCodeExecutionContent,
@@ -20,20 +18,14 @@ import type {
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { createSignal, Match, onMount, Show, Switch } from 'solid-js';
 
-// Type aliases for backwards compatibility with discriminated union variants
-type TextEditorCodeExecutionViewResult = TextEditorCodeExecutionResult & {
-  type: 'text_editor_code_execution_view_result';
-};
+// Type alias for backwards compatibility with discriminated union variant
 type TextEditorCodeExecutionCreateResult = TextEditorCodeExecutionResult & {
   type: 'text_editor_code_execution_create_result';
 };
-type TextEditorCodeExecutionStrReplaceResult = TextEditorCodeExecutionResult & {
-  type: 'text_editor_code_execution_str_replace_result';
-};
+
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
-// Store file creation data from tool calls to use when handling responses
 type FileCreationData = {
   path: string;
   fileText: string;
@@ -57,61 +49,6 @@ function getExtensionFromPath(path: string): string | null {
 
 function getFileNameFromPath(path: string): string {
   return path.split('/').pop() ?? 'file';
-}
-
-const MAX_OUTPUT_LINES = 5;
-
-function CodeFence(props: { content: string; maxLines: number }) {
-  const [expanded, setExpanded] = createSignal(false);
-
-  const lines = () => props.content.split('\n');
-  const needsTruncation = () => lines().length > props.maxLines;
-  const displayContent = () => {
-    if (expanded() || !needsTruncation()) {
-      return props.content;
-    }
-    return lines().slice(0, props.maxLines).join('\n');
-  };
-
-  return (
-    <div class="relative">
-      <Show when={needsTruncation()}>
-        <button
-          type="button"
-          class="text-ink-extra-muted hover:text-ink-muted absolute top-1 right-1 p-1"
-          onClick={() => setExpanded(!expanded())}
-        >
-          <Show when={expanded()} fallback={<CaretRight class="h-4 w-4" />}>
-            <CaretDown class="h-4 w-4" />
-          </Show>
-        </button>
-      </Show>
-      <pre
-        class="text-ink-muted bg-background-secondary overflow-x-auto rounded p-2 pr-8 font-mono text-xs whitespace-pre-wrap"
-        classList={{
-          'max-h-32 overflow-hidden': !expanded() && needsTruncation(),
-        }}
-      >
-        {displayContent()}
-      </pre>
-    </div>
-  );
-}
-
-function ViewResult(props: { result: TextEditorCodeExecutionViewResult }) {
-  const hasContent = () => !!props.result.content?.trim();
-
-  return (
-    <Show
-      when={hasContent()}
-      fallback={<span class="text-ink-muted">Empty file</span>}
-    >
-      <CodeFence
-        content={props.result.content ?? ''}
-        maxLines={MAX_OUTPUT_LINES}
-      />
-    </Show>
-  );
 }
 
 function CreateResult(props: {
@@ -151,10 +88,7 @@ function CreateResult(props: {
   };
 
   return (
-    <div class="flex items-center gap-2">
-      <span class="text-ink-muted">
-        {props.result.is_file_update ? 'File updated' : 'File created'}
-      </span>
+    <div class="flex items-center">
       <Show when={createdFile()}>
         {(file) => (
           <button
@@ -175,38 +109,12 @@ function CreateResult(props: {
   );
 }
 
-function StrReplaceResult(props: {
-  result: TextEditorCodeExecutionStrReplaceResult;
-}) {
-  const diffContent = () => props.result.lines?.join('\n') ?? '';
-  const hasContent = () => diffContent().trim().length > 0;
-
-  return (
-    <Show
-      when={hasContent()}
-      fallback={<span class="text-ink-muted">Edit applied</span>}
-    >
-      <CodeFence content={diffContent()} maxLines={MAX_OUTPUT_LINES} />
-    </Show>
-  );
-}
-
-function TextEditorResult(props: {
+function InlineTextEditorResult(props: {
   content: TextEditorCodeExecutionContent;
   toolId: string;
 }) {
   return (
     <Switch>
-      <Match
-        when={
-          props.content.type === 'text_editor_code_execution_view_result' &&
-          props.content
-        }
-      >
-        {(result) => (
-          <ViewResult result={result() as TextEditorCodeExecutionViewResult} />
-        )}
-      </Match>
       <Match
         when={
           props.content.type === 'text_editor_code_execution_create_result' &&
@@ -222,22 +130,22 @@ function TextEditorResult(props: {
       </Match>
       <Match
         when={
-          props.content.type ===
-            'text_editor_code_execution_str_replace_result' && props.content
-        }
-      >
-        {(result) => (
-          <StrReplaceResult
-            result={result() as TextEditorCodeExecutionStrReplaceResult}
-          />
-        )}
-      </Match>
-      <Match
-        when={
           props.content.type === 'text_editor_code_execution_tool_result_error'
         }
       >
         <span class="text-ink-error">Failed</span>
+      </Match>
+      <Match
+        when={props.content.type === 'text_editor_code_execution_view_result'}
+      >
+        <span class="text-ink-extra-muted">Viewed file</span>
+      </Match>
+      <Match
+        when={
+          props.content.type === 'text_editor_code_execution_str_replace_result'
+        }
+      >
+        <span class="text-ink-extra-muted">Edit applied</span>
       </Match>
     </Switch>
   );
@@ -246,7 +154,6 @@ function TextEditorResult(props: {
 const handler = createToolRenderer({
   name: 'text_editor_code_execution',
   handleCall: async (ctx) => {
-    // Store file creation data for use in handleResponse
     if (ctx.tool.data.command === 'create' && ctx.tool.data.file_text) {
       toolFileDataMap[ctx.tool.id] = {
         path: ctx.tool.data.path,
@@ -256,18 +163,16 @@ const handler = createToolRenderer({
   },
   handleResponse: async (ctx) => {
     const { content } = ctx.tool.data;
+    const fileData = toolFileDataMap[ctx.tool.id];
 
-    // Only create macro files for successful file creations
     if (content.type !== 'text_editor_code_execution_create_result') {
       return;
     }
 
-    const fileData = toolFileDataMap[ctx.tool.id];
     if (!fileData) {
       return;
     }
 
-    // Clean up stored data
     delete toolFileDataMap[ctx.tool.id];
 
     const extension = getExtensionFromPath(fileData.path);
@@ -303,21 +208,23 @@ const handler = createToolRenderer({
       });
     }
   },
-  renderCall: (ctx) => (
-    <BaseTool icon={File} renderContext={ctx.renderContext} type="call">
-      <code class="text-ink-muted font-mono text-xs">{ctx.tool.data.path}</code>
+  render: (ctx) => (
+    <BaseTool icon={Terminal} renderContext={ctx.renderContext} type="call">
+      <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+        <span>Uploaded code</span>
+        <Show when={ctx.response}>
+          {(response) => (
+            <div class="shrink-0">
+              <InlineTextEditorResult
+                content={response().data.content}
+                toolId={ctx.tool.id}
+              />
+            </div>
+          )}
+        </Show>
+      </div>
     </BaseTool>
   ),
-  renderResponse: (ctx) => {
-    return (
-      <BaseTool renderContext={ctx.renderContext} type="response">
-        <TextEditorResult
-          content={ctx.tool.data.content}
-          toolId={ctx.tool.id}
-        />
-      </BaseTool>
-    );
-  },
 });
 
 export const textEditorCodeExecutionHandler = handler;

@@ -11,6 +11,7 @@ testing = []
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
+axum-extra = { workspace = true, features = ["cookie", "typed-header"] }
 cookie = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_env = { path = "../macro_env" }

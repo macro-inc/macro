@@ -8,16 +8,13 @@ import {
 
 describe('inbox-query-filters', () => {
   describe('applyInboxQueryFilters', () => {
-    it('applies inbox notification filters, task bypass, and email importance', () => {
+    it('applies inbox notification filters and email importance', () => {
       const result = applyInboxQueryFilters({});
 
       expect(result.channel_filters?.notification_filters?.done).toBe(false);
       expect(result.chat_filters?.notification_filters?.done).toBe(false);
       expect(result.project_filters?.notification_filters?.done).toBe(false);
       expect(result.document_filters?.notification_filters?.done).toBe(false);
-      expect(result.document_filters?.task_filters?.include_cbm_atm_nc).toBe(
-        true
-      );
       expect(result.email_filters?.importance).toBe(true);
     });
   });
@@ -32,23 +29,6 @@ describe('inbox-query-filters', () => {
       expect(result.project_filters).toBeUndefined();
       expect(result.document_filters).toBeUndefined();
       expect(result.email_filters).toBeUndefined();
-    });
-
-    it('strips include_cbm_atm_nc while preserving other task filters', () => {
-      const result = removeInboxQueryFilters({
-        document_filters: {
-          task_filters: {
-            include_cbm_atm_nc: true,
-          },
-        },
-      });
-
-      expect(result.document_filters?.task_filters).toEqual({
-        status: ['todo'],
-      });
-      expect(
-        result.document_filters?.task_filters?.include_cbm_atm_nc
-      ).toBeUndefined();
     });
 
     it('keeps non-inbox notification values intact', () => {

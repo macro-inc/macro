@@ -485,11 +485,18 @@ impl DocumentRepo for PgDocumentRepo {
     async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
 
+        use crate::domain::models::FileTypeUpdate;
+        let file_type_db = args.file_type.map(|update| match update {
+            FileTypeUpdate::Set(ft) => Some(ft.to_string()),
+            FileTypeUpdate::Clear => None,
+        });
+
         edit::update_document_metadata(
             &mut transaction,
             &args.document_id,
             args.document_name.as_deref(),
             args.project_id.as_deref(),
+            file_type_db,
         )
         .await?;
 

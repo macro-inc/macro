@@ -3,6 +3,7 @@ mod copy_document_v2;
 
 use std::str::FromStr;
 
+use crate::api::context::EntityAccessService;
 use crate::{
     api::context::ApiContext,
     model::request::documents::copy::{CopyDocumentQueryParams, CopyDocumentRequest},
@@ -13,7 +14,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::{
     document::{
         DocumentBasic, DocumentMetadata, FileType, FileTypeExt, response::GetDocumentResponse,
@@ -54,7 +55,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(state, user_context, document_context, req, _access), fields(user_id=%user_context.macro_user_id, document_version_id=?params.version_id))]
 pub(in crate::api) async fn copy_document_handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
     user_context: MacroUserExtractor,
     document_context: Extension<DocumentBasic>,

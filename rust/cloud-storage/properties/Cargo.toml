@@ -17,6 +17,7 @@ ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
+entity_access = { path = "../entity_access" }
 futures = { workspace = true }
 email_db_client = { path = "../email_db_client" }
 macro_db_client = { path = "../macro_db_client" }

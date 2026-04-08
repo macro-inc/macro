@@ -11,6 +11,7 @@ use documents::{
 };
 use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
+    inbound::toolset::EmailToolContext,
     outbound::EmailPgRepo,
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
@@ -35,12 +36,11 @@ pub type ToolScribe =
 pub type ToolFrecencyService = FrecencyQueryServiceImpl<FrecencyPgStorage>;
 
 /// Type alias for the email service implementation
-pub type ToolEmailService = EmailServiceImpl<
-    EmailPgRepo,
-    ToolFrecencyService,
-    email::domain::ports::NoOpEnqueuer,
-    email::domain::ports::NoOpGmailLabelModifier,
->;
+pub type ToolEmailService =
+    EmailServiceImpl<EmailPgRepo, ToolFrecencyService, email::domain::ports::NoOpEnqueuer>;
+
+/// Type alias for the send-capable email service implementation used by user tools.
+pub type ToolUserEmailService = EmailServiceImpl<EmailPgRepo, ToolFrecencyService, sqs_client::SQS>;
 
 /// Type alias for the comms/channels service implementation
 pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
@@ -75,6 +75,16 @@ impl ConnectionService for NoOpConnectionService {
     async fn send_invalidation_event<'a, T: std::fmt::Debug + serde::Serialize + Send>(
         &self,
         _invalidation_event: connection::domain::models::InvalidationEvent<'a, T>,
+    ) -> Result<(), connection::domain::models::ConnectionError> {
+        Ok(())
+    }
+
+    async fn send_channel_message(
+        &self,
+        _channel_id: &str,
+        _message_type: &str,
+        _message: serde_json::Value,
+        _triggered_by: connection::domain::models::EntityAccessAuth,
     ) -> Result<(), connection::domain::models::ConnectionError> {
         Ok(())
     }
@@ -125,12 +135,15 @@ impl properties::NotificationService for NoOpNotificationService {
 /// Type alias for the properties service implementation used by AI tools
 pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PropertiesPgRepo,
-    properties::PermissionServiceImpl,
+    properties::PermissionServiceImpl<ToolEntityAccessService>,
     NoOpNotificationService,
 >;
 
 /// Type alias for the properties tool context
 pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService>;
+
+/// Type alias for the email tool context
+pub type ToolEmailToolContext = EmailToolContext<ToolUserEmailService>;
 
 /// The full service context containing all API clients.
 /// Individual tools should extract only the clients they need via `FromRef`.
@@ -140,8 +153,10 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
+    pub email_service: Arc<ToolEmailService>,
     pub document_tool_context: ToolDocumentToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
+    pub email_tool_context: ToolEmailToolContext,
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {
@@ -150,10 +165,11 @@ impl FromRef<ToolServiceContext> for ai_toolset::NoContext {
     }
 }
 
-impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService> {
+impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService, ToolEmailService> {
     fn from_ref(ctx: &ToolServiceContext) -> Self {
         SoupToolContext {
             service: ctx.soup_service.clone(),
+            email_service: ctx.email_service.clone(),
         }
     }
 }

@@ -11,3 +11,4 @@ export {
   createBulkRenameDssEntityMutation,
   createRenameDssEntityMutation,
 } from './queries/rename';
+export { createUpdateFileTypeMutation } from './queries/file-type';

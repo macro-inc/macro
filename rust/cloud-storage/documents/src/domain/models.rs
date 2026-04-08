@@ -68,6 +68,17 @@ pub struct CloudFrontConfig {
     pub browser_cache_expiry_seconds: u64,
 }
 
+/// Represents a file type update: either set to a specific type or clear to null.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum FileTypeUpdate {
+    /// Set the file type to a specific value.
+    Set(FileType),
+    /// Clear the file type (set to null).
+    Clear,
+}
+
 /// Arguments for editing a document in the repository.
 pub struct EditDocumentRepoArgs {
     /// The document ID to edit.
@@ -79,6 +90,8 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// New file type (None = no change).
+    pub file_type: Option<FileTypeUpdate>,
 }
 
 /// Arguments for the edit_document service call.
@@ -93,6 +106,9 @@ pub struct EditDocumentServiceArgs {
     /// Updated share permissions for the document.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// The new file type for the document (null to clear).
+    #[serde(default)]
+    pub file_type: Option<FileTypeUpdate>,
 }
 
 /// Query parameters for the location_v3 endpoint.

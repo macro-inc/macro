@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EditDocumentServiceArgsDocumentName } from './editDocumentServiceArgsDocumentName';
+import type { EditDocumentServiceArgsFileType } from './editDocumentServiceArgsFileType';
 import type { EditDocumentServiceArgsProjectId } from './editDocumentServiceArgsProjectId';
 import type { EditDocumentServiceArgsSharePermission } from './editDocumentServiceArgsSharePermission';
 
@@ -14,6 +15,7 @@ import type { EditDocumentServiceArgsSharePermission } from './editDocumentServi
 export interface EditDocumentServiceArgs {
   /** The name of the document. */
   documentName?: EditDocumentServiceArgsDocumentName;
+  fileType?: EditDocumentServiceArgsFileType;
   /** The new project id of the document. */
   projectId?: EditDocumentServiceArgsProjectId;
   sharePermission?: EditDocumentServiceArgsSharePermission;
