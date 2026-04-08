@@ -1,7 +1,4 @@
 import { createEffect, on, onCleanup, type Accessor } from 'solid-js';
-import { isMobile } from '@core/mobile/isMobile';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import type { ThreadListNavigation } from './ThreadList';
 import { isPlatform } from '@core/util/platform';
 
