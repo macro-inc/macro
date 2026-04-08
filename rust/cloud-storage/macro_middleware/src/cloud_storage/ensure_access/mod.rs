@@ -1,82 +1,11 @@
-pub mod history;
-pub mod pin;
-
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 pub use model_entity::EntityType;
-use models_permissions::share_permission::access_level::ViewAccessLevel;
-use models_permissions::share_permission::access_level::{
-    AccessLevel, CommentAccessLevel, EditAccessLevel, OwnerAccessLevel,
-};
+use models_permissions::share_permission::access_level::AccessLevel;
 use std::str::FromStr;
 use std::time::Instant;
-use thiserror::Error;
 
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
-
-/// trait which turns a Unit struct into a [AccessLevel]
-pub(crate) trait BuildAccessLevel: std::fmt::Debug {
-    fn into_access_level() -> AccessLevel;
-}
-
-impl BuildAccessLevel for ViewAccessLevel {
-    fn into_access_level() -> AccessLevel {
-        AccessLevel::View
-    }
-}
-
-impl BuildAccessLevel for EditAccessLevel {
-    fn into_access_level() -> AccessLevel {
-        AccessLevel::Edit
-    }
-}
-
-impl BuildAccessLevel for OwnerAccessLevel {
-    fn into_access_level() -> AccessLevel {
-        AccessLevel::Owner
-    }
-}
-
-impl BuildAccessLevel for CommentAccessLevel {
-    fn into_access_level() -> AccessLevel {
-        AccessLevel::Comment
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum AccessLevelErr {
-    #[error("{}", .0.1)]
-    DbErr((StatusCode, String)),
-    #[error("User does not have access to the desired resource")]
-    UnAuthorized,
-    #[error("{0}")]
-    UnAuthorizedWithMsg(&'static str),
-    #[error("No macro_prompt_id was included in the request")]
-    BadRequest,
-    #[error("Internal server error")]
-    InternalErr,
-}
-
-impl IntoResponse for AccessLevelErr {
-    fn into_response(self) -> Response {
-        match &self {
-            AccessLevelErr::DbErr(e) => (e.0, self.to_string()).into_response(),
-            AccessLevelErr::UnAuthorized => {
-                (StatusCode::UNAUTHORIZED, self.to_string()).into_response()
-            }
-            AccessLevelErr::UnAuthorizedWithMsg(_) => {
-                (StatusCode::UNAUTHORIZED, self.to_string()).into_response()
-            }
-            AccessLevelErr::BadRequest => {
-                (StatusCode::BAD_REQUEST, self.to_string()).into_response()
-            }
-            AccessLevelErr::InternalErr => {
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()).into_response()
-            }
-        }
-    }
-}
 
 /// Gets the users AccessLevel for a given item
 /// This is for the new permission system
