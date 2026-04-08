@@ -248,6 +248,20 @@ function createCallState() {
       }
     }
 
+    // Audio output has no media track — use the room's active device or fall
+    // back to the first enumerated output device so the radio is pre-selected.
+    const activeOutput = r.getActiveDevice('audiooutput');
+    if (activeOutput) {
+      setStore('activeAudioOutputDeviceId', activeOutput);
+    } else if (store.audioOutputDevices.length > 0) {
+      setStore(
+        'activeAudioOutputDeviceId',
+        store.audioOutputDevices[0].deviceId
+      );
+    }
+
+    // Video is off by default so there's no track to inspect — use the room's
+    // active device or fall back to the first enumerated camera.
     const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
     if (camPub?.track) {
       const settings = (
@@ -255,6 +269,16 @@ function createCallState() {
       ).mediaStreamTrack?.getSettings();
       if (settings?.deviceId) {
         setStore('activeVideoInputDeviceId', settings.deviceId);
+      }
+    } else {
+      const activeVideo = r.getActiveDevice('videoinput');
+      if (activeVideo) {
+        setStore('activeVideoInputDeviceId', activeVideo);
+      } else if (store.videoInputDevices.length > 0) {
+        setStore(
+          'activeVideoInputDeviceId',
+          store.videoInputDevices[0].deviceId
+        );
       }
     }
   }
@@ -265,6 +289,15 @@ function createCallState() {
     try {
       await r.switchActiveDevice('audioinput', deviceId);
       setStore('activeAudioInputDeviceId', deviceId);
+
+      // If mic is currently live, republish with the new device to ensure it
+      // actually takes effect (switchActiveDevice alone can be unreliable).
+      if (!store.isAudioMuted) {
+        await r.localParticipant.setMicrophoneEnabled(false);
+        await r.localParticipant.setMicrophoneEnabled(true, {
+          deviceId: { exact: deviceId },
+        });
+      }
     } catch (e) {
       console.error('failed to switch audio input device', e);
     }
@@ -287,6 +320,14 @@ function createCallState() {
     try {
       await r.switchActiveDevice('videoinput', deviceId);
       setStore('activeVideoInputDeviceId', deviceId);
+
+      // If camera is currently live, republish with the new device.
+      if (!store.isVideoMuted) {
+        await r.localParticipant.setCameraEnabled(false);
+        await r.localParticipant.setCameraEnabled(true, {
+          deviceId: { exact: deviceId },
+        });
+      }
     } catch (e) {
       console.error('failed to switch video input device', e);
     }
@@ -363,7 +404,16 @@ function createCallState() {
     if (!r) return;
     const newMuted = !store.isAudioMuted;
     try {
-      await r.localParticipant.setMicrophoneEnabled(!newMuted);
+      if (newMuted) {
+        await r.localParticipant.setMicrophoneEnabled(false);
+      } else {
+        // Re-enable with the user's selected device
+        const deviceId = store.activeAudioInputDeviceId;
+        await r.localParticipant.setMicrophoneEnabled(
+          true,
+          deviceId ? { deviceId: { exact: deviceId } } : undefined
+        );
+      }
       setStore('isAudioMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle audio', e);
@@ -375,7 +425,16 @@ function createCallState() {
     if (!r) return;
     const newMuted = !store.isVideoMuted;
     try {
-      await r.localParticipant.setCameraEnabled(!newMuted);
+      if (newMuted) {
+        await r.localParticipant.setCameraEnabled(false);
+      } else {
+        // Re-enable with the user's selected device
+        const deviceId = store.activeVideoInputDeviceId;
+        await r.localParticipant.setCameraEnabled(
+          true,
+          deviceId ? { deviceId: { exact: deviceId } } : undefined
+        );
+      }
       setStore('isVideoMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle video', e);
