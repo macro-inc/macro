@@ -5,6 +5,7 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import type { ActiveOperator, OperatorType } from './parse-search-operators';
+import { INDEX_OPTIONS as INDEX_OPTIONS_SOURCE } from './search-filter-controls';
 
 export type AutocompleteOption = {
   id: string;
@@ -12,38 +13,9 @@ export type AutocompleteOption = {
   icon?: () => JSX.Element;
 };
 
-export const INDEX_OPTIONS: AutocompleteOption[] = [
-  {
-    id: 'channels',
-    label: 'Channels',
-    icon: () => <EntityIcon targetType="channel" size="xs" />,
-  },
-  {
-    id: 'document',
-    label: 'Documents',
-    icon: () => <EntityIcon targetType="md" size="xs" />,
-  },
-  {
-    id: 'task',
-    label: 'Tasks',
-    icon: () => <EntityIcon targetType="task" size="xs" />,
-  },
-  {
-    id: 'email',
-    label: 'Email',
-    icon: () => <EntityIcon targetType="email" size="xs" />,
-  },
-  {
-    id: 'folders',
-    label: 'Folders',
-    icon: () => <EntityIcon targetType="project" size="xs" />,
-  },
-  {
-    id: 'agent',
-    label: 'Agents',
-    icon: () => <EntityIcon targetType="chat" size="xs" />,
-  },
-];
+export const INDEX_OPTIONS: AutocompleteOption[] = INDEX_OPTIONS_SOURCE.map(
+  (o) => ({ id: o.value, label: o.label, icon: o.icon })
+);
 
 interface SearchOperatorAutocompleteProps {
   activeOperator: ActiveOperator;

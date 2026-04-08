@@ -24,19 +24,12 @@ import {
   SearchOperatorAutocomplete,
   type AutocompleteOption,
 } from './search-operator-autocomplete';
+import { INDEX_OPTIONS as INDEX_OPTIONS_SOURCE } from './search-filter-controls';
 import type { OperatorType } from './parse-search-operators';
 
-const INDEX_QUERY_FILTERS: Record<
-  string,
-  (typeof QUERY_FILTERS)[keyof typeof QUERY_FILTERS] | undefined
-> = {
-  channels: QUERY_FILTERS.channels,
-  document: QUERY_FILTERS.documentAndFile,
-  task: QUERY_FILTERS.task,
-  email: QUERY_FILTERS.email,
-  folders: QUERY_FILTERS.folders,
-  agent: QUERY_FILTERS.agent,
-};
+const INDEX_QUERY_FILTERS = Object.fromEntries(
+  INDEX_OPTIONS_SOURCE.map((o) => [o.value, o.queryFilters])
+);
 
 type SearchbarVariant = 'filled' | 'secondary';
 

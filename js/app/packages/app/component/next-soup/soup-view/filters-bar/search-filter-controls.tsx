@@ -10,7 +10,7 @@ import { batch, createMemo, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 
-const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
+export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
   {
     value: 'channels',
     label: 'Channels',
