@@ -48,7 +48,10 @@ impl EnvExtMacroServiceUrls for Environment {
         match self {
             Environment::Production => url("https://macro.com"),
             Environment::Develop => url("https://dev.macro.com"),
-            Environment::Local => url("http://localhost:3000"),
+            Environment::Local => {
+                let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+                url(&format!("http://localhost:{port}"))
+            }
         }
     }
 

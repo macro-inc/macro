@@ -12,7 +12,10 @@ impl FrontendUrl for Environment {
         match self {
             Environment::Production => "https://macro.com/app/".parse().unwrap(),
             Environment::Develop => "https://dev.macro.com/app/".parse().unwrap(),
-            Environment::Local => "http://localhost:3000/app/".parse().unwrap(),
+            Environment::Local => {
+                let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+                format!("http://localhost:{port}/app/").parse().unwrap()
+            }
         }
     }
 }

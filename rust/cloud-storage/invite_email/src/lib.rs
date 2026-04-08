@@ -58,11 +58,14 @@ const MINUTES_PER_WEEK: u64 = 60 * 24 * 7;
 
 fn signup_url(env: Environment) -> Url {
     let host = match env {
-        Environment::Production => "https://macro.com",
-        Environment::Develop => "https://dev.macro.com",
-        Environment::Local => "http://localhost:3000",
+        Environment::Production => "https://macro.com".to_string(),
+        Environment::Develop => "https://dev.macro.com".to_string(),
+        Environment::Local => {
+            let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+            format!("http://localhost:{port}")
+        }
     };
-    let mut url = Url::parse(host).expect("all the inputs are static, valid values");
+    let mut url = Url::parse(&host).expect("all the inputs are static, valid values");
     url.set_path("/app/signup");
     url
 }
