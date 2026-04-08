@@ -139,13 +139,25 @@ async fn handle_customer_subscription_event(
 
     // Skip processing if the subscription is still incomplete
     if current_status == "incomplete" {
-        tracing::debug!("skipping incomplete subscription");
+        tracing::info!(
+            current_status = current_status,
+            "skipping incomplete subscription"
+        );
         return Ok(());
     }
 
     // For subscription.updated events, check if we're transitioning from incomplete
     // to active/trialing. If so, this is effectively a "new" subscription activation.
     let previous_status = extract_previous_status(&previous_attributes);
+
+    tracing::info!(
+        event_type = ?event_type,
+        current_status = current_status,
+        previous_status = ?previous_status,
+        previous_attributes_raw = ?previous_attributes,
+        "subscription event status details"
+    );
+
     let is_transition_from_incomplete =
         matches!(event_type, EventType::CustomerSubscriptionUpdated)
             && previous_status.as_deref() == Some("incomplete")
@@ -156,6 +168,13 @@ async fn handle_customer_subscription_event(
             previous_status = ?previous_status,
             current_status = current_status,
             "subscription transitioned from incomplete to active state"
+        );
+    } else if matches!(event_type, EventType::CustomerSubscriptionUpdated) {
+        tracing::info!(
+            previous_status = ?previous_status,
+            current_status = current_status,
+            is_transition_from_incomplete = is_transition_from_incomplete,
+            "subscription update did not qualify as incomplete transition"
         );
     }
 
