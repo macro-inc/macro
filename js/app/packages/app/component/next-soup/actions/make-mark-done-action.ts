@@ -13,7 +13,7 @@ type MakeMarkDoneOptions = {
 };
 
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
-  const { notificationSource } = options;;
+  const { notificationSource } = options;
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'channel_message') return false;
@@ -72,8 +72,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     await execute(entities);
 
     soup.selection.clear();
-    const shouldNavigate =
-      soup.filters.isActive('signal') || soup.filters.isActive('noise');
 
     if (nextEntity) {
       soup.focus.set(nextEntity.id);
