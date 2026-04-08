@@ -71,14 +71,7 @@ export const SearchOperatorAutocomplete = (
         id: ch.id,
         label: ch.data.name,
         icon: () => (
-          <EntityIcon
-            targetType={
-              ch.data.channelType === 'direct_message'
-                ? 'direct_message'
-                : 'channel'
-            }
-            size="xs"
-          />
+          <EntityIcon targetType={ch.data.channelType || 'channel'} size="xs" />
         ),
       }))
   );
