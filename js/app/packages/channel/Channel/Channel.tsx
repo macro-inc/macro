@@ -58,6 +58,7 @@ import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
+import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import {
   createTargetMessageController,
@@ -152,6 +153,7 @@ export function Channel(props: ChannelProps) {
 
   const threadManager = createThreadManager();
   const [isChannelInputHidden, setIsChannelInputHidden] = createSignal(false);
+  const [channelInputEl, setChannelInputEl] = createSignal<HTMLDivElement>();
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
     channelId: () => props.channelId,
@@ -226,6 +228,8 @@ export function Channel(props: ChannelProps) {
 
   // On Mobile when a thread reply input is focused, we want to hide the main Channel input
   createInlineInputKeyboardHandler(messageListElement, setIsChannelInputHidden);
+  // On Native iOS app, when the main channel input is focused, scroll to bottom if already near bottom
+  createMainInputKeyboardHandler(channelInputEl, threadListNavigation);
 
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
@@ -353,7 +357,10 @@ export function Channel(props: ChannelProps) {
             </Show>
             <DebugSuspense name="Channel.input">
               <ChannelInputContainer
-                ref={attachInputRef}
+                ref={(el) => {
+                  attachInputRef(el);
+                  setChannelInputEl(el);
+                }}
                 isHidden={isChannelInputHidden()}
               >
                 <ChannelInput
