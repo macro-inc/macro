@@ -506,6 +506,14 @@ fn track_stripe_subscription(
 
     let subscription_id = subscription_id.to_string();
 
+    tracing::info!(
+        value_cents = value_cents,
+        currency = %currency,
+        is_new = data.is_new,
+        status = %data.status,
+        "spawning analytics tracking task"
+    );
+
     tokio::spawn(
         async move {
             let event = SubscriptionEvent {
