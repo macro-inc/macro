@@ -4,11 +4,12 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import type { SoupBody } from '@queries/soup/items';
 import { batch, createMemo, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 
-const INDEX_OPTIONS: (Option & { queryFilters: Record<string, unknown> })[] = [
+const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
   {
     value: 'channels',
     label: 'Channels',
@@ -54,7 +55,7 @@ const INDEX_SELECT_OPTIONS: Option[] = INDEX_OPTIONS.map((o) => ({
 }));
 
 export const SearchIndexFilter = () => {
-  const { soup, setQueryFilters } = useSoupView();
+  const { soup, queryFilters, setQueryFilters } = useSoupView();
 
   const activeIndex = createMemo((): Option[] => {
     const found = INDEX_OPTIONS.find((opt) => soup.filters.isActive(opt.value));
@@ -71,14 +72,31 @@ export const SearchIndexFilter = () => {
         }
       }
 
+      const prevChannelFilters = queryFilters().channel_filters;
+      const channelSubFilters = {
+        channel_ids: prevChannelFilters?.channel_ids,
+        sender_ids: prevChannelFilters?.sender_ids,
+      };
+
       if (selected.length > 0) {
         const opt = INDEX_OPTIONS.find((o) => o.value === selected[0].value);
         if (opt) {
           soup.filters.toggle({ or: [opt.value as FilterID] });
-          setQueryFilters(opt.queryFilters);
+          setQueryFilters({
+            ...opt.queryFilters,
+            channel_filters: {
+              ...opt.queryFilters.channel_filters,
+              ...channelSubFilters,
+            },
+          });
         }
       } else {
-        setQueryFilters(QUERY_FILTERS.default);
+        setQueryFilters({
+          ...QUERY_FILTERS.default,
+          channel_filters: {
+            ...channelSubFilters,
+          },
+        });
       }
     });
   };
