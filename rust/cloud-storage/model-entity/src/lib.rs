@@ -48,6 +48,19 @@ pub enum EntityType {
 }
 
 impl EntityType {
+    /// Returns if the given entity type is a valid entity that is stored in
+    /// entity_access
+    pub fn is_valid_entity_access_entity(&self) -> bool {
+        match self {
+            EntityType::User => false,
+            EntityType::Team => false,
+            EntityType::Channel => false,
+            EntityType::Chat => true,
+            EntityType::Document => true,
+            EntityType::Project => true,
+            EntityType::EmailThread => true,
+        }
+    }
     /// provide an entity string slice to upgrade this type into an [Entity]
     pub fn with_entity_str<'a>(self, entity_id: &'a str) -> Entity<'a> {
         Entity {

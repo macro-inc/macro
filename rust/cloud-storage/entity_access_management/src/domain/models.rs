@@ -12,3 +12,19 @@ pub enum EntityAccessManagementError {
     #[error(transparent)]
     DatabaseError(#[from] anyhow::Error),
 }
+
+/// Entity access source type
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "\"entity_access_source_type\"", rename_all = "lowercase")
+)]
+pub enum EntityAccessSourceType {
+    /// Channel source
+    Channel,
+    /// Team source
+    Team,
+    /// User source
+    User,
+}

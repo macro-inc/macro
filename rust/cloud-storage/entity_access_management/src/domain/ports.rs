@@ -2,6 +2,7 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_entity::EntityType;
 
 use crate::domain::models::EntityAccessManagementError;
@@ -35,6 +36,7 @@ pub trait EntityAccessManagementService: Clone + Send + Sync + 'static {
         &self,
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
+        owner_id: &MacroUserId<Lowercase<'_>>,
         project_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), EntityAccessManagementError>> + Send;
 
@@ -43,6 +45,7 @@ pub trait EntityAccessManagementService: Clone + Send + Sync + 'static {
         &self,
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
+        owner_id: &MacroUserId<Lowercase<'_>>,
         old_project_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), EntityAccessManagementError>> + Send;
 }
