@@ -1,8 +1,4 @@
-//! MCP server binary that serves the DCS AI toolset over HTTP.
-//!
-//! This binary spins up a Streamable HTTP MCP server exposing the same
-//! tools that are available in the DCS chat/stream API, with OAuth 2.1
-//! authentication backed by FusionAuth.
+use std::sync::Arc;
 
 use ai_tools::{
     NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
@@ -11,10 +7,6 @@ use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
-use dashmap::DashMap;
-use document_cognition_service::mcp_oauth::{
-    mcp_router, state::OAuthState, tool_service::AuthenticatedToolService,
-};
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
@@ -29,23 +21,21 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use rmcp::transport::streamable_http_server::{
-    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+use mcp_auth_proxy::{
+    domain::service::McpAuthProxyServiceImpl, outbound::fusionauth::FusionAuthOAuthProvider,
 };
 use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
-use secretsmanager_client::SecretManager;
+use secretsmanager_client::LocalOrRemoteSecret;
 use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
-use sqlx::postgres::PgPoolOptions;
-use std::sync::Arc;
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use sync_service_client::SyncServiceClient;
 
 env_var!(
-    struct McpEnvVars {
+    pub struct McpEnvVars {
         DatabaseUrl,
         EmailScheduledQueue,
         DocumentStorageServiceUrl,
@@ -64,33 +54,21 @@ env_var!(
         FusionauthClientId,
         FusionauthTenantId,
         FusionauthApiKeySecretKey,
+        FusionauthClientSecretKey,
         GoogleClientId,
         GoogleClientSecretKey,
     }
 );
 
-fn is_local() -> bool {
-    matches!(
-        macro_env::Environment::new_or_prod(),
-        macro_env::Environment::Local
-    )
+#[derive(Clone)]
+pub struct McpContext {
+    pub jwt_args: JwtValidationArgs,
+    pub tool_context: ToolServiceContext,
+    pub auth_proxy: McpAuthProxyServiceImpl,
 }
 
-#[tokio::main]
-#[tracing::instrument(err)]
-async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
-
+pub async fn build_context() -> anyhow::Result<McpContext> {
     let env_vars = McpEnvVars::new().context("failed to load environment variables")?;
-
-    // FusionAuth client secret uses a different env var name in local vs deployed
-    let fusionauth_client_secret_env = if is_local() {
-        std::env::var("FUSIONAUTH_CLIENT_SECRET")
-            .context("FUSIONAUTH_CLIENT_SECRET must be provided")?
-    } else {
-        std::env::var("FUSIONAUTH_CLIENT_SECRET_KEY")
-            .context("FUSIONAUTH_CLIENT_SECRET_KEY must be provided")?
-    };
 
     let db = PgPoolOptions::new()
         .min_connections(3)
@@ -111,7 +89,6 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    // JWT validation args (reads JWT_SECRET_KEY, AUDIENCE, ISSUER, etc. from env)
     let jwt_args = JwtValidationArgs::new_with_secret_manager(macro_env, &secretsmanager_client)
         .await
         .context("failed to initialize JWT validation args")?;
@@ -120,23 +97,47 @@ async fn main() -> anyhow::Result<()> {
         InternalApiSecretKey::new().context("failed to create internal auth key")?,
     );
 
+    let sync_service_auth_key = LocalOrRemoteSecret::new_from_secret_manager(
+        env_vars.sync_service_auth_key.as_ref().to_owned(),
+        &secretsmanager_client,
+    )
+    .await
+    .context("failed to load sync service auth key")?;
+
+    let tool_context = build_tool_context(
+        &env_vars,
+        &db,
+        &secretsmanager_client,
+        sqs_client,
+        internal_auth_key.as_ref().to_string(),
+        sync_service_auth_key.as_ref().to_owned(),
+    )
+    .await?;
+
+    let auth_proxy = build_auth_proxy(&env_vars, &secretsmanager_client).await?;
+
+    Ok(McpContext {
+        jwt_args,
+        tool_context,
+        auth_proxy,
+    })
+}
+
+async fn build_tool_context(
+    env_vars: &McpEnvVars,
+    db: &PgPool,
+    secretsmanager_client: &secretsmanager_client::SecretsManager,
+    sqs_client: sqs_client::SQS,
+    internal_auth_key: String,
+    sync_service_auth_key: String,
+) -> anyhow::Result<ToolServiceContext> {
     let dss_url: String = env_vars.document_storage_service_url.as_ref().to_owned();
+    let sync_service_url: String = env_vars.sync_service_url.as_ref().to_owned();
 
     let document_storage_client =
-        DocumentStorageServiceClient::new(internal_auth_key.as_ref().to_string(), dss_url.clone());
+        DocumentStorageServiceClient::new(internal_auth_key.clone(), dss_url.clone());
 
-    let sync_service_auth_key = if is_local() {
-        env_vars.sync_service_auth_key.as_ref().to_owned()
-    } else {
-        secretsmanager_client
-            .get_secret_value(&env_vars.sync_service_auth_key)
-            .await
-            .context("failed to get sync service auth key from secrets manager")?
-            .to_string()
-    };
-
-    let search_service_client =
-        SearchServiceClient::new(internal_auth_key.as_ref().to_string(), dss_url);
+    let search_service_client = SearchServiceClient::new(internal_auth_key.clone(), dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         sync_service_auth_key.clone(),
@@ -144,17 +145,16 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let email_service_client = Arc::new(EmailServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        internal_auth_key.clone(),
         env_vars.email_service_url.as_ref().to_owned(),
     ));
 
     let static_file_service_client =
         Arc::new(static_file_service_client::StaticFileServiceClient::new(
-            internal_auth_key.as_ref().to_string(),
+            internal_auth_key,
             env_vars.static_file_service_url.as_ref().to_owned(),
         ));
 
-    // Build soup service
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
     let email_service = EmailServiceImpl::new(
@@ -176,7 +176,6 @@ async fn main() -> anyhow::Result<()> {
         channels_service,
     ));
 
-    // Build document tool context
     let s3_client = macro_aws_config::s3_client().await;
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
@@ -184,20 +183,15 @@ async fn main() -> anyhow::Result<()> {
         env_vars.docx_document_upload_bucket.as_ref(),
     );
     let document_repo = PgDocumentRepo::new(db.clone());
-    let cloudfront_private_key = if is_local() {
+    let cloudfront_private_key = LocalOrRemoteSecret::new_from_secret_manager(
         env_vars
             .document_storage_service_cloudfront_signer_private_key_secret_name
             .as_ref()
-            .to_owned()
-    } else {
-        secretsmanager_client
-            .get_secret_value(
-                &env_vars.document_storage_service_cloudfront_signer_private_key_secret_name,
-            )
-            .await
-            .context("failed to get CloudFront signer private key from secrets manager")?
-            .to_string()
-    };
+            .to_owned(),
+        secretsmanager_client,
+    )
+    .await
+    .context("failed to load CloudFront signer private key")?;
     let cloudfront_config = CloudFrontConfig {
         distribution_url: env_vars
             .document_storage_service_cloudfront_distribution_url
@@ -207,11 +201,10 @@ async fn main() -> anyhow::Result<()> {
             .document_storage_service_cloudfront_signer_public_key_id
             .as_ref()
             .to_owned(),
-        signer_private_key: cloudfront_private_key,
+        signer_private_key: cloudfront_private_key.as_ref().to_owned(),
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
-    let sync_service_url: String = env_vars.sync_service_url.as_ref().to_owned();
     let sync_service_client =
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone());
     let document_service = DocumentServiceImpl::new(
@@ -222,34 +215,32 @@ async fn main() -> anyhow::Result<()> {
         NoOpTaskProperties,
         NoOpConnectionService,
     );
-    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-        db.clone(),
-    )));
+    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
-        (*entity_access_service).clone(),
+        entity_access_service,
         lexical_client_for_tools,
     );
 
-    // Build properties tool context
     let properties_service = properties::PropertiesServiceImpl::new(
         properties::PropertiesPgRepo::new(db.clone()),
         Some(properties::PermissionServiceImpl::new(
             db.clone(),
-            entity_access_service.clone(),
+            Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+                db.clone(),
+            ))),
         )),
         Some(NoOpNotificationService),
     );
     let properties_tool_context =
         properties::inbound::toolset::PropertiesToolContext::new(properties_service);
 
-    // Build email tool context
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(EmailServiceImpl::new(
             EmailPgRepo::new(db.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-            sqs_client.clone(),
+            sqs_client,
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
@@ -258,7 +249,6 @@ async fn main() -> anyhow::Result<()> {
         ))),
     );
 
-    // Build the ToolServiceContext
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -291,105 +281,54 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized tool context");
 
-    // Create the MCP service with authenticated tool handler
-    let mcp_service = StreamableHttpService::new(
-        move || {
-            let tools = ai_tools::all_tools();
-            Ok(AuthenticatedToolService::new(
-                tools.toolset,
-                tool_context.clone(),
-            ))
-        },
-        Arc::new(LocalSessionManager::default()),
-        StreamableHttpServerConfig::default(),
-    );
+    Ok(tool_context)
+}
 
-    // Build FusionAuth client for the MCP OAuth flow.
-    // The oauth_redirect_uri points to the MCP server's own callback endpoint.
+async fn build_auth_proxy(
+    env_vars: &McpEnvVars,
+    secretsmanager_client: &secretsmanager_client::SecretsManager,
+) -> anyhow::Result<McpAuthProxyServiceImpl> {
     let mcp_public_url: String = env_vars.mcp_public_url.as_ref().to_owned();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
 
-    let fusionauth_api_key = if is_local() {
-        env_vars.fusionauth_api_key_secret_key.as_ref().to_owned()
-    } else {
-        secretsmanager_client
-            .get_secret_value(&env_vars.fusionauth_api_key_secret_key)
-            .await
-            .context("failed to get FusionAuth API key")?
-            .to_string()
-    };
+    let fusionauth_api_key = LocalOrRemoteSecret::new_from_secret_manager(
+        env_vars.fusionauth_api_key_secret_key.as_ref().to_owned(),
+        secretsmanager_client,
+    )
+    .await
+    .context("failed to load FusionAuth API key")?;
 
-    let fusionauth_client_secret = if is_local() {
-        fusionauth_client_secret_env
-    } else {
-        secretsmanager_client
-            .get_secret_value(&fusionauth_client_secret_env)
-            .await
-            .context("failed to get FusionAuth client secret")?
-            .to_string()
-    };
+    let fusionauth_client_secret = LocalOrRemoteSecret::new_from_secret_manager(
+        env_vars.fusionauth_client_secret_key.as_ref().to_owned(),
+        secretsmanager_client,
+    )
+    .await
+    .context("failed to load FusionAuth client secret")?;
 
-    let google_client_secret = if is_local() {
-        env_vars.google_client_secret_key.as_ref().to_owned()
-    } else {
-        secretsmanager_client
-            .get_secret_value(&env_vars.google_client_secret_key)
-            .await
-            .context("failed to get Google client secret")?
-            .to_string()
-    };
+    let google_client_secret = LocalOrRemoteSecret::new_from_secret_manager(
+        env_vars.google_client_secret_key.as_ref().to_owned(),
+        secretsmanager_client,
+    )
+    .await
+    .context("failed to load Google client secret")?;
 
     let fusionauth_client = fusionauth::FusionAuthClient::new(
         env_vars.fusionauth_tenant_id.as_ref().to_owned(),
-        fusionauth_api_key,
+        fusionauth_api_key.as_ref().to_owned(),
         env_vars.fusionauth_client_id.as_ref().to_owned(),
-        fusionauth_client_secret,
+        fusionauth_client_secret.as_ref().to_owned(),
         env_vars.fusionauth_base_url.as_ref().to_owned(),
         mcp_oauth_redirect_uri,
         env_vars.google_client_id.as_ref().to_owned(),
-        google_client_secret,
+        google_client_secret.as_ref().to_owned(),
     );
 
-    // Resolve the Google IDP ID at startup so we don't need it as an env var.
-    let google_idp_id = fusionauth_client
-        .get_identity_provider_id_by_name("google")
+    let auth_provider = FusionAuthOAuthProvider::new(fusionauth_client)
         .await
-        .context("failed to look up Google identity provider in FusionAuth")?;
-    tracing::info!(%google_idp_id, "resolved Google IDP ID from FusionAuth");
+        .context("failed to initialize MCP auth provider")?;
 
-    // Build OAuth state
-    let oauth_state = OAuthState {
-        pending: Arc::new(DashMap::new()),
-        codes: Arc::new(DashMap::new()),
-        jwt_args: jwt_args.clone(),
-        fusionauth_client: Arc::new(fusionauth_client),
-        google_idp_id,
-        mcp_public_url: mcp_public_url.clone(),
-    };
-
-    // Spawn background cleanup for expired OAuth entries
-    let cleanup_state = oauth_state.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-        loop {
-            interval.tick().await;
-            cleanup_state.cleanup_expired();
-        }
-    });
-
-    let app = mcp_router(oauth_state, jwt_args, mcp_service);
-
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8090".to_string());
-    let addr = format!("0.0.0.0:{port}");
-    let listener = tokio::net::TcpListener::bind(&addr)
-        .await
-        .context("failed to bind MCP server")?;
-
-    tracing::info!("MCP server listening on http://{addr}/mcp");
-
-    axum::serve(listener, app)
-        .await
-        .context("MCP server error")?;
-
-    Ok(())
+    Ok(McpAuthProxyServiceImpl::new(
+        mcp_public_url,
+        Arc::new(auth_provider),
+    ))
 }

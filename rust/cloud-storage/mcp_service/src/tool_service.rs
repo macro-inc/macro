@@ -8,8 +8,6 @@ use rmcp::{
 };
 use std::sync::Arc;
 
-use super::middleware::McpUserIdentity;
-
 /// MCP server handler that extracts authenticated user identity from HTTP
 /// request parts injected by rmcp's `StreamableHttpService`.
 pub struct AuthenticatedToolService<Context> {
@@ -18,7 +16,7 @@ pub struct AuthenticatedToolService<Context> {
 }
 
 impl<Context> AuthenticatedToolService<Context> {
-    /// Create a new authenticated tool service.
+    /// Creates a new authenticated tool service.
     pub fn new(toolset: Arc<AsyncToolSet<Context>>, context: Context) -> Self {
         Self { toolset, context }
     }
@@ -58,11 +56,11 @@ where
             .toolset
             .tools
             .iter()
-            .map(|(k, v)| {
+            .map(|(key, value)| {
                 Tool::new(
-                    k.to_owned(),
-                    v.description.to_owned(),
-                    Arc::new(v.input_schema.clone()),
+                    key.to_owned(),
+                    value.description.to_owned(),
+                    Arc::new(value.input_schema.clone()),
                 )
             })
             .collect::<Vec<_>>();
@@ -78,17 +76,13 @@ where
         request: rmcp::model::CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
-        // Extract user identity from HTTP parts injected by rmcp.
-        let identity = context
+        let user_id = context
             .extensions
             .get::<http::request::Parts>()
-            .and_then(|parts| parts.extensions.get::<McpUserIdentity>().cloned())
+            .and_then(|parts| parts.extensions.get::<MacroUserIdStr<'static>>().cloned())
             .ok_or_else(|| {
                 rmcp::ErrorData::internal_error("missing user identity — is auth configured?", None)
             })?;
-
-        let user_id = MacroUserIdStr::try_from(identity.user_id.clone())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("invalid user id: {e}"), None))?;
 
         let request_context = RequestContext { user_id };
 
@@ -106,19 +100,19 @@ where
                 &arguments,
             )
             .await
-            .map_err(|e| match e {
-                ai_toolset::ToolSetError::Deserialization(e) => {
-                    rmcp::ErrorData::parse_error(e.to_string(), None)
+            .map_err(|error| match error {
+                ai_toolset::ToolSetError::Deserialization(error) => {
+                    rmcp::ErrorData::parse_error(error.to_string(), None)
                 }
-                ai_toolset::ToolSetError::NotFound(s) => {
-                    rmcp::ErrorData::resource_not_found(s, None)
+                ai_toolset::ToolSetError::NotFound(message) => {
+                    rmcp::ErrorData::resource_not_found(message, None)
                 }
             })?;
 
         match result {
-            Ok(good) => Ok(rmcp::model::CallToolResult::structured(good)),
-            Err(bad) => Ok(rmcp::model::CallToolResult::error(vec![Content::text(
-                bad.description,
+            Ok(value) => Ok(rmcp::model::CallToolResult::structured(value)),
+            Err(error) => Ok(rmcp::model::CallToolResult::error(vec![Content::text(
+                error.description,
             )])),
         }
     }

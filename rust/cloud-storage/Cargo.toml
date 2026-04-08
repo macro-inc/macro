@@ -72,6 +72,8 @@ members = [
   "macro_sha_count_client",
   "macro_share_permissions",
   "macro_uuid",
+  "mcp_auth_proxy",
+  "mcp_service",
   "memory",
   "mention_utils",
   "model",
