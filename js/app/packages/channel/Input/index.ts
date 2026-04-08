@@ -4,6 +4,9 @@ export { ThreadInput } from './ThreadInput';
 export { createInputAttachmentTracker } from './attachment-tracker';
 export { createInputState } from './create-input-state';
 export { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
+export { createMentionsTracker } from './mentions-tracker';
+export { buildPostMessageRequest } from './message-payload';
+export { uploadInputAttachments } from './upload-attachments';
 
 export { Root } from './Root';
 export { Layout } from './Layout';
@@ -26,6 +29,7 @@ export { SendAction } from './SendAction';
 export { RibbonButton } from './RibbonButton';
 export { FormatButtons } from './FormatButtons';
 export { useInput, useInputCommands, InputProvider } from './context';
+export { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 
 export { isReplyInput } from './types';
 

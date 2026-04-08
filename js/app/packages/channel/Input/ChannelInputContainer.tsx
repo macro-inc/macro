@@ -1,6 +1,7 @@
 import type { JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
+// NOTE: I think this could be more composable.
 export function ChannelInputContainer(props: {
   ref: (el: HTMLDivElement) => void;
   children: JSX.Element;
