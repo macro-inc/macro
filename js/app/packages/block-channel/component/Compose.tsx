@@ -4,43 +4,32 @@ import {
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
-import {
-  applyInlineFormat,
-  applyNodeFormat,
-  buildPostMessageRequest,
-  createConfiguredChannelMarkdownEditor,
-  createInputAttachmentTracker,
-  createInputState,
-  createMentionsTracker,
-  FormatButtons,
-  Input,
-  uploadInputAttachments,
-  type InputSnapshot,
-} from '@channel/Input';
-import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { getDestinationFromOptions } from '@core/component/NewMessage';
+import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { isMobile } from '@core/mobile/isMobile';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import type { InputAttachment } from '@core/store/cacheChannelInput';
 import {
   tryMacroId,
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
-import {
-  chatRuleset,
-  handleFileFolderDrop,
-  uploadFile,
-} from '@core/util/upload';
-import { useSendMessageToPeople } from '@core/util/channels';
-import { isErr } from '@core/util/maybeResult';
-import { commsServiceClient } from '@service-comms/client';
+import { handleFileFolderDrop } from '@core/util/upload';
 import InfoIcon from '@icon/regular/info.svg';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import { handleFileUpload } from './DeprecatedChannelInput/inputAttachments';
+import { DraftChannelInput } from './DeprecatedChannelInput/ChannelInput';
+
+false && fileFolderDrop;
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
+
+  const [isDraggedOver, setIsDraggedOver] = createSignal(false);
+
+  const [channelInputAttachmentsStore, setChannelInputAttachmentsStore] =
+    createStore<Record<string, InputAttachment[]>>({});
 
   const { users: destinationOptions } = useCombinedRecipients();
   const [selectedRecipients, setSelectedRecipients] = createSignal<
@@ -100,112 +89,6 @@ export function ChannelCompose() {
     }
   });
 
-  // -- Error state --
-  const [error, setError] = createSignal<string>();
-
-  // -- Send logic --
-  const { sendToUsers, sendToChannel } = useSendMessageToPeople();
-
-  async function handleSend(snapshot: InputSnapshot) {
-    setError(undefined);
-    const recipients = selectedRecipients();
-
-    if (recipients.length === 0) {
-      setError('Please select at least one recipient');
-      throw new Error('Please select at least one recipient');
-    }
-
-    const destination = getDestinationFromOptions(recipients);
-    const { content, mentions, attachments } = buildPostMessageRequest({
-      snapshot,
-    });
-
-    try {
-      if (
-        destination.type === 'users' &&
-        channelName() &&
-        destination.users.length > 1
-      ) {
-        const res = await commsServiceClient.createChannel({
-          channel_type: 'private',
-          name: channelName() ?? null,
-          participants: destination.users,
-        });
-        if (isErr(res)) {
-          throw new Error('Could not create channel');
-        }
-        const [, { id }] = res;
-        await sendToChannel({
-          channelId: id,
-          content,
-          mentions,
-          attachments,
-          navigate: { navigate: true, mergeHistory: true },
-        });
-      } else {
-        await sendToUsers({
-          users: destination.users,
-          content,
-          mentions,
-          attachments,
-          navigate: { navigate: true, mergeHistory: true },
-        });
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to send message');
-      throw e;
-    }
-  }
-
-  // -- Input composition --
-  const mentionsTracker = createMentionsTracker();
-  const attachmentTracker = createInputAttachmentTracker();
-  let clearComposer = () => {};
-
-  const inputState = createInputState({
-    initialInput: { mode: 'channel' as const },
-    mentions: mentionsTracker.mentions,
-    attachmentTracker,
-    clearComposer: () => clearComposer(),
-    attachFiles: async (files) => {
-      await uploadInputAttachments({
-        files,
-        tracker: attachmentTracker,
-        uploadFile: async (file: File) =>
-          uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
-      });
-    },
-    clearInput: () => markdownEditor.controls.clear(),
-    callbacks: { onSend: handleSend },
-  });
-
-  const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
-
-  const markdownEditor = createConfiguredChannelMarkdownEditor({
-    namespace: 'compose-input-markdown',
-    enableMentions: true,
-    scrollContainer,
-    onMentionCreate: (mention) => mentionsTracker.onMentionCreate(mention),
-    onMentionRemove: (mention) => mentionsTracker.onMentionRemove(mention),
-    onChange: (markdown) => inputState.setValue(markdown),
-    onEnter: () => {
-      if (isMobile()) return false;
-      void inputState.commands.send();
-      return true;
-    },
-    onPasteFilesAndDirs: (files, directories) => {
-      void handleFileFolderDrop(files, directories, (entries) =>
-        inputState.commands.attachFiles(entries.map((e) => e.file))
-      );
-    },
-  });
-  clearComposer = () => markdownEditor.controls.clear();
-
-  const placeholder = createMemo(() => {
-    const name = channelName();
-    return name ? `Send message to ${name}` : 'Send message';
-  });
-
   return (
     <>
       <SplitHeaderLeft>
@@ -221,7 +104,33 @@ export function ChannelCompose() {
       <SplitToolbarLeft>
         <div class="h-full items-center flex" p-1></div>
       </SplitToolbarLeft>
-      <div class="relative flex flex-col w-full h-full panel">
+      <div
+        class="relative flex flex-col w-full h-full panel"
+        use:fileFolderDrop={{
+          onDrop: (files, folders) => {
+            handleFileFolderDrop(files, folders, (uploadEntries) =>
+              handleFileUpload(uploadEntries, {
+                store: channelInputAttachmentsStore,
+                setStore: setChannelInputAttachmentsStore,
+                key: 'draft',
+              })
+            );
+          },
+          onDragStart: () => {
+            setIsDraggedOver(true);
+          },
+          onDragEnd: () => {
+            setIsDraggedOver(false);
+          },
+        }}
+      >
+        <Show when={isDraggedOver()}>
+          <FileDropOverlay valid={true}>
+            <div class="font-mono">
+              Drop any file here to add it to the conversation
+            </div>
+          </FileDropOverlay>
+        </Show>
         <div class="pt-2 h-full grow w-full overflow-y-auto @min-[40rem]:px-4">
           <div class="macro-message-width macro-message-padding mx-auto pb-1 h-full">
             <input
@@ -256,72 +165,19 @@ export function ChannelCompose() {
             </div>
           </div>
         </div>
-        <Show when={error()}>
-          <div class="shrink-0 w-full @min-[40rem]:px-4">
-            <div class="mx-auto w-full macro-message-width macro-message-padding">
-              <div class="text-sm font-mono text-failure-ink">{error()}</div>
-            </div>
+        <div class="shrink-0 w-full pb-2 @min-[40rem]:px-4">
+          <div class="mx-auto w-full macro-message-width macro-message-padding">
+            <DraftChannelInput
+              selectedRecipients={selectedRecipients}
+              channelName={channelName}
+              inputAttachments={{
+                store: channelInputAttachmentsStore,
+                setStore: setChannelInputAttachmentsStore,
+                key: 'draft',
+              }}
+            />
           </div>
-        </Show>
-        <ChannelInputContainer ref={() => {}}>
-          <div class="mx-auto w-full macro-message-width macro-message-padding @min-[40rem]:px-4">
-            <Input.Root
-              input={inputState.view()}
-              commands={inputState.commands}
-            >
-              <Input.DropZone
-                onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
-                onDragEnd={() => inputState.setIsDraggedOver(false)}
-              >
-                <Input.Layout>
-                  <Input.DropOverlay />
-                  <Input.FormatRibbon>
-                    <FormatButtons
-                      selectionState={() => markdownEditor.selection}
-                      onInlineFormat={(format) =>
-                        applyInlineFormat(markdownEditor.lexical, format)
-                      }
-                      onNodeFormat={(format) =>
-                        applyNodeFormat(markdownEditor.lexical, format)
-                      }
-                    />
-                  </Input.FormatRibbon>
-                  <Input.EditorShell
-                    ref={setScrollContainer}
-                    onClick={(event) => {
-                      if (!isMobile()) {
-                        event.stopPropagation();
-                        markdownEditor.controls.focus();
-                      }
-                    }}
-                  >
-                    <Input.Editor>
-                      <MarkdownShell
-                        config={markdownEditor}
-                        placeholder={placeholder()}
-                        autofocus={false}
-                        class="text-sm"
-                      />
-                    </Input.Editor>
-                  </Input.EditorShell>
-                  <Input.Attachments kind="media" />
-                  <Input.Attachments kind="document" />
-                  <Input.Footer>
-                    <Input.Actions>
-                      <Input.Actions.Left>
-                        <Input.AttachFilesAction />
-                        <Input.ToggleFormatAction />
-                      </Input.Actions.Left>
-                      <Input.Actions.Right>
-                        <Input.SendAction />
-                      </Input.Actions.Right>
-                    </Input.Actions>
-                  </Input.Footer>
-                </Input.Layout>
-              </Input.DropZone>
-            </Input.Root>
-          </div>
-        </ChannelInputContainer>
+        </div>
       </div>
     </>
   );
