@@ -5,8 +5,10 @@ import {
   commsServiceClient,
   type MessageResponse,
 } from '@service-comms/client';
-import type { PostReactionRequest } from '@service-comms/generated/models';
-import type { GetChannelResponse } from './types';
+import type {
+  CountedReaction,
+  PostReactionRequest,
+} from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';
@@ -21,7 +23,7 @@ import {
 type WithChannelId<T> = T & { channelId: string };
 type WithUserId<T> = T & { userId: string };
 
-type ReactionList = GetChannelResponse['reactions'][string];
+type ReactionList = CountedReaction[];
 type WithReactionState<T> = T & {
   currentReactions?: ReactionList;
   threadId?: string;
@@ -121,12 +123,7 @@ export function optimisticAddReaction(
     >
   >
 ): AddReactionContext | undefined {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
-  const fallbackChannelData =
-    queryClient.getQueryData<GetChannelResponse>(queryKey);
-  const currentReactions =
-    vars.currentReactions ?? fallbackChannelData?.reactions[vars.message_id];
+  const currentReactions = vars.currentReactions;
   const target = resolveMessageTarget({
     channelId: vars.channelId,
     messageId: vars.message_id,
@@ -170,12 +167,7 @@ export function optimisticRemoveReaction(
     >
   >
 ): RemoveReactionContext | undefined {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
-  const fallbackChannelData =
-    queryClient.getQueryData<GetChannelResponse>(queryKey);
-  const currentReactions =
-    vars.currentReactions ?? fallbackChannelData?.reactions[vars.message_id];
+  const currentReactions = vars.currentReactions;
   const target = resolveMessageTarget({
     channelId: vars.channelId,
     messageId: vars.message_id,

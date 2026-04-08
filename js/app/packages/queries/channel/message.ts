@@ -14,7 +14,7 @@ import type {
   CountedReaction,
   PostMessageRequest,
 } from '@service-comms/generated/models';
-import type { Attachment, Message } from './types';
+import type { Attachment, Message } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';

@@ -47,6 +47,9 @@ function createScope(
 describe('setupQueryPersistence', () => {
   it('allowlists persisted channel query families', () => {
     expect(shouldPersistChannelQuery(channelKeys.withID('a').queryKey)).toBe(
+      false
+    );
+    expect(shouldPersistChannelQuery(channelKeys.listChannels.queryKey)).toBe(
       true
     );
     expect(
@@ -153,13 +156,13 @@ describe('setupQueryPersistence', () => {
     queryClient.setQueryData(messageQueryKey, { value: 'skip' });
     expect(store.set).not.toHaveBeenCalled();
 
-    queryClient.setQueryData(channelKeys.withID('b').queryKey, {
+    queryClient.setQueryData(channelKeys.listChannels.queryKey, {
       value: 'persist',
     });
     expect(store.set).toHaveBeenCalledTimes(1);
     expect(
       (store.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
-    ).toEqual(channelKeys.withID('b').queryKey);
+    ).toEqual(channelKeys.listChannels.queryKey);
   });
 
   it('restores query data from store on added event', async () => {
