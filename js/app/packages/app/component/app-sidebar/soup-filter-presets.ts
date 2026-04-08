@@ -298,23 +298,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           queryFilters: {
-            channel_filters: { channel_ids: EXCLUDE },
-            chat_filters: { chat_ids: EXCLUDE },
-            email_filters: { recipients: EXCLUDE },
-            document_filters: { document_ids: EXCLUDE },
+            ...QUERY_FILTERS.folders,
             project_filters: { owners: [ctx.userId] },
           },
           clientFilters: { and: ['folders'] },
         };
       },
       all: () => ({
-        queryFilters: {
-          channel_filters: { channel_ids: EXCLUDE },
-          chat_filters: { chat_ids: EXCLUDE },
-          email_filters: { recipients: EXCLUDE },
-          document_filters: { document_ids: EXCLUDE },
-          project_filters: {},
-        },
+        queryFilters: QUERY_FILTERS.folders,
         clientFilters: { and: ['folders'] },
       }),
     },
