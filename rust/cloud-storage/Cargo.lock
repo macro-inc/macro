@@ -2057,6 +2057,7 @@ dependencies = [
  "comms_db_client",
  "connection_gateway_client",
  "doppleganger",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",

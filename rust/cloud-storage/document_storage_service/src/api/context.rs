@@ -252,6 +252,7 @@ impl From<&ApiContext> for CommsHandlerState {
             permissions_token_secret: ctx.permissions_token_secret.clone(),
             frecency_storage: ctx.frecency_storage.clone(),
             comms_state: ctx.comms_state.clone(),
+            entity_access_service: ctx.entity_access_service.clone(),
         }
     }
 }

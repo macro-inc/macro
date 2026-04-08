@@ -5,6 +5,8 @@ use comms::{
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access::outbound::PgAccessRepository;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
@@ -15,6 +17,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 pub type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
 env_var! {
     #[derive(Clone)]
@@ -31,6 +34,7 @@ pub struct AppState {
     pub permissions_token_secret: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
     pub frecency_storage: FrecencyPgStorage,
     pub comms_state: CommsRouterState<ChannelImpl>,
+    pub entity_access_service: Arc<EntityAccessServiceType>,
 }
 
 pub type ChannelImpl = ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
