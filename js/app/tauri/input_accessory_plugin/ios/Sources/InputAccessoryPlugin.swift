@@ -9,23 +9,27 @@ class InputAccessoryPlugin: Plugin {
         webview.scrollView.keyboardDismissMode = .interactive
 
         guard !InputAccessoryPlugin.isSwizzled else { return }
-        InputAccessoryPlugin.isSwizzled = true
-        disableAccessoryBar(in: webview)
+        if disableAccessoryBar(in: webview) {
+            InputAccessoryPlugin.isSwizzled = true
+        }
     }
 }
 
-private func disableAccessoryBar(in rootView: UIView) {
+@discardableResult
+private func disableAccessoryBar(in rootView: UIView) -> Bool {
     var queue = rootView.subviews
     while !queue.isEmpty {
         let view = queue.removeFirst()
         if NSStringFromClass(type(of: view)).hasPrefix("WKContent") {
             if let cls = object_getClass(view) {
                 swizzleInputAccessoryView(on: cls)
+                return true
             }
-            return
+            return false
         }
         queue.append(contentsOf: view.subviews)
     }
+    return false
 }
 
 private class NoInputAccessoryView: UIView {
