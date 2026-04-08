@@ -1,3 +1,4 @@
+import XIcon from '@icon/regular/x.svg';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -168,14 +169,25 @@ const InChannelFilter = () => {
   };
 
   return (
-    <FilterCombobox
-      label={inLabel()}
-      options={channelOptions()}
-      active={activeChannelFilter()}
-      onChange={handleChange}
-      placeholder="Search channels..."
-      virtualized
-    />
+    <div class="flex items-stretch">
+      <FilterCombobox
+        label={inLabel()}
+        options={channelOptions()}
+        active={activeChannelFilter()}
+        onChange={handleChange}
+        placeholder="Search channels..."
+        virtualized
+      />
+      <Show when={activeChannelFilter().length > 0}>
+        <button
+          type="button"
+          class="flex items-center ml-[-1px] px-1 border border-accent/30 bg-accent/15 text-accent rounded-r-xs hover:bg-accent/25"
+          onClick={() => handleChange([])}
+        >
+          <XIcon class="size-3" />
+        </button>
+      </Show>
+    </div>
   );
 };
 
@@ -234,13 +246,24 @@ const FromSenderFilter = () => {
   };
 
   return (
-    <FilterCombobox
-      label={fromLabel()}
-      options={senderOptions()}
-      active={activeSenderFilter()}
-      onChange={handleChange}
-      placeholder="Search senders..."
-      virtualized
-    />
+    <div class="flex items-stretch">
+      <FilterCombobox
+        label={fromLabel()}
+        options={senderOptions()}
+        active={activeSenderFilter()}
+        onChange={handleChange}
+        placeholder="Search senders..."
+        virtualized
+      />
+      <Show when={activeSenderFilter().length > 0}>
+        <button
+          type="button"
+          class="flex items-center ml-[-1px] px-1 border border-accent/30 bg-accent/15 text-accent rounded-r-xs hover:bg-accent/25"
+          onClick={() => handleChange([])}
+        >
+          <XIcon class="size-3" />
+        </button>
+      </Show>
+    </div>
   );
 };
