@@ -207,18 +207,20 @@ export function ChannelThread(props: ThreadProps) {
               </DebugSuspense>
               <DebugSuspense name="ChannelThread.replies">
                 <Thread.RepliesContainer>
-                  <Thread.ReplyList
-                    channelId={props.channelId()}
-                    threadId={props.data().id}
-                    replies={displayReplies()}
-                    getMessageActions={props.getMessageActions}
-                    messageEditor={props.messageEditor}
-                    isNewMessage={props.isNewMessage}
-                    highlightedReplyId={props.highlightedReplyId}
-                    onReady={setReplyListHandle}
-                    selectedReplyId={replySelection.selectedId}
-                    isThreadFocused={isThreadFocused}
-                  />
+                  <DebugSuspense name="ChannelThread.ReplyList">
+                    <Thread.ReplyList
+                      channelId={props.channelId()}
+                      threadId={props.data().id}
+                      replies={displayReplies()}
+                      getMessageActions={props.getMessageActions}
+                      messageEditor={props.messageEditor}
+                      isNewMessage={props.isNewMessage}
+                      highlightedReplyId={props.highlightedReplyId}
+                      onReady={setReplyListHandle}
+                      selectedReplyId={replySelection.selectedId}
+                      isThreadFocused={isThreadFocused}
+                    />
+                  </DebugSuspense>
 
                   <Show when={props.isReplying()}>
                     <div
