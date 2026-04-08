@@ -503,11 +503,10 @@ function NarrowInboxLayout(props: LayoutProps) {
               >
                 <StaticMarkdown
                   theme={twoLineClampMarkdownTheme}
-                  markdown={
-                    (mostRecentMessageSenderName
-                      ? `**${mostRecentMessageSenderName.firstName()}:** `
-                      : '') + msg().content.trim()
-                  }
+                  markdown={(() => {
+                    const name = mostRecentMessageSenderName?.firstName();
+                    return (name ? `**${name}:** ` : '') + msg().content.trim();
+                  })()}
                   singleLine
                 />
               </Show>
