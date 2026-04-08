@@ -43,9 +43,7 @@ type ChannelTargetMessageParams = {
   [URL_PARAMS.thread]?: string;
 };
 
-type IncomingParams = Record<string, string>;
-
-export type BlockChannelProps = IncomingParams & {};
+export type BlockChannelProps = ChannelTargetMessageParams;
 
 type ChannelPropsTargetMessage = Pick<
   ChannelProps,

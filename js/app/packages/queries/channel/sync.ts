@@ -43,7 +43,7 @@ type CommsAttachmentPayload = {
  * update since it was already applied. Otherwise, this is an external update
  * (other user, other tab, or server-initiated) and we apply it to the cache.
  *
- * We always call softInvalidateChannelWithID to ensure eventual consistency:
+ * We always call softInvalidateTargetCaches to ensure eventual consistency:
  * - Marks query as stale for background refetch when component remounts
  * - Handles cross-tab sync where optimistic state may differ
  * - Catches edge cases like server-side message modifications
@@ -138,22 +138,19 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
     payload.nonce
   );
 
+  const target = resolveMessageTarget({
+    channelId: payload.channel_id,
+    messageId: payload.message_id,
+  });
+
   if (isExternalUpdate) {
     try {
-      const target = resolveMessageTarget({
-        channelId: payload.channel_id,
-        messageId: payload.message_id,
-      });
       replaceTargetReactions(payload.channel_id, target, payload.reactions);
     } catch (error) {
       console.error('Failed to update reaction cache from websocket:', error);
     }
   }
 
-  const target = resolveMessageTarget({
-    channelId: payload.channel_id,
-    messageId: payload.message_id,
-  });
   softInvalidateTargetCaches(payload.channel_id, target);
 }
 
