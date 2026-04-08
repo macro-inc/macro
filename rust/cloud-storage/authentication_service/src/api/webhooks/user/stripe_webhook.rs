@@ -87,6 +87,8 @@ pub async fn handler(
     tracing::info!(
         event_id = %event.id,
         event_type = ?event.type_,
+        event_api_version = ?event.api_version,
+        library_api_version = %"1.0.0-alpha.4 (targets 2025-09-30.clover)",
         "processing stripe event"
     );
 
