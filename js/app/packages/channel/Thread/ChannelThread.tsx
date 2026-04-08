@@ -111,7 +111,8 @@ export function ChannelThread(props: ThreadProps) {
     activeReplies()
       .slice(DEFAULT_VISIBLE_REPLY_COUNT)
       .some((reply: ApiThreadReply) => props.isNewMessage?.(reply));
-  const collapsedReplyUsers = () => getUniqueReplyUserIds(activeReplies());
+  const collapsedReplyUsers = () =>
+    getUniqueReplyUserIds(activeReplies().slice(DEFAULT_VISIBLE_REPLY_COUNT));
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
   const shouldShowCollapsedIndicator = () =>
