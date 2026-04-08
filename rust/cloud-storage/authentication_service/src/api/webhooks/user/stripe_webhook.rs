@@ -524,6 +524,13 @@ fn track_stripe_subscription(
             let user_data = MetaUserData::with_email(&data.email);
             let event_id = Some(subscription_id.as_str());
 
+            tracing::info!(
+                status = %data.status,
+                is_new = data.is_new,
+                ga_client_id = ?data.ga_client_id,
+                "analytics tracking task started"
+            );
+
             match (data.status.as_str(), data.is_new) {
                 ("active" | "trialing", true) => {
                     if let Some(ref ga_client_id) = data.ga_client_id {
