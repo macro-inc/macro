@@ -23,9 +23,11 @@ pub struct PinParams {
     pub pinned_item_id: String,
 }
 
+/// Json body containing the pin type
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JsonBodyWithPinType {
+    /// The pin type
     pub pin_type: String,
 }
 
