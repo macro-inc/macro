@@ -6,7 +6,36 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
+import {
+  createSignal,
+  createEffect,
+  onCleanup,
+  Show,
+  createMemo,
+} from 'solid-js';
+import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
+import {
+  detectActiveOperator,
+  stripOperatorAtRange,
+} from './parse-search-operators';
+import {
+  SearchOperatorAutocomplete,
+  type AutocompleteOption,
+} from './search-operator-autocomplete';
+import type { OperatorType } from './parse-search-operators';
+
+const INDEX_QUERY_FILTERS: Record<
+  string,
+  (typeof QUERY_FILTERS)[keyof typeof QUERY_FILTERS] | undefined
+> = {
+  channels: QUERY_FILTERS.channels,
+  document: QUERY_FILTERS.document,
+  email: QUERY_FILTERS.email,
+  task: QUERY_FILTERS.task,
+  people: QUERY_FILTERS.people,
+  agent: QUERY_FILTERS.agent,
+  file: QUERY_FILTERS.file,
+};
 
 type SearchbarVariant = 'filled' | 'secondary';
 
@@ -24,7 +53,7 @@ const variantStyles: Record<SearchbarVariant, string> = {
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { searchText, setSearchText } = useSoupView();
+  const { searchText, setSearchText, soup, setQueryFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
 
   const [ref, setRef] = createSignal<HTMLInputElement | undefined>();
@@ -32,6 +61,24 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   const [searchFocused, setSearchFocused] = createSignal(false);
   const [measuredWidth, setMeasuredWidth] = createSignal(0);
+  const [cursorPos, setCursorPos] = createSignal(0);
+  const [highlightedIndex, setHighlightedIndex] = createSignal(0);
+
+  const activeOperator = createMemo(() => {
+    if (!searchFocused()) return null;
+    return detectActiveOperator(searchText(), cursorPos());
+  });
+
+  createEffect(() => {
+    if (activeOperator()) {
+      setHighlightedIndex(0);
+    }
+  });
+
+  const updateCursorPos = () => {
+    const el = ref();
+    if (el) setCursorPos(el.selectionStart ?? el.value.length);
+  };
 
   createEffect(() => {
     if (measureSpan) {
@@ -68,8 +115,101 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     return Math.max(MIN_INPUT_WIDTH, measuredWidth());
   };
 
+  const handleSelect = (type: OperatorType, option: AutocompleteOption) => {
+    const op = activeOperator();
+    if (!op) return;
+
+    const newText = stripOperatorAtRange(
+      searchText(),
+      op.startIndex,
+      op.endIndex
+    );
+    setSearchText(newText);
+
+    switch (type) {
+      case 'index': {
+        soup.filters.toggle({ or: [option.id] });
+        const qf = INDEX_QUERY_FILTERS[option.id];
+        if (qf) setQueryFilters(qf);
+        break;
+      }
+      case 'in':
+        setQueryFilters((prev) => ({
+          ...prev,
+          channel_filters: {
+            ...prev.channel_filters,
+            channel_ids: [
+              ...(prev.channel_filters?.channel_ids ?? []),
+              option.id,
+            ],
+          },
+        }));
+        break;
+      case 'from':
+        setQueryFilters((prev) => ({
+          ...prev,
+          channel_filters: {
+            ...prev.channel_filters,
+            sender_ids: [
+              ...(prev.channel_filters?.sender_ids ?? []),
+              option.id,
+            ],
+          },
+        }));
+        break;
+    }
+
+    queueMicrotask(() => ref()?.focus());
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const op = activeOperator();
+
+    if (op) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightedIndex((i) => i + 1);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightedIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const dropdownEl = ref()
+          ?.closest('[data-search-bar-wrapper]')
+          ?.querySelector('[data-operator-dropdown]');
+        if (dropdownEl) {
+          const buttons = dropdownEl.querySelectorAll('button');
+          const idx = highlightedIndex();
+          if (buttons[idx]) {
+            (buttons[idx] as HTMLButtonElement).click();
+          }
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.currentTarget.blur();
+        props.onDismiss?.();
+        return;
+      }
+    } else {
+      if (e.key === 'Escape' || e.key === 'Enter' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.currentTarget.blur();
+        if (e.key === 'Escape') props.onDismiss?.();
+      }
+    }
+  };
+
   return (
-    <div class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2">
+    <div
+      class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
+      data-search-bar-wrapper
+    >
       <Tooltip
         class="w-full"
         placement="bottom-start"
@@ -100,20 +240,17 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             data-soup-search
             type="text"
             value={searchText()}
-            onInput={(e) => setSearchText(e.currentTarget.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            onKeyDown={(e) => {
-              if (
-                e.key === 'Escape' ||
-                e.key === 'Enter' ||
-                e.key === 'ArrowDown'
-              ) {
-                e.preventDefault();
-                e.currentTarget.blur();
-                if (e.key === 'Escape') props.onDismiss?.();
-              }
+            onInput={(e) => {
+              setSearchText(e.currentTarget.value);
+              queueMicrotask(updateCursorPos);
             }}
+            onClick={updateCursorPos}
+            onFocus={() => {
+              setSearchFocused(true);
+              queueMicrotask(updateCursorPos);
+            }}
+            onBlur={() => setSearchFocused(false)}
+            onKeyDown={handleKeyDown}
             class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full"
             style={{ width: `${inputWidth()}px` }}
           />
@@ -140,6 +277,17 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             >
               <XIcon class="size-4 mobile:size-6" />
             </button>
+          </Show>
+          <Show when={activeOperator()}>
+            {(op) => (
+              <SearchOperatorAutocomplete
+                activeOperator={op()}
+                onSelect={handleSelect}
+                onDismiss={() => ref()?.blur()}
+                highlightedIndex={highlightedIndex}
+                setHighlightedIndex={setHighlightedIndex}
+              />
+            )}
           </Show>
         </div>
       </Tooltip>
