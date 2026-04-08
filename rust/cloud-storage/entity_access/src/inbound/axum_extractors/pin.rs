@@ -16,7 +16,7 @@ use crate::domain::{
 };
 use model_user::axum_extractor::MacroUserExtractor;
 
-/// Path parameters for history routes.
+/// Path parameters for pin routes.
 #[derive(serde::Deserialize)]
 pub struct PinParams {
     /// The ID of the item.
