@@ -197,6 +197,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    const input = e.currentTarget as HTMLInputElement | null;
     const op = activeOperator();
 
     if (op) {
@@ -226,14 +227,14 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       }
       if (e.key === 'Escape') {
         e.preventDefault();
-        e.currentTarget.blur();
+        input?.blur();
         props.onDismiss?.();
         return;
       }
     } else {
       if (e.key === 'Escape' || e.key === 'Enter' || e.key === 'ArrowDown') {
         e.preventDefault();
-        e.currentTarget.blur();
+        input?.blur();
         if (e.key === 'Escape') props.onDismiss?.();
       }
     }

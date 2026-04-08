@@ -166,10 +166,11 @@ export function useFilterRefinements() {
       viewCategories().flatMap((c) => c.options.map((o) => o.id))
     );
     for (const option of INDEX_OPTIONS) {
+      const optionId = option.id as FilterID;
       if (
-        !soup.filters.isActive(option.id) ||
-        coveredByView.has(option.id) ||
-        presetFilterIds.has(option.id as FilterID)
+        !soup.filters.isActive(optionId) ||
+        coveredByView.has(optionId) ||
+        presetFilterIds.has(optionId)
       ) {
         continue;
       }
@@ -180,7 +181,7 @@ export function useFilterRefinements() {
         icon: option.icon,
         categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
         onRemove: () => {
-          soup.filters.toggle({ or: [option.id as FilterID] });
+          soup.filters.toggle({ or: [optionId] });
           setQueryFilters(QUERY_FILTERS.default);
         },
       });
