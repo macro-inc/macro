@@ -1,5 +1,4 @@
 use crate::domain::models::{BundleUpdate, BundleUpdateRequest, PlatformVerifier, UpdateErr};
-use macro_env::Environment;
 use url::Url;
 
 /// outbound trait for sending network requests to query the bundle state
@@ -7,10 +6,9 @@ pub trait GetJsBundleSemver: Send + Sync + 'static {
     /// fetch the semver of the current app over the network
     fn get_app_semver(
         &self,
-        env: &Environment,
     ) -> impl Future<Output = Result<semver::Version, UpdateErr>> + Send;
     /// get the Url of the bundle
-    fn get_app_bundle_path(&self, env: &Environment) -> Url;
+    fn get_app_bundle_path(&self) -> Url;
 }
 
 /// the service level trait for dealing with tauri app integration

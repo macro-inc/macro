@@ -6971,6 +6971,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "macro_env",
+ "macro_service_urls",
  "native_app_service",
  "tokio",
  "tracing",
@@ -6984,8 +6985,6 @@ dependencies = [
  "anyhow",
  "axum",
  "cool_asserts",
- "macro_env",
- "macro_service_urls",
  "reqwest",
  "semver",
  "serde",
