@@ -56,10 +56,10 @@ async fn main() -> anyhow::Result<()> {
             println!("All backfill phases COMPLETED");
         }
         "verify" => {
-            let user_access_items =
+            let _user_access_items =
                 get_legacy_user_items(&db, &env_vars.macro_user_id, false).await?;
 
-            let entity_access_items =
+            let _entity_access_items =
                 get_entity_access_items(&db, &env_vars.macro_user_id, false).await?;
         }
         other => anyhow::bail!(
@@ -163,9 +163,14 @@ async fn backfill_owned_items(db: &Pool<Postgres>) -> anyhow::Result<()> {
         let inserts: Vec<_> = batch
             .iter()
             .map(|item| {
+                let item_type = if item.item_type.eq("thread") {
+                    "email_thread".to_string()
+                } else {
+                    item.item_type.to_string()
+                };
                 (
                     item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
-                    item.item_type.to_string(),
+                    item_type,
                     item.user_id.to_string(),
                     SourceEntityType::User,
                     item.access_level,
@@ -225,10 +230,15 @@ async fn backfill_non_projects_channels_and_teams(db: &Pool<Postgres>) -> anyhow
         let mut inserts = Vec::new();
 
         for item in &batch {
+            let item_type = if item.item_type.eq("thread") {
+                "email_thread".to_string()
+            } else {
+                item.item_type.to_string()
+            };
             if let Some(channel_id) = &item.granted_from_channel_id {
                 inserts.push((
                     item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
-                    item.item_type.clone(),
+                    item_type.clone(),
                     channel_id.to_string(),
                     SourceEntityType::Channel,
                     item.access_level,
@@ -237,7 +247,7 @@ async fn backfill_non_projects_channels_and_teams(db: &Pool<Postgres>) -> anyhow
             if let Some(team_id) = &item.granted_from_team_id {
                 inserts.push((
                     item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
-                    item.item_type.clone(),
+                    item_type.clone(),
                     team_id.to_string(),
                     SourceEntityType::Team,
                     item.access_level,
@@ -345,9 +355,14 @@ async fn backfill_project_items(db: &Pool<Postgres>) -> anyhow::Result<()> {
                     let inserts: Vec<_> = item_ids
                         .iter()
                         .map(|item| {
+                            let item_type = if item.item_type.eq("thread") {
+                                "email_thread".to_string()
+                            } else {
+                                item.item_type.to_string()
+                            };
                             (
                                 item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
-                                item.item_type.to_string(),
+                                item_type,
                                 source_id.clone(),
                                 source_entity_type,
                                 project.access_level,
@@ -386,10 +401,9 @@ async fn backfill_project_items(db: &Pool<Postgres>) -> anyhow::Result<()> {
 pub async fn get_legacy_user_items(
     db: &Pool<Postgres>,
     user_id: &str,
-    exclude_owned: bool,
+    _exclude_owned: bool,
 ) -> anyhow::Result<Vec<(String, String)>> {
     let start = std::time::Instant::now();
-    let item_type_filter: Option<String> = None;
     let results = sqlx::query!(
         r#"
         WITH RECURSIVE ProjectHierarchy AS (
@@ -488,7 +502,7 @@ pub async fn get_legacy_user_items(
 pub async fn get_entity_access_items(
     db: &Pool<Postgres>,
     user_id: &str,
-    exclude_owned: bool,
+    _exclude_owned: bool,
 ) -> anyhow::Result<Vec<(macro_uuid::Uuid, String)>> {
     let start = std::time::Instant::now();
     // Fetch source IDs first
