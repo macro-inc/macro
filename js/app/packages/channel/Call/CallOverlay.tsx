@@ -235,17 +235,21 @@ function DeviceList(props: {
   return (
     <MenuGroup>
       <GroupLabel>{props.label}</GroupLabel>
-      <For each={props.devices}>
-        {(device) => (
-          <MenuItem
-            text={device.label}
-            selectorType="radio"
-            value={device.deviceId}
-            groupValue={props.activeDeviceId ?? ''}
-            onClick={() => props.onSelect(device.deviceId)}
-          />
-        )}
-      </For>
+      <DropdownMenu.RadioGroup
+        value={props.activeDeviceId ?? ''}
+        onChange={(value) => props.onSelect(value)}
+      >
+        <For each={props.devices}>
+          {(device) => (
+            <MenuItem
+              text={device.label}
+              selectorType="radio"
+              value={device.deviceId}
+              groupValue={props.activeDeviceId ?? ''}
+            />
+          )}
+        </For>
+      </DropdownMenu.RadioGroup>
     </MenuGroup>
   );
 }
