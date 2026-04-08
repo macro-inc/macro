@@ -1,6 +1,6 @@
 import XIcon from '@icon/regular/x.svg';
-import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
-import { EntityIcon } from '@entity/extractors/entity-icon';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
@@ -15,37 +15,37 @@ export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
   {
     value: 'channels',
     label: 'Channels',
-    icon: () => <CoreEntityIcon targetType="channel" size="xs" />,
+    icon: () => <EntityIcon targetType="channel" size="xs" />,
     queryFilters: QUERY_FILTERS.channels,
   },
   {
     value: 'document',
     label: 'Documents',
-    icon: () => <CoreEntityIcon targetType="md" size="xs" />,
+    icon: () => <EntityIcon targetType="md" size="xs" />,
     queryFilters: QUERY_FILTERS.documentAndFile,
   },
   {
     value: 'task',
     label: 'Tasks',
-    icon: () => <CoreEntityIcon targetType="task" size="xs" />,
+    icon: () => <EntityIcon targetType="task" size="xs" />,
     queryFilters: QUERY_FILTERS.task,
   },
   {
     value: 'email',
     label: 'Email',
-    icon: () => <CoreEntityIcon targetType="email" size="xs" />,
+    icon: () => <EntityIcon targetType="email" size="xs" />,
     queryFilters: QUERY_FILTERS.email,
   },
   {
     value: 'folders',
     label: 'Folders',
-    icon: () => <CoreEntityIcon targetType="project" size="xs" />,
+    icon: () => <EntityIcon targetType="project" size="xs" />,
     queryFilters: QUERY_FILTERS.folders,
   },
   {
     value: 'agent',
     label: 'Agents',
-    icon: () => <CoreEntityIcon targetType="chat" size="xs" />,
+    icon: () => <EntityIcon targetType="chat" size="xs" />,
     queryFilters: QUERY_FILTERS.agent,
   },
 ];
@@ -141,7 +141,7 @@ const InChannelFilter = () => {
         label: ch.data.name,
         icon: () => (
           <div class="size-4">
-            <EntityIcon entity={ch.data} />
+            <EntityIconWithAvatar entity={ch.data} />
           </div>
         ),
       }))
