@@ -1,14 +1,14 @@
-import { handleFileUpload } from '@block-channel/utils/inputAttachments';
+import { handleFileUpload } from '@block-channel/component/DeprecatedChannelInput/inputAttachments';
 import {
   $convertSingleMentionToCard,
   expandGroupParticipants,
   toSimpleMention,
-} from '@block-channel/utils/mentionExpansion';
+} from '@block-channel/component/DeprecatedChannelInput/mentionExpansion';
 import {
   createTasksFromPotential,
   replaceCheckboxesWithMentions,
-} from '@block-channel/utils/taskModeConversion';
-import { useTaskMode } from '@block-channel/hooks/taskmode';
+} from '@block-channel/component/DeprecatedChannelInput/taskModeConversion';
+import { useTaskMode } from '@block-channel/component/DeprecatedChannelInput/taskmode';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import {
@@ -65,7 +65,7 @@ import { TaskPreviewPanel } from './TaskPreviewPanel';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { ENABLE_STATIC_DOCUMENT_CARDS } from '@core/constant/featureFlags';
-import type { SendMessageArgs } from '@block-channel/hooks/message';
+import type { SendMessageArgs } from '@block-channel/component/DeprecatedChannelInput/message';
 
 false && fileFolderDrop;
 

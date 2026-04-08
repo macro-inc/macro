@@ -2,7 +2,7 @@ import {
   clearDraftMessage,
   loadDraftMessage,
   saveDraftMessage,
-} from '@block-channel/utils/draftMessages';
+} from '@block-channel/component/DeprecatedChannelInput/draftMessages';
 import type {
   DraftMessage,
   InputAttachment,
@@ -14,7 +14,7 @@ import type { ChannelParticipant } from '@queries/channel/types';
 import { type Accessor, createMemo, createSignal, onMount } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { BaseInput } from './BaseInput';
-import { useSendChannelMessage } from '@block-channel/hooks/message';
+import { useSendChannelMessage } from '@block-channel/component/DeprecatedChannelInput/message';
 
 export type ChannelInputProps = {
   channelId: string;

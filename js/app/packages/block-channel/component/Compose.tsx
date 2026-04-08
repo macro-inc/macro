@@ -18,8 +18,8 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import InfoIcon from '@icon/regular/info.svg';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { handleFileUpload } from '../utils/inputAttachments';
-import { DraftChannelInput } from './ChannelInput';
+import { handleFileUpload } from './DeprecatedChannelInput/inputAttachments';
+import { DraftChannelInput } from './DeprecatedChannelInput/ChannelInput';
 
 false && fileFolderDrop;
 

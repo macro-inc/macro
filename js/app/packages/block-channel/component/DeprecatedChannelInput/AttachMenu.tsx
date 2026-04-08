@@ -1,4 +1,4 @@
-import { handleFileUpload } from '@block-channel/utils/inputAttachments';
+import { handleFileUpload } from '@block-channel/component/DeprecatedChannelInput/inputAttachments';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import { blockAcceptedFileExtensions } from '@core/constant/allBlocks';

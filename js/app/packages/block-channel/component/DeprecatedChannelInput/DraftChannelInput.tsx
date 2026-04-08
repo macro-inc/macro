@@ -1,4 +1,4 @@
-import { mapAttachmentsForSend } from '@block-channel/utils/inputAttachments';
+import { mapAttachmentsForSend } from '@block-channel/component/DeprecatedChannelInput/inputAttachments';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import type { WithCustomUserInput } from '@core/user';
