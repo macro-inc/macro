@@ -23,7 +23,7 @@ pub enum BundleClientErr {
 }
 
 impl BundleClient {
-    fn new(mut base: Url) -> Self {
+    pub fn new(mut base: Url) -> Self {
         base.set_path("");
         let client = reqwest::Client::new();
         Self { client, base }

@@ -178,7 +178,10 @@ pub fn run() {
                     .unwrap_or(Platform::Desktop),
             )
             .expect("Domains must be valid urls"),
-        );
+        )
+        .plugin(macro_bundle_updater_plugin::MacroBundleUpdaterPlugin::new(
+            "https://macro.com".parse().expect("valid url"),
+        ));
 
     #[cfg(mobile)]
     {

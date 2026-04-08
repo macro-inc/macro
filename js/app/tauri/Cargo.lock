@@ -92,6 +92,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "logger",
+ "macro_bundle_updater_plugin",
  "navigation_plugin",
  "nom",
  "reqwest",
@@ -2572,6 +2573,7 @@ dependencies = [
  "rootcause",
  "semver",
  "serde",
+ "serde_json",
  "sha2",
  "strum",
  "tauri",
@@ -2704,6 +2706,7 @@ dependencies = [
  "nom",
  "rootcause",
  "serde",
+ "serde_json",
  "serde_qs",
  "tauri",
  "tauri-plugin-opener",

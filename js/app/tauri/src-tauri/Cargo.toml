@@ -48,6 +48,7 @@ urlencoding = "2.1.3"
 # system notifications for when the app is open
 tauri-plugin-notification = "2"
 # push notifications for mobile (when app is closed)
+macro_bundle_updater_plugin = { path = "../macro_bundle_updater_plugin" }
 navigation_plugin = { path = "../navigation_plugin" }
 tauri-plugin-notifications = { git = "https://github.com/macro-inc/tauri-plugins", rev = "2b2257722f60458921eadf4a9ab4d9e1db36e34f" }
 tauri-plugin-os = "2"

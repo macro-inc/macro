@@ -6,11 +6,15 @@ use crate::domain::{
     ports::SystemQuery,
 };
 
-struct SystemInfo<R: Runtime> {
+pub struct SystemInfo<R: Runtime> {
     app_handle: tauri::AppHandle<R>,
 }
 
 impl<R: Runtime> SystemInfo<R> {
+    pub fn new(app_handle: tauri::AppHandle<R>) -> Self {
+        Self { app_handle }
+    }
+
     fn get_target(&self) -> Target {
         match std::env::consts::OS {
             "linux" => Target::Linux,
