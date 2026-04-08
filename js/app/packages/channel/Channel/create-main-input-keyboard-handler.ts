@@ -1,4 +1,4 @@
-import { createEffect, on, onCleanup, type Accessor } from 'solid-js';
+import { createEffect, onCleanup, type Accessor } from 'solid-js';
 import type { ThreadListNavigation } from './ThreadList';
 import { isPlatform } from '@core/util/platform';
 
