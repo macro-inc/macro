@@ -2,6 +2,7 @@ import { cn } from '@ui/utils/classname';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
+import { useUserId } from '@core/context/user';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import type { ActiveOperator, OperatorType } from './parse-search-operators';
 
@@ -58,6 +59,7 @@ export const SearchOperatorAutocomplete = (
   const { useList } = useQuickAccess();
   const channels = useList('channel', 'dm');
   const contacts = useList('person');
+  const userId = useUserId();
 
   const channelOptions = createMemo((): AutocompleteOption[] =>
     channels()
@@ -71,15 +73,29 @@ export const SearchOperatorAutocomplete = (
       }))
   );
 
-  const contactOptions = createMemo((): AutocompleteOption[] =>
-    contacts().map((c) => ({
-      id: c.id,
-      label: c.data.name || c.id,
-      icon: () => (
-        <UserIcon id={c.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }))
-  );
+  const contactOptions = createMemo((): AutocompleteOption[] => {
+    const currentUserId = userId();
+    let me: AutocompleteOption | undefined;
+    const others: AutocompleteOption[] = [];
+    for (const c of contacts()) {
+      const opt: AutocompleteOption = {
+        id: c.id,
+        label:
+          c.id === currentUserId
+            ? `${c.data.name || 'Me'} (me)`
+            : c.data.name || c.id,
+        icon: () => (
+          <UserIcon id={c.id} size="xs" suppressClick showTooltip={false} />
+        ),
+      };
+      if (c.id === currentUserId) {
+        me = opt;
+      } else {
+        others.push(opt);
+      }
+    }
+    return [...(me ? [me] : []), ...others];
+  });
 
   const baseOptions = createMemo((): AutocompleteOption[] => {
     switch (props.activeOperator.type) {
