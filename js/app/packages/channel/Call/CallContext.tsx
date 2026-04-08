@@ -251,17 +251,19 @@ function createCallState() {
     // Audio output has no media track — use the room's active device or fall
     // back to the first enumerated output device so the radio is pre-selected.
     const activeOutput = r.getActiveDevice('audiooutput');
-    if (activeOutput) {
+    const outputDevices = store.audioOutputDevices;
+    if (
+      activeOutput &&
+      outputDevices.some((d) => d.deviceId === activeOutput)
+    ) {
       setStore('activeAudioOutputDeviceId', activeOutput);
-    } else if (store.audioOutputDevices.length > 0) {
-      setStore(
-        'activeAudioOutputDeviceId',
-        store.audioOutputDevices[0].deviceId
-      );
+    } else if (outputDevices.length > 0) {
+      setStore('activeAudioOutputDeviceId', outputDevices[0].deviceId);
     }
 
-    // Video is off by default so there's no track to inspect — use the room's
-    // active device or fall back to the first enumerated camera.
+    // Only set the active video device when we can read it from a live track.
+    // When video is off we leave it null — guessing would show the wrong
+    // selection if the browser's default differs from the first enumerated device.
     const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
     if (camPub?.track) {
       const settings = (
@@ -269,16 +271,6 @@ function createCallState() {
       ).mediaStreamTrack?.getSettings();
       if (settings?.deviceId) {
         setStore('activeVideoInputDeviceId', settings.deviceId);
-      }
-    } else {
-      const activeVideo = r.getActiveDevice('videoinput');
-      if (activeVideo) {
-        setStore('activeVideoInputDeviceId', activeVideo);
-      } else if (store.videoInputDevices.length > 0) {
-        setStore(
-          'activeVideoInputDeviceId',
-          store.videoInputDevices[0].deviceId
-        );
       }
     }
   }
@@ -428,12 +420,23 @@ function createCallState() {
       if (newMuted) {
         await r.localParticipant.setCameraEnabled(false);
       } else {
-        // Re-enable with the user's selected device
         const deviceId = store.activeVideoInputDeviceId;
         await r.localParticipant.setCameraEnabled(
           true,
           deviceId ? { deviceId: { exact: deviceId } } : undefined
         );
+        // Read the actual device the browser chose so the dropdown is accurate
+        const camPub = r.localParticipant.getTrackPublication(
+          Track.Source.Camera
+        );
+        if (camPub?.track) {
+          const settings = (
+            camPub.track as LocalTrack
+          ).mediaStreamTrack?.getSettings();
+          if (settings?.deviceId) {
+            setStore('activeVideoInputDeviceId', settings.deviceId);
+          }
+        }
       }
       setStore('isVideoMuted', newMuted);
     } catch (e) {
