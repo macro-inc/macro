@@ -37,7 +37,7 @@ macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }
-macro_env = { path = "../macro_env", features = ["frontend_url"] }
+macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",

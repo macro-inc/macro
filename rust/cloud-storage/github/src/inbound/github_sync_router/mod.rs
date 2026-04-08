@@ -13,7 +13,7 @@ use axum::{
     extract::{FromRequest, Request, State},
     response::Redirect,
 };
-use macro_env::ext::frontend_url::FrontendUrl;
+use macro_service_urls::EnvExtMacroServiceUrls;
 use reqwest::StatusCode;
 use std::sync::Arc;
 
@@ -103,7 +103,7 @@ pub async fn sync_redirect_handler<T: GithubSyncService>(
 ) -> Redirect {
     Redirect::temporary(
         macro_env::Environment::new_or_prod()
-            .get_frontend_url()
+            .app()
             .as_str(),
     )
 }

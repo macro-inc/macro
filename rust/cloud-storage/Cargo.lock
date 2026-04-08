@@ -4476,6 +4476,7 @@ dependencies = [
  "jsonwebtoken 10.3.0 (git+https://github.com/whutchinson98/jsonwebtoken)",
  "macro_db_migrator",
  "macro_env",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -6071,7 +6072,6 @@ dependencies = [
  "strum",
  "thiserror 2.0.17",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -6985,6 +6985,7 @@ dependencies = [
  "axum",
  "cool_asserts",
  "macro_env",
+ "macro_service_urls",
  "reqwest",
  "semver",
  "serde",

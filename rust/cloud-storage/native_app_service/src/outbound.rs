@@ -2,7 +2,8 @@ use crate::domain::{
     models::{BUNDLE_ARCHIVE_NAME, SEMVER_FILE_NAME, UpdateErr},
     ports::GetJsBundleSemver,
 };
-use macro_env::{Environment, ext::frontend_url::FrontendUrl};
+use macro_env::Environment;
+use macro_service_urls::EnvExtMacroServiceUrls;
 use std::str::FromStr;
 use url::Url;
 
@@ -27,7 +28,7 @@ impl Default for DefaultBundleFetcher {
 impl GetJsBundleSemver for DefaultBundleFetcher {
     #[tracing::instrument(skip(self), ret, err)]
     async fn get_app_semver(&self, env: &Environment) -> Result<semver::Version, UpdateErr> {
-        let url = env.get_frontend_url().join(self.semver_file_name).unwrap();
+        let url = env.app().join(self.semver_file_name).unwrap();
         let res = reqwest::get(url)
             .await
             .map_err(anyhow::Error::from)?
@@ -41,7 +42,7 @@ impl GetJsBundleSemver for DefaultBundleFetcher {
     }
 
     fn get_app_bundle_path(&self, env: &Environment) -> Url {
-        env.get_frontend_url()
+        env.app()
             .join(self.bundle_archive_name)
             .unwrap()
     }
