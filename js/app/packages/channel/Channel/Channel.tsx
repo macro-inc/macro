@@ -120,6 +120,7 @@ export function Channel(props: ChannelProps) {
     initialTargetMessageReplyId: props.targetMessageReplyId,
     messageKeys: () => messageIndex.keys(),
     navigation: threadListNavigation,
+    didInitialScroll: () => threadListScrollState()?.didInitialScroll ?? false,
   });
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
