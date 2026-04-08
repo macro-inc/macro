@@ -490,11 +490,11 @@ fn track_stripe_subscription(
     data: SubscriptionTrackingData,
 ) {
     let Some(value_cents) = data.value_cents else {
-        tracing::debug!("skipping analytics tracking: missing value_cents");
+        tracing::warn!("skipping analytics tracking: missing value_cents");
         return;
     };
     let Some(currency) = data.currency else {
-        tracing::debug!("skipping analytics tracking: missing currency");
+        tracing::warn!("skipping analytics tracking: missing currency");
         return;
     };
 
