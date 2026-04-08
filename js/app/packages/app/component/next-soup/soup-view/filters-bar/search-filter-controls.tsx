@@ -14,37 +14,41 @@ export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
   {
     value: 'channels',
     label: 'Channels',
-    icon: () => <EntityIcon targetType="channel" size="xs" />,
+    icon: () => (
+      <EntityIcon targetType="channel" size="xs" theme="monochrome" />
+    ),
     queryFilters: QUERY_FILTERS.channels,
   },
   {
     value: 'document',
     label: 'Documents',
-    icon: () => <EntityIcon targetType="md" size="xs" />,
+    icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
     queryFilters: QUERY_FILTERS.documentAndFile,
   },
   {
     value: 'task',
     label: 'Tasks',
-    icon: () => <EntityIcon targetType="task" size="xs" />,
+    icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
     queryFilters: QUERY_FILTERS.task,
   },
   {
     value: 'email',
     label: 'Email',
-    icon: () => <EntityIcon targetType="email" size="xs" />,
+    icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
     queryFilters: QUERY_FILTERS.email,
   },
   {
     value: 'folders',
     label: 'Folders',
-    icon: () => <EntityIcon targetType="project" size="xs" />,
+    icon: () => (
+      <EntityIcon targetType="project" size="xs" theme="monochrome" />
+    ),
     queryFilters: QUERY_FILTERS.folders,
   },
   {
     value: 'agent',
     label: 'Agents',
-    icon: () => <EntityIcon targetType="chat" size="xs" />,
+    icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
     queryFilters: QUERY_FILTERS.agent,
   },
 ];
