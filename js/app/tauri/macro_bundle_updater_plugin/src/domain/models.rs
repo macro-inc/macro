@@ -110,6 +110,12 @@ impl Progress {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ProgressPercentage(f64);
 
+impl ProgressPercentage {
+    pub fn value(self) -> f64 {
+        self.0
+    }
+}
+
 #[non_exhaustive]
 pub struct DownloadBundleRequest<P> {
     pub url: Url,

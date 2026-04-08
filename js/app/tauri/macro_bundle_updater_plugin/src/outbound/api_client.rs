@@ -42,7 +42,8 @@ impl UpdateRepo for BundleClient {
         url.path_segments_mut()
             .map_err(|_| BundleClientErr::CannotBeABase(self.base.clone()))?
             .clear()
-            .push("/bundle")
+            .push("update")
+            .push("bundle")
             .push(request.target.into())
             .push(request.arch.into())
             .push(&request.current_version.to_string());

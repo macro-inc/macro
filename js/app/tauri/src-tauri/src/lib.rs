@@ -1,13 +1,13 @@
 use logger::Logger;
+use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
-use navigation_plugin::{MacroNavigationPlugin, Platform};
 use reqwest::cookie::CookieStore;
 use reqwest::header::COOKIE;
 use rootcause::{Report, report};
 use serde::Serialize;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(target_os = "ios")]
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
 use tauri::{Manager, Runtime};
@@ -120,9 +120,7 @@ pub fn run() {
         .with_line_number(true)
         .pretty();
 
-    let registry = tracing_subscriber::registry()
-        .with(filter)
-        .with(fmt_layer);
+    let registry = tracing_subscriber::registry().with(filter).with(fmt_layer);
 
     #[cfg(target_os = "ios")]
     let registry = registry.with(tracing_oslog::OsLogger::new(
@@ -170,18 +168,12 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
         .plugin(
-            MacroNavigationPlugin::new(
-                ALLOWED_DOMAINS,
-                cfg!(mobile)
-                    .then_some(Platform::Mobile)
-                    .unwrap_or(Platform::Desktop),
-            )
-            .expect("Domains must be valid urls"),
-        )
-        .plugin(macro_bundle_updater_plugin::MacroBundleUpdaterPlugin::new(
-            "https://macro.com".parse().expect("valid url"),
-        ));
+            macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
+                "https://macro.com".parse().expect("valid url"),
+            ),
+        );
 
     #[cfg(mobile)]
     {
@@ -198,7 +190,11 @@ pub fn run() {
             alive: AtomicBool::new(true),
             generation: AtomicU64::new(0),
         })
-        .invoke_handler(tauri::generate_handler![heartbeat_response])
+        .invoke_handler(tauri::generate_handler![
+            heartbeat_response,
+            macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
+            macro_bundle_updater_plugin::inbound::plugin::perform_update
+        ])
         .setup(|app| {
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {

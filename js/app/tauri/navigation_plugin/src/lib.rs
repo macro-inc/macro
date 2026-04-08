@@ -53,7 +53,6 @@ pub enum Platform {
 #[derive(Clone)]
 pub struct MacroNavigationPlugin {
     internal_domains: Arc<[Url]>,
-    platform: Platform,
     allowed_file_prefix: Option<PathBuf>,
 }
 
@@ -72,16 +71,12 @@ struct MacroCallbackQuery<'a> {
 }
 
 impl MacroNavigationPlugin {
-    pub fn new(
-        allow_list: &'static [&'static str],
-        platform: Platform,
-    ) -> Result<Self, url::ParseError> {
+    pub fn new(allow_list: &'static [&'static str]) -> Result<Self, url::ParseError> {
         Ok(MacroNavigationPlugin {
             internal_domains: allow_list
                 .iter()
                 .map(|s| s.parse())
                 .collect::<Result<Arc<_>, _>>()?,
-            platform,
             allowed_file_prefix: None,
         })
     }
@@ -90,7 +85,6 @@ impl MacroNavigationPlugin {
         self.allowed_file_prefix = Some(prefix);
         self
     }
-
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
     fn get_destination<'a>(&self, url: &'a Url) -> NavigationOutput<'a> {
@@ -153,7 +147,11 @@ fn transform_external_url(mut url: Url) -> Url {
             .as_str(),
         ));
     }
-    if url.query_pairs().find(|(k, _v)| k.as_ref() == "is_mobile").is_none() {
+    if url
+        .query_pairs()
+        .find(|(k, _v)| k.as_ref() == "is_mobile")
+        .is_none()
+    {
         url.query_pairs_mut().append_pair("is_mobile", "true");
     }
     url
@@ -169,11 +167,11 @@ impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
         app: &tauri::AppHandle<R>,
         _config: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if self.allowed_file_prefix.is_none() {
-            if let Ok(cache_dir) = app.path().app_cache_dir() {
-                tracing::debug!("Setting allowed file prefix to {cache_dir:?}");
-                self.allowed_file_prefix = Some(cache_dir);
-            }
+        if self.allowed_file_prefix.is_none()
+            && let Ok(cache_dir) = app.path().app_cache_dir()
+        {
+            tracing::debug!("Setting allowed file prefix to {cache_dir:?}");
+            self.allowed_file_prefix = Some(cache_dir);
         }
         Ok(())
     }
