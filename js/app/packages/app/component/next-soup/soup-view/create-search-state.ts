@@ -116,10 +116,11 @@ export const createSearchState = ({
     return filterToResultMap;
   });
 
-  const hasChannelQueryFilters = createMemo(() => {
+  // we will hide local results if there are channel filters because we only want message results
+  const hasChannelQueryFilters = () => {
     const cf = queryFilters().channel_filters;
     return !!(cf?.channel_ids?.length || cf?.sender_ids?.length);
-  });
+  };
 
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
