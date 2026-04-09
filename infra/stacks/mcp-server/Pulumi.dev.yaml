@@ -11,6 +11,7 @@ config:
   mcp-server:google_client_secret: google-client-secret-dev
   mcp-server:internal_auth_key: document-storage-service-auth-key-dev
   mcp-server:jwt_secret_key: fusionauth-jwt-secret-dev
+  mcp-server:macro_cache_secret_key: macro-cache-dev
   mcp-server:macro_db_secret_key: macro-db-dev
   mcp-server:sync_service_auth_key: sync-service-key-dev
   datadog:validate: "false"
