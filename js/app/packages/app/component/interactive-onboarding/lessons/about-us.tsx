@@ -7,6 +7,7 @@ import UsersThree from '@phosphor-icons/core/regular/users-three.svg?component-s
 import { startSsoLogin } from '@core/auth/sso';
 import { initAndStartEmailSync } from '@core/email-link';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { isTauri } from '@core/util/platform';
 
 function AboutUsContent(props: LessonContentProps) {
   onMount(() => {
@@ -78,7 +79,7 @@ function AboutUsDemo() {
       >
         <For each={PANELS}>
           {(panel) => (
-            <div class="flex-1 flex flex-col">
+            <div class="flex-1 w-full flex flex-col">
               <div class="border border-edge-muted bg-panel rounded-xs overflow-hidden">
                 <div class="p-6 flex flex-col items-center gap-4 text-center">
                   {panel.icon()}
@@ -103,19 +104,22 @@ export const aboutUsLesson: LessonDefinition = {
     const success = await startSsoLogin({
       returnPath: `${ROUTER_BASE_CONCAT}welcome?google=1`,
     });
-    // On native mobile, auth completes inline — init email sync and advance.
-    // On web this never resolves (page redirects away).
+    // On web, startSsoLogin redirects and never resolves.
+    // On native mobile, auth completes inline. Reload the page with the
+    // return param so it goes through the normal completeOnParam flow —
+    // this avoids Suspense blanking the screen when auth state changes.
     if (success) {
-      await initAndStartEmailSync().match(
-        () => {},
-        (e) => {
-          if (e.tag !== 'AlreadyInitialized') {
-            console.error('Failed to init email link after Google auth', e);
-          }
-        }
-      );
+      // Reload into the completeOnParam flow. Tauri uses HashRouter so the
+      // route + query must go inside the hash fragment.
+      if (isTauri()) {
+        window.location.hash = '#/welcome?google=1';
+        window.location.reload();
+      } else {
+        window.location.href = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?google=1`;
+      }
     }
-    return success;
+    // Never resolves — page reloads (native) or redirects (web).
+    return new Promise(() => {});
   },
   completeOnParam: 'google',
   onCompleteParam: () =>

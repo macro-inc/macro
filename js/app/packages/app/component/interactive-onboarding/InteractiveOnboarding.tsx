@@ -86,13 +86,17 @@ export default function InteractiveOnboarding() {
   );
   const [lessonKey, setLessonKey] = createSignal(0);
 
-  const navigateAway = () => {
-    splitPanel?.handle.replace({
-      next: { type: 'component', id: 'unified-list' },
-    });
-  };
-
   const navigate = useNavigate();
+
+  const navigateAway = () => {
+    if (splitPanel) {
+      splitPanel.handle.replace({
+        next: { type: 'component', id: 'unified-list' },
+      });
+    } else {
+      navigate('/', { replace: true });
+    }
+  };
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
@@ -377,7 +381,7 @@ export default function InteractiveOnboarding() {
                     <div class="size-full flex flex-col items-center overflow-y-auto p-6">
                       <div
                         style={bodyStyle()}
-                        class="flex flex-col items-center text-center gap-6 w-full max-w-md my-auto"
+                        class="flex flex-col items-center text-center gap-6 w-full max-w-md mt-4"
                       >
                         <div class="w-24 opacity-20">
                           <MacroLogo class="fill-ink" />
