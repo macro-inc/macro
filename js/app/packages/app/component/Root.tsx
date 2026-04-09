@@ -189,7 +189,7 @@ function BasePathComponent() {
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
         <Navigate
-          href={`${isNativeMobilePlatform() ? '/login' : '/signup'}${window.location.search}`}
+          href={`${isNativeMobilePlatform() ? '/login' : '/welcome'}${window.location.search}`}
         />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>

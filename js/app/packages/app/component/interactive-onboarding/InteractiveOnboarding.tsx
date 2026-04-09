@@ -11,8 +11,6 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { useTutorialCompleted } from '@core/context/user';
 import { CommandState } from '@app/component/command';
 import { resetSandbox } from './sandbox/sandbox-store';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
@@ -31,8 +29,6 @@ export default function InteractiveOnboarding() {
   const analytics = useAnalytics();
 
   const splitPanel = useSplitPanel();
-  const completeTutorial = useCompleteTutorialMutation();
-  const tutorialCompleted = useTutorialCompleted();
   const location = useLocation();
 
   const isTouch = isTouchDevice();
@@ -95,20 +91,7 @@ export default function InteractiveOnboarding() {
     });
   };
 
-  // Redirect away if the backend already marks the tutorial as complete
-  // before the user starts. We set tutorialComplete early (after the invite
-  // step) so we track whether the flow has started to avoid a mid-flow redirect.
-  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
   const navigate = useNavigate();
-  createEffect(() => {
-    if (tutorialCompleted() && !onboardingStarted() && !testMode) {
-      if (splitPanel) {
-        navigateAway();
-      } else {
-        navigate('/', { replace: true });
-      }
-    }
-  });
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
@@ -127,8 +110,6 @@ export default function InteractiveOnboarding() {
       index: current.index,
       state: 'completed',
     });
-
-    setOnboardingStarted(true);
 
     if (current.definition.onContinue) {
       // Don't update reactive state — avoids a UI flash to the next lesson
@@ -154,7 +135,6 @@ export default function InteractiveOnboarding() {
       state: 'skipped',
     });
 
-    setOnboardingStarted(true);
     state.skipLesson(current.definition.id);
     setReadyToContinue(false);
     setContinueLabel(undefined);
@@ -265,28 +245,6 @@ export default function InteractiveOnboarding() {
       }
     })
   );
-
-  // Mark tutorial complete on the backend once the email-invite lesson is
-  // completed or skipped — before the paywall step. On touch devices there is
-  // no email-invite step, so we complete after the welcome lesson instead.
-  createEffect(() => {
-    if (testMode) return;
-    if (isTouch) {
-      const welcome = state
-        .lessons()
-        .find((l) => l.definition.id === 'welcome');
-      if (welcome && (welcome.completed || welcome.skipped)) {
-        completeTutorial.mutate(undefined);
-      }
-    } else {
-      const invite = state
-        .lessons()
-        .find((l) => l.definition.id === 'email-invite');
-      if (invite && (invite.completed || invite.skipped)) {
-        completeTutorial.mutate(undefined);
-      }
-    }
-  });
 
   createEffect(
     on(

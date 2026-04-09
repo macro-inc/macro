@@ -28,7 +28,7 @@ function PostSignupRedirect() {
         }
       }
     );
-    navigate(userInfo()?.tutorialComplete ? '/' : '/welcome', {
+    navigate('/', {
       replace: true,
     });
   });
