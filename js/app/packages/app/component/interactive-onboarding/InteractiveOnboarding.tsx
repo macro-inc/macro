@@ -63,9 +63,24 @@ export default function InteractiveOnboarding() {
       ? new Set(sortedLessons.slice(0, slideIndex).map((l) => l.id))
       : undefined;
 
+  // Detect a return-from-OAuth param synchronously so we can pre-populate
+  // completed lessons before the first render, avoiding a flash of the first slide.
+  // Search the unfiltered LESSONS list — the returning lesson (e.g. about-us) may
+  // have been filtered out now that the user is authenticated.
+  const returningLesson = LESSONS.find(
+    (l) => l.completeOnParam && params.has(l.completeOnParam)
+  );
+  const returnCompleted = returningLesson
+    ? new Set(
+        sortedLessons
+          .filter((l) => (l.order ?? 0) <= (returningLesson.order ?? 0))
+          .map((l) => l.id)
+      )
+    : undefined;
+
   const state = createOnboardingState({
     definitions: lessons,
-    initialCompleted: debugCompleted ?? new Set(),
+    initialCompleted: debugCompleted ?? returnCompleted ?? new Set(),
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
@@ -150,20 +165,15 @@ export default function InteractiveOnboarding() {
   let shellRef: HTMLDivElement | undefined;
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('onboarding-shell');
 
-  onMount(async () => {
+  onMount(() => {
     if (shellRef) {
       attachHotkeys(shellRef);
       shellRef.focus();
     }
 
-    // When returning from an external auth flow (e.g. Google OAuth), the URL
-    // contains a param that matches a lesson's completeOnParam. Fast-forward
-    // through all lessons up to and including that lesson so the user lands on
-    // the next step. If the param is absent (e.g. user hit Back), we start fresh.
-    const returningLesson = sortedLessons.find(
-      (l) => l.completeOnParam && params.has(l.completeOnParam)
-    );
-
+    // When returning from an external auth flow (e.g. Google OAuth), clean the
+    // return param from the URL and run any async side-effects. The lessons are
+    // already pre-completed synchronously via returnCompleted above.
     if (returningLesson) {
       const cleanParams = new URLSearchParams(window.location.search);
       cleanParams.delete(returningLesson.completeOnParam!);
@@ -174,16 +184,7 @@ export default function InteractiveOnboarding() {
         qs ? `${window.location.pathname}?${qs}` : window.location.pathname
       );
 
-      if (returningLesson.onCompleteParam) {
-        const ok = await returningLesson.onCompleteParam();
-        if (!ok) return;
-      }
-
-      for (const lesson of sortedLessons) {
-        state.completeLesson(lesson.id);
-        if (lesson.id === returningLesson.id) break;
-      }
-      setLessonKey((k) => k + 1);
+      returningLesson.onCompleteParam?.();
     }
   });
 
