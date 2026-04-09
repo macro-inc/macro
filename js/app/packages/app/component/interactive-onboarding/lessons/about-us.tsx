@@ -106,11 +106,11 @@ export const aboutUsLesson: LessonDefinition = {
   completeOnParam: 'google',
   onCompleteParam: () =>
     initAndStartEmailSync().match(
-      () => {},
+      () => true,
       (e) => {
-        if (e.tag !== 'AlreadyInitialized') {
-          console.error('Failed to init email link after Google auth', e);
-        }
+        if (e.tag === 'AlreadyInitialized') return true;
+        console.error('Failed to init email link after Google auth', e);
+        return false;
       }
     ),
 };

@@ -20,7 +20,6 @@ import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton, SkipButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import { clearCompletedLessons, saveCompletedLesson } from './persistence';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
@@ -50,9 +49,6 @@ export default function InteractiveOnboarding() {
     : allLessons;
 
   const testMode = new URLSearchParams(location.search).has('test');
-  if (testMode) {
-    clearCompletedLessons();
-  }
 
   const params = new URLSearchParams(location.search);
   const slideParam = params.get('slide');
@@ -127,9 +123,6 @@ export default function InteractiveOnboarding() {
     }
 
     state.completeLesson(current.definition.id);
-    if (!testMode) {
-      saveCompletedLesson(current.definition.id);
-    }
     setReadyToContinue(false);
     setContinueLabel(undefined);
     setLessonKey((k) => k + 1);
@@ -148,10 +141,6 @@ export default function InteractiveOnboarding() {
 
     setOnboardingStarted(true);
     state.skipLesson(current.definition.id);
-    if (!testMode) {
-      saveCompletedLesson(current.definition.id);
-    }
-
     setReadyToContinue(false);
     setContinueLabel(undefined);
     setLessonKey((k) => k + 1);
@@ -176,16 +165,18 @@ export default function InteractiveOnboarding() {
     );
 
     if (returningLesson) {
-      window.history.replaceState(null, '', window.location.pathname);
+      const cleanParams = new URLSearchParams(window.location.search);
+      cleanParams.delete(returningLesson.completeOnParam!);
+      const qs = cleanParams.toString();
+      window.history.replaceState(
+        null,
+        '',
+        qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+      );
 
       if (returningLesson.onCompleteParam) {
-        await returningLesson.onCompleteParam();
-      }
-
-      if (tutorialCompleted()) {
-        if (splitPanel) navigateAway();
-        else navigate('/', { replace: true });
-        return;
+        const ok = await returningLesson.onCompleteParam();
+        if (!ok) return;
       }
 
       for (const lesson of sortedLessons) {
