@@ -111,6 +111,6 @@ export const aboutUsLesson: LessonDefinition = {
         if (e.tag !== 'AlreadyInitialized') {
           console.error('Failed to init email link after Google auth', e);
         }
-      },
+      }
     ),
 };
