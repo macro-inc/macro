@@ -4,7 +4,7 @@ import IconX from '@icon/regular/x.svg';
 import { stripeServiceClient } from '@service-stripe/client';
 import { createSignal, Show } from 'solid-js';
 import { useAnalytics } from '@app/component/analytics-context';
-import { PLANS, type PlanTier } from './PlanGrid';
+import { PLANS, type PlanTier } from './plans';
 
 interface PaywallComponent {
   cb: () => Promise<void> | void;
@@ -21,7 +21,7 @@ const PaywallComponent = (props: PaywallComponent) => {
   const [selectedTier, setSelectedTier] = createSignal<PlanTier>('sonnet');
   const hasPaid = useHasPaidAccess();
 
-  const handleCheckout = async (tier: string) => {
+  const handleCheckout = async (tier: PlanTier) => {
     try {
       await props.cb();
       const url = await stripeServiceClient.createCheckoutSession(
