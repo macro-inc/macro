@@ -286,26 +286,22 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'organization',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
+                          channelName: zod
+                            .string()
+                            .optional()
+                            .describe('The name of the channel'),
+                          invitedBy: zod
+                            .string()
+                            .describe('The user who sent the invitation'),
+                          senderProfilePictureUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The sender's profile picture URL, if available."
+                            ),
                         })
                         .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            invitedBy: zod.string(),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                          })
-                        )
-                        .describe(
-                          'Metadata for when a user is invited to a channel'
+                          'Metadata for when a user is invited to a channel.'
                         ),
                       tag: zod.enum(['channel_invite']),
                     })
@@ -711,26 +707,22 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'organization',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
+                          channelName: zod
+                            .string()
+                            .optional()
+                            .describe('The name of the channel'),
+                          invitedBy: zod
+                            .string()
+                            .describe('The user who sent the invitation'),
+                          senderProfilePictureUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The sender's profile picture URL, if available."
+                            ),
                         })
                         .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            invitedBy: zod.string(),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                          })
-                        )
-                        .describe(
-                          'Metadata for when a user is invited to a channel'
+                          'Metadata for when a user is invited to a channel.'
                         ),
                       tag: zod.enum(['channel_invite']),
                     })
@@ -1130,26 +1122,22 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'organization',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
+                          channelName: zod
+                            .string()
+                            .optional()
+                            .describe('The name of the channel'),
+                          invitedBy: zod
+                            .string()
+                            .describe('The user who sent the invitation'),
+                          senderProfilePictureUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The sender's profile picture URL, if available."
+                            ),
                         })
                         .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            invitedBy: zod.string(),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                          })
-                        )
-                        .describe(
-                          'Metadata for when a user is invited to a channel'
+                          'Metadata for when a user is invited to a channel.'
                         ),
                       tag: zod.enum(['channel_invite']),
                     })
@@ -1544,23 +1532,21 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  channelName: zod.string().optional(),
-                  channelType: zod.enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'directMessage',
-                    'team',
-                  ]),
+                  channelName: zod
+                    .string()
+                    .optional()
+                    .describe('The name of the channel'),
+                  invitedBy: zod
+                    .string()
+                    .describe('The user who sent the invitation'),
+                  senderProfilePictureUrl: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "The sender's profile picture URL, if available."
+                    ),
                 })
-                .describe('Common metadata for notifications on channels')
-                .and(
-                  zod.object({
-                    invitedBy: zod.string(),
-                    senderProfilePictureUrl: zod.string().nullish(),
-                  })
-                )
-                .describe('Metadata for when a user is invited to a channel'),
+                .describe('Metadata for when a user is invited to a channel.'),
               tag: zod.enum(['channel_invite']),
             })
             .describe('The user was invited to a channel.'),
