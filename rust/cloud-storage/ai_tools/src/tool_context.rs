@@ -15,9 +15,6 @@ use email::{
     outbound::EmailPgRepo,
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
-use entity_access_management::domain::{
-    models::EntityAccessManagementError, ports::EntityAccessManagementService,
-};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use properties::inbound::toolset::PropertiesToolContext;
 use scribe::{
@@ -93,38 +90,11 @@ impl ConnectionService for NoOpConnectionService {
     }
 }
 
-/// No-op entity access management service (not needed for AI tools)
-#[derive(Clone)]
-pub struct NoOpEntityAccessManagementService;
-
-impl EntityAccessManagementService for NoOpEntityAccessManagementService {
-    async fn add_entity_to_project(
-        &self,
-        _entity_id: &uuid::Uuid,
-        _entity_type: model_entity::EntityType,
-        _project_id: &uuid::Uuid,
-    ) -> Result<(), EntityAccessManagementError> {
-        Ok(())
-    }
-
-    async fn remove_entity_from_project(
-        &self,
-        _entity_id: &uuid::Uuid,
-        _entity_type: model_entity::EntityType,
-        _old_project_id: &uuid::Uuid,
-    ) -> Result<(), EntityAccessManagementError> {
-        Ok(())
-    }
-
-    async fn move_project(
-        &self,
-        _project_id: &uuid::Uuid,
-        _old_project_id: Option<&uuid::Uuid>,
-        _new_project_id: Option<&uuid::Uuid>,
-    ) -> Result<(), EntityAccessManagementError> {
-        Ok(())
-    }
-}
+/// Type alias for the entity access management service implementation used by AI tools
+pub type ToolEntityAccessManagementService =
+    entity_access_management::domain::service::EntityAccessManagementServiceImpl<
+        entity_access_management::outbound::PgRepository,
+    >;
 
 /// Type alias for the document service implementation used by AI tools
 pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
@@ -132,7 +102,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     S3UploadUrlAdapter,
     NoOpTaskProperties,
     NoOpConnectionService,
-    NoOpEntityAccessManagementService,
+    ToolEntityAccessManagementService,
 >;
 
 /// Type alias for the entity access service implementation

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use ai_tools::{
-    NoOpConnectionService, NoOpEntityAccessManagementService, NoOpNotificationService,
-    NoOpTaskProperties, ToolServiceContext,
+    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -217,7 +216,9 @@ async fn build_tool_context(
         s3_upload_adapter,
         NoOpTaskProperties,
         NoOpConnectionService,
-        NoOpEntityAccessManagementService,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
     );
     let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();
