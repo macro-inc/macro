@@ -4,7 +4,7 @@ import type { LessonContentProps, LessonDefinition } from '../types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EyeSlash from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import UsersThree from '@phosphor-icons/core/regular/users-three.svg?component-solid';
-import { redirectToEmailAuth } from '@core/auth/email';
+import { startSsoLogin } from '@core/auth/sso';
 import { initAndStartEmailSync } from '@core/email-link';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 
@@ -99,10 +99,24 @@ export const aboutUsLesson: LessonDefinition = {
   content: AboutUsContent,
   demo: AboutUsDemo,
   order: 60,
-  onContinue: () =>
-    redirectToEmailAuth({
+  onContinue: async () => {
+    const success = await startSsoLogin({
       returnPath: `${ROUTER_BASE_CONCAT}welcome?google=1`,
-    }),
+    });
+    // On native mobile, auth completes inline — init email sync and advance.
+    // On web this never resolves (page redirects away).
+    if (success) {
+      await initAndStartEmailSync().match(
+        () => {},
+        (e) => {
+          if (e.tag !== 'AlreadyInitialized') {
+            console.error('Failed to init email link after Google auth', e);
+          }
+        }
+      );
+    }
+    return success;
+  },
   completeOnParam: 'google',
   onCompleteParam: () =>
     initAndStartEmailSync().match(

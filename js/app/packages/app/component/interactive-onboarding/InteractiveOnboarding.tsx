@@ -23,6 +23,7 @@ import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useIsAuthenticated } from '@core/auth';
+import { fetchToken } from '@core/util/fetchWithToken';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export default function InteractiveOnboarding() {
@@ -41,7 +42,7 @@ export default function InteractiveOnboarding() {
     return true;
   });
   const lessons = isTouch
-    ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'choose-plan')
+    ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'about-us' || l.id === 'choose-plan')
     : allLessons;
 
   const testMode = new URLSearchParams(location.search).has('test');
@@ -112,9 +113,19 @@ export default function InteractiveOnboarding() {
     });
 
     if (current.definition.onContinue) {
-      // Don't update reactive state — avoids a UI flash to the next lesson
-      // before the redirect fires. Completion is saved on return via completeOnParam.
-      current.definition.onContinue();
+      // On web this redirects (returns void). On native mobile it resolves
+      // with true after inline auth succeeds, so we advance the lesson.
+      const result = current.definition.onContinue();
+      if (result instanceof Promise) {
+        result.then((shouldAdvance) => {
+          if (shouldAdvance) {
+            state.completeLesson(current.definition.id);
+            setReadyToContinue(false);
+            setContinueLabel(undefined);
+            setLessonKey((k) => k + 1);
+          }
+        });
+      }
       return;
     }
 
@@ -152,8 +163,8 @@ export default function InteractiveOnboarding() {
     }
 
     // When returning from an external auth flow (e.g. Google OAuth), clean the
-    // return param from the URL and run any async side-effects. The lessons are
-    // already pre-completed synchronously via returnCompleted above.
+    // return param from the URL and run side-effects. The lessons are already
+    // pre-completed synchronously via returnCompleted above.
     if (returningLesson) {
       const cleanParams = new URLSearchParams(window.location.search);
       cleanParams.delete(returningLesson.completeOnParam!);
@@ -164,7 +175,12 @@ export default function InteractiveOnboarding() {
         qs ? `${window.location.pathname}?${qs}` : window.location.pathname
       );
 
-      returningLesson.onCompleteParam?.();
+      // Ensure the JWT is refreshed before making authenticated API calls.
+      // On a fresh page load after OAuth redirect, the session cookie is set
+      // but no fetchWithToken call has triggered a token refresh yet.
+      if (returningLesson.onCompleteParam) {
+        fetchToken().then(() => returningLesson.onCompleteParam!());
+      }
     }
   });
 
