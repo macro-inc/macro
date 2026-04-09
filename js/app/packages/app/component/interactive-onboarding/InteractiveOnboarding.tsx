@@ -384,9 +384,11 @@ export default function InteractiveOnboarding() {
                     <div class="size-full flex flex-col items-center overflow-y-auto p-6">
                       <div
                         style={bodyStyle()}
-                        class="flex flex-col items-center text-center gap-6 w-full max-w-md mt-4"
+                        class="flex flex-col items-start text-left gap-6 w-full max-w-md mt-4"
                       >
-                        <LogoIcon class="size-16 text-accent" />
+                        <Show when={lesson().definition.id === 'welcome' || lesson().definition.id === 'launch'}>
+                          <LogoIcon class="size-16 text-accent self-center" />
+                        </Show>
                         <h2 class="text-3xl font-semibold text-ink">
                           {lesson().definition.title}
                         </h2>
@@ -425,6 +427,7 @@ export default function InteractiveOnboarding() {
                               onClick={handleContinue}
                               label={continueLabel()}
                               disabled={!readyToContinue()}
+                              centered={lesson().definition.centeredButton}
                             />
                             <Show when={lesson().definition.secondaryAction}>
                               {(Action) => <Dynamic component={Action()} />}
@@ -473,6 +476,7 @@ export default function InteractiveOnboarding() {
                             onClick={handleContinue}
                             label={continueLabel()}
                             disabled={!readyToContinue()}
+                            centered={lesson().definition.centeredButton}
                           />
                           <Show when={lesson().definition.skippable}>
                             <SkipButton onClick={handleSkip} />

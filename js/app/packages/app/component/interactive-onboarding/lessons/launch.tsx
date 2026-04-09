@@ -15,7 +15,7 @@ function LaunchContent(props: LessonContentProps) {
 
 export const launchLesson: LessonDefinition = {
   id: 'launch',
-  title: 'Welcome to Macro!',
+  title: 'Welcome to Macro',
   content: LaunchContent,
   order: 100,
 };

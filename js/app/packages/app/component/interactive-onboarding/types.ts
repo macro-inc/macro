@@ -20,6 +20,8 @@ export interface LessonDefinition {
   completeOnParam?: string;
   /** Called when completeOnParam is detected, before the lesson is advanced. Return false to abort the fast-forward (e.g. when initialization fails). */
   onCompleteParam?: () => Promise<boolean>;
+  /** Center the continue button label. */
+  centeredButton?: boolean;
   /** Optional secondary button rendered below the continue button. */
   secondaryAction?: Component;
 }

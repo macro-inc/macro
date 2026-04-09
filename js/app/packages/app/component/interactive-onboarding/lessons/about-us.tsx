@@ -98,6 +98,7 @@ export const aboutUsLesson: LessonDefinition = {
   id: 'about-us',
   title: 'Security and privacy',
   content: AboutUsContent,
+  centeredButton: true,
   demo: AboutUsDemo,
   order: 60,
   onContinue: async () => {
