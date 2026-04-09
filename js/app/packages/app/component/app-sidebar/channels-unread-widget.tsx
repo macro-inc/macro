@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { UnifiedNotification } from '@notifications/types';
+import { openNotification } from '@notifications';
 import {
   For,
   Show,
@@ -117,6 +118,8 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
       : 'Unknown Channel';
   };
 
+  const latestNotification = () => props.group.notifications[0];
+
   const content = () =>
     ({
       type: 'channel',
@@ -126,6 +129,15 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
 
+  const navigateToLatestNotification = (newSplit = false) => {
+    const manager = globalSplitManager();
+    if (!manager) return;
+    const notification = latestNotification();
+    if (notification) {
+      openNotification(notification, manager, newSplit);
+    }
+  };
+
   const openInCurrentSplit = () =>
     layout.openWithSplit(content(), {
       referredFrom: 'sidebar',
@@ -133,14 +145,7 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
 
   const openInNewSplit = () => {
     if (!canOpenInNewSplit()) return;
-    const manager = globalSplitManager()!;
-
-    manager.createNewSplit({
-      content: content(),
-      activate: true,
-      allowDuplicate: true,
-      referredFrom: 'sidebar',
-    });
+    navigateToLatestNotification(true);
   };
 
   const openFullscreen = () => {
@@ -163,14 +168,10 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
             'opacity-100 translate-y-0': isVisible(),
           }}
           onClick={(e) => {
-            // Middle mouse handling
             if (e.button === 1) return;
 
             e.preventDefault();
-            layout.openWithSplit(content(), {
-              preferNewSplit: e.shiftKey,
-              referredFrom: 'sidebar',
-            });
+            navigateToLatestNotification(e.shiftKey);
           }}
         >
           <div class="flex-shrink-0">
@@ -226,27 +227,11 @@ export const ChannelsUnreadWidget = () => {
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = () => [...notificationSource.notifications()];
 
-  const openChannelIds = createMemo(() => {
-    const manager = globalSplitManager();
-    if (!manager) return new Set<string>();
-    return new Set(
-      manager
-        .splits()
-        .filter((s) => s.content.type === 'channel')
-        .map((s) => s.content.id)
-    );
-  });
-
   const filteredNotifications = () => filterUnreadNotDone(allNotifications());
 
-  const channelGroupsMap = createMemo(() => {
-    const open = openChannelIds();
-    const groups = groupByChannel(filteredNotifications());
-    for (const id of open) {
-      groups.delete(id);
-    }
-    return groups;
-  });
+  const channelGroupsMap = createMemo(() =>
+    groupByChannel(filteredNotifications())
+  );
 
   const [orderedIds, setOrderedIds] = createSignal<string[]>([]);
 
