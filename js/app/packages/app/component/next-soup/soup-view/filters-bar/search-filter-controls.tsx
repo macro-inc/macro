@@ -61,7 +61,7 @@ const INDEX_SELECT_OPTIONS: Option[] = INDEX_OPTIONS.map((o) => ({
 }));
 
 export const SearchIndexFilter = () => {
-  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const { soup, setQueryFilters } = useSoupView();
 
   const activeIndex = createMemo((): Option[] => {
     const found = INDEX_OPTIONS.find((opt) => soup.filters.isActive(opt.value));
@@ -78,30 +78,17 @@ export const SearchIndexFilter = () => {
         }
       }
 
-      const prevChannelFilters = queryFilters().channel_filters;
-      const channelSubFilters = {
-        channel_ids: prevChannelFilters?.channel_ids,
-        sender_ids: prevChannelFilters?.sender_ids,
-      };
-
       if (selected.length > 0) {
         const opt = INDEX_OPTIONS.find((o) => o.value === selected[0].value);
         if (opt) {
           soup.filters.toggle({ or: [opt.value as FilterID] });
           setQueryFilters({
             ...opt.queryFilters,
-            channel_filters: {
-              ...opt.queryFilters.channel_filters,
-              ...channelSubFilters,
-            },
           });
         }
       } else {
         setQueryFilters({
           ...QUERY_FILTERS.default,
-          channel_filters: {
-            ...channelSubFilters,
-          },
         });
       }
     });
