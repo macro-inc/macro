@@ -24,7 +24,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   Match,
   onCleanup,
   Show,
@@ -62,22 +61,14 @@ import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
 import {
   filterNotDoneNotifications,
   filterValidNotifications,
-  extractMessageContent,
-  isNotificationUnread,
 } from '../utils/notification';
 import { getActionVerb } from '../extractors-notification/notification-description-helpers';
 import type { NotificationType } from '@core/types';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { toast } from '@core/component/Toast/Toast';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
-import {
-  type NotificationStack,
-  stackNotifications,
-  getMostRecentNotification,
-  getAllNotificationsFromGroup,
-} from '@notifications';
+import { stackNotifications } from '@notifications';
 import { mergeRefs } from '@solid-primitives/refs';
+import type { EntityRowConfig } from '../extractors-notification';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { isMobile } from '@core/mobile/isMobile';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
@@ -150,13 +141,6 @@ function useCharacterCount(ref: Accessor<HTMLElement | undefined>) {
 
   return chars;
 }
-
-type EntityRowConfig = {
-  swipeLeftColor?: string;
-  swipeLeftRevealedComponent?: JSX.Element;
-  swipeRightColor?: string;
-  swipeRightRevealedComponent?: JSX.Element;
-};
 
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
@@ -749,154 +733,6 @@ function MaybeEntityRow(props: {
   );
 }
 
-function StackRowLayout(props: {
-  stack: NotificationStack;
-  entity: WithNotification<EntityData>;
-  unread: boolean;
-}) {
-  const msgContent = () =>
-    extractMessageContent(getMostRecentNotification(props.stack));
-
-  return (
-    <Entity.Layout
-      class="w-full text-sm grid bg-edge/10 border-edge-muted"
-      style={{
-        'grid-template-columns':
-          'var(--soup-stack-row-unread-column-width) 1fr 8ch',
-        'grid-template-rows': 'auto auto',
-        'grid-template-areas': '"unread title timestamp" "unread body body"',
-        'border-left-width': 'var(--soup-stack-row-border-l)',
-      }}
-    >
-      <Entity.Slot placement="unread" class="flex items-center justify-center">
-        <UnreadIndicator
-          class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
-          active={props.unread}
-        />
-      </Entity.Slot>
-      <Entity.Slot
-        placement="title"
-        class="flex items-center gap-2 truncate font-semibold pt-3"
-      >
-        <Entity.Notification.Icon stack={props.stack} class="size-3.5" />
-        <Entity.Notification.Description stack={props.stack} />
-      </Entity.Slot>
-      <Entity.Slot
-        placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
-      >
-        <Entity.Timestamp entity={props.entity} />
-      </Entity.Slot>
-      <Entity.Slot
-        placement="body"
-        class="text-ink-extra-muted truncate pb-2 min-h-[1lh] pr-4"
-      >
-        <Show when={msgContent()}>
-          {(content) => (
-            <StaticMarkdown
-              theme={unifiedListMarkdownTheme}
-              markdown={content()}
-              singleLine
-            />
-          )}
-        </Show>
-      </Entity.Slot>
-    </Entity.Layout>
-  );
-}
-
-function StackRow(props: {
-  stack: NotificationStack;
-  entity: WithNotification<EntityData>;
-  entityRowConfig?: EntityRowConfig;
-}) {
-  const ctx = useContext(EntityRowContext);
-  const notificationSource = useGlobalNotificationSource();
-  const stackEntityId = getMostRecentNotification(props.stack).id;
-  const unread = () => isNotificationUnread(props.stack);
-
-  const handleSwipeLeft = async () => {
-    await ctx?.collapseEntity(stackEntityId);
-    void notificationSource.bulkMarkAsDone(
-      getAllNotificationsFromGroup(props.stack)
-    );
-    toast.success('Marked as done');
-  };
-
-  if (!ctx) {
-    return (
-      <StackRowLayout
-        stack={props.stack}
-        entity={props.entity}
-        unread={unread()}
-      />
-    );
-  }
-
-  return (
-    <EntityRow
-      entityId={stackEntityId}
-      onSwipeLeft={handleSwipeLeft}
-      swipeLeftColor={props.entityRowConfig?.swipeLeftColor}
-      swipeLeftRevealedComponent={
-        props.entityRowConfig?.swipeLeftRevealedComponent
-      }
-      swipeRightColor={props.entityRowConfig?.swipeRightColor}
-      swipeRightRevealedComponent={
-        props.entityRowConfig?.swipeRightRevealedComponent
-      }
-    >
-      <StackRowLayout
-        stack={props.stack}
-        entity={props.entity}
-        unread={unread()}
-      />
-    </EntityRow>
-  );
-}
-
-function MobileMultiStackLayout(props: {
-  stacks: NotificationStack[];
-  entity: WithNotification<EntityData>;
-  entityRowConfig?: EntityRowConfig;
-}) {
-  const isDirectMessage = () =>
-    isChannelEntity(props.entity) &&
-    props.entity.channelType === 'direct_message';
-
-  return (
-    <div class="pl-(--soup-stack-row-padding-l) pb-3 relative">
-      {/* Non-swipeable header */}
-      <div class="grid grid-cols-[calc(var(--soup-inbox-left-of-content)-var(--soup-stack-row-padding-l))_auto] w-full text-sm items-center pr-4 py-3">
-        <div class="ml-(--soup-stack-header-icon-padding-l) mr-(--soup-inbox-icon-padding-r) shrink-0 size-(--soup-stack-icon-diameter) bg-edge-muted rounded-full flex items-center justify-center">
-          <Entity.Icon
-            entity={props.entity}
-            class={cn(
-              !isDirectMessage() &&
-                'size-[calc(var(--soup-stack-icon-diameter)*var(--soup-inbox-icon-factor))]'
-            )}
-          />
-        </div>
-        <span class="flex-1 truncate font-semibold text-sm">
-          <Entity.Title entity={props.entity} />
-        </span>
-      </div>
-      {/* Stack rows */}
-      <div class="flex flex-col gap-3">
-        <For each={props.stacks}>
-          {(stack) => (
-            <StackRow
-              stack={stack}
-              entity={props.entity}
-              entityRowConfig={props.entityRowConfig}
-            />
-          )}
-        </For>
-      </div>
-    </div>
-  );
-}
-
 export function ListEntity(props: ListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
@@ -1003,7 +839,7 @@ export function ListEntity(props: ListEntityProps) {
             isMobile() && (hasBeenMultiStack() || mobileStacks().length > 1)
           }
         >
-          <MobileMultiStackLayout
+          <Entity.Notification.MobileStacks
             stacks={mobileStacks()}
             entity={props.entity}
             entityRowConfig={props.entityRowConfig}
