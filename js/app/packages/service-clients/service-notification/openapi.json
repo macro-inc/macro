@@ -1030,11 +1030,13 @@
               "notification_event_type",
               "sent",
               "done",
+              "created_at",
+              "updated_at",
               "notification_metadata"
             ],
             "properties": {
               "created_at": {
-                "type": ["string", "null"],
+                "type": "string",
                 "format": "date-time",
                 "description": "When the notification was created."
               },
@@ -1073,7 +1075,7 @@
                 "description": "Whether the notification has been sent."
               },
               "updated_at": {
-                "type": ["string", "null"],
+                "type": "string",
                 "format": "date-time",
                 "description": "When the notification was last updated."
               },
