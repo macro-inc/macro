@@ -189,7 +189,7 @@ impl NotificationExtEmail for ChannelInviteMetadata {
 
     fn rate_limit_key(&self) -> RateLimitKey {
         RateLimitKey::builder(&Self::TYPE_NAME)
-            .append(&self.channel_name)
+            .append(&self.invited_by)
             .finish()
     }
 }
