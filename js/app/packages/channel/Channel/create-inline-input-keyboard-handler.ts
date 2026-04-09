@@ -59,12 +59,31 @@ function attachInlineInputKeyboardHandler(
   let keyboardWillShowHandler: ((e: Event) => void) | undefined;
   let activeInputContainer: HTMLElement | undefined;
 
+  const resetHiddenState = () => {
+    setIsChannelInputHidden(false);
+    activeInputContainer = undefined;
+    observer.disconnect();
+    if (keyboardWillShowHandler) {
+      window.removeEventListener('keyboardWillShow', keyboardWillShowHandler);
+      keyboardWillShowHandler = undefined;
+    }
+  };
+
+  // iOS doesn't fire focusout when a focused element is removed from the DOM.
+  // Watch for the active input container being removed so we can reset state.
+  const observer = new MutationObserver(() => {
+    if (activeInputContainer && !containerEl.contains(activeInputContainer)) {
+      resetHiddenState();
+    }
+  });
+
   const handleFocusIn = (e: FocusEvent) => {
     const inputContainer = (e.target as HTMLElement).closest<HTMLElement>(
       INPUT_CONTAINER_SELECTOR
     );
     if (!inputContainer) return;
     activeInputContainer = inputContainer;
+    observer.observe(containerEl, { childList: true, subtree: true });
 
     setIsChannelInputHidden(true);
     const currentKeyboardHeight = parseFloat(
@@ -99,12 +118,7 @@ function attachInlineInputKeyboardHandler(
       INPUT_CONTAINER_SELECTOR
     );
     if (!nextInputContainer) {
-      setIsChannelInputHidden(false);
-      activeInputContainer = undefined;
-      if (keyboardWillShowHandler) {
-        window.removeEventListener('keyboardWillShow', keyboardWillShowHandler);
-        keyboardWillShowHandler = undefined;
-      }
+      resetHiddenState();
     }
   };
 
@@ -114,6 +128,7 @@ function attachInlineInputKeyboardHandler(
   return {
     getActiveInputContainer: () => activeInputContainer,
     cleanup: () => {
+      observer.disconnect();
       containerEl.removeEventListener('focusin', handleFocusIn);
       containerEl.removeEventListener(
         'focusout',
