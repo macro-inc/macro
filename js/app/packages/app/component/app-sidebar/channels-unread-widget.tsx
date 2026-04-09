@@ -17,11 +17,11 @@ import {
   useSenderName,
 } from '@app/component/app-sidebar/utils';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { getChannelNotificationParams } from '@notifications/notification-navigation';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -94,8 +94,6 @@ function groupByChannel(
 }
 
 function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
-  const layout = useSplitLayout();
-
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
   onMount(() => {
@@ -120,12 +118,6 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
 
   const latestNotification = () => props.group.notifications[0];
 
-  const content = () =>
-    ({
-      type: 'channel',
-      id: props.group.entityId,
-    }) as const;
-
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
 
@@ -133,24 +125,27 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     const manager = globalSplitManager();
     if (!manager) return;
     const notification = latestNotification();
-    if (notification) {
-      openNotification(notification, manager, newSplit);
-    }
+    openNotification(notification, manager, newSplit);
   };
 
-  const openInCurrentSplit = () =>
-    layout.openWithSplit(content(), {
-      referredFrom: 'sidebar',
-    });
+  const openInCurrentSplit = () => {
+    navigateToLatestNotification(false);
+  };
 
   const openInNewSplit = () => {
     if (!canOpenInNewSplit()) return;
     navigateToLatestNotification(true);
   };
 
-  const openFullscreen = () => {
-    const split = openInCurrentSplit();
-    split?.toggleSpotlight(true);
+  const _openFullscreen = () => {
+    const { params } = getChannelNotificationParams(latestNotification());
+    globalSplitManager()?.createPopoverSplit({
+      content: {
+        type: 'channel',
+        id: props.group.entityId,
+        params,
+      },
+    });
   };
 
   return (
@@ -211,7 +206,8 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
-          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          {/* FIXME: this doesn't work yet */}
+          {/* <MenuItem text="Open fullscreen" onClick={openFullscreen} /> */}
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
         </ContextMenuContent>
       </ContextMenu.Portal>
