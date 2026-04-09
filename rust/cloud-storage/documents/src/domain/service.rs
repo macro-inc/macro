@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests;
 
+use entity_access_management::domain::ports::EntityAccessManagementService;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -42,6 +43,7 @@ pub struct DocumentServiceImpl<
     U: PresignedUploadUrlPort,
     T: TaskPropertiesPort,
     C: ConnectionService,
+    Eam: EntityAccessManagementService,
 > {
     repo: R,
     cloudfront_config: CloudFrontConfig,
@@ -49,10 +51,17 @@ pub struct DocumentServiceImpl<
     upload_url_service: U,
     task_properties_service: T,
     connection_service: C,
+    #[allow(dead_code)]
+    entity_access_management_service: Eam,
 }
 
-impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: ConnectionService>
-    DocumentServiceImpl<R, U, T, C>
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+> DocumentServiceImpl<R, U, T, C, Eam>
 {
     /// Create a new document service.
     pub fn new(
@@ -62,6 +71,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         upload_url_service: U,
         task_properties_service: T,
         connection_service: C,
+        entity_access_management_service: Eam,
     ) -> Self {
         Self {
             repo,
@@ -70,6 +80,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             upload_url_service,
             task_properties_service,
             connection_service,
+            entity_access_management_service,
         }
     }
 
@@ -277,8 +288,13 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
     }
 }
 
-impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: ConnectionService>
-    DocumentService for DocumentServiceImpl<R, U, T, C>
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+> DocumentService for DocumentServiceImpl<R, U, T, C, Eam>
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(

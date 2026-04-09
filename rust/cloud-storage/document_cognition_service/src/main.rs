@@ -1,6 +1,9 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
-use ai_tools::{NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties};
+use ai_tools::{
+    NoOpConnectionService, NoOpEntityAccessManagementService, NoOpNotificationService,
+    NoOpTaskProperties,
+};
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -233,6 +236,7 @@ async fn main() -> anyhow::Result<()> {
         s3_upload_adapter,
         NoOpTaskProperties,
         NoOpConnectionService,
+        NoOpEntityAccessManagementService,
     );
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),

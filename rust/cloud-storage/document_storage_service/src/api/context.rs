@@ -142,6 +142,9 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
+    entity_access_management::domain::service::EntityAccessManagementServiceImpl<
+        entity_access_management::outbound::PgRepository,
+    >,
 >;
 
 /// Type alias for the documents router state.

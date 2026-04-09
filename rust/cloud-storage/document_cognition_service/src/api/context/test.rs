@@ -239,6 +239,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         s3_upload_adapter,
         ai_tools::NoOpTaskProperties,
         ai_tools::NoOpConnectionService,
+        ai_tools::NoOpEntityAccessManagementService,
     );
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(

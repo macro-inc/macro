@@ -22,11 +22,13 @@ documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
+entity_access_management = { path = "../entity_access_management", default-features = false, features = ["ports"] }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
 macro_db_client = { path = "../macro_db_client" }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_dcs = { path = "../models_dcs" }
 models_email = { path = "../models_email" }
