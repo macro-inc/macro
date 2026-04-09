@@ -132,9 +132,7 @@ impl ChannelMessageEvent<'_> {
                                     message_id: self.message.id.to_string(),
                                     user_id: self.message.sender_id.clone(),
                                     message_content: self.message.content.clone(),
-                                    thread_parent_sender_id: self
-                                        .thread_parent_sender_id
-                                        .clone(),
+                                    thread_parent_sender_id: self.thread_parent_sender_id.clone(),
                                     common: self.channel_metadata.clone(),
                                     sender_profile_picture_url: self
                                         .sender_profile_picture_url
@@ -189,9 +187,7 @@ impl ChannelMessageEvent<'_> {
                                 sender: self.message.sender_id.clone(),
                                 message_content: self.message.content.to_string(),
                                 common: self.channel_metadata.clone(),
-                                sender_profile_picture_url: self
-                                    .sender_profile_picture_url
-                                    .clone(),
+                                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
                             },
                             sender_id: sender(),
                             recipient_ids: recipients_without_sender_and_mentions,

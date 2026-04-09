@@ -31,25 +31,9 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct ReferralCode(pub String);
 
-/// Template struct for rendering the invite email.
-///
-/// Both [`InviteToMacro`] and [`ChannelInviteMetadata`] convert into this struct
-/// to render the shared `invite.html` template.
-#[derive(Debug, Clone, Template)]
-#[template(path = "invite.html")]
-pub struct InviteTemplate {
-    /// The sender's profile picture URL, if available.
-    pub sender_profile_picture_url: Option<Url>,
-    /// The sender's display name, if they have set one.
-    pub sender_name: Option<String>,
-    /// The sender's email address.
-    pub sender_email: Option<String>,
-    /// The URL the CTA button should link to.
-    pub referral_url: Url,
-}
-
 /// The metadata for a referral-to-macro notification.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Template)]
+#[template(path = "invite.html")]
 pub struct InviteToMacro {
     /// The recipient email.
     pub recipient_email: EmailStr<'static>,
@@ -69,15 +53,6 @@ impl InviteToMacro {
     fn referral_url(&self) -> Url {
         let env = Environment::new_or_prod();
         get_url(env, &self.referral_code)
-    }
-
-    fn as_template(&self) -> InviteTemplate {
-        InviteTemplate {
-            sender_profile_picture_url: self.sender_profile_picture_url.clone(),
-            sender_name: self.sender_name.clone(),
-            sender_email: self.sender_email.clone(),
-            referral_url: self.referral_url(),
-        }
     }
 }
 
@@ -120,7 +95,6 @@ impl NotificationExtEmail for InviteToMacro {
         EmailContent {
             subject: format!("{} has invited you to join Macro", sender),
             body: self
-                .as_template()
                 .render()
                 .expect("InviteToMacro template render failed in format_email"),
         }
@@ -142,8 +116,9 @@ impl NotificationExtEmail for InviteToMacro {
 }
 
 /// Metadata for when a user is invited to a channel.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema, Template)]
 #[serde(rename_all = "camelCase")]
+#[template(path = "invite_to_channel.html")]
 pub struct ChannelInviteMetadata {
     /// The user who sent the invitation
     #[serde(alias = "invited_by")]
@@ -159,17 +134,8 @@ pub struct ChannelInviteMetadata {
 }
 
 impl ChannelInviteMetadata {
-    fn as_template(&self) -> InviteTemplate {
-        let sender_email = Some(self.invited_by.email_part().as_ref().to_string());
-        InviteTemplate {
-            sender_profile_picture_url: self
-                .sender_profile_picture_url
-                .as_ref()
-                .and_then(|s| Url::parse(s).ok()),
-            sender_name: None,
-            sender_email,
-            referral_url: signup_url(Environment::new_or_prod()),
-        }
+    fn signup_url(&self) -> Url {
+        signup_url(Environment::new_or_prod())
     }
 }
 
@@ -203,7 +169,6 @@ impl NotificationExtEmail for ChannelInviteMetadata {
         EmailContent {
             subject: format!("{sender} has invited you to join #{}", self.channel_name),
             body: self
-                .as_template()
                 .render()
                 .expect("ChannelInviteMetadata template render failed in format_email"),
         }
@@ -219,7 +184,6 @@ impl NotificationExtEmail for ChannelInviteMetadata {
     fn rate_limit_key(&self) -> RateLimitKey {
         RateLimitKey::builder(&Self::TYPE_NAME)
             .append(&self.channel_name)
-            .append(&self.invited_by)
             .finish()
     }
 }

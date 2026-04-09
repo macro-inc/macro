@@ -5,7 +5,7 @@
   xmlns="http://www.w3.org/1999/xhtml"
 >
   <head>
-    <title>You're Invited to Macro</title>
+    <title>You're Invited to Join #{{ channel_name }} on Macro</title>
     <!--[if !mso]><!-->
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <!--<![endif]-->
@@ -28,11 +28,11 @@
         }
       </style>
     <![endif]-->
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,500&display=swap" rel="stylesheet">
-      
+
     <style type="text/css">
       @font-face {
         font-family: "Berkeley Mono";
@@ -131,15 +131,15 @@
               </td>
               {% endif %}
               <td style="vertical-align: middle; line-height: 1.2">
-                {% if let Some(name) = sender_name %}{{ name }}{% else %}{% if let Some(email) = sender_email %}<span
+                <span
                   style="
                     color: #626262;
                     font-family:
                       &quot;Berkeley Mono&quot;, &quot;Courier New&quot;,
                       Courier, monospace;
                   "
-                  >&lt;{{ email }}&gt;</span
-                >{% else %}A Macro user{% endif %}{% endif %} has invited you to Macro
+                  >{{ invited_by }}</span
+                > has invited you to join <strong>#{{ channel_name }}</strong>
               </td>
             </tr>
           </tbody>
@@ -154,26 +154,9 @@
               line-height: 1.4;
             "
           >
-            {% if let Some(name) = sender_name %}{{ name }}{% if let Some(email) = sender_email %}
-            <span
-              style="
-                color: #626262;
-                font-family:
-                  &quot;Berkeley Mono&quot;, &quot;Courier New&quot;, Courier,
-                  monospace;
-              "
-              >&lt;{{ email }}&gt;</span
-            >{% endif %}{% else %}{% if let Some(email) = sender_email %}<span
-              style="
-                color: #626262;
-                font-family:
-                  &quot;Berkeley Mono&quot;, &quot;Courier New&quot;, Courier,
-                  monospace;
-              "
-              >&lt;{{ email }}&gt;</span
-            >{% else %}A Macro user{% endif %}{% endif %} has invited you to join them on Macro. Collaborate on
-            documents. Stay in sync with tasks. Search over everything. AI
-            Assistance with anything.
+            You've been invited to join <strong>#{{ channel_name }}</strong> on Macro.
+            Collaborate on documents. Stay in sync with tasks. Search over
+            everything. AI Assistance with anything.
           </div>
 
           <table
@@ -209,11 +192,10 @@
                       padding: 4px 10px;
                       color: #090909;
                     "
-                    href="{{ referral_url() }}"
+                    href="{{ signup_url() }}"
                     target="_blank"
                   >
-                    Join {% if let Some(name) = sender_name %}{{ name }}{% else
-                    %}{% if let Some(email) = sender_email %}{{ email }}{% else %}Macro{% endif %}{% endif %}
+                    Join #{{ channel_name }}
                   </a>
                 </td>
                 <td
