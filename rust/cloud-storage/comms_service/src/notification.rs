@@ -161,8 +161,9 @@ impl ChannelMessageEvent<'_> {
                     tracing::warn!("thread participants is empty, but message has thread id");
                 }
             }
-            // Channel has no messages, send invite notification
-            (0, None) => {
+            // First message in channel — the count is 1 because our message
+            // was already persisted before this notification task runs.
+            (0 | 1, None) => {
                 dispatch_notifications_for_invite(
                     ingress,
                     self.channel_id,
