@@ -233,10 +233,11 @@ where
         };
 
         // get the timestamp info back out of the db created values
-        let (created_at, updated_at) = n
+        let first = n
             .first()
-            .map(|n| (n.created_at, n.updated_at))
-            .expect("created notification rows should not be empty");
+            .ok_or_else(|| rootcause::report!("create_notification returned empty Vec"))
+            .context(SendNotificationError::Other)?;
+        let (created_at, updated_at) = (first.created_at, first.updated_at);
 
         let results = join_all(
             n.into_iter()
