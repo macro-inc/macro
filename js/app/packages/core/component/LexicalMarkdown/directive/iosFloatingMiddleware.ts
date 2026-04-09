@@ -1,7 +1,7 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
 import { size, type Placement } from '@floating-ui/dom';
-import { isIOS } from '@solid-primitives/platform';
 
 /**
  * Returns iOS-aware safe-padding, incorporating the safe area insets and virtual keyboard height.
@@ -9,7 +9,7 @@ import { isIOS } from '@solid-primitives/platform';
 export function iosSafePadding(
   spacing: number
 ): number | { top: number; right: number; bottom: number; left: number } {
-  if (!isIOS) return spacing;
+  if (!isMobile()) return spacing;
   return {
     top: spacing + getSafeAreaInset('top'),
     right: spacing + getSafeAreaInset('right'),
@@ -43,7 +43,7 @@ export function iosSizeMiddleware(
         ? getSafeAreaInset('top')
         : 0;
       const kbHeight =
-        isIOS && placement.startsWith('bottom') ? virtualKeyboardHeight() : 0;
+        isMobile() && placement.startsWith('bottom') ? virtualKeyboardHeight() : 0;
       const h = Math.max(0, availableHeight - safeAreaTop - kbHeight);
       Object.assign(elements.floating.style, {
         maxHeight: `${h}px`,

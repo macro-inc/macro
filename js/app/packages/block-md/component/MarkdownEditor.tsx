@@ -178,7 +178,6 @@ import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
 import { isMobile } from '@core/mobile/isMobile';
-import { isIOS } from '@solid-primitives/platform';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 
@@ -600,7 +599,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     )
     .use(pinnedPropertiesPlugin());
 
-  if (isIOS || isNativeMobilePlatform()) {
+  if (isMobile() || isNativeMobilePlatform()) {
     plugins.use(
       iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer })
     );

@@ -1,4 +1,4 @@
-import { isIOS } from '@solid-primitives/platform';
+import { isMobile } from "./isMobile";
 
 type SafeAreaInsetSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -17,7 +17,7 @@ window.addEventListener('resize', () => {
 });
 
 export function getSafeAreaInset(side: SafeAreaInsetSide): number {
-  if (!isIOS) return 0;
+  if (!isMobile()) return 0;
   if (cache[side] !== null) return cache[side];
   const el = document.createElement('div');
   el.style.setProperty(`padding-${side}`, `env(safe-area-inset-${side}, 0px)`);

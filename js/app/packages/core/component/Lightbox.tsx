@@ -27,7 +27,6 @@ import {
 import { platformFetch } from '../util/platformFetch';
 import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
-import { isIOS } from '@solid-primitives/platform';
 
 const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
   <Spinner {...p} class="animate-spin" />
@@ -76,7 +75,7 @@ export function Lightbox(props: LightboxProps) {
   // gesture — the user-activation window expires if a network round-trip is
   // needed. Desktop clipboard doesn't have this constraint.
   const [cachedBlob, setCachedBlob] = createSignal<Blob | undefined>();
-  if (isIOS) {
+  if (isMobile()) {
     createEffect(() => {
       props.src(); // re-fetch when navigating to a new image
       setCachedBlob(undefined);

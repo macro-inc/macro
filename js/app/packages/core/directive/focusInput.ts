@@ -1,6 +1,6 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isPlatform } from '@core/util/platform';
-import { isIOS } from '@solid-primitives/platform';
 import { type Accessor, onCleanup } from 'solid-js';
 
 export type FocusInputOptions = {
@@ -61,7 +61,7 @@ export function focusInput(
       cleanup();
     }
 
-    if ((isTouchDevice() && isIOS) || isPlatform('ios')) {
+    if ((isTouchDevice() && isMobile()) || isPlatform('ios')) {
       // iOS only: focus a hidden temporary input synchronously within the
       // click gesture so the virtual keyboard opens, then transfer focus to
       // the real target once it appears in the DOM.
