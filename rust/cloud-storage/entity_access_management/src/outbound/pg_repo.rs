@@ -197,6 +197,7 @@ impl EntityAccessManagementRepository for PgRepository {
                     .push_bind(source.project_id.to_string());
             });
 
+            qb.push(" ON CONFLICT DO NOTHING");
             qb.build().execute(transaction.as_mut()).await?;
         }
 
@@ -326,6 +327,7 @@ impl EntityAccessManagementRepository for PgRepository {
                         .push_bind(source.project_id.to_string());
                 });
 
+                qb.push(" ON CONFLICT DO NOTHING");
                 qb.build().execute(transaction.as_mut()).await?;
             }
         }
