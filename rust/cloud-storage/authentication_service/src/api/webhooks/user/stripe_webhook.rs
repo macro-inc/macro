@@ -221,14 +221,18 @@ async fn handle_customer_subscription_event(
         None
     };
 
-    // Extract GA client ID from subscription metadata for analytics tracking
+    // Extract tracking IDs from subscription metadata for analytics
     let ga_client_id = subscription.metadata.get("ga_client_id").cloned();
+    let fbp = subscription.metadata.get("fbp").cloned();
+    let fbc = subscription.metadata.get("fbc").cloned();
 
     tracing::info!(
         email=%email.as_ref(),
         subscription_id,
         subscription_status,
         ga_client_id=?ga_client_id,
+        fbp=?fbp,
+        fbc=?fbc,
         "processing stripe subscription"
     );
 
@@ -250,6 +254,8 @@ async fn handle_customer_subscription_event(
             &team_id,
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
+                fbp: fbp.clone(),
+                fbc: fbc.clone(),
                 email: email.as_ref().to_string(),
                 value_cents: subscription_value,
                 currency: subscription_currency,
@@ -377,6 +383,8 @@ async fn handle_customer_subscription_event(
         subscription_id,
         SubscriptionTrackingData {
             ga_client_id,
+            fbp,
+            fbc,
             email: email.as_ref().to_string(),
             value_cents: subscription_value,
             currency: subscription_currency,
@@ -477,6 +485,8 @@ struct SubscriptionEvent {
 #[derive(Debug, Clone)]
 struct SubscriptionTrackingData {
     ga_client_id: Option<String>,
+    fbp: Option<String>,
+    fbc: Option<String>,
     email: String,
     value_cents: Option<i64>,
     currency: Option<String>,
@@ -523,7 +533,11 @@ fn track_stripe_subscription(
                 value: value_cents as f64 / 100.0,
                 currency: currency.to_uppercase(),
             };
-            let user_data = MetaUserData::with_email(&data.email);
+            let user_data = MetaUserData {
+                email: Some(data.email.clone()),
+                fbp: data.fbp.clone(),
+                fbc: data.fbc.clone(),
+            };
             let event_id = Some(subscription_id.as_str());
 
             tracing::info!(

@@ -6,6 +6,6 @@
  */
 
 /**
- * Google Analytics client ID for conversion tracking
+ * Meta (Facebook) click ID from _fbc cookie
  */
-export type CreateCheckoutSessionRequestGaClientId = string | null;
+export type CheckoutSessionMetadataFbc = string | null;

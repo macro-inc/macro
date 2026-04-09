@@ -41,24 +41,22 @@ function ChoosePlanDemo() {
     <div class="h-full w-full flex items-center justify-center px-8">
       <PlanGrid
         footer={(plan) => (
-          <div class="mt-auto pt-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCheckout(plan.tier);
-              }}
-              disabled={loading() !== null}
-              class="w-full py-2 rounded-xs text-base font-semibold"
-              classList={{
-                'bg-accent text-panel': !!plan.highlighted,
-                'bg-ink/8 text-ink hover:bg-ink/12': !plan.highlighted,
-                'opacity-60': loading() !== null,
-              }}
-            >
-              {loading() === plan.tier ? 'Loading...' : `Get ${plan.name}`}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCheckout(plan.tier);
+            }}
+            disabled={loading() !== null}
+            class="w-full py-2 rounded-xs text-base font-semibold"
+            classList={{
+              'bg-accent text-panel': !!plan.highlighted,
+              'bg-ink/8 text-ink hover:bg-ink/12': !plan.highlighted,
+              'opacity-60': loading() !== null,
+            }}
+          >
+            {loading() === plan.tier ? 'Loading...' : `Get ${plan.name}`}
+          </button>
         )}
       />
     </div>

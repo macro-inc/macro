@@ -1,0 +1,16 @@
+---
+title: UpdateThreadLabels
+description: "Add or remove a label from all messages in an email thread. Use ListLabels first to get valid label IDs. Set `add` to true to apply the label, or false to remove it."
+---
+
+# UpdateThreadLabels
+
+Add or remove a label from all messages in an email thread. Use ListLabels first to get valid label IDs. Set `add` to true to apply the label, or false to remove it.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `add` | boolean | Yes | Whether to add (true) or remove (false) the label. |
+| `label_id` | string | Yes | The ID of the label to add or remove. Use ListLabels to get valid label IDs. |
+| `thread_id` | string | Yes | The ID of the email thread to modify. |
