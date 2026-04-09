@@ -4,16 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ConnGatewayInnerNotifValueAllOfCreatedAt } from './connGatewayInnerNotifValueAllOfCreatedAt';
 import type { ConnGatewayInnerNotifValueAllOfDeletedAt } from './connGatewayInnerNotifValueAllOfDeletedAt';
 import type { ConnGatewayInnerNotifValueAllOfSenderId } from './connGatewayInnerNotifValueAllOfSenderId';
-import type { ConnGatewayInnerNotifValueAllOfUpdatedAt } from './connGatewayInnerNotifValueAllOfUpdatedAt';
 import type { ConnGatewayInnerNotifValueAllOfViewedAt } from './connGatewayInnerNotifValueAllOfViewedAt';
 import type { TaggedContentValue } from './taggedContentValue';
 
 export type ConnGatewayInnerNotifValueAllOf = {
   /** When the notification was created. */
-  created_at?: ConnGatewayInnerNotifValueAllOfCreatedAt;
+  created_at: string;
   /** When the notification was deleted. */
   deleted_at?: ConnGatewayInnerNotifValueAllOfDeletedAt;
   /** Whether the notification is marked as done. */
@@ -29,7 +27,7 @@ TODO make this a new type */
   /** Whether the notification has been sent. */
   sent: boolean;
   /** When the notification was last updated. */
-  updated_at?: ConnGatewayInnerNotifValueAllOfUpdatedAt;
+  updated_at: string;
   /** When the notification was viewed/seen. */
   viewed_at?: ConnGatewayInnerNotifValueAllOfViewedAt;
 };

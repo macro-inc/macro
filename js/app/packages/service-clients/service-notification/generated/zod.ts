@@ -126,7 +126,6 @@ export const listTypedNotificationsResponse = zod
               created_at: zod
                 .string()
                 .datetime({})
-                .nullish()
                 .describe('When the notification was created.'),
               deleted_at: zod
                 .string()
@@ -475,7 +474,6 @@ export const listTypedNotificationsResponse = zod
               updated_at: zod
                 .string()
                 .datetime({})
-                .nullish()
                 .describe('When the notification was last updated.'),
               viewed_at: zod
                 .string()
@@ -547,7 +545,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
               created_at: zod
                 .string()
                 .datetime({})
-                .nullish()
                 .describe('When the notification was created.'),
               deleted_at: zod
                 .string()
@@ -896,7 +893,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
               updated_at: zod
                 .string()
                 .datetime({})
-                .nullish()
                 .describe('When the notification was last updated.'),
               viewed_at: zod
                 .string()
@@ -962,7 +958,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
               created_at: zod
                 .string()
                 .datetime({})
-                .nullish()
                 .describe('When the notification was created.'),
               deleted_at: zod
                 .string()
@@ -1311,7 +1306,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
               updated_at: zod
                 .string()
                 .datetime({})
-                .nullish()
                 .describe('When the notification was last updated.'),
               viewed_at: zod
                 .string()
@@ -1388,7 +1382,6 @@ export const getTypedNotificationByIdResponse = zod
       created_at: zod
         .string()
         .datetime({})
-        .nullish()
         .describe('When the notification was created.'),
       deleted_at: zod
         .string()
@@ -1703,7 +1696,6 @@ export const getTypedNotificationByIdResponse = zod
       updated_at: zod
         .string()
         .datetime({})
-        .nullish()
         .describe('When the notification was last updated.'),
       viewed_at: zod
         .string()
