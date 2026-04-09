@@ -1,0 +1,17 @@
+---
+title: ReadThread
+description: "Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.     Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window."
+---
+
+# ReadThread
+
+Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.
+    Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `contentType` | string | Yes | The type of content to read. Choose based on the type of content you want to retrieve. |
+| `ids` | array | Yes | ID(s) of the content to read. IMPORTANT: channel-message, chat-message, and content types support MULTIPLE ids! For all other content types (channel, chat-thread) provide a single id. |
+| `messagesSince` | string | Yes | A local datetime of the earliest message to include in a channel transcript following ISO 8601 format, only applicable to channels |

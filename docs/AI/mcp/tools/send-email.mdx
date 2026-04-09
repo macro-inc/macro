@@ -1,0 +1,19 @@
+---
+title: SendEmail
+description: "Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. The body must be plain text only — do not use HTML, Markdown, or any formatting syntax (no **bold**, *italics*, headings, etc.). Just write natural prose with line breaks."
+---
+
+# SendEmail
+
+Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. The body must be plain text only — do not use HTML, Markdown, or any formatting syntax (no **bold**, *italics*, headings, etc.). Just write natural prose with line breaks.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `bcc` | array | Yes | Blind carbon copy recipients (optional). |
+| `body` | string | Yes | The plain text body of the email. |
+| `cc` | array | Yes | Carbon copy recipients (optional). |
+| `replyingToId` | string | Yes | The ID of a message to reply to (optional). When set, the email is sent as a reply within the same thread. |
+| `subject` | string | Yes | The subject line of the email. |
+| `to` | array | Yes | The primary recipients (To field). |

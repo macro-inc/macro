@@ -2100,6 +2100,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "reqwest",
+ "rootcause",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -3862,6 +3863,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity_access_management"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cool_asserts",
+ "macro_db_migrator",
+ "macro_user_id",
+ "mockall",
+ "model-entity",
+ "models_permissions",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "enum-as-inner"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5389,7 +5410,9 @@ dependencies = [
  "askama",
  "macro_env",
  "macro_user_id",
+ "model-entity",
  "notification",
+ "rootcause",
  "serde",
  "serde_json",
  "url",

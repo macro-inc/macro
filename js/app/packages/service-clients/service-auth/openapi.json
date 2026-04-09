@@ -3061,6 +3061,24 @@
           }
         }
       },
+      "CheckoutSessionMetadata": {
+        "type": "object",
+        "description": "Tracking metadata for conversion attribution",
+        "properties": {
+          "fbc": {
+            "type": ["string", "null"],
+            "description": "Meta (Facebook) click ID from _fbc cookie"
+          },
+          "fbp": {
+            "type": ["string", "null"],
+            "description": "Meta (Facebook) browser ID from _fbp cookie"
+          },
+          "gaClientId": {
+            "type": ["string", "null"],
+            "description": "Google Analytics client ID for conversion tracking"
+          }
+        }
+      },
       "CreateAccountMergeRequest": {
         "type": "object",
         "required": ["email"],
@@ -3084,9 +3102,9 @@
             "type": ["string", "null"],
             "description": "Optional discount/promo code to apply"
           },
-          "gaClientId": {
-            "type": ["string", "null"],
-            "description": "Google Analytics client ID for conversion tracking"
+          "metadata": {
+            "$ref": "#/components/schemas/CheckoutSessionMetadata",
+            "description": "Tracking metadata for conversion attribution"
           },
           "successUrl": {
             "type": "string",

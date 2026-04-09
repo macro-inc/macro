@@ -1102,24 +1102,23 @@
         }
       },
       "ChannelInviteMetadata": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/CommonChannelMetadata"
+        "type": "object",
+        "description": "Metadata for when a user is invited to a channel.",
+        "required": ["invitedBy"],
+        "properties": {
+          "channelName": {
+            "type": "string",
+            "description": "The name of the channel"
           },
-          {
-            "type": "object",
-            "required": ["invitedBy"],
-            "properties": {
-              "invitedBy": {
-                "type": "string"
-              },
-              "senderProfilePictureUrl": {
-                "type": ["string", "null"]
-              }
-            }
+          "invitedBy": {
+            "type": "string",
+            "description": "The user who sent the invitation"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "The sender's profile picture URL, if available."
           }
-        ],
-        "description": "Metadata for when a user is invited to a channel"
+        }
       },
       "ChannelMentionMetadata": {
         "allOf": [

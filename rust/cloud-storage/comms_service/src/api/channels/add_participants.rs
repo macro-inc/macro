@@ -96,48 +96,46 @@ pub async fn handler(
     tracing::info!(elapsed=?start.elapsed(), "added user channel permissions");
 
     // There should always be participants, but better safe than sorry
-    if !participants.is_empty() {
-        let metadata = CommonChannelMetadata {
-            channel_type: model_notifications::ChannelType::mirror(channel_type),
-            channel_name: channel_name.clone(),
-        };
-        comms_notification::dispatch_notifications_for_invite(
-            &ctx,
-            &channel_id,
-            &MacroUserIdStr::parse_from_str(&channel_member.context.user_id)
-                .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
-                .into_owned(),
-            req.participants.clone(),
-            metadata.clone(),
-        )
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "unable to send channel invite notification");
-        })
-        .ok();
+    let metadata = CommonChannelMetadata {
+        channel_type: model_notifications::ChannelType::mirror(channel_type),
+        channel_name: channel_name.clone(),
+    };
+    comms_notification::dispatch_notifications_for_invite(
+        &ctx,
+        &channel_id,
+        &MacroUserIdStr::parse_from_str(&channel_member.context.user_id)
+            .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
+            .into_owned(),
+        req.participants.clone(),
+        metadata.clone(),
+    )
+    .await
+    .inspect_err(|e| {
+        tracing::error!(error=?e, "unable to send channel invite notification");
+    })
+    .ok();
 
-        if matches!(channel_type, ChannelType::Private) && !channel_participants.is_empty() {
-            // Contacts: add participants to social graph
-            let channel_participants: Vec<String> = channel_participants
-                .iter()
-                .map(|p| p.user_id.to_string())
-                .collect();
-            let sqs_client = &ctx.sqs_client;
-            sqs_client
-                .enqueue_contacts_add_participants(
-                    participants.clone(),
-                    channel_participants,
-                    &channel_id.to_string(),
+    if matches!(channel_type, ChannelType::Private) && !channel_participants.is_empty() {
+        // Contacts: add participants to social graph
+        let channel_participants: Vec<String> = channel_participants
+            .iter()
+            .map(|p| p.user_id.to_string())
+            .collect();
+        let sqs_client = &ctx.sqs_client;
+        sqs_client
+            .enqueue_contacts_add_participants(
+                participants.clone(),
+                channel_participants,
+                &channel_id.to_string(),
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to create 'add participant' SQS message");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "unable to create 'add participant' SQS message".to_string(),
                 )
-                .await
-                .map_err(|e| {
-                    tracing::error!(error=?e, "unable to create 'add participant' SQS message");
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "unable to create 'add participant' SQS message".to_string(),
-                    )
-                })?;
-        }
+            })?;
     }
 
     Ok(StatusCode::OK)

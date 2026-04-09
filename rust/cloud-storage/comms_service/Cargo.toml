@@ -82,5 +82,9 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 
+[dev-dependencies]
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+
 [package.metadata.cargo-machete]
 ignored = ["connection_gateway"]

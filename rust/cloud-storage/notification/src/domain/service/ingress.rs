@@ -232,6 +232,9 @@ where
             }));
         };
 
+        // get the timestamp info back out of the db created values
+        let timestamps = n.first().map(|n| (n.created_at, n.updated_at));
+
         let results = join_all(
             n.into_iter()
                 .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
@@ -239,7 +242,17 @@ where
         .await;
 
         self.queue
-            .publish(queue_messages.with_state_decisions(results).collect())
+            .publish(
+                queue_messages
+                    .with_state_decisions(results)
+                    .map(|msg| {
+                        msg.with_timestamps(
+                            timestamps.and_then(|v| v.0),
+                            timestamps.and_then(|v| v.1),
+                        )
+                    })
+                    .collect(),
+            )
             .await
             .context(SendNotificationError::Other)?;
 

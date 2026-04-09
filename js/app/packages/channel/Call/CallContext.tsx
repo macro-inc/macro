@@ -8,6 +8,10 @@ import {
   type LocalTrack,
 } from 'livekit-client';
 import {
+  KrispNoiseFilter,
+  isKrispNoiseFilterSupported,
+} from '@livekit/krisp-noise-filter';
+import {
   createContext,
   createSignal,
   useContext,
@@ -45,6 +49,7 @@ type CallStoreState = {
   activeAudioInputDeviceId: string | null;
   activeAudioOutputDeviceId: string | null;
   activeVideoInputDeviceId: string | null;
+  isNoiseSuppressed: boolean;
 };
 
 const initialState: CallStoreState = {
@@ -62,6 +67,7 @@ const initialState: CallStoreState = {
   activeAudioInputDeviceId: null,
   activeAudioOutputDeviceId: null,
   activeVideoInputDeviceId: null,
+  isNoiseSuppressed: false,
 };
 
 export type CallState = {
@@ -115,6 +121,10 @@ export type CallState = {
   switchAudioOutput: (deviceId: string) => Promise<void>;
   /** Switch active video input device */
   switchVideoInput: (deviceId: string) => Promise<void>;
+  /** Whether Krisp noise suppression is active */
+  isNoiseSuppressed: () => boolean;
+  /** Toggle Krisp noise suppression on/off */
+  toggleNoiseSuppression: () => Promise<void>;
 };
 
 const CallContext = createContext<CallState>();
@@ -138,6 +148,9 @@ export function useCallContextOptional(): CallState | undefined {
 function createCallState() {
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({ ...initialState });
+  const [krispFilter, setKrispFilter] = createSignal<ReturnType<
+    typeof KrispNoiseFilter
+  > | null>(null);
 
   // --- internal helpers ---
 
@@ -181,6 +194,11 @@ function createCallState() {
   }
 
   function destroyRoom() {
+    const krisp = krispFilter();
+    if (krisp) {
+      krisp.destroy();
+      setKrispFilter(null);
+    }
     const r = room();
     if (r) {
       r.removeAllListeners();
@@ -347,7 +365,13 @@ function createCallState() {
       // Reuse existing room instance (same channel, e.g. leave then rejoin)
       targetRoom = room()!;
     } else {
-      targetRoom = new Room();
+      targetRoom = new Room({
+        audioCaptureDefaults: {
+          noiseSuppression: true,
+          echoCancellation: true,
+          autoGainControl: true,
+        },
+      });
       attachRoomListeners(targetRoom);
       setRoom(targetRoom);
     }
@@ -374,6 +398,23 @@ function createCallState() {
     }
     setStore('isAudioMuted', false);
     setStore('isVideoMuted', true);
+
+    // Register Krisp noise filter on the mic track
+    if (isKrispNoiseFilterSupported()) {
+      try {
+        const micPub = targetRoom.localParticipant.getTrackPublication(
+          Track.Source.Microphone
+        );
+        if (micPub?.track) {
+          const krisp = KrispNoiseFilter();
+          await (micPub.track as LocalTrack).setProcessor(krisp);
+          setKrispFilter(krisp);
+          setStore('isNoiseSuppressed', true);
+        }
+      } catch (e) {
+        console.error('failed to enable Krisp noise filter', e);
+      }
+    }
 
     // Enumerate available devices and track active ones
     await enumerateDevices();
@@ -456,6 +497,18 @@ function createCallState() {
     }
   }
 
+  async function toggleNoiseSuppression() {
+    const krisp = krispFilter();
+    if (!krisp) return;
+    try {
+      const newEnabled = !store.isNoiseSuppressed;
+      await krisp.setEnabled(newEnabled);
+      setStore('isNoiseSuppressed', newEnabled);
+    } catch (e) {
+      console.error('failed to toggle noise suppression', e);
+    }
+  }
+
   // --- cleanup ---
 
   const handleBeforeUnload = () => {
@@ -518,6 +571,8 @@ function createCallState() {
     switchAudioInput,
     switchAudioOutput,
     switchVideoInput,
+    isNoiseSuppressed: () => store.isNoiseSuppressed,
+    toggleNoiseSuppression,
   };
 
   return state;
