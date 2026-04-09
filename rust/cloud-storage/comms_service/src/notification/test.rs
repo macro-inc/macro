@@ -219,3 +219,69 @@ async fn thread_reply_excludes_sender_and_mentions() {
     assert!(recipients.contains("macro|bob@test.com"));
     assert!(recipients.contains("macro|charlie@test.com"));
 }
+
+fn has_email(req: &serde_json::Value) -> bool {
+    !req["build_email"].is_null()
+}
+
+#[tokio::test]
+async fn first_message_sends_email_invite_to_non_existing_users() {
+    let channel_id = Uuid::new_v4();
+    let participants = vec![
+        participant(uid("macro|sender@test.com"), channel_id),
+        participant(uid("macro|existing@test.com"), channel_id),
+        participant(uid("macro|newuser@test.com"), channel_id),
+    ];
+    let msg = message(channel_id, uid("macro|sender@test.com"), None);
+    let metadata = private_metadata();
+
+    // Only existing@test.com is a known user
+    let existing_user_ids: HashSet<String> = HashSet::from(["macro|existing@test.com".to_string()]);
+
+    let ingress = MockNotificationIngress::new();
+    ChannelMessageEvent {
+        channel_id: &channel_id,
+        message: &msg,
+        channel_metadata: &metadata,
+        channel_message_count: 0,
+        user_mentions: &[],
+        document_mentions: &[],
+        participants: &participants,
+        thread_participants: &[],
+        thread_parent_sender_id: None,
+        sender_profile_picture_url: None,
+        existing_user_ids,
+    }
+    .send(&ingress)
+    .await
+    .unwrap();
+
+    let requests = ingress.recorded_requests();
+
+    // Should produce exactly two channel_invite notifications
+    let invites: Vec<_> = requests
+        .iter()
+        .filter(|r| get_type_name(r) == "channel_invite")
+        .collect();
+    assert_eq!(invites.len(), 2, "expected two invite notifications");
+
+    // The invite to the existing user should NOT have email
+    let existing_invite = invites
+        .iter()
+        .find(|r| get_recipient_ids(r).contains("macro|existing@test.com"))
+        .expect("should have invite for existing user");
+    assert!(
+        !has_email(existing_invite),
+        "existing user invite should not have email"
+    );
+
+    // The invite to the non-existing user SHOULD have email
+    let new_user_invite = invites
+        .iter()
+        .find(|r| get_recipient_ids(r).contains("macro|newuser@test.com"))
+        .expect("should have invite for non-existing user");
+    assert!(
+        has_email(new_user_invite),
+        "non-existing user invite should have email"
+    );
+}
