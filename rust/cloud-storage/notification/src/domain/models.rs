@@ -152,6 +152,7 @@ impl<T> UserNotificationRow<T> {
 /// newtype wrapper for the the typename of a Notification
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub(crate) struct NotificationTypeName(Cow<'static, str>);
 
 impl NotificationTypeName {
@@ -168,6 +169,7 @@ impl AsRef<str> for NotificationTypeName {
 
 /// A notification metadata value tagged with the notification event type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct TaggedContent<T> {
     pub(crate) tag: NotificationTypeName,
     pub(crate) content: T,

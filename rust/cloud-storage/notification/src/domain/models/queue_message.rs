@@ -113,6 +113,7 @@ impl<'a> EmailNotification<'a> {
 
 /// the value of the inner payload inside [ConnGatewayNotification]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ConnGatewayInnerNotif<T> {
     /// The notification ID.
     pub notification_id: uuid::Uuid,
@@ -140,8 +141,18 @@ pub struct ConnGatewayInnerNotif<T> {
     pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
+/// Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.
+///
+/// Used for OpenAPI schema generation — serializes identically to
+/// `ConnGatewayInnerNotif<serde_json::Value>`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ConnGatewayNotificationPayload(pub ConnGatewayInnerNotif<serde_json::Value>);
+
 /// Connection gateway (WebSocket) notification payload.
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub(crate) struct ConnGatewayNotification<'a, T> {
     /// The notification payload to send.
     pub(crate) notif: ConnGatewayInnerNotif<T>,

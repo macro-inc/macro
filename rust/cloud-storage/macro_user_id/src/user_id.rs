@@ -75,6 +75,20 @@ where
 #[serde(try_from = "String", into = "String")]
 pub struct MacroUserIdStr<'a>(pub MacroUserId<Lowercase<'a>>);
 
+#[cfg(feature = "schema")]
+impl<'a> utoipa::ToSchema for MacroUserIdStr<'a> {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("MacroUserIdStr")
+    }
+}
+
+#[cfg(feature = "schema")]
+impl<'a> utoipa::PartialSchema for MacroUserIdStr<'a> {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        String::schema()
+    }
+}
+
 impl<'a> std::fmt::Debug for MacroUserIdStr<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.as_ref())
