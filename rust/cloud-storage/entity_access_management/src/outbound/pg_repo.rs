@@ -32,7 +32,7 @@ struct SimpleEntity {
     pub entity_type: String,
 }
 
-/// PostgreSQL-backed implementation of [`EntityManagementRepository`]
+/// PostgreSQL-backed implementation of [`EntityAccessManagementRepository`]
 #[derive(Clone)]
 pub struct PgRepository {
     pool: PgPool,
