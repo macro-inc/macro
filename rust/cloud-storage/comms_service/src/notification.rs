@@ -37,24 +37,16 @@ pub struct ChannelMessageEvent<'a> {
     thread_parent_sender_id: Option<MacroUserIdStr<'static>>,
 }
 
-pub struct ChannelInviteEvent<'a> {
-    channel_id: &'a Uuid,
-    invited_by_user_id: &'a MacroUserIdStr<'static>,
-    recipient_user_ids: &'a [String],
-    common: &'a CommonChannelMetadata,
-}
-
 fn recipients_excluding<'a>(
     recipients: impl IntoIterator<Item = &'a str>,
     exclude: impl IntoIterator<Item = &'a str>,
-) -> Vec<MacroUserIdStr<'static>> {
+) -> impl Iterator<Item = MacroUserIdStr<'static>> {
     let exclude_set: HashSet<&str> = exclude.into_iter().collect();
     recipients
         .into_iter()
-        .filter(|id| !exclude_set.contains(id))
+        .filter(move |id| !exclude_set.contains(id))
         .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
         .map(|u| u.into_owned())
-        .collect()
 }
 
 fn create_notification_queue_message(
@@ -71,30 +63,6 @@ fn create_notification_queue_message(
     }
 }
 
-impl<'a> ChannelInviteEvent<'a> {
-    fn generate_notifications(&self) -> Vec<NotificationMsg> {
-        let mut notifications: Vec<NotificationMsg> = vec![];
-
-        if !self.recipient_user_ids.is_empty() {
-            notifications.push(create_notification_queue_message(
-                self.channel_id,
-                self.invited_by_user_id.copied().into_owned(),
-                recipients_excluding(
-                    self.recipient_user_ids.iter().map(|m| m.as_str()),
-                    once(self.invited_by_user_id.as_ref()),
-                ),
-                NotifEvent::ChannelInvite(ChannelInviteMetadata {
-                    invited_by: self.invited_by_user_id.clone(),
-                    common: self.common.clone(),
-                    sender_profile_picture_url: None,
-                }),
-            ));
-        }
-
-        notifications
-    }
-}
-
 impl ChannelMessageEvent<'_> {
     fn generate_notifications(&self) -> Vec<NotificationMsg> {
         let mut notifications: Vec<NotificationMsg> = vec![];
@@ -106,7 +74,8 @@ impl ChannelMessageEvent<'_> {
                 recipients_excluding(
                     self.user_mentions.iter().map(|m| m.as_str()),
                     once(self.message.sender_id.0.as_ref()),
-                ),
+                )
+                .collect(),
                 NotifEvent::ChannelMention(ChannelMentionMetadata {
                     message_content: self.message.content.clone(),
                     message_id: self.message.id.to_string(),
@@ -118,10 +87,11 @@ impl ChannelMessageEvent<'_> {
         }
 
         if !self.document_mentions.is_empty() {
-            let recipients_excluding_mentions = recipients_excluding(
+            let recipients_excluding_mentions: Vec<_> = recipients_excluding(
                 self.participants.iter().map(|p| p.user_id.as_ref()),
                 once(self.message.sender_id.0.as_ref()),
-            );
+            )
+            .collect();
 
             for mention in self.document_mentions {
                 notifications.push(create_notification_queue_message(
@@ -144,10 +114,11 @@ impl ChannelMessageEvent<'_> {
 
         // MessageSend and Invite notifications are sent to all participants except the sender and
         // mentioned users. Mentioned users receive a seperate ChannelMention Notification.
-        let recipients_without_sender_and_mentions = recipients_excluding(
+        let recipients_without_sender_and_mentions: Vec<_> = recipients_excluding(
             self.participants.iter().map(|p| p.user_id.as_ref()),
             sender_and_mentions.clone(),
-        );
+        )
+        .collect();
 
         match (self.channel_message_count, self.message.thread_id) {
             // Thread Message Reply
@@ -159,7 +130,8 @@ impl ChannelMessageEvent<'_> {
                         recipients_excluding(
                             self.thread_participants.iter().map(|p| p.as_ref()),
                             sender_and_mentions,
-                        ),
+                        )
+                        .collect(),
                         NotifEvent::ChannelMessageReply(ChannelReplyMetadata {
                             thread_id: thread_id.to_string(),
                             message_id: self.message.id.to_string(),
@@ -310,25 +282,29 @@ pub async fn dispatch_notifications_for_invite(
     let sender_profile_picture_url =
         get_sender_profile_picture_url(&api_context.db, invited_by_user_id).await;
 
-    let event = ChannelInviteEvent {
-        channel_id,
-        invited_by_user_id,
-        recipient_user_ids: &recipient_user_ids,
-        common: &common,
-    };
-
-    let mut notifications = event.generate_notifications();
-    for n in &mut notifications {
-        set_sender_profile_picture(
-            &mut n.notification_event,
-            sender_profile_picture_url.clone(),
-        );
-    }
-
-    for notification in notifications {
-        send_notification_queue_message(&*api_context.notification_ingress_service, notification)
-            .await?;
-    }
+    api_context
+        .notification_ingress_service
+        .send_notification(
+            SendNotificationRequestBuilder {
+                notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
+                notification: ChannelInviteMetadata {
+                    invited_by: invited_by_user_id.clone(),
+                    common: common.clone(),
+                    sender_profile_picture_url,
+                },
+                sender_id: Some(invited_by_user_id.copied().into_owned()),
+                recipient_ids: recipients_excluding(
+                    recipient_user_ids.iter().map(|m| m.as_str()),
+                    once(invited_by_user_id.as_ref()),
+                )
+                .collect(),
+            }
+            .into_request()
+            .with_apns()
+            .with_conn_gateway(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
     Ok(())
 }
