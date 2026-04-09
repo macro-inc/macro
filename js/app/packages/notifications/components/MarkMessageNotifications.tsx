@@ -2,7 +2,7 @@ import { onMount } from 'solid-js';
 import type { JSXElement } from 'solid-js';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 
-export function MarkMessaageNotifications(props: {
+export function MarkMessageNotifications(props: {
   messageId: string;
   channelId: string;
   children: JSXElement;
