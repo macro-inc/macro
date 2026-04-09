@@ -39,15 +39,9 @@ function openSplitIfNotOpen(
   );
 }
 
-/**
- * Opens a channel notification.
- */
-async function openChannelNotification(
-  notification: UnifiedNotification,
-  layoutManager: SplitManager,
-  newSplit: boolean = false
-) {
-  const channelId = notification.entity_id;
+export function getChannelNotificationParams(
+  notification: UnifiedNotification
+): { messageId?: string; threadId?: string; params?: Record<string, string> } {
   let messageId: string | undefined;
   let threadId: string | undefined;
 
@@ -63,6 +57,20 @@ async function openChannelNotification(
   }
 
   const params = messageId ? getChannelParams(messageId, threadId) : undefined;
+  return { messageId, threadId, params };
+}
+
+/**
+ * Opens a channel notification.
+ */
+async function openChannelNotification(
+  notification: UnifiedNotification,
+  layoutManager: SplitManager,
+  newSplit: boolean = false
+) {
+  const channelId = notification.entity_id;
+  const { messageId, threadId, params } =
+    getChannelNotificationParams(notification);
 
   openSplitIfNotOpen(layoutManager, 'channel', channelId, {
     newSplit,

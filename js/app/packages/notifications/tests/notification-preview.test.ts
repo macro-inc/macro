@@ -10,7 +10,7 @@ function createEmailNotification(
     entity_id: 'thread-1',
     entity_type: 'email_thread',
     created_at: new Date().toISOString(),
-    updated_at: null,
+    updated_at: new Date().toISOString(),
     viewed_at: null,
     deleted_at: null,
     done: false,

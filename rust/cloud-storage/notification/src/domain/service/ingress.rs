@@ -233,7 +233,11 @@ where
         };
 
         // get the timestamp info back out of the db created values
-        let timestamps = n.first().map(|n| (n.created_at, n.updated_at));
+        let first = n
+            .first()
+            .ok_or_else(|| rootcause::report!("create_notification returned empty Vec"))
+            .context(SendNotificationError::Other)?;
+        let (created_at, updated_at) = (first.created_at, first.updated_at);
 
         let results = join_all(
             n.into_iter()
@@ -245,12 +249,7 @@ where
             .publish(
                 queue_messages
                     .with_state_decisions(results)
-                    .map(|msg| {
-                        msg.with_timestamps(
-                            timestamps.and_then(|v| v.0),
-                            timestamps.and_then(|v| v.1),
-                        )
-                    })
+                    .map(|msg| msg.with_timestamps(created_at, updated_at))
                     .collect(),
             )
             .await

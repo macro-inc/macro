@@ -6,6 +6,6 @@
  */
 
 /**
- * When the notification was created.
+ * When the notification was last updated.
  */
-export type ApiUserNotificationAllOfCreatedAt = string | null;
+export type ConnGatewayInnerNotifValueAllOfUpdatedAt = string | null;

@@ -6,6 +6,6 @@
  */
 
 /**
- * When the notification was last updated.
+ * newtype wrapper for the the typename of a Notification
  */
-export type ApiUserNotificationAllOfUpdatedAt = string | null;
+export type NotificationTypeName = string;

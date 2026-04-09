@@ -8,6 +8,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   onMount,
   Show,
   type Accessor,
@@ -149,18 +150,23 @@ export function Channel(props: ChannelProps) {
     },
   });
 
-  onMount(() => {
+  const markAsViewed = () => {
     updateActivityMutation.mutate({
       channelId: props.channelId,
       activityType: 'view',
     });
+  };
+
+  onMount(() => {
+    markAsViewed();
+  });
+
+  onCleanup(() => {
+    markAsViewed();
   });
 
   useBeforeLeave(() => {
-    updateActivityMutation.mutate({
-      channelId: props.channelId,
-      activityType: 'view',
-    });
+    markAsViewed();
   });
 
   const threadManager = createThreadManager();

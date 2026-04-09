@@ -19,7 +19,7 @@ function createBaseNotification(
     entity_id: 'channel-1',
     entity_type: 'channel',
     created_at: new Date(createdAt).toISOString(),
-    updated_at: null,
+    updated_at: new Date(createdAt).toISOString(),
     viewed_at: null,
     deleted_at: null,
     done: false,

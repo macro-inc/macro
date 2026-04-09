@@ -16,7 +16,7 @@ axum = [
 ]
 docs = ["dep:aquamarine"]
 redis-tests = []
-schema = ["dep:utoipa"]
+schema = ["dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]
 ai = { path = "../ai", optional = true }

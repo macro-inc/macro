@@ -41,7 +41,7 @@ impl NotifPreview {
             .format_title(v.sender_id.as_ref().map(CowLike::copied))?;
         let body = v.notification_metadata.format_body(v.sender_id)?;
         Ok(NotifPreview {
-            created_at: v.created_at.unwrap_or(Utc::now()),
+            created_at: v.created_at,
             title,
             body,
         })
