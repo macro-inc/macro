@@ -1,6 +1,5 @@
 //! Entity access management service implementation.
 
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_entity::EntityType;
 
 use crate::domain::{
@@ -14,26 +13,21 @@ pub struct EntityAccessManagementServiceImpl<R> {
     repo: R,
 }
 
-impl<R> EntityAccessManagementServiceImpl<R>
-where
-    R: EntityAccessManagementRepository,
-{
+impl<R: EntityAccessManagementRepository> EntityAccessManagementServiceImpl<R> {
     /// Create a new entity access management service.
     pub fn new(repo: R) -> Self {
         Self { repo }
     }
 }
 
-impl<R> EntityAccessManagementService for EntityAccessManagementServiceImpl<R>
-where
-    R: EntityAccessManagementRepository,
+impl<R: EntityAccessManagementRepository> EntityAccessManagementService
+    for EntityAccessManagementServiceImpl<R>
 {
     #[tracing::instrument(skip(self), err)]
     async fn add_entity_to_project(
         &self,
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
-        owner_id: &MacroUserId<Lowercase<'_>>,
         project_id: &uuid::Uuid,
     ) -> Result<(), EntityAccessManagementError> {
         if !entity_type.is_valid_entity_access_entity() {
@@ -53,7 +47,6 @@ where
         &self,
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
-        owner_id: &MacroUserId<Lowercase<'_>>,
         old_project_id: &uuid::Uuid,
     ) -> Result<(), EntityAccessManagementError> {
         if !entity_type.is_valid_entity_access_entity() {

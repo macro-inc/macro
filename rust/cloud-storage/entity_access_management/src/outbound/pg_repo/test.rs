@@ -386,3 +386,55 @@ async fn add_entity_to_project_inserts_access_for_all_ancestor_shares(pool: Pool
         Some("cccccccc-cccc-cccc-cccc-cccccccccccc")
     );
 }
+
+/// Adds a document to PROJECT_C then removes it, verifying that all 6
+/// inherited access rows are deleted while the pre-existing project
+/// access rows remain untouched.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
+)]
+async fn remove_entity_from_project_deletes_inherited_access(pool: Pool<Postgres>) {
+    let repo = PgRepository::new(pool.clone());
+
+    let document_id = Uuid::new_v4();
+    let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
+
+    // Add entity to project — creates 6 inherited access rows
+    repo.add_entity_to_project(&document_id, EntityType::Document, &project_c)
+        .await
+        .unwrap();
+
+    // Verify 6 rows exist before removal
+    let before_count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1",
+        &document_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(before_count, Some(6));
+
+    // Remove entity from project
+    repo.remove_entity_from_project(&document_id, EntityType::Document, &project_c)
+        .await
+        .unwrap();
+
+    // All 6 document rows should be gone
+    let after_count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1",
+        &document_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(after_count, Some(0));
+
+    // Pre-existing project access rows should be untouched (12 rows from fixture)
+    let project_rows =
+        sqlx::query_scalar!("SELECT COUNT(*) FROM entity_access WHERE entity_type = 'project'",)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(project_rows, Some(12));
+}

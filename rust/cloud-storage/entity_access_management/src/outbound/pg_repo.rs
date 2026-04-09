@@ -156,6 +156,34 @@ impl EntityAccessManagementRepository for PgRepository {
         entity_type: EntityType,
         old_project_id: &uuid::Uuid,
     ) -> Result<(), Self::Err> {
-        todo!()
+        let mut transaction = self.pool.begin().await?;
+
+        let walked_up_project_ids = self
+            .walk_up_project_tree(&mut transaction, old_project_id)
+            .await?;
+
+        if !walked_up_project_ids.is_empty() {
+            let entity_type_str: &str = entity_type.into();
+            sqlx::query!(
+                r#"
+                DELETE FROM entity_access
+                WHERE entity_id = $1
+                AND entity_type = $2
+                AND granted_from_project_id = ANY($3)
+                "#,
+                entity_id,
+                entity_type_str,
+                &walked_up_project_ids
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>(),
+            )
+            .execute(transaction.as_mut())
+            .await?;
+
+            transaction.commit().await?;
+        }
+
+        Ok(())
     }
 }
