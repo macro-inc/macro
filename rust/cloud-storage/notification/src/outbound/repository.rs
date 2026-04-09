@@ -334,16 +334,17 @@ impl NotificationDbOps for PgPool {
             .map(|id| id.to_string())
             .collect();
 
-        sqlx::query!(
+        let created_at = sqlx::query_scalar!(
             r#"
             INSERT INTO user_notification (notification_id, user_id)
             SELECT $1, user_id
             FROM UNNEST($2::text[]) as user_id
+            RETURNING created_at::timestamptz as "created_at!"
             "#,
             notification_id,
             &user_ids
         )
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
 
         tx.commit().await?;
@@ -363,9 +364,9 @@ impl NotificationDbOps for PgPool {
                 entity: entity.clone(),
                 sent: false,
                 done: false,
-                created_at: None,
+                created_at: Some(created_at),
                 viewed_at: None,
-                updated_at: None,
+                updated_at: Some(created_at),
                 deleted_at: None,
                 notification_metadata: n.clone(),
                 sender_id: sender_id.clone(),
