@@ -4,12 +4,14 @@ export const PLANS = [
     name: 'Level 1',
     price: 20,
     features: ['Haiku agent', '1,000 AI tool calls', '25 GB storage'],
+    highlighted: false,
   },
   {
     tier: 'sonnet' as const,
     name: 'Level 2',
     price: 60,
     features: ['Sonnet agent', '5,000 AI tool calls', '100 GB storage'],
+    highlighted: false,
   },
   {
     tier: 'opus' as const,
