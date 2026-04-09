@@ -1,10 +1,8 @@
 import { onCleanup, onMount } from 'solid-js';
 import type { JSXElement } from 'solid-js';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import {
-  compositeEntity,
-  type UnifiedNotification,
-} from '@notifications/types';
+import type { UnifiedNotification } from '@notifications/types';
+import { useNotificationsForEntity } from '@notifications/notification-helpers';
 
 export function MarkMessageNotifications(props: {
   messageId: string;
@@ -12,6 +10,10 @@ export function MarkMessageNotifications(props: {
   children: JSXElement;
 }) {
   const notificationSource = useGlobalNotificationSource();
+  const notifications = useNotificationsForEntity(notificationSource, {
+    type: 'channel',
+    id: props.channelId,
+  });
   const isMessageNotification = (n: UnifiedNotification) => {
     return (
       (n.notification_metadata.tag === 'channel_mention' ||
@@ -27,12 +29,7 @@ export function MarkMessageNotifications(props: {
   });
 
   onMount(() => {
-    const notifications =
-      notificationSource.notificationsByEntity()[
-        compositeEntity({ type: 'channel', id: props.channelId })
-      ];
-
-    const existing = notifications.find(isMessageNotification);
+    const existing = notifications().find(isMessageNotification);
 
     if (!existing) {
       unsubscribe = notificationSource.subscribe((n) => {
