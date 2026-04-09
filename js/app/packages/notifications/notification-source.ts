@@ -7,7 +7,11 @@ import {
 } from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
-import type { UserUnsubscribe } from '@service-notification/generated/schemas';
+import type {
+  ConnGatewayInnerNotifValue,
+  NotifEvent,
+  UserUnsubscribe,
+} from '@service-notification/generated/schemas';
 import type {
   UseInfiniteQueryResult,
   UseQueryResult,
@@ -26,7 +30,9 @@ import {
   compositeEntity,
   notificationEntity,
   type UnifiedNotification,
+  unifiedNotificationSchema,
 } from './types';
+import { fromZodError } from 'zod-validation-error';
 
 type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
 
@@ -120,13 +126,35 @@ export function createNotificationSource(
     setMutedEntities(reconcile(mutedEntities));
   });
 
+  const mapWebsocketNotification = (
+    raw: ConnGatewayInnerNotifValue
+  ): UnifiedNotification => {
+    return {
+      ...raw,
+      id: raw.notification_id,
+      notification_metadata: raw.notification_metadata as NotifEvent,
+    };
+  };
+
   createSocketEffect(ws, (wsData) => {
     if (wsData.type !== NOTIFICATION_EVENT_TYPE) {
       return;
     }
     let parsedNotification: UnifiedNotification;
     try {
-      parsedNotification = JSON.parse(wsData.data);
+      const raw = JSON.parse(wsData.data) as ConnGatewayInnerNotifValue;
+      const unsafeMapped = mapWebsocketNotification(raw);
+      const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
+      if (!parseResult.success) {
+        console.warn(
+          'Failed to parse notification',
+          wsData.data,
+          fromZodError(parseResult.error)
+        );
+        parsedNotification = unsafeMapped;
+      } else {
+        parsedNotification = parseResult.data;
+      }
     } catch (e) {
       console.error('Failed to parse notification', wsData.data, e);
       return;

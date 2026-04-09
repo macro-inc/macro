@@ -1,6 +1,10 @@
-import { onMount } from 'solid-js';
+import { onCleanup, onMount } from 'solid-js';
 import type { JSXElement } from 'solid-js';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import {
+  compositeEntity,
+  type UnifiedNotification,
+} from '@notifications/types';
 
 export function MarkMessageNotifications(props: {
   messageId: string;
@@ -8,23 +12,39 @@ export function MarkMessageNotifications(props: {
   children: JSXElement;
 }) {
   const notificationSource = useGlobalNotificationSource();
+  const isMessageNotification = (n: UnifiedNotification) => {
+    return (
+      (n.notification_metadata.tag === 'channel_mention' ||
+        n.notification_metadata.tag === 'channel_message_send' ||
+        n.notification_metadata.tag === 'channel_message_reply') &&
+      n.notification_metadata.content.messageId === props.messageId
+    );
+  };
+
+  let unsubscribe: () => void = () => {};
+  onCleanup(() => {
+    unsubscribe();
+  });
 
   onMount(() => {
-    const toMark = notificationSource.notifications().filter((n) => {
-      if (n.viewed_at || n.done) return false;
-      if (n.entity_id !== props.channelId) return false;
-      const meta = n.notification_metadata;
-      if (
-        meta.tag === 'channel_mention' ||
-        meta.tag === 'channel_message_send' ||
-        meta.tag === 'channel_message_reply'
-      ) {
-        return meta.content.messageId === props.messageId;
-      }
-      return false;
-    });
-    if (toMark.length > 0) {
-      notificationSource.bulkMarkAsRead(toMark);
+    const notifications =
+      notificationSource.notificationsByEntity()[
+        compositeEntity({ type: 'channel', id: props.channelId })
+      ];
+
+    const existing = notifications.find(isMessageNotification);
+
+    if (!existing) {
+      unsubscribe = notificationSource.subscribe((n) => {
+        if (!isMessageNotification(n)) return;
+        notificationSource.markAsRead(n);
+        unsubscribe();
+      });
+      return;
+    }
+
+    if (existing && !existing.viewed_at) {
+      notificationSource.markAsRead(existing);
     }
   });
 
