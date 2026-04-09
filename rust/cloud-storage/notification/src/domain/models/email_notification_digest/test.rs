@@ -1,8 +1,8 @@
 //! Tests for the email notification digest state machine.
 
 use super::*;
-use chrono::Utc;
 use crate::domain::models::{Notification, UserNotificationRow};
+use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use rootcause::Report;
