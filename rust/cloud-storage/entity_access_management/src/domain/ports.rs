@@ -26,6 +26,14 @@ pub trait EntityAccessManagementRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
         old_project_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Updates entity access when a project is moved from one location to another
+    fn move_project(
+        &self,
+        project_id: &uuid::Uuid,
+        old_project_id: Option<&uuid::Uuid>,
+        new_project_id: Option<&uuid::Uuid>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Service for managing entity access.
@@ -44,5 +52,13 @@ pub trait EntityAccessManagementService: Clone + Send + Sync + 'static {
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
         old_project_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), EntityAccessManagementError>> + Send;
+
+    /// Updates entity access when a project is moved from one location to another
+    fn move_project(
+        &self,
+        project_id: &uuid::Uuid,
+        old_project_id: Option<&uuid::Uuid>,
+        new_project_id: Option<&uuid::Uuid>,
     ) -> impl Future<Output = Result<(), EntityAccessManagementError>> + Send;
 }

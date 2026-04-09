@@ -438,3 +438,312 @@ async fn remove_entity_from_project_deletes_inherited_access(pool: Pool<Postgres
             .unwrap();
     assert_eq!(project_rows, Some(12));
 }
+
+/// Calling from PROJECT_A (root) should return the full tree:
+/// 3 projects (A, B, C) + 1 document in A + 1 chat in B + 1 document in C = 6 entities
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
+)]
+async fn nested_entities_from_root_returns_full_tree(pool: Pool<Postgres>) {
+    let repo = PgRepository::new(pool.clone());
+    let mut tx = pool.begin().await.unwrap();
+    let project_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+
+    let result = repo
+        .get_nested_project_entities(&mut tx, &project_a)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 6);
+
+    let projects: Vec<_> = result
+        .iter()
+        .filter(|e| e.entity_type == "project")
+        .collect();
+    assert_eq!(projects.len(), 3);
+
+    let documents: Vec<_> = result
+        .iter()
+        .filter(|e| e.entity_type == "document")
+        .collect();
+    assert_eq!(documents.len(), 2);
+    assert!(documents.iter().any(|e| e.entity_id == "doc-in-a"));
+    assert!(documents.iter().any(|e| e.entity_id == "doc-in-c"));
+
+    let chats: Vec<_> = result.iter().filter(|e| e.entity_type == "chat").collect();
+    assert_eq!(chats.len(), 1);
+    assert_eq!(chats[0].entity_id, "chat-in-b");
+}
+
+/// Calling from PROJECT_B should return B's subtree:
+/// 2 projects (B, C) + 1 chat in B + 1 document in C = 4 entities
+/// Should NOT include project_a or doc-in-a.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
+)]
+async fn nested_entities_from_mid_returns_subtree_only(pool: Pool<Postgres>) {
+    let repo = PgRepository::new(pool.clone());
+    let mut tx = pool.begin().await.unwrap();
+    let project_b = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+
+    let result = repo
+        .get_nested_project_entities(&mut tx, &project_b)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 4);
+
+    let projects: Vec<_> = result
+        .iter()
+        .filter(|e| e.entity_type == "project")
+        .collect();
+    assert_eq!(projects.len(), 2);
+    assert!(
+        !projects
+            .iter()
+            .any(|e| e.entity_id == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    );
+
+    assert!(result.iter().any(|e| e.entity_id == "chat-in-b"));
+    assert!(result.iter().any(|e| e.entity_id == "doc-in-c"));
+    assert!(!result.iter().any(|e| e.entity_id == "doc-in-a"));
+}
+
+/// Calling from PROJECT_C (leaf) should return:
+/// 1 project (C) + 1 document in C = 2 entities
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
+)]
+async fn nested_entities_from_leaf_returns_self_and_children(pool: Pool<Postgres>) {
+    let repo = PgRepository::new(pool.clone());
+    let mut tx = pool.begin().await.unwrap();
+    let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
+
+    let result = repo
+        .get_nested_project_entities(&mut tx, &project_c)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    assert!(result.iter().any(
+        |e| e.entity_type == "project" && e.entity_id == "cccccccc-cccc-cccc-cccc-cccccccccccc"
+    ));
+    assert!(
+        result
+            .iter()
+            .any(|e| e.entity_type == "document" && e.entity_id == "doc-in-c")
+    );
+}
+
+/// Non-existent project returns empty.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
+)]
+async fn nested_entities_nonexistent_project_returns_empty(pool: Pool<Postgres>) {
+    let repo = PgRepository::new(pool.clone());
+    let mut tx = pool.begin().await.unwrap();
+    let nonexistent = Uuid::new_v4();
+
+    let result = repo
+        .get_nested_project_entities(&mut tx, &nonexistent)
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+/// Move PROJECT_B from under PROJECT_A to under PROJECT_D.
+///
+/// Project tree before:
+///   PROJECT_A (user_a/owner, channel-1/view)
+///     PROJECT_B (user_b/owner, team-1/edit)
+///       PROJECT_C (user_c/owner)
+///         doc_in_c
+///       doc_in_b
+///   PROJECT_D (user_d/owner, team-2/comment)
+///
+/// Project tree after:
+///   PROJECT_A (unchanged)
+///   PROJECT_D
+///     PROJECT_B
+///       PROJECT_C
+///         doc_in_c
+///       doc_in_b
+///
+/// The move should:
+/// - Remove all inherited access from project_a for B's nested entities (8 rows)
+/// - Add inherited access from project_d for B's nested entities (8 rows)
+/// - Leave project_a's own access and project_d's own access untouched
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("move_project_test_data"))
+)]
+async fn move_project_from_a_to_d_updates_inherited_access(pool: Pool<Postgres>) {
+    let repo = PgRepository::new(pool.clone());
+
+    let project_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let project_b = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+    let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
+    let project_d = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd").unwrap();
+    let doc_in_b = Uuid::parse_str("d1111111-1111-1111-1111-111111111111").unwrap();
+    let doc_in_c = Uuid::parse_str("d2222222-2222-2222-2222-222222222222").unwrap();
+
+    repo.move_project(&project_b, Some(&project_a), Some(&project_d))
+        .await
+        .unwrap();
+
+    // Helper to count entity_access rows for a given entity
+    let count_for = |pool: Pool<Postgres>, entity_id: Uuid| async move {
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1",
+            &entity_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap_or(0)
+    };
+
+    // Helper to check grants from a specific project
+    let grants_from = |pool: Pool<Postgres>, entity_id: Uuid, project: &'static str| async move {
+        sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND granted_from_project_id = $2",
+                &entity_id,
+                project,
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .unwrap_or(0)
+    };
+
+    // -- project_a: unchanged (2 direct shares, no inherited)
+    assert_eq!(count_for(pool.clone(), project_a).await, 2);
+
+    // -- project_d: unchanged (2 direct shares, no inherited)
+    assert_eq!(count_for(pool.clone(), project_d).await, 2);
+
+    // -- project_b: 2 direct + 2 from D (lost 2 from A)
+    assert_eq!(count_for(pool.clone(), project_b).await, 4);
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            project_b,
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            project_b,
+            "dddddddd-dddd-dddd-dddd-dddddddddddd"
+        )
+        .await,
+        2
+    );
+
+    // -- project_c: 1 direct + 2 from B + 2 from D (lost 2 from A)
+    assert_eq!(count_for(pool.clone(), project_c).await, 5);
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            project_c,
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            project_c,
+            "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        )
+        .await,
+        2
+    );
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            project_c,
+            "dddddddd-dddd-dddd-dddd-dddddddddddd"
+        )
+        .await,
+        2
+    );
+
+    // -- doc_in_b: 2 from B + 2 from D (lost 2 from A)
+    assert_eq!(count_for(pool.clone(), doc_in_b).await, 4);
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            doc_in_b,
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            doc_in_b,
+            "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        )
+        .await,
+        2
+    );
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            doc_in_b,
+            "dddddddd-dddd-dddd-dddd-dddddddddddd"
+        )
+        .await,
+        2
+    );
+
+    // -- doc_in_c: 2 from B + 1 from C + 2 from D (lost 2 from A)
+    assert_eq!(count_for(pool.clone(), doc_in_c).await, 5);
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            doc_in_c,
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            doc_in_c,
+            "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        )
+        .await,
+        2
+    );
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            doc_in_c,
+            "cccccccc-cccc-cccc-cccc-cccccccccccc"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        grants_from(
+            pool.clone(),
+            doc_in_c,
+            "dddddddd-dddd-dddd-dddd-dddddddddddd"
+        )
+        .await,
+        2
+    );
+}

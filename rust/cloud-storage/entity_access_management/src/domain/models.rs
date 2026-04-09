@@ -8,9 +8,12 @@ pub enum EntityAccessManagementError {
     /// Unsupported entity type provided
     #[error("unsupported entity type provided {0}")]
     UnsupportedEntityType(EntityType),
-    /// Datbase error occured
+    /// Database error occured
     #[error(transparent)]
     DatabaseError(#[from] anyhow::Error),
+    /// Invalid project move configuration
+    #[error("invalid project move configuration")]
+    InvalidProjectMove,
 }
 
 /// Entity access source type
@@ -18,7 +21,7 @@ pub enum EntityAccessManagementError {
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
-    sqlx(type_name = "\"entity_access_source_type\"", rename_all = "lowercase")
+    sqlx(type_name = "entity_access_source_type", rename_all = "lowercase")
 )]
 pub enum EntityAccessSourceType {
     /// Channel source

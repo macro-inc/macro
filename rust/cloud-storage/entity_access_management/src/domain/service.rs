@@ -60,4 +60,31 @@ impl<R: EntityAccessManagementRepository> EntityAccessManagementService
             .await
             .map_err(|e| EntityAccessManagementError::DatabaseError(e.into()))
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn move_project(
+        &self,
+        project_id: &uuid::Uuid,
+        old_project_id: Option<&uuid::Uuid>,
+        new_project_id: Option<&uuid::Uuid>,
+    ) -> Result<(), EntityAccessManagementError> {
+        match (old_project_id, new_project_id) {
+            // cannot both be the same
+            (Some(old_project_id), Some(new_project_id)) => {
+                if old_project_id.eq(new_project_id) {
+                    return Err(EntityAccessManagementError::InvalidProjectMove);
+                }
+            }
+            // cannot both be empty
+            (None, None) => {
+                return Err(EntityAccessManagementError::InvalidProjectMove);
+            }
+            _ => {}
+        }
+
+        self.repo
+            .move_project(project_id, old_project_id, new_project_id)
+            .await
+            .map_err(|e| EntityAccessManagementError::DatabaseError(e.into()))
+    }
 }

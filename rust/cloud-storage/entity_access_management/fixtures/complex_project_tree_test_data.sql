@@ -24,6 +24,16 @@ INSERT INTO public."Project" ("id", "name", "userId", "parentId")
 INSERT INTO public."Project" ("id", "name", "userId", "parentId")
     VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'project-c', 'macro|user_c@test.com', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 
+-- Documents: one in project_a, one in project_c
+INSERT INTO public."Document" ("id", "name", "owner", "projectId")
+    VALUES ('doc-in-a', 'doc-a', 'macro|user_a@test.com', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+INSERT INTO public."Document" ("id", "name", "owner", "projectId")
+    VALUES ('doc-in-c', 'doc-c', 'macro|user_c@test.com', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
+
+-- Chats: one in project_b
+INSERT INTO public."Chat" ("id", "name", "userId", "projectId")
+    VALUES ('chat-in-b', 'chat-b', 'macro|user_b@test.com', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+
 -- Direct owner records (granted_from_project_id IS NULL)
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
     VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'project', 'macro|user_a@test.com', 'user', 'owner');

@@ -23,6 +23,15 @@ struct ProjectSourceEntity {
     pub access_level: AccessLevel,
 }
 
+/// Simple entity wrapper
+#[derive(Clone, Debug)]
+struct SimpleEntity {
+    /// The entity id
+    pub entity_id: String,
+    /// The entity type
+    pub entity_type: String,
+}
+
 /// PostgreSQL-backed implementation of [`EntityManagementRepository`]
 #[derive(Clone)]
 pub struct PgRepository {
@@ -37,6 +46,53 @@ impl PgRepository {
 }
 
 impl PgRepository {
+    /// Gets all nested entities for a given project
+    /// Includes the project itself
+    #[tracing::instrument(skip(self, transaction), err)]
+    async fn get_nested_project_entities(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        project_id: &uuid::Uuid,
+    ) -> Result<Vec<SimpleEntity>, sqlx::Error> {
+        let results = sqlx::query!(
+            r#"
+            WITH RECURSIVE child_projects AS (
+                SELECT id FROM "Project" WHERE id = $1
+
+                UNION ALL
+
+                SELECT p.id FROM "Project" p
+                INNER JOIN child_projects cp ON p."parentId" = cp.id
+            )
+            SELECT id as "entity_id!", 'project' as "entity_type!" FROM child_projects
+
+            UNION ALL
+
+            SELECT d.id as "entity_id!", 'document' as "entity_type!" FROM "Document" d
+            WHERE d."projectId" IN (SELECT id FROM child_projects)
+
+            UNION ALL
+
+            SELECT c.id as "entity_id!", 'chat' as "entity_type!" FROM "Chat" c
+            WHERE c."projectId" IN (SELECT id FROM child_projects)
+
+            UNION ALL
+
+            SELECT et.id::text as "entity_id!", 'email_thread' as "entity_type!" FROM email_threads et
+            WHERE et.project_id IN (SELECT id FROM child_projects)
+            "#,
+            &project_id.to_string()
+        )
+        .map(|r| SimpleEntity {
+            entity_id: r.entity_id,
+            entity_type: r.entity_type,
+        })
+        .fetch_all(transaction.as_mut())
+        .await?;
+
+        Ok(results)
+    }
+
     /// Walks up the project tree and grabs all projects including the project provided id
     #[tracing::instrument(skip(self, transaction), err)]
     async fn walk_up_project_tree(
@@ -183,6 +239,98 @@ impl EntityAccessManagementRepository for PgRepository {
 
             transaction.commit().await?;
         }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn move_project(
+        &self,
+        project_id: &uuid::Uuid,
+        old_project_id: Option<&uuid::Uuid>,
+        new_project_id: Option<&uuid::Uuid>,
+    ) -> Result<(), Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+
+        // The project entities we will need to update (including the project itself)
+        let project_entities = self
+            .get_nested_project_entities(&mut transaction, project_id)
+            .await?;
+
+        // Get all project items including the project itself
+        // If there is an old_project_id we need to remove all project item shares for the old_project_id and above
+        if let Some(old_project_id) = old_project_id {
+            // Walk project tree
+            let old_walked_up_project_ids = self
+                .walk_up_project_tree(&mut transaction, old_project_id)
+                .await?;
+
+            // Delete all entities in the project for projects shared
+            if !old_walked_up_project_ids.is_empty() {
+                sqlx::query!(
+                    r#"
+                DELETE FROM entity_access
+                WHERE entity_id = ANY($1)
+                AND granted_from_project_id = ANY($2)
+                "#,
+                    &project_entities
+                        .iter()
+                        .filter_map(|s| Uuid::parse_str(&s.entity_id).ok())
+                        .collect::<Vec<uuid::Uuid>>(),
+                    &old_walked_up_project_ids
+                        .into_iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>(),
+                )
+                .execute(transaction.as_mut())
+                .await?;
+            }
+        }
+
+        // If there is a new_project_id we need to add all project item shares for new_project_id and above
+        if let Some(new_project_id) = new_project_id {
+            let new_walked_up_project_ids = self
+                .walk_up_project_tree(&mut transaction, new_project_id)
+                .await?;
+
+            // get all source entities for the new walked up projects
+            let source_entities = self
+                .get_all_source_entities_for_projects(&mut transaction, &new_walked_up_project_ids)
+                .await?;
+
+            if !source_entities.is_empty() {
+                let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+                    "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",
+                );
+
+                let rows: Vec<_> = project_entities
+                    .iter()
+                    .filter_map(|entity| {
+                        Uuid::parse_str(&entity.entity_id)
+                            .ok()
+                            .map(|id| (id, &entity.entity_type))
+                    })
+                    .flat_map(|(entity_id, entity_type)| {
+                        source_entities
+                            .iter()
+                            .map(move |source| (entity_id, entity_type, source))
+                    })
+                    .collect();
+
+                qb.push_values(&rows, |mut b, (entity_id, entity_type, source)| {
+                    b.push_bind(entity_id)
+                        .push_bind(entity_type)
+                        .push_bind(&source.source_id)
+                        .push_bind(source.source_type)
+                        .push_bind(source.access_level)
+                        .push_bind(source.project_id.to_string());
+                });
+
+                qb.build().execute(transaction.as_mut()).await?;
+            }
+        }
+
+        transaction.commit().await?;
 
         Ok(())
     }
