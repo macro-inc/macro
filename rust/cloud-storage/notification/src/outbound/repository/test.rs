@@ -153,6 +153,33 @@ async fn test_create_notification(pool: Pool<Postgres>) {
     assert_eq!(user_row.user_id, recipient.to_string());
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_create_notification_returns_timestamps(pool: Pool<Postgres>) {
+    let recipient = test_user("recipient@test.com");
+    let notification_id = uuid::Uuid::new_v4();
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        notification: TaggedContent::new(TestNotification {
+            message: "hello".to_string(),
+        }),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([recipient.clone()]),
+    };
+
+    let rows = pool
+        .create_notification(request, notification_id, "test_service", None)
+        .await
+        .unwrap()
+        .expect("should return Some for new notification");
+
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert!(row.created_at.is_some(), "created_at should be set");
+    assert!(row.updated_at.is_some(), "updated_at should be set");
+    assert_eq!(row.created_at, row.updated_at);
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("user_notifications"))
