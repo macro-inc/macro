@@ -225,6 +225,53 @@ pub(crate) enum NotificationChannel<'a, T, U> {
     ConnGateway(ConnGatewayNotification<'a, T>),
 }
 
+impl<'a, T, U> NotificationChannel<'a, T, U> {
+    fn with_timestamps(
+        self,
+        created_at: Option<DateTime<Utc>>,
+        updated_at: Option<DateTime<Utc>>,
+    ) -> Self {
+        match self {
+            NotificationChannel::Ios(apnstargets) => NotificationChannel::Ios(apnstargets),
+            NotificationChannel::Email(email_notification) => {
+                NotificationChannel::Email(email_notification)
+            }
+            NotificationChannel::ConnGateway(ConnGatewayNotification {
+                notif:
+                    ConnGatewayInnerNotif {
+                        notification_id,
+                        notification_event_type,
+                        entity,
+                        sent,
+                        done,
+                        created_at: _,
+                        viewed_at,
+                        updated_at: _,
+                        deleted_at,
+                        notification_metadata,
+                        sender_id,
+                    },
+                recipients,
+            }) => NotificationChannel::ConnGateway(ConnGatewayNotification {
+                notif: ConnGatewayInnerNotif {
+                    notification_id,
+                    notification_event_type,
+                    entity,
+                    sent,
+                    done,
+                    created_at,
+                    viewed_at,
+                    updated_at,
+                    deleted_at,
+                    notification_metadata,
+                    sender_id,
+                },
+                recipients,
+            }),
+        }
+    }
+}
+
 /// Message published to SQS after DB persistence.
 /// Contains everything needed for delivery.
 ///
@@ -258,6 +305,21 @@ impl<'a, T, U> QueueMessage<'a, T, U> {
         Self {
             message_type: typename.as_ref().to_string(),
             content: NotificationChannel::Ios(Box::new(content)),
+        }
+    }
+
+    pub(crate) fn with_timestamps(
+        self,
+        created_at: Option<DateTime<Utc>>,
+        updated_at: Option<DateTime<Utc>>,
+    ) -> Self {
+        let QueueMessage {
+            message_type,
+            content,
+        } = self;
+        QueueMessage {
+            message_type,
+            content: content.with_timestamps(created_at, updated_at),
         }
     }
 }
