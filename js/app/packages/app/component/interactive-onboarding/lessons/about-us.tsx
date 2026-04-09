@@ -16,8 +16,8 @@ function AboutUsContent(props: LessonContentProps) {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
       <p>
-        Macro connects to your calendar and inbox for our AI, email client,
-        and unified inbox features. We will never share your data or send emails
+        Macro connects to your calendar and inbox for our AI, email client, and
+        unified inbox features. We will never share your data or send emails
         without your explicit permission.
       </p>
     </div>
