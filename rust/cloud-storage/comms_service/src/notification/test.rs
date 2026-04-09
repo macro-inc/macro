@@ -143,6 +143,7 @@ async fn mentioned_users_get_mention_not_message_send() {
         thread_participants: &[],
         thread_parent_sender_id: None,
         sender_profile_picture_url: None,
+        existing_user_ids: HashSet::new(),
     }
     .send(&ingress)
     .await
@@ -199,6 +200,7 @@ async fn thread_reply_excludes_sender_and_mentions() {
         thread_participants: &thread_participants,
         thread_parent_sender_id: Some(uid("macro|thread_parent_sender@test.com")),
         sender_profile_picture_url: None,
+        existing_user_ids: HashSet::new(),
     }
     .send(&ingress)
     .await

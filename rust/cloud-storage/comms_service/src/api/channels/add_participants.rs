@@ -100,14 +100,42 @@ pub async fn handler(
         channel_type: model_notifications::ChannelType::mirror(channel_type),
         channel_name: channel_name.clone(),
     };
+
+    let invited_by_user_id = MacroUserIdStr::parse_from_str(&channel_member.context.user_id)
+        .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
+        .into_owned();
+
+    let sender_profile_picture_url =
+        comms_notification::get_sender_profile_picture_url(&ctx.db, &invited_by_user_id).await;
+
+    let parsed_recipients: Vec<_> = participants
+        .iter()
+        .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
+        .collect();
+
+    let parsed_ids: Vec<_> = parsed_recipients.iter().map(|u| u.0.clone()).collect();
+
+    let existing_user_ids: std::collections::HashSet<String> =
+        macro_db_client::user::get_all::get_existing_users(&ctx.db, &parsed_ids)
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to get existing users");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "unable to get existing users".to_string(),
+                )
+            })?
+            .into_iter()
+            .collect();
+
     comms_notification::dispatch_notifications_for_invite(
-        &ctx,
+        &*ctx.notification_ingress_service,
         &channel_id,
-        &MacroUserIdStr::parse_from_str(&channel_member.context.user_id)
-            .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
-            .into_owned(),
-        req.participants.clone(),
-        metadata.clone(),
+        &invited_by_user_id,
+        parsed_recipients,
+        existing_user_ids,
+        sender_profile_picture_url,
+        metadata,
     )
     .await
     .inspect_err(|e| {

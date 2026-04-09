@@ -32,6 +32,9 @@ struct ChannelMessageEvent<'a> {
     thread_participants: &'a [MacroUserIdStr<'static>],
     thread_parent_sender_id: Option<MacroUserIdStr<'static>>,
     sender_profile_picture_url: Option<String>,
+    /// Pre-computed set of existing user IDs; used by the `(0, None)` invite
+    /// branch to split recipients into push vs email delivery.
+    existing_user_ids: HashSet<String>,
 }
 
 fn recipients_excluding<'a>(
@@ -160,24 +163,16 @@ impl ChannelMessageEvent<'_> {
             }
             // Channel has no messages, send invite notification
             (0, None) => {
-                ingress
-                    .send_notification(
-                        SendNotificationRequestBuilder {
-                            notification_entity: entity(),
-                            notification: ChannelInviteMetadata {
-                                invited_by: self.message.sender_id.clone(),
-                                channel_name: self.channel_metadata.channel_name.clone(),
-                                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
-                            },
-                            sender_id: sender(),
-                            recipient_ids: recipients_without_sender_and_mentions,
-                        }
-                        .into_request()
-                        .with_apns()
-                        .with_conn_gateway(),
-                    )
-                    .await
-                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+                dispatch_notifications_for_invite(
+                    ingress,
+                    self.channel_id,
+                    &self.message.sender_id,
+                    recipients_without_sender_and_mentions.into_iter().collect(),
+                    self.existing_user_ids.clone(),
+                    self.sender_profile_picture_url.clone(),
+                    self.channel_metadata.clone(),
+                )
+                .await?;
             }
             // Channel has messages, send message send notification
             (_, None) => {
@@ -209,34 +204,20 @@ impl ChannelMessageEvent<'_> {
 }
 
 pub async fn dispatch_notifications_for_invite(
-    api_context: &AppState,
+    ingres: &impl NotificationIngress,
     channel_id: &Uuid,
     invited_by_user_id: &MacroUserIdStr<'static>,
-    recipient_user_ids: Vec<String>,
+    recipient_user_ids: Vec<MacroUserIdStr<'_>>,
+    existing_user_ids: HashSet<String>,
+    sender_profile_picture_url: Option<String>,
     common: CommonChannelMetadata,
 ) -> anyhow::Result<()> {
-    let parsed_recipients: Vec<_> = recipient_user_ids
-        .iter()
-        .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
-        .map(|u| u.0)
-        .collect();
-
-    let sender_profile_picture_url =
-        get_sender_profile_picture_url(&api_context.db, invited_by_user_id).await;
-
-    let existing_users: HashSet<String> =
-        macro_db_client::user::get_all::get_existing_users(&api_context.db, &parsed_recipients)
-            .await?
-            .into_iter()
-            .collect();
-
-    let (existing_users, not_existing_users): (HashSet<_>, HashSet<_>) = parsed_recipients
+    let (existing_users, not_existing_users): (HashSet<_>, HashSet<_>) = recipient_user_ids
         .into_iter()
-        .map(MacroUserIdStr)
-        .partition(|id| existing_users.contains(id.as_ref()));
+        .partition(|id| existing_user_ids.contains(id.as_ref()));
 
     let _ = tokio::try_join!(
-        api_context.notification_ingress_service.send_notification(
+        ingres.send_notification(
             SendNotificationRequestBuilder {
                 notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
                 notification: ChannelInviteMetadata {
@@ -251,7 +232,7 @@ pub async fn dispatch_notifications_for_invite(
             .with_apns()
             .with_conn_gateway(),
         ),
-        api_context.notification_ingress_service.send_notification(
+        ingres.send_notification(
             SendNotificationRequestBuilder {
                 notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
                 notification: ChannelInviteMetadata {
@@ -282,24 +263,21 @@ pub async fn dispatch_notifications_for_message(
     let channel_message_count =
         check_if_channel_has_messages(&api_context.db, channel_id).await? as usize;
 
-    // First message in channel: use the invite flow which splits recipients into
-    // existing vs non-existing users, sending email invites to non-existing users.
-    if channel_message_count == 0 && message.thread_id.is_none() {
-        let recipient_user_ids: Vec<String> = participants
-            .iter()
-            .map(|p| p.user_id.as_ref().to_string())
-            .filter(|id| id != message.sender_id.0.as_ref())
-            .collect();
+    // When this is the first message in the channel, look up which
+    // participants already have accounts so the invite branch can split
+    // push (existing) vs email (non-existing) delivery.
+    let existing_user_ids: HashSet<String> = if channel_message_count == 0
+        && message.thread_id.is_none()
+    {
+        let participant_ids: Vec<_> = participants.iter().map(|p| p.user_id.0.clone()).collect();
 
-        return dispatch_notifications_for_invite(
-            api_context,
-            channel_id,
-            &message.sender_id,
-            recipient_user_ids,
-            channel_metadata,
-        )
-        .await;
-    }
+        macro_db_client::user::get_all::get_existing_users(&api_context.db, &participant_ids)
+            .await?
+            .into_iter()
+            .collect()
+    } else {
+        HashSet::new()
+    };
 
     let (user_mentions, document_mention_ids) =
         mentions
@@ -355,12 +333,13 @@ pub async fn dispatch_notifications_for_message(
         thread_participants: &thread_participants,
         thread_parent_sender_id,
         sender_profile_picture_url,
+        existing_user_ids,
     }
     .send(&*api_context.notification_ingress_service)
     .await
 }
 
-async fn get_sender_profile_picture_url(
+pub async fn get_sender_profile_picture_url(
     db: &sqlx::PgPool,
     sender_id: &MacroUserIdStr<'_>,
 ) -> Option<String> {
