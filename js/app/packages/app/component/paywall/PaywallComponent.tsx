@@ -116,11 +116,11 @@ const PaywallComponent = (props: PaywallComponent) => {
                     </span>
                     <span class="text-base text-ink/40">/mo</span>
                   </div>
-                  <ul class="text-sm text-ink/60 flex flex-col gap-1 list-disc list-inside">
+                  <div class="text-sm text-ink/60 flex flex-col gap-1">
                     <For each={plan.features}>
-                      {(feature) => <li>{feature}</li>}
+                      {(feature) => <span>{feature}</span>}
                     </For>
-                  </ul>
+                  </div>
                 </div>
               </button>
             )}
