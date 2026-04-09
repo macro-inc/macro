@@ -58,6 +58,10 @@ pub async fn handler(
         ));
     }
 
+    let invited_by_user_id = MacroUserIdStr::parse_from_str(&channel_member.context.user_id)
+        .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
+        .into_owned();
+
     let participants = to_lowercase(&req.participants);
 
     for participant in participants.iter() {
@@ -101,10 +105,6 @@ pub async fn handler(
         channel_name: channel_name.clone(),
     };
 
-    let invited_by_user_id = MacroUserIdStr::parse_from_str(&channel_member.context.user_id)
-        .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
-        .into_owned();
-
     let sender_profile_picture_url =
         comms_notification::get_sender_profile_picture_url(&ctx.db, &invited_by_user_id).await;
 
@@ -118,13 +118,10 @@ pub async fn handler(
     let existing_user_ids: std::collections::HashSet<String> =
         macro_db_client::user::get_all::get_existing_users(&ctx.db, &parsed_ids)
             .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to get existing users");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "unable to get existing users".to_string(),
-                )
-            })?
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "unable to get existing users for invite");
+            })
+            .unwrap_or_default()
             .into_iter()
             .collect();
 
