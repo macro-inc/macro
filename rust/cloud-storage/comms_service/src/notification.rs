@@ -93,9 +93,7 @@ impl ChannelMessageEvent<'_> {
                                 document_name: mention.item_name.clone(),
                                 owner: mention.item_owner.clone(),
                                 file_type: mention.file_type.clone(),
-                                sender_profile_picture_url: self
-                                    .sender_profile_picture_url
-                                    .clone(),
+                                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
                             },
                             sender_id: sender(),
                             recipient_ids: doc_recipients.clone(),
@@ -134,9 +132,7 @@ impl ChannelMessageEvent<'_> {
                                     message_id: self.message.id.to_string(),
                                     user_id: self.message.sender_id.clone(),
                                     message_content: self.message.content.clone(),
-                                    thread_parent_sender_id: self
-                                        .thread_parent_sender_id
-                                        .clone(),
+                                    thread_parent_sender_id: self.thread_parent_sender_id.clone(),
                                     common: self.channel_metadata.clone(),
                                     sender_profile_picture_url: self
                                         .sender_profile_picture_url
@@ -168,9 +164,7 @@ impl ChannelMessageEvent<'_> {
                             notification: ChannelInviteMetadata {
                                 invited_by: self.message.sender_id.clone(),
                                 common: self.channel_metadata.clone(),
-                                sender_profile_picture_url: self
-                                    .sender_profile_picture_url
-                                    .clone(),
+                                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
                             },
                             sender_id: sender(),
                             recipient_ids: recipients_without_sender_and_mentions,
@@ -193,9 +187,7 @@ impl ChannelMessageEvent<'_> {
                                 sender: self.message.sender_id.clone(),
                                 message_content: self.message.content.to_string(),
                                 common: self.channel_metadata.clone(),
-                                sender_profile_picture_url: self
-                                    .sender_profile_picture_url
-                                    .clone(),
+                                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
                             },
                             sender_id: sender(),
                             recipient_ids: recipients_without_sender_and_mentions,
@@ -220,12 +212,43 @@ pub async fn dispatch_notifications_for_invite(
     recipient_user_ids: Vec<String>,
     common: CommonChannelMetadata,
 ) -> anyhow::Result<()> {
+    let parsed_recipients: Vec<_> = recipient_user_ids
+        .iter()
+        .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
+        .map(|u| u.0)
+        .collect();
+
     let sender_profile_picture_url =
         get_sender_profile_picture_url(&api_context.db, invited_by_user_id).await;
 
-    api_context
-        .notification_ingress_service
-        .send_notification(
+    let existing_users: HashSet<String> =
+        macro_db_client::user::get_all::get_existing_users(&api_context.db, &parsed_recipients)
+            .await?
+            .into_iter()
+            .collect();
+
+    let (existing_users, not_existing_users): (HashSet<_>, HashSet<_>) = parsed_recipients
+        .into_iter()
+        .map(MacroUserIdStr)
+        .partition(|id| existing_users.contains(id.as_ref()));
+
+    let _ = tokio::try_join!(
+        api_context.notification_ingress_service.send_notification(
+            SendNotificationRequestBuilder {
+                notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
+                notification: ChannelInviteMetadata {
+                    invited_by: invited_by_user_id.clone(),
+                    common: common.clone(),
+                    sender_profile_picture_url: sender_profile_picture_url.clone(),
+                },
+                sender_id: Some(invited_by_user_id.copied().into_owned()),
+                recipient_ids: existing_users,
+            }
+            .into_request()
+            .with_apns()
+            .with_conn_gateway(),
+        ),
+        api_context.notification_ingress_service.send_notification(
             SendNotificationRequestBuilder {
                 notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
                 notification: ChannelInviteMetadata {
@@ -234,18 +257,14 @@ pub async fn dispatch_notifications_for_invite(
                     sender_profile_picture_url,
                 },
                 sender_id: Some(invited_by_user_id.copied().into_owned()),
-                recipient_ids: recipients_excluding(
-                    recipient_user_ids.iter().map(|m| m.as_str()),
-                    once(invited_by_user_id.as_ref()),
-                )
-                .collect(),
+                recipient_ids: not_existing_users,
             }
             .into_request()
             .with_apns()
             .with_conn_gateway(),
         )
-        .await
-        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+    )
+    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
     Ok(())
 }
@@ -337,7 +356,9 @@ async fn get_sender_profile_picture_url(
 mod tests {
     use super::*;
     use model::comms::{ChannelId, ParticipantRole};
-    use notification_hex::domain::models::{Notification, NotificationResult, SendNotificationRequest};
+    use notification_hex::domain::models::{
+        Notification, NotificationResult, SendNotificationRequest,
+    };
     use notification_hex::domain::service::SendNotificationError;
     use std::collections::HashMap;
     use std::sync::Mutex;
