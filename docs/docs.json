@@ -1,0 +1,69 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Macro",
+  "appearance": {
+    "default": "dark"
+  },
+  "colors": {
+    "primary": "#ff8f05",
+    "light": "#ff8f05",
+    "dark": "#ff8f05"
+  },
+  "background": {
+    "color": {
+      "dark": "#090909"
+    }
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index"
+            ]
+          },
+          {
+            "group": "Product",
+            "pages": [
+              "product/email",
+              "product/channels",
+              "product/docs",
+              "product/canvas",
+              "product/tasks",
+              "product/search",
+              "product/files",
+              "product/ai-chat"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Changelog",
+        "groups": [
+          {
+            "group": "Releases",
+            "pages": [
+              "changelog/introduction"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "Get Macro",
+      "href": "https://macro.com"
+    }
+  }
+}

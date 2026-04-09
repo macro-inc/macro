@@ -4,31 +4,7 @@ import IconX from '@icon/regular/x.svg';
 import { stripeServiceClient } from '@service-stripe/client';
 import { createSignal, For, Show } from 'solid-js';
 import { useAnalytics } from '@app/component/analytics-context';
-
-const PLANS = [
-  {
-    tier: 'haiku' as const,
-    name: 'Haiku',
-    price: 20,
-    description: "Access to Anthropic's fast, lightweight model",
-    calls: '1,000',
-  },
-  {
-    tier: 'sonnet' as const,
-    name: 'Sonnet',
-    price: 60,
-    description: "Access to Anthropic's balanced frontier model",
-    calls: '5,000',
-    popular: true,
-  },
-  {
-    tier: 'opus' as const,
-    name: 'Opus',
-    price: 120,
-    description: "Access to Anthropic's most capable model",
-    calls: 'Unlimited',
-  },
-];
+import { PLANS, type PlanTier } from './plans';
 
 interface PaywallComponent {
   cb: () => Promise<void> | void;
@@ -42,10 +18,10 @@ interface PaywallComponent {
 const PaywallComponent = (props: PaywallComponent) => {
   const analytics = useAnalytics();
 
-  const [selectedTier, setSelectedTier] = createSignal<string>('sonnet');
+  const [selectedTier, setSelectedTier] = createSignal<PlanTier>('sonnet');
   const hasPaid = useHasPaidAccess();
 
-  const handleCheckout = async (tier: string) => {
+  const handleCheckout = async (tier: PlanTier) => {
     try {
       await props.cb();
       const url = await stripeServiceClient.createCheckoutSession(
@@ -129,9 +105,6 @@ const PaywallComponent = (props: PaywallComponent) => {
                       <div class="font-semibold text-ink text-base sm:text-lg">
                         {plan.name}
                       </div>
-                      <p class="text-sm text-ink/50 mt-0.5">
-                        {plan.description}
-                      </p>
                     </div>
                     {selectedTier() === plan.tier && (
                       <div class="bg-accent w-3 sm:w-4 h-3 sm:h-4 shrink-0"></div>
@@ -143,15 +116,11 @@ const PaywallComponent = (props: PaywallComponent) => {
                     </span>
                     <span class="text-base text-ink/40">/mo</span>
                   </div>
-                  <div class="text-sm text-ink/60">
-                    <span class="font-semibold text-ink">{plan.calls}</span> AI
-                    tool calls
-                  </div>
-                  <Show when={plan.popular}>
-                    <span class="text-[10px] font-semibold text-accent">
-                      Most popular
-                    </span>
-                  </Show>
+                  <ul class="text-sm text-ink/60 flex flex-col gap-1 list-disc list-inside">
+                    <For each={plan.features}>
+                      {(feature) => <li>{feature}</li>}
+                    </For>
+                  </ul>
                 </div>
               </button>
             )}
