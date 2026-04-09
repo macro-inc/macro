@@ -45,7 +45,13 @@ export default function InteractiveOnboarding() {
     return true;
   });
   const lessons = isTouch
-    ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'about-us' || l.id === 'choose-plan' || l.id === 'launch')
+    ? allLessons.filter(
+        (l) =>
+          l.id === 'welcome' ||
+          l.id === 'about-us' ||
+          l.id === 'choose-plan' ||
+          l.id === 'launch'
+      )
     : allLessons;
 
   const testMode = new URLSearchParams(location.search).has('test');
@@ -386,7 +392,12 @@ export default function InteractiveOnboarding() {
                         style={bodyStyle()}
                         class="flex flex-col items-start text-left gap-6 w-full max-w-md mt-4"
                       >
-                        <Show when={lesson().definition.id === 'welcome' || lesson().definition.id === 'launch'}>
+                        <Show
+                          when={
+                            lesson().definition.id === 'welcome' ||
+                            lesson().definition.id === 'launch'
+                          }
+                        >
                           <LogoIcon class="size-16 text-accent self-center" />
                         </Show>
                         <h2 class="text-3xl font-semibold text-ink">

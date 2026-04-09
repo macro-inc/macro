@@ -6,9 +6,7 @@ function LaunchContent(props: LessonContentProps) {
 
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
-      <p>
-        You're all set! Let's dive in.
-      </p>
+      <p>You're all set! Let's dive in.</p>
     </div>
   );
 }
