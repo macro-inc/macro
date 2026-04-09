@@ -199,9 +199,14 @@ where
 {
     /// return the [EmailParts] contained within self
     pub fn email_part<'a>(&'a self) -> Email<ArcCowStr<'a>> {
-        let id_str = self.user_id.as_ref();
-        let email_str = &id_str[self.email_part_offset..];
+        let email_str = self.email_str();
         self.email_part.map(|_| ArcCowStr::Borrowed(email_str))
+    }
+
+    /// return the email as a string slice
+    pub fn email_str(&self) -> &str {
+        let id_str = self.user_id.as_ref();
+        &id_str[self.email_part_offset..]
     }
 }
 

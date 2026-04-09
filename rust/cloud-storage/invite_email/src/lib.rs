@@ -10,6 +10,7 @@ mod test;
 
 use askama::Template;
 use macro_env::Environment;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -137,6 +138,10 @@ impl ChannelInviteMetadata {
     fn signup_url(&self) -> Url {
         signup_url(Environment::new_or_prod())
     }
+
+    fn sender_display(&self) -> &str {
+        self.invited_by.email_str()
+    }
 }
 
 impl Notification for ChannelInviteMetadata {
@@ -148,7 +153,8 @@ impl NotificationTitle for ChannelInviteMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender = self.invited_by.email_part().email_str().to_string();
+        let email = self.invited_by.email_part();
+        let sender = email.email_str();
         Ok(format!(
             "{sender} invited you to join #{}",
             self.channel_name
@@ -165,7 +171,7 @@ impl NotificationTitle for ChannelInviteMetadata {
 
 impl NotificationExtEmail for ChannelInviteMetadata {
     fn format_email(&self) -> EmailContent {
-        let sender = self.invited_by.as_ref();
+        let sender = self.sender_display();
         EmailContent {
             subject: format!("{sender} has invited you to join #{}", self.channel_name),
             body: self
@@ -198,13 +204,14 @@ impl NotificationExtIos for ChannelInviteMetadata {
 
     fn as_apns<'a>(
         &self,
-        _sender_id: Option<MacroUserIdStr<'a>>,
+        sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let sender = self.invited_by.email_part().email_str().to_string();
-        let title = format!("{sender} invited you to join #{}", self.channel_name);
-        let body = "Open macro to continue".to_string();
+        let title = self
+            .format_title(sender_id.as_ref().map(CowLike::copied))
+            .ok()?;
+        let body = self.format_body(sender_id).ok()?;
         let mutable_content = self.sender_profile_picture_url.as_ref().map(|_| 1);
         Some(APNSPushNotification {
             aps: Aps {
