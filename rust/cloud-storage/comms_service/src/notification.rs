@@ -263,8 +263,7 @@ pub async fn dispatch_notifications_for_invite(
                 recipient_ids: not_existing_users,
             }
             .into_request()
-            .with_apns()
-            .with_conn_gateway(),
+            .with_email(),
         )
     )
     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
@@ -282,6 +281,25 @@ pub async fn dispatch_notifications_for_message(
 ) -> anyhow::Result<()> {
     let channel_message_count =
         check_if_channel_has_messages(&api_context.db, channel_id).await? as usize;
+
+    // First message in channel: use the invite flow which splits recipients into
+    // existing vs non-existing users, sending email invites to non-existing users.
+    if channel_message_count == 0 && message.thread_id.is_none() {
+        let recipient_user_ids: Vec<String> = participants
+            .iter()
+            .map(|p| p.user_id.as_ref().to_string())
+            .filter(|id| id != message.sender_id.0.as_ref())
+            .collect();
+
+        return dispatch_notifications_for_invite(
+            api_context,
+            channel_id,
+            &message.sender_id,
+            recipient_user_ids,
+            channel_metadata,
+        )
+        .await;
+    }
 
     let (user_mentions, document_mention_ids) =
         mentions
