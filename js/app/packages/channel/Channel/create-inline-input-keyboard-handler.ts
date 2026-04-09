@@ -10,9 +10,7 @@ import {
   virtualKeyboardHeight,
   virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
-import {
-  scrollElementAboveKeyboard,
-} from '../scroll-utils';
+import { scrollElementAboveKeyboard } from '../scroll-utils';
 import { isPlatform } from '@core/util/platform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
@@ -44,7 +42,7 @@ export function createInlineInputKeyboardHandler(
     if (!inputContainer) return;
     activeInputContainer = inputContainer;
 
-    // HACK: on mobile safari, we need to ensure that the input container is scrolled into view BEFORE we hide the input, and then perform the subsequent scroll. Some sort of weird Safari focus behavior going on. 
+    // HACK: on mobile safari, we need to ensure that the input container is scrolled into view BEFORE we hide the input, and then perform the subsequent scroll. Some sort of weird Safari focus behavior going on.
     if (!isPlatform('ios')) {
       activeInputContainer.scrollIntoView({ block: 'end' });
     }

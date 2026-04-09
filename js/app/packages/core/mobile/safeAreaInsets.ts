@@ -1,4 +1,4 @@
-import { isMobile } from "./isMobile";
+import { isMobile } from './isMobile';
 
 type SafeAreaInsetSide = 'top' | 'right' | 'bottom' | 'left';
 

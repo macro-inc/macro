@@ -43,7 +43,9 @@ export function iosSizeMiddleware(
         ? getSafeAreaInset('top')
         : 0;
       const kbHeight =
-        isMobile() && placement.startsWith('bottom') ? virtualKeyboardHeight() : 0;
+        isMobile() && placement.startsWith('bottom')
+          ? virtualKeyboardHeight()
+          : 0;
       const h = Math.max(0, availableHeight - safeAreaTop - kbHeight);
       Object.assign(elements.floating.style, {
         maxHeight: `${h}px`,
