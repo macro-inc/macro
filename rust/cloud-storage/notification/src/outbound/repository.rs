@@ -517,6 +517,7 @@ impl NotificationDbOps for PgPool {
                 |row| -> Result<UserNotificationRow<T>, rootcause::Report<Uuid>> {
                     let entity = EntityType::from_str(&row.event_item_type)
                         .map_err(|e| rootcause::report!(e))
+                        .attach(row.event_item_type)
                         .context(row.notification_id)?
                         .with_entity_string(row.event_item_id);
 
