@@ -132,7 +132,9 @@ impl ChannelMessageEvent<'_> {
                                     message_id: self.message.id.to_string(),
                                     user_id: self.message.sender_id.clone(),
                                     message_content: self.message.content.clone(),
-                                    thread_parent_sender_id: self.thread_parent_sender_id.clone(),
+                                    thread_parent_sender_id: self
+                                        .thread_parent_sender_id
+                                        .clone(),
                                     common: self.channel_metadata.clone(),
                                     sender_profile_picture_url: self
                                         .sender_profile_picture_url
@@ -163,7 +165,7 @@ impl ChannelMessageEvent<'_> {
                             notification_entity: entity(),
                             notification: ChannelInviteMetadata {
                                 invited_by: self.message.sender_id.clone(),
-                                common: self.channel_metadata.clone(),
+                                channel_name: self.channel_metadata.channel_name.clone(),
                                 sender_profile_picture_url: self.sender_profile_picture_url.clone(),
                             },
                             sender_id: sender(),
@@ -187,7 +189,9 @@ impl ChannelMessageEvent<'_> {
                                 sender: self.message.sender_id.clone(),
                                 message_content: self.message.content.to_string(),
                                 common: self.channel_metadata.clone(),
-                                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+                                sender_profile_picture_url: self
+                                    .sender_profile_picture_url
+                                    .clone(),
                             },
                             sender_id: sender(),
                             recipient_ids: recipients_without_sender_and_mentions,
@@ -238,7 +242,7 @@ pub async fn dispatch_notifications_for_invite(
                 notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
                 notification: ChannelInviteMetadata {
                     invited_by: invited_by_user_id.clone(),
-                    common: common.clone(),
+                    channel_name: common.channel_name.clone(),
                     sender_profile_picture_url: sender_profile_picture_url.clone(),
                 },
                 sender_id: Some(invited_by_user_id.copied().into_owned()),
@@ -253,7 +257,7 @@ pub async fn dispatch_notifications_for_invite(
                 notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
                 notification: ChannelInviteMetadata {
                     invited_by: invited_by_user_id.clone(),
-                    common: common.clone(),
+                    channel_name: common.channel_name.clone(),
                     sender_profile_picture_url,
                 },
                 sender_id: Some(invited_by_user_id.copied().into_owned()),

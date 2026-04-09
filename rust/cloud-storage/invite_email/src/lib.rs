@@ -2,7 +2,8 @@
 //! Domain models for invitation email notifications.
 //!
 //! Contains the [`InviteToMacro`] referral notification, the [`InviteToTeamMetadata`] team
-//! invitation notification, and the [`ReferralCode`] newtype.
+//! invitation notification, the [`ChannelInviteMetadata`] channel invitation, and the
+//! [`ReferralCode`] newtype.
 
 #[cfg(test)]
 mod test;
@@ -10,9 +11,14 @@ mod test;
 use askama::Template;
 use macro_env::Environment;
 use macro_user_id::email::EmailStr;
+use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use notification::domain::models::{
-    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, queue_message::EmailContent,
+    NotifCollapseKey, Notification, NotificationExtEmail, NotificationExtIos, NotificationTitle,
+    RateLimitConfig, RateLimitKey,
+    apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
+    queue_message::EmailContent,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -25,9 +31,25 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct ReferralCode(pub String);
 
-/// The metadata for a referral-to-macro notification.
-#[derive(Debug, Serialize, Deserialize, Clone, Template)]
+/// Template struct for rendering the invite email.
+///
+/// Both [`InviteToMacro`] and [`ChannelInviteMetadata`] convert into this struct
+/// to render the shared `invite.html` template.
+#[derive(Debug, Clone, Template)]
 #[template(path = "invite.html")]
+pub struct InviteTemplate {
+    /// The sender's profile picture URL, if available.
+    pub sender_profile_picture_url: Option<Url>,
+    /// The sender's display name, if they have set one.
+    pub sender_name: Option<String>,
+    /// The sender's email address.
+    pub sender_email: Option<String>,
+    /// The URL the CTA button should link to.
+    pub referral_url: Url,
+}
+
+/// The metadata for a referral-to-macro notification.
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InviteToMacro {
     /// The recipient email.
     pub recipient_email: EmailStr<'static>,
@@ -47,6 +69,15 @@ impl InviteToMacro {
     fn referral_url(&self) -> Url {
         let env = Environment::new_or_prod();
         get_url(env, &self.referral_code)
+    }
+
+    fn as_template(&self) -> InviteTemplate {
+        InviteTemplate {
+            sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+            sender_name: self.sender_name.clone(),
+            sender_email: self.sender_email.clone(),
+            referral_url: self.referral_url(),
+        }
     }
 }
 
@@ -89,6 +120,7 @@ impl NotificationExtEmail for InviteToMacro {
         EmailContent {
             subject: format!("{} has invited you to join Macro", sender),
             body: self
+                .as_template()
                 .render()
                 .expect("InviteToMacro template render failed in format_email"),
         }
@@ -106,6 +138,127 @@ impl NotificationExtEmail for InviteToMacro {
         RateLimitKey::builder(&Self::TYPE_NAME)
             .append(&self.recipient_email.0.as_ref())
             .finish()
+    }
+}
+
+/// Metadata for when a user is invited to a channel.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelInviteMetadata {
+    /// The user who sent the invitation
+    #[serde(alias = "invited_by")]
+    #[schema(value_type = String)]
+    pub invited_by: MacroUserIdStr<'static>,
+    /// The name of the channel
+    #[serde(default)]
+    #[serde(alias = "channel_name")]
+    pub channel_name: String,
+    /// The sender's profile picture URL, if available.
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
+}
+
+impl ChannelInviteMetadata {
+    fn as_template(&self) -> InviteTemplate {
+        let sender_email = Some(self.invited_by.email_part().as_ref().to_string());
+        InviteTemplate {
+            sender_profile_picture_url: self
+                .sender_profile_picture_url
+                .as_ref()
+                .and_then(|s| Url::parse(s).ok()),
+            sender_name: None,
+            sender_email,
+            referral_url: signup_url(Environment::new_or_prod()),
+        }
+    }
+}
+
+impl Notification for ChannelInviteMetadata {
+    const TYPE_NAME: &'static str = "channel_invite";
+}
+
+impl NotificationTitle for ChannelInviteMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let sender = self.invited_by.email_part().email_str().to_string();
+        Ok(format!(
+            "{sender} invited you to join #{}",
+            self.channel_name
+        ))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok("Open macro to continue".to_string())
+    }
+}
+
+impl NotificationExtEmail for ChannelInviteMetadata {
+    fn format_email(&self) -> EmailContent {
+        let sender = self.invited_by.as_ref();
+        EmailContent {
+            subject: format!("{sender} has invited you to join #{}", self.channel_name),
+            body: self
+                .as_template()
+                .render()
+                .expect("ChannelInviteMetadata template render failed in format_email"),
+        }
+    }
+
+    fn rate_limit_config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: 1,
+            window: Duration::from_hours(24 * 7),
+        }
+    }
+
+    fn rate_limit_key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&Self::TYPE_NAME)
+            .append(&self.channel_name)
+            .append(&self.invited_by)
+            .finish()
+    }
+}
+
+impl NotificationExtIos for ChannelInviteMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = self.invited_by.email_part().email_str().to_string();
+        let title = format!("{sender} invited you to join #{}", self.channel_name);
+        let body = "Open macro to continue".to_string();
+        let mutable_content = self.sender_profile_picture_url.as_ref().map(|_| 1);
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                mutable_content,
+                ..Default::default()
+            },
+            push_notification_data: PushNotificationData {
+                notification_id,
+                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+            },
+        })
     }
 }
 

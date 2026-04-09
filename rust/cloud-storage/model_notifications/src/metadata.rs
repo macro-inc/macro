@@ -1,10 +1,11 @@
 use doppleganger::Doppleganger;
-pub use invite_email::InviteToTeamMetadata;
+pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
+pub use notification::domain::models::NotificationTitle;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
@@ -61,19 +62,6 @@ pub struct CommonChannelMetadata {
     #[serde(default)]
     #[serde(alias = "channel_name")]
     pub channel_name: String,
-}
-
-/// Metadata for when a user is invited to a channel
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ChannelInviteMetadata {
-    #[serde(alias = "invited_by")]
-    #[schema(value_type = String)]
-    pub invited_by: MacroUserIdStr<'static>,
-    #[serde(flatten)]
-    pub common: CommonChannelMetadata,
-    #[serde(default)]
-    pub sender_profile_picture_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -222,10 +210,6 @@ impl NotificationTitle for NewEmailMetadata {
     }
 }
 
-impl notification::domain::models::Notification for ChannelInviteMetadata {
-    const TYPE_NAME: &'static str = "channel_invite";
-}
-
 impl notification::domain::models::Notification for AiResponseMetadata {
     const TYPE_NAME: &'static str = "ai_response";
 }
@@ -244,19 +228,6 @@ impl notification::domain::models::Notification for ChannelReplyMetadata {
 
 impl notification::domain::models::Notification for DocumentMentionMetadata {
     const TYPE_NAME: &'static str = "document_mention";
-}
-
-pub trait NotificationTitle {
-    /// format the notification into a user facing title
-    fn format_title(
-        &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report>;
-
-    fn format_body(
-        &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report>;
 }
 
 impl NotificationTitle for ChannelMentionMetadata {
@@ -373,25 +344,6 @@ impl NotificationTitle for ChannelReplyMetadata {
     }
 }
 
-impl NotificationTitle for ChannelInviteMetadata {
-    fn format_title(
-        &self,
-        _sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report> {
-        let email = self.invited_by.email_part();
-        let sender = email.email_str();
-        let channel = &self.common.channel_name;
-        Ok(format!("{sender} invited you to join #{channel}"))
-    }
-
-    fn format_body(
-        &self,
-        _sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report> {
-        Ok("Open macro to continue".to_string())
-    }
-}
-
 /// Metadata for when a user is assigned to a task
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -499,25 +451,6 @@ fn alert_apns<T: NotificationTitle>(
             sender_profile_picture_url,
         },
     })
-}
-
-impl NotificationExtIos for ChannelInviteMetadata {
-    type NotifData = ::notification::domain::models::apple::PushNotificationData;
-
-    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
-        let entity_type: &'static str = entity.entity_type.into();
-        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
-    }
-
-    fn as_apns<'a>(
-        &self,
-        sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
-        notification_id: Uuid,
-    ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
-    }
 }
 
 impl NotificationTitle for AiResponseMetadata {
