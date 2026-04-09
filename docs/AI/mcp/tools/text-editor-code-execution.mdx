@@ -1,0 +1,18 @@
+---
+title: text_editor_code_execution
+description: "Generated schema for text_editor_code_execution"
+---
+
+# text_editor_code_execution
+
+Generated schema for text_editor_code_execution
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `command` | string | Yes | The command to execute: "view", "create", or "str_replace" |
+| `file_text` | string | No | File content for create operations |
+| `new_str` | string | No | Replacement string for str_replace operations |
+| `old_str` | string | No | String to find for str_replace operations |
+| `path` | string | Yes | Path to the file |

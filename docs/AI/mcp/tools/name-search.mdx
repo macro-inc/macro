@@ -1,0 +1,15 @@
+---
+title: NameSearch
+description: "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. This tool finds items based on what they're called, not their content."
+---
+
+# NameSearch
+
+Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. This tool finds items based on what they're called, not their content.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityTypes` | array | Yes | Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'] |
+| `name` | string | Yes | The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names. |
