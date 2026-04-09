@@ -56,11 +56,11 @@ pub struct UserNotificationRow<T> {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created.
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
-    pub updated_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
     /// When the notification was deleted.
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
@@ -238,7 +238,7 @@ impl<T> Identify for UserNotificationRow<T> {
 impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
     fn sort_on(sort: CreatedAt) -> impl FnMut(&Self) -> CursorVal<CreatedAt> {
         move |v| {
-            let last_val = v.created_at.unwrap_or(DateTime::UNIX_EPOCH);
+            let last_val = v.created_at;
             CursorVal {
                 sort_type: sort,
                 last_val,

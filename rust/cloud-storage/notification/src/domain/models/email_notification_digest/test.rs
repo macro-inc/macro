@@ -1,6 +1,7 @@
 //! Tests for the email notification digest state machine.
 
 use super::*;
+use chrono::Utc;
 use crate::domain::models::{Notification, UserNotificationRow};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -226,9 +227,9 @@ fn create_test_notification_row<T: Notification>(metadata: T) -> UserNotificatio
         entity: EntityType::Document.with_entity_str("doc_123"),
         sent: false,
         done: false,
-        created_at: None,
+        created_at: Utc::now(),
         viewed_at: None,
-        updated_at: None,
+        updated_at: Utc::now(),
         deleted_at: None,
         notification_metadata: Arc::new(metadata),
         sender_id: None,

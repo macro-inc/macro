@@ -127,11 +127,11 @@ pub struct ConnGatewayInnerNotif<T> {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created.
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
-    pub updated_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
     /// When the notification was deleted.
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
@@ -158,9 +158,9 @@ impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
                 entity: req.req.notification_entity.clone().into_owned(),
                 sent: true,
                 done: false,
-                created_at: None,
+                created_at: Utc::now(),
                 viewed_at: None,
-                updated_at: None,
+                updated_at: Utc::now(),
                 deleted_at: None,
                 notification_metadata: req.req.notification.clone(),
                 sender_id: req.req.sender_id.as_ref().map(|x| x.clone().into_owned()),
@@ -226,11 +226,7 @@ pub(crate) enum NotificationChannel<'a, T, U> {
 }
 
 impl<'a, T, U> NotificationChannel<'a, T, U> {
-    fn with_timestamps(
-        self,
-        created_at: Option<DateTime<Utc>>,
-        updated_at: Option<DateTime<Utc>>,
-    ) -> Self {
+    fn with_timestamps(self, created_at: DateTime<Utc>, updated_at: DateTime<Utc>) -> Self {
         match self {
             NotificationChannel::Ios(apnstargets) => NotificationChannel::Ios(apnstargets),
             NotificationChannel::Email(email_notification) => {
@@ -310,8 +306,8 @@ impl<'a, T, U> QueueMessage<'a, T, U> {
 
     pub(crate) fn with_timestamps(
         self,
-        created_at: Option<DateTime<Utc>>,
-        updated_at: Option<DateTime<Utc>>,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
     ) -> Self {
         let QueueMessage {
             message_type,

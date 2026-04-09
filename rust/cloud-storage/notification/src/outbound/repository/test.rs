@@ -175,8 +175,6 @@ async fn test_create_notification_returns_timestamps(pool: Pool<Postgres>) {
 
     assert_eq!(rows.len(), 1);
     let row = &rows[0];
-    assert!(row.created_at.is_some(), "created_at should be set");
-    assert!(row.updated_at.is_some(), "updated_at should be set");
     assert_eq!(row.created_at, row.updated_at);
 }
 

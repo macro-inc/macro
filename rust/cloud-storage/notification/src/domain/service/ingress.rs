@@ -233,7 +233,10 @@ where
         };
 
         // get the timestamp info back out of the db created values
-        let timestamps = n.first().map(|n| (n.created_at, n.updated_at));
+        let (created_at, updated_at) = n
+            .first()
+            .map(|n| (n.created_at, n.updated_at))
+            .expect("created notification rows should not be empty");
 
         let results = join_all(
             n.into_iter()
@@ -245,12 +248,7 @@ where
             .publish(
                 queue_messages
                     .with_state_decisions(results)
-                    .map(|msg| {
-                        msg.with_timestamps(
-                            timestamps.and_then(|v| v.0),
-                            timestamps.and_then(|v| v.1),
-                        )
-                    })
+                    .map(|msg| msg.with_timestamps(created_at, updated_at))
                     .collect(),
             )
             .await

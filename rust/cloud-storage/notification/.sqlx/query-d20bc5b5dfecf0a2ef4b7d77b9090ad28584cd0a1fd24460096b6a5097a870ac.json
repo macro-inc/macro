@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                un.user_id as owner_id,\n                un.notification_id,\n                n.event_item_id,\n                n.event_item_type,\n                un.sent,\n                un.done,\n                un.created_at::timestamptz,\n                un.seen_at::timestamptz as viewed_at,\n                un.created_at::timestamptz as updated_at,\n                un.deleted_at::timestamptz,\n                n.metadata as \"notification_metadata: serde_json::Value\",\n                n.notification_event_type as notification_event_type,\n                n.sender_id as sender_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n            AND un.notification_id = $2\n            AND un.deleted_at IS NULL\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                un.user_id as owner_id,\n                un.notification_id,\n                n.event_item_id,\n                n.event_item_type,\n                un.sent,\n                un.done,\n                un.created_at::timestamptz as \"created_at!\",\n                un.seen_at::timestamptz as viewed_at,\n                un.created_at::timestamptz as \"updated_at!\",\n                un.deleted_at::timestamptz,\n                n.metadata as \"notification_metadata: serde_json::Value\",\n                n.notification_event_type as notification_event_type,\n                n.sender_id as sender_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n            AND un.deleted_at IS NULL\n            AND un.done = false\n            AND (($3::timestamptz IS NULL)\n                OR (un.created_at, un.notification_id) < ($3, $4))\n            ORDER BY un.created_at DESC, un.notification_id DESC\n            LIMIT $2\n            ",
   "describe": {
     "columns": [
       {
@@ -35,7 +35,7 @@
       },
       {
         "ordinal": 6,
-        "name": "created_at",
+        "name": "created_at!",
         "type_info": "Timestamptz"
       },
       {
@@ -45,7 +45,7 @@
       },
       {
         "ordinal": 8,
-        "name": "updated_at",
+        "name": "updated_at!",
         "type_info": "Timestamptz"
       },
       {
@@ -72,6 +72,8 @@
     "parameters": {
       "Left": [
         "Text",
+        "Int8",
+        "Timestamptz",
         "Uuid"
       ]
     },
@@ -91,5 +93,5 @@
       true
     ]
   },
-  "hash": "e231e279615526b33206979b400328d23be40ef9da49697ef6b75cdfcd69caad"
+  "hash": "d20bc5b5dfecf0a2ef4b7d77b9090ad28584cd0a1fd24460096b6a5097a870ac"
 }
