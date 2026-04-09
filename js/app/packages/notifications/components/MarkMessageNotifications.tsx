@@ -40,7 +40,7 @@ export function MarkMessageNotifications(props: {
       return;
     }
 
-    if (existing && !existing.viewed_at) {
+    if (!existing.viewed_at) {
       notificationSource.markAsRead(existing);
     }
   });
