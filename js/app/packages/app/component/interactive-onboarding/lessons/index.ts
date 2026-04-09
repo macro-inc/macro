@@ -9,6 +9,7 @@ import { markdownMentionsLesson } from './markdown-mentions';
 import { aboutUsLesson } from './about-us';
 import { emailInviteLesson } from './email-invite';
 import { choosePlanLesson } from './choose-plan';
+import { launchLesson } from './launch';
 
 export const LESSONS: LessonDefinition[] = [
   welcomeLesson,
@@ -21,4 +22,5 @@ export const LESSONS: LessonDefinition[] = [
   aboutUsLesson,
   emailInviteLesson,
   choosePlanLesson,
+  launchLesson,
 ];

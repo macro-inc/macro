@@ -1,5 +1,6 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import MacroLogo from '@core/component/MacroLogo';
+import LogoIcon from '@macro-icons/macro-logo.svg';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
@@ -24,6 +25,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useIsAuthenticated } from '@core/auth';
 import { fetchToken } from '@core/util/fetchWithToken';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export default function InteractiveOnboarding() {
@@ -39,10 +41,11 @@ export default function InteractiveOnboarding() {
   const allLessons = LESSONS.filter((l) => {
     if (l.id === 'choose-plan' && hasPaid()) return false;
     if (l.id === 'about-us' && isAuthenticated()) return false;
+    if (l.id === 'launch' && !isMobile()) return false;
     return true;
   });
   const lessons = isTouch
-    ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'about-us' || l.id === 'choose-plan')
+    ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'about-us' || l.id === 'choose-plan' || l.id === 'launch')
     : allLessons;
 
   const testMode = new URLSearchParams(location.search).has('test');
@@ -383,9 +386,7 @@ export default function InteractiveOnboarding() {
                         style={bodyStyle()}
                         class="flex flex-col items-center text-center gap-6 w-full max-w-md mt-4"
                       >
-                        <div class="w-24 opacity-20">
-                          <MacroLogo class="fill-ink" />
-                        </div>
+                        <LogoIcon class="size-16 text-accent" />
                         <h2 class="text-3xl font-semibold text-ink">
                           {lesson().definition.title}
                         </h2>
