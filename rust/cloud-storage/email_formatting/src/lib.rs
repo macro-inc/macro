@@ -4,10 +4,11 @@ use hmac::Hmac;
 use macro_env::Environment;
 use macro_service_urls::EnvExtMacroServiceUrls;
 use macro_user_id::cowlike::CowLike;
-use model_notifications::{NotifEvent, NotificationTitle};
+use model_notifications::NotifEvent;
 use notification::domain::models::{
-    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, UserNotificationRow,
-    email_notification_digest::ports::DigestBatch, queue_message::EmailContent, signing::SignedUrl,
+    Notification, NotificationExtEmail, NotificationTitle, RateLimitConfig, RateLimitKey,
+    UserNotificationRow, email_notification_digest::ports::DigestBatch,
+    queue_message::EmailContent, signing::SignedUrl,
 };
 use rootcause::Report;
 use serde::{Deserialize, Serialize};

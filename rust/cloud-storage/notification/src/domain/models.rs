@@ -275,6 +275,23 @@ pub trait NotificationExtEmail: Notification {
     fn rate_limit_key(&self) -> RateLimitKey;
 }
 
+/// Extension trait for notifications that have a user-facing title and body.
+///
+/// Used for formatting push notification alerts (APNS) and notification previews.
+pub trait NotificationTitle {
+    /// Format the notification into a user-facing title.
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report>;
+
+    /// Format the notification into a user-facing body.
+    fn format_body(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report>;
+}
+
 /// Extension trait for notifications that can be delivered via iOS push (APNS).
 pub trait NotificationExtIos: Notification {
     /// The custom data type included in the APNS push notification payload.
