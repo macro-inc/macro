@@ -20,15 +20,12 @@ import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton, SkipButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import {
-  clearCompletedLessons,
-  loadCompletedLessons,
-  saveCompletedLesson,
-} from './persistence';
+import { clearCompletedLessons, saveCompletedLesson } from './persistence';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
+import { useIsAuthenticated } from '@core/auth';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export default function InteractiveOnboarding() {
@@ -42,9 +39,12 @@ export default function InteractiveOnboarding() {
   const isTouch = isTouchDevice();
 
   const hasPaid = useHasPaidAccess();
-  const allLessons = hasPaid()
-    ? LESSONS.filter((l) => l.id !== 'choose-plan')
-    : LESSONS;
+  const isAuthenticated = useIsAuthenticated();
+  const allLessons = LESSONS.filter((l) => {
+    if (l.id === 'choose-plan' && hasPaid()) return false;
+    if (l.id === 'about-us' && isAuthenticated()) return false;
+    return true;
+  });
   const lessons = isTouch
     ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'choose-plan')
     : allLessons;
@@ -69,7 +69,7 @@ export default function InteractiveOnboarding() {
 
   const state = createOnboardingState({
     definitions: lessons,
-    initialCompleted: debugCompleted ?? loadCompletedLessons(),
+    initialCompleted: debugCompleted ?? new Set(),
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
@@ -118,6 +118,14 @@ export default function InteractiveOnboarding() {
     });
 
     setOnboardingStarted(true);
+
+    if (current.definition.onContinue) {
+      // Don't update reactive state — avoids a UI flash to the next lesson
+      // before the redirect fires. Completion is saved on return via completeOnParam.
+      current.definition.onContinue();
+      return;
+    }
+
     state.completeLesson(current.definition.id);
     if (!testMode) {
       saveCompletedLesson(current.definition.id);
@@ -153,10 +161,38 @@ export default function InteractiveOnboarding() {
   let shellRef: HTMLDivElement | undefined;
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('onboarding-shell');
 
-  onMount(() => {
+  onMount(async () => {
     if (shellRef) {
       attachHotkeys(shellRef);
       shellRef.focus();
+    }
+
+    // When returning from an external auth flow (e.g. Google OAuth), the URL
+    // contains a param that matches a lesson's completeOnParam. Fast-forward
+    // through all lessons up to and including that lesson so the user lands on
+    // the next step. If the param is absent (e.g. user hit Back), we start fresh.
+    const returningLesson = sortedLessons.find(
+      (l) => l.completeOnParam && params.has(l.completeOnParam)
+    );
+
+    if (returningLesson) {
+      window.history.replaceState(null, '', window.location.pathname);
+
+      if (returningLesson.onCompleteParam) {
+        await returningLesson.onCompleteParam();
+      }
+
+      if (tutorialCompleted()) {
+        if (splitPanel) navigateAway();
+        else navigate('/', { replace: true });
+        return;
+      }
+
+      for (const lesson of sortedLessons) {
+        state.completeLesson(lesson.id);
+        if (lesson.id === returningLesson.id) break;
+      }
+      setLessonKey((k) => k + 1);
     }
   });
 
@@ -419,6 +455,9 @@ export default function InteractiveOnboarding() {
                               label={continueLabel()}
                               disabled={!readyToContinue()}
                             />
+                            <Show when={lesson().definition.secondaryAction}>
+                              {(Action) => <Dynamic component={Action()} />}
+                            </Show>
                           </div>
                         </Show>
                       </div>
@@ -466,6 +505,9 @@ export default function InteractiveOnboarding() {
                           />
                           <Show when={lesson().definition.skippable}>
                             <SkipButton onClick={handleSkip} />
+                          </Show>
+                          <Show when={lesson().definition.secondaryAction}>
+                            {(Action) => <Dynamic component={Action()} />}
                           </Show>
                         </div>
                       </Show>

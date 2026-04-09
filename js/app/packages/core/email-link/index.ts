@@ -123,6 +123,20 @@ function connectEmail(): ResultAsync<void, TimeoutError> {
 }
 
 /**
+ * Initializes email syncing, starts polling, and invalidates relevant queries.
+ * Unlike useEmailLinks().initEmailLink, this does not require SolidJS context.
+ */
+export function initAndStartEmailSync() {
+  const invalidations = async () => {
+    invalidateEmailLinks();
+    await updateUserAuth();
+    await invalidateUserInfo();
+  };
+
+  return initEmailLink().map(startEmailPolling).map(invalidations);
+}
+
+/**
  * Hooks for interacting with email links.
  */
 export function useEmailLinks() {

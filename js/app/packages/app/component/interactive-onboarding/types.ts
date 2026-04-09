@@ -14,6 +14,14 @@ export interface LessonDefinition {
   skippable?: boolean;
   /** Hide the continue/skip buttons entirely — the lesson drives its own advancement. */
   hideContinue?: boolean;
+  /** Called instead of the default complete-and-advance flow. Use to redirect externally (e.g. OAuth). Completion is deferred to completeOnParam on return. */
+  onContinue?: () => void;
+  /** If this URL search param is present on mount, auto-complete this lesson and advance (used for returning from external OAuth flows). */
+  completeOnParam?: string;
+  /** Called when completeOnParam is detected, before the lesson is advanced. Use for per-lesson side effects (e.g. initializing email after Google auth). */
+  onCompleteParam?: () => Promise<void>;
+  /** Optional secondary button rendered below the continue button. */
+  secondaryAction?: Component;
 }
 
 export interface LessonContentProps {

@@ -17,9 +17,24 @@ function WelcomeContent(props: LessonContentProps) {
   );
 }
 
+function WelcomeSecondaryAction() {
+  return (
+    <>
+      <p class="text-sm text-ink/50 mt-10">Already have an account?</p>
+      <a
+        href="/app/login"
+        class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 bracket-never border-none bg-transparent text-ink/50 hover:bg-hover/60 ring-1 ring-edge-muted/50"
+      >
+        Login
+      </a>
+    </>
+  );
+}
+
 export const welcomeLesson: LessonDefinition = {
   id: 'welcome',
   title: 'Welcome to Macro',
   content: WelcomeContent,
+  secondaryAction: WelcomeSecondaryAction,
   order: 0,
 };
