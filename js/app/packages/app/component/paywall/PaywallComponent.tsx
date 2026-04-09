@@ -2,7 +2,7 @@ import { useHasPaidAccess } from '@core/auth';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import IconX from '@icon/regular/x.svg';
 import { stripeServiceClient } from '@service-stripe/client';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { useAnalytics } from '@app/component/analytics-context';
 import { PLANS, type PlanTier } from './plans';
 
