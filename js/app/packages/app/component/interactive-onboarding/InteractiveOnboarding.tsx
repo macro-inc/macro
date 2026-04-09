@@ -1,7 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import MacroLogo from '@core/component/MacroLogo';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
   createSignal,
@@ -34,7 +34,6 @@ export default function InteractiveOnboarding() {
   const completeTutorial = useCompleteTutorialMutation();
   const tutorialCompleted = useTutorialCompleted();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
 
   const isTouch = isTouchDevice();
 
@@ -49,13 +48,12 @@ export default function InteractiveOnboarding() {
     ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'choose-plan')
     : allLessons;
 
-  const testMode = searchParams.test !== undefined;
+  const testMode = new URLSearchParams(location.search).has('test');
 
-  const slideParam = searchParams.slide ?? null;
+  const params = new URLSearchParams(location.search);
+  const slideParam = params.get('slide');
   const slideIndex =
-    slideParam !== null
-      ? Math.max(0, parseInt(String(slideParam), 10) - 1)
-      : null;
+    slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
 
   const sortedLessons = [...lessons].sort(
     (a, b) => (a.order ?? 0) - (b.order ?? 0)
@@ -163,17 +161,18 @@ export default function InteractiveOnboarding() {
     // through all lessons up to and including that lesson so the user lands on
     // the next step. If the param is absent (e.g. user hit Back), we start fresh.
     const returningLesson = sortedLessons.find(
-      (l) => l.completeOnParam && searchParams[l.completeOnParam] !== undefined
+      (l) => l.completeOnParam && params.has(l.completeOnParam)
     );
 
     if (returningLesson) {
-      // Strip the return param from the URL without a full navigation
-      const clean = new URLSearchParams(location.search);
-      clean.delete(returningLesson.completeOnParam!);
-      const qs = clean.toString();
-      navigate(qs ? `${location.pathname}?${qs}` : location.pathname, {
-        replace: true,
-      });
+      const cleanParams = new URLSearchParams(window.location.search);
+      cleanParams.delete(returningLesson.completeOnParam!);
+      const qs = cleanParams.toString();
+      window.history.replaceState(
+        null,
+        '',
+        qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+      );
 
       if (returningLesson.onCompleteParam) {
         const ok = await returningLesson.onCompleteParam();
