@@ -7,7 +7,6 @@ import { Hotkey } from '@core/component/Hotkey';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { createSignal, onCleanup, Show } from 'solid-js';
@@ -29,6 +28,20 @@ const variantStyles: Record<SearchbarVariant, string> = {
     'bg-transparent text-ink-muted border-edge-muted hover:bg-input hover:text-ink focus-within:bg-input focus-within:text-ink',
 };
 
+const USER_MENTION_RE = /<m-user-mention>(.*?)<\/m-user-mention>/g;
+
+function extractUserMentionIds(markdown: string): string[] {
+  const ids: string[] = [];
+  for (const match of markdown.matchAll(USER_MENTION_RE)) {
+    try {
+      const data = JSON.parse(match[1]);
+      if (data.userId) ids.push(`user:${data.userId}`);
+    } catch {
+      // skip malformed
+    }
+  }
+  return ids;
+}
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const { searchText, setSearchText, soup, setQueryFilters } = useSoupView();
@@ -36,10 +49,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   const [hasContent, setHasContent] = createSignal(false);
 
-  const applyMentionFilter = (mention: ItemMention) => {
-    if (mention.itemType !== 'user') return;
-    const mentionValue = `user:${mention.itemId}`;
-    if (!soup.filters.isActive('channels')) {
+  const syncMentionFilters = (mentions: string[]) => {
+    const hasMentions = mentions.length > 0;
+    if (hasMentions && !soup.filters.isActive('channels')) {
       for (const opt of INDEX_OPTIONS_SOURCE) {
         if (soup.filters.isActive(opt.value)) {
           soup.filters.toggle({ or: [opt.value] });
@@ -50,7 +62,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         ...QUERY_FILTERS.channels,
         channel_filters: {
           ...QUERY_FILTERS.channels.channel_filters,
-          mentions: [mentionValue],
+          mentions,
         },
       });
     } else {
@@ -58,40 +70,23 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         ...prev,
         channel_filters: {
           ...prev.channel_filters,
-          mentions: [
-            ...(prev.channel_filters?.mentions ?? []),
-            mentionValue,
-          ],
+          mentions,
         },
       }));
     }
   };
 
-  const removeMentionFilter = (mention: ItemMention) => {
-    if (mention.itemType !== 'user') return;
-    const mentionValue = `user:${mention.itemId}`;
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        mentions: (prev.channel_filters?.mentions ?? []).filter(
-          (m) => m !== mentionValue
-        ),
-      },
-    }));
-  };
-
   const editor = buildConfig('chat')
     .namespace('soup-search-bar')
     .singleLine()
-    .withMentions({
-      onCreate: applyMentionFilter,
-      onRemove: removeMentionFilter,
-    })
+    .withMentions()
     .onChange((markdown) => {
       const plainText = markdownToPlainText(markdown).trim();
       setSearchText(plainText);
       setHasContent(markdown.trim().length > 0);
+
+      const mentions = extractUserMentionIds(markdown);
+      syncMentionFilters(mentions);
     })
     .onEscape(() => {
       props.onDismiss?.();
