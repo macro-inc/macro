@@ -7,7 +7,7 @@ version = "0.1.0"
 [features]
 default = ["outbound", "ports"]
 outbound = ["dep:sqlx", "ports"]
-ports = ["dep:tokio"]
+ports = []
 
 [dependencies]
 # Core
@@ -22,9 +22,6 @@ uuid = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
-
-# Async runtime (for ports)
-tokio = { workspace = true, optional = true }
 
 # Database
 sqlx = { workspace = true, optional = true }

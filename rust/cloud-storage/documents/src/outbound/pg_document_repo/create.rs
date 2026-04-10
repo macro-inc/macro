@@ -1,7 +1,9 @@
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::AccessLevel;
+use entity_access_management::domain::models::EntityAccessSourceType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::VersionIDWithTimeStamps;
+use model_entity::EntityType;
 use model_file_type::FileType;
 use models_permissions::share_permission::SharePermissionV2;
 
@@ -198,28 +200,27 @@ pub async fn insert_history<'a>(
     Ok(())
 }
 
-/// Inserts user item access
+/// Inserts user entity access
 #[tracing::instrument(skip(transaction), err)]
-pub async fn insert_item_access<'a>(
+pub async fn insert_entity_access<'a>(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &uuid::Uuid,
     user_id: &MacroUserIdStr<'a>,
 ) -> Result<(), sqlx::Error> {
-    let access_id = macro_uuid::generate_uuid_v7();
+    let entity_type_str: &str = EntityType::Document.into();
+
     sqlx::query!(
         r#"
-            INSERT INTO "UserItemAccess" (
-                "id", "user_id", "item_id", "item_type", "access_level",
-                "granted_from_channel_id", "created_at", "updated_at"
+            INSERT INTO "entity_access" (
+            "entity_id", "entity_type", "source_id", "source_type", "access_level", "created_at", "updated_at"
             )
-            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             "#,
-        access_id,
+        document_id,
+        entity_type_str,
         user_id.as_ref(),
-        &document_id.to_string(),
-        "document",
+        EntityAccessSourceType::User as _,
         AccessLevel::Owner as _,
-        None::<uuid::Uuid>,
     )
     .execute(transaction.as_mut())
     .await?;
