@@ -43,7 +43,7 @@ export default function InteractiveOnboarding() {
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
   const allLessons = LESSONS.filter((l) => {
-    if (l.id === 'choose-plan' && hasPaid()) return false;
+    if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted())) return false;
     if (l.id === 'about-us' && isAuthenticated()) return false;
     if (l.id === 'launch' && !isMobile()) return false;
     return true;
@@ -112,12 +112,11 @@ export default function InteractiveOnboarding() {
     }
   };
 
-  // Redirect away if the backend already marks the tutorial as complete
-  // before the user starts. We track whether the flow has started to avoid
-  // a mid-flow redirect.
-  const [onboardingStarted, setOnboardingStarted] = createSignal(!!returningLesson);
+  // Redirect away if the backend already marks the tutorial as complete.
+  // Skip the redirect when returning from OAuth — we just marked it complete
+  // ourselves and still have remaining lessons to show.
   createEffect(() => {
-    if (tutorialCompleted() && !onboardingStarted() && !testMode) {
+    if (tutorialCompleted() && !returningLesson && !testMode) {
       navigateAway();
     }
   });
@@ -140,7 +139,7 @@ export default function InteractiveOnboarding() {
       state: 'completed',
     });
 
-    setOnboardingStarted(true);
+
 
     if (current.definition.onContinue) {
       // On web this redirects (returns void). On native mobile it resolves
@@ -176,7 +175,7 @@ export default function InteractiveOnboarding() {
       state: 'skipped',
     });
 
-    setOnboardingStarted(true);
+
     state.skipLesson(current.definition.id);
     setReadyToContinue(false);
     setContinueLabel(undefined);
