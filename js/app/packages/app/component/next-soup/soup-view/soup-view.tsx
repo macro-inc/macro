@@ -675,7 +675,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
               ? (props.initialClientFilters ?? { and: [], or: [] })
               : (initialPersistedState.filters ?? { and: [], or: [] })
           );
-          setQueryFilters(initialPersistedState.queryFilters ?? {});
+          setQueryFilters(
+            isStale ? {} : (initialPersistedState.queryFilters ?? {})
+          );
           setActiveTab(initialPersistedState.activeTab);
         });
       }
