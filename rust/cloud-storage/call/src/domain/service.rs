@@ -1,7 +1,10 @@
 //! Call service implementation.
 
-use connection::domain::models::EntityAccessAuth;
 use connection::domain::ports::ConnectionService;
+use entity_access::domain::models::EntityType;
+use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
@@ -11,27 +14,37 @@ use super::models::{
 use super::ports::{CallRepository, CallRtcClient, CallService};
 
 /// The concrete call service implementation.
-pub struct CallServiceImpl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> {
+pub struct CallServiceImpl<
+    R: CallRepository,
+    C: CallRtcClient,
+    Cn: ConnectionService,
+    E: EntityAccessService,
+> {
     repo: R,
     rtc_client: C,
     connection_service: Cn,
+    entity_access_service: E,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
 }
 
-impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallServiceImpl<R, C, Cn> {
+impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService, E: EntityAccessService>
+    CallServiceImpl<R, C, Cn, E>
+{
     /// Create a new call service.
     pub fn new(
         repo: R,
         rtc_client: C,
         connection_service: Cn,
+        entity_access_service: E,
         server_url: impl Into<String>,
     ) -> Self {
         Self {
             repo,
             rtc_client,
             connection_service,
+            entity_access_service,
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
@@ -56,32 +69,45 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallServiceImpl
         channel_id: &Uuid,
         message_type: &str,
         message: &serde_json::Value,
-        triggered_by_user_id: Option<&str>,
+        triggered_by_user_id: Option<MacroUserIdStr<'_>>,
     ) {
-        let triggered_by = match triggered_by_user_id {
-            Some(uid) => uid
-                .to_string()
-                .try_into()
-                .map(EntityAccessAuth::Authenticated)
-                .unwrap_or(EntityAccessAuth::Internal),
-            None => EntityAccessAuth::Internal,
+        let channel_id_str = channel_id.to_string();
+        let users = match self
+            .entity_access_service
+            .get_users_by_entity(&channel_id_str, EntityType::Channel)
+            .await
+        {
+            Ok(users) => users,
+            Err(e) => {
+                tracing::error!(error=?e, "failed to fetch channel users for call event");
+                return;
+            }
         };
+
+        let users: Vec<MacroUserIdStr<'_>> = users
+            .into_iter()
+            .filter_map(move |u| {
+                if triggered_by_user_id
+                    .as_ref()
+                    .is_some_and(|t| u.as_ref() == t.as_ref())
+                {
+                    None
+                } else {
+                    Some(u)
+                }
+            })
+            .collect();
 
         let _ = self
             .connection_service
-            .send_channel_message(
-                &channel_id.to_string(),
-                message_type,
-                message.clone(),
-                triggered_by,
-            )
+            .send_channel_message(&users, message_type, message.clone())
             .await
             .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call event"));
     }
 }
 
-impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
-    for CallServiceImpl<R, C, Cn>
+impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService, E: EntityAccessService> CallService
+    for CallServiceImpl<R, C, Cn, E>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -112,7 +138,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
     async fn get_or_create_call(
         &self,
         channel_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
     ) -> Result<CallTokenResponse, CallError> {
         let call = match self
             .repo
@@ -135,7 +161,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
                 // the ON CONFLICT returns None — re-read the existing call.
                 match self
                     .repo
-                    .create_call(&call_id, channel_id, &room_name, user_id)
+                    .create_call(&call_id, channel_id, &room_name, user_id.copied())
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?
                 {
@@ -177,7 +203,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
                                 "call_id": call.id,
                                 "created_by": user_id,
                             }),
-                            Some(user_id),
+                            Some(user_id.copied()),
                         )
                         .await;
 
@@ -197,7 +223,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
 
         // Idempotent upsert — handles concurrent joins and rejoin after leave.
         self.repo
-            .add_participant(&call.id, user_id)
+            .add_participant(&call.id, user_id.copied())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
@@ -221,7 +247,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
     async fn leave_or_end_call(
         &self,
         channel_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
     ) -> Result<LeaveCallResponse, CallError> {
         let call = self
             .repo
@@ -232,7 +258,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
 
         // Remove participant from DB (idempotent — no-op if already removed by webhook).
         self.repo
-            .remove_participant(&call.id, user_id)
+            .remove_participant(&call.id, user_id.copied())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
@@ -318,12 +344,12 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
 
                 // Reconcile: idempotent upsert (handles reconnect/race conditions).
                 self.repo
-                    .add_participant(&call.id, participant_identity)
+                    .add_participant(&call.id, participant_identity.copied())
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?;
                 tracing::info!(
                     call_id = %call.id,
-                    participant = participant_identity,
+                    participant = participant_identity.as_ref(),
                     "reconciled participant_joined via webhook"
                 );
             }
@@ -349,7 +375,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
 
                 // Remove participant from DB (idempotent — no-op if already left).
                 self.repo
-                    .remove_participant(&call.id, participant_identity)
+                    .remove_participant(&call.id, participant_identity.copied())
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?;
 

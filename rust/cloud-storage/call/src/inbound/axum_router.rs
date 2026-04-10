@@ -240,11 +240,10 @@ pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService
 ) -> Result<Json<CallTokenResponse>, CallError> {
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
-    let user_id = user.macro_user_id.as_ref();
 
     let response = state
         .service
-        .get_or_create_call(&channel_id, user_id)
+        .get_or_create_call(&channel_id, user.macro_user_id)
         .await?;
 
     Ok(Json(response))
@@ -303,11 +302,10 @@ pub async fn leave_or_end_call_handler<S: CallService, Svc: EntityAccessService>
     user: MacroUserExtractor,
 ) -> Result<Json<LeaveCallResponse>, CallError> {
     let channel_id = access.channel_id;
-    let user_id = user.macro_user_id.as_ref();
 
     let response = state
         .service
-        .leave_or_end_call(&channel_id, user_id)
+        .leave_or_end_call(&channel_id, user.macro_user_id)
         .await?;
 
     Ok(Json(response))

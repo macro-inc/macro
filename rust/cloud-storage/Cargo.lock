@@ -107,6 +107,7 @@ dependencies = [
  "item_filters",
  "lazy_static",
  "macro_db_client",
+ "macro_user_id",
  "model",
  "model_notifications",
  "models_dcs",

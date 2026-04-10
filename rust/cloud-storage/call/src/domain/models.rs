@@ -3,6 +3,7 @@
 use std::fmt;
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -108,7 +109,7 @@ pub struct CallWebhookEvent {
     /// Room name associated with the event, if any.
     pub room_name: Option<String>,
     /// Participant identity associated with the event, if any.
-    pub participant_identity: Option<String>,
+    pub participant_identity: Option<MacroUserIdStr<'static>>,
     /// Egress ID associated with the event, if any.
     pub egress_id: Option<String>,
     /// File download URL from a completed egress, if any.
