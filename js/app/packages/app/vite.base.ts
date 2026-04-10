@@ -134,7 +134,6 @@ export const createAppViteConfig = ({
         port: Number(process.env.PORT || 3000),
         host: '0.0.0.0',
         strictPort: true,
-        allowedHosts: ['host.docker.internal'],
         hmr: {
           protocol: 'ws',
           host: process.env.TAURI_DEV_HOST || 'localhost',
