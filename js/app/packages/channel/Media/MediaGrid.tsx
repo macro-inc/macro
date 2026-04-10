@@ -9,6 +9,7 @@ import type { MediaItem } from './media-items';
 
 const ATTACHMENT_TILE_SIZE = 92;
 const SINGLE_IMAGE_MAX_WIDTH = 400;
+const SINGLE_IMAGE_MAX_HEIGHT = 400;
 const MESSAGE_GALLERY_IMAGE_MAX_WIDTH = 200;
 const MESSAGE_GALLERY_IMAGE_MAX_HEIGHT = 200;
 
@@ -22,7 +23,7 @@ function MessageImageTile(props: {
       props.item.width ?? undefined,
       props.item.height ?? undefined,
       props.large ? SINGLE_IMAGE_MAX_WIDTH : MESSAGE_GALLERY_IMAGE_MAX_WIDTH,
-      props.large ? undefined : MESSAGE_GALLERY_IMAGE_MAX_HEIGHT
+      props.large ? SINGLE_IMAGE_MAX_HEIGHT : MESSAGE_GALLERY_IMAGE_MAX_HEIGHT
     );
 
   return (
