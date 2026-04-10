@@ -12,6 +12,7 @@ use model_entity::EntityType;
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, CommonChannelMetadata, DocumentMentionMetadata,
+    NotificationDocumentSubType,
 };
 use notification_hex::domain::models::SendNotificationRequestBuilder;
 use notification_hex::domain::service::NotificationIngress;
@@ -99,6 +100,10 @@ impl ChannelMessageEvent<'_> {
                                 document_name: mention.item_name.clone(),
                                 owner: mention.item_owner.clone(),
                                 file_type: mention.file_type.clone(),
+                                sub_type: match mention.sub_type.as_deref() {
+                                    Some("task") => Some(NotificationDocumentSubType::Task),
+                                    _ => None,
+                                },
                                 sender_profile_picture_url: self.sender_profile_picture_url.clone(),
                             },
                             sender_id: sender(),
