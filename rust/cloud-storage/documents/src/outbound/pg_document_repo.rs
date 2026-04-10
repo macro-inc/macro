@@ -444,8 +444,8 @@ impl DocumentRepo for PgDocumentRepo {
             create::insert_history(&mut transaction, &document_id, &user_id, created_at).await?;
         }
 
-        // Insert user item access (Owner level)
-        create::insert_item_access(&mut transaction, &document_id, &user_id).await?;
+        // Insert user entity access (Owner level)
+        create::insert_entity_access(&mut transaction, &document_id, &user_id).await?;
 
         // Link to email attachment if provided
         if let Some(attachment_id) = email_attachment_id {

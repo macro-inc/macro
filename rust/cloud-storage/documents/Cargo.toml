@@ -47,12 +47,14 @@ connection = { path = "../connection", default-features = false, features = [
 document_sub_type = { path = "../document_sub_type" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
+  "outbound",
   "ports",
 ], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 s3_key = { path = "../s3_key" }
@@ -90,7 +92,6 @@ sha2 = { workspace = true, optional = true }
 dotenvy = { workspace = true }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
-model-entity = { path = "../model-entity" }
 mockall = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
