@@ -41,7 +41,6 @@ export default function InteractiveOnboarding() {
   const allLessons = LESSONS.filter((l) => {
     if (l.id === 'choose-plan' && hasPaid()) return false;
     if (l.id === 'about-us' && isAuthenticated()) return false;
-    if (l.id === 'launch' && !isMobile()) return false;
     return true;
   });
   const lessons = isTouch
@@ -418,7 +417,13 @@ export default function InteractiveOnboarding() {
                           />
                         </div>
                         {/* Show demo inline on touch — skip email-invite's MockAppChrome */}
-                        <Show when={lesson().definition.id !== 'email-invite' ? lesson().definition.demo : undefined}>
+                        <Show
+                          when={
+                            lesson().definition.id !== 'email-invite'
+                              ? lesson().definition.demo
+                              : undefined
+                          }
+                        >
                           {(Demo) => (
                             <div class="w-full">
                               <Dynamic
