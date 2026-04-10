@@ -51,8 +51,12 @@ function usePushNotifications(
     const perm = await requestPermissions();
     if (perm.status !== 'granted') return 'denied';
     const reg = await registerForRemoteNotifications();
+    if (!reg.token) {
+      setRegistrationResult(undefined);
+      setPermission(undefined);
+      return 'denied';
+    }
     setRegistrationResult(reg);
-    if (!reg.token) return 'denied';
     return await registerDevice(reg.token);
   }
 
@@ -81,19 +85,27 @@ function usePushNotifications(
         return;
       }
       const storedToken = registrationResult()?.token;
-      if (!storedToken) return;
+      if (!storedToken) {
+        setPermission(undefined);
+        return;
+      }
 
       const freshResult = await registerForRemoteNotifications();
       if (freshResult.token && freshResult.token !== storedToken) {
-        // Best-effort unregister the old token
-        notificationServiceClient.unregisterDevice({
-          deviceType,
-          token: storedToken,
-        });
+        // Best-effort unregister the old token; errors are non-fatal.
+        notificationServiceClient
+          .unregisterDevice({ deviceType, token: storedToken })
+          .catch(console.error);
         setRegistrationResult(freshResult);
-        void registerDevice(freshResult.token);
-      } else {
-        setPermission('granted');
+        registerDevice(freshResult.token).catch(console.error);
+      } else if (freshResult.token) {
+        // Token unchanged. Only trust the persisted 'granted' state; if it isn't
+        // confirmed (e.g. a prior backend call failed), re-register now.
+        if (permission() === 'granted') {
+          setPermission('granted');
+        } else {
+          registerDevice(freshResult.token).catch(console.error);
+        }
       }
     } catch (e) {
       console.error(e);
