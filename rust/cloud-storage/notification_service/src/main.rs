@@ -135,7 +135,7 @@ pub async fn main() -> anyhow::Result<()> {
     let notification_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
-    let notification_queue = ::notification::outbound::queue::SqsNotificationQueue::new(
+    let notification_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
         vars.notification_queue.as_ref().to_string(),
     );
@@ -260,7 +260,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let ingress_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
-    let ingress_delivery_queue = ::notification::outbound::queue::SqsNotificationQueue::new(
+    let ingress_delivery_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
         vars.notification_queue.as_ref().to_string(),
     );
@@ -270,10 +270,10 @@ pub async fn main() -> anyhow::Result<()> {
         ingress_state_machine,
     );
 
-    let ingress_queue = ::notification::outbound::queue::SqsIngressQueue {
-        client: aws_sdk_sqs::Client::new(&aws_config),
-        queue_url: vars.notification_ingress_queue.as_ref().to_string(),
-    };
+    let ingress_queue = ::notification::outbound::queue::SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        vars.notification_ingress_queue.as_ref().to_string(),
+    );
     let ingress_worker =
         ::notification::inbound::ingress_worker::IngressWorker::new(ingress_service, ingress_queue);
 

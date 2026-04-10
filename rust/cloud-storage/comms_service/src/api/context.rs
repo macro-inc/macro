@@ -11,12 +11,12 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use notification_hex::domain::service::SqsNotificationIngress;
-use notification_hex::outbound::queue::SqsIngressQueue;
+use notification_hex::outbound::queue::SqsQueue;
 use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use std::sync::Arc;
 
-pub type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 pub type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
 env_var! {

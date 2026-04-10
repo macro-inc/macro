@@ -39,7 +39,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -81,7 +81,7 @@ type DssSoupState = SoupRouterState<
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl<EntityAccessService>,

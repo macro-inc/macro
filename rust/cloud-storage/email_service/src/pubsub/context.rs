@@ -4,14 +4,14 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use gmail_client::GmailClient;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 /// The concrete notification ingress service type.
-pub type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 #[derive(Clone)]
 pub struct PubSubContext {

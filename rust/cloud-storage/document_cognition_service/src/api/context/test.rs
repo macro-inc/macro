@@ -122,7 +122,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
     use notification::domain::service::SqsNotificationIngress;
-    use notification::outbound::queue::SqsIngressQueue;
+    use notification::outbound::queue::SqsQueue;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
@@ -206,10 +206,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         channels_service,
     ));
 
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::from_conf(sqs_config),
-        queue_url: "test-notification-ingress-queue".to_string(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::from_conf(sqs_config),
+        "test-notification-ingress-queue".to_string(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
     });

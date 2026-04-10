@@ -10,7 +10,7 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use scribe::{
     ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
     email::EmailClient, static_file::StaticFileClient,
@@ -32,7 +32,7 @@ pub use test::*;
 pub type DcsScribe =
     ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
 
-pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 pub type DcsMemoryService =
     memory::domain::service::MemoryServiceImpl<memory::outbound::pg_memory_repo::PgMemoryRepo>;

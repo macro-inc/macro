@@ -1,14 +1,14 @@
 use axum::extract::FromRef;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use sqlx::PgPool;
 use std::sync::Arc;
 
 use properties::PropertiesServiceImpl;
 
 /// The concrete notification ingress service type.
-type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 /// Type alias for the entity access service.
 pub type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
