@@ -12,42 +12,30 @@ import {
 } from 'solid-js';
 import ChannelIcon from '@macro-icons/wide/channel.svg?component-solid';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  isChannelNotification,
-  useSenderName,
-} from '@app/component/app-sidebar/utils';
+import { useSenderName } from '@app/component/app-sidebar/utils';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
+import { isChannelNotification } from '@notifications/notification-helpers';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
   channelType: string | null;
   isDM: boolean;
 } {
-  const metadata = notification.notification_metadata;
-
-  if (
-    metadata.tag === 'channel_mention' ||
-    metadata.tag === 'channel_message_send' ||
-    metadata.tag === 'channel_message_reply'
-  ) {
-    const channelType = metadata.content.channelType;
-    const isDM = channelType === 'directMessage';
-    return {
-      channelName:
-        'channelName' in metadata.content
-          ? (metadata.content.channelName ?? null)
-          : null,
-      channelType,
-      isDM,
-    };
+  if (!isChannelNotification(notification)) {
+    return { channelName: null, channelType: null, isDM: false };
   }
 
-  return { channelName: null, channelType: null, isDM: false };
+  const meta = notification.notification_metadata;
+  const channelType = meta.content.channelType;
+  const isDM = channelType === 'directMessage';
+  const channelName =
+    'channelName' in meta.content ? (meta.content.channelName ?? null) : null;
+  return { channelName, channelType, isDM };
 }
 
 interface ChannelGroup {
