@@ -125,7 +125,9 @@ impl<
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct CallStartedNotification;
+struct CallStartedNotification {
+    sender_profile_picture_url: Option<String>,
+}
 
 impl Notification for CallStartedNotification {
     const TYPE_NAME: &'static str = "call-started";
@@ -161,7 +163,7 @@ impl NotificationExtIos for CallStartedNotification {
             },
             push_notification_data: PushNotificationData {
                 notification_id,
-                sender_profile_picture_url: None,
+                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
             },
         })
     }
@@ -290,10 +292,19 @@ impl<
                             }
                         };
 
+                        let sender_profile_picture_url = self
+                            .repo
+                            .get_user_profile_picture(user_id.copied())
+                            .await
+                            .ok()
+                            .flatten();
+
                         let req = SendNotificationRequestBuilder {
                             notification_entity: EntityType::Channel
                                 .with_entity_string(channel_id_str),
-                            notification: CallStartedNotification,
+                            notification: CallStartedNotification {
+                                sender_profile_picture_url,
+                            },
                             sender_id: Some(user_id.copied()),
                             recipient_ids,
                         }

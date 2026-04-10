@@ -480,4 +480,24 @@ impl CallRepository for PgCallRepo {
         .await?;
         Ok(())
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_profile_picture<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT mui.profile_picture
+            FROM macro_user_info mui
+            JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+            WHERE u.id = $1 AND mui.profile_picture IS NOT NULL
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| opt.flatten())
+    }
 }

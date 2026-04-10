@@ -124,6 +124,12 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         segment: &TranscriptSegmentRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get the profile picture URL for a user by their `MacroUserIdStr`.
+    fn get_user_profile_picture<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
