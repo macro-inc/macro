@@ -12,7 +12,6 @@ import { LoginOptions } from './LoginOptions';
 import type { Stage } from './Shared';
 
 function PostSignupRedirect() {
-  const userInfo = useUserInfo();
   const navigate = useNavigate();
   const { initEmailLink } = useEmailLinks();
 
