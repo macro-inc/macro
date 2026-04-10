@@ -474,7 +474,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           ? (props.placeholder ?? placeholderText())
           : undefined
       }
-      class="ph-no-capture w-full text-sm offset-2"
+      class="ph-no-capture w-full text-sm offset-2 bg-input"
       classList={{
         'border border-edge': !props.hideBorder,
         'py-2': !props.noPadding,

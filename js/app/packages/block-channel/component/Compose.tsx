@@ -37,6 +37,7 @@ import { isErr } from '@core/util/maybeResult';
 import { commsServiceClient } from '@service-comms/client';
 import InfoIcon from '@icon/regular/info.svg';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
@@ -259,65 +260,60 @@ export function ChannelCompose() {
             </div>
           </div>
         </Show>
-        <div class="shrink-0 w-full pb-2 @min-[40rem]:px-4">
-          <div class="mx-auto w-full macro-message-width macro-message-padding">
-            <Input.Root
-              input={inputState.view()}
-              commands={inputState.commands}
+        <ChannelInputContainer>
+          <Input.Root input={inputState.view()} commands={inputState.commands}>
+            <Input.DropZone
+              onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
+              onDragEnd={() => inputState.setIsDraggedOver(false)}
             >
-              <Input.DropZone
-                onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
-                onDragEnd={() => inputState.setIsDraggedOver(false)}
-              >
-                <Input.Layout>
-                  <Input.DropOverlay />
-                  <Input.FormatRibbon>
-                    <FormatButtons
-                      selectionState={() => markdownEditor.selection}
-                      onInlineFormat={(format) =>
-                        applyInlineFormat(markdownEditor.lexical, format)
-                      }
-                      onNodeFormat={(format) =>
-                        applyNodeFormat(markdownEditor.lexical, format)
-                      }
+              <Input.Layout>
+                <Input.DropOverlay />
+                <Input.FormatRibbon>
+                  <FormatButtons
+                    selectionState={() => markdownEditor.selection}
+                    onInlineFormat={(format) =>
+                      applyInlineFormat(markdownEditor.lexical, format)
+                    }
+                    onNodeFormat={(format) =>
+                      applyNodeFormat(markdownEditor.lexical, format)
+                    }
+                  />
+                </Input.FormatRibbon>
+                <Input.EditorShell
+                  ref={setScrollContainer}
+                  onClick={(event) => {
+                    if (!isMobile()) {
+                      event.stopPropagation();
+                      markdownEditor.controls.focus();
+                    }
+                  }}
+                >
+                  <Input.Editor>
+                    <MarkdownShell
+                      config={markdownEditor}
+                      placeholder={placeholder()}
+                      autofocus={false}
+                      class="text-sm"
                     />
-                  </Input.FormatRibbon>
-                  <Input.EditorShell
-                    ref={setScrollContainer}
-                    onClick={(event) => {
-                      if (!isMobile()) {
-                        event.stopPropagation();
-                        markdownEditor.controls.focus();
-                      }
-                    }}
-                  >
-                    <Input.Editor>
-                      <MarkdownShell
-                        config={markdownEditor}
-                        placeholder={placeholder()}
-                        autofocus={false}
-                        class="text-sm"
-                      />
-                    </Input.Editor>
-                  </Input.EditorShell>
-                  <Input.Attachments kind="media" />
-                  <Input.Attachments kind="document" />
-                  <Input.Footer>
-                    <Input.Actions>
-                      <Input.Actions.Left>
-                        <Input.AttachFilesAction />
-                        <Input.ToggleFormatAction />
-                      </Input.Actions.Left>
-                      <Input.Actions.Right>
-                        <Input.SendAction />
-                      </Input.Actions.Right>
-                    </Input.Actions>
-                  </Input.Footer>
-                </Input.Layout>
-              </Input.DropZone>
-            </Input.Root>
-          </div>
-        </div>
+                  </Input.Editor>
+                </Input.EditorShell>
+                <Input.Attachments kind="media" />
+                <Input.Attachments kind="document" />
+                <Input.Footer>
+                  <Input.Actions>
+                    <Input.Actions.Left>
+                      <Input.AttachFilesAction />
+                      <Input.ToggleFormatAction />
+                    </Input.Actions.Left>
+                    <Input.Actions.Right>
+                      <Input.SendAction />
+                    </Input.Actions.Right>
+                  </Input.Actions>
+                </Input.Footer>
+              </Input.Layout>
+            </Input.DropZone>
+          </Input.Root>
+        </ChannelInputContainer>
       </div>
     </>
   );
