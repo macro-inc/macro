@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM entity_access\n                WHERE entity_id = ANY($1)\n                AND granted_from_project_id = ANY($2)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "279926d74db34fd618a6b507e2ec60160ef8399af5cfa11393a2e1e8d9762d65"
+}
