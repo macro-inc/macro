@@ -107,6 +107,7 @@ import {
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import { QUERY_FILTERS } from '../filters/query-filters';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -676,7 +677,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
               : (initialPersistedState.filters ?? { and: [], or: [] })
           );
           setQueryFilters(
-            isStale ? {} : (initialPersistedState.queryFilters ?? {})
+            isStale
+              ? QUERY_FILTERS.default
+              : (initialPersistedState.queryFilters ?? QUERY_FILTERS.default)
           );
           setActiveTab(initialPersistedState.activeTab);
         });
