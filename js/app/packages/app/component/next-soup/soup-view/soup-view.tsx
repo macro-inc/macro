@@ -17,7 +17,10 @@ import {
   SoupViewContextProvider,
   useSoupView,
 } from '@app/component/next-soup/soup-view/soup-view-context';
-import { soupViewCacheKey } from '@app/component/next-soup/soup-view/soup-view-cache-key';
+import {
+  soupViewCacheKey,
+  activeSoupViewCounts,
+} from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -171,10 +174,6 @@ type PersistedSoupViewState = {
 };
 
 const PERSISTED_STATE_VERSION = 2;
-
-// Tracks how many SoupViewList instances are mounted per contentId.
-// Used to detect duplicate splits showing the same view.
-const activeSoupViewCounts = new Map<string, number>();
 
 const listStateCache = new Map<
   string,

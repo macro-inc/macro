@@ -6,7 +6,10 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { soupViewCacheKey } from '@app/component/next-soup/soup-view/soup-view-cache-key';
+import {
+  soupViewCacheKey,
+  activeSoupViewCounts,
+} from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { SoupBody } from '@queries/soup/items';
 import { batch, createEffect, createMemo, Show } from 'solid-js';
@@ -17,6 +20,7 @@ import type { ChannelFilters } from '@service-storage/generated/schemas';
 type ChannelSubFilters = Pick<ChannelFilters, 'channel_ids' | 'sender_ids'>;
 
 function getCachedChannelSubFilters(contentId: string): ChannelSubFilters {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
   try {
     const raw = localStorage.getItem(
       soupViewCacheKey(contentId, 'channel-sub-filters')
@@ -28,10 +32,15 @@ function getCachedChannelSubFilters(contentId: string): ChannelSubFilters {
 }
 
 function cacheChannelSubFilters(contentId: string, filters: ChannelSubFilters) {
-  localStorage.setItem(
-    soupViewCacheKey(contentId, 'channel-sub-filters'),
-    JSON.stringify(filters)
-  );
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return;
+  try {
+    localStorage.setItem(
+      soupViewCacheKey(contentId, 'channel-sub-filters'),
+      JSON.stringify(filters)
+    );
+  } catch {
+    // best-effort: quota or security errors should not break filter flow
+  }
 }
 
 export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
