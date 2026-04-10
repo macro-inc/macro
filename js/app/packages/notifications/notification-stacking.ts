@@ -42,21 +42,18 @@ export function getThreadId(group: NotificationStack): string {
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
-  // Do no stack and document_mention type notifications
-  const filteredNotifications = notifications.filter(
-    (n) => n.notification_metadata.tag !== 'document_mention'
-  );
-
   const isChannelMention = (n: UnifiedNotification) =>
     n.notification_metadata.tag === 'channel_mention';
   const isChannelMessageSend = (n: UnifiedNotification) =>
     n.notification_metadata.tag === 'channel_message_send';
   const isChannelMessageReply = (n: UnifiedNotification) =>
     n.notification_metadata.tag === 'channel_message_reply';
+  const isDocumentMention = (n: UnifiedNotification) =>
+    n.notification_metadata.tag === 'document_mention';
 
   // Collect mention messageIds for shadowing
   const mentionedMsgIds = new Set(
-    filteredNotifications
+    notifications
       .filter(isChannelMention)
       .flatMap((n) =>
         n.notification_metadata.tag === 'channel_mention'
@@ -76,18 +73,20 @@ export function stackNotifications(
   };
 
   // Partition by type
-  const mentions = filteredNotifications.filter(isChannelMention);
-  const newMsgs = filteredNotifications
+  const mentions = notifications.filter(isChannelMention);
+  const newMsgs = notifications
     .filter(isChannelMessageSend)
     .filter((n) => !isShadowed(n));
-  const replies = filteredNotifications
+  const replies = notifications
     .filter(isChannelMessageReply)
     .filter((n) => !isShadowed(n));
-  const others = filteredNotifications.filter(
+  const docMentions = notifications.filter(isDocumentMention);
+  const others = notifications.filter(
     (n) =>
       !isChannelMention(n) &&
       !isChannelMessageSend(n) &&
-      !isChannelMessageReply(n)
+      !isChannelMessageReply(n) &&
+      !isDocumentMention(n)
   );
 
   // Build groups
@@ -95,6 +94,7 @@ export function stackNotifications(
     ...mentions.flatMap((n) => makeStack('channel_mention', [n])),
     ...makeStack('channel_message_send', newMsgs),
     ...makeReplyStacks(replies),
+    ...makeStack('document_mention', docMentions),
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),
   ];
 
