@@ -28,30 +28,17 @@ const variantStyles: Record<SearchbarVariant, string> = {
     'bg-transparent text-ink-muted border-edge-muted hover:bg-input hover:text-ink focus-within:bg-input focus-within:text-ink',
 };
 
-const USER_MENTION_RE = /<m-user-mention>(.*?)<\/m-user-mention>/g;
-
-function extractUserMentionIds(markdown: string): string[] {
-  const ids: string[] = [];
-  for (const match of markdown.matchAll(USER_MENTION_RE)) {
-    try {
-      const data = JSON.parse(match[1]);
-      if (data.userId) ids.push(`user:${data.userId}`);
-    } catch {
-      // skip malformed
-    }
-  }
-  return ids;
-}
-
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const { searchText, setSearchText, setSearchPaused, soup, setQueryFilters } =
     useSoupView();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
+  const [latestMarkdown, setLatestMarkdown] = createSignal('');
+  const [mentions, setMentions] = createSignal<string[]>([]);
 
-  const syncMentionFilters = (mentions: string[]) => {
-    const hasMentions = mentions.length > 0;
+  const syncMentionFilters = (mentionIds: string[]) => {
+    const hasMentions = mentionIds.length > 0;
     if (hasMentions && !soup.filters.isActive('channels')) {
       for (const opt of INDEX_OPTIONS_SOURCE) {
         if (soup.filters.isActive(opt.value)) {
@@ -63,7 +50,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         ...QUERY_FILTERS.channels,
         channel_filters: {
           ...QUERY_FILTERS.channels.channel_filters,
-          mentions,
+          mentions: mentionIds,
         },
       });
     } else {
@@ -71,18 +58,26 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         ...prev,
         channel_filters: {
           ...prev.channel_filters,
-          mentions,
+          mentions: mentionIds,
         },
       }));
     }
   };
 
-  const [latestMarkdown, setLatestMarkdown] = createSignal('');
-
   const editor = buildConfig('chat')
     .namespace('soup-search-bar')
     .singleLine()
-    .withMentions()
+    .withMentions({
+      onCreate: (mention) => {
+        if (mention.itemType !== 'user') return;
+        const val = `user:${mention.itemId}`;
+        setMentions((prev) => (prev.includes(val) ? prev : [...prev, val]));
+      },
+      onRemove: (mention) => {
+        if (mention.itemType !== 'user') return;
+        setMentions((prev) => prev.filter((m) => m !== `user:${mention.itemId}`));
+      },
+    })
     .onChange((markdown) => {
       setLatestMarkdown(markdown);
       setHasContent(markdown.trim().length > 0);
@@ -92,19 +87,17 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       return true;
     });
 
-  // Sync search text and mention filters only when the mention menu is closed
+  // Pause search while the mention picker is open.
+  // When it closes, sync the latest markdown → searchText + mention filters.
   createEffect(() => {
     const menuOpen =
       editor.buildHandle()._internal.mentionsMenuOps?.isOpen() ?? false;
     setSearchPaused(menuOpen);
 
     if (!menuOpen) {
-      const markdown = latestMarkdown();
-      const plainText = markdownToPlainText(markdown).trim();
+      const plainText = markdownToPlainText(latestMarkdown()).trim();
       setSearchText(plainText);
-
-      const mentions = extractUserMentionIds(markdown);
-      syncMentionFilters(mentions);
+      syncMentionFilters(mentions());
     }
   });
 
@@ -160,6 +153,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 editor.controls.clear();
                 setSearchText('');
                 setHasContent(false);
+                setMentions([]);
                 props.onDismiss?.();
               }}
             >
