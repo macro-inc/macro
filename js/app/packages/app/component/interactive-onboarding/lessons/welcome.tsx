@@ -1,7 +1,7 @@
 import { onMount } from 'solid-js';
 import { A } from '@solidjs/router';
 import type { LessonContentProps, LessonDefinition } from '../types';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 function WelcomeContent(props: LessonContentProps) {
   onMount(() => props.onComplete('Get Started'));
@@ -11,7 +11,7 @@ function WelcomeContent(props: LessonContentProps) {
       <p>
         Macro is a unified system for work – built for <strong>speed</strong>{' '}
         and <strong>focus</strong>.
-        {!isMobile() &&
+        {!isTouchDevice() &&
           ' This short walk-through will introduce a few core features.'}
       </p>
     </div>

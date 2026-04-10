@@ -28,6 +28,7 @@ import { useHasPaidAccess } from '@core/auth/license';
 import { useIsAuthenticated } from '@core/auth';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export default function InteractiveOnboarding() {
   const analytics = useAnalytics();
@@ -37,7 +38,7 @@ export default function InteractiveOnboarding() {
   const tutorialCompleted = useTutorialCompleted();
   const location = useLocation();
 
-  const mobile = isMobile();
+  const isTouch = isTouchDevice();
 
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
@@ -47,7 +48,7 @@ export default function InteractiveOnboarding() {
     if (l.id === 'launch' && !isMobile()) return false;
     return true;
   });
-  const lessons = mobile
+  const lessons = isTouch
     ? allLessons.filter(
         (l) =>
           l.id === 'welcome' ||
@@ -297,7 +298,7 @@ export default function InteractiveOnboarding() {
   // no email-invite step, so we complete after the about-us lesson instead.
   createEffect(() => {
     if (testMode) return;
-    if (mobile) {
+    if (isTouch) {
       const aboutUs = state
         .lessons()
         .find((l) => l.definition.id === 'about-us');
@@ -423,7 +424,7 @@ export default function InteractiveOnboarding() {
             >
               {(lesson) => (
                 <Show
-                  when={!mobile}
+                  when={!isTouch}
                   fallback={
                     /* Touch layout — single vertical column */
                     <div class="size-full flex flex-col items-center overflow-y-auto p-6">
