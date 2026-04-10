@@ -1,0 +1,10 @@
+[sync]
+symlink = [
+  "js/app/node_modules",
+  "infra/node_modules",
+  "rust/sync-service/target",
+  "rust/cloud-storage/target",
+]
+copy = [
+  ".env",
+]
