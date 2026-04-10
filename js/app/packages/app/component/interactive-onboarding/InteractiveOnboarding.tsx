@@ -127,7 +127,11 @@ export default function InteractiveOnboarding() {
   const handleLessonComplete = (buttonLabel?: string) => {
     setContinueLabel(buttonLabel);
     setReadyToContinue(true);
-    requestAnimationFrame(() => continueButtonRef?.focus());
+    // Skip auto-focus on touch — Safari scrolls to the focused element,
+    // which jumps the view to the bottom on longer lessons.
+    if (!isTouch) {
+      requestAnimationFrame(() => continueButtonRef?.focus());
+    }
   };
 
   const handleContinue = () => {
