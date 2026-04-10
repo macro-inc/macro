@@ -3,6 +3,7 @@
 use std::fmt;
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -59,6 +60,21 @@ pub struct LeaveCallResponse {
     pub call_ended: bool,
 }
 
+/// Response indicating whether an active call exists for a channel.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallActiveResponse {
+    /// The call identifier.
+    pub call_id: Uuid,
+    /// The channel this call belongs to.
+    pub channel_id: Uuid,
+    /// User who created the call.
+    pub created_by: String,
+    /// When the call was created.
+    pub created_at: DateTime<Utc>,
+}
+
 /// Configuration for S3 egress output.
 #[derive(Clone)]
 pub struct EgressS3Config {
@@ -93,7 +109,7 @@ pub struct CallWebhookEvent {
     /// Room name associated with the event, if any.
     pub room_name: Option<String>,
     /// Participant identity associated with the event, if any.
-    pub participant_identity: Option<String>,
+    pub participant_identity: Option<MacroUserIdStr<'static>>,
     /// Egress ID associated with the event, if any.
     pub egress_id: Option<String>,
     /// File download URL from a completed egress, if any.

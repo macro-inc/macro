@@ -13,6 +13,15 @@ type CreateTargetMessageControllerOptions = {
   initialTargetMessageReplyId?: string | undefined;
   messageKeys: Accessor<string[]>;
   navigation: Accessor<ThreadListNavigation | undefined>;
+  /**
+   * Whether the ThreadList has completed its initial scroll.
+   *
+   * The controller defers pending scroll execution until this returns `true`
+   * so that a `goToMessage` call that fires while the initial scroll is still
+   * in progress does not get overridden by the initial-scroll retry logic
+   * inside ThreadList.
+   */
+  didInitialScroll: Accessor<boolean>;
 };
 
 export type TargetMessageController = ReturnType<
@@ -83,10 +92,20 @@ export function createTargetMessageController(
         options.navigation,
         () => targetMessageData['pendingScrollTargetId'],
         options.messageKeys,
+        options.didInitialScroll,
       ],
-      ([navigation, pendingTargetId]) => {
+      ([navigation, pendingTargetId, , didInitialScroll]) => {
         if (!navigation || !pendingTargetId) return;
         if (!hasMessageLoaded(pendingTargetId)) return;
+
+        // Defer the scroll until the ThreadList has completed its initial
+        // scroll. This prevents a goToMessage call from being overridden by
+        // the initial-scroll retry logic in ThreadList's handleScrollEnd,
+        // which validates position against the *original* scroll target.
+        // The pending target stays queued; once didInitialScroll flips to
+        // true the effect re-fires and executes the scroll.
+        if (!didInitialScroll) return;
+
         if (!navigation.scrollToId(pendingTargetId)) return;
 
         const restoredDefaultPagination =

@@ -1,7 +1,7 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { ChannelMessage } from '../Message';
-import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
+import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useUserId } from '@core/context/user';
 import { deferredGate } from '@core/util/debounce';
 import { tryMacroId, useDisplayName } from '@core/user';
@@ -111,7 +111,8 @@ export function ChannelThread(props: ThreadProps) {
     activeReplies()
       .slice(DEFAULT_VISIBLE_REPLY_COUNT)
       .some((reply: ApiThreadReply) => props.isNewMessage?.(reply));
-  const collapsedReplyUsers = () => getUniqueReplyUserIds(activeReplies());
+  const collapsedReplyUsers = () =>
+    getUniqueReplyUserIds(activeReplies().slice(DEFAULT_VISIBLE_REPLY_COUNT));
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
   const shouldShowCollapsedIndicator = () =>
@@ -175,7 +176,7 @@ export function ChannelThread(props: ThreadProps) {
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
       >
         <div class="flex flex-col w-full">
-          <MarkMessaageNotifications
+          <MarkMessageNotifications
             messageId={props.data().id}
             channelId={props.channelId()}
           >
@@ -196,7 +197,7 @@ export function ChannelThread(props: ThreadProps) {
                 }
               />
             </DebugSuspense>
-          </MarkMessaageNotifications>
+          </MarkMessageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
               <DebugSuspense name="ChannelThread.reply-rail">
@@ -207,18 +208,20 @@ export function ChannelThread(props: ThreadProps) {
               </DebugSuspense>
               <DebugSuspense name="ChannelThread.replies">
                 <Thread.RepliesContainer>
-                  <Thread.ReplyList
-                    channelId={props.channelId()}
-                    threadId={props.data().id}
-                    replies={displayReplies()}
-                    getMessageActions={props.getMessageActions}
-                    messageEditor={props.messageEditor}
-                    isNewMessage={props.isNewMessage}
-                    highlightedReplyId={props.highlightedReplyId}
-                    onReady={setReplyListHandle}
-                    selectedReplyId={replySelection.selectedId}
-                    isThreadFocused={isThreadFocused}
-                  />
+                  <DebugSuspense name="ChannelThread.ReplyList">
+                    <Thread.ReplyList
+                      channelId={props.channelId()}
+                      threadId={props.data().id}
+                      replies={displayReplies()}
+                      getMessageActions={props.getMessageActions}
+                      messageEditor={props.messageEditor}
+                      isNewMessage={props.isNewMessage}
+                      highlightedReplyId={props.highlightedReplyId}
+                      onReady={setReplyListHandle}
+                      selectedReplyId={replySelection.selectedId}
+                      isThreadFocused={isThreadFocused}
+                    />
+                  </DebugSuspense>
 
                   <Show when={props.isReplying()}>
                     <div

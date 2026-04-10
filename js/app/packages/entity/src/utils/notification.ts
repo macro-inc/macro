@@ -1,6 +1,6 @@
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { Notification } from '../types/notification';
-import type { UnifiedNotification } from '@notifications';
+import { notificationIsRead, type UnifiedNotification } from '@notifications';
 import { match } from 'ts-pattern';
 
 /**
@@ -105,11 +105,7 @@ export function isNotificationUnread(
 ): boolean {
   if ('notifications' in item && Array.isArray(item.notifications)) {
     const stack = item as NotificationStack;
-    return stack.notifications.some(
-      (notification) => !notification.viewed_at && !notification.done
-    );
+    return stack.notifications.some((n) => !notificationIsRead(n));
   }
-
-  const notification = item as Notification;
-  return !notification.viewed_at && !notification.done;
+  return !notificationIsRead(item as Notification);
 }

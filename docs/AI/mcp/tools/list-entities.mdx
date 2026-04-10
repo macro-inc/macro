@@ -1,0 +1,15 @@
+---
+title: ListEntities
+description: "Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, and chat channels. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead."
+---
+
+# ListEntities
+
+Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, and chat channels. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `includeTypes` | array | Yes | Filter to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. |
+| `sortBy` | string | Yes | How to sort results: recently_viewed (default), recently_updated, or recently_created. |

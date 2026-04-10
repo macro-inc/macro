@@ -1030,11 +1030,13 @@
               "notification_event_type",
               "sent",
               "done",
+              "created_at",
+              "updated_at",
               "notification_metadata"
             ],
             "properties": {
               "created_at": {
-                "type": ["string", "null"],
+                "type": "string",
                 "format": "date-time",
                 "description": "When the notification was created."
               },
@@ -1073,7 +1075,7 @@
                 "description": "Whether the notification has been sent."
               },
               "updated_at": {
-                "type": ["string", "null"],
+                "type": "string",
                 "format": "date-time",
                 "description": "When the notification was last updated."
               },
@@ -1102,24 +1104,23 @@
         }
       },
       "ChannelInviteMetadata": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/CommonChannelMetadata"
+        "type": "object",
+        "description": "Metadata for when a user is invited to a channel.",
+        "required": ["invitedBy"],
+        "properties": {
+          "channelName": {
+            "type": "string",
+            "description": "The name of the channel"
           },
-          {
-            "type": "object",
-            "required": ["invitedBy"],
-            "properties": {
-              "invitedBy": {
-                "type": "string"
-              },
-              "senderProfilePictureUrl": {
-                "type": ["string", "null"]
-              }
-            }
+          "invitedBy": {
+            "type": "string",
+            "description": "The user who sent the invitation"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "The sender's profile picture URL, if available."
           }
-        ],
-        "description": "Metadata for when a user is invited to a channel"
+        }
       },
       "ChannelMentionMetadata": {
         "allOf": [
@@ -1265,6 +1266,85 @@
             "$ref": "#/components/schemas/ChannelType"
           }
         }
+      },
+      "ConnGatewayInnerNotif_Value": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity",
+            "description": "The entity the notification is about."
+          },
+          {
+            "type": "object",
+            "required": [
+              "notification_id",
+              "notification_event_type",
+              "sent",
+              "done",
+              "created_at",
+              "updated_at",
+              "notification_metadata"
+            ],
+            "properties": {
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the notification was created."
+              },
+              "deleted_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the notification was deleted."
+              },
+              "done": {
+                "type": "boolean",
+                "description": "Whether the notification is marked as done."
+              },
+              "notification_event_type": {
+                "type": "string",
+                "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
+              },
+              "notification_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The notification ID."
+              },
+              "notification_metadata": {
+                "$ref": "#/components/schemas/TaggedContent_Value",
+                "description": "Deserialized notification metadata."
+              },
+              "sender_id": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MacroUserIdStr",
+                    "description": "The user who triggered the notification."
+                  }
+                ]
+              },
+              "sent": {
+                "type": "boolean",
+                "description": "Whether the notification has been sent."
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the notification was last updated."
+              },
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the notification was viewed/seen."
+              }
+            }
+          }
+        ],
+        "description": "the value of the inner payload inside [ConnGatewayNotification]"
+      },
+      "ConnGatewayNotificationPayload": {
+        "$ref": "#/components/schemas/ConnGatewayInnerNotif_Value",
+        "description": "Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.\n\nUsed for OpenAPI schema generation — serializes identically to\n`ConnGatewayInnerNotif<serde_json::Value>`."
       },
       "CreateNotification": {
         "allOf": [
@@ -1467,6 +1547,9 @@
             "description": "List of user IDs that the item is shared with"
           }
         }
+      },
+      "MacroUserIdStr": {
+        "type": "string"
       },
       "MentionedInDocumentCommentMetadata": {
         "type": "object",
@@ -1740,6 +1823,10 @@
         "type": "string",
         "enum": ["v1"]
       },
+      "NotificationTypeName": {
+        "type": "string",
+        "description": "newtype wrapper for the the typename of a Notification"
+      },
       "PushNotificationData": {
         "type": "object",
         "required": ["notificationId"],
@@ -1788,6 +1875,17 @@
             "type": "integer",
             "format": "int64",
             "description": "the thread id"
+          }
+        }
+      },
+      "TaggedContent_Value": {
+        "type": "object",
+        "description": "A notification metadata value tagged with the notification event type.",
+        "required": ["tag", "content"],
+        "properties": {
+          "content": {},
+          "tag": {
+            "$ref": "#/components/schemas/NotificationTypeName"
           }
         }
       },

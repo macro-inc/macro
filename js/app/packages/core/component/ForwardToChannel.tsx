@@ -1,4 +1,4 @@
-import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
+import { useChannelMarkdownArea } from '@block-channel/component/DeprecatedChannelInput/MarkdownArea';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useIsAuthenticated } from '@core/auth';
 import {

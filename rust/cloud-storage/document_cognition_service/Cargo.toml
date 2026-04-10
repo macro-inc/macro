@@ -21,10 +21,6 @@ path = "src/openapi.rs"
 name = "document_cognition_service_models"
 path = "src/models_bin.rs"
 
-[[bin]]
-name = "mcp_server"
-path = "src/bin/mcp_server.rs"
-
 [features]
 local = []
 local_auth = ["macro_middleware/local_auth"]
@@ -47,14 +43,12 @@ aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
-base64 = { workspace = true }
 chat = { path = "../chat" }
 chrono = { workspace = true }
 comms = { path = "../comms", features = ["outbound"] }
 comms_service_client = { path = "../comms_service_client" }
 connection_gateway = { path = "../connection_gateway" }
 cookie = { workspace = true }
-dashmap = { workspace = true }
 document_cognition_service_client = { path = "../document_cognition_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents", features = ["ai_tools"] }
@@ -63,7 +57,6 @@ entity_access = { path = "../entity_access" }
 email = { path = "../email", features = ["outbound"] }
 email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
-fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }
@@ -98,7 +91,6 @@ models_permissions = { path = "../models_permissions" }
 regex = { workspace = true }
 reqwest.workspace = true
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false }
-rmcp = { version = "1.2.0", features = ["transport-streamable-http-server"] }
 schemars = { workspace = true }
 scribe = { path = "../scribe", features = [
   "channel",
@@ -111,7 +103,6 @@ search_service_client = { path = "../search_service_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 readonly_pool = { path = "../readonly_pool" }
 soup = { path = "../soup", features = ["outbound"] }
 sqlx = { workspace = true }
@@ -143,7 +134,6 @@ unfurl_service = { path = "../unfurl_service" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 url = { workspace = true }
-urlencoding = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

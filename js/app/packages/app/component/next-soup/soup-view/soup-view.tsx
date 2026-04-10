@@ -17,6 +17,10 @@ import {
   SoupViewContextProvider,
   useSoupView,
 } from '@app/component/next-soup/soup-view/soup-view-context';
+import {
+  soupViewCacheKey,
+  activeSoupViewCounts,
+} from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -107,6 +111,7 @@ import {
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import { QUERY_FILTERS } from '../filters/query-filters';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -168,11 +173,7 @@ type PersistedSoupViewState = {
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 1;
-
-// Tracks how many SoupViewList instances are mounted per contentId.
-// Used to detect duplicate splits showing the same view.
-const activeSoupViewCounts = new Map<string, number>();
+const PERSISTED_STATE_VERSION = 2;
 
 const listStateCache = new Map<
   string,
@@ -646,7 +647,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const [persistedState, setPersistedState] = makePersisted(
     createSignal<PersistedSoupViewState>(),
-    { name: `macro:soup-view:${contentId}` }
+    { name: soupViewCacheKey(contentId) }
   );
 
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
@@ -675,7 +676,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
               ? (props.initialClientFilters ?? { and: [], or: [] })
               : (initialPersistedState.filters ?? { and: [], or: [] })
           );
-          setQueryFilters(initialPersistedState.queryFilters ?? {});
+          setQueryFilters(
+            isStale
+              ? QUERY_FILTERS.default
+              : (initialPersistedState.queryFilters ?? QUERY_FILTERS.default)
+          );
           setActiveTab(initialPersistedState.activeTab);
         });
       }

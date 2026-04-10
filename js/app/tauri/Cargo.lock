@@ -94,6 +94,7 @@ dependencies = [
  "tauri-plugin-deep-link",
  "tauri-plugin-haptics",
  "tauri-plugin-http",
+ "tauri-plugin-input-accessory",
  "tauri-plugin-log",
  "tauri-plugin-notification",
  "tauri-plugin-notifications",
@@ -4615,6 +4616,14 @@ dependencies = [
  "tokio",
  "url",
  "urlpattern",
+]
+
+[[package]]
+name = "tauri-plugin-input-accessory"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

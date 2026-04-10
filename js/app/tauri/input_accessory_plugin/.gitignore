@@ -1,0 +1,6 @@
+# Swift Package Manager build artifacts
+ios/.build/
+ios/Package.resolved
+
+# Tauri-generated Swift API (placed here by `cargo tauri ios build`)
+.tauri/

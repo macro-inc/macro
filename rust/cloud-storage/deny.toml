@@ -264,7 +264,6 @@ skip = [
   { crate = "thiserror-impl", reason = "Error handling dependencies" },
   { crate = "tokio-rustls", reason = "AWS SDK and reqwest version mismatch" },
   { crate = "tower", reason = "Service framework dependencies" },
-  { crate = "tungstenite", reason = "WebSocket dependencies" },
   { crate = "unicode-width", reason = "Unicode dependencies" },
   { crate = "wasi", reason = "WebAssembly system interface dependencies" },
   { crate = "windows-sys", reason = "Windows dependencies version mismatch" },

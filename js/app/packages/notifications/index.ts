@@ -41,6 +41,7 @@ export {
 } from './notification-metadata';
 export { openNotificationFromId } from './notification-navigation';
 export { openNotification } from './notification-navigation';
+export { CHANNEL_EVENT_TYPES } from './notification-source';
 export type {
   PlatformNotificationData,
   PlatformNotificationHandle,

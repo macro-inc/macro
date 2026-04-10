@@ -1,0 +1,23 @@
+{
+  "groups": [
+    {
+      "group": "First Steps",
+      "pages": [
+        "index",
+        "changelog/introduction"
+      ]
+    },
+    {
+      "group": "MCP",
+      "pages": [
+        "AI/mcp/overview",
+        {
+          "group": "Tool Reference",
+          "pages": {
+            "$ref": "./tool-pages.json"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -87,7 +87,7 @@ pub struct NotificationItem {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created (ISO 8601).
-    pub created_at: Option<String>,
+    pub created_at: String,
     /// The notification metadata/payload.
     pub metadata: serde_json::Value,
     /// The user ID of the sender, if any.
@@ -103,7 +103,7 @@ impl From<UserNotificationRow<serde_json::Value>> for NotificationItem {
             entity_id: row.entity.entity_id.into_owned(),
             seen: row.viewed_at.is_some(),
             done: row.done,
-            created_at: row.created_at.map(|t| t.to_rfc3339()),
+            created_at: row.created_at.to_rfc3339(),
             metadata: row.notification_metadata,
             sender_id: row.sender_id.map(|s| (*s).as_ref().to_owned()),
         }

@@ -48,12 +48,11 @@ impl ConnectionService for NoOpConnectionService {
         Ok(())
     }
 
-    async fn send_channel_message(
+    async fn send_channel_message<'a>(
         &self,
-        _channel_id: &str,
+        _users: &[MacroUserIdStr<'a>],
         _message_type: &str,
         _message: serde_json::Value,
-        _triggered_by: connection::domain::models::EntityAccessAuth,
     ) -> Result<(), connection::domain::models::ConnectionError> {
         Ok(())
     }

@@ -1,5 +1,5 @@
 use anyhow::Context;
-use mention_utils::parse::{NullXmlFormatter, ParsedXmlText, XmlFormatter};
+use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::channel_message::UpsertChannelMessageArgs,
 };
@@ -31,7 +31,7 @@ pub async fn process_channel_message_update(
 
     let parsed = ParsedXmlText::parse(&channel_message_info.channel_message.content)?;
 
-    let transformed_content = NullXmlFormatter::format_xml_text(parsed);
+    let transformed_content = PlainTextFormatter::format_xml_text(parsed);
 
     let upsert_channel_message_args = UpsertChannelMessageArgs {
         channel_id: channel_message_info.channel_id.to_string(),

@@ -76,6 +76,7 @@ export * from './basicDocumentSubTypeProperty';
 export * from './basicDocumentType';
 export * from './basicDocumentUpdatedAt';
 export * from './bomPart';
+export * from './callActiveResponse';
 export * from './callTokenResponse';
 export * from './channel';
 export * from './channelFilters';

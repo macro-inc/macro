@@ -26,9 +26,6 @@ import {
 } from '@channel/Channel/channel-tabs';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
-import { ChannelDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import type { BlockChannelProps } from './Block';
 import {
   CallProvider,
   ChannelCallButton,
@@ -43,6 +40,8 @@ type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
   [URL_PARAMS.thread]?: string;
 };
+
+export type BlockChannelProps = ChannelTargetMessageParams;
 
 type ChannelPropsTargetMessage = Pick<
   ChannelProps,
@@ -102,7 +101,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   useBlockEntityCommands();
 
   const isPreview = !!useMaybePreviewPanel();
-  const notificationSource = useGlobalNotificationSource();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
   const [activeTab, setActiveTab] =
@@ -142,11 +140,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <ChannelDebouncedNotificationReadMarker
-        notificationSource={notificationSource}
-        channelId={channelId}
-        debounceTime={500}
-      />
       <CallProvider>
         <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
           <div class="h-full flex flex-col">

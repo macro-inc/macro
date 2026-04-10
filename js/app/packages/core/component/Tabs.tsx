@@ -1,15 +1,20 @@
 import {
   SegmentedControl as KSegmentedControl,
+  useSegmentedControlContext,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
 import {
   type JSX,
+  batch,
+  type ComponentProps,
   createEffect,
   createSignal,
   For,
+  on,
   splitProps,
 } from 'solid-js';
 import { cn } from '@ui/utils/classname';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 
 export type TabItem = {
   value: string;
@@ -34,30 +39,6 @@ export const Tabs = (
     'class',
   ]);
 
-  let listRef!: HTMLDivElement;
-  const itemRefs: HTMLElement[] = [];
-
-  const [indicatorStyle, setIndicatorStyle] = createSignal({
-    left: 0,
-    width: 0,
-  });
-
-  const updateIndicatorPosition = (element: HTMLElement) => {
-    if (!listRef || !element) return;
-    const listRect = listRef.getBoundingClientRect();
-    const tabRect = element.getBoundingClientRect();
-    setIndicatorStyle({
-      left: tabRect.left - listRect.left + listRef.scrollLeft,
-      width: tabRect.width,
-    });
-  };
-
-  createEffect(() => {
-    const val = local.value ?? local.defaultValue ?? local.list[0]?.value;
-    const idx = local.list.findIndex((t) => t.value === val);
-    if (idx >= 0 && itemRefs[idx]) updateIndicatorPosition(itemRefs[idx]);
-  });
-
   return (
     <KSegmentedControl
       value={local.value}
@@ -66,15 +47,12 @@ export const Tabs = (
       {...rootProps}
       class={cn('h-full', local.class)}
     >
-      <div ref={listRef} class="relative flex items-center h-full">
+      <div class="relative flex items-center h-full">
         <For each={local.list}>
-          {(item, i) => (
+          {(item) => (
             <KSegmentedControl.Item
               value={item.value}
               disabled={local.disabled}
-              ref={(el) => {
-                itemRefs[i()] = el;
-              }}
             >
               <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
               <KSegmentedControl.ItemLabel
@@ -90,20 +68,72 @@ export const Tabs = (
             </KSegmentedControl.Item>
           )}
         </For>
-        <div
+        <Indicator
           data-indicator
           class={cn(
-            'absolute h-[2px] bg-accent transition-[left,width] duration-150 pointer-events-none',
+            'absolute h-[2px]! bg-accent transition-[transform,width] duration-150 pointer-events-none',
             (local.indicatorPosition ?? 'bottom') === 'top'
               ? 'top-0'
               : 'bottom-0'
           )}
-          style={{
-            left: `${indicatorStyle().left}px`,
-            width: `${indicatorStyle().width}px`,
-          }}
         />
       </div>
     </KSegmentedControl>
+  );
+};
+
+// This is based off of the KSegmentedControl.Indicator but removes the
+// height and Y translation styles
+const Indicator = (props: ComponentProps<'div'>) => {
+  const context = useSegmentedControlContext();
+
+  const [style, setStyle] = createSignal<JSX.CSSProperties>();
+  const [resizing, setResizing] = createSignal(false);
+
+  const computeTransform = (element: HTMLElement): string | undefined => {
+    const x = element.offsetLeft;
+
+    return `translateX(${x}px)`;
+  };
+
+  const computeStyle = () => {
+    const element = context.selectedItem();
+
+    if (!element) {
+      setStyle(undefined);
+      return;
+    }
+
+    setStyle({
+      width: `${element.offsetWidth}px`,
+      transform: computeTransform(element),
+      'transition-duration': resizing() ? '0ms' : undefined,
+    });
+  };
+
+  createEffect(
+    on(context.selectedItem, () => {
+      setResizing(!style());
+      computeStyle();
+      setResizing(false);
+    })
+  );
+
+  createResizeObserver(context.root, () => {
+    batch(() => {
+      setResizing(true);
+      computeStyle();
+      setResizing(false);
+    });
+  });
+
+  return (
+    <div
+      role="presentation"
+      style={style()}
+      data-resizing={resizing()}
+      data-orientation={context.orientation()}
+      {...props}
+    />
   );
 };

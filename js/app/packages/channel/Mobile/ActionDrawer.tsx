@@ -179,7 +179,10 @@ export function ActionDrawer() {
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-        <MobileDrawer.Content aria-label="Message actions">
+        <MobileDrawer.Content
+          aria-label="Message actions"
+          class={showEmojiSearch() ? 'h-[80vh]' : undefined}
+        >
           {/* Drag handle */}
           <div class="flex justify-center pt-3 pb-2 shrink-0">
             <div class="w-10 h-1 rounded-full bg-edge-muted" />

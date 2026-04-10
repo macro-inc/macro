@@ -1,5 +1,5 @@
 import { fileSelector } from '@core/directive/fileSelector';
-import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { FormatRibbon } from '@block-channel/component/DeprecatedChannelInput/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {

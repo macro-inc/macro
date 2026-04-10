@@ -87,6 +87,8 @@ pub async fn handler(
     tracing::info!(
         event_id = %event.id,
         event_type = ?event.type_,
+        event_api_version = ?event.api_version,
+        library_api_version = %"1.0.0-alpha.4 (targets 2025-09-30.clover)",
         "processing stripe event"
     );
 
@@ -139,13 +141,25 @@ async fn handle_customer_subscription_event(
 
     // Skip processing if the subscription is still incomplete
     if current_status == "incomplete" {
-        tracing::debug!("skipping incomplete subscription");
+        tracing::info!(
+            current_status = current_status,
+            "skipping incomplete subscription"
+        );
         return Ok(());
     }
 
     // For subscription.updated events, check if we're transitioning from incomplete
     // to active/trialing. If so, this is effectively a "new" subscription activation.
     let previous_status = extract_previous_status(&previous_attributes);
+
+    tracing::info!(
+        event_type = ?event_type,
+        current_status = current_status,
+        previous_status = ?previous_status,
+        previous_attributes_raw = ?previous_attributes,
+        "subscription event status details"
+    );
+
     let is_transition_from_incomplete =
         matches!(event_type, EventType::CustomerSubscriptionUpdated)
             && previous_status.as_deref() == Some("incomplete")
@@ -156,6 +170,13 @@ async fn handle_customer_subscription_event(
             previous_status = ?previous_status,
             current_status = current_status,
             "subscription transitioned from incomplete to active state"
+        );
+    } else if matches!(event_type, EventType::CustomerSubscriptionUpdated) {
+        tracing::info!(
+            previous_status = ?previous_status,
+            current_status = current_status,
+            is_transition_from_incomplete = is_transition_from_incomplete,
+            "subscription update did not qualify as incomplete transition"
         );
     }
 
@@ -200,14 +221,18 @@ async fn handle_customer_subscription_event(
         None
     };
 
-    // Extract GA client ID from subscription metadata for analytics tracking
+    // Extract tracking IDs from subscription metadata for analytics
     let ga_client_id = subscription.metadata.get("ga_client_id").cloned();
+    let fbp = subscription.metadata.get("fbp").cloned();
+    let fbc = subscription.metadata.get("fbc").cloned();
 
     tracing::info!(
         email=%email.as_ref(),
         subscription_id,
         subscription_status,
         ga_client_id=?ga_client_id,
+        fbp=?fbp,
+        fbc=?fbc,
         "processing stripe subscription"
     );
 
@@ -229,6 +254,8 @@ async fn handle_customer_subscription_event(
             &team_id,
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
+                fbp: fbp.clone(),
+                fbc: fbc.clone(),
                 email: email.as_ref().to_string(),
                 value_cents: subscription_value,
                 currency: subscription_currency,
@@ -356,6 +383,8 @@ async fn handle_customer_subscription_event(
         subscription_id,
         SubscriptionTrackingData {
             ga_client_id,
+            fbp,
+            fbc,
             email: email.as_ref().to_string(),
             value_cents: subscription_value,
             currency: subscription_currency,
@@ -456,6 +485,8 @@ struct SubscriptionEvent {
 #[derive(Debug, Clone)]
 struct SubscriptionTrackingData {
     ga_client_id: Option<String>,
+    fbp: Option<String>,
+    fbc: Option<String>,
     email: String,
     value_cents: Option<i64>,
     currency: Option<String>,
@@ -471,11 +502,11 @@ fn track_stripe_subscription(
     data: SubscriptionTrackingData,
 ) {
     let Some(value_cents) = data.value_cents else {
-        tracing::debug!("skipping analytics tracking: missing value_cents");
+        tracing::warn!("skipping analytics tracking: missing value_cents");
         return;
     };
     let Some(currency) = data.currency else {
-        tracing::debug!("skipping analytics tracking: missing currency");
+        tracing::warn!("skipping analytics tracking: missing currency");
         return;
     };
 
@@ -487,6 +518,14 @@ fn track_stripe_subscription(
 
     let subscription_id = subscription_id.to_string();
 
+    tracing::info!(
+        value_cents = value_cents,
+        currency = %currency,
+        is_new = data.is_new,
+        status = %data.status,
+        "spawning analytics tracking task"
+    );
+
     tokio::spawn(
         async move {
             let event = SubscriptionEvent {
@@ -494,8 +533,19 @@ fn track_stripe_subscription(
                 value: value_cents as f64 / 100.0,
                 currency: currency.to_uppercase(),
             };
-            let user_data = MetaUserData::with_email(&data.email);
+            let user_data = MetaUserData {
+                email: Some(data.email.clone()),
+                fbp: data.fbp.clone(),
+                fbc: data.fbc.clone(),
+            };
             let event_id = Some(subscription_id.as_str());
+
+            tracing::info!(
+                status = %data.status,
+                is_new = data.is_new,
+                ga_client_id = ?data.ga_client_id,
+                "analytics tracking task started"
+            );
 
             match (data.status.as_str(), data.is_new) {
                 ("active" | "trialing", true) => {

@@ -197,7 +197,7 @@ export const MobileFilterDrawer = () => {
 
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-          <MobileDrawer.Content aria-label="Filters">
+          <MobileDrawer.Content aria-label="Filters" class="h-[80vh]">
             {/* Drag handle */}
             <div class="flex justify-center pt-3 pb-1 shrink-0">
               <div class="w-10 h-1 rounded-full bg-edge-muted" />

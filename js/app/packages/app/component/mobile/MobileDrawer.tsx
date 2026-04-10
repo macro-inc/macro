@@ -64,9 +64,9 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
         if (isInputEl(e.target)) setInputFocused(false);
       }}
       class={cn(
-        'bottom-(--virtual-keyboard-height) fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+        'bottom-(--virtual-keyboard-height) fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
         inputFocused()
-          ? 'pb-0 h-[calc(80vh-var(--virtual-keyboard-height))]'
+          ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
           : 'pb-(--safe-bottom)',
         local.class
       )}

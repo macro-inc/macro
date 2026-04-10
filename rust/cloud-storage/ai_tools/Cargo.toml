@@ -26,6 +26,7 @@ frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
 macro_db_client = { path = "../macro_db_client" }
+macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 model_notifications = { path = "../model_notifications" }
 models_dcs = { path = "../models_dcs" }

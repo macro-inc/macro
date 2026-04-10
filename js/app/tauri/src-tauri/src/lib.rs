@@ -90,6 +90,15 @@ static ALLOWED_DOMAINS: &[&str] = &[
     "tauri://localhost",
     "https://macro.com",
     "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
+    "http://localhost:3004",
+    "http://localhost:3005",
+    "http://localhost:3006",
+    "http://localhost:3007",
+    "http://localhost:3008",
+    "http://localhost:3009",
 ];
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -136,7 +145,9 @@ pub fn run() {
 
     #[cfg(target_os = "ios")]
     {
-        builder = builder.plugin(tauri_plugin_haptics::init());
+        builder = builder
+            .plugin(tauri_plugin_haptics::init())
+            .plugin(tauri_plugin_input_accessory::init());
     }
 
     // register the rest of the common plugins
