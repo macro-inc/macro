@@ -81,7 +81,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     .singleLine()
     .withMentions()
     .onChange((markdown) => {
-      const plainText = markdownToPlainText(markdown).trim();
+      const plainText = markdownToPlainText(markdown)
+        .replace(/(^|\s)@\S*/g, '$1')
+        .trim();
       setSearchText(plainText);
       setHasContent(markdown.trim().length > 0);
 
