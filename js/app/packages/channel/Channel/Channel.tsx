@@ -314,23 +314,23 @@ export function Channel(props: ChannelProps) {
       <StaticMarkdownContext>
         <MaybeMessageActionDrawerManager>
           <ChannelDropZone dragState={dragState}>
-            <Show when={messages().length > 0}>
-              <div
-                class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
-                ref={(element) => {
-                  setMessageListElement(element);
-                  attachMessageListRef(element);
-                }}
-                tabIndex={-1}
-                data-channel-message-list
-                data-channel-nav="keyboard"
-                onMouseMove={(e) => {
-                  const el = e.currentTarget;
-                  if (el.dataset.channelNav !== 'mouse') {
-                    el.dataset.channelNav = 'mouse';
-                  }
-                }}
-              >
+            <div
+              class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
+              ref={(element) => {
+                setMessageListElement(element);
+                attachMessageListRef(element);
+              }}
+              tabIndex={-1}
+              data-channel-message-list
+              data-channel-nav="keyboard"
+              onMouseMove={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.channelNav !== 'mouse') {
+                  el.dataset.channelNav = 'mouse';
+                }
+              }}
+            >
+              <Show when={messages().length > 0}>
                 <ThreadList
                   keys={() => messageIndex.keys()}
                   initialScrollTarget={threadListInitialScrollTarget()}
@@ -393,8 +393,8 @@ export function Channel(props: ChannelProps) {
                   navigation={threadListNavigation}
                   scrollState={threadListScrollState}
                 />
-              </div>
-            </Show>
+              </Show>
+            </div>
             <DebugSuspense name="Channel.input">
               <ChannelInputContainer
                 ref={(el) => {
