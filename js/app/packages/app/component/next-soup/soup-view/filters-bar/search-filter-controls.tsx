@@ -7,9 +7,27 @@ import { useUserId } from '@core/context/user';
 import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import type { SoupBody } from '@queries/soup/items';
-import { batch, createMemo, Show } from 'solid-js';
+import { batch, createEffect, createMemo, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
+import type { ChannelFilters } from '@service-storage/generated/schemas';
+
+const CHANNEL_SUB_FILTERS_KEY = 'macro:soup-view:search:channel-sub-filters';
+
+type ChannelSubFilters = Pick<ChannelFilters, 'channel_ids' | 'sender_ids'>;
+
+function getCachedChannelSubFilters(): ChannelSubFilters {
+  try {
+    const raw = localStorage.getItem(CHANNEL_SUB_FILTERS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function cacheChannelSubFilters(filters: ChannelSubFilters) {
+  localStorage.setItem(CHANNEL_SUB_FILTERS_KEY, JSON.stringify(filters));
+}
 
 export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
   {
@@ -61,13 +79,25 @@ const INDEX_SELECT_OPTIONS: Option[] = INDEX_OPTIONS.map((o) => ({
 }));
 
 export const SearchIndexFilter = () => {
-  const { soup, setQueryFilters } = useSoupView();
+  const { soup, queryFilters, setQueryFilters } = useSoupView();
 
   const activeIndex = createMemo((): Option[] => {
     const found = INDEX_OPTIONS.find((opt) => soup.filters.isActive(opt.value));
     return found
       ? [{ value: found.value, label: found.label, icon: found.icon }]
       : [];
+  });
+
+  const isChannelsActive = () =>
+    activeIndex().some((o) => o.value === 'channels');
+
+  createEffect(() => {
+    if (!isChannelsActive()) return;
+    const cf = queryFilters().channel_filters;
+    const sub: ChannelSubFilters = {};
+    if (cf?.channel_ids?.length) sub.channel_ids = cf.channel_ids;
+    if (cf?.sender_ids?.length) sub.sender_ids = cf.sender_ids;
+    cacheChannelSubFilters(sub);
   });
 
   const handleChange = (selected: Option[]) => {
@@ -82,9 +112,20 @@ export const SearchIndexFilter = () => {
         const opt = INDEX_OPTIONS.find((o) => o.value === selected[0].value);
         if (opt) {
           soup.filters.toggle({ or: [opt.value as FilterID] });
-          setQueryFilters({
-            ...opt.queryFilters,
-          });
+          if (opt.value === 'channels') {
+            const cached = getCachedChannelSubFilters();
+            setQueryFilters({
+              ...opt.queryFilters,
+              channel_filters: {
+                ...opt.queryFilters.channel_filters,
+                ...cached,
+              },
+            });
+          } else {
+            setQueryFilters({
+              ...opt.queryFilters,
+            });
+          }
         }
       } else {
         setQueryFilters({
@@ -98,9 +139,6 @@ export const SearchIndexFilter = () => {
     const active = activeIndex();
     return active.length > 0 ? active[0].label : 'All';
   });
-
-  const isChannelsActive = () =>
-    activeIndex().some((o) => o.value === 'channels');
 
   return (
     <div class="flex items-center gap-1.5">
