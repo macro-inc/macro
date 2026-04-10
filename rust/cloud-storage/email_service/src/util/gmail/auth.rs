@@ -37,6 +37,7 @@ pub async fn fetch_token_or_delete_on_revocation(
             sqs_client
                 .enqueue_link_manager_notification(LinkManagerMessage::DeleteLink {
                     link_id: link.id,
+                    deletion_reason: models_email::email::service::pubsub::DeletionReason::AccessRevoked,
                 })
                 .await
                 .inspect_err(|e| {
