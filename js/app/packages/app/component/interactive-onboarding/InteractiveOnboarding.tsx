@@ -115,7 +115,7 @@ export default function InteractiveOnboarding() {
   // Redirect away if the backend already marks the tutorial as complete
   // before the user starts. We track whether the flow has started to avoid
   // a mid-flow redirect.
-  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
+  const [onboardingStarted, setOnboardingStarted] = createSignal(!!returningLesson);
   createEffect(() => {
     if (tutorialCompleted() && !onboardingStarted() && !testMode) {
       navigateAway();
