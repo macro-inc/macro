@@ -20,6 +20,12 @@ export function ChannelCallButton(props: { channelId: string }) {
 
   const isPending = () => call.isJoining() || call.isLeaving();
 
+  const tooltip = () => {
+    if (call.isInThisChannel()) return 'Leave Call';
+    if (isCallInProgress()) return 'Join Call';
+    return 'Call';
+  };
+
   const handleClick = async () => {
     if (isPending()) return;
     try {
@@ -37,13 +43,7 @@ export function ChannelCallButton(props: { channelId: string }) {
     <Button
       onClick={handleClick}
       disabled={isPending()}
-      tooltip={
-        call.isInThisChannel()
-          ? 'Leave Call'
-          : isCallInProgress()
-            ? 'Join Call'
-            : 'Call'
-      }
+      tooltip={tooltip()}
       class={
         isHighlighted()
           ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent-ink'
