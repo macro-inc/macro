@@ -135,6 +135,19 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .await
             .map_err(Into::into)
     }
+
+    async fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        use system_properties::SystemPropertiesService as _;
+
+        self.system_properties
+            .copy_task_properties(from_task_id, to_task_id)
+            .await
+            .map_err(Into::into)
+    }
 }
 
 pub(crate) type DocumentService = DocumentServiceImpl<

@@ -66,6 +66,13 @@ impl TaskPropertiesPort for NoOpTaskProperties {
     ) -> anyhow::Result<()> {
         Ok(())
     }
+    async fn copy_task_properties(
+        &self,
+        _from_task_id: &str,
+        _to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 /// No-op connection service
