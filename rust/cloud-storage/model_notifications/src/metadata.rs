@@ -2,7 +2,7 @@ use doppleganger::Doppleganger;
 pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
-use mention_utils::parse::{ParsedXmlText, XmlFormatter};
+use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
 pub use notification::domain::models::NotificationTitle;
@@ -360,57 +360,6 @@ pub struct TaskAssignedMetadata {
     pub assigned_by: MacroUserIdStr<'static>,
     #[serde(default)]
     pub sender_profile_picture_url: Option<String>,
-}
-
-// Plain text formatter for converting XML message content to plain text for APNS payloads.
-struct PlainTextFormatter;
-
-impl XmlFormatter for PlainTextFormatter {
-    fn format_plain_text(s: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", s)
-    }
-
-    fn format_link(
-        link: &mention_utils::parse::ParsedLink<'_>,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        write!(f, "{}", link.url)
-    }
-
-    fn format_doc(
-        doc: &mention_utils::parse::ParsedDocumentMention<'_>,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        write!(f, "{}", doc.document_name)
-    }
-
-    fn format_user(
-        user: &mention_utils::parse::ParsedUserMention<'_>,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        write!(f, "{}", user.user_id.0.email_part().email_str())
-    }
-
-    fn format_contact(
-        contact: &mention_utils::parse::ParsedContactMention<'_>,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        write!(f, "{}", contact.name)
-    }
-
-    fn format_date(
-        date: &mention_utils::parse::ParsedDateMention<'_>,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        write!(f, "{}", date.display_format)
-    }
-
-    fn format_group(
-        group: &mention_utils::parse::ParsedGroupMention<'_>,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        write!(f, "@{}", group.group_alias)
-    }
 }
 
 /// Helper to parse XML message content to plain text, returning None on failure.
