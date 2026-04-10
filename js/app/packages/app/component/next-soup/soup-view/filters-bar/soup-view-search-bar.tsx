@@ -77,27 +77,34 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     }
   };
 
+  const [latestMarkdown, setLatestMarkdown] = createSignal('');
+
   const editor = buildConfig('chat')
     .namespace('soup-search-bar')
     .singleLine()
     .withMentions()
     .onChange((markdown) => {
-      const plainText = markdownToPlainText(markdown).trim();
-      setSearchText(plainText);
+      setLatestMarkdown(markdown);
       setHasContent(markdown.trim().length > 0);
-
-      const mentions = extractUserMentionIds(markdown);
-      syncMentionFilters(mentions);
     })
     .onEscape(() => {
       props.onDismiss?.();
       return true;
     });
 
+  // Sync search text and mention filters only when the mention menu is closed
   createEffect(() => {
-    const menuOps = editor.buildHandle()._internal.mentionsMenuOps;
-    if (menuOps) {
-      createEffect(() => setSearchPaused(menuOps.isOpen()));
+    const menuOpen =
+      editor.buildHandle()._internal.mentionsMenuOps?.isOpen() ?? false;
+    setSearchPaused(menuOpen);
+
+    if (!menuOpen) {
+      const markdown = latestMarkdown();
+      const plainText = markdownToPlainText(markdown).trim();
+      setSearchText(plainText);
+
+      const mentions = extractUserMentionIds(markdown);
+      syncMentionFilters(mentions);
     }
   });
 
