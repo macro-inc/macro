@@ -54,7 +54,7 @@ export function getChannelNotificationParams(
       messageId: m.content.messageId,
       threadId: m.content.threadId,
     }))
-    .otherwise(() => ({ messageId: undefined, threadId: undefined }));
+    .exhaustive();
 
   const params = messageId ? getChannelParams(messageId, threadId) : undefined;
   return { messageId, threadId, params };

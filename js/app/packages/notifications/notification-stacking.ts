@@ -53,9 +53,9 @@ export function stackNotifications(
     filteredNotifications
       .filter(byTag('channel_mention'))
       .map((n) =>
-        n.notification_metadata.tag === 'channel_mention'
-          ? n.notification_metadata.content.messageId
-          : undefined
+        match(n.notification_metadata)
+          .with({ tag: 'channel_mention' }, (m) => m.content.messageId)
+          .otherwise(() => undefined)
       )
       .filter(Boolean)
   );
