@@ -6,27 +6,32 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { soupViewCacheKey } from '@app/component/next-soup/soup-view/soup-view-cache-key';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { SoupBody } from '@queries/soup/items';
 import { batch, createEffect, createMemo, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { ChannelFilters } from '@service-storage/generated/schemas';
 
-const CHANNEL_SUB_FILTERS_KEY = 'macro:soup-view:search:channel-sub-filters';
-
 type ChannelSubFilters = Pick<ChannelFilters, 'channel_ids' | 'sender_ids'>;
 
-function getCachedChannelSubFilters(): ChannelSubFilters {
+function getCachedChannelSubFilters(contentId: string): ChannelSubFilters {
   try {
-    const raw = localStorage.getItem(CHANNEL_SUB_FILTERS_KEY);
+    const raw = localStorage.getItem(
+      soupViewCacheKey(contentId, 'channel-sub-filters')
+    );
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
 }
 
-function cacheChannelSubFilters(filters: ChannelSubFilters) {
-  localStorage.setItem(CHANNEL_SUB_FILTERS_KEY, JSON.stringify(filters));
+function cacheChannelSubFilters(contentId: string, filters: ChannelSubFilters) {
+  localStorage.setItem(
+    soupViewCacheKey(contentId, 'channel-sub-filters'),
+    JSON.stringify(filters)
+  );
 }
 
 export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
@@ -80,6 +85,8 @@ const INDEX_SELECT_OPTIONS: Option[] = INDEX_OPTIONS.map((o) => ({
 
 export const SearchIndexFilter = () => {
   const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const panel = useSplitPanelOrThrow();
+  const contentId = panel.handle.content().id;
 
   const activeIndex = createMemo((): Option[] => {
     const found = INDEX_OPTIONS.find((opt) => soup.filters.isActive(opt.value));
@@ -97,7 +104,7 @@ export const SearchIndexFilter = () => {
     const sub: ChannelSubFilters = {};
     if (cf?.channel_ids?.length) sub.channel_ids = cf.channel_ids;
     if (cf?.sender_ids?.length) sub.sender_ids = cf.sender_ids;
-    cacheChannelSubFilters(sub);
+    cacheChannelSubFilters(contentId, sub);
   });
 
   const handleChange = (selected: Option[]) => {
@@ -113,7 +120,7 @@ export const SearchIndexFilter = () => {
         if (opt) {
           soup.filters.toggle({ or: [opt.value as FilterID] });
           if (opt.value === 'channels') {
-            const cached = getCachedChannelSubFilters();
+            const cached = getCachedChannelSubFilters(contentId);
             setQueryFilters({
               ...opt.queryFilters,
               channel_filters: {

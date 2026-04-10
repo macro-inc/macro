@@ -17,6 +17,7 @@ import {
   SoupViewContextProvider,
   useSoupView,
 } from '@app/component/next-soup/soup-view/soup-view-context';
+import { soupViewCacheKey } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -647,7 +648,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const [persistedState, setPersistedState] = makePersisted(
     createSignal<PersistedSoupViewState>(),
-    { name: `macro:soup-view:${contentId}` }
+    { name: soupViewCacheKey(contentId) }
   );
 
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
