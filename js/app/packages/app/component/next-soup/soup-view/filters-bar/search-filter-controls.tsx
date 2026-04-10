@@ -147,6 +147,13 @@ export const SearchIndexFilter = () => {
     return active.length > 0 ? active[0].label : 'All';
   });
 
+  const hasActiveIndex = () => activeIndex().length > 0;
+
+  const clearFilters = () => {
+    cacheChannelSubFilters(contentId, {});
+    handleChange([]);
+  };
+
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
@@ -159,6 +166,15 @@ export const SearchIndexFilter = () => {
       <Show when={isChannelsActive()}>
         <InChannelFilter />
         <FromSenderFilter />
+      </Show>
+      <Show when={hasActiveIndex()}>
+        <button
+          type="button"
+          class="flex items-center px-1 py-1 text-ink-muted rounded-xs hover:bg-ink/5 hover:text-ink"
+          onClick={clearFilters}
+        >
+          <XIcon class="size-3.5" />
+        </button>
       </Show>
     </div>
   );
