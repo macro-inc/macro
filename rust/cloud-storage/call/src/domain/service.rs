@@ -5,7 +5,15 @@ use entity_access::domain::models::EntityType;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::models::apple::{
+    APNSPushNotification, Alert, AlertDictionary, Aps, PushNotificationData,
+};
+use notification::domain::models::{
+    NotifCollapseKey, Notification, NotificationExtIos, SendNotificationRequestBuilder,
+};
 use notification::domain::service::NotificationIngress;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use super::models::{
@@ -96,7 +104,7 @@ impl<
 
         let users: Vec<MacroUserIdStr<'_>> = users
             .into_iter()
-            .filter_map(move |u| {
+            .filter_map(|u| {
                 if triggered_by_user_id
                     .as_ref()
                     .is_some_and(|t| u.as_ref() == t.as_ref())
@@ -113,6 +121,49 @@ impl<
             .send_channel_message(&users, message_type, message.clone())
             .await
             .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call event"));
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct CallStartedNotification;
+
+impl Notification for CallStartedNotification {
+    const TYPE_NAME: &'static str = "call-started";
+}
+
+impl NotificationExtIos for CallStartedNotification {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, entity: &model_entity::Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(Self::TYPE_NAME).append(&entity.entity_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &model_entity::Entity<'_>,
+        notification_id: uuid::Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(Alert::Dictionary(AlertDictionary {
+                    title: Some("Incoming Call".to_string()),
+                    body: Some(format!(
+                        "{} is calling you",
+                        sender_id
+                            .as_ref()
+                            .map(|e| e.email_str())
+                            .unwrap_or("Someone")
+                    )),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            },
+            push_notification_data: PushNotificationData {
+                notification_id,
+                sender_profile_picture_url: None,
+            },
+        })
     }
 }
 
@@ -221,6 +272,42 @@ impl<
                             Some(user_id.copied()),
                         )
                         .await;
+
+                        // Send push notification to channel members (best-effort).
+                        let channel_id_str = channel_id.to_string();
+                        let recipient_ids: HashSet<MacroUserIdStr<'_>> = match self
+                            .entity_access_service
+                            .get_users_by_entity(&channel_id_str, EntityType::Channel)
+                            .await
+                        {
+                            Ok(users) => users
+                                .into_iter()
+                                .filter(|u| u.as_ref() != user_id.as_ref())
+                                .collect(),
+                            Err(e) => {
+                                tracing::error!(error=?e, "failed to fetch channel users for call notification");
+                                HashSet::new()
+                            }
+                        };
+
+                        let req = SendNotificationRequestBuilder {
+                            notification_entity: EntityType::Channel
+                                .with_entity_string(channel_id_str),
+                            notification: CallStartedNotification,
+                            sender_id: Some(user_id.copied()),
+                            recipient_ids,
+                        }
+                        .into_request()
+                        .with_apns()
+                        .with_conn_gateway();
+
+                        let _ = self
+                            .notification_ingress
+                            .send_notification(req)
+                            .await
+                            .inspect_err(|e| {
+                                tracing::error!(error=?e, "failed to send call started notification")
+                            });
 
                         call
                     }

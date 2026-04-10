@@ -1750,6 +1750,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
+ "model-entity",
  "model-error-response",
  "model_user",
  "models_permissions",
