@@ -76,7 +76,10 @@ function usePushNotifications(
   onMount(async () => {
     try {
       const perm = await checkPermissions();
-      if (perm.status !== 'granted') return;
+      if (perm.status !== 'granted') {
+        setPermission(undefined);
+        return;
+      }
       const storedToken = registrationResult()?.token;
       if (!storedToken) return;
 
@@ -89,6 +92,8 @@ function usePushNotifications(
         });
         setRegistrationResult(freshResult);
         void registerDevice(freshResult.token);
+      } else {
+        setPermission('granted');
       }
     } catch (e) {
       console.error(e);
