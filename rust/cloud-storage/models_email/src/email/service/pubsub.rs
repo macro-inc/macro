@@ -40,7 +40,7 @@ pub enum FailureReason {
 }
 
 /// The reason a link was deleted, stored in the email_links_history table.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DeletionReason {
     Unused,
     Inactive,
