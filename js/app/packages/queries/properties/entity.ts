@@ -46,6 +46,7 @@ export function useEntityPropertiesQuery(
         queryKey: propertiesKeys.entity({
           entityType: type,
           entityId: id,
+          includeMetadata,
         }).queryKey,
         queryFn: async () => {
           const data = await throwOnErr(
@@ -162,7 +163,7 @@ export function useSaveEntityPropertyMutation(
         return optimisticUpdateSoupEntity({
           tag: current.tag,
           data: {
-            id: current.data.id,
+            ...current.data,
             properties: current.data.properties.map((prop) =>
               prop.definition.id === vars.property.propertyDefinitionId
                 ? { ...prop, value: soupValue }
@@ -406,7 +407,7 @@ export function useSetPropertyStatusCompleteMutation(
         soupTxn = optimisticUpdateSoupEntity({
           tag: current.tag,
           data: {
-            id: current.data.id,
+            ...current.data,
             properties: updateStatusPropertyToCompleted(
               current.data.properties
             ),

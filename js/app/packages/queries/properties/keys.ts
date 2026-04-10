@@ -4,8 +4,15 @@ import type { PropertyScope } from '../../service-clients/service-properties/gen
 
 export const propertiesKeys = createQueryKeys('properties', {
   all: null,
-  entity: (params: { entityType: EntityType; entityId: string }) => ({
-    queryKey: ['entity', params.entityType, params.entityId],
+  entity: (params: {
+    entityType: EntityType;
+    entityId: string;
+    includeMetadata?: boolean;
+  }) => ({
+    queryKey:
+      params.includeMetadata !== undefined
+        ? ['entity', params.entityType, params.entityId, params.includeMetadata]
+        : ['entity', params.entityType, params.entityId],
   }),
   options: (params: { propertyDefinitionId: string }) => ({
     queryKey: ['options', params.propertyDefinitionId],
