@@ -226,14 +226,16 @@ async fn handle_delete(
         .await
         .context("Failed to delete link in background task")?;
 
-    // Mark the link as deleted in history table for tracking
-    email_db_client::links_history::update::set_deleted_at(
+    // Mark the link as deleted in history table for tracking (best-effort)
+    if let Err(e) = email_db_client::links_history::update::set_deleted_at(
         &ctx.db,
         link.id,
         deletion_reason.as_str(),
     )
     .await
-    .context("Failed to set deleted_at on email link history")?;
+    {
+        tracing::error!(error=?e, link_id=?link.id, "Failed to set deleted_at on email link history");
+    }
 
     tracing::info!("Successfully deleted link");
 

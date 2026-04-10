@@ -132,8 +132,8 @@ pub async fn handler(
                 return Err(InitError::TooManyJobs);
             }
 
-            // Record link creation in history table for tracking
-            email_db_client::links_history::insert::insert_email_link_history(
+            // Record link creation in history table for tracking (best-effort)
+            if let Err(e) = email_db_client::links_history::insert::insert_email_link_history(
                 &ctx.db,
                 link.id,
                 &link.fusionauth_user_id,
@@ -141,7 +141,9 @@ pub async fn handler(
                 link.provider,
             )
             .await
-            .context("Failed to insert email link history")?;
+            {
+                tracing::error!(error=?e, link_id=?link.id, "Failed to insert email link history");
+            }
 
             // create job to backfill user's inbox history
             let backfill_job = email_db_client::backfill::job::insert::create_backfill_job(
