@@ -8,12 +8,7 @@ import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import type { NotificationSource } from './notification-source';
 import { getChannelParams } from '@block-channel/utils/link';
-
-const CHANNEL_EVENT_TYPES = [
-  'channel_mention',
-  'channel_message_send',
-  'channel_message_reply',
-] as const;
+import { CHANNEL_EVENT_TYPES } from './notification-source';
 
 /**
  * Opens a split if it is not already open.

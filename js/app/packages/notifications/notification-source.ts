@@ -34,6 +34,12 @@ import {
 } from './types';
 import { fromZodError } from 'zod-validation-error';
 
+export const CHANNEL_EVENT_TYPES = [
+  'channel_mention',
+  'channel_message_send',
+  'channel_message_reply',
+] as const;
+
 type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
 
 type UnsubscribeFn = () => void;
