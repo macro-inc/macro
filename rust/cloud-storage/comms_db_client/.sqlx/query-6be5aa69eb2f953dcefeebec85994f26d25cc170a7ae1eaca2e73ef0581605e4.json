@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT COUNT(id) as count FROM comms_messages\n        WHERE channel_id = $1\n        LIMIT 1\n        ",
+  "query": "\n        SELECT COUNT(id) as count FROM comms_messages\n        WHERE channel_id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "1308ba1a19b78a512b2753a7a837b756219ded649e524027acdbc8e2a0fd3fc6"
+  "hash": "6be5aa69eb2f953dcefeebec85994f26d25cc170a7ae1eaca2e73ef0581605e4"
 }

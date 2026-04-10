@@ -1,6 +1,6 @@
 use crate::api::context::AppState;
 use comms_db_client::{
-    messages::get_count::check_if_channel_has_messages,
+    messages::get_count::get_channel_message_count,
     messages::get_message_owner::get_message_owner,
     model::{Message, SimpleMention},
     participants::get_participants::get_channel_participants_for_thread_id,
@@ -267,7 +267,7 @@ pub async fn dispatch_notifications_for_message(
     // count includes the message we just created — the first message in a
     // channel yields a count of 1 (not 0).
     let channel_message_count =
-        check_if_channel_has_messages(&api_context.db, channel_id).await? as usize;
+        get_channel_message_count(&api_context.db, channel_id).await? as usize;
 
     // When this is the first message in the channel, look up which
     // participants already have accounts so the invite branch can split

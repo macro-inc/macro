@@ -41,7 +41,7 @@ async fn returns_zero_for_empty_channel(pool: PgPool) -> anyhow::Result<()> {
     let channel_id = Uuid::new_v4();
     insert_channel(&pool, channel_id).await;
 
-    let count = check_if_channel_has_messages(&pool, &channel_id).await?;
+    let count = get_channel_message_count(&pool, &channel_id).await?;
     assert_eq!(count, 0);
     Ok(())
 }
@@ -52,7 +52,7 @@ async fn returns_one_for_single_message(pool: PgPool) -> anyhow::Result<()> {
     insert_channel(&pool, channel_id).await;
     insert_message(&pool, channel_id, false, None).await;
 
-    let count = check_if_channel_has_messages(&pool, &channel_id).await?;
+    let count = get_channel_message_count(&pool, &channel_id).await?;
     assert_eq!(count, 1);
     Ok(())
 }
@@ -65,7 +65,7 @@ async fn returns_full_count_not_capped_at_one(pool: PgPool) -> anyhow::Result<()
         insert_message(&pool, channel_id, false, None).await;
     }
 
-    let count = check_if_channel_has_messages(&pool, &channel_id).await?;
+    let count = get_channel_message_count(&pool, &channel_id).await?;
     assert_eq!(
         count, 5,
         "function should return the real row count, not a 0/1 flag"
@@ -81,7 +81,7 @@ async fn includes_deleted_messages(pool: PgPool) -> anyhow::Result<()> {
     insert_message(&pool, channel_id, true, None).await;
     insert_message(&pool, channel_id, true, None).await;
 
-    let count = check_if_channel_has_messages(&pool, &channel_id).await?;
+    let count = get_channel_message_count(&pool, &channel_id).await?;
     assert_eq!(
         count, 3,
         "soft-deleted messages are still counted by the underlying query"
@@ -100,7 +100,7 @@ async fn only_counts_matching_channel(pool: PgPool) -> anyhow::Result<()> {
     insert_message(&pool, channel_a, false, None).await;
     insert_message(&pool, channel_b, false, None).await;
 
-    assert_eq!(check_if_channel_has_messages(&pool, &channel_a).await?, 2);
-    assert_eq!(check_if_channel_has_messages(&pool, &channel_b).await?, 1);
+    assert_eq!(get_channel_message_count(&pool, &channel_a).await?, 2);
+    assert_eq!(get_channel_message_count(&pool, &channel_b).await?, 1);
     Ok(())
 }
