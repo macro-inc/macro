@@ -33,6 +33,7 @@ comms = { path = "../comms" }
 documents = { path = "../documents" }
 email = { path = "../email" }
 entity_access = { path = "../entity_access" }
+entity_access_management = { path = "../entity_access_management" }
 frecency = { path = "../frecency" }
 lexical_client = { path = "../lexical_client" }
 scribe = { path = "../scribe" }
