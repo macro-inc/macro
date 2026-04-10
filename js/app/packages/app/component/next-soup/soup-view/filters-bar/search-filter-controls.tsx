@@ -21,7 +21,7 @@ export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
     queryFilters: QUERY_FILTERS.channels,
   },
   {
-    value: 'document',
+    value: 'document-or-file',
     label: 'Documents',
     icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
     queryFilters: QUERY_FILTERS.documentAndFile,
