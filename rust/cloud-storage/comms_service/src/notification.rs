@@ -161,9 +161,11 @@ impl ChannelMessageEvent<'_> {
                     tracing::warn!("thread participants is empty, but message has thread id");
                 }
             }
-            // First message in channel — the count is 1 because our message
-            // was already persisted before this notification task runs.
-            (0 | 1, None) => {
+            // First message in the channel — send an invite notification.
+            // The count is 1 (not 0) because our message was already persisted
+            // before this notification task runs; 0 shouldn't happen in
+            // practice but is handled defensively.
+            (..=1, None) => {
                 dispatch_notifications_for_invite(
                     ingress,
                     self.channel_id,
@@ -261,13 +263,16 @@ pub async fn dispatch_notifications_for_message(
     message: Message,
     mentions: Vec<SimpleMention>,
 ) -> anyhow::Result<()> {
+    // The message is already persisted before this task runs, so the row
+    // count includes the message we just created — the first message in a
+    // channel yields a count of 1 (not 0).
     let channel_message_count =
         check_if_channel_has_messages(&api_context.db, channel_id).await? as usize;
 
     // When this is the first message in the channel, look up which
     // participants already have accounts so the invite branch can split
     // push (existing) vs email (non-existing) delivery.
-    let existing_user_ids: HashSet<String> = if channel_message_count == 0
+    let existing_user_ids: HashSet<String> = if channel_message_count <= 1
         && message.thread_id.is_none()
     {
         let participant_ids: Vec<_> = participants.iter().map(|p| p.user_id.0.clone()).collect();

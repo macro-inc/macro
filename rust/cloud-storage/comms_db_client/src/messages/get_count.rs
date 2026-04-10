@@ -1,8 +1,11 @@
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
 
-/// This will return 0 if there are no messages in the channel
-/// This will return 1 if there is at least 1 message in the channel
+/// Returns the number of messages in the given channel.
+///
+/// Despite the name, this is a plain `COUNT(id)` and returns the actual row
+/// count, not a 0/1 boolean. Callers that only need to know whether any
+/// messages exist should compare against `0`.
 #[tracing::instrument(skip(executor))]
 pub async fn check_if_channel_has_messages<'e, E>(
     executor: E,
