@@ -136,7 +136,9 @@ async fn mentioned_users_get_mention_not_message_send() {
         channel_id: &channel_id,
         message: &msg,
         channel_metadata: &metadata,
-        channel_message_count: 1,
+        // 2 = message we just persisted + at least one prior message, so this
+        // exercises the regular send branch (not the first-message invite).
+        channel_message_count: 2,
         user_mentions: &user_mentions,
         document_mentions: &[],
         participants: &participants,

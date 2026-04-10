@@ -1,6 +1,9 @@
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Returns the number of messages in the given channel.
 ///
 /// Despite the name, this is a plain `COUNT(id)` and returns the actual row
