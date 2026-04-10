@@ -5,6 +5,7 @@ import { Button } from '@ui/components/Button';
 import PhoneIcon from '@icon/regular/phone.svg';
 import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
 import { useCall } from './useCall';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function ChannelCallButton(props: { channelId: string }) {
   const { setActiveTab } = useChannelTab();
@@ -38,7 +39,7 @@ export function ChannelCallButton(props: { channelId: string }) {
           ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent-ink'
           : 'px-1'
       }
-      size="icon-sm"
+      size={isTouchDevice() ? 'icon-md' : 'icon-sm'}
     >
       <Show when={call.isInThisChannel()} fallback={<PhoneIcon />}>
         <PhoneDisconnectIcon />
