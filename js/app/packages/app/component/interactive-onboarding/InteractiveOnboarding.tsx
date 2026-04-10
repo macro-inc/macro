@@ -120,7 +120,7 @@ export default function InteractiveOnboarding() {
     if (tutorialCompleted() && !onboardingStarted() && !testMode) {
       navigateAway();
     }
-  };
+  });
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
