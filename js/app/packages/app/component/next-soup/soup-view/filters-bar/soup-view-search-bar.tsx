@@ -9,7 +9,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import { INDEX_OPTIONS as INDEX_OPTIONS_SOURCE } from './search-filter-controls';
 
@@ -44,7 +44,8 @@ function extractUserMentionIds(markdown: string): string[] {
 }
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { searchText, setSearchText, soup, setQueryFilters } = useSoupView();
+  const { searchText, setSearchText, setSearchPaused, soup, setQueryFilters } =
+    useSoupView();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
@@ -81,9 +82,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     .singleLine()
     .withMentions()
     .onChange((markdown) => {
-      const plainText = markdownToPlainText(markdown)
-        .replace(/(^|\s)@\S*/g, '$1')
-        .trim();
+      const plainText = markdownToPlainText(markdown).trim();
       setSearchText(plainText);
       setHasContent(markdown.trim().length > 0);
 
@@ -94,6 +93,13 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       props.onDismiss?.();
       return true;
     });
+
+  createEffect(() => {
+    const menuOps = editor.buildHandle()._internal.mentionsMenuOps;
+    if (menuOps) {
+      createEffect(() => setSearchPaused(menuOps.isOpen()));
+    }
+  });
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],

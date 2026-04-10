@@ -29,12 +29,14 @@ interface CreateSearchStateArgs {
   soup: SoupState;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   disableLocalSearch?: boolean;
+  searchPaused?: Accessor<boolean>;
 }
 
 export const createSearchState = ({
   soup,
   queryFilters,
   disableLocalSearch,
+  searchPaused,
 }: CreateSearchStateArgs) => {
   const [searchText, setSearchText] = createSignal('');
 
@@ -79,7 +81,10 @@ export const createSearchState = ({
       },
     }),
     () => ({
-      enabled: !isSearchServiceDisabled() && isSearchServiceDebounceSettled(),
+      enabled:
+        !isSearchServiceDisabled() &&
+        isSearchServiceDebounceSettled() &&
+        !searchPaused?.(),
     })
   );
 
