@@ -2,7 +2,7 @@ import { onMount } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 function LaunchContent(props: LessonContentProps) {
-  onMount(() => props.onComplete('Launch'));
+  onMount(() => setTimeout(() => props.onComplete('Launch')));
 
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">

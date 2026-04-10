@@ -49,6 +49,7 @@ export default function InteractiveOnboarding() {
         (l) =>
           l.id === 'welcome' ||
           l.id === 'about-us' ||
+          l.id === 'email-invite' ||
           l.id === 'choose-plan' ||
           l.id === 'launch'
       )
@@ -416,8 +417,8 @@ export default function InteractiveOnboarding() {
                             scopeId={scopeId}
                           />
                         </div>
-                        {/* Show plan cards inline on touch for choose-plan */}
-                        <Show when={lesson().definition.demo}>
+                        {/* Show demo inline on touch — skip email-invite's MockAppChrome */}
+                        <Show when={lesson().definition.id !== 'email-invite' ? lesson().definition.demo : undefined}>
                           {(Demo) => (
                             <div class="w-full">
                               <Dynamic
@@ -440,6 +441,9 @@ export default function InteractiveOnboarding() {
                               disabled={!readyToContinue()}
                               centered={lesson().definition.centeredButton}
                             />
+                            <Show when={lesson().definition.skippable}>
+                              <SkipButton onClick={handleSkip} />
+                            </Show>
                             <Show when={lesson().definition.secondaryAction}>
                               {(Action) => <Dynamic component={Action()} />}
                             </Show>
