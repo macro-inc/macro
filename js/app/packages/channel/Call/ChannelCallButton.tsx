@@ -4,6 +4,7 @@ import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { Button } from '@ui/components/Button';
 import PhoneIcon from '@icon/regular/phone.svg';
 import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
+import { useActiveCallQuery } from '@queries/call/call';
 import { useCall } from './useCall';
 
 export function ChannelCallButton(props: { channelId: string }) {
@@ -12,6 +13,10 @@ export function ChannelCallButton(props: { channelId: string }) {
     onJoin: () => setActiveTab('call'),
     onLeave: () => setActiveTab(DEFAULT_CHANNEL_TAB),
   });
+
+  const activeCallQuery = useActiveCallQuery(() => props.channelId);
+  const isCallInProgress = () => !!activeCallQuery.data;
+  const isHighlighted = () => call.isInThisChannel() || isCallInProgress();
 
   const isPending = () => call.isJoining() || call.isLeaving();
 
@@ -32,9 +37,15 @@ export function ChannelCallButton(props: { channelId: string }) {
     <Button
       onClick={handleClick}
       disabled={isPending()}
-      tooltip={call.isInThisChannel() ? 'Leave Call' : 'Call'}
-      class={
+      tooltip={
         call.isInThisChannel()
+          ? 'Leave Call'
+          : isCallInProgress()
+            ? 'Join Call'
+            : 'Call'
+      }
+      class={
+        isHighlighted()
           ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent-ink'
           : 'px-1'
       }

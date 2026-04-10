@@ -731,6 +731,61 @@
         }
       }
     },
+    "/call/{channel_id}/active": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/{channel_id}/active`.",
+        "description": "Returns 200 with call info if an active call exists, or 204 No Content if not.",
+        "operationId": "check_active_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallActiveResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No active call"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/{channel_id}/transcript": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -5698,6 +5753,32 @@
           "sha": {
             "type": "string",
             "description": "The sha of the bom part content\nThere is an index on sha for more performant queries based on it."
+          }
+        }
+      },
+      "CallActiveResponse": {
+        "type": "object",
+        "description": "Response indicating whether an active call exists for a channel.",
+        "required": ["callId", "channelId", "createdBy", "createdAt"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
           }
         }
       },

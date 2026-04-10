@@ -8,8 +8,8 @@ use std::future::Future;
 use uuid::Uuid;
 
 use super::models::{
-    Call, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent, EgressS3Config,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    Call, CallActiveResponse, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent,
+    EgressS3Config, LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -30,6 +30,12 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Get an active call by channel ID.
     fn get_call_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
+
+    /// Check whether an active call exists for a channel. Queries `calls` table only.
+    fn get_active_call_by_channel(
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
@@ -168,6 +174,13 @@ pub trait CallRtcClient: Send + Sync + 'static {
 pub trait CallService: Send + Sync + 'static {
     /// Validate an internal call token (e.g. from the `x-macro-internal-call` header).
     fn validate_internal_call(&self, token: &str) -> bool;
+
+    /// Check if an active call exists for a channel.
+    /// Returns the call info if active, or `None` if no call exists.
+    fn check_active_call(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallActiveResponse>, CallError>> + Send;
 
     /// Get or create a call in a channel. If a call already exists, joins it;
     /// otherwise creates a new one. Always returns a join token.

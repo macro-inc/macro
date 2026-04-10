@@ -1,9 +1,10 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { mapOk } from '@core/util/maybeResult';
+import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
-export type { CallTokenResponse, LeaveCallResponse };
+export type { CallActiveResponse, CallTokenResponse, LeaveCallResponse };
 
 const host: string = SERVER_HOSTS['document-storage-service'];
 
@@ -23,6 +24,17 @@ export const callServiceClient = {
         method: 'DELETE',
       }),
       (result) => result
+    );
+  },
+
+  async checkActiveCall(channelId: string) {
+    return mapOk(
+      await fetchWithToken<CallActiveResponse>(
+        `${host}/call/${channelId}/active`,
+        { method: 'GET' }
+      ),
+      // safeFetch returns {} for 204 (no Content-Type header)
+      (data) => ('callId' in data ? (data as CallActiveResponse) : null)
     );
   },
 };

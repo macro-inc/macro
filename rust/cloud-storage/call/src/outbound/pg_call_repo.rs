@@ -138,6 +138,33 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_active_call_by_channel(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Option<Call>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
+            FROM calls
+            WHERE channel_id = $1
+            "#,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| {
+            opt.map(|row| Call {
+                id: row.id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                created_at: row.created_at,
+                egress_id: row.egress_id,
+            })
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_call_by_room_name(&self, room_name: &str) -> Result<Option<Call>, Self::Err> {
         sqlx::query!(
             r#"

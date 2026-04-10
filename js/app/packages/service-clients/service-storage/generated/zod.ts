@@ -850,6 +850,26 @@ export const leaveOrEndCallResponse = zod
   .describe('Response for the leave/end call operation.');
 
 /**
+ * Returns 200 with call info if an active call exists, or 204 No Content if not.
+ * @summary Handler for `GET /call/{channel_id}/active`.
+ */
+export const checkActiveCallParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const checkActiveCallResponse = zod
+  .object({
+    callId: zod.string().uuid().describe('The call identifier.'),
+    channelId: zod
+      .string()
+      .uuid()
+      .describe('The channel this call belongs to.'),
+    createdAt: zod.string().datetime({}).describe('When the call was created.'),
+    createdBy: zod.string().describe('User who created the call.'),
+  })
+  .describe('Response indicating whether an active call exists for a channel.');
+
+/**
  * Receives transcript segments from the transcription agent.
 Authenticated via the `x-macro-internal-call` shared secret.
 Duplicate segments (same `segment_id`) are ignored.

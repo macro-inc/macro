@@ -5,7 +5,8 @@ use connection::domain::ports::ConnectionService;
 use uuid::Uuid;
 
 use super::models::{
-    CallError, CallTokenResponse, EgressS3Config, LeaveCallResponse, TranscriptSegmentRequest,
+    CallActiveResponse, CallError, CallTokenResponse, EgressS3Config, LeaveCallResponse,
+    TranscriptSegmentRequest,
 };
 use super::ports::{CallRepository, CallRtcClient, CallService};
 
@@ -86,6 +87,25 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService> CallService
         self.internal_call_secret
             .as_deref()
             .is_some_and(|secret| secret == token)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn check_active_call(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Option<CallActiveResponse>, CallError> {
+        let call = self
+            .repo
+            .get_active_call_by_channel(channel_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        Ok(call.map(|c| CallActiveResponse {
+            call_id: c.id,
+            channel_id: c.channel_id,
+            created_by: c.created_by,
+            created_at: c.created_at,
+        }))
     }
 
     #[tracing::instrument(err, skip(self))]

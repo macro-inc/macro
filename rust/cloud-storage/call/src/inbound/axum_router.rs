@@ -29,7 +29,7 @@ use model_user::axum_extractor::MacroUserExtractor;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CallError, CallTokenResponse, LeaveCallResponse, TranscriptSegmentRequest,
+    CallActiveResponse, CallError, CallTokenResponse, LeaveCallResponse, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
 
@@ -72,6 +72,7 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 ///
 /// Routes:
 /// - `GET /{channel_id}` — get or create a call (join existing or start new)
+/// - `GET /{channel_id}/active` — check if an active call exists
 /// - `DELETE /{channel_id}` — leave or end a call
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
@@ -83,6 +84,10 @@ where
         .route(
             "/{channel_id}",
             get(get_or_create_call_handler::<S, Svc>).delete(leave_or_end_call_handler::<S, Svc>),
+        )
+        .route(
+            "/{channel_id}/active",
+            get(check_active_call_handler::<S, Svc>),
         )
         .with_state(state)
 }
@@ -243,6 +248,37 @@ pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService
         .await?;
 
     Ok(Json(response))
+}
+
+/// Handler for `GET /call/{channel_id}/active`.
+///
+/// Returns 200 with call info if an active call exists, or 204 No Content if not.
+#[utoipa::path(
+    get,
+    operation_id = "check_active_call",
+    path = "/call/{channel_id}/active",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+    ),
+    responses(
+        (status = 200, body = CallActiveResponse),
+        (status = 204, description = "No active call"),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn check_active_call_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+) -> Result<axum::response::Response, CallError> {
+    let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
+        .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
+
+    match state.service.check_active_call(&channel_id).await? {
+        Some(response) => Ok(Json(response).into_response()),
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+    }
 }
 
 /// Handler for `DELETE /call/{channel_id}`.

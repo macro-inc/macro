@@ -193,6 +193,7 @@ use utoipa::OpenApi;
 
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
+        call::inbound::axum_router::check_active_call_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
         call::inbound::axum_router::webhook_handler,
         call::inbound::axum_router::transcript_handler,
@@ -335,6 +336,7 @@ use utoipa::OpenApi;
 
             // Calls
             call::domain::models::CallTokenResponse,
+            call::domain::models::CallActiveResponse,
             call::domain::models::LeaveCallResponse,
             call::domain::models::TranscriptSegmentRequest,
 
