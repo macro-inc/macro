@@ -120,7 +120,7 @@ export const aboutUsLesson: LessonDefinition = {
       }
     }
     // Never resolves — page reloads (native) or redirects (web).
-    return new Promise(() => {});
+    return new Promise<boolean>(() => {});
   },
   completeOnParam: 'google',
   onCompleteParam: () =>

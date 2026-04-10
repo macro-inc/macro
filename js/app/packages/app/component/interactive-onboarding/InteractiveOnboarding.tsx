@@ -43,7 +43,8 @@ export default function InteractiveOnboarding() {
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
   const allLessons = LESSONS.filter((l) => {
-    if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted())) return false;
+    if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
+      return false;
     if (l.id === 'about-us' && isAuthenticated()) return false;
     if (l.id === 'launch' && !isMobile()) return false;
     return true;
@@ -139,8 +140,6 @@ export default function InteractiveOnboarding() {
       state: 'completed',
     });
 
-
-
     if (current.definition.onContinue) {
       // On web this redirects (returns void). On native mobile it resolves
       // with true after inline auth succeeds, so we advance the lesson.
@@ -174,7 +173,6 @@ export default function InteractiveOnboarding() {
       index: current.index,
       state: 'skipped',
     });
-
 
     state.skipLesson(current.definition.id);
     setReadyToContinue(false);
