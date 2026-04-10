@@ -1,7 +1,7 @@
 import { onMount, For } from 'solid-js';
 import type { JSX } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobile } from '@core/mobile/isMobile';
 import EyeSlash from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import UsersThree from '@phosphor-icons/core/regular/users-three.svg?component-solid';
 import { startSsoLogin } from '@core/auth/sso';
@@ -73,8 +73,8 @@ function AboutUsDemo() {
       <div
         class="w-full max-w-2xl items-start"
         classList={{
-          'flex flex-col gap-3': isTouchDevice(),
-          'flex gap-4': !isTouchDevice(),
+          'flex flex-col gap-3': isMobile(),
+          'flex gap-4': !isMobile(),
         }}
       >
         <For each={PANELS}>
