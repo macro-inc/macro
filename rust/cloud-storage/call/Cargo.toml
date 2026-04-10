@@ -36,6 +36,7 @@ entity_access = { path = "../entity_access", optional = true, default-features =
 livekit-api = { workspace = true, optional = true }
 livekit-protocol = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }
+notification = { path = "../notification" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_permissions = { path = "../models_permissions", optional = true }

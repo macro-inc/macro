@@ -5,6 +5,7 @@ use entity_access::domain::models::EntityType;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::service::NotificationIngress;
 use uuid::Uuid;
 
 use super::models::{
@@ -19,18 +20,25 @@ pub struct CallServiceImpl<
     C: CallRtcClient,
     Cn: ConnectionService,
     E: EntityAccessService,
+    N: NotificationIngress,
 > {
     repo: R,
     rtc_client: C,
     connection_service: Cn,
     entity_access_service: E,
+    notification_ingress: N,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
 }
 
-impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService, E: EntityAccessService>
-    CallServiceImpl<R, C, Cn, E>
+impl<
+    R: CallRepository,
+    C: CallRtcClient,
+    Cn: ConnectionService,
+    E: EntityAccessService,
+    N: NotificationIngress,
+> CallServiceImpl<R, C, Cn, E, N>
 {
     /// Create a new call service.
     pub fn new(
@@ -38,6 +46,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService, E: EntityAccess
         rtc_client: C,
         connection_service: Cn,
         entity_access_service: E,
+        notification_ingress: N,
         server_url: impl Into<String>,
     ) -> Self {
         Self {
@@ -45,6 +54,7 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService, E: EntityAccess
             rtc_client,
             connection_service,
             entity_access_service,
+            notification_ingress,
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
@@ -106,8 +116,13 @@ impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService, E: EntityAccess
     }
 }
 
-impl<R: CallRepository, C: CallRtcClient, Cn: ConnectionService, E: EntityAccessService> CallService
-    for CallServiceImpl<R, C, Cn, E>
+impl<
+    R: CallRepository,
+    C: CallRtcClient,
+    Cn: ConnectionService,
+    E: EntityAccessService,
+    N: NotificationIngress,
+> CallService for CallServiceImpl<R, C, Cn, E, N>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret

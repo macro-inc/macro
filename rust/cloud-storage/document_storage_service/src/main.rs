@@ -373,6 +373,7 @@ async fn main() -> anyhow::Result<()> {
         livekit_rtc_client,
         call_connection_service,
         (*entity_access_service).clone(),
+        (*notification_ingress_service).clone(),
         config.vars.livekit_server_url.as_ref(),
     );
     if let Some(secret) = internal_call_secret {

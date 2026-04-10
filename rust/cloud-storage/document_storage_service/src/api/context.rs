@@ -163,8 +163,13 @@ pub(crate) type CallConnectionService =
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
 
 /// Type alias for the call service.
-pub(crate) type DssCallService =
-    CallServiceImpl<PgCallRepo, LivekitRtcClient, CallConnectionService, EntityAccessService>;
+pub(crate) type DssCallService = CallServiceImpl<
+    PgCallRepo,
+    LivekitRtcClient,
+    CallConnectionService,
+    EntityAccessService,
+    NotificationIngressType,
+>;
 
 /// Type alias for the call router state.
 pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessService>;
