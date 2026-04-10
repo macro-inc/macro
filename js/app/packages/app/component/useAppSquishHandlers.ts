@@ -1,10 +1,10 @@
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   setVirtualKeyboardHeight,
   setVirtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
+import { isIOS } from '@solid-primitives/platform';
 import { onCleanup, onMount } from 'solid-js';
 
 /**
@@ -54,7 +54,7 @@ export function useAppSquishHandlers() {
         window.removeEventListener('keyboardWillHide', handleKeyboardWillHide);
       });
     });
-  } else if (isMobile()) {
+  } else if (isIOS) {
     // We are tracking viewport height, and using that to set a CSS variable,
     // so that we can properly constrain the viewport-height for mobile in response to changes such as
     // the virtual keyboard appearing.

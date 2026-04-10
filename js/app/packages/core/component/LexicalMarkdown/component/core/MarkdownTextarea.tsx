@@ -58,8 +58,8 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
+import { isIOS } from '@solid-primitives/platform';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isMobile } from '@core/mobile/isMobile';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
@@ -217,7 +217,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     );
   }
 
-  if (isMobile() || isNativeMobilePlatform()) {
+  if (isIOS || isNativeMobilePlatform()) {
     plugins.use(
       iosCursorScrollPlugin({
         scrollContainer: props.scrollRef ?? (() => scrollContainerRef),

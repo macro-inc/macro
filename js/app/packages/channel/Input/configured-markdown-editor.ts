@@ -7,9 +7,9 @@ import {
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { IUser } from '@core/user/types';
+import { isIOS } from '@solid-primitives/platform';
 import type { Accessor } from 'solid-js';
 
 type CreateConfiguredChannelMarkdownEditorOptions = {
@@ -71,7 +71,7 @@ export function createConfiguredChannelMarkdownEditor(
     .onChange(options.onChange)
     .onEnter(options.onEnter);
 
-  if ((isMobile() || isNativeMobilePlatform()) && options.scrollContainer) {
+  if ((isIOS || isNativeMobilePlatform()) && options.scrollContainer) {
     editor.use(
       iosCursorScrollPlugin({ scrollContainer: options.scrollContainer })
     );
