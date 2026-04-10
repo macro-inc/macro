@@ -309,8 +309,7 @@ impl<
                             recipient_ids,
                         }
                         .into_request()
-                        .with_apns()
-                        .with_conn_gateway();
+                        .with_apns();
 
                         let _ = self
                             .notification_ingress

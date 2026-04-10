@@ -491,7 +491,7 @@ impl CallRepository for PgCallRepo {
             SELECT mui.profile_picture
             FROM macro_user_info mui
             JOIN "User" u ON mui.macro_user_id = u.macro_user_id
-            WHERE u.macro_user_id::text = $1 AND mui.profile_picture IS NOT NULL
+            WHERE u.id = $1 AND mui.profile_picture IS NOT NULL
             LIMIT 1
             "#,
             user_id.as_ref(),
