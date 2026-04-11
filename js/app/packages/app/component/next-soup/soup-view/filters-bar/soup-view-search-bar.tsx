@@ -77,7 +77,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const menuIsOpen = () =>
     editor.buildHandle()._internal.mentionsMenuOps?.isOpen() ?? false;
 
-  createEffect(on(menuIsOpen, (open) => setSearchPaused(open)));
+  createEffect(() => setSearchPaused(menuIsOpen()));
 
   createEffect(
     on(latestMarkdown, (markdown) => {
@@ -86,7 +86,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     })
   );
 
-  createEffect(on(mentions, (mentionIds) => setSearchMentions(mentionIds)));
+  createEffect(() => setSearchMentions(mentions()));
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
