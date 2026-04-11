@@ -27,11 +27,7 @@ const variantStyles: Record<SearchbarVariant, string> = {
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const {
-    setSearchText,
-    setSearchPaused,
-    setSearchMentions,
-  } = useSoupView();
+  const { setSearchText, setSearchPaused, setSearchMentions } = useSoupView();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
