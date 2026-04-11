@@ -1,6 +1,10 @@
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
+import {
+  type ItemMention,
+  mentionsPlugin,
+} from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
@@ -38,27 +42,29 @@ export default function SearchBarEditor(props: SearchBarEditorProps) {
   const { editor, plugins, cleanup: cleanupLexical } = wrapper;
 
   const [markdownState, setMarkdownState] = createSignal('');
-  const [cursorPos, setCursorPos] = createSignal(0);
   const [searchFocused, setSearchFocused] = createSignal(true);
   const [highlightedIndex, setHighlightedIndex] = createSignal(0);
+  const [mentions, setMentions] = createSignal<ItemMention[]>([]);
 
-  plugins.richText().state<string>(setMarkdownState, 'markdown').history(400);
-
-  const updateCursorPos = () => {
-    const root = editor.getRootElement();
-    const sel = window.getSelection();
-    if (root && sel && sel.rangeCount > 0) {
-      setCursorPos(sel.focusOffset);
-    }
-  };
+  plugins
+    .richText()
+    .state<string>(setMarkdownState, 'markdown')
+    .history(400)
+    .use(
+      mentionsPlugin({
+        setMentions,
+        disableMentionTracking: true,
+      })
+    );
 
   const plainText = createMemo(() => markdownToPlainText(markdownState()).trim());
 
   const activeMention = createMemo(() => {
     if (!searchFocused()) return null;
-    const text = markdownState();
-    const pos = cursorPos();
-    return detectActiveMention(text, text.length);
+    const md = markdownState();
+    // Only detect @ in the plain text portion (not inside XML tags)
+    const plain = markdownToPlainText(md);
+    return detectActiveMention(plain, plain.length);
   });
 
   createEffect(() => {
@@ -67,10 +73,19 @@ export default function SearchBarEditor(props: SearchBarEditorProps) {
 
   createEffect(() => setSearchPaused(!!activeMention()));
 
+  // Sync search text only when mention menu is closed
   createEffect(() => {
     if (!activeMention()) {
       setSearchText(plainText());
     }
+  });
+
+  // Sync mention filters from editor state (derived, not accumulated)
+  createEffect(() => {
+    const mentionIds = mentions()
+      .filter((m) => m.itemType === 'user')
+      .map((m) => `user:${m.itemId}`);
+    syncMentionFilters(mentionIds);
   });
 
   createEffect(() => {
@@ -108,6 +123,7 @@ export default function SearchBarEditor(props: SearchBarEditorProps) {
     const mention = activeMention();
     if (!mention) return;
 
+    // Remove the @partial text, then insert a UserMentionNode
     editor.update(() => {
       const root = $getRoot();
       const text = root.getTextContent();
@@ -125,29 +141,17 @@ export default function SearchBarEditor(props: SearchBarEditorProps) {
       email,
     });
 
-    const mentionValue = `user:${option.id}`;
-    syncMentionFilters([mentionValue]);
-
     queueMicrotask(() => editor.focus());
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const mention = activeMention();
-    if (mention) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setHighlightedIndex((i) => i + 1);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setHighlightedIndex((i) => Math.max(0, i - 1));
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const dropdownEl = editor
-          .getRootElement()
+  editor.registerCommand(
+    KEY_ENTER_COMMAND,
+    (e) => {
+      if (activeMention()) {
+        e?.preventDefault();
+        e?.stopPropagation();
+        const root = editor.getRootElement();
+        const dropdownEl = root
           ?.closest('[data-search-bar-wrapper]')
           ?.querySelector('[data-operator-dropdown]');
         if (dropdownEl) {
@@ -157,15 +161,7 @@ export default function SearchBarEditor(props: SearchBarEditorProps) {
             (buttons[idx] as HTMLButtonElement).click();
           }
         }
-        return;
       }
-    }
-  };
-
-  editor.registerCommand(
-    KEY_ENTER_COMMAND,
-    (e) => {
-      e?.preventDefault();
       return true;
     },
     COMMAND_PRIORITY_HIGH
@@ -173,23 +169,37 @@ export default function SearchBarEditor(props: SearchBarEditorProps) {
 
   editor.registerCommand(
     KEY_ESCAPE_COMMAND,
-    (e) => {
+    () => {
       props.onDismiss?.();
       return true;
     },
     COMMAND_PRIORITY_HIGH
   );
 
-  props.onFocusReady?.(() => editor.focus());
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const mention = activeMention();
+    if (mention) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        setHighlightedIndex((i) => i + 1);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        setHighlightedIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+    }
+  };
 
   onCleanup(cleanupLexical);
 
   return (
     <div
       class="relative"
-      on:keydown={handleKeyDown}
-      on:input={updateCursorPos}
-      on:click={updateCursorPos}
+      ref={(el) => el.addEventListener('keydown', handleKeyDown, true)}
     >
       <div
         ref={(el) => {
@@ -204,6 +214,7 @@ export default function SearchBarEditor(props: SearchBarEditorProps) {
                 root.append(p);
               });
             }
+            props.onFocusReady?.(() => editor.focus());
             setTimeout(() => editor.focus());
           });
         }}

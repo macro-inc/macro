@@ -8,13 +8,9 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import {
   createSignal,
-  lazy,
   onCleanup,
   Show,
-  Suspense,
 } from 'solid-js';
-
-const LazySearchBarEditor = lazy(() => import('./search-bar-editor'));
 
 type SearchbarVariant = 'filled' | 'secondary';
 
@@ -35,18 +31,30 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const { searchText, setSearchText } = useSoupView();
   const panel = useSplitPanelOrThrow();
 
-  const [activated, setActivated] = createSignal(false);
+  const [editorReady, setEditorReady] = createSignal(false);
   const [hasContent, setHasContent] = createSignal(false);
+  const [EditorComponent, setEditorComponent] = createSignal<
+    typeof import('./search-bar-editor').default | null
+  >(null);
 
   let plainInputRef: HTMLInputElement | undefined;
   let editorFocus: (() => void) | undefined;
+  let loadStarted = false;
+
+  const startEditorLoad = () => {
+    if (loadStarted) return;
+    loadStarted = true;
+    import('./search-bar-editor').then((mod) => {
+      setEditorComponent(() => mod.default);
+    });
+  };
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
     scopeId: panel.splitHotkeyScope,
     description: 'Search',
     keyDownHandler: () => {
-      if (activated()) {
+      if (editorReady()) {
         editorFocus?.();
       } else {
         plainInputRef?.focus();
@@ -56,6 +64,8 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   });
 
   onCleanup(searchHotkey.dispose);
+
+  const Editor = EditorComponent();
 
   return (
     <div
@@ -74,38 +84,44 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           )}
         >
           <SearchIcon class="size-4 shrink-0" />
-          <Show
-            when={activated()}
-            fallback={
-              <input
-                ref={plainInputRef}
-                data-soup-search
-                type="text"
-                value={searchText()}
-                onFocus={() => setActivated(true)}
-                onInput={(e) => {
-                  setSearchText(e.currentTarget.value);
-                  setHasContent(e.currentTarget.value.length > 0);
-                }}
-                placeholder="Search"
-                class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full text-sm"
-              />
-            }
-          >
-            <div class="flex-1 min-w-0">
-              <Suspense>
-                <LazySearchBarEditor
-                  initialValue={searchText()}
-                  onDismiss={props.onDismiss}
-                  onFocusReady={(fn) => {
-                    editorFocus = fn;
-                  }}
-                  onHasContentChange={setHasContent}
-                />
-              </Suspense>
-            </div>
+          <input
+            ref={plainInputRef}
+            data-soup-search
+            type="text"
+            value={searchText()}
+            onFocus={startEditorLoad}
+            onInput={(e) => {
+              setSearchText(e.currentTarget.value);
+              setHasContent(e.currentTarget.value.length > 0);
+              startEditorLoad();
+            }}
+            placeholder="Search"
+            class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full text-sm"
+            classList={{ hidden: editorReady() }}
+          />
+          <Show when={EditorComponent()}>
+            {(Comp) => (
+              <div class="flex-1 min-w-0">
+                {(() => {
+                  const C = Comp();
+                  return (
+                    <C
+                      initialValue={searchText()}
+                      onDismiss={props.onDismiss}
+                      onFocusReady={(fn) => {
+                        editorFocus = fn;
+                        // Transfer focus from plain input to editor
+                        setEditorReady(true);
+                        queueMicrotask(() => fn());
+                      }}
+                      onHasContentChange={setHasContent}
+                    />
+                  );
+                })()}
+              </div>
+            )}
           </Show>
-          <Show when={!hasContent() && !activated() && !props.onDismiss}>
+          <Show when={!hasContent() && !editorReady() && !props.onDismiss}>
             <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge-muted text-xs rounded-md items-center px-1 py-px">
               <Hotkey shortcut="cmd+f" />
             </div>
@@ -119,7 +135,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 e.stopPropagation();
                 setSearchText('');
                 setHasContent(false);
-                setActivated(false);
                 props.onDismiss?.();
               }}
             >
