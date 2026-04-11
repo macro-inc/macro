@@ -88,6 +88,7 @@ export interface EditorControls {
   getState: () => SerializedEditorState;
   setState: (state: SerializedEditorState) => void;
   getLexical: () => LexicalEditor;
+  isMentionMenuOpen: () => boolean;
 }
 
 /**

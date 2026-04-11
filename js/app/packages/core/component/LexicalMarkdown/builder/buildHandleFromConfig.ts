@@ -251,6 +251,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     setState: (state: SerializedEditorState) =>
       initializeEditorWithState(editor, state),
     getLexical: () => editor,
+    isMentionMenuOpen: () => mentionsMenuOps?.isOpen() ?? false,
   };
 
   return {

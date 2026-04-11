@@ -74,8 +74,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   // Sync search text + mention filters only when the mention menu is closed.
   // This avoids cascading reactive updates during mention insertion and
   // prevents search from firing while typing @partial.
-  const menuIsOpen = () =>
-    editor.buildHandle()._internal.mentionsMenuOps?.isOpen() ?? false;
+  const menuIsOpen = () => editor.controls.isMentionMenuOpen();
 
   createEffect(() => setSearchPaused(menuIsOpen()));
 
