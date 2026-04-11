@@ -9,7 +9,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { batch, createSignal, createEffect, onCleanup, Show, untrack } from 'solid-js';
+import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
 import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import { INDEX_OPTIONS as INDEX_OPTIONS_SOURCE } from './search-filter-controls';
 
@@ -68,24 +68,20 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   // Sync search text + mention filters only when the mention menu is closed.
   // This avoids cascading reactive updates during mention insertion and
   // prevents search from firing while typing @partial.
-  // Pause search while the mention picker is open
-  createEffect(() => {
-    const menuOpen =
-      editor.buildHandle()._internal.mentionsMenuOps?.isOpen() ?? false;
-    setSearchPaused(menuOpen);
-  });
+  const menuIsOpen = () =>
+    editor.buildHandle()._internal.mentionsMenuOps?.isOpen() ?? false;
 
-  // Sync search text when markdown changes (but not while mention menu is open)
-  createEffect(() => {
-    const markdown = latestMarkdown();
-    if (untrack(() => editor.buildHandle()._internal.mentionsMenuOps?.isOpen())) return;
-    setSearchText(markdownToPlainText(markdown).trim());
-  });
+  createEffect(on(menuIsOpen, (open) => setSearchPaused(open)));
 
-  // Sync mention filters when mentions change
-  createEffect(() => {
-    const mentionIds = mentions();
-    untrack(() => {
+  createEffect(
+    on(latestMarkdown, (markdown) => {
+      if (menuIsOpen()) return;
+      setSearchText(markdownToPlainText(markdown).trim());
+    })
+  );
+
+  createEffect(
+    on(mentions, (mentionIds) => {
       if (mentionIds.length > 0 && !soup.filters.isActive('channels')) {
         for (const opt of INDEX_OPTIONS_SOURCE) {
           if (soup.filters.isActive(opt.value)) {
@@ -109,8 +105,8 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           },
         }));
       }
-    });
-  });
+    })
+  );
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
@@ -162,11 +158,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 e.preventDefault();
                 e.stopPropagation();
                 editor.controls.clear();
-                batch(() => {
-                  setSearchText('');
-                  setHasContent(false);
-                  setMentions([]);
-                });
+                setSearchText('');
+                setHasContent(false);
+                setMentions([]);
                 props.onDismiss?.();
               }}
             >
