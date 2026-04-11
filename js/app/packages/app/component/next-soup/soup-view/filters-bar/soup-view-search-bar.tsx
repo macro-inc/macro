@@ -40,6 +40,8 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     .namespace('soup-search-bar')
     .singleLine()
     .withMentions({
+      sources: ['users'],
+      disableMentionTracking: true,
       onCreate: (mention) => {
         if (mention.itemType !== 'user') return;
         const val = `user:${mention.itemId}`;

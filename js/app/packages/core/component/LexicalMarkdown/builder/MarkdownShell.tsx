@@ -241,6 +241,7 @@ export const MarkdownShell: Component<
               disableMentionTracking={
                 builderConfig.mentions?.disableMentionTracking
               }
+              sources={builderConfig.mentions?.sources}
             />
           )}
         </Show>

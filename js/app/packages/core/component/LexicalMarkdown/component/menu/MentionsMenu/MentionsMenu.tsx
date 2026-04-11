@@ -74,6 +74,8 @@ export type MentionsMenuProps = {
   useSnapshotForDocuments?: boolean;
   /** whether to show open tabs as a bucket in the menu */
   showOpenTabs?: boolean;
+  /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
+  sources?: Array<'users' | 'documents'>;
 };
 
 export function MentionsMenu(props: MentionsMenuProps) {
@@ -269,7 +271,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       });
     }
 
-    return buckets.filter((bucket) => bucket.getFullCount() > 0);
+    const sourcesFilter = props.sources;
+    const filtered = sourcesFilter
+      ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id as any))
+      : buckets;
+
+    return filtered.filter((bucket) => bucket.getFullCount() > 0);
   });
 
   const controller = useMentionsMenuController(bucketConfigs, {
