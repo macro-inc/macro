@@ -10,8 +10,6 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
-import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
-import { INDEX_OPTIONS as INDEX_OPTIONS_SOURCE } from './search-filter-controls';
 
 type SearchbarVariant = 'filled' | 'secondary';
 
@@ -33,8 +31,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     setSearchText,
     setSearchPaused,
     setSearchMentions,
-    soup,
-    setQueryFilters,
   } = useSoupView();
   const panel = useSplitPanelOrThrow();
 
@@ -90,20 +86,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     })
   );
 
-  createEffect(
-    on(mentions, (mentionIds) => {
-      setSearchMentions(mentionIds);
-      if (mentionIds.length > 0 && !soup.filters.isActive('channels')) {
-        for (const opt of INDEX_OPTIONS_SOURCE) {
-          if (soup.filters.isActive(opt.value)) {
-            soup.filters.toggle({ or: [opt.value] });
-          }
-        }
-        soup.filters.toggle({ or: ['channels'] });
-        setQueryFilters(QUERY_FILTERS.channels);
-      }
-    })
-  );
+  createEffect(on(mentions, (mentionIds) => setSearchMentions(mentionIds)));
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
