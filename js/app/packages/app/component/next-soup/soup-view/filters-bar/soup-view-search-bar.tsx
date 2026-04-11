@@ -9,7 +9,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { batch, createSignal, createEffect, onCleanup, Show } from 'solid-js';
+import { batch, createSignal, createEffect, onCleanup, Show, untrack } from 'solid-js';
 import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import { INDEX_OPTIONS as INDEX_OPTIONS_SOURCE } from './search-filter-controls';
 
@@ -68,43 +68,48 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   // Sync search text + mention filters only when the mention menu is closed.
   // This avoids cascading reactive updates during mention insertion and
   // prevents search from firing while typing @partial.
+  // Pause search while the mention picker is open
   createEffect(() => {
     const menuOpen =
       editor.buildHandle()._internal.mentionsMenuOps?.isOpen() ?? false;
     setSearchPaused(menuOpen);
+  });
 
-    if (!menuOpen) {
-      const markdown = latestMarkdown();
-      const mentionIds = mentions();
+  // Sync search text when markdown changes (but not while mention menu is open)
+  createEffect(() => {
+    const markdown = latestMarkdown();
+    if (untrack(() => editor.buildHandle()._internal.mentionsMenuOps?.isOpen())) return;
+    setSearchText(markdownToPlainText(markdown).trim());
+  });
 
-      batch(() => {
-        setSearchText(markdownToPlainText(markdown).trim());
-
-        if (mentionIds.length > 0 && !soup.filters.isActive('channels')) {
-          for (const opt of INDEX_OPTIONS_SOURCE) {
-            if (soup.filters.isActive(opt.value)) {
-              soup.filters.toggle({ or: [opt.value] });
-            }
+  // Sync mention filters when mentions change
+  createEffect(() => {
+    const mentionIds = mentions();
+    untrack(() => {
+      if (mentionIds.length > 0 && !soup.filters.isActive('channels')) {
+        for (const opt of INDEX_OPTIONS_SOURCE) {
+          if (soup.filters.isActive(opt.value)) {
+            soup.filters.toggle({ or: [opt.value] });
           }
-          soup.filters.toggle({ or: ['channels'] });
-          setQueryFilters({
-            ...QUERY_FILTERS.channels,
-            channel_filters: {
-              ...QUERY_FILTERS.channels.channel_filters,
-              mentions: mentionIds,
-            },
-          });
-        } else {
-          setQueryFilters((prev) => ({
-            ...prev,
-            channel_filters: {
-              ...prev.channel_filters,
-              mentions: mentionIds,
-            },
-          }));
         }
-      });
-    }
+        soup.filters.toggle({ or: ['channels'] });
+        setQueryFilters({
+          ...QUERY_FILTERS.channels,
+          channel_filters: {
+            ...QUERY_FILTERS.channels.channel_filters,
+            mentions: mentionIds,
+          },
+        });
+      } else {
+        setQueryFilters((prev) => ({
+          ...prev,
+          channel_filters: {
+            ...prev.channel_filters,
+            mentions: mentionIds,
+          },
+        }));
+      }
+    });
   });
 
   const searchHotkey = registerHotkey({
