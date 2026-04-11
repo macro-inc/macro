@@ -238,10 +238,13 @@ export const registerSidebarHotkeys = ({
           const splitEl = document.querySelector(
             `[data-split-id="${activeSplit.id}"]`
           );
-          const searchInput =
-            splitEl?.querySelector<HTMLInputElement>('[data-soup-search]');
-          if (searchInput) {
-            searchInput.focus();
+          const searchContainer =
+            splitEl?.querySelector<HTMLElement>('[data-soup-search]');
+          if (searchContainer) {
+            const editable =
+              searchContainer.querySelector<HTMLElement>('[contenteditable]') ??
+              searchContainer;
+            editable.focus();
             return true;
           }
         }
