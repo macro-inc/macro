@@ -30,7 +30,6 @@ const variantStyles: Record<SearchbarVariant, string> = {
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const {
-    searchText,
     setSearchText,
     setSearchPaused,
     setSearchMentions,
