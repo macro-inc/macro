@@ -23,27 +23,6 @@ export function detectActiveOperator(
   return { type, partial, startIndex, endIndex };
 }
 
-export type ActiveMention = {
-  partial: string;
-  startIndex: number;
-  endIndex: number;
-};
-
-export function detectActiveMention(
-  text: string,
-  cursorPosition: number
-): ActiveMention | null {
-  const before = text.slice(0, cursorPosition);
-  const match = before.match(/(^|\s)@(\S*)$/);
-  if (!match) return null;
-
-  const partial = match[2];
-  const startIndex = match.index! + match[1].length;
-  const endIndex = cursorPosition;
-
-  return { partial, startIndex, endIndex };
-}
-
 export function stripOperatorAtRange(
   text: string,
   startIndex: number,
