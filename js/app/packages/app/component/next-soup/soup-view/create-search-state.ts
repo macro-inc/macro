@@ -78,7 +78,7 @@ export const createSearchState = ({
                 ...filters,
                 channel_filters: {
                   ...filters.channel_filters,
-                  mentions: mentionIds,
+                  mentions: mentionIds.map((id) => `user:${id}`),
                 },
               }
             : filters,
