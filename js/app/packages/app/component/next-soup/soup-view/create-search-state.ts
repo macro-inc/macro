@@ -30,6 +30,7 @@ interface CreateSearchStateArgs {
   queryFilters: Accessor<SoupItemsQueryFilters>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
+  searchMentions?: Accessor<string[]>;
 }
 
 export const createSearchState = ({
@@ -37,6 +38,7 @@ export const createSearchState = ({
   queryFilters,
   disableLocalSearch,
   searchPaused,
+  searchMentions,
 }: CreateSearchStateArgs) => {
   const [searchText, setSearchText] = createSignal('');
 
@@ -63,12 +65,25 @@ export const createSearchState = ({
   );
 
   const searchUnifiedNameContentRequest = createMemo(
-    (): UnifiedSearchRequest => ({
-      search_on: 'name_content',
-      match_type: 'partial',
-      query: debouncedSearchForService(),
-      filters: queryFilters(),
-    })
+    (): UnifiedSearchRequest => {
+      const filters = queryFilters();
+      const mentionIds = searchMentions?.();
+      return {
+        search_on: 'name_content',
+        match_type: 'partial',
+        query: debouncedSearchForService(),
+        filters:
+          mentionIds && mentionIds.length > 0
+            ? {
+                ...filters,
+                channel_filters: {
+                  ...filters.channel_filters,
+                  mentions: mentionIds,
+                },
+              }
+            : filters,
+      };
+    }
   );
 
   const searchQuery = useSearchSoupQuery(

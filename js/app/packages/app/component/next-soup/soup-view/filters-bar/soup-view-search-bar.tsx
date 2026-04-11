@@ -29,8 +29,14 @@ const variantStyles: Record<SearchbarVariant, string> = {
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { searchText, setSearchText, setSearchPaused, soup, setQueryFilters } =
-    useSoupView();
+  const {
+    searchText,
+    setSearchText,
+    setSearchPaused,
+    setSearchMentions,
+    soup,
+    setQueryFilters,
+  } = useSoupView();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
@@ -45,14 +51,13 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       disableMentionTracking: true,
       onCreate: (mention) => {
         if (mention.itemType !== 'user') return;
-        const val = `user:${mention.itemId}`;
-        setMentions((prev) => (prev.includes(val) ? prev : [...prev, val]));
+        setMentions((prev) =>
+          prev.includes(mention.itemId) ? prev : [...prev, mention.itemId]
+        );
       },
       onRemove: (mention) => {
         if (mention.itemType !== 'user') return;
-        setMentions((prev) =>
-          prev.filter((m) => m !== `user:${mention.itemId}`)
-        );
+        setMentions((prev) => prev.filter((m) => m !== mention.itemId));
       },
     })
     .withHistory({ timeGap: 400 })
@@ -82,6 +87,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   createEffect(
     on(mentions, (mentionIds) => {
+      setSearchMentions(mentionIds);
       if (mentionIds.length > 0 && !soup.filters.isActive('channels')) {
         for (const opt of INDEX_OPTIONS_SOURCE) {
           if (soup.filters.isActive(opt.value)) {
@@ -89,21 +95,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           }
         }
         soup.filters.toggle({ or: ['channels'] });
-        setQueryFilters({
-          ...QUERY_FILTERS.channels,
-          channel_filters: {
-            ...QUERY_FILTERS.channels.channel_filters,
-            mentions: mentionIds,
-          },
-        });
-      } else {
-        setQueryFilters((prev) => ({
-          ...prev,
-          channel_filters: {
-            ...prev.channel_filters,
-            mentions: mentionIds,
-          },
-        }));
+        setQueryFilters(QUERY_FILTERS.channels);
       }
     })
   );
@@ -161,6 +153,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 setSearchText('');
                 setHasContent(false);
                 setMentions([]);
+                setSearchMentions([]);
                 props.onDismiss?.();
               }}
             >
