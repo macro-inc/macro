@@ -67,11 +67,15 @@ export const createSearchState = ({
   const searchUnifiedNameContentRequest = createMemo(
     (): UnifiedSearchRequest => {
       const filters = queryFilters();
-      const mentionIds = searchMentions?.();
+      const query = debouncedSearchForService();
+      const mentionIds =
+        isSearchServiceDebounceSettled() && !isSearchServiceDisabled()
+          ? searchMentions?.()
+          : undefined;
       return {
         search_on: 'name_content',
         match_type: 'partial',
-        query: debouncedSearchForService(),
+        query,
         filters:
           mentionIds && mentionIds.length > 0
             ? {
