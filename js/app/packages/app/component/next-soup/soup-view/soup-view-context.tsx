@@ -158,11 +158,15 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const soupBody = createMemo(
-    (): SoupBody => ({
-      ...queryFilters(),
-    })
-  );
+  const soupBody = createMemo((): SoupBody => {
+    const filters = queryFilters();
+    const { mentions: _, ...channelFiltersWithoutMentions } =
+      filters.channel_filters ?? {};
+    return {
+      ...filters,
+      channel_filters: channelFiltersWithoutMentions,
+    };
+  });
 
   const search = createSearchState({
     soup,
