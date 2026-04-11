@@ -65,7 +65,13 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       setLatestMarkdown(markdown);
       setHasContent(markdown.trim().length > 0);
     })
+    .onEnter(() => {
+      if (menuIsOpen()) return false;
+      editor.controls.blur();
+      return true;
+    })
     .onEscape(() => {
+      editor.controls.blur();
       props.onDismiss?.();
       return true;
     });
@@ -129,7 +135,16 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           )}
         >
           <SearchIcon class="size-4 shrink-0" />
-          <div class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0">
+          <div
+            class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
+            onKeyDown={(e) => {
+              if (menuIsOpen()) return;
+              if (e.key === 'ArrowDown' || e.key === 'j') {
+                e.preventDefault();
+                editor.controls.blur();
+              }
+            }}
+          >
             <MarkdownShell
               config={editor}
               placeholder="Search"
