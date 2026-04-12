@@ -75,7 +75,7 @@ export type MentionsMenuProps = {
   /** whether to show open tabs as a bucket in the menu */
   showOpenTabs?: boolean;
   /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
-  sources?: Array<'users' | 'documents'>;
+  sources?: Array<'users' | 'documents' | 'channels' | 'emails' | 'dates' | 'openTabs'>;
 };
 
 export function MentionsMenu(props: MentionsMenuProps) {

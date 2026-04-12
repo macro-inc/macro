@@ -17,7 +17,7 @@ export interface ActionsOptions {
 }
 
 export interface MentionsOptions {
-  sources?: Array<'users' | 'documents'>;
+  sources?: Array<'users' | 'documents' | 'channels' | 'emails' | 'dates' | 'openTabs'>;
   onRemove?: (mention: ItemMention) => void;
   onCreate?: (mention: ItemMention) => void;
   block?: string;
