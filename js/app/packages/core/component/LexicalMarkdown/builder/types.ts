@@ -11,13 +11,14 @@ import type {
   SelectionData,
 } from '../plugins';
 import type { createMenuOperations } from '../shared/inlineMenu';
+import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 
 export interface ActionsOptions {
   useBlockBoundary?: boolean;
 }
 
 export interface MentionsOptions {
-  sources?: Array<'users' | 'documents' | 'channels' | 'emails' | 'dates' | 'openTabs'>;
+  sources?: MentionBucketId[];
   onRemove?: (mention: ItemMention) => void;
   onCreate?: (mention: ItemMention) => void;
   block?: string;

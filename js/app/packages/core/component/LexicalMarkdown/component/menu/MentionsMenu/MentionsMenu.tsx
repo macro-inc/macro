@@ -34,7 +34,7 @@ import type {
 import type { HistoryItem as Item } from '@queries/history/history';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { debouncedDependent } from '@core/util/debounce';
-import type { BucketConfig } from './MentionsMenuController';
+import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
 import type { MentionItem } from '../../../utils/mentionsUtils';
 import { ItemBin } from './components/ItemBin';
@@ -75,7 +75,7 @@ export type MentionsMenuProps = {
   /** whether to show open tabs as a bucket in the menu */
   showOpenTabs?: boolean;
   /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
-  sources?: Array<'users' | 'documents' | 'channels' | 'emails' | 'dates' | 'openTabs'>;
+  sources?: MentionBucketId[];
 };
 
 export function MentionsMenu(props: MentionsMenuProps) {
