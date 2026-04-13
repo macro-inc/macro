@@ -124,20 +124,13 @@ function GroupedMessageLayout(props: {
   channelId: string;
   messageEditor?: MessageEditor;
 }) {
-  const message = useMessage();
-  const isEditing = () => isEditingMessage(props.messageEditor, message().id);
-
   return (
     <Message.Layout>
       <Message.Slot placement="icon">
         <Message.SenderIcon hidden />
       </Message.Slot>
       <Message.Slot placement="content">
-        <div
-          class={cn(
-            'ph-no-capture flex gap-3 min-w-0 items-start',
-          )}
-        >
+        <div class={cn('ph-no-capture flex gap-3 min-w-0 items-start')}>
           <MessageContentSlot
             channelId={props.channelId}
             messageEditor={props.messageEditor}
