@@ -78,6 +78,7 @@ pub(in crate::api::search::simple) async fn search_contacts<'a>(
     term: String,
     limit: u32,
     cursor: models_search_cursor::SearchCursorOption,
+    importance: Option<bool>,
 ) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
     // If cursor is Done, no more results to fetch
     let inner_cursor = match cursor {
@@ -87,7 +88,7 @@ pub(in crate::api::search::simple) async fn search_contacts<'a>(
         models_search_cursor::SearchCursorOption::NotDone(c) => c,
     };
 
-    email_contact_search::search_email_contacts(db, user_id, term, limit, inner_cursor)
+    email_contact_search::search_email_contacts(db, user_id, term, limit, inner_cursor, importance)
         .await
         .map_err(SearchError::EmailContactSearch)
         .map(|response| {

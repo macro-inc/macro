@@ -86,7 +86,7 @@ impl SearchCursorAttributes for ThreadPaginationEntry {
         time = 30,
         result = true,
         key = "String",
-        convert = r#"{ format!("{}-{}-{}-{}", macro_user_id.as_ref(), term, limit, cursor.as_ref().map(|c| format!("{}-{}", c.entity_id, c.updated_at)).unwrap_or_default()) }"#
+        convert = r#"{ format!("{}-{}-{}-{}-{:?}", macro_user_id.as_ref(), term, limit, cursor.as_ref().map(|c| format!("{}-{}", c.entity_id, c.updated_at)).unwrap_or_default(), importance) }"#
     )
 )]
 pub async fn search_email_contacts<'a>(
@@ -95,6 +95,7 @@ pub async fn search_email_contacts<'a>(
     term: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
+    importance: Option<bool>,
 ) -> Result<PaginatedResult<EmailContactMatchThreadResult>, EmailContactSearchError> {
     if term.is_empty() {
         return Err(EmailContactSearchError::EmptySearchTerm);
@@ -128,6 +129,25 @@ pub async fn search_email_contacts<'a>(
             $4::timestamptz IS NULL
             OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)
         )
+        AND (
+            $6::bool IS NULL
+            OR $6::bool = (NOT (
+                EXISTS (
+                    SELECT 1 FROM email_messages em_dep
+                    JOIN email_message_labels ml_dep ON ml_dep.message_id = em_dep.id
+                    JOIN email_labels l_dep ON ml_dep.label_id = l_dep.id
+                    WHERE em_dep.thread_id = t.id
+                    AND l_dep.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM email_messages em_pri
+                    JOIN email_message_labels ml_pri ON ml_pri.message_id = em_pri.id
+                    JOIN email_labels l_pri ON ml_pri.label_id = l_pri.id
+                    WHERE em_pri.thread_id = t.id
+                    AND l_pri.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+                )
+            ))
+        )
         ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC
         LIMIT $3
         "#,
@@ -136,6 +156,7 @@ pub async fn search_email_contacts<'a>(
         fetch_limit,
         cursor_updated_at,
         cursor_entity_id,
+        importance,
     )
     .fetch_all(db)
     .await?;
