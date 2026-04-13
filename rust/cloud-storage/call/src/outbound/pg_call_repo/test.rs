@@ -12,6 +12,7 @@ use uuid::Uuid;
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
+const CALL_ARCHIVED: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca2ed);
 static USER_A: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
 static USER_B: LazyLock<MacroUserIdStr<'static>> =
@@ -498,5 +499,113 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     .await?;
     assert_eq!(ephemeral, 0);
 
+    Ok(())
+}
+
+// -- get_call_record_by_call_id ----------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let now = Utc::now();
+
+    // Ingest two transcript segments into the active call.
+    repo.create_transcript_segment(
+        &CALL1,
+        &TranscriptSegmentRequest {
+            segment_id: "seg-live-1".to_string(),
+            speaker_id: USER_A.to_string(),
+            content: "hello there".to_string(),
+            started_at: now,
+            ended_at: Some(now),
+            is_final: true,
+        },
+    )
+    .await?;
+    repo.create_transcript_segment(
+        &CALL1,
+        &TranscriptSegmentRequest {
+            segment_id: "seg-live-2".to_string(),
+            speaker_id: USER_B.to_string(),
+            content: "general kenobi".to_string(),
+            started_at: now,
+            ended_at: Some(now),
+            is_final: true,
+        },
+    )
+    .await?;
+
+    let record = repo
+        .get_call_record_by_call_id(&CALL1)
+        .await?
+        .expect("active call should be found");
+
+    assert_eq!(record.call_id, CALL1);
+    assert_eq!(record.channel_id, CH1);
+    assert!(record.is_active);
+    assert!(record.ended_at.is_none());
+    assert!(record.duration_ms.is_none());
+
+    // Participants from fixture.
+    let user_ids: Vec<&str> = record
+        .participants
+        .iter()
+        .map(|p| p.user_id.as_str())
+        .collect();
+    assert_eq!(user_ids, vec![USER_A.as_ref(), USER_B.as_ref()]);
+
+    // Transcripts ordered by sequence_num.
+    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript[0].sequence_num, 1);
+    assert_eq!(record.transcript[0].content, "hello there");
+    assert_eq!(
+        record.transcript[0].segment_id.as_deref(),
+        Some("seg-live-1")
+    );
+    assert_eq!(record.transcript[1].sequence_num, 2);
+    assert_eq!(record.transcript[1].content, "general kenobi");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should be found");
+
+    assert_eq!(record.call_id, CALL_ARCHIVED);
+    assert_eq!(record.channel_id, CH1);
+    assert!(!record.is_active);
+    assert!(record.ended_at.is_some());
+    assert_eq!(record.duration_ms, Some(300_000));
+    assert_eq!(record.egress_id.as_deref(), Some("egress-arch-1"));
+
+    // Participants from archived fixture (both have left_at).
+    assert_eq!(record.participants.len(), 2);
+    assert!(record.participants.iter().all(|p| p.left_at.is_some()));
+
+    // Transcripts ordered by sequence_num.
+    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(record.transcript[1].content, "archived reply");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_none_for_unknown(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo.get_call_record_by_call_id(&Uuid::now_v7()).await?;
+    assert!(record.is_none());
     Ok(())
 }

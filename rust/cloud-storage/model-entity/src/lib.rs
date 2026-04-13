@@ -45,6 +45,8 @@ pub enum EntityType {
     EmailThread,
     /// The entity is a team
     Team,
+    /// The entity is a voice/video call
+    Call,
 }
 
 impl EntityType {
@@ -59,6 +61,9 @@ impl EntityType {
             EntityType::Document => true,
             EntityType::Project => true,
             EntityType::EmailThread => true,
+            // Calls are handled by entity_access by resolving through the call's
+            // owning channel (access is inherited from channel membership).
+            EntityType::Call => true,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

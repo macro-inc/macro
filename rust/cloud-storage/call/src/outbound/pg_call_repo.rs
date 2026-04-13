@@ -11,7 +11,10 @@ use models_permissions::share_permission::channel_share_permission::ChannelShare
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{Call, CallParticipant, TranscriptSegmentRequest};
+use crate::domain::models::{
+    Call, CallParticipant, CallRecord, CallRecordParticipant, CallRecordTranscriptSegment,
+    TranscriptSegmentRequest,
+};
 use crate::domain::ports::CallRepository;
 
 /// Postgres implementation of [`CallRepository`].
@@ -479,6 +482,150 @@ impl CallRepository for PgCallRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_record_by_call_id(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<CallRecord>, Self::Err> {
+        // Try active `calls` first.
+        if let Some(active) = sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
+            FROM calls
+            WHERE id = $1
+            "#,
+            call_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        {
+            let participants = sqlx::query!(
+                r#"
+                SELECT user_id, joined_at, left_at
+                FROM call_participants
+                WHERE call_id = $1
+                ORDER BY joined_at ASC
+                "#,
+                call_id,
+            )
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(|row| CallRecordParticipant {
+                user_id: row.user_id,
+                joined_at: row.joined_at,
+                left_at: row.left_at,
+            })
+            .collect();
+
+            let transcript = sqlx::query!(
+                r#"
+                SELECT segment_id, speaker_id, content, started_at, ended_at, sequence_num
+                FROM call_transcripts
+                WHERE call_id = $1
+                ORDER BY sequence_num ASC
+                "#,
+                call_id,
+            )
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(|row| CallRecordTranscriptSegment {
+                segment_id: Some(row.segment_id),
+                speaker_id: row.speaker_id,
+                content: row.content,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+                sequence_num: row.sequence_num,
+            })
+            .collect();
+
+            return Ok(Some(CallRecord {
+                call_id: active.id,
+                channel_id: active.channel_id,
+                room_name: active.room_name,
+                created_by: active.created_by,
+                started_at: active.created_at,
+                ended_at: None,
+                duration_ms: None,
+                egress_id: active.egress_id,
+                is_active: true,
+                participants,
+                transcript,
+            }));
+        }
+
+        // Fall back to archived `call_records`.
+        let Some(archived) = sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id
+            FROM call_records
+            WHERE id = $1
+            "#,
+            call_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        let participants = sqlx::query!(
+            r#"
+            SELECT user_id, joined_at, left_at
+            FROM call_record_participants
+            WHERE call_record_id = $1
+            ORDER BY joined_at ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| CallRecordParticipant {
+            user_id: row.user_id,
+            joined_at: row.joined_at,
+            left_at: row.left_at,
+        })
+        .collect();
+
+        let transcript = sqlx::query!(
+            r#"
+            SELECT segment_id, speaker_id, content, started_at, ended_at, sequence_num
+            FROM call_record_transcripts
+            WHERE call_record_id = $1
+            ORDER BY sequence_num ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| CallRecordTranscriptSegment {
+            segment_id: row.segment_id,
+            speaker_id: row.speaker_id,
+            content: row.content,
+            started_at: row.started_at,
+            ended_at: row.ended_at,
+            sequence_num: row.sequence_num,
+        })
+        .collect();
+
+        Ok(Some(CallRecord {
+            call_id: archived.id,
+            channel_id: archived.channel_id,
+            room_name: archived.room_name,
+            created_by: archived.created_by,
+            started_at: archived.started_at,
+            ended_at: Some(archived.ended_at),
+            duration_ms: Some(archived.duration_ms),
+            egress_id: archived.egress_id,
+            is_active: false,
+            participants,
+            transcript,
+        }))
     }
 
     #[tracing::instrument(err, skip(self))]

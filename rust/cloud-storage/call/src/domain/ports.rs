@@ -5,12 +5,13 @@
 use std::fmt::Debug;
 use std::future::Future;
 
+use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    Call, CallActiveResponse, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent,
-    EgressS3Config, LeaveCallResponse, TranscriptSegmentRequest,
+    Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallTokenResponse,
+    CallWebhookEvent, EgressS3Config, LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -130,6 +131,15 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Fetch a full [`CallRecord`] by call id. Looks in both the active
+    /// `calls` table and the archived `call_records` table; returns `None`
+    /// if neither has a matching row. The returned record includes the
+    /// call's participants and transcript segments.
+    fn get_call_record_by_call_id(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallRecord>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -217,4 +227,14 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: &Uuid,
         segment: TranscriptSegmentRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Fetch the [`CallRecord`] for a call the caller has channel-member access to.
+    ///
+    /// Authorization is carried in the receipt produced by
+    /// `CallAccessLevelExtractor`; the entity on the receipt must be
+    /// `EntityType::Call` and its `entity_id` must be the call's UUID.
+    fn get_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
 }

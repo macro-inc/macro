@@ -1,7 +1,7 @@
 //! Call service implementation.
 
 use connection::domain::ports::ConnectionService;
-use entity_access::domain::models::EntityType;
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -17,8 +17,8 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 use super::models::{
-    CallActiveResponse, CallError, CallTokenResponse, EgressS3Config, LeaveCallResponse,
-    TranscriptSegmentRequest,
+    CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
+    LeaveCallResponse, TranscriptSegmentRequest,
 };
 use super::ports::{CallRepository, CallRtcClient, CallService};
 
@@ -573,6 +573,28 @@ impl<
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> Result<CallRecord, CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+        let call_id = Uuid::parse_str(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
+
+        self.repo
+            .get_call_record_by_call_id(&call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .ok_or_else(|| CallError::NotFound(call_id.to_string()))
     }
 
     #[tracing::instrument(err, skip(self, segment))]
