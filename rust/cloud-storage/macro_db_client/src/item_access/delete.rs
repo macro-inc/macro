@@ -86,7 +86,7 @@ pub async fn delete_user_entity_access_bulk(
             .execute(transaction.as_mut())
             .await?
         }
-        EntityType::Chat | EntityType::Document | EntityType::EmailThread => {
+        EntityType::Chat | EntityType::Document | EntityType::EmailThread | EntityType::Call => {
             sqlx::query!(
                 r#"
         DELETE FROM "entity_access"
