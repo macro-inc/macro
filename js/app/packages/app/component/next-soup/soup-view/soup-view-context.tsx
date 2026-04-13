@@ -17,8 +17,8 @@ import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useNotificationsForEntity } from '@notifications';
 import {
   type SoupParams,
-  useSoupItemsQuery,
   type SoupBody,
+  useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import {
   type Accessor,
@@ -38,6 +38,7 @@ import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
 import type { SoupPage } from '@service-storage/generated/schemas';
+import { mergeFilterAst } from '@app/component/next-soup/filters/define-filter';
 
 type Row<T> = {
   original: T;
@@ -158,11 +159,13 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const soupBody = createMemo(
-    (): SoupBody => ({
-      ...queryFilters(),
-    })
-  );
+  const soupBody = createMemo(() => {
+    const asts = soup.filters.active().map((f) => {
+      if (!f.ast) return {};
+      return typeof f.ast === 'function' ? f.ast({}) : f.ast;
+    });
+    return mergeFilterAst(...asts);
+  });
 
   const search = createSearchState({
     soup,
@@ -207,7 +210,7 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const itemsQuery = useSoupItemsQuery(
+  const itemsQuery = useSoupAstItemsQuery(
     () => ({
       params: soupParams(),
       body: soupBody(),
