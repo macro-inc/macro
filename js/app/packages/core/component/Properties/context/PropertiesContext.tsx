@@ -4,6 +4,7 @@ import {
   createContext,
   createEffect,
   createSignal,
+  onCleanup,
   type ParentProps,
   useContext,
 } from 'solid-js';
@@ -147,7 +148,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
   };
 
   // Handle ESC key to close modals
-  // Use capture phase listener to intercept before hotkey system (like drawer close)
+  // Use capture phase listener to intercept before hotkey system's capture phase handlers
   createEffect(() => {
     const isAnyModalOpen =
       propertySelectorModal() !== null ||
@@ -155,26 +156,24 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
       datePickerModal() !== null ||
       createPropertyModal() !== null;
 
+    let handleKeyDown: (e: KeyboardEvent) => void;
+
     if (isAnyModalOpen) {
-      const handleKeyDown = (e: KeyboardEvent) => {
+      handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           e.preventDefault();
           e.stopPropagation();
-          e.stopImmediatePropagation();
           closeAllModals();
         }
       };
 
-      // Capture phase = runs before hotkey system's bubble phase handlers
       document.addEventListener('keydown', handleKeyDown, { capture: true });
-
-      // Cleanup when modal closes or component unmounts
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown, {
-          capture: true,
-        });
-      };
     }
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown, {
+        capture: true,
+      });
+    });
   });
 
   const value: PropertiesContextValue = {
