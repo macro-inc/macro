@@ -94,7 +94,7 @@ export const QUERY_FILTERS = {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
-    email_filters: {},
+    email_filters: { importance: true },
   },
 
   people: {
@@ -161,5 +161,5 @@ export const QUERY_FILTERS = {
     project_filters: {},
   },
 
-  default: {},
+  default: { email_filters: { importance: true } },
 } satisfies Record<string, SoupItemsQueryFilters>;
