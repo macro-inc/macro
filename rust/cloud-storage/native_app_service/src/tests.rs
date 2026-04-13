@@ -17,11 +17,7 @@ use strum::IntoEnumIterator;
 
 #[test]
 fn all_urls_work() {
-    let fetcher = DefaultBundleFetcher {
-        base_url: "https://macro.com".parse().unwrap(),
-        semver_file_name: "",
-        bundle_archive_name: "",
-    };
+    let fetcher = DefaultBundleFetcher::new("https://macro.com".parse().unwrap());
     let _url = fetcher.get_app_bundle_path();
 }
 
@@ -34,6 +30,10 @@ impl GetJsBundleSemver for MockBundleFetcher {
 
     fn get_app_bundle_path(&self) -> Url {
         "https://example.com".parse().unwrap()
+    }
+
+    async fn get_app_bundle_checksum(&self, _version: &semver::Version) -> Result<String, UpdateErr> {
+        Ok("abc123".to_string())
     }
 }
 
@@ -95,9 +95,10 @@ async fn it_should_upgrade_mobile() {
                     semver,
                 })
                 .await,
-            Ok(Some(BundleUpdate { version, notes: _, url })) => {
+            Ok(Some(BundleUpdate { version, notes: _, url, checksum })) => {
                 assert_eq!(version.to_string(), "1.1.1");
                 assert_eq!(url.as_str(), "https://example.com/");
+                assert_eq!(checksum, "abc123");
             }
         );
     }
@@ -154,9 +155,10 @@ async fn it_should_upgrade_desktop() {
                     semver,
                 })
                 .await,
-            Ok(Some(BundleUpdate { version, notes: _, url })) => {
+            Ok(Some(BundleUpdate { version, notes: _, url, checksum })) => {
                 assert_eq!(version.to_string(), "1.1.1");
                 assert_eq!(url.as_str(), "https://example.com/");
+                assert_eq!(checksum, "abc123");
             }
         );
     }

@@ -1,20 +1,49 @@
 use std::sync::Arc;
 
-use macro_service_urls::EnvExtMacroServiceUrls;
 use native_app_service::{
-    domain::{models::PlatformData, service::NativeAppServiceImpl},
+    domain::{
+        models::{PlatformData, UpdateErr},
+        ports::GetJsBundleSemver,
+        service::NativeAppServiceImpl,
+    },
     inbound::{RouterState, native_app_router},
-    outbound::DefaultBundleFetcher,
 };
+use url::Url;
+
+/// Bundle fetcher that always reports a very high version, forcing an update.
+struct AlwaysUpdateFetcher {
+    bundle_url: Url,
+    checksum: String,
+}
+
+impl GetJsBundleSemver for AlwaysUpdateFetcher {
+    async fn get_app_semver(&self) -> Result<semver::Version, UpdateErr> {
+        Ok(semver::Version::new(999, 0, 0))
+    }
+
+    fn get_app_bundle_path(&self) -> Url {
+        self.bundle_url.clone()
+    }
+
+    async fn get_app_bundle_checksum(&self, _version: &semver::Version) -> Result<String, UpdateErr> {
+        Ok(self.checksum.clone())
+    }
+}
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let base_url = macro_env::Environment::Local.app();
+    let bundle_url: Url = std::env::var("BUNDLE_URL")
+        .unwrap_or_else(|_| "http://localhost:3000/app-archive.zip".to_string())
+        .parse()
+        .expect("BUNDLE_URL must be a valid URL");
+
+    let checksum = std::env::var("BUNDLE_CHECKSUM")
+        .unwrap_or_else(|_| "d407a7bd65b3a50120285c31d7d6c50924760c05c8beb62090a4cf8124870ba1".to_string());
 
     let service = NativeAppServiceImpl {
-        bundle_fetcher: DefaultBundleFetcher::new(base_url),
+        bundle_fetcher: AlwaysUpdateFetcher { bundle_url, checksum },
         platform_data: PlatformData {
             ios_development_team_id: String::new(),
             ios_app_bundle_id: String::new(),

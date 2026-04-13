@@ -6971,12 +6971,12 @@ name = "native_app_server"
 version = "0.1.0"
 dependencies = [
  "axum",
- "macro_env",
- "macro_service_urls",
  "native_app_service",
+ "semver",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -6990,6 +6990,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "sha2",
  "strum",
  "thiserror 2.0.17",
  "tokio",

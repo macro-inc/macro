@@ -5,9 +5,9 @@ edition = "2024"
 
 [dependencies]
 axum = { workspace = true }
-macro_env = { path = "../../macro_env" }
-macro_service_urls = { path = "../../macro_service_urls" }
 native_app_service = { path = "../../native_app_service" }
+semver = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+url = { workspace = true }

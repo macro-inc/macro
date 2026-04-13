@@ -9,6 +9,11 @@ pub trait GetJsBundleSemver: Send + Sync + 'static {
     ) -> impl Future<Output = Result<semver::Version, UpdateErr>> + Send;
     /// get the Url of the bundle
     fn get_app_bundle_path(&self) -> Url;
+    /// get the SHA-256 hex digest of the bundle archive for the given version
+    fn get_app_bundle_checksum(
+        &self,
+        version: &semver::Version,
+    ) -> impl Future<Output = Result<String, UpdateErr>> + Send;
 }
 
 /// the service level trait for dealing with tauri app integration

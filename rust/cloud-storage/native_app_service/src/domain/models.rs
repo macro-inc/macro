@@ -76,6 +76,8 @@ pub struct BundleUpdate {
     pub(crate) notes: Option<String>,
     /// the fully qualified Url where the update bundle exists
     pub(crate) url: Url,
+    /// the expected SHA-256 hex digest of the bundle archive
+    pub(crate) checksum: String,
 }
 
 /// The payload to check if there is a native app js bundle update available
