@@ -167,37 +167,7 @@ pub async fn delete_projects_bulk(
 ) -> anyhow::Result<()> {
     let mut transaction = db.begin().await.context("unable to begin transaction")?;
 
-    sqlx::query!(
-        r#"
-            DELETE FROM "SharePermission"
-            WHERE id IN (
-                SELECT "sharePermissionId"
-                FROM "ProjectPermission"
-                WHERE "projectId" = ANY($1)
-            )
-        "#,
-        project_ids
-    )
-    .execute(&mut *transaction)
-    .await
-    .context("unable to delete share permissions")?;
-
-    crate::item_access::delete::delete_user_item_access_bulk(
-        &mut transaction,
-        project_ids,
-        "project",
-    )
-    .await?;
-
-    sqlx::query!(
-        r#"
-        DELETE FROM "Project"
-        WHERE id = ANY($1)"#,
-        project_ids
-    )
-    .execute(&mut *transaction)
-    .await
-    .context("unable to delete projects")?;
+    delete_projects_bulk_tsx(&mut transaction, project_ids).await?;
 
     transaction
         .commit()
