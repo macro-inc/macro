@@ -9,6 +9,7 @@ use sqlx::{Pool, Postgres, types::Uuid};
 pub(in crate::api::search) struct FilterEmailResponse {
     pub thread_ids: Vec<String>,
     pub ids_only: bool,
+    pub importance: Option<bool>,
 }
 
 /// Performs the name search over email subjects
@@ -43,6 +44,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         filter_email_response.ids_only,
         limit,
         inner_cursor,
+        filter_email_response.importance,
     )
     .await
     .map_err(SearchError::NameSearch)

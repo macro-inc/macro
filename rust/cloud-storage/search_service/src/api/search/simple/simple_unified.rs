@@ -366,6 +366,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                             &simple_email::FilterEmailResponse {
                                 ids_only: false,
                                 thread_ids: filter_email_response.thread_ids,
+                                importance: filter_email_response.importance,
                             },
                             name_search_term.clone(),
                             page_size,
