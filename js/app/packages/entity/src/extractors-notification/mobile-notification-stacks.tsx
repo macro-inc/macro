@@ -8,9 +8,7 @@ import {
 import type { WithNotification } from '../types/notification';
 import { isChannelEntity, type EntityData } from '../types/entity';
 import { CollapsibleList } from '../components/CollapsibleList';
-import {
-  isNotificationUnread,
-} from '../utils/notification';
+import { isNotificationUnread } from '../utils/notification';
 import { Entity } from '../entity';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';

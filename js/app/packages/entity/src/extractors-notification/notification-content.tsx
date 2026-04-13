@@ -1,20 +1,20 @@
-import { Show, For, createSignal } from 'solid-js';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import type { Notification } from '../types/notification';
-import {
-  type NotificationStack,
-  type UnifiedNotification,
-  openNotification,
-} from '@notifications';
-import { extractMessageContent } from '../utils/notification';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useNotificationActions } from './notification-actions';
-import { Button } from '@ui/components/Button';
-import CheckIcon from '@icon/regular/check.svg';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import CheckIcon from '@icon/regular/check.svg';
+import {
+  type NotificationStack,
+  openNotification,
+  type UnifiedNotification,
+} from '@notifications';
+import { Button } from '@ui/components/Button';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
+import type { Notification } from '../types/notification';
+import { extractMessageContent } from '../utils/notification';
+import { useNotificationActions } from './notification-actions';
 
 interface NotificationContentProps {
   notification?: Notification;
@@ -35,10 +35,8 @@ function DocumentMentionPill(props: { notification: UnifiedNotification }) {
   const documentName = () => documentMeta()?.documentName ?? 'Untitled';
   const targetType = () => {
     const meta = documentMeta();
-    // subType will be typed once orval regenerates the notification schemas
-    const subTypeStr = (
-      meta as { subType?: { type: string } | null } | undefined
-    )?.subType?.type;
+
+    const subTypeStr = meta?.subType?.type;
     return fileTypeToBlockName(subTypeStr ?? meta?.fileType) ?? 'default';
   };
 
@@ -73,32 +71,126 @@ function DocumentMentionPill(props: { notification: UnifiedNotification }) {
   );
 }
 
-const MAX_VISIBLE_PILLS = 4;
-
 function DocumentMentionPills(props: { stack: NotificationStack }) {
+  let measureRef: HTMLDivElement | undefined;
+  let badgeRef: HTMLButtonElement | undefined;
+  // null = not yet measured; show all pills until the first measurement completes.
+  const [visibleCount, setVisibleCount] = createSignal<number | null>(null);
   const [expanded, setExpanded] = createSignal(false);
   const notifications = () => props.stack.notifications;
-  const visible = () =>
-    expanded() ? notifications() : notifications().slice(0, MAX_VISIBLE_PILLS);
-  const overflow = () =>
-    Math.max(0, notifications().length - MAX_VISIBLE_PILLS);
+
+  const recalculate = () => {
+    const container = measureRef;
+    if (!container) return;
+    const containerWidth = container.getBoundingClientRect().width;
+    if (containerWidth === 0) return;
+
+    const gap = 6; // gap-1.5 = 6px
+    // Direct children are the pills; the badge button is excluded via data-badge.
+    const pills = Array.from(container.children).filter(
+      (el) => !el.hasAttribute('data-badge')
+    ) as HTMLElement[];
+    if (pills.length === 0) return;
+
+    const pillWidths = pills.map((el) => el.getBoundingClientRect().width);
+    const badgeWidth = badgeRef
+      ? badgeRef.getBoundingClientRect().width + gap
+      : 0;
+
+    // Check whether every pill fits with no badge needed.
+    const totalWidth = pillWidths.reduce(
+      (sum, w, i) => sum + w + (i > 0 ? gap : 0),
+      0
+    );
+    if (totalWidth <= containerWidth) {
+      setVisibleCount(pills.length);
+      return;
+    }
+
+    // Some pills overflow — fit as many as possible while leaving room for the badge.
+    const availableWidth = containerWidth - badgeWidth;
+    let usedWidth = 0;
+    let count = 0;
+    for (let i = 0; i < pillWidths.length; i++) {
+      const addWidth = (i > 0 ? gap : 0) + pillWidths[i];
+      if (usedWidth + addWidth <= availableWidth) {
+        usedWidth += addWidth;
+        count++;
+      } else {
+        break;
+      }
+    }
+    setVisibleCount(Math.max(1, count));
+  };
+
+  // Re-measure when notifications change or on first mount.
+  createEffect(() => {
+    void notifications();
+    recalculate();
+  });
+
+  // Re-measure whenever the container is resized (window resize, panel resize, etc.).
+  createEffect(() => {
+    const container = measureRef;
+    if (!container) return;
+    const observer = new ResizeObserver(recalculate);
+    observer.observe(container);
+    onCleanup(() => observer.disconnect());
+  });
+
+  const count = () =>
+    expanded()
+      ? notifications().length
+      : (visibleCount() ?? notifications().length);
+  const overflow = () => Math.max(0, notifications().length - count());
 
   return (
-    <div class="flex flex-wrap items-center gap-1.5 pt-1">
-      <For each={visible()}>
-        {(n) => <DocumentMentionPill notification={n} />}
-      </For>
-      <Show when={!expanded() && overflow() > 0}>
+    <div class="relative pt-1">
+      {/*
+			  Invisible measurement layer: absolutely positioned so it takes no layout
+			  space, but always contains every pill + the badge so their widths can be
+			  measured at any point regardless of what the visible layer shows.
+			*/}
+      <div
+        ref={measureRef}
+        class="absolute inset-x-0 top-0 flex flex-nowrap items-center gap-1.5 invisible pointer-events-none"
+        aria-hidden="true"
+      >
+        <For each={notifications()}>
+          {(n) => <DocumentMentionPill notification={n} />}
+        </For>
         <button
-          class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 bg-panel hover:bg-edge/10 flex-shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded(true);
-          }}
+          ref={badgeRef}
+          data-badge
+          class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 flex-shrink-0"
+          tabIndex={-1}
         >
-          + {overflow()} more files
+          +{notifications().length} more
         </button>
-      </Show>
+      </div>
+      {/* Visible layer: only as many pills as fit, followed by the badge if needed. */}
+      <div
+        class={
+          expanded()
+            ? 'flex flex-wrap items-center gap-1.5'
+            : 'flex flex-nowrap items-center gap-1.5'
+        }
+      >
+        <For each={notifications().slice(0, count())}>
+          {(n) => <DocumentMentionPill notification={n} />}
+        </For>
+        <Show when={overflow() > 0}>
+          <button
+            class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 bg-panel hover:bg-edge/10 flex-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(true);
+            }}
+          >
+            +{overflow()} more
+          </button>
+        </Show>
+      </div>
     </div>
   );
 }

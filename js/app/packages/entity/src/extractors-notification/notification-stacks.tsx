@@ -39,7 +39,6 @@ function NotificationStackRow(props: {
   stack: NotificationStack;
   onClick?: (e: PointerEvent | MouseEvent) => void;
   content?: JSX.Element;
-  description?: JSX.Element;
 }) {
   const notificationSource = useGlobalNotificationSource();
   const unread = () => isNotificationUnread(props.stack);
