@@ -17,18 +17,21 @@ import { makePersisted } from '@solid-primitives/storage';
 import {
   createContext,
   createEffect,
+  createResource,
   createSignal,
   type JSX,
-  onMount,
 } from 'solid-js';
 import { triggerNavigation } from './navigation';
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
+import { whenSettled } from '@core/util/whenSettled';
 
 function usePushNotifications(
   deviceType: 'android' | 'ios',
   onPushNotification?: (event: NotificationEvent) => void
 ) {
+  const [systemPermission] = createResource(checkPermissions);
+
   const [registrationResult, setRegistrationResult] = makePersisted(
     createSignal<NotificationRegistrationResult | undefined>(undefined)
   );
@@ -37,7 +40,9 @@ function usePushNotifications(
     createSignal<'granted' | 'denied' | undefined>(undefined)
   );
 
-  async function registerDevice(token: string): Promise<'granted' | 'denied'> {
+  async function registerDeviceWithNotificationService(
+    token: string
+  ): Promise<'granted' | 'denied'> {
     const res = await notificationServiceClient.registerDevice({
       deviceType,
       token,
@@ -49,15 +54,19 @@ function usePushNotifications(
 
   async function requestNotificationRegistration() {
     const perm = await requestPermissions();
-    if (perm.status !== 'granted') return 'denied';
+    if (perm.status !== 'granted') {
+      setPermission(undefined);
+      setRegistrationResult(undefined);
+      return 'denied';
+    }
     const reg = await registerForRemoteNotifications();
     if (!reg.token) {
-      setRegistrationResult(undefined);
       setPermission(undefined);
+      setRegistrationResult(undefined);
       return 'denied';
     }
     setRegistrationResult(reg);
-    return await registerDevice(reg.token);
+    return await registerDeviceWithNotificationService(reg.token);
   }
 
   async function unregisterPushNotifications() {
@@ -75,42 +84,39 @@ function usePushNotifications(
     setPermission(undefined);
   }
 
-  // On launch, check if the APNS token has rotated.
+  // On launch, once persmission state resolves, ensure persisted state is synced correct, and check if the APNS token has rotated.
   // iOS returns the same token if valid, or a new one if it has rotated.
-  onMount(async () => {
-    try {
-      const perm = await checkPermissions();
+  whenSettled(
+    systemPermission,
+    (perm) => {
+      // Here we defensively ensure our persisted perm state is synced properly, for backwards compatiblity
       if (perm.status !== 'granted') {
         setPermission(undefined);
         return;
+      } else if (perm.status === 'granted' && permission() !== 'granted') {
+        setPermission('granted');
       }
       const storedToken = registrationResult()?.token;
-      if (!storedToken) {
-        setPermission(undefined);
-        return;
-      }
+      if (!storedToken) return;
 
-      const freshResult = await registerForRemoteNotifications();
-      if (freshResult.token && freshResult.token !== storedToken) {
-        // Best-effort unregister the old token; errors are non-fatal.
-        notificationServiceClient
-          .unregisterDevice({ deviceType, token: storedToken })
-          .catch(console.error);
-        setRegistrationResult(freshResult);
-        registerDevice(freshResult.token).catch(console.error);
-      } else if (freshResult.token) {
-        // Token unchanged. Only trust the persisted 'granted' state; if it isn't
-        // confirmed (e.g. a prior backend call failed), re-register now.
-        if (permission() === 'granted') {
-          setPermission('granted');
-        } else {
-          registerDevice(freshResult.token).catch(console.error);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  });
+      registerForRemoteNotifications()
+        .then((freshResult) => {
+          if (freshResult.token && freshResult.token !== storedToken) {
+            // Best-effort unregister the old token
+            notificationServiceClient.unregisterDevice({
+              deviceType,
+              token: storedToken,
+            });
+            setRegistrationResult(freshResult);
+            registerDeviceWithNotificationService(freshResult.token).catch(
+              console.error
+            );
+          }
+        })
+        .catch(console.error);
+    },
+    console.error
+  );
 
   createEffect(() => {
     if (!registrationResult()?.success || !onPushNotification) return;
