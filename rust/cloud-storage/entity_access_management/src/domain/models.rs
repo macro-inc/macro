@@ -2,6 +2,8 @@
 
 use model_entity::EntityType;
 
+pub use models_entity_access_management::EntityAccessSourceType;
+
 /// Errors that can occur in entity_access_management crate.
 #[derive(Debug, thiserror::Error)]
 pub enum EntityAccessManagementError {
@@ -14,20 +16,4 @@ pub enum EntityAccessManagementError {
     /// Invalid project move configuration
     #[error("invalid project move configuration")]
     InvalidProjectMove,
-}
-
-/// Entity access source type
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
-#[cfg_attr(
-    feature = "outbound",
-    sqlx(type_name = "entity_access_source_type", rename_all = "lowercase")
-)]
-pub enum EntityAccessSourceType {
-    /// Channel source
-    Channel,
-    /// Team source
-    Team,
-    /// User source
-    User,
 }
