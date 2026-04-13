@@ -307,6 +307,16 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                   />
                 </Show>
               </div>
+              <Show when={props.property.isMultiSelect}>
+                <div class="border-t border-edge-muted px-2 py-1.5 flex justify-end">
+                  <button
+                    class="text-xs text-ink-muted hover:text-ink px-2 py-1"
+                    onClick={handleClose}
+                  >
+                    Done
+                  </button>
+                </div>
+              </Show>
             </div>
           </Show>
         </div>
