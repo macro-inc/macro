@@ -166,7 +166,7 @@ const useSoupNotificationInvalidators = () => {
 type PersistedSoupViewState = {
   version?: number;
   activeTab: string | undefined;
-  filters: { and: string[]; or: string[] };
+  filters: string[];
   queryFilters: SoupItemsQueryFilters;
   sort: SystemSortOption[];
   previewEntity: string | undefined;
@@ -187,7 +187,7 @@ const listStateCache = new Map<
 
 interface SoupViewProps {
   viewName: string;
-  initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
+  initialClientFilters?: FilterID[];
   queryFilters?: SoupItemsQueryFilters;
   disableLocalSearch?: boolean;
 }
@@ -354,7 +354,7 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
+  initialClientFilters?: FilterID[];
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -673,8 +673,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
         batch(() => {
           soup.filters.set(
             isStale
-              ? (props.initialClientFilters ?? { and: [], or: [] })
-              : (initialPersistedState.filters ?? { and: [], or: [] })
+              ? (props.initialClientFilters ?? [])
+              : (initialPersistedState.filters ?? [])
           );
           setQueryFilters(
             isStale
@@ -701,10 +701,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         ({
           version: PERSISTED_STATE_VERSION,
           activeTab: activeTab(),
-          filters: {
-            and: soup.filters.andFilters().map((f) => f.id),
-            or: soup.filters.orFilters().map((f) => f.id),
-          },
+          filters: [...soup.filters.activeIds()],
           queryFilters: queryFilters(),
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),

@@ -89,10 +89,7 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return false;
 
-    const expectedIds = new Set([
-      ...(preset.clientFilters.and ?? []),
-      ...(preset.clientFilters.or ?? []),
-    ]);
+    const expectedIds = new Set(preset.clientFilters);
 
     const currentIds = new Set(soup.filters.activeIds() as FilterID[]);
 
@@ -136,10 +133,7 @@ export function useFilterRefinements() {
    */
   const activeFiltersList = createMemo((): ActiveFilter[] => {
     const preset = currentPreset();
-    const presetFilterIds = new Set([
-      ...(preset?.clientFilters.and ?? []),
-      ...(preset?.clientFilters.or ?? []),
-    ]);
+    const presetFilterIds = new Set(preset?.clientFilters ?? []);
 
     const filters: ActiveFilter[] = [];
     for (const category of viewCategories()) {
@@ -181,7 +175,7 @@ export function useFilterRefinements() {
         icon: option.icon,
         categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
         onRemove: () => {
-          soup.filters.toggle({ or: [optionId] });
+          soup.filters.toggle([optionId]);
           setQueryFilters(QUERY_FILTERS.default);
         },
       });
@@ -262,14 +256,14 @@ export function useFilterRefinements() {
   };
 
   const removeFilter = (optionId: string) => {
-    soup.filters.toggle({ or: [optionId as FilterID] });
+    soup.filters.toggle([optionId as FilterID]);
   };
 
   const replaceFilter = (oldOptionId: string, newOptionId: string) => {
     // Toggle off the old filter and toggle on the new one
     batch(() => {
-      soup.filters.toggle({ or: [oldOptionId as FilterID] });
-      soup.filters.toggle({ or: [newOptionId as FilterID] });
+      soup.filters.toggle([oldOptionId as FilterID]);
+      soup.filters.toggle([newOptionId as FilterID]);
     });
   };
 

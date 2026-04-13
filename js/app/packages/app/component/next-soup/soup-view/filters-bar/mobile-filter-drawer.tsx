@@ -113,7 +113,7 @@ export const MobileFilterDrawer = () => {
     categories().length > 0 || isTasksView() || sortOptions().length > 0;
 
   const toggleFilter = (optionId: FilterOption['id']) => {
-    soup.filters.toggle({ or: [optionId] });
+    soup.filters.toggle([optionId]);
   };
 
   const toggleAssignee = (id: string) => {

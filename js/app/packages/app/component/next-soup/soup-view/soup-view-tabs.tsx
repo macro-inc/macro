@@ -86,7 +86,7 @@ export const useApplyPreset = () => {
 
   const applyPreset = (preset: {
     queryFilters: SoupItemsQueryFilters;
-    clientFilters: { and?: FilterID[]; or?: FilterID[] };
+    clientFilters: FilterID[];
   }) => {
     batch(() => {
       setQueryFilters(preset.queryFilters);
