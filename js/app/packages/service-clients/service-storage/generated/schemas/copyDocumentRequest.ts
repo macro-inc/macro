@@ -6,8 +6,11 @@
  */
 import type { CopyDocumentRequestVersionId } from './copyDocumentRequestVersionId';
 
+/**
+ * Request body for copying a document.
+ */
 export interface CopyDocumentRequest {
-  /** The name of the document without extension. */
+  /** The name of the new document (without extension). */
   documentName: string;
   versionId?: CopyDocumentRequestVersionId;
 }

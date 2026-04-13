@@ -2054,8 +2054,9 @@
     "/documents/{document_id}/copy": {
       "post": {
         "tags": ["document"],
-        "summary": "Handles copying a given document. This is the similar to\ncreate_document_handler where you provide the branched_from_id,\nbranched_from_version_id and document_family_id in the request body. Except\nthis will not require you to re-upload the document when it's made saving\ntime and resources.",
-        "operationId": "copy_document_handler",
+        "summary": "Handler for `POST /documents/{document_id}/copy`.",
+        "description": "Copies an existing document, creating a new document with the same content.\nDoes not require re-uploading the document file.",
+        "operationId": "copy_document",
         "parameters": [
           {
             "name": "document_id",
@@ -2093,7 +2094,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetDocumentResponse"
+                  "$ref": "#/components/schemas/CopyDocumentResponse"
                 }
               }
             }
@@ -2103,7 +2104,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2113,17 +2114,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2133,7 +2124,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2143,7 +2134,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -6166,21 +6157,23 @@
       },
       "CopyDocumentQueryParams": {
         "type": "object",
+        "description": "Query parameters for the copy document endpoint.",
         "properties": {
           "version_id": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "The version id of the document to copy. Defaults to copying the latest version of the document."
+            "description": "The DB version id of the document to copy. Defaults to latest."
           }
         }
       },
       "CopyDocumentRequest": {
         "type": "object",
+        "description": "Request body for copying a document.",
         "required": ["documentName"],
         "properties": {
           "documentName": {
             "type": "string",
-            "description": "The name of the document without extension."
+            "description": "The name of the new document (without extension)."
           },
           "versionId": {
             "oneOf": [
@@ -6188,9 +6181,25 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/SyncServiceVersionID"
+                "$ref": "#/components/schemas/SyncServiceVersionID",
+                "description": "Optional sync service version ID for MD documents."
               }
             ]
+          }
+        }
+      },
+      "CopyDocumentResponse": {
+        "type": "object",
+        "description": "Response wrapper for the copy document endpoint.",
+        "required": ["error", "data"],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DocumentResponse",
+            "description": "The copied document data."
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred."
           }
         }
       },

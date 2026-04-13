@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CopyDocumentHandlerParams = {
+export type CopyDocumentParams = {
   /**
    * The version id of the document to copy. Defaults to copying the latest version of the document.
    */
