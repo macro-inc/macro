@@ -872,7 +872,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   soup.focus.set(row.original.id);
                                 }}
                                 showUnrollNotifications={
-                                  soup.filters.isActive('signal') &&
+                                  soup.filters.isActive('inbox') &&
                                   !soup.filters.isActive('noise')
                                 }
                                 checked={row.isSelected()}

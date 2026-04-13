@@ -56,7 +56,7 @@ export type DefineFilterConfig<
   readonly predicate:
     | ((entity: EntityData) => boolean)
     | ((entity: EntityData, ctx: TContext) => boolean);
-  readonly ast?: FilterAst | ((ctx: TContext) => FilterAst);
+  readonly ast?: (ctx: TContext) => FilterAst;
 };
 
 export type DefinedFilter<TContext = object, TId extends string = string> = {
@@ -66,7 +66,7 @@ export type DefinedFilter<TContext = object, TId extends string = string> = {
   readonly predicate:
     | ((entity: EntityData) => boolean)
     | ((entity: EntityData, ctx: TContext) => boolean);
-  readonly ast: FilterAst | ((ctx: TContext) => FilterAst);
+  readonly ast: (ctx: TContext) => FilterAst;
   readonly test: (entity: EntityData, ctx?: TContext) => boolean;
   readonly toAst: (ctx?: TContext) => FilterAst;
 };
@@ -75,7 +75,7 @@ export function defineFilter<
   TContext = object,
   const TId extends string = string,
 >(config: DefineFilterConfig<TContext, TId>): DefinedFilter<TContext, TId> {
-  const { id, label, group, predicate, ast: astConfig = {} } = config;
+  const { id, label, group, predicate, ast: astConfig = () => ({}) } = config;
 
   return {
     id,
@@ -87,10 +87,7 @@ export function defineFilter<
       return predicate(entity, ctx as TContext);
     },
     toAst: (ctx?: TContext) => {
-      if (typeof astConfig === 'function') {
-        return ctx !== undefined ? astConfig(ctx) : {};
-      }
-      return astConfig;
+      return astConfig(ctx as TContext);
     },
   };
 }

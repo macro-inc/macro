@@ -164,10 +164,7 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const soupBody = createMemo(() => {
-    const asts = soup.filters.active().map((f) => {
-      if (!f.ast) return {};
-      return typeof f.ast === 'function' ? f.ast({}) : f.ast;
-    });
+    const asts = soup.filters.active().map((f) => f.ast({}));
 
     // Include assignee filter ASTs
     const currentAssigneeFilter = assigneeFilter();
