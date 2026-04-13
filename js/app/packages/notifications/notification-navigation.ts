@@ -10,6 +10,10 @@ import type { NotificationSource } from './notification-source';
 import { getChannelParams } from '@block-channel/utils/link';
 import { isChannelNotification } from './notification-helpers';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
+import {
+  stackNotifications,
+  getMostRecentNotification,
+} from './notification-stacking';
 
 /**
  * Opens a split if it is not already open.
@@ -208,6 +212,18 @@ export function openNotification(
     });
   }
   return ResultAsync.fromSafePromise(handler(layoutManager, newSplit));
+}
+
+export function openSingleStackNotification(
+  notifications: UnifiedNotification[],
+  layoutManager: SplitManager,
+  newSplit: boolean = false
+): boolean {
+  const stacks = stackNotifications(notifications);
+  if (stacks.length !== 1) return false;
+  const mostRecent = getMostRecentNotification(stacks[0]!);
+  openNotification(mostRecent, layoutManager, newSplit);
+  return true;
 }
 
 export function openNotificationFromId(

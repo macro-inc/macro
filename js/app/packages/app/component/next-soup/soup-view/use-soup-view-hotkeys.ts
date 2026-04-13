@@ -16,11 +16,7 @@ import {
   filterNotDoneNotifications,
   filterValidNotifications,
 } from '@entity';
-import {
-  stackNotifications,
-  getMostRecentNotification,
-  openNotification,
-} from '@notifications';
+import { openSingleStackNotification } from '@notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { onCleanup, type Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -146,21 +142,13 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const entity = soup.focus.item();
       if (!entity) return false;
 
-      // For channel entities with a single notification stack,
-      // open that notification directly (matching click behavior)
       if (entity.type === 'channel' && isWithNotification(entity)) {
-        const notifications = entity.notifications?.() ?? [];
         const validNotifs = filterNotDoneNotifications(
-          filterValidNotifications(notifications)
+          filterValidNotifications(entity.notifications?.() ?? [])
         );
-        const stacks = stackNotifications(validNotifs);
-        if (stacks.length === 1) {
-          const splitManager = globalSplitManager();
-          if (splitManager) {
-            const mostRecent = getMostRecentNotification(stacks[0]!);
-            openNotification(mostRecent, splitManager);
-            return true;
-          }
+        const splitManager = globalSplitManager();
+        if (splitManager && openSingleStackNotification(validNotifs, splitManager)) {
+          return true;
         }
       }
 
@@ -326,18 +314,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       if (!entity) return false;
 
       if (entity.type === 'channel' && isWithNotification(entity)) {
-        const notifications = entity.notifications?.() ?? [];
         const validNotifs = filterNotDoneNotifications(
-          filterValidNotifications(notifications)
+          filterValidNotifications(entity.notifications?.() ?? [])
         );
-        const stacks = stackNotifications(validNotifs);
-        if (stacks.length === 1) {
-          const splitManager = globalSplitManager();
-          if (splitManager) {
-            const mostRecent = getMostRecentNotification(stacks[0]!);
-            openNotification(mostRecent, splitManager, true);
-            return true;
-          }
+        const splitManager = globalSplitManager();
+        if (splitManager && openSingleStackNotification(validNotifs, splitManager, true)) {
+          return true;
         }
       }
 
