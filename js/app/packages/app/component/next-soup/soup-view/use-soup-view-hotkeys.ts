@@ -10,7 +10,18 @@ import {
   isScopeInActiveBranch,
   runCommand,
 } from '@core/hotkey/utils';
-import { isSearchEntity } from '@entity';
+import {
+  isSearchEntity,
+  isWithNotification,
+  filterNotDoneNotifications,
+  filterValidNotifications,
+} from '@entity';
+import {
+  stackNotifications,
+  getMostRecentNotification,
+  openNotification,
+} from '@notifications';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { onCleanup, type Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
@@ -134,6 +145,24 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     keyDownHandler: () => {
       const entity = soup.focus.item();
       if (!entity) return false;
+
+      // For channel entities with a single notification stack,
+      // open that notification directly (matching click behavior)
+      if (entity.type === 'channel' && isWithNotification(entity)) {
+        const notifications = entity.notifications?.() ?? [];
+        const validNotifs = filterNotDoneNotifications(
+          filterValidNotifications(notifications)
+        );
+        const stacks = stackNotifications(validNotifs);
+        if (stacks.length === 1) {
+          const splitManager = globalSplitManager();
+          if (splitManager) {
+            const mostRecent = getMostRecentNotification(stacks[0]!);
+            openNotification(mostRecent, splitManager);
+            return true;
+          }
+        }
+      }
 
       const contentHitData = isSearchEntity(entity)
         ? entity.search.contentHitData
@@ -295,6 +324,23 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     keyDownHandler: () => {
       const entity = soup.focus.item();
       if (!entity) return false;
+
+      if (entity.type === 'channel' && isWithNotification(entity)) {
+        const notifications = entity.notifications?.() ?? [];
+        const validNotifs = filterNotDoneNotifications(
+          filterValidNotifications(notifications)
+        );
+        const stacks = stackNotifications(validNotifs);
+        if (stacks.length === 1) {
+          const splitManager = globalSplitManager();
+          if (splitManager) {
+            const mostRecent = getMostRecentNotification(stacks[0]!);
+            openNotification(mostRecent, splitManager, true);
+            return true;
+          }
+        }
+      }
+
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         openInNewSplit: true,
