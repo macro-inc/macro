@@ -205,7 +205,8 @@ export const SearchIndexFilter = () => {
 
   const indexLabel = createMemo(() => {
     const active = activeIndex();
-    return active.length > 0 ? active[0].label : 'All';
+    const value = active.length > 0 ? active[0].label : 'All';
+    return `Type: ${value}`;
   });
 
   const hasActiveIndex = () => activeIndex().length > 0;
@@ -266,7 +267,8 @@ const EmailImportanceFilter = () => {
 
   const label = createMemo(() => {
     const a = active();
-    return a.length > 0 ? a[0].label : 'All';
+    const value = a.length > 0 ? a[0].label : 'All';
+    return `Importance: ${value}`;
   });
 
   const handleChange = (selected: Option[]) => {
