@@ -80,10 +80,7 @@ where
     /// Looks up both the active `calls` table and the archived `call_records`
     /// table. Returns `NotFound` if neither has a matching row, or
     /// `BadRequest` if the id is not a valid UUID.
-    async fn resolve_call_channel_id(
-        &self,
-        call_id: &str,
-    ) -> Result<Uuid, AccessError> {
+    async fn resolve_call_channel_id(&self, call_id: &str) -> Result<Uuid, AccessError> {
         let call_uuid = Uuid::from_str(call_id)
             .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
         let info = self
@@ -145,7 +142,8 @@ where
             // Call access is inherited from the call's channel.
             EntityType::Call => {
                 let channel_uuid = self.resolve_call_channel_id(entity_id).await?;
-                self.get_channel_access(&channel_uuid.to_string(), user_id).await
+                self.get_channel_access(&channel_uuid.to_string(), user_id)
+                    .await
             }
             // These entity types don't have access checks implemented yet.
             EntityType::Team | EntityType::User => Ok(None),
