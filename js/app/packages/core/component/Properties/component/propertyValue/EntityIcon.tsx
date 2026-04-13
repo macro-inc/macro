@@ -3,7 +3,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../../hooks';
 import type { Property } from '../../types';
-import { PropertyValueDeleteButton } from './ValueComponents';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 
 type EntityValueDisplayProps = ParentProps<{
   property: Property;
@@ -75,14 +75,17 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
           }
         >
           <div
-            class="absolute right-1 inset-y-0 flex items-center gap-1"
+            class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-gradient-to-r from-transparent to-hover to-40%"
             onClick={(e: MouseEvent) => e.stopPropagation()}
           >
             <Show when={props.onRemove}>
-              <PropertyValueDeleteButton
-                onClick={props.onRemove!}
+              <button
+                onClick={() => props.onRemove!()}
                 disabled={props.isSaving}
-              />
+                class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink"
+              >
+                <DeleteIcon class="size-3" />
+              </button>
             </Show>
           </div>
         </Show>
