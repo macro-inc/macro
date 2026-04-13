@@ -1,7 +1,6 @@
--- NOTE: This is used purely to setup the testing DB
--- Changes from `database/prisma/schema.prisma` need to be converted into raw SQL
--- Changes here WILL NOT ever make it into the dev/production db.
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+\restrict 0bDna1GcoDLApKtMSDzUQAagke9hWeBYLoGzrwxJvMXM9iWQWndi7vTWlhAlQDO
+CREATE SCHEMA _sqlx_test;
 
 CREATE EXTENSION IF NOT EXISTS btree_gin WITH SCHEMA public;
 
@@ -3257,3 +3256,4 @@ ALTER TABLE ONLY public.team_user
 ALTER TABLE ONLY public.user_notification
     ADD CONSTRAINT user_notification_notification_id_fkey FOREIGN KEY (notification_id) REFERENCES public.notification(id) ON DELETE CASCADE;
 
+\unrestrict 0bDna1GcoDLApKtMSDzUQAagke9hWeBYLoGzrwxJvMXM9iWQWndi7vTWlhAlQDO
