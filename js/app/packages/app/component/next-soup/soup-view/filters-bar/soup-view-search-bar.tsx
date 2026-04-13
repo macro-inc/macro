@@ -4,7 +4,6 @@ import { cn } from '@ui/utils/classname';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
@@ -100,61 +99,55 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
       data-search-bar-wrapper
     >
-      <Tooltip
-        class="w-full"
-        placement="bottom-start"
-        tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}
+      <div
+        class={cn(
+          'w-full relative flex items-center gap-1 rounded-xs py-1.5 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
+          variantStyles[props.variant ?? 'secondary']
+        )}
       >
+        <SearchIcon class="size-4 shrink-0" />
         <div
-          class={cn(
-            'relative flex items-center gap-1 rounded-xs py-1.5 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
-            variantStyles[props.variant ?? 'secondary']
-          )}
+          data-soup-search
+          class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
+          onKeyDown={(e) => {
+            if (menuIsOpen()) return;
+            if (e.key === 'ArrowDown' || e.key === 'j') {
+              e.preventDefault();
+              editor.controls.blur();
+            }
+          }}
         >
-          <SearchIcon class="size-4 shrink-0" />
-          <div
-            data-soup-search
-            class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
-            onKeyDown={(e) => {
-              if (menuIsOpen()) return;
-              if (e.key === 'ArrowDown' || e.key === 'j') {
-                e.preventDefault();
-                editor.controls.blur();
-              }
+          <MarkdownShell
+            config={editor}
+            placeholder="Search"
+            autofocus={props.autoFocus}
+            class="!min-h-0 !overflow-visible"
+          />
+        </div>
+        <Show when={!hasContent() && !props.onDismiss}>
+          <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge-muted text-xs rounded-md items-center px-1 py-px">
+            <Hotkey shortcut="cmd+f" />
+          </div>
+        </Show>
+        <Show when={hasContent() || props.onDismiss}>
+          <button
+            type="button"
+            class="ml-auto size-4 mobile:size-6 shrink-0 hover:opacity-60"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              editor.controls.clear();
+              setSearchText('');
+              setHasContent(false);
+              setMentions([]);
+              setSearchMentions([]);
+              props.onDismiss?.();
             }}
           >
-            <MarkdownShell
-              config={editor}
-              placeholder="Search"
-              autofocus={props.autoFocus}
-              class="!min-h-0 !overflow-visible"
-            />
-          </div>
-          <Show when={!hasContent() && !props.onDismiss}>
-            <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge-muted text-xs rounded-md items-center px-1 py-px">
-              <Hotkey shortcut="cmd+f" />
-            </div>
-          </Show>
-          <Show when={hasContent() || props.onDismiss}>
-            <button
-              type="button"
-              class="ml-auto size-4 mobile:size-6 shrink-0 hover:opacity-60"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                editor.controls.clear();
-                setSearchText('');
-                setHasContent(false);
-                setMentions([]);
-                setSearchMentions([]);
-                props.onDismiss?.();
-              }}
-            >
-              <XIcon class="size-4 mobile:size-6" />
-            </button>
-          </Show>
-        </div>
-      </Tooltip>
+            <XIcon class="size-4 mobile:size-6" />
+          </button>
+        </Show>
+      </div>
     </div>
   );
 };
