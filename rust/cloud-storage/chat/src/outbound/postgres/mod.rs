@@ -310,6 +310,13 @@ impl ChatRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn update_project_modified(&self, project_id: &str) -> Result<(), ChatErr> {
+        queries::update_project_modified::update_project_modified(&self.pool, project_id)
+            .await
+            .map_err(to_chat_err)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn patch_message(
         &self,
         chat_id: &str,

@@ -16,5 +16,6 @@ pub(crate) mod permanently_delete_chat;
 pub(crate) mod revert_delete_chat;
 pub(crate) mod soft_delete_chat;
 pub(crate) mod update_message_content;
+pub(crate) mod update_project_modified;
 pub(crate) mod upsert_item_last_accessed;
 pub(crate) mod upsert_user_history;
