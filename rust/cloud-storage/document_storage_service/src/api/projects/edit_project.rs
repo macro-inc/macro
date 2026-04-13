@@ -11,6 +11,7 @@ use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor,
 };
+use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_share_permissions::user_item_access::update_user_item_access;
 use model::response::{GenericErrorResponse, SuccessResponse};
 use model::{project::BasicProject, response::GenericSuccessResponse};
@@ -193,6 +194,23 @@ async fn edit_project_v2(
         },
     )
     .await;
+
+    let _ = ctx
+        .entity_access_management_service
+        .move_project(
+            &macro_uuid::string_to_uuid(&id).unwrap(),
+            project_context
+                .parent_id
+                .as_ref()
+                .map(|p| macro_uuid::string_to_uuid(&p).unwrap())
+                .as_ref(),
+            req.project_parent_id
+                .as_ref()
+                .map(|p| macro_uuid::string_to_uuid(&p).unwrap())
+                .as_ref(),
+        )
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "unable to update entity access for project"));
 
     // Update the project you moved from and moved to
     macro_project_utils::update_project_modified(
