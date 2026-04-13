@@ -75,7 +75,7 @@ where
 
         let result = service_context
             .service
-            .get_document(entity_access_receipt)
+            .get_document(entity_access_receipt.clone())
             .await
             .map_err(|e| ToolCallError {
                 description: "unable to get the document metadata".to_string(),
@@ -84,10 +84,21 @@ where
 
         let branch_name = if let Some(sub_type) = result.document_metadata.sub_type {
             match sub_type {
-                document_sub_type::DocumentSubType::Task => Some(construct_branch_name(
-                    &result.document_metadata.document_id,
-                    &result.document_metadata.document_name,
-                )),
+                document_sub_type::DocumentSubType::Task => {
+                    let short_id = service_context
+                        .service
+                        .get_short_id(entity_access_receipt)
+                        .await
+                        .map_err(|e| ToolCallError {
+                            description: "unable to get the short id".to_string(),
+                            internal_error: e.into(),
+                        })?;
+
+                    let name = result.document_metadata.document_name.clone();
+                    let slugified_name = name.replace(" ", "-").to_lowercase();
+
+                    Some(format!("macro-{short_id}-{slugified_name}"))
+                }
             }
         } else {
             None
@@ -103,17 +114,4 @@ where
             user_access_level: result.user_access_level,
         })
     }
-}
-
-/// Constructs the branch name of a task from document id + document name
-fn construct_branch_name(document_id: &str, document_name: &str) -> String {
-    // SAFETY: this is fine as we know the id is a uuid
-    let document_id = macro_uuid::string_to_uuid(document_id).unwrap();
-
-    let short_uuid_converter = macro_uuid::ShortUuidConverter::default();
-    let short_uuid = short_uuid_converter.from_uuid(&document_id);
-
-    let slugified_name = document_name.replace(" ", "-").to_lowercase();
-
-    format!("macro-{short_uuid}-{slugified_name}")
 }
