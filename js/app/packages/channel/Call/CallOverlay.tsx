@@ -1,14 +1,6 @@
 import { Track, type RemoteParticipant } from 'livekit-client';
-import {
-  For,
-  Show,
-  createEffect,
-  createSignal,
-  onCleanup,
-  on,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
+import { TrackView } from './TrackView';
 import PhoneDisconnect from '@icon/regular/phone-disconnect.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
@@ -27,66 +19,10 @@ import {
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext, type MediaDeviceInfo } from './CallContext';
 
-/**
- * Generic track view that attaches/detaches a LiveKit track's media element.
- * Callers resolve the track; this component handles the DOM lifecycle.
- */
-function TrackView(props: {
-  track: Track | undefined;
-  fit?: 'cover' | 'contain';
-  mirror?: boolean;
-}) {
-  let ref!: HTMLDivElement;
-  let attachedTrack: Track | undefined;
-  let attachedElement: Element | undefined;
-
-  createEffect(
-    on(
-      () => props.track,
-      (track, prev) => {
-        if (prev === track) return;
-
-        prev?.detach().forEach((el) => el.remove());
-        attachedTrack = undefined;
-        attachedElement = undefined;
-
-        if (!track) return;
-
-        const el = track.attach();
-        attachedTrack = track;
-        attachedElement = el;
-        Object.assign(el.style, {
-          width: '100%',
-          height: '100%',
-          objectFit: props.fit ?? 'cover',
-          transform: props.mirror ? 'scaleX(-1)' : '',
-        });
-        ref.appendChild(el);
-      }
-    )
-  );
-
-  onCleanup(() => {
-    if (attachedTrack) {
-      attachedTrack.detach().forEach((el) => el.remove());
-    } else {
-      attachedElement?.remove();
-    }
-  });
-
-  return <div ref={ref} class="w-full h-full" />;
-}
-
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
   const [displayName] = useDisplayName(macroId());
-
-  const micTrack = () => {
-    callCtx.trackVersion();
-    return props.participant.getTrackPublication(Track.Source.Microphone)
-      ?.track;
-  };
 
   const cameraTrack = () => {
     callCtx.trackVersion();
@@ -101,10 +37,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
       classList={{ 'ring-2 ring-accent-2': isSpeaking() }}
     >
-      {/* Attach remote audio so we can hear this participant (visually hidden to avoid stealing layout) */}
-      <div class="absolute w-0 h-0 overflow-hidden">
-        <TrackView track={micTrack()} />
-      </div>
+      {/* Remote mic audio is attached by <CallAudioSink /> so playback survives tab switches. */}
       <Show
         when={cameraTrack()}
         fallback={

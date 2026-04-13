@@ -27,6 +27,7 @@ import {
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import {
+  CallAudioSink,
   CallProvider,
   ChannelCallButton,
   ChannelCallTab,
@@ -143,6 +144,12 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       <CallProvider>
         <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
           <div class="h-full flex flex-col">
+            {/*
+              Mounted above <Switch> so remote call audio keeps playing when
+              the user switches from the Call tab to Messages / Attachments /
+              Participants. See CallAudioSink for details.
+            */}
+            <CallAudioSink />
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <NewChannel
