@@ -1,7 +1,8 @@
-import type { NotificationStack } from '@notifications/notification-stacking';
-import type { Notification } from '../types/notification';
+import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import { notificationIsRead, type UnifiedNotification } from '@notifications';
+import type { NotificationStack } from '@notifications/notification-stacking';
 import { match } from 'ts-pattern';
+import type { Notification } from '../types/notification';
 
 /**
  * Filters out invalid notification types that shouldn't be displayed
@@ -12,7 +13,11 @@ export function filterValidNotifications(
   if (!notifications) return [];
 
   return notifications.filter((n) => {
-    return n.notification_event_type !== undefined;
+    return (
+      n.notification_event_type !== undefined &&
+      (ENABLE_DOCUMENT_MENTION_NOTIFICATIONS ||
+        n.notification_event_type !== 'document_mention')
+    );
   });
 }
 
