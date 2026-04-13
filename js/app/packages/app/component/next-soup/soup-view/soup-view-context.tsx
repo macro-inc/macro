@@ -33,7 +33,11 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import { matchesTaskSubFilters } from './task-sub-filter-matcher';
+import {
+  createAssigneeFilter,
+  unassignedFilter,
+} from '@app/component/next-soup/filters';
+import { NO_ASSIGNEE } from './task-sub-filter-matcher';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
@@ -164,6 +168,17 @@ export const SoupViewContextProvider: FlowComponent<
       if (!f.ast) return {};
       return typeof f.ast === 'function' ? f.ast({}) : f.ast;
     });
+
+    // Include assignee filter ASTs
+    const currentAssigneeFilter = assigneeFilter();
+    for (const id of currentAssigneeFilter) {
+      if (id === NO_ASSIGNEE) {
+        asts.push(unassignedFilter.toAst());
+      } else {
+        asts.push(createAssigneeFilter(id).toAst());
+      }
+    }
+
     return mergeFilterAst(...asts);
   });
 
@@ -297,14 +312,15 @@ export const SoupViewContextProvider: FlowComponent<
         continue;
       }
 
-      // Apply task sub-filters
+      // Apply assignee filters using filter configs
       if (currentAssigneeFilter.length > 0 && isTaskEntity(entity)) {
-        const taskEntity = entity as unknown as TaskEntityWithProperties;
-        if (
-          !matchesTaskSubFilters(taskEntity, {
-            assigneeFilter: currentAssigneeFilter,
-          })
-        ) {
+        const matchesAny = currentAssigneeFilter.some((id) => {
+          if (id === NO_ASSIGNEE) {
+            return unassignedFilter.test(entity);
+          }
+          return createAssigneeFilter(id).test(entity);
+        });
+        if (!matchesAny) {
           continue;
         }
       }

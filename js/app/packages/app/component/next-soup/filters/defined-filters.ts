@@ -2,7 +2,14 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import { type EntityData, isDocumentEntity, getEntityProjectId } from '@entity';
+import {
+  type EntityData,
+  type TaskEntityWithProperties,
+  isDocumentEntity,
+  isTaskEntity,
+  getEntityProjectId,
+  getTaskAssigneeIds,
+} from '@entity';
 import type { NotificationSource } from '@notifications';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import {
@@ -503,6 +510,31 @@ export const assignedToFilter = (getUserID: () => string | undefined) =>
       propf: ast.propEntity(SYSTEM_PROPERTY_IDS.ASSIGNEES, getUserID() ?? ''),
     },
   });
+
+/** Creates an assignee filter for a specific user ID */
+export const createAssigneeFilter = (userId: string) =>
+  defineFilter({
+    id: `assignee:${userId}` as const,
+    predicate: (e: EntityData) => {
+      if (!isTaskEntity(e)) return false;
+      const task = e as unknown as TaskEntityWithProperties;
+      return getTaskAssigneeIds(task).includes(userId);
+    },
+    ast: {
+      propf: ast.propEntity(SYSTEM_PROPERTY_IDS.ASSIGNEES, userId),
+    },
+  });
+
+/** Filter for unassigned tasks */
+export const unassignedFilter = defineFilter({
+  id: 'unassigned',
+  predicate: (e: EntityData) => {
+    if (!isTaskEntity(e)) return false;
+    const task = e as unknown as TaskEntityWithProperties;
+    return getTaskAssigneeIds(task).length === 0;
+  },
+  ast: { df: ast.eq('dst', 'task') },
+});
 
 export const unreadFilterDef = (notificationSource: NotificationSource) =>
   defineFilter({

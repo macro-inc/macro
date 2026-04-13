@@ -27,6 +27,8 @@ export {
 
 export {
   createSoupFilters,
+  createAssigneeFilter,
+  unassignedFilter,
   SOUP_FILTER_GROUPS,
   ENTITY_TYPE_FILTERS,
   type FilterID,
