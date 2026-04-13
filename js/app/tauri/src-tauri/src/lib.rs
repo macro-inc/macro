@@ -171,7 +171,7 @@ pub fn run() {
         .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
-                "http://localhost:8080/".parse().expect("valid url"),
+                "http://localhost:3001/".parse().expect("valid url"),
             ),
         );
 

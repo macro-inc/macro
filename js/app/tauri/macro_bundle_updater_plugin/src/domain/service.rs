@@ -8,7 +8,6 @@ use crate::domain::{
 use rootcause::{Report, prelude::ResultExt, report};
 use semver::Version;
 use std::path::{Path, PathBuf};
-use tokio::task::JoinHandle;
 
 pub struct Service {
     handle: WorkerHandle,
@@ -23,7 +22,6 @@ struct Worker<U, Fs, Q> {
 }
 
 struct WorkerHandle {
-    _handle: tokio::task::JoinHandle<()>,
     status_rx: tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>>,
     grant_tx: Option<tokio::sync::oneshot::Sender<UpdateApproval>>,
 }
@@ -36,7 +34,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(UpdateStatus::Idle));
         let (grant_tx, grant_rx) = tokio::sync::oneshot::channel();
 
-        let handle = Worker {
+        Worker {
             update_repo,
             fs_repo,
             system_query,
@@ -46,14 +44,13 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         .run_background();
 
         WorkerHandle {
-            _handle: handle,
             status_rx,
             grant_tx: Some(grant_tx),
         }
     }
 
-    fn run_background(mut self) -> JoinHandle<()> {
-        tokio::task::spawn(async move {
+    fn run_background(mut self) {
+        tauri::async_runtime::spawn(async move {
             loop {
                 let Ok(status) = self.status_tx.borrow().as_ref().cloned() else {
                     break;
@@ -68,9 +65,10 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     break;
                 };
             }
-        })
+        });
     }
 
+    #[tracing::instrument(ret, err, skip(self))]
     async fn next_status(
         &mut self,
         status: UpdateStatus,
