@@ -1409,6 +1409,17 @@
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)"
+              }
+            ]
           }
         }
       },
@@ -1818,6 +1829,21 @@
             "description": "The ids of the notifications to handle"
           }
         }
+      },
+      "NotificationDocumentSubType": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["task"]
+              }
+            }
+          }
+        ],
+        "description": "The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern."
       },
       "NotificationServiceApiVersion": {
         "type": "string",
