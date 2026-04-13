@@ -327,7 +327,7 @@ export const StatusFilter = () => {
     { value: 'done', label: 'Done' },
   ];
 
-  const status = useFilterOptions(statusOptions, { target: 'and' });
+  const status = useFilterOptions(statusOptions);
 
   return (
     <FilterSelect
@@ -381,7 +381,7 @@ export const TaskStatusFilter = () => {
     ),
   }));
 
-  const status = useFilterOptions(statusOptions, { target: 'or' });
+  const status = useFilterOptions(statusOptions);
 
   return (
     <FilterSelect
@@ -607,7 +607,7 @@ export const HasAttachmentFilter = () => {
     { value: 'has-attachment', label: 'Has attachment' },
   ];
 
-  const attachment = useFilterOptions(attachmentOptions, { target: 'and' });
+  const attachment = useFilterOptions(attachmentOptions);
 
   return (
     <FilterChipGroup

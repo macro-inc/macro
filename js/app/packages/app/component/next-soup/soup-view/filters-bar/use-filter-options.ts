@@ -5,7 +5,6 @@ import type { Option } from './filter-primitives';
 
 type UseFilterOptionsConfig = {
   multiple?: boolean;
-  target?: 'and' | 'or';
   /** Optional function to compute query filters based on selected option values */
   getQueryFilters?: (selectedIds: string[]) => SoupItemsQueryFilters;
 };
@@ -14,7 +13,7 @@ export const useFilterOptions = (
   options: Option[],
   config: UseFilterOptionsConfig = {}
 ) => {
-  const { multiple = true, target = 'or', getQueryFilters } = config;
+  const { multiple = true, getQueryFilters } = config;
   const { soup, setQueryFilters } = useSoupView();
 
   const optionIds = options.map((opt) => opt.value);
@@ -31,24 +30,13 @@ export const useFilterOptions = (
         : [];
 
     batch(() => {
-      soup.filters.set((cur) => {
-        if (target === 'and') {
-          return {
-            and: [
-              ...cur.andIds.filter((id) => !optionIds.includes(id)),
-              ...selectedIds,
-            ],
-            or: cur.orIds,
-          };
-        }
-        return {
-          and: cur.andIds,
-          or: [
-            ...cur.orIds.filter((id) => !optionIds.includes(id)),
-            ...selectedIds,
-          ],
-        };
-      });
+      // Get current active IDs, remove options from this group, add newly selected
+      const currentIds = soup.filters.activeIds();
+      const newIds = [
+        ...currentIds.filter((id) => !optionIds.includes(id)),
+        ...selectedIds,
+      ];
+      soup.filters.set(newIds);
 
       if (getQueryFilters) {
         setQueryFilters(getQueryFilters(selectedIds));
