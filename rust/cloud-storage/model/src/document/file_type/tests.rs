@@ -32,6 +32,14 @@ fn test_clean_document_name() {
     );
 
     assert_eq!(
+        FileType::clean_document_name("proposal.PDF").as_deref(),
+        Some("proposal")
+    );
+    assert_eq!(
+        FileType::clean_document_name("report.Docx").as_deref(),
+        Some("report")
+    );
+    assert_eq!(
         FileType::clean_document_name("testing.random").as_deref(),
         None
     );
@@ -75,6 +83,11 @@ fn test_is_suffix_match() {
     assert!(FileType::is_suffix_match("testing.docx.zip"));
     assert!(FileType::is_suffix_match("testing.tar.gz"));
     assert!(FileType::is_suffix_match(".pdf"));
+    assert!(FileType::is_suffix_match("testing.PDF"));
+    assert!(FileType::is_suffix_match("testing.Pdf"));
+    assert!(FileType::is_suffix_match("testing.DOCX"));
+    assert!(FileType::is_suffix_match("testing.MD"));
+    assert!(FileType::is_suffix_match("testing.TAR.GZ"));
 }
 
 #[test]
@@ -129,5 +142,17 @@ fn test_split_suffix_match() {
     assert_eq!(
         FileType::split_suffix_match("testing.1.5.0.tar.gz"),
         Some(("testing.1.5.0", "tar.gz"))
+    );
+    assert_eq!(
+        FileType::split_suffix_match("testing.PDF"),
+        Some(("testing", "PDF"))
+    );
+    assert_eq!(
+        FileType::split_suffix_match("testing.Docx"),
+        Some(("testing", "Docx"))
+    );
+    assert_eq!(
+        FileType::split_suffix_match("REPORT.MD"),
+        Some(("REPORT", "MD"))
     );
 }
