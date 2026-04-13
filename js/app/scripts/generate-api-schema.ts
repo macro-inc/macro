@@ -73,22 +73,34 @@ async function runBinary(
 		binaryName,
 	);
 	const proc = Bun.spawn([binaryPath], { stdout: "pipe", stderr: "pipe" });
-	let timedOut = false;
-	const timeout = setTimeout(() => {
-		timedOut = true;
-		proc.kill();
-	}, BINARY_TIMEOUT_MS);
-	const [stdout, stderr, exitCode] = await Promise.all([
+	const TIMEOUT_SENTINEL = Symbol("timeout");
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	const timeoutPromise = new Promise<typeof TIMEOUT_SENTINEL>((resolve) => {
+		timeout = setTimeout(() => {
+			proc.kill();
+			resolve(TIMEOUT_SENTINEL);
+		}, BINARY_TIMEOUT_MS);
+	});
+	const completionPromise = Promise.all([
 		new Response(proc.stdout).text(),
 		new Response(proc.stderr).text(),
 		proc.exited,
 	]);
+	const result = await Promise.race([completionPromise, timeoutPromise]);
 	clearTimeout(timeout);
-	if (timedOut) {
+	if (result === TIMEOUT_SENTINEL) {
+		// After the kill, the in-flight stream reads should complete quickly — grab
+		// whatever stderr was buffered, but don't wait forever if they don't.
+		const drained = await Promise.race([
+			completionPromise.catch(() => null),
+			new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_000)),
+		]);
+		const stderr = drained ? drained[1] : "";
 		throw new Error(
 			`${binaryName} timed out after ${BINARY_TIMEOUT_MS}ms\nstderr:\n${stderr}`,
 		);
 	}
+	const [stdout, stderr, exitCode] = result;
 	if (exitCode !== 0) {
 		throw new Error(
 			`${binaryName} exited with code ${exitCode}\nstderr:\n${stderr}`,
