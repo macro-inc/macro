@@ -39,13 +39,15 @@ pub async fn create_project_v2(
 
     upsert_user_history(&mut transaction, user_id.copied(), &project.id, "project").await?;
 
-    crate::item_access::insert::insert_user_item_access(
+    // SAFETY: this is a UUID
+    let project_id = macro_uuid::string_to_uuid(&project.id).unwrap();
+
+    crate::item_access::insert::insert_user_entity_access(
         &mut transaction,
         user_id,
-        &project.id,
+        &project_id,
         "project",
         AccessLevel::Owner,
-        None,
     )
     .await?;
 

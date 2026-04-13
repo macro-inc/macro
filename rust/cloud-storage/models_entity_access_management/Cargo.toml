@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "models_entity_access_management"
+publish = false
+version = "0.1.0"
+
+[features]
+db = ["dep:sqlx"]
+default = ["db"]
+
+[dependencies]
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
