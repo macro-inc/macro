@@ -1,4 +1,5 @@
 use anyhow::Context;
+use model_entity::EntityType;
 use sqlx::{Pool, Postgres, Transaction};
 
 /// Soft deletes a document from the database.
@@ -102,10 +103,10 @@ pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::
         .execute(&mut *transaction)
         .await?;
 
-    crate::item_access::delete::delete_user_item_access_by_item(
+    crate::item_access::delete::delete_user_entity_access_by_item(
         &mut transaction,
-        document_id,
-        "document",
+        &macro_uuid::string_to_uuid(document_id).unwrap(),
+        EntityType::Document,
     )
     .await?;
 

@@ -2819,6 +2819,7 @@ dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
  "macro_entrypoint",
+ "macro_uuid",
  "openssl",
  "sqlx",
  "tokio",

@@ -48,10 +48,10 @@ pub async fn delete_chat(db: sqlx::PgPool, chat_id: &str) -> anyhow::Result<()> 
 
     sqlx::query!(
         r#"
-        DELETE FROM "UserItemAccess"
-        WHERE "item_id" = $1 AND "item_type" = $2
+        DELETE FROM "entity_access"
+        WHERE "entity_id" = $1 AND "entity_type" = $2
         "#,
-        chat_id,
+        macro_uuid::string_to_uuid(chat_id).unwrap(),
         "chat",
     )
     .execute(&mut *transaction)
