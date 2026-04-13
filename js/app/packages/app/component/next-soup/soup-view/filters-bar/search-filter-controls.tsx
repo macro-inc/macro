@@ -149,9 +149,8 @@ export const SearchIndexFilter = () => {
   createEffect(() => {
     if (!isEmailActive()) return;
     const ef = queryFilters().email_filters;
-    const sub: EmailSubFilters = {};
-    if (ef?.importance !== undefined) sub.importance = ef.importance;
-    cacheEmailSubFilters(contentId, sub);
+    // Use null as sentinel for "explicitly cleared" since undefined is dropped by JSON.stringify
+    cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
   });
 
   const handleChange = (selected: Option[]) => {
@@ -177,11 +176,16 @@ export const SearchIndexFilter = () => {
             });
           } else if (opt.value === 'email') {
             const cached = getCachedEmailSubFilters(contentId);
+            // null in cache means "explicitly cleared" — convert to undefined to override the default
+            const importance =
+              'importance' in cached
+                ? (cached.importance ?? undefined)
+                : opt.queryFilters.email_filters?.importance;
             setQueryFilters({
               ...opt.queryFilters,
               email_filters: {
                 ...opt.queryFilters.email_filters,
-                ...cached,
+                importance,
               },
             });
           } else {
@@ -193,6 +197,7 @@ export const SearchIndexFilter = () => {
       } else {
         setQueryFilters({
           ...QUERY_FILTERS.default,
+          email_filters: { importance: true },
         });
       }
     });
@@ -207,7 +212,6 @@ export const SearchIndexFilter = () => {
 
   const clearFilters = () => {
     cacheChannelSubFilters(contentId, {});
-    cacheEmailSubFilters(contentId, {});
     handleChange([]);
   };
 
