@@ -161,5 +161,5 @@ export const QUERY_FILTERS = {
     project_filters: {},
   },
 
-  default: { email_filters: { importance: true } },
+  default: {},
 } satisfies Record<string, SoupItemsQueryFilters>;

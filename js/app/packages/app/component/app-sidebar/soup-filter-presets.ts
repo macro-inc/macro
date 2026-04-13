@@ -316,6 +316,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         queryFilters: {
           ...QUERY_FILTERS.default,
+          email_filters: { importance: true },
         },
         clientFilters: { and: [], or: [] },
       }),

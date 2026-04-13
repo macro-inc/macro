@@ -15,9 +15,13 @@ import type { SoupBody } from '@queries/soup/items';
 import { batch, createEffect, createMemo, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
-import type { ChannelFilters } from '@service-storage/generated/schemas';
+import type {
+  ChannelFilters,
+  EmailFilters,
+} from '@service-storage/generated/schemas';
 
 type ChannelSubFilters = Pick<ChannelFilters, 'channel_ids' | 'sender_ids'>;
+type EmailSubFilters = Pick<EmailFilters, 'importance'>;
 
 function getCachedChannelSubFilters(contentId: string): ChannelSubFilters {
   if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
@@ -40,6 +44,30 @@ function cacheChannelSubFilters(contentId: string, filters: ChannelSubFilters) {
     );
   } catch {
     // best-effort: quota or security errors should not break filter flow
+  }
+}
+
+function getCachedEmailSubFilters(contentId: string): EmailSubFilters {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
+  try {
+    const raw = localStorage.getItem(
+      soupViewCacheKey(contentId, 'email-sub-filters')
+    );
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function cacheEmailSubFilters(contentId: string, filters: EmailSubFilters) {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return;
+  try {
+    localStorage.setItem(
+      soupViewCacheKey(contentId, 'email-sub-filters'),
+      JSON.stringify(filters)
+    );
+  } catch {
+    // best-effort
   }
 }
 
@@ -106,6 +134,8 @@ export const SearchIndexFilter = () => {
 
   const isChannelsActive = () =>
     activeIndex().some((o) => o.value === 'channels');
+  const isEmailActive = () =>
+    activeIndex().some((o) => o.value === 'email');
 
   createEffect(() => {
     if (!isChannelsActive()) return;
@@ -114,6 +144,14 @@ export const SearchIndexFilter = () => {
     if (cf?.channel_ids?.length) sub.channel_ids = cf.channel_ids;
     if (cf?.sender_ids?.length) sub.sender_ids = cf.sender_ids;
     cacheChannelSubFilters(contentId, sub);
+  });
+
+  createEffect(() => {
+    if (!isEmailActive()) return;
+    const ef = queryFilters().email_filters;
+    const sub: EmailSubFilters = {};
+    if (ef?.importance !== undefined) sub.importance = ef.importance;
+    cacheEmailSubFilters(contentId, sub);
   });
 
   const handleChange = (selected: Option[]) => {
@@ -134,6 +172,15 @@ export const SearchIndexFilter = () => {
               ...opt.queryFilters,
               channel_filters: {
                 ...opt.queryFilters.channel_filters,
+                ...cached,
+              },
+            });
+          } else if (opt.value === 'email') {
+            const cached = getCachedEmailSubFilters(contentId);
+            setQueryFilters({
+              ...opt.queryFilters,
+              email_filters: {
+                ...opt.queryFilters.email_filters,
                 ...cached,
               },
             });
@@ -160,6 +207,7 @@ export const SearchIndexFilter = () => {
 
   const clearFilters = () => {
     cacheChannelSubFilters(contentId, {});
+    cacheEmailSubFilters(contentId, {});
     handleChange([]);
   };
 
@@ -176,6 +224,9 @@ export const SearchIndexFilter = () => {
         <InChannelFilter />
         <FromSenderFilter />
       </Show>
+      <Show when={isEmailActive()}>
+        <EmailImportanceFilter />
+      </Show>
       <Show when={hasActiveIndex()}>
         <button
           type="button"
@@ -186,6 +237,58 @@ export const SearchIndexFilter = () => {
         </button>
       </Show>
     </div>
+  );
+};
+
+const EMAIL_IMPORTANCE_OPTIONS: Option[] = [
+  { value: 'signal', label: 'Signal' },
+  { value: 'noise', label: 'Noise' },
+];
+
+function importanceToOption(
+  importance: boolean | null | undefined
+): Option[] {
+  if (importance === true) return [EMAIL_IMPORTANCE_OPTIONS[0]];
+  if (importance === false) return [EMAIL_IMPORTANCE_OPTIONS[1]];
+  return [];
+}
+
+const EmailImportanceFilter = () => {
+  const { setQueryFilters, queryFilters } = useSoupView();
+
+  const active = createMemo(() =>
+    importanceToOption(queryFilters().email_filters?.importance)
+  );
+
+  const label = createMemo(() => {
+    const a = active();
+    return a.length > 0 ? a[0].label : 'All';
+  });
+
+  const handleChange = (selected: Option[]) => {
+    const importance =
+      selected.length > 0
+        ? selected[0].value === 'signal'
+          ? true
+          : false
+        : undefined;
+    setQueryFilters((prev) => ({
+      ...prev,
+      email_filters: {
+        ...prev.email_filters,
+        importance,
+      },
+    }));
+  };
+
+  return (
+    <FilterSelect
+      label={label()}
+      options={EMAIL_IMPORTANCE_OPTIONS}
+      active={active()}
+      onChange={handleChange}
+      multiple={false}
+    />
   );
 };
 
