@@ -147,7 +147,10 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
           filterValidNotifications(entity.notifications?.() ?? [])
         );
         const splitManager = globalSplitManager();
-        if (splitManager && openSingleStackNotification(validNotifs, splitManager)) {
+        if (
+          splitManager &&
+          openSingleStackNotification(validNotifs, splitManager)
+        ) {
           return true;
         }
       }
@@ -318,7 +321,10 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
           filterValidNotifications(entity.notifications?.() ?? [])
         );
         const splitManager = globalSplitManager();
-        if (splitManager && openSingleStackNotification(validNotifs, splitManager, true)) {
+        if (
+          splitManager &&
+          openSingleStackNotification(validNotifs, splitManager, true)
+        ) {
           return true;
         }
       }
