@@ -134,8 +134,7 @@ export const SearchIndexFilter = () => {
 
   const isChannelsActive = () =>
     activeIndex().some((o) => o.value === 'channels');
-  const isEmailActive = () =>
-    activeIndex().some((o) => o.value === 'email');
+  const isEmailActive = () => activeIndex().some((o) => o.value === 'email');
 
   createEffect(() => {
     if (!isChannelsActive()) return;
@@ -250,9 +249,7 @@ const EMAIL_IMPORTANCE_OPTIONS: Option[] = [
   { value: 'noise', label: 'Noise' },
 ];
 
-function importanceToOption(
-  importance: boolean | null | undefined
-): Option[] {
+function importanceToOption(importance: boolean | null | undefined): Option[] {
   if (importance === true) return [EMAIL_IMPORTANCE_OPTIONS[0]];
   if (importance === false) return [EMAIL_IMPORTANCE_OPTIONS[1]];
   return [];
@@ -273,11 +270,7 @@ const EmailImportanceFilter = () => {
 
   const handleChange = (selected: Option[]) => {
     const importance =
-      selected.length > 0
-        ? selected[0].value === 'signal'
-          ? true
-          : false
-        : undefined;
+      selected.length > 0 ? selected[0].value === 'signal' : undefined;
     setQueryFilters((prev) => ({
       ...prev,
       email_filters: {
