@@ -1,7 +1,4 @@
-import SwapIcon from '@icon/bold/swap-bold.svg';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button } from '@ui/components/Button';
 import type { Component, JSX } from 'solid-js';
 import { twMerge } from 'tailwind-merge';
 import type { PropertySaveHandler } from '../../context/PropertiesContext';
@@ -93,51 +90,5 @@ export const PropertyValueButton: Component<{
     >
       {props.children}
     </button>
-  );
-};
-
-/**
- * Edit button for modifying property values
- * Consistent styling and behavior for all property types
- */
-export const PropertyValueEditButton: Component<{
-  onClick: () => void;
-  disabled?: boolean;
-}> = (props) => {
-  return (
-    <Button
-      onClick={props.onClick}
-      disabled={props.disabled}
-      class={twMerge(
-        'bg-panel size-4 p-0.5 border border-edge-muted text-ink-muted cursor-default',
-        'hover:bg-hover hover:text-ink',
-        'active:bg-panel active:border-edge active:text-ink'
-      )}
-    >
-      <SwapIcon class="size-3" />
-    </Button>
-  );
-};
-
-/**
- * Delete button for removing property values
- * Consistent styling and behavior for all property types
- */
-export const PropertyValueDeleteButton: Component<{
-  onClick: () => void;
-  disabled?: boolean;
-}> = (props) => {
-  return (
-    <Button
-      onClick={props.onClick}
-      disabled={props.disabled}
-      class={twMerge(
-        'bg-panel floating-failure-bg size-4 p-0.5 border border-edge-muted text-failure-ink cursor-default',
-        'hover:bg-panel hover:floating-failure-bg',
-        'active:bg-failure-ink active:border-failure-ink active:text-panel'
-      )}
-    >
-      <DeleteIcon class="size-3" />
-    </Button>
   );
 };
