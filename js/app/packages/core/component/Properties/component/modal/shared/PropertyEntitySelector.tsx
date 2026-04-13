@@ -41,6 +41,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 type EntityInputProps = {
   config: EntitySelectorConfig;
   selectedOptions: () => Set<string>;
+  originalOptions?: () => Set<string>;
   setSelectedOptions: (
     options: Set<string>,
     entityInfo?: { id: string; entity_type: string }[]
@@ -494,6 +495,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               {(entity, index) => {
                 const adjustedIndex = () => index() + pinnedCount();
                 const isSelected = () => props.selectedOptions().has(entity.id);
+                const wasOriginal = () =>
+                  props.originalOptions?.().has(entity.id) ?? false;
+                const isAdded = () => isSelected() && !wasOriginal();
+                const isRemoved = () => !isSelected() && wasOriginal();
                 const isKeyboardSelected = () =>
                   adjustedIndex() === selectedIndex();
 
@@ -503,7 +508,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
                     classList={{
                       'bg-hover': isKeyboardSelected(),
-                      'bg-accent/10': isSelected(),
+                      'bg-success-bg': isAdded(),
+                      'bg-failure-bg': isRemoved(),
+                      'bg-accent/10':
+                        isSelected() && !isAdded() && !isRemoved(),
                     }}
                     onClick={() => toggleEntity(entity)}
                     onKeyDown={(e) => e.key === 'Enter' && toggleEntity(entity)}
