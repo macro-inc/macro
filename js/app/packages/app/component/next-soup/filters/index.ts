@@ -8,17 +8,26 @@ export {
   createFilterState,
   type FilterState,
   type FilterStateOptions,
-  type SetFiltersInput,
-  type SetFiltersCallback,
-  type CurrentFilterState,
   type FilterConfig,
   type FilterGroupConfig,
   type FilterPredicate,
 } from './create-filter-state';
 
 export {
+  defineFilter,
+  mergeFilterAst,
+  ast,
+  NIL_UUID,
+  type FilterAst,
+  type AstExpr,
+  type AstBucket,
+  type EmailView,
+  type DefinedFilter,
+} from './define-filter';
+
+export {
   createSoupFilters,
   SOUP_FILTER_GROUPS,
-  ENTITY_TYPE_FILTER_CONFIGS,
+  ENTITY_TYPE_FILTERS,
   type FilterID,
-} from './configs';
+} from './defined-filters';
