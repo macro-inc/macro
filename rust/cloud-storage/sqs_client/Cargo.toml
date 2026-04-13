@@ -24,7 +24,7 @@ default = [
 ]
 document = []
 document_text_extractor = []
-email = ["uuid", "models_email", "dep:email"]
+email = ["uuid", "models_email", "dep:email", "gmail"]
 gmail = ["model", "uuid"]
 organization_retention = []
 search = ["chrono", "model", "models_opensearch", "uuid", "futures"]
