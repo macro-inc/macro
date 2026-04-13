@@ -3908,6 +3908,7 @@ dependencies = [
  "macro_user_id",
  "mockall",
  "model-entity",
+ "models_entity_access_management",
  "models_permissions",
  "serde",
  "serde_json",
@@ -6054,6 +6055,7 @@ dependencies = [
  "model-entity",
  "model_file_type",
  "models_dcs",
+ "models_entity_access_management",
  "models_opensearch",
  "models_pagination",
  "models_permissions",
@@ -6802,6 +6804,14 @@ dependencies = [
  "thiserror 2.0.17",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "models_entity_access_management"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
 ]
 
 [[package]]
