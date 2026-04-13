@@ -6,7 +6,7 @@ pub struct CreateProjectRequest {
     /// The name of the project.
     pub name: String,
     /// The project that the new project will belong to.
-    pub project_parent_id: Option<String>,
+    pub project_parent_id: Option<uuid::Uuid>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]

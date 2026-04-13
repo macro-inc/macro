@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT user_id FROM (\n        -- Direct user grants\n        SELECT source_id as user_id FROM entity_access\n        WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'user'\n\n        UNION ALL\n\n        -- Channel Members\n        SELECT cp.user_id FROM comms_channel_participants cp\n        WHERE cp.left_at IS NULL AND cp.channel_id IN (\n            SELECT source_id::uuid FROM entity_access\n            WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'channel'\n        )\n\n        UNION ALL\n\n        -- Team Members\n        SELECT tu.user_id FROM team_user tu\n        WHERE tu.team_id IN (\n            SELECT source_id::uuid FROM entity_access\n            WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'team'\n        )\n    )\n      \n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0c0d2d2d944ff26d1b60d890ffb5becd7ce6250a3becf484a65ecfa99a0c0d2d"
+}
