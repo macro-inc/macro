@@ -594,6 +594,68 @@
         }
       }
     },
+    "/call/record/{call_id}": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/record/{call_id}`.",
+        "description": "Returns the full [`CallRecord`] (metadata + participants + transcript)\nfor a call identified by its own id. Covers both active and archived calls.\nAccess is validated via channel membership (MemberParticipantRole).",
+        "operationId": "get_call_record",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallRecord"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/webhook": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -5770,6 +5832,132 @@
           "createdBy": {
             "type": "string",
             "description": "User who created the call."
+          }
+        }
+      },
+      "CallRecord": {
+        "type": "object",
+        "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
+        "required": [
+          "callId",
+          "channelId",
+          "roomName",
+          "createdBy",
+          "startedAt",
+          "isActive",
+          "participants",
+          "transcript"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "durationMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Call duration in milliseconds (None if still active)."
+          },
+          "egressId": {
+            "type": ["string", "null"],
+            "description": "Recording egress ID, if any."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the call is currently active (from `calls` table)."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordParticipant"
+            },
+            "description": "Participants (both active and historic)."
+          },
+          "roomName": {
+            "type": "string",
+            "description": "The RTC room name."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started (created_at for active, started_at for archived)."
+          },
+          "transcript": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordTranscriptSegment"
+            },
+            "description": "Transcript segments ordered by `sequence_num`."
+          }
+        }
+      },
+      "CallRecordParticipant": {
+        "type": "object",
+        "description": "A participant as returned in a [`CallRecord`] (historic — includes `left_at`).",
+        "required": ["userId", "joinedAt"],
+        "properties": {
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the user left (None if still in an active call)."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The user id."
+          }
+        }
+      },
+      "CallRecordTranscriptSegment": {
+        "type": "object",
+        "description": "A transcript segment as returned in a [`CallRecord`].",
+        "required": ["speakerId", "content", "startedAt", "sequenceNum"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The transcribed text content."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the speaker stopped (if known)."
+          },
+          "segmentId": {
+            "type": ["string", "null"],
+            "description": "LiveKit segment ID (nullable for archived records)."
+          },
+          "sequenceNum": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Ordering within the call."
+          },
+          "speakerId": {
+            "type": "string",
+            "description": "The speaker's user ID."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the speaker started this segment."
           }
         }
       },
