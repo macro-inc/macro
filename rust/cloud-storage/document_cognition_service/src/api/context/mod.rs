@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::service::ai_stream_registry::AiStreamRegistry;
 use ai_tools::{
     AiToolSet, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
     ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
@@ -62,6 +63,7 @@ pub struct ApiContext {
     pub all_tools: Arc<AiToolSet>,
     pub all_tools_prompt: &'static str,
     pub entity_access_service: Arc<DcsEntityAccessService>,
+    pub ai_stream_registry: AiStreamRegistry,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

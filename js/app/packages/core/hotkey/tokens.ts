@@ -244,6 +244,7 @@ export const TOKENS = {
       close: 'chat-spotlight-close',
     },
     new: 'chat-new',
+    stop: 'chat-stop',
   },
 } as const;
 

@@ -347,6 +347,9 @@ async fn main() -> anyhow::Result<()> {
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service,
+        ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
+            redis_client.clone(),
+        ),
     })
     .await
     .context("failed to setup and serve api")?;

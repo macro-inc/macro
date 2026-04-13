@@ -24,6 +24,9 @@ import type {
   PatchChatRequest,
   RejectToolCallRequest,
   SendChatMessageResponse,
+  StopChatStreamError,
+  StopChatStreamRequest,
+  StopChatStreamResponse,
   StringIDResponse,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
@@ -1207,4 +1210,56 @@ export const sendChatMessage = async (
     status: res.status,
     headers: res.headers,
   } as sendChatMessageResponse;
+};
+
+/**
+ * Cancels the streaming task associated with the given `stream_id`, causing
+it to persist whatever has been generated so far and emit `StreamEnd`.
+The caller must have at least `Edit` access to the chat.
+ * @summary Stop an in-flight AI chat stream.
+ */
+export type stopChatStreamResponse200 = {
+  data: StopChatStreamResponse;
+  status: 200;
+};
+
+export type stopChatStreamResponse403 = {
+  data: StopChatStreamError;
+  status: 403;
+};
+
+export type stopChatStreamResponseSuccess = stopChatStreamResponse200 & {
+  headers: Headers;
+};
+export type stopChatStreamResponseError = stopChatStreamResponse403 & {
+  headers: Headers;
+};
+
+export type stopChatStreamResponse =
+  | stopChatStreamResponseSuccess
+  | stopChatStreamResponseError;
+
+export const getStopChatStreamUrl = () => {
+  return `/stream/chat/message/stop`;
+};
+
+export const stopChatStream = async (
+  stopChatStreamRequest: StopChatStreamRequest,
+  options?: RequestInit
+): Promise<stopChatStreamResponse> => {
+  const res = await fetch(getStopChatStreamUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(stopChatStreamRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: stopChatStreamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as stopChatStreamResponse;
 };
