@@ -333,7 +333,7 @@ async fn main() -> anyhow::Result<()> {
             properties: properties_service.clone(),
         },
         connection_service,
-        entity_access_management_service,
+        entity_access_management_service.clone(),
     ));
 
     let github_webhook_secret = secretsmanager_client
@@ -458,6 +458,7 @@ async fn main() -> anyhow::Result<()> {
         call_state,
         call_webhook_state,
         call_internal_state,
+        entity_access_management_service,
     };
 
     // Spawn the delete document worker
