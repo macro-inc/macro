@@ -490,7 +490,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 height: `${Math.min(sortedEntities().length * ITEM_SIZE, 192)}px`,
                 contain: 'content',
               }}
-              class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
+              class="overflow-y-auto overflow-x-hidden"
             >
               {(entity, index) => {
                 const adjustedIndex = () => index() + pinnedCount();
