@@ -2,10 +2,7 @@ use anyhow::Context;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
-use crate::{
-    chat::get_basic_chat,
-    projects::get_project::get_basic_project::get_basic_project,
-};
+use crate::{chat::get_basic_chat, projects::get_project::get_basic_project::get_basic_project};
 
 pub mod document;
 pub mod project;
