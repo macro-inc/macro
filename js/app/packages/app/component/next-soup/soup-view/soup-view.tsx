@@ -111,8 +111,6 @@ import {
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
-import { useAnalytics } from '@app/component/analytics-context';
 import { QUERY_FILTERS } from '../filters/query-filters';
 
 const useSoupNotificationInvalidators = () => {
@@ -213,22 +211,6 @@ export const SoupView = (props: SoupViewProps) => {
   };
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
-  const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
-  const analytics = useAnalytics();
-
-  const togglePreview = () => {
-    const currentPreview = soup.previewEntity();
-    if (currentPreview) {
-      soup.setPreviewEntity(undefined);
-      return;
-    }
-
-    const focused = soup.focus.id();
-    if (!focused) return;
-
-    analytics.track('preview_panel_use');
-    soup.setPreviewEntity(focused);
-  };
 
   const isMailView = createMemo(() => {
     const content = panel.handle.content();
@@ -334,24 +316,6 @@ export const SoupView = (props: SoupViewProps) => {
                     </Show>
                   }
                 />
-              </Show>
-              <Show when={isComponentListView('search')}>
-                <Tooltip
-                  tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
-                >
-                  <Button
-                    variant={soup.previewEntity() ? 'primary' : 'ghost'}
-                    size="sm"
-                    class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
-                    onClick={togglePreview}
-                    onMouseEnter={() => setPreviewBtnHovering(true)}
-                    onMouseLeave={() => setPreviewBtnHovering(false)}
-                  >
-                    <AnimatedPreviewIcon
-                      triggerAnimation={previewBtnHovering()}
-                    />
-                  </Button>
-                </Tooltip>
               </Show>
             </SplitHeaderRight>
             <SoupFiltersBar />
