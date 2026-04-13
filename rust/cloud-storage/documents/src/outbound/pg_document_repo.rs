@@ -727,8 +727,8 @@ impl DocumentRepo for PgDocumentRepo {
         // Create share permission
         create::set_share_permission(&mut transaction, &document_id, file_type).await?;
 
-        // Insert user item access (Owner level)
-        create::insert_item_access(&mut transaction, &document_id, &user_id).await?;
+        // Insert user entity access (Owner level)
+        create::insert_entity_access(&mut transaction, &document_id, &user_id).await?;
 
         // Insert user history
         let now = chrono::Utc::now();
