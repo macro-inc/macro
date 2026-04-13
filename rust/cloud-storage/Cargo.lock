@@ -1873,12 +1873,14 @@ dependencies = [
  "axum",
  "chrono",
  "entity_access",
+ "entity_access_management",
  "http-body-util",
  "macro_db_migrator",
  "macro_share_permissions",
  "macro_user_id",
  "macro_uuid",
  "model",
+ "model-entity",
  "model_user",
  "models_permissions",
  "roles_and_permissions",
@@ -1891,6 +1893,7 @@ dependencies = [
  "tracing",
  "unicode-segmentation",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]

@@ -9,13 +9,15 @@ use ai_toolset::{AsyncToolSet, RequestContext, tool_object::UserToolResponse};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use std::sync::Arc;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Concrete service implementation that delegates to a [`ChatRepo`]
-pub struct ChatServiceImpl<R, ToolSetContext>
+pub struct ChatServiceImpl<R, ToolSetContext, Eam>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
 {
@@ -23,9 +25,11 @@ where
     toolset: Arc<AsyncToolSet<ToolSetContext>>,
     context: ToolSetContext,
     repo: R,
+    entity_access_management_service: Eam,
 }
 
-impl<R: ChatRepo, ToolSetContext> ChatServiceImpl<R, ToolSetContext>
+impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService>
+    ChatServiceImpl<R, ToolSetContext, Eam>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
 {
@@ -34,16 +38,19 @@ where
         repo: R,
         toolset: Arc<AsyncToolSet<ToolSetContext>>,
         context: ToolSetContext,
+        entity_access_management_service: Eam,
     ) -> Self {
         Self {
             repo,
             toolset,
             context,
+            entity_access_management_service,
         }
     }
 }
 
-impl<R: ChatRepo, ToolSetContext> ChatService for ChatServiceImpl<R, ToolSetContext>
+impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService> ChatService
+    for ChatServiceImpl<R, ToolSetContext, Eam>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
 {
@@ -57,7 +64,27 @@ where
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }
 
-        self.repo.create(user_id, args).await
+        let project_id = args.project_id.clone();
+        let chat_id = self.repo.create(user_id, args).await?;
+
+        if let Some(project_id) = &project_id
+            && !project_id.is_empty()
+            && let (Ok(chat_uuid), Ok(project_uuid)) = (
+                uuid::Uuid::parse_str(&chat_id),
+                uuid::Uuid::parse_str(project_id),
+            )
+        {
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&chat_uuid, EntityType::Chat, &project_uuid)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
+        Ok(chat_id)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -106,7 +133,32 @@ where
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), ChatErr> {
         let chat_id = &entity_access_receipt.entity().entity_id;
-        self.repo.delete(chat_id).await
+        let project_id = self
+            .repo
+            .get_metadata(chat_id)
+            .await
+            .ok()
+            .and_then(|c| c.project_id);
+        self.repo.delete(chat_id).await?;
+
+        if let Some(project_id) = &project_id
+            && !project_id.is_empty()
+            && let (Ok(chat_uuid), Ok(project_uuid)) = (
+                uuid::Uuid::parse_str(chat_id),
+                uuid::Uuid::parse_str(project_id),
+            )
+        {
+            let _ = self
+                .entity_access_management_service
+                .remove_entity_from_project(&chat_uuid, EntityType::Chat, &project_uuid)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to remove entity from project"));
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -115,7 +167,32 @@ where
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), ChatErr> {
         let chat_id = &entity_access_receipt.entity().entity_id;
-        self.repo.permanently_delete(chat_id).await
+        let project_id = self
+            .repo
+            .get_metadata(chat_id)
+            .await
+            .ok()
+            .and_then(|c| c.project_id);
+        self.repo.permanently_delete(chat_id).await?;
+
+        if let Some(project_id) = &project_id
+            && !project_id.is_empty()
+            && let (Ok(chat_uuid), Ok(project_uuid)) = (
+                uuid::Uuid::parse_str(chat_id),
+                uuid::Uuid::parse_str(project_id),
+            )
+        {
+            let _ = self
+                .entity_access_management_service
+                .remove_entity_from_project(&chat_uuid, EntityType::Chat, &project_uuid)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to remove entity from project"));
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -131,7 +208,57 @@ where
         }
         let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
-        self.repo.patch(user_id.to_owned(), chat_id, args).await
+
+        let old_project_id = self
+            .repo
+            .get_metadata(chat_id)
+            .await
+            .ok()
+            .and_then(|c| c.project_id);
+        let new_project_id = args.project_id.clone();
+        let project_changing =
+            new_project_id.is_some() && new_project_id.as_deref() != old_project_id.as_deref();
+
+        self.repo.patch(user_id.to_owned(), chat_id, args).await?;
+
+        // Remove from old project (only if the project is actually changing)
+        if project_changing
+            && let Some(old_project_id) = &old_project_id
+            && !old_project_id.is_empty()
+            && let (Ok(chat_uuid), Ok(old_uuid)) = (
+                uuid::Uuid::parse_str(chat_id),
+                uuid::Uuid::parse_str(old_project_id),
+            )
+        {
+            let _ = self
+                .entity_access_management_service
+                .remove_entity_from_project(&chat_uuid, EntityType::Chat, &old_uuid)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to remove entity from project"));
+            let _ = self.repo.update_project_modified(old_project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
+            );
+        }
+
+        // Add to new project's entity access + bump modified timestamp
+        if let Some(new_project_id) = &new_project_id
+            && !new_project_id.is_empty()
+            && let (Ok(chat_uuid), Ok(new_uuid)) = (
+                uuid::Uuid::parse_str(chat_id),
+                uuid::Uuid::parse_str(new_project_id),
+            )
+        {
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&chat_uuid, EntityType::Chat, &new_uuid)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, project_id=?new_project_id, "unable to add entity to project"));
+            let _ = self.repo.update_project_modified(new_project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?new_project_id, "unable to update project modified date"),
+            );
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -295,7 +422,8 @@ where
     }
 }
 
-impl<R: ChatRepo, ToolSetContext> ChatServiceImpl<R, ToolSetContext>
+impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService>
+    ChatServiceImpl<R, ToolSetContext, Eam>
 where
     ToolSetContext: Clone + Send + Sync + 'static,
 {
