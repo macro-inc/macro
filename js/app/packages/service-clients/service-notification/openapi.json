@@ -1441,7 +1441,8 @@
           "document",
           "project",
           "email_thread",
-          "team"
+          "team",
+          "call"
         ]
       },
       "ErrorResponse": {
