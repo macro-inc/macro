@@ -489,6 +489,17 @@ impl CallRepository for PgCallRepo {
         &self,
         call_id: &Uuid,
     ) -> Result<Option<CallRecord>, Self::Err> {
+        // Use a read-only snapshot-isolation transaction so the call row and its
+        // participants/transcripts all reflect the same point in time. Without this,
+        // a concurrent `archive_call` can move rows from `calls` -> `call_records`
+        // between our SELECTs, leaving us with an "active" call row but empty
+        // participants/transcript (or vice versa). REPEATABLE READ gives a stable
+        // snapshot; READ ONLY avoids blocking writers.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            .execute(&mut *tx)
+            .await?;
+
         // Try active `calls` first.
         if let Some(active) = sqlx::query!(
             r#"
@@ -498,7 +509,7 @@ impl CallRepository for PgCallRepo {
             "#,
             call_id,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?
         {
             let participants = sqlx::query!(
@@ -510,7 +521,7 @@ impl CallRepository for PgCallRepo {
                 "#,
                 call_id,
             )
-            .fetch_all(&self.pool)
+            .fetch_all(&mut *tx)
             .await?
             .into_iter()
             .map(|row| CallRecordParticipant {
@@ -529,7 +540,7 @@ impl CallRepository for PgCallRepo {
                 "#,
                 call_id,
             )
-            .fetch_all(&self.pool)
+            .fetch_all(&mut *tx)
             .await?
             .into_iter()
             .map(|row| CallRecordTranscriptSegment {
@@ -542,6 +553,7 @@ impl CallRepository for PgCallRepo {
             })
             .collect();
 
+            tx.commit().await?;
             return Ok(Some(CallRecord {
                 call_id: active.id,
                 channel_id: active.channel_id,
@@ -566,9 +578,10 @@ impl CallRepository for PgCallRepo {
             "#,
             call_id,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?
         else {
+            tx.commit().await?;
             return Ok(None);
         };
 
@@ -581,7 +594,7 @@ impl CallRepository for PgCallRepo {
             "#,
             call_id,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *tx)
         .await?
         .into_iter()
         .map(|row| CallRecordParticipant {
@@ -600,7 +613,7 @@ impl CallRepository for PgCallRepo {
             "#,
             call_id,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *tx)
         .await?
         .into_iter()
         .map(|row| CallRecordTranscriptSegment {
@@ -613,6 +626,7 @@ impl CallRepository for PgCallRepo {
         })
         .collect();
 
+        tx.commit().await?;
         Ok(Some(CallRecord {
             call_id: archived.id,
             channel_id: archived.channel_id,
