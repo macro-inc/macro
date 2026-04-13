@@ -135,8 +135,7 @@ function GroupedMessageLayout(props: {
       <Message.Slot placement="content">
         <div
           class={cn(
-            'ph-no-capture flex gap-3 min-w-0',
-            isEditing() ? 'items-start' : 'items-center'
+            'ph-no-capture flex gap-3 min-w-0 items-start',
           )}
         >
           <MessageContentSlot
