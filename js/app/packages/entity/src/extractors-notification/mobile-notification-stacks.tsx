@@ -1,4 +1,4 @@
-import { Show, useContext, createEffect, type JSX } from 'solid-js';
+import { useContext, createEffect, type JSX } from 'solid-js';
 import { reconcile, createStore } from 'solid-js/store';
 import {
   type NotificationStack,
@@ -9,7 +9,6 @@ import type { WithNotification } from '../types/notification';
 import { isChannelEntity, type EntityData } from '../types/entity';
 import { CollapsibleList } from '../components/CollapsibleList';
 import {
-  extractMessageContent,
   isNotificationUnread,
 } from '../utils/notification';
 import { Entity } from '../entity';
@@ -17,9 +16,8 @@ import { UnreadIndicator } from '../components/UnreadIndicator';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { cn } from '@ui/utils/classname';
+import { NotificationContent } from './notification-content';
 
 export type EntityRowConfig = {
   swipeLeftColor?: string;
@@ -33,9 +31,6 @@ function MobileStackRowLayout(props: {
   entity: WithNotification<EntityData>;
   unread: boolean;
 }) {
-  const msgContent = () =>
-    extractMessageContent(getMostRecentNotification(props.stack));
-
   return (
     <Entity.Layout
       class="w-full text-sm grid bg-edge/10 border-edge-muted"
@@ -68,17 +63,11 @@ function MobileStackRowLayout(props: {
       </Entity.Slot>
       <Entity.Slot
         placement="body"
-        class="text-ink-extra-muted truncate pb-2 min-h-[1lh] pr-4"
+        class={cn('text-ink-extra-muted pb-2 min-h-[1lh] pr-4', {
+          truncate: props.stack.type !== 'document_mention',
+        })}
       >
-        <Show when={msgContent()}>
-          {(content) => (
-            <StaticMarkdown
-              theme={unifiedListMarkdownTheme}
-              markdown={content()}
-              singleLine
-            />
-          )}
-        </Show>
+        <NotificationContent stack={props.stack} />
       </Entity.Slot>
     </Entity.Layout>
   );
