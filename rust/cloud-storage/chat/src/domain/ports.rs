@@ -81,6 +81,12 @@ pub trait ChatRepo: Send + Sync + 'static {
         args: PatchChatArgs,
     ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
 
+    /// Update a project's `updatedAt` timestamp.
+    fn update_project_modified(
+        &self,
+        project_id: &str,
+    ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
+
     /// Patch a message's content.
     fn patch_message(
         &self,
