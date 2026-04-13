@@ -44,6 +44,8 @@ type ChannelMessageActionEffects = {
   copyToClipboard: (text: string) => Promise<void>;
   notifyCopyLinkSuccess: () => void;
   notifyCopyLinkFailure: (error: unknown) => void;
+  notifyCopyMessageTextSuccess: () => void;
+  notifyCopyMessageTextFailure: (error: unknown) => void;
 };
 
 export type CreateChannelMessageActionsOptions = {
@@ -72,6 +74,13 @@ function createDefaultEffects(): ChannelMessageActionEffects {
     notifyCopyLinkFailure: (error) => {
       console.error('failed to copy link', error);
       toast.failure('Failed to copy link');
+    },
+    notifyCopyMessageTextSuccess: () => {
+      toast.success('Message copied to clipboard');
+    },
+    notifyCopyMessageTextFailure: (error) => {
+      console.error('failed to copy message text', error);
+      toast.failure('Failed to copy message');
     },
   };
 }
@@ -151,6 +160,17 @@ export function createChannelMessageActions(
           effects.notifyCopyLinkFailure(error);
         }
       },
+      onCopyMessageText:
+        !isDeleted && message.content
+          ? async () => {
+              try {
+                await effects.copyToClipboard(message.content);
+                effects.notifyCopyMessageTextSuccess();
+              } catch (error) {
+                effects.notifyCopyMessageTextFailure(error);
+              }
+            }
+          : undefined,
       onEdit: canEditDelete ? options.onEdit : undefined,
       onDelete: canEditDelete
         ? () => {
