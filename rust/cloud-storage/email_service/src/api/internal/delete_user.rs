@@ -30,7 +30,10 @@ pub async fn handler(
     })?;
 
     for link in links {
-        let message = LinkManagerMessage::DeleteLink { link_id: link.id };
+        let message = LinkManagerMessage::DeleteLink {
+            link_id: link.id,
+            deletion_reason: models_email::email::service::pubsub::DeletionReason::UserDeleted,
+        };
 
         ctx.sqs_client
             .enqueue_link_manager_notification(message)

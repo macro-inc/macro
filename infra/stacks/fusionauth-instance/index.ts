@@ -262,10 +262,14 @@ const macroApplication = new FusionAuthApplication(
       proofKeyForCodeExchangePolicy: 'NotRequired',
       scopeHandlingPolicy: 'Compatibility',
       unknownScopePolicy: 'Remove',
-      authorizedUrlValidationPolicy: 'ExactMatch',
+      authorizedUrlValidationPolicy:
+        stack === 'local' || stack === 'dev' ? 'AllowWildcards' : 'ExactMatch',
       authorizedRedirectUrls: [
         `${AUTHENTICATION_SERVICE_DOMAIN}/oauth/redirect`,
         `https://mcp-server${stack === 'prod' ? '' : `-${stack}`}.macro.com/oauth/callback`,
+        ...(stack === 'local' || stack === 'dev'
+          ? ['http://localhost:8085/*', 'http://localhost:8085/oauth/*']
+          : []),
       ],
       authorizedOriginUrls: ALLOWED_ORIGINS(),
       logoutBehavior: 'AllApplications',

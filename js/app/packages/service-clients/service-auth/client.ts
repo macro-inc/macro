@@ -421,7 +421,11 @@ export const authServiceClient = {
     successUrl: string;
     cancelUrl: string;
     discount?: string | null;
-    gaClientId?: string | null;
+    metadata?: {
+      gaClientId?: string | null;
+      fbp?: string | null;
+      fbc?: string | null;
+    };
     tier?: string;
   }) {
     return mapOk(
@@ -431,7 +435,7 @@ export const authServiceClient = {
           successUrl: args.successUrl,
           cancelUrl: args.cancelUrl,
           discount: args.discount ?? undefined,
-          gaClientId: args.gaClientId ?? undefined,
+          metadata: args.metadata,
           tier: args.tier ?? undefined,
         }),
       }),

@@ -39,6 +39,28 @@ pub enum FailureReason {
     InvalidData,
 }
 
+/// The reason a link was deleted, stored in the email_links_history table.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum DeletionReason {
+    Unused,
+    Inactive,
+    ManuallyDisabled,
+    UserDeleted,
+    AccessRevoked,
+}
+
+impl DeletionReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DeletionReason::Unused => "Unused",
+            DeletionReason::Inactive => "Inactive",
+            DeletionReason::ManuallyDisabled => "ManuallyDisabled",
+            DeletionReason::UserDeleted => "UserDeleted",
+            DeletionReason::AccessRevoked => "AccessRevoked",
+        }
+    }
+}
+
 /// The message sent to the link manager SQS queue.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "operation")]
@@ -47,7 +69,10 @@ pub enum LinkManagerMessage {
     /// inbox notifications for the user.
     Refresh { link_id: Uuid },
     /// Delete a single link from the database.
-    DeleteLink { link_id: Uuid },
+    DeleteLink {
+        link_id: Uuid,
+        deletion_reason: DeletionReason,
+    },
     /// Delete all links for a user, identified by fusionauth_user_id.
     DeleteUser { fusionauth_user_id: String },
 }

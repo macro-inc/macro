@@ -58,6 +58,18 @@ pub enum StripeProductTier {
     Opus,
 }
 
+/// Tracking metadata for conversion attribution
+#[derive(Debug, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckoutSessionMetadata {
+    /// Google Analytics client ID for conversion tracking
+    pub ga_client_id: Option<String>,
+    /// Meta (Facebook) browser ID from _fbp cookie
+    pub fbp: Option<String>,
+    /// Meta (Facebook) click ID from _fbc cookie
+    pub fbc: Option<String>,
+}
+
 /// Request body for creating a Stripe checkout session
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -68,8 +80,9 @@ pub struct CreateCheckoutSessionRequest {
     pub cancel_url: String,
     /// Optional discount/promo code to apply
     pub discount: Option<String>,
-    /// Google Analytics client ID for conversion tracking
-    pub ga_client_id: Option<String>,
+    /// Tracking metadata for conversion attribution
+    #[serde(default)]
+    pub metadata: CheckoutSessionMetadata,
     /// The tier, defaults to haiku
     #[serde(default)]
     pub tier: StripeProductTier,
@@ -166,8 +179,14 @@ pub async fn create_checkout_session(
 
     // Build subscription metadata from optional tracking fields
     let mut metadata = std::collections::HashMap::new();
-    if let Some(ga_client_id) = req.ga_client_id {
+    if let Some(ga_client_id) = req.metadata.ga_client_id {
         metadata.insert("ga_client_id".to_string(), ga_client_id);
+    }
+    if let Some(fbp) = req.metadata.fbp {
+        metadata.insert("fbp".to_string(), fbp);
+    }
+    if let Some(fbc) = req.metadata.fbc {
+        metadata.insert("fbc".to_string(), fbc);
     }
 
     // Only set subscription_data if we have metadata to include

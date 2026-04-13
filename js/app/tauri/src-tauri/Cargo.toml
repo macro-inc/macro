@@ -61,3 +61,6 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-haptics = "2"
 tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "2b2257722f60458921eadf4a9ab4d9e1db36e34f" }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }

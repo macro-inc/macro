@@ -62,6 +62,8 @@ export function useAppSquishHandlers() {
     const handleResize = () => {
       if (window.visualViewport) {
         const newViewportHeight = window.visualViewport.height;
+        // We can reliably use the visual viewport shrinking in size as a strong signal that the virtual keyboard is visible. This is better than using focusIn as a signal, because with focusIn we have to guess the timing of the virtual keyboard appearing.
+        // We can NOT reliably use the visual viewport growing for the inverse. Recent versions of iOS Safari cause this to fire immediately on virtual keyboard appearance. Instead we need to rely on focusOut.
         if (newViewportHeight < previousViewportHeight) {
           setVirtualKeyboardVisible(true);
           const vh = newViewportHeight * 0.01;
@@ -69,9 +71,6 @@ export function useAppSquishHandlers() {
           setTimeout(() => {
             window.scrollTo(0, 0);
           });
-        } else {
-          setVirtualKeyboardVisible(false);
-          document.documentElement.style.setProperty('--dvh', '1dvh');
         }
         previousViewportHeight = newViewportHeight;
       }
@@ -101,14 +100,16 @@ export function useAppSquishHandlers() {
         handleResize();
         window.visualViewport.addEventListener('scroll', handleResize);
       }
-      document.addEventListener('focusout', handleFocusOut);
+      document.addEventListener('focusout', handleFocusOut, { capture: true });
 
       onCleanup(() => {
         if (window.visualViewport) {
           window.visualViewport.removeEventListener('resize', handleResize);
           window.visualViewport.removeEventListener('scroll', handleResize);
         }
-        document.removeEventListener('focusout', handleFocusOut);
+        document.removeEventListener('focusout', handleFocusOut, {
+          capture: true,
+        });
       });
     });
   }

@@ -1,7 +1,10 @@
 //! Implementation of GW port using the ConnectionGatewayClient
 
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 
 use crate::domain::{
     models::{INVALIDATION_MESSAGE_TYPE, InvalidationEvent},
@@ -51,7 +54,7 @@ impl ConnectionGateway for ConnectionGatewayImpl {
     #[tracing::instrument(skip(self), err)]
     async fn batch_send_message<'a>(
         &self,
-        users: &[MacroUserId<Lowercase<'a>>],
+        users: &[MacroUserIdStr<'a>],
         message_type: &str,
         message: serde_json::Value,
     ) -> Result<(), Self::Err> {

@@ -131,6 +131,7 @@ export const QUERY_FILTERS = {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
     document_filters: { file_types: getFileAssociations() },
   },
 
@@ -138,6 +139,7 @@ export const QUERY_FILTERS = {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
     document_filters: {
       file_types: ['md', 'canvas', 'docx', ...getFileAssociations()],
     },
@@ -149,6 +151,14 @@ export const QUERY_FILTERS = {
     email_filters: { recipients: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
     channel_filters: {},
+  },
+
+  folders: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    project_filters: {},
   },
 
   default: {},

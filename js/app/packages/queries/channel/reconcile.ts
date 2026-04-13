@@ -41,9 +41,7 @@ import type {
   CountedReaction,
 } from '@service-comms/generated/models';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
-import type { GetChannelResponse } from './types';
 import { queryClient } from '../client';
-import { channelKeys } from './keys';
 
 export type MessageTarget =
   | {
@@ -92,12 +90,6 @@ export function makeMessageTarget(args: {
   };
 }
 
-function getCachedChannel(channelId: string): GetChannelResponse | undefined {
-  return queryClient.getQueryData<GetChannelResponse>(
-    channelKeys.withID(channelId).queryKey
-  );
-}
-
 /** Finds a reply's parent thread id from cached channel data. */
 export function findThreadIdForMessage(
   channelId: string,
@@ -111,11 +103,7 @@ export function findThreadIdForMessage(
     return queryKey.at(-1) as string | undefined;
   }
 
-  return (
-    getCachedChannel(channelId)?.messages.find(
-      (message) => message.id === messageId
-    )?.thread_id ?? undefined
-  );
+  return undefined;
 }
 
 /** Resolves whether a message target is top-level or a thread reply. */

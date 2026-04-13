@@ -5,8 +5,11 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
 
 type SearchbarVariant = 'filled' | 'secondary';
 
@@ -24,52 +27,79 @@ const variantStyles: Record<SearchbarVariant, string> = {
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { searchText, setSearchText } = useSoupView();
+  const { setSearchText, setSearchPaused, setSearchMentions } = useSoupView();
   const panel = useSplitPanelOrThrow();
 
-  const [ref, setRef] = createSignal<HTMLInputElement | undefined>();
-  let measureSpan: HTMLSpanElement | undefined;
+  const [hasContent, setHasContent] = createSignal(false);
+  const [latestMarkdown, setLatestMarkdown] = createSignal('');
+  const [mentions, setMentions] = createSignal<string[]>([]);
 
-  const [searchFocused, setSearchFocused] = createSignal(false);
-  const [measuredWidth, setMeasuredWidth] = createSignal(0);
+  const editor = buildConfig('chat')
+    .namespace('soup-search-bar')
+    .singleLine()
+    .withMentions({
+      sources: ['users'],
+      disableMentionTracking: true,
+      onCreate: (mention) => {
+        if (mention.itemType !== 'user') return;
+        setMentions((prev) =>
+          prev.includes(mention.itemId) ? prev : [...prev, mention.itemId]
+        );
+      },
+      onRemove: (mention) => {
+        if (mention.itemType !== 'user') return;
+        setMentions((prev) => prev.filter((m) => m !== mention.itemId));
+      },
+    })
+    .withHistory({ timeGap: 400 })
+    .onChange((markdown) => {
+      setLatestMarkdown(markdown);
+      setHasContent(markdown.trim().length > 0);
+    })
+    .onEnter(() => {
+      if (menuIsOpen()) return false;
+      editor.controls.blur();
+      return true;
+    })
+    .onEscape(() => {
+      editor.controls.blur();
+      props.onDismiss?.();
+      return true;
+    });
 
-  createEffect(() => {
-    if (measureSpan) {
-      measureSpan.textContent = searchText() || '';
-      setMeasuredWidth(measureSpan.scrollWidth);
-    }
-  });
+  // Sync search text + mention filters only when the mention menu is closed.
+  // This avoids cascading reactive updates during mention insertion and
+  // prevents search from firing while typing @partial.
+  const menuIsOpen = () => editor.controls.isMentionMenuOpen();
 
-  createEffect(() => {
-    ref();
-    if (props.autoFocus) {
-      queueMicrotask(() => {
-        ref()?.focus();
-      });
-    }
-  });
+  createEffect(() => setSearchPaused(menuIsOpen()));
+
+  createEffect(
+    on(latestMarkdown, (markdown) => {
+      if (menuIsOpen()) return;
+      setSearchText(markdownToPlainText(markdown).trim());
+    })
+  );
+
+  createEffect(() => setSearchMentions(mentions()));
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
     scopeId: panel.splitHotkeyScope,
     description: 'Search',
     keyDownHandler: () => {
-      ref()?.focus();
+      editor.controls.focus();
       return true;
     },
   });
 
   onCleanup(searchHotkey.dispose);
 
-  const MIN_INPUT_WIDTH = 48;
-
-  const inputWidth = () => {
-    if (!searchText() && !searchFocused()) return 0;
-    return Math.max(MIN_INPUT_WIDTH, measuredWidth());
-  };
-
   return (
-    <div class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2">
+    <div
+      class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
+      data-search-bar-wrapper
+    >
       <Tooltip
         class="w-full"
         placement="bottom-start"
@@ -80,61 +110,43 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             'relative flex items-center gap-1 rounded-xs py-1.5 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
             variantStyles[props.variant ?? 'secondary']
           )}
-          onMouseDown={(e) => {
-            if (e.target !== ref()) {
-              e.preventDefault();
-              ref()?.focus();
-            }
-          }}
         >
           <SearchIcon class="size-4 shrink-0" />
-          <span
-            ref={(el) => {
-              measureSpan = el;
-            }}
-            class="invisible absolute whitespace-pre"
-            aria-hidden="true"
-          />
-          <input
-            ref={setRef}
+          <div
             data-soup-search
-            type="text"
-            value={searchText()}
-            onInput={(e) => setSearchText(e.currentTarget.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
+            class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
             onKeyDown={(e) => {
-              if (
-                e.key === 'Escape' ||
-                e.key === 'Enter' ||
-                e.key === 'ArrowDown'
-              ) {
+              if (menuIsOpen()) return;
+              if (e.key === 'ArrowDown' || e.key === 'j') {
                 e.preventDefault();
-                e.currentTarget.blur();
-                if (e.key === 'Escape') props.onDismiss?.();
+                editor.controls.blur();
               }
             }}
-            class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full"
-            style={{ width: `${inputWidth()}px` }}
-          />
-          <Show when={!searchText()}>
-            <span class="text-ink-placeholder leading-none pointer-events-none text-sm peer-focus:hidden">
-              Search
-            </span>
-          </Show>
-          <Show when={!searchText() && !props.onDismiss}>
-            <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge-muted text-xs rounded-md items-center px-1 py-px peer-focus:hidden">
+          >
+            <MarkdownShell
+              config={editor}
+              placeholder="Search"
+              autofocus={props.autoFocus}
+              class="!min-h-0 !overflow-visible"
+            />
+          </div>
+          <Show when={!hasContent() && !props.onDismiss}>
+            <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge-muted text-xs rounded-md items-center px-1 py-px">
               <Hotkey shortcut="cmd+f" />
             </div>
           </Show>
-          <Show when={searchText() || props.onDismiss}>
+          <Show when={hasContent() || props.onDismiss}>
             <button
               type="button"
               class="ml-auto size-4 mobile:size-6 shrink-0 hover:opacity-60"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                editor.controls.clear();
                 setSearchText('');
+                setHasContent(false);
+                setMentions([]);
+                setSearchMentions([]);
                 props.onDismiss?.();
               }}
             >

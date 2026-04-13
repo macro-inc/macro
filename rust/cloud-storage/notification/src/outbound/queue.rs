@@ -9,33 +9,52 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::ports::{NotificationIngressQueue, NotificationQueue};
 
-/// SQS-backed implementation of the notification queue port.
+/// SQS-backed implementation of the notification queue ports.
+///
+/// A single type implements both [`NotificationQueue`] (delivery/egress queue)
+/// and [`NotificationIngressQueue`] (ingress queue). Callers construct one
+/// instance per queue URL.
 #[derive(Clone)]
-pub struct SqsNotificationQueue {
+pub struct SqsQueue {
     client: SqsClient,
     queue_url: String,
 }
 
-impl SqsNotificationQueue {
-    /// Create a new SQS notification queue adapter.
+impl SqsQueue {
+    /// Create a new SQS queue adapter pointing at `queue_url`.
     pub fn new(client: SqsClient, queue_url: String) -> Self {
         Self { client, queue_url }
     }
+
+    async fn send_json<T: Serialize>(&self, message: &T) -> Result<(), Report> {
+        let body = serde_json::to_string(message)?;
+        self.client
+            .send_message()
+            .queue_url(&self.queue_url)
+            .message_body(body)
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    async fn delete(&self, receipt_handle: &str) -> Result<(), Report> {
+        self.client
+            .delete_message()
+            .queue_url(&self.queue_url)
+            .receipt_handle(receipt_handle)
+            .send()
+            .await?;
+        Ok(())
+    }
 }
 
-impl NotificationQueue for SqsNotificationQueue {
+impl NotificationQueue for SqsQueue {
     async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
         messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         for message in messages {
-            let body = serde_json::to_string(&message)?;
-            self.client
-                .send_message()
-                .queue_url(&self.queue_url)
-                .message_body(body)
-                .send()
-                .await?;
+            self.send_json(&message).await?;
         }
         Ok(())
     }
@@ -56,7 +75,9 @@ impl NotificationQueue for SqsNotificationQueue {
             .into_iter()
             .filter_map(|msg| {
                 let body_str = msg.body?;
-                let body = serde_json::from_str(&body_str).ok()?;
+                let body = serde_json::from_str(&body_str)
+                    .inspect_err(|e| tracing::error!(error=?e, body=%body_str, "failed to deserialize queue message"))
+                    .ok()?;
                 let receipt_handle = msg.receipt_handle?;
                 Some(RawQueueMessage {
                     body,
@@ -69,13 +90,7 @@ impl NotificationQueue for SqsNotificationQueue {
     }
 
     async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
-        self.client
-            .delete_message()
-            .queue_url(&self.queue_url)
-            .receipt_handle(receipt_handle)
-            .send()
-            .await?;
-        Ok(())
+        self.delete(receipt_handle).await
     }
 
     async fn delay_message(
@@ -91,6 +106,46 @@ impl NotificationQueue for SqsNotificationQueue {
             .send()
             .await?;
         Ok(())
+    }
+}
+
+impl NotificationIngressQueue for SqsQueue {
+    async fn publish(&self, message: IngressQueueMessage) -> Result<(), Report> {
+        self.send_json(&message).await
+    }
+
+    async fn receive_messages(&self) -> Result<Vec<RawIngressQueueMessage>, Report> {
+        let result = self
+            .client
+            .receive_message()
+            .queue_url(&self.queue_url)
+            .max_number_of_messages(10)
+            .wait_time_seconds(20)
+            .send()
+            .await?;
+
+        let messages = result
+            .messages
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|msg| {
+                let body_str = msg.body?;
+                let body = serde_json::from_str(&body_str)
+                    .inspect_err(|e| tracing::error!(error=?e, body=%body_str, "failed to deserialize ingress queue message"))
+                    .ok()?;
+                let receipt_handle = msg.receipt_handle?;
+                Some(RawIngressQueueMessage {
+                    body,
+                    receipt_handle,
+                })
+            })
+            .collect();
+
+        Ok(messages)
+    }
+
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
+        self.delete(receipt_handle).await
     }
 }
 
@@ -184,69 +239,6 @@ impl NotificationQueue for FileQueue {
         _delay: std::time::Duration,
     ) -> Result<(), Report> {
         // No-op for file-based queue.
-        Ok(())
-    }
-}
-
-/// SQS-backed implementation of the notification ingress queue port.
-///
-/// Used by [`crate::domain::service::SqsNotificationIngress`] to publish
-/// type-erased notification requests, and by the ingress worker to consume them.
-#[derive(Clone)]
-pub struct SqsIngressQueue {
-    /// the sqs client
-    pub client: SqsClient,
-    /// the url of the queue
-    pub queue_url: String,
-}
-
-impl NotificationIngressQueue for SqsIngressQueue {
-    async fn publish(&self, message: IngressQueueMessage) -> Result<(), Report> {
-        let body = serde_json::to_string(&message)?;
-        self.client
-            .send_message()
-            .queue_url(&self.queue_url)
-            .message_body(body)
-            .send()
-            .await?;
-        Ok(())
-    }
-
-    async fn receive_messages(&self) -> Result<Vec<RawIngressQueueMessage>, Report> {
-        let result = self
-            .client
-            .receive_message()
-            .queue_url(&self.queue_url)
-            .max_number_of_messages(10)
-            .wait_time_seconds(20)
-            .send()
-            .await?;
-
-        let messages = result
-            .messages
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|msg| {
-                let body_str = msg.body?;
-                let body = serde_json::from_str(&body_str).ok()?;
-                let receipt_handle = msg.receipt_handle?;
-                Some(RawIngressQueueMessage {
-                    body,
-                    receipt_handle,
-                })
-            })
-            .collect();
-
-        Ok(messages)
-    }
-
-    async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
-        self.client
-            .delete_message()
-            .queue_url(&self.queue_url)
-            .receipt_handle(receipt_handle)
-            .send()
-            .await?;
         Ok(())
     }
 }

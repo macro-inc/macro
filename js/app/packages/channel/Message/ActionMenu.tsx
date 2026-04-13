@@ -1,14 +1,14 @@
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
 import LinkIcon from '@icon/regular/link.svg';
-import TaskIcon from '@macro-icons/wide/task.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
-import PlusIcon from '@icon/regular/plus.svg';
+import SmileyIcon from '@icon/regular/smiley.svg';
 import TrashIcon from '@icon/regular/trash.svg';
+import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
+import { useMessage, useMessageActions, useMessageSelection } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
-import { useMessage, useMessageActions, useMessageSelection } from './context';
 import { renderIcon } from './render-icon';
 import type { MessageActionEvent, MessageActionHandler } from './types';
 
@@ -139,7 +139,7 @@ export function ActionMenu(props: ActionMenuProps) {
               onEmojiSelect={(emoji) => {
                 handleReaction(emoji);
               }}
-              trigger={renderIcon(PlusIcon)}
+              trigger={renderIcon(SmileyIcon)}
               triggerProps={{
                 title: 'More reactions',
                 'aria-label': 'More reactions',

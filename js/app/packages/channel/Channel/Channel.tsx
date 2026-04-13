@@ -8,6 +8,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   onMount,
   Show,
   type Accessor,
@@ -60,6 +61,7 @@ import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
+import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import {
   clearStaleRestoredChannelData,
@@ -148,22 +150,28 @@ export function Channel(props: ChannelProps) {
     },
   });
 
-  onMount(() => {
+  const markAsViewed = () => {
     updateActivityMutation.mutate({
       channelId: props.channelId,
       activityType: 'view',
     });
+  };
+
+  onMount(() => {
+    markAsViewed();
+  });
+
+  onCleanup(() => {
+    markAsViewed();
   });
 
   useBeforeLeave(() => {
-    updateActivityMutation.mutate({
-      channelId: props.channelId,
-      activityType: 'view',
-    });
+    markAsViewed();
   });
 
   const threadManager = createThreadManager();
   const [isChannelInputHidden, setIsChannelInputHidden] = createSignal(false);
+  const [channelInputEl, setChannelInputEl] = createSignal<HTMLDivElement>();
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
     channelId: () => props.channelId,
@@ -256,6 +264,12 @@ export function Channel(props: ChannelProps) {
 
   // On Mobile when a thread reply input is focused, we want to hide the main Channel input
   createInlineInputKeyboardHandler(messageListElement, setIsChannelInputHidden);
+  // On Native iOS app, when the main channel input is focused, scroll to bottom if already near bottom
+  createMainInputKeyboardHandler(
+    channelInputEl,
+    threadListNavigation,
+    messageListElement
+  );
 
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
@@ -300,23 +314,23 @@ export function Channel(props: ChannelProps) {
       <StaticMarkdownContext>
         <MaybeMessageActionDrawerManager>
           <ChannelDropZone dragState={dragState}>
-            <Show when={messages().length > 0}>
-              <div
-                class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
-                ref={(element) => {
-                  setMessageListElement(element);
-                  attachMessageListRef(element);
-                }}
-                tabIndex={-1}
-                data-channel-message-list
-                data-channel-nav="keyboard"
-                onMouseMove={(e) => {
-                  const el = e.currentTarget;
-                  if (el.dataset.channelNav !== 'mouse') {
-                    el.dataset.channelNav = 'mouse';
-                  }
-                }}
-              >
+            <div
+              class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
+              ref={(element) => {
+                setMessageListElement(element);
+                attachMessageListRef(element);
+              }}
+              tabIndex={-1}
+              data-channel-message-list
+              data-channel-nav="keyboard"
+              onMouseMove={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.channelNav !== 'mouse') {
+                  el.dataset.channelNav = 'mouse';
+                }
+              }}
+            >
+              <Show when={messages().length > 0}>
                 <ThreadList
                   keys={() => messageIndex.keys()}
                   initialScrollTarget={threadListInitialScrollTarget()}
@@ -379,11 +393,14 @@ export function Channel(props: ChannelProps) {
                   navigation={threadListNavigation}
                   scrollState={threadListScrollState}
                 />
-              </div>
-            </Show>
+              </Show>
+            </div>
             <DebugSuspense name="Channel.input">
               <ChannelInputContainer
-                ref={attachInputRef}
+                ref={(el) => {
+                  attachInputRef(el);
+                  setChannelInputEl(el);
+                }}
                 isHidden={isChannelInputHidden()}
               >
                 <ChannelInput

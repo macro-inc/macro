@@ -68,6 +68,10 @@ interface SoupViewContextValues {
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
+  searchPaused: Accessor<boolean>;
+  setSearchPaused: Setter<boolean>;
+  searchMentions: Accessor<string[]>;
+  setSearchMentions: Setter<string[]>;
   featuredIds: Accessor<string[]>;
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
@@ -134,6 +138,8 @@ export const SoupViewContextProvider: FlowComponent<
   const [internalQueryFilters, setInternalQueryFilters] =
     createSignal<SoupBody>({ ...(props.queryFilters ?? {}) });
 
+  const [searchPaused, setSearchPaused] = createSignal(false);
+  const [searchMentions, setSearchMentions] = createSignal<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
   const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
 
@@ -162,6 +168,8 @@ export const SoupViewContextProvider: FlowComponent<
     soup,
     queryFilters,
     disableLocalSearch: props.disableLocalSearch,
+    searchPaused,
+    searchMentions,
   });
 
   const notificationSource = useGlobalNotificationSource();
@@ -367,6 +375,10 @@ export const SoupViewContextProvider: FlowComponent<
     rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
+    searchPaused,
+    setSearchPaused,
+    searchMentions,
+    setSearchMentions,
     featuredIds: search.featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,

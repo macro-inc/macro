@@ -4,6 +4,9 @@ name = "macro_user_id"
 publish = false
 version = "0.1.0"
 
+[features]
+schema = ["dep:utoipa"]
+
 [dependencies]
 cowlike = { path = "../cowlike" }
 doppleganger = { workspace = true }
@@ -11,3 +14,4 @@ nom = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }

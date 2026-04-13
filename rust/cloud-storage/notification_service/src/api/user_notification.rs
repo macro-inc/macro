@@ -60,11 +60,11 @@ pub struct ApiUserNotification {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created.
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
-    pub updated_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
     /// When the notification was deleted.
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.

@@ -3,7 +3,7 @@ import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
-import PlusIcon from '@icon/regular/plus.svg';
+import SmileyIcon from '@icon/regular/smiley.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import { focusInput } from '@core/directive/focusInput';
 import {
@@ -179,7 +179,10 @@ export function ActionDrawer() {
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-        <MobileDrawer.Content aria-label="Message actions">
+        <MobileDrawer.Content
+          aria-label="Message actions"
+          class={showEmojiSearch() ? 'h-[80vh]' : undefined}
+        >
           {/* Drag handle */}
           <div class="flex justify-center pt-3 pb-2 shrink-0">
             <div class="w-10 h-1 rounded-full bg-edge-muted" />
@@ -217,7 +220,7 @@ export function ActionDrawer() {
                   class="size-12 bg-edge/30 rounded-full flex items-center justify-center text-ink-muted"
                   onClick={() => setShowEmojiSearch(true)}
                 >
-                  {renderIcon(PlusIcon, 'size-[28px]')}
+                  {renderIcon(SmileyIcon, 'size-[28px]')}
                 </button>
               </div>
             </Show>

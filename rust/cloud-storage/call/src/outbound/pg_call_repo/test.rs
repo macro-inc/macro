@@ -1,17 +1,23 @@
+use std::{ops::Deref, sync::LazyLock};
+
 use crate::domain::models::TranscriptSegmentRequest;
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use chrono::Utc;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
-const USER_A: &str = "macro|user-a@test.com";
-const USER_B: &str = "macro|user-b@test.com";
-const USER_C: &str = "macro|user-c@test.com";
+static USER_A: LazyLock<MacroUserIdStr<'static>> =
+    LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
+static USER_B: LazyLock<MacroUserIdStr<'static>> =
+    LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-b@test.com").unwrap());
+static USER_C: LazyLock<MacroUserIdStr<'static>> =
+    LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-c@test.com").unwrap());
 
 fn repo(pool: Pool<Postgres>) -> PgCallRepo {
     PgCallRepo::new(pool)
@@ -27,14 +33,14 @@ async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let id = Uuid::now_v7();
     let call = repo
-        .create_call(&id, &CH2, "room-ch2", USER_B)
+        .create_call(&id, &CH2, "room-ch2", USER_B.deref().copied())
         .await?
         .expect("should create new call");
 
     assert_eq!(call.id, id);
     assert_eq!(call.channel_id, CH2);
     assert_eq!(call.room_name, "room-ch2");
-    assert_eq!(call.created_by, USER_B);
+    assert_eq!(call.created_by, USER_B.as_ref());
     Ok(())
 }
 
@@ -46,7 +52,7 @@ async fn create_call_returns_none_on_duplicate_channel(pool: Pool<Postgres>) -> 
     let repo = repo(pool);
     // CH1 already has an active call from the fixture.
     let result = repo
-        .create_call(&Uuid::now_v7(), &CH1, "room-dup", USER_A)
+        .create_call(&Uuid::now_v7(), &CH1, "room-dup", USER_A.deref().copied())
         .await?;
 
     assert!(result.is_none(), "should return None on conflict");
@@ -120,13 +126,15 @@ async fn add_and_check_participant(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
 
     // user-c is not in the call yet.
-    assert!(!repo.is_participant(&CALL1, USER_C).await?);
+    assert!(!repo.is_participant(&CALL1, &USER_C.as_ref()).await?);
 
-    let participant = repo.add_participant(&CALL1, USER_C).await?;
+    let participant = repo
+        .add_participant(&CALL1, USER_C.deref().copied())
+        .await?;
     assert_eq!(participant.call_id, CALL1);
-    assert_eq!(participant.user_id, USER_C);
+    assert_eq!(participant.user_id, USER_C.as_ref());
 
-    assert!(repo.is_participant(&CALL1, USER_C).await?);
+    assert!(repo.is_participant(&CALL1, &USER_C.as_ref()).await?);
     Ok(())
 }
 
@@ -137,9 +145,10 @@ async fn add_and_check_participant(pool: Pool<Postgres>) -> anyhow::Result<()> {
 async fn remove_participant_removes_from_db(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
 
-    assert!(repo.is_participant(&CALL1, USER_B).await?);
-    repo.remove_participant(&CALL1, USER_B).await?;
-    assert!(!repo.is_participant(&CALL1, USER_B).await?);
+    assert!(repo.is_participant(&CALL1, &USER_B.as_ref()).await?);
+    repo.remove_participant(&CALL1, USER_B.deref().copied())
+        .await?;
+    assert!(!repo.is_participant(&CALL1, &USER_B.as_ref()).await?);
     Ok(())
 }
 
@@ -155,8 +164,8 @@ async fn get_participants_returns_all(pool: Pool<Postgres>) -> anyhow::Result<()
 
     assert_eq!(participants.len(), 2);
     let user_ids: Vec<&str> = participants.iter().map(|p| p.user_id.as_str()).collect();
-    assert!(user_ids.contains(&USER_A));
-    assert!(user_ids.contains(&USER_B));
+    assert!(user_ids.contains(&USER_A.as_ref()));
+    assert!(user_ids.contains(&USER_B.as_ref()));
     Ok(())
 }
 
@@ -171,7 +180,8 @@ async fn get_participant_count_correct(pool: Pool<Postgres>) -> anyhow::Result<(
 
     assert_eq!(repo.get_participant_count(&CALL1).await?, 2);
 
-    repo.remove_participant(&CALL1, USER_B).await?;
+    repo.remove_participant(&CALL1, USER_B.deref().copied())
+        .await?;
     assert_eq!(repo.get_participant_count(&CALL1).await?, 1);
     Ok(())
 }
@@ -223,7 +233,7 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     .await?;
 
     assert_eq!(record.channel_id, CH1);
-    assert_eq!(record.created_by, USER_A);
+    assert_eq!(record.created_by, USER_A.as_ref());
     assert!(record.duration_ms >= 0);
     assert!(record.ended_at >= record.started_at);
 
@@ -258,8 +268,10 @@ async fn archive_call_preserves_soft_deleted_participants(
     let repo = repo(pool.clone());
 
     // Soft-delete both participants (simulates leave_or_end_call flow).
-    repo.remove_participant(&CALL1, USER_A).await?;
-    repo.remove_participant(&CALL1, USER_B).await?;
+    repo.remove_participant(&CALL1, USER_A.deref().copied())
+        .await?;
+    repo.remove_participant(&CALL1, USER_B.deref().copied())
+        .await?;
 
     // Active count should be 0 but rows still exist.
     assert_eq!(repo.get_participant_count(&CALL1).await?, 0);
@@ -282,8 +294,8 @@ async fn archive_call_preserves_soft_deleted_participants(
 
     assert_eq!(rows.len(), 2);
     let user_ids: Vec<&str> = rows.iter().map(|r| r.user_id.as_str()).collect();
-    assert!(user_ids.contains(&USER_A));
-    assert!(user_ids.contains(&USER_B));
+    assert!(user_ids.contains(&USER_A.as_ref()));
+    assert!(user_ids.contains(&USER_B.as_ref()));
     // Both should have left_at set since they were soft-deleted.
     assert!(rows.iter().all(|r| r.left_at.is_some()));
 
@@ -474,7 +486,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
 
     assert_eq!(transcripts.len(), 1);
     assert_eq!(transcripts[0].content, "test transcript");
-    assert_eq!(transcripts[0].speaker_id, USER_A);
+    assert_eq!(transcripts[0].speaker_id, USER_A.as_ref());
     assert_eq!(transcripts[0].sequence_num, 1);
 
     // Ephemeral transcripts should be gone (cascaded).

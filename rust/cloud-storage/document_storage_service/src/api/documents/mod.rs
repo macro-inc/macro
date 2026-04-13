@@ -5,8 +5,7 @@ use axum::{
 };
 use tower::ServiceBuilder;
 
-// needs to be public in api crate for swagger
-pub(in crate::api) mod copy_document;
+// NOTE: copy_document is now served by the documents hex crate router
 pub(in crate::api) mod delete_document;
 pub(in crate::api) mod export_document;
 pub(in crate::api) mod get_batch_preview;
@@ -92,24 +91,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             get(get_document_key::get_document_key_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
-        .route(
-            "/{document_id}/copy",
-            post(copy_document::copy_document_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_document_exists_middleware.clone())
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::validate_user_quota::document_handler,
-                    )),
-            ),
-        )
+        // NOTE: /{document_id}/copy is now served by the documents hex crate router
         // NOTE: GET /{document_id} is now served by the documents hex crate router
         .route(
             "/{document_id}/views",

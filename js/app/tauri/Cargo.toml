@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["src-tauri", "navigation_plugin", "logger"]
+members = ["src-tauri", "navigation_plugin", "logger", "input_accessory_plugin"]
 
 [workspace.dependencies]
 rootcause = "0.10"

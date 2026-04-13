@@ -145,7 +145,9 @@ pub fn run() {
 
     #[cfg(target_os = "ios")]
     {
-        builder = builder.plugin(tauri_plugin_haptics::init());
+        builder = builder
+            .plugin(tauri_plugin_haptics::init())
+            .plugin(tauri_plugin_input_accessory::init());
     }
 
     // register the rest of the common plugins

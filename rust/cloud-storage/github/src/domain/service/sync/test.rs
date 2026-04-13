@@ -182,6 +182,18 @@ impl DocumentService for StubDocumentService {
         Ok(())
     }
 
+    async fn copy_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_context: DocumentBasic,
+        _user_id: MacroUserIdStr<'static>,
+        _document_name: String,
+        _query_version_id: Option<i64>,
+        _sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
+    ) -> Result<model::document::response::DocumentResponse, DocumentError> {
+        unimplemented!()
+    }
+
     async fn create_task(
         &self,
         _user_id: MacroUserIdStr<'static>,

@@ -5,6 +5,7 @@ import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
+import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
 const BASE_ITEM_SIZE: number = 64;
 const BASE_BUFFER_SIZE: number = BASE_ITEM_SIZE;
@@ -70,7 +71,6 @@ type ThreadListProps = {
 };
 
 const NEAR_TOP_THRESHOLD = 800;
-const NEAR_BOTTOM_THRESHOLD = 50;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {

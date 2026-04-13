@@ -11,6 +11,8 @@ use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
     CreateAgentDispatchRequest, EncodedFileOutput, S3Upload, encoded_file_output,
 };
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use crate::domain::ports::CallRtcClient;
@@ -86,10 +88,10 @@ impl CallRtcClient for LivekitRtcClient {
     async fn generate_token(
         &self,
         room_name: &str,
-        participant_identity: &str,
+        participant_identity: MacroUserIdStr<'_>,
     ) -> anyhow::Result<String> {
         let token = AccessToken::with_api_key(&self.api_key, &self.api_secret)
-            .with_identity(participant_identity)
+            .with_identity(participant_identity.as_ref())
             .with_grants(VideoGrants {
                 room_join: true,
                 room: room_name.to_string(),
@@ -106,10 +108,10 @@ impl CallRtcClient for LivekitRtcClient {
     async fn remove_participant(
         &self,
         room_name: &str,
-        participant_identity: &str,
+        participant_identity: MacroUserIdStr<'_>,
     ) -> anyhow::Result<()> {
         self.room_client
-            .remove_participant(room_name, participant_identity)
+            .remove_participant(room_name, participant_identity.as_ref())
             .await?;
         Ok(())
     }
@@ -191,7 +193,20 @@ impl CallRtcClient for LivekitRtcClient {
             event: event.event,
             id: event.id,
             room_name: event.room.map(|r| r.name),
-            participant_identity: event.participant.map(|p| p.identity),
+            participant_identity: event
+                .participant
+                .and_then(|p| {
+                    // The transcription agent joins with its agent name as the
+                    // identity, which is not a MacroUserId — short-circuit so
+                    // join/leave events for the agent don't fail parsing.
+                    if Some(p.identity.as_str()) == self.transcription_agent_name.as_deref() {
+                        None
+                    } else {
+                        Some(MacroUserIdStr::parse_from_str(&p.identity).map(CowLike::into_owned))
+                    }
+                })
+                .transpose()
+                .map_err(anyhow::Error::from)?,
             egress_id,
             file_url,
             created_at: event.created_at,

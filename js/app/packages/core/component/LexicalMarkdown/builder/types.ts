@@ -11,13 +11,14 @@ import type {
   SelectionData,
 } from '../plugins';
 import type { createMenuOperations } from '../shared/inlineMenu';
+import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 
 export interface ActionsOptions {
   useBlockBoundary?: boolean;
 }
 
 export interface MentionsOptions {
-  sources?: Array<'users' | 'documents'>;
+  sources?: MentionBucketId[];
   onRemove?: (mention: ItemMention) => void;
   onCreate?: (mention: ItemMention) => void;
   block?: string;
@@ -88,6 +89,7 @@ export interface EditorControls {
   getState: () => SerializedEditorState;
   setState: (state: SerializedEditorState) => void;
   getLexical: () => LexicalEditor;
+  isMentionMenuOpen: () => boolean;
 }
 
 /**

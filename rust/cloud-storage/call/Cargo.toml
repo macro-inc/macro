@@ -8,38 +8,39 @@ version = "0.1.0"
 default = ["inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
-  "dep:entity_access",
   "dep:model-error-response",
   "dep:model_user",
   "dep:utoipa",
+  "entity_access/inbound",
   "ports",
 ]
 outbound = [
-  "dep:entity_access",
   "dep:livekit-api",
   "dep:livekit-protocol",
   "dep:models_permissions",
   "dep:sqlx",
   "ports",
 ]
-ports = ["dep:tokio"]
+ports = ["dep:entity_access", "dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }
-axum = { workspace = true, optional = true }
-chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = [
-  "inbound",
+  "ports",
 ] }
 livekit-api = { workspace = true, optional = true }
 livekit-protocol = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_permissions = { path = "../models_permissions", optional = true }
+notification = { path = "../notification" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }

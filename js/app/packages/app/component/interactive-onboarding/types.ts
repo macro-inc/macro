@@ -14,6 +14,16 @@ export interface LessonDefinition {
   skippable?: boolean;
   /** Hide the continue/skip buttons entirely — the lesson drives its own advancement. */
   hideContinue?: boolean;
+  /** Called instead of the default complete-and-advance flow. On web, redirects externally (returns void). On native mobile, performs auth inline and returns true to advance. */
+  onContinue?: () => void | Promise<boolean>;
+  /** If this URL search param is present on mount, auto-complete this lesson and advance (used for returning from external OAuth flows). */
+  completeOnParam?: string;
+  /** Called when completeOnParam is detected, before the lesson is advanced. Return false to abort the fast-forward (e.g. when initialization fails). */
+  onCompleteParam?: () => Promise<boolean>;
+  /** Center the continue button label. */
+  centeredButton?: boolean;
+  /** Optional secondary button rendered below the continue button. */
+  secondaryAction?: Component;
 }
 
 export interface LessonContentProps {

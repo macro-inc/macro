@@ -5,7 +5,7 @@ import {
   type MessageData,
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
-import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
+import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
 import type { MessageEditor } from '../Channel/create-message-editor';
@@ -74,7 +74,7 @@ export function ThreadReplyList(props: {
             <ThreadRail
               newMessage={listMetaByReplyId()[reply.id].isNewMessage}
             />
-            <MarkMessaageNotifications
+            <MarkMessageNotifications
               messageId={reply.id}
               channelId={props.channelId}
             >
@@ -91,7 +91,7 @@ export function ThreadReplyList(props: {
                   isReplySelected() ? { isSelected: true } : undefined
                 }
               />
-            </MarkMessaageNotifications>
+            </MarkMessageNotifications>
           </div>
         );
       }}

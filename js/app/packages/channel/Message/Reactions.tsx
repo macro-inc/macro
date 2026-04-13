@@ -1,5 +1,5 @@
 import { useUserId } from '@core/context/user';
-import PlusIcon from '@icon/regular/plus.svg';
+import SmileyIcon from '@icon/regular/smiley.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show } from 'solid-js';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
@@ -65,7 +65,7 @@ export function Reactions(props: ReactionsProps) {
                 emoji,
               });
             }}
-            trigger={renderIcon(PlusIcon)}
+            trigger={renderIcon(SmileyIcon)}
             triggerProps={{
               'aria-label': 'Add reaction',
               'data-message-reaction-add': '',

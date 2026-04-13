@@ -1,5 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
+import { useChannelMarkdownArea } from '@block-channel/component/DeprecatedChannelInput/MarkdownArea';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';

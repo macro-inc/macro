@@ -153,6 +153,7 @@ interface ContinueButtonProps {
   label?: string;
   disabled?: boolean;
   ref?: (el: HTMLButtonElement) => void;
+  centered?: boolean;
 }
 
 export function ContinueButton(props: ContinueButtonProps) {
@@ -161,7 +162,8 @@ export function ContinueButton(props: ContinueButtonProps) {
       ref={props.ref}
       type="button"
       class={cn(
-        'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center justify-between gap-2 bracket-never border-none',
+        'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center gap-2 bracket-never border-none',
+        props.centered ? 'justify-center' : 'justify-between',
         {
           'bg-transparent text-ink/40 font-normal ring-1 ring-edge-muted/50':
             props.disabled,

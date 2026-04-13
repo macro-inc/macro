@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { UnifiedNotification } from '@notifications/types';
+import { openNotification } from '@notifications';
 import {
   For,
   Show,
@@ -11,42 +12,30 @@ import {
 } from 'solid-js';
 import ChannelIcon from '@macro-icons/wide/channel.svg?component-solid';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  isChannelNotification,
-  useSenderName,
-} from '@app/component/app-sidebar/utils';
+import { useSenderName } from '@app/component/app-sidebar/utils';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { getChannelNotificationParams } from '@notifications/notification-navigation';
+import { isChannelNotification } from '@notifications/notification-helpers';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
   channelType: string | null;
   isDM: boolean;
 } {
-  const metadata = notification.notification_metadata;
-
-  if (
-    metadata.tag === 'channel_mention' ||
-    metadata.tag === 'channel_message_send' ||
-    metadata.tag === 'channel_message_reply'
-  ) {
-    const channelType = metadata.content.channelType;
-    const isDM = channelType === 'directMessage';
-    return {
-      channelName:
-        'channelName' in metadata.content
-          ? (metadata.content.channelName ?? null)
-          : null,
-      channelType,
-      isDM,
-    };
+  if (!isChannelNotification(notification)) {
+    return { channelName: null, channelType: null, isDM: false };
   }
 
-  return { channelName: null, channelType: null, isDM: false };
+  const meta = notification.notification_metadata;
+  const channelType = meta.content.channelType;
+  const isDM = channelType === 'directMessage';
+  const channelName =
+    'channelName' in meta.content ? (meta.content.channelName ?? null) : null;
+  return { channelName, channelType, isDM };
 }
 
 interface ChannelGroup {
@@ -93,8 +82,6 @@ function groupByChannel(
 }
 
 function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
-  const layout = useSplitLayout();
-
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
   onMount(() => {
@@ -117,35 +104,36 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
       : 'Unknown Channel';
   };
 
-  const content = () =>
-    ({
-      type: 'channel',
-      id: props.group.entityId,
-    }) as const;
+  const latestNotification = () => props.group.notifications[0];
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
 
-  const openInCurrentSplit = () =>
-    layout.openWithSplit(content(), {
-      referredFrom: 'sidebar',
-    });
+  const navigateToLatestNotification = (newSplit = false) => {
+    const manager = globalSplitManager();
+    if (!manager) return;
+    const notification = latestNotification();
+    openNotification(notification, manager, newSplit);
+  };
+
+  const openInCurrentSplit = () => {
+    navigateToLatestNotification(false);
+  };
 
   const openInNewSplit = () => {
     if (!canOpenInNewSplit()) return;
-    const manager = globalSplitManager()!;
-
-    manager.createNewSplit({
-      content: content(),
-      activate: true,
-      allowDuplicate: true,
-      referredFrom: 'sidebar',
-    });
+    navigateToLatestNotification(true);
   };
 
-  const openFullscreen = () => {
-    const split = openInCurrentSplit();
-    split?.toggleSpotlight(true);
+  const _openFullscreen = () => {
+    const { params } = getChannelNotificationParams(latestNotification());
+    globalSplitManager()?.createPopoverSplit({
+      content: {
+        type: 'channel',
+        id: props.group.entityId,
+        params,
+      },
+    });
   };
 
   return (
@@ -163,14 +151,10 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
             'opacity-100 translate-y-0': isVisible(),
           }}
           onClick={(e) => {
-            // Middle mouse handling
             if (e.button === 1) return;
 
             e.preventDefault();
-            layout.openWithSplit(content(), {
-              preferNewSplit: e.shiftKey,
-              referredFrom: 'sidebar',
-            });
+            navigateToLatestNotification(e.shiftKey);
           }}
         >
           <div class="flex-shrink-0">
@@ -210,7 +194,8 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
-          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          {/* FIXME: this doesn't work yet */}
+          {/* <MenuItem text="Open fullscreen" onClick={openFullscreen} /> */}
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
         </ContextMenuContent>
       </ContextMenu.Portal>
@@ -226,27 +211,11 @@ export const ChannelsUnreadWidget = () => {
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = () => [...notificationSource.notifications()];
 
-  const openChannelIds = createMemo(() => {
-    const manager = globalSplitManager();
-    if (!manager) return new Set<string>();
-    return new Set(
-      manager
-        .splits()
-        .filter((s) => s.content.type === 'channel')
-        .map((s) => s.content.id)
-    );
-  });
-
   const filteredNotifications = () => filterUnreadNotDone(allNotifications());
 
-  const channelGroupsMap = createMemo(() => {
-    const open = openChannelIds();
-    const groups = groupByChannel(filteredNotifications());
-    for (const id of open) {
-      groups.delete(id);
-    }
-    return groups;
-  });
+  const channelGroupsMap = createMemo(() =>
+    groupByChannel(filteredNotifications())
+  );
 
   const [orderedIds, setOrderedIds] = createSignal<string[]>([]);
 

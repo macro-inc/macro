@@ -39,7 +39,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -81,7 +81,7 @@ type DssSoupState = SoupRouterState<
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl<EntityAccessService>,
@@ -135,6 +135,19 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .await
             .map_err(Into::into)
     }
+
+    async fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        use system_properties::SystemPropertiesService as _;
+
+        self.system_properties
+            .copy_task_properties(from_task_id, to_task_id)
+            .await
+            .map_err(Into::into)
+    }
 }
 
 pub(crate) type DocumentService = DocumentServiceImpl<
@@ -163,8 +176,13 @@ pub(crate) type CallConnectionService =
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
 
 /// Type alias for the call service.
-pub(crate) type DssCallService =
-    CallServiceImpl<PgCallRepo, LivekitRtcClient, CallConnectionService>;
+pub(crate) type DssCallService = CallServiceImpl<
+    PgCallRepo,
+    LivekitRtcClient,
+    CallConnectionService,
+    EntityAccessService,
+    NotificationIngressType,
+>;
 
 /// Type alias for the call router state.
 pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessService>;

@@ -5,6 +5,7 @@ mod test;
 
 use chrono::Utc;
 use entity_access::domain::models::AccessLevel;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::PgPool;
@@ -34,7 +35,7 @@ impl CallRepository for PgCallRepo {
         call_id: &Uuid,
         channel_id: &Uuid,
         room_name: &str,
-        created_by: &str,
+        created_by: MacroUserIdStr<'_>,
     ) -> Result<Option<Call>, Self::Err> {
         // Create share permission
         let share_permission_id = uuid::Uuid::now_v7();
@@ -90,7 +91,7 @@ impl CallRepository for PgCallRepo {
             call_id,
             channel_id,
             room_name,
-            created_by,
+            created_by.as_ref(),
             &share_permission_id.to_string(),
         )
         .fetch_optional(tx.as_mut())
@@ -115,6 +116,33 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn get_call_by_channel_id(&self, channel_id: &Uuid) -> Result<Option<Call>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
+            FROM calls
+            WHERE channel_id = $1
+            "#,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| {
+            opt.map(|row| Call {
+                id: row.id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                created_at: row.created_at,
+                egress_id: row.egress_id,
+            })
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_active_call_by_channel(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Option<Call>, Self::Err> {
         sqlx::query!(
             r#"
             SELECT id, channel_id, room_name, created_by, created_at, egress_id
@@ -165,7 +193,7 @@ impl CallRepository for PgCallRepo {
     async fn add_participant(
         &self,
         call_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
     ) -> Result<CallParticipant, Self::Err> {
         let row = sqlx::query!(
             r#"
@@ -175,7 +203,7 @@ impl CallRepository for PgCallRepo {
             RETURNING call_id, user_id, joined_at
             "#,
             call_id,
-            user_id,
+            user_id.as_ref(),
         )
         .fetch_one(&self.pool)
         .await?;
@@ -188,7 +216,11 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn remove_participant(&self, call_id: &Uuid, user_id: &str) -> Result<(), Self::Err> {
+    async fn remove_participant(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
             UPDATE call_participants
@@ -196,7 +228,7 @@ impl CallRepository for PgCallRepo {
             WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL
             "#,
             call_id,
-            user_id,
+            user_id.as_ref(),
         )
         .execute(&self.pool)
         .await?;
@@ -447,5 +479,25 @@ impl CallRepository for PgCallRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_profile_picture<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT mui.profile_picture
+            FROM macro_user_info mui
+            JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+            WHERE u.id = $1 AND mui.profile_picture IS NOT NULL
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| opt.flatten())
     }
 }

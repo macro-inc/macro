@@ -420,15 +420,14 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors('INVALID_RESPONSE'),
   })
   .fn('copyDocument', {
-    description: schemas.copyDocumentHandlerResponse.description!,
+    description: schemas.copyDocumentResponse.description!,
     args: {
-      documentId: schemas.copyDocumentHandlerParams.shape.document_id,
-      ...schemas.copyDocumentHandlerQueryParams.shape,
-      ...schemas.copyDocumentHandlerBody.shape,
+      documentId: schemas.copyDocumentParams.shape.document_id,
+      ...schemas.copyDocumentQueryParams.shape,
+      ...schemas.copyDocumentBody.shape,
     },
     result:
-      schemas.copyDocumentHandlerResponse.shape.data.shape.documentMetadata
-        .shape,
+      schemas.copyDocumentResponse.shape.data.shape.documentMetadata.shape,
     modifies: true,
     throws: withFetchErrors(),
   })

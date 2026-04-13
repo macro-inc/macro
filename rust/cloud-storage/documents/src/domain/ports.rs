@@ -13,9 +13,11 @@ use model::document::response::{
 };
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
+use model::sync_service::SyncServiceVersionID;
+
 use super::models::{
-    CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
-    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+    CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse,
+    DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
 };
 
 /// Repository for accessing document data from the database.
@@ -127,6 +129,35 @@ pub trait DocumentRepo: Send + Sync + 'static {
         user_id: &str,
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get document metadata at a specific version ID.
+    fn get_document_metadata_at_version(
+        &self,
+        document_id: &str,
+        version_id: i64,
+    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Get the owner of a project by project ID.
+    fn get_project_owner(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<MacroUserIdStr<'static>, Self::Err>> + Send;
+
+    /// Copy a document's DB records in a single transaction.
+    ///
+    /// Creates: Document row, version (DocumentBom or DocumentInstance),
+    /// SharePermission, DocumentPermission, UserItemAccess, and user history.
+    fn copy_document(
+        &self,
+        args: CopyDocumentRepoArgs,
+    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Copy PDF-specific data (DocumentText, DocumentProcessResult) for a copied document.
+    fn copy_pdf_parts(
+        &self,
+        new_document_id: &str,
+        original_document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Port for generating S3 presigned upload URLs.
@@ -146,6 +177,13 @@ pub trait PresignedUploadUrlPort: Send + Sync + 'static {
         sha: &str,
         content_type: ContentType,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Copy a document object from source key to destination key within the storage bucket.
+    fn copy_object(
+        &self,
+        source_key: &str,
+        destination_key: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// Port for attaching task system properties.
@@ -170,6 +208,13 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Copy all task property values from one task to another.
+    fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -242,6 +287,17 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
         status: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Copy an existing document, creating a new document with the same content.
+    fn copy_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: DocumentBasic,
+        user_id: MacroUserIdStr<'static>,
+        document_name: String,
+        query_version_id: Option<i64>,
+        sync_version_id: Option<SyncServiceVersionID>,
+    ) -> impl Future<Output = Result<model::document::response::DocumentResponse, DocumentError>> + Send;
 
     /// Create a task document and optionally set property values on it.
     fn create_task(

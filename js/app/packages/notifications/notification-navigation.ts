@@ -8,12 +8,8 @@ import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import type { NotificationSource } from './notification-source';
 import { getChannelParams } from '@block-channel/utils/link';
-
-const CHANNEL_EVENT_TYPES = [
-  'channel_mention',
-  'channel_message_send',
-  'channel_message_reply',
-] as const;
+import { isChannelNotification } from './notification-helpers';
+import { CHANNEL_EVENT_TYPES } from './notification-source';
 
 /**
  * Opens a split if it is not already open.
@@ -39,6 +35,31 @@ function openSplitIfNotOpen(
   );
 }
 
+export function getChannelNotificationParams(
+  notification: UnifiedNotification
+): { messageId?: string; threadId?: string; params?: Record<string, string> } {
+  if (!isChannelNotification(notification)) return {};
+
+  const meta = notification.notification_metadata;
+  const { messageId, threadId } = match(meta)
+    .with({ tag: 'channel_mention' }, (m) => ({
+      messageId: m.content.messageId,
+      threadId: m.content.threadId ?? undefined,
+    }))
+    .with({ tag: 'channel_message_send' }, (m) => ({
+      messageId: m.content.messageId,
+      threadId: undefined,
+    }))
+    .with({ tag: 'channel_message_reply' }, (m) => ({
+      messageId: m.content.messageId,
+      threadId: m.content.threadId,
+    }))
+    .exhaustive();
+
+  const params = messageId ? getChannelParams(messageId, threadId) : undefined;
+  return { messageId, threadId, params };
+}
+
 /**
  * Opens a channel notification.
  */
@@ -48,21 +69,8 @@ async function openChannelNotification(
   newSplit: boolean = false
 ) {
   const channelId = notification.entity_id;
-  let messageId: string | undefined;
-  let threadId: string | undefined;
-
-  const tag = notification.notification_metadata.tag;
-  if (tag === 'channel_mention') {
-    messageId = notification.notification_metadata.content.messageId;
-    threadId = notification.notification_metadata.content.threadId ?? undefined;
-  } else if (tag === 'channel_message_send') {
-    messageId = notification.notification_metadata.content.messageId;
-  } else if (tag === 'channel_message_reply') {
-    messageId = notification.notification_metadata.content.messageId;
-    threadId = notification.notification_metadata.content.threadId;
-  }
-
-  const params = messageId ? getChannelParams(messageId, threadId) : undefined;
+  const { messageId, threadId, params } =
+    getChannelNotificationParams(notification);
 
   openSplitIfNotOpen(layoutManager, 'channel', channelId, {
     newSplit,

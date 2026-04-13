@@ -1,0 +1,63 @@
+[package]
+default-run = "mcp_service"
+edition = "2024"
+name = "mcp_service"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+ai_tools = { path = "../ai_tools" }
+ai_toolset = { path = "../ai_toolset" }
+anyhow = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true, features = ["tower-log"] }
+comms = { path = "../comms", features = ["outbound"] }
+document_storage_service_client = { path = "../document_storage_service_client" }
+documents = { path = "../documents", features = ["ai_tools"] }
+email = { path = "../email", features = ["outbound"] }
+email_service_client = { path = "../email_service_client" }
+entity_access = { path = "../entity_access" }
+frecency = { path = "../frecency", features = ["outbound", "postgres"] }
+fusionauth = { path = "../fusionauth" }
+http = { workspace = true }
+lexical_client = { path = "../lexical_client" }
+mcp_auth_proxy = { path = "../mcp_auth_proxy" }
+macro_auth = { path = "../macro_auth" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+  "cloud_storage",
+  "user_permissions",
+] }
+macro_user_id = { path = "../macro_user_id" }
+properties = { path = "../properties", features = ["ai_tools"] }
+readonly_pool = { path = "../readonly_pool" }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
+rmcp = { version = "1.2.0", features = ["transport-streamable-http-server"] }
+scribe = { path = "../scribe", features = [
+  "channel",
+  "dcs",
+  "document",
+  "email",
+  "static_file",
+] }
+search_service_client = { path = "../search_service_client" }
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde_json = { workspace = true }
+soup = { path = "../soup", features = ["outbound"] }
+sqlx = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "chat",
+  "document_text_extractor",
+  "email",
+  "gmail",
+  "search",
+] }
+static_file_service_client = { path = "../static_file_service_client" }
+sync_service_client = { path = "../sync_service_client" }
+tokio = { workspace = true }
+tracing = { workspace = true }

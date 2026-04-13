@@ -1,8 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/maybeResult';
-import { softInvalidateChannelWithID } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   commsServiceClient,
@@ -16,7 +14,7 @@ import type {
   CountedReaction,
   PostMessageRequest,
 } from '@service-comms/generated/models';
-import type { Attachment, GetChannelResponse, Message } from './types';
+import type { Attachment, Message } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';
@@ -179,47 +177,20 @@ export function optimisticInsertChannelMessage(
     target,
   };
 
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-
-      const newMessage: Message = {
-        id: vars.optimisticId,
-        channel_id: vars.channelId,
-        sender_id: vars.senderId,
-        content: vars.content,
-        thread_id: vars.thread_id ?? undefined,
-        created_at: now,
-        updated_at: now,
-        deleted_at: undefined,
-        edited_at: undefined,
-      };
-
-      return {
-        ...prev,
-        messages: [...prev.messages, newMessage],
-        attachments: [...prev.attachments, ...newAttachments],
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    if (target.kind === 'thread_reply') {
-      const optimisticReply = makeOptimisticThreadReply(
-        vars,
-        newAttachments,
-        now
-      );
-      insertMessageIntoTargetCaches(vars.channelId, target, optimisticReply);
-    } else {
-      const optimisticMessage = makeOptimisticTopLevelMessage(
-        vars,
-        newAttachments,
-        now
-      );
-      insertMessageIntoTargetCaches(vars.channelId, target, optimisticMessage);
-    }
+  if (target.kind === 'thread_reply') {
+    const optimisticReply = makeOptimisticThreadReply(
+      vars,
+      newAttachments,
+      now
+    );
+    insertMessageIntoTargetCaches(vars.channelId, target, optimisticReply);
+  } else {
+    const optimisticMessage = makeOptimisticTopLevelMessage(
+      vars,
+      newAttachments,
+      now
+    );
+    insertMessageIntoTargetCaches(vars.channelId, target, optimisticMessage);
   }
 
   return context;
@@ -232,26 +203,7 @@ export function rollbackInsertChannelMessage(
   channelId: string,
   context: InsertMessageContext
 ): void {
-  const queryKey = channelKeys.withID(channelId).queryKey;
-
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-
-      return {
-        ...prev,
-        messages: prev.messages.filter((m) => m.id !== context.optimisticId),
-        attachments: prev.attachments.filter(
-          (a) => a.message_id !== context.optimisticId
-        ),
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    removeMessageFromTargetCaches(channelId, context.target);
-  }
+  removeMessageFromTargetCaches(channelId, context.target);
 }
 
 /**
@@ -265,56 +217,15 @@ export function replaceOptimisticMessage(
     threadId?: string;
   }>
 ): void {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
-
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-
-      const messageIndex = prev.messages.findIndex(
-        (m) => m.id === vars.optimisticId
-      );
-
-      if (messageIndex === -1) return prev;
-
-      const hasAuthoritativeAttachments = prev.attachments.some(
-        (attachment) => attachment.message_id === vars.realId
-      );
-
-      const updatedMessages = [...prev.messages];
-      updatedMessages[messageIndex] = {
-        ...updatedMessages[messageIndex],
-        id: vars.realId,
-      };
-
-      return {
-        ...prev,
-        messages: updatedMessages,
-        attachments: hasAuthoritativeAttachments
-          ? prev.attachments.filter(
-              (attachment) => attachment.message_id !== vars.optimisticId
-            )
-          : prev.attachments.map((attachment) =>
-              attachment.message_id === vars.optimisticId
-                ? { ...attachment, message_id: vars.realId }
-                : attachment
-            ),
-      };
-    }
+  replaceTargetMessageId(
+    vars.channelId,
+    resolveMessageTarget({
+      channelId: vars.channelId,
+      messageId: vars.optimisticId,
+      threadId: vars.threadId,
+    }),
+    vars.realId
   );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    replaceTargetMessageId(
-      vars.channelId,
-      resolveMessageTarget({
-        channelId: vars.channelId,
-        messageId: vars.optimisticId,
-        threadId: vars.threadId,
-      }),
-      vars.realId
-    );
-  }
 }
 
 /**
@@ -326,9 +237,6 @@ export function optimisticDeleteChannelMessage(
     Pick<ChannelMessage, 'message_id'> & { threadId?: string }
   >
 ): DeleteMessageContext | undefined {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
-
   const target = resolveMessageTarget({
     channelId: vars.channelId,
     messageId: vars.message_id,
@@ -340,51 +248,11 @@ export function optimisticDeleteChannelMessage(
     target,
   };
 
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-
-      const deletedMessage = prev.messages.find(
-        (m) => m.id === vars.message_id
-      );
-      if (!deletedMessage) return prev;
-
-      context.deletedMessage = deletedMessage;
-      context.deletedReactions = prev.reactions[vars.message_id] ?? [];
-      context.deletedAttachments = prev.attachments.filter(
-        (a) => a.message_id === vars.message_id
-      );
-
-      const filteredMessages = prev.messages.filter(
-        (m) => m.id !== vars.message_id
-      );
-
-      // Remove reactions for the deleted message
-      const { [vars.message_id]: _removedReactions, ...remainingReactions } =
-        prev.reactions;
-
-      // Remove attachments linked to the deleted message
-      const filteredAttachments = prev.attachments.filter(
-        (a) => a.message_id !== vars.message_id
-      );
-
-      return {
-        ...prev,
-        messages: filteredMessages,
-        reactions: remainingReactions,
-        attachments: filteredAttachments,
-      };
-    }
+  context.targetSnapshot = captureDeleteSnapshotForTarget(
+    vars.channelId,
+    target
   );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    context.targetSnapshot = captureDeleteSnapshotForTarget(
-      vars.channelId,
-      target
-    );
-    removeMessageFromTargetCaches(vars.channelId, target);
-  }
+  removeMessageFromTargetCaches(vars.channelId, target);
 
   return context;
 }
@@ -396,29 +264,7 @@ export function rollbackDeleteChannelMessage(
   channelId: string,
   context: DeleteMessageContext
 ): void {
-  const queryKey = channelKeys.withID(channelId).queryKey;
-
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-      if (!context.deletedMessage) return prev;
-
-      return {
-        ...prev,
-        messages: [...prev.messages, context.deletedMessage],
-        reactions: {
-          ...prev.reactions,
-          ...(context.deletedReactions.length > 0 && {
-            [context.deletedMessage.id]: context.deletedReactions,
-          }),
-        },
-        attachments: [...prev.attachments, ...context.deletedAttachments],
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS() && context.targetSnapshot) {
+  if (context.targetSnapshot) {
     restoreMessageInTargetCaches(
       channelId,
       context.target,
@@ -438,7 +284,6 @@ export function optimisticUpdateChannelMessage(
     }
   >
 ): UpdateMessageContext | undefined {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
   const target = resolveMessageTarget({
     channelId: vars.channelId,
     messageId: vars.message_id,
@@ -464,42 +309,7 @@ export function optimisticUpdateChannelMessage(
     };
   }
 
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-
-      const message = prev.messages.find((m) => m.id === vars.message_id);
-      if (!message) return prev;
-
-      context = {
-        messageId: vars.message_id,
-        target,
-        previousContent: message.content,
-        previousEditedAt: message.edited_at,
-        previousUpdatedAt: message.updated_at,
-        previousAttachments: prev.attachments.filter(
-          (attachment) => attachment.message_id === vars.message_id
-        ),
-      };
-
-      return {
-        ...prev,
-        messages: prev.messages.map((m) =>
-          m.id === vars.message_id
-            ? { ...m, content: vars.content, edited_at: now, updated_at: now }
-            : m
-        ),
-        attachments: prev.attachments.filter(
-          (attachment) =>
-            attachment.message_id !== vars.message_id ||
-            !deletedAttachmentIDs.has(attachment.id)
-        ),
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS() && context) {
+  if (context) {
     replaceTargetMessageState(vars.channelId, target, {
       content: vars.content,
       editedAt: now,
@@ -520,43 +330,12 @@ export function rollbackUpdateChannelMessage(
   channelId: string,
   context: UpdateMessageContext
 ): void {
-  const queryKey = channelKeys.withID(channelId).queryKey;
-
-  queryClient.setQueriesData(
-    { queryKey },
-    (prev: GetChannelResponse | undefined) => {
-      if (!prev) return prev;
-
-      return {
-        ...prev,
-        messages: prev.messages.map((m) =>
-          m.id === context.messageId
-            ? {
-                ...m,
-                content: context.previousContent,
-                edited_at: context.previousEditedAt,
-                updated_at: context.previousUpdatedAt,
-              }
-            : m
-        ),
-        attachments: [
-          ...prev.attachments.filter(
-            (attachment) => attachment.message_id !== context.messageId
-          ),
-          ...context.previousAttachments,
-        ],
-      };
-    }
-  );
-
-  if (ENABLE_NEW_CHANNELS()) {
-    replaceTargetMessageState(channelId, context.target, {
-      content: context.previousContent,
-      editedAt: normalizeDateValue(context.previousEditedAt),
-      updatedAt: normalizeDateValue(context.previousUpdatedAt) ?? '',
-      attachments: context.previousAttachments,
-    });
-  }
+  replaceTargetMessageState(channelId, context.target, {
+    content: context.previousContent,
+    editedAt: normalizeDateValue(context.previousEditedAt),
+    updatedAt: normalizeDateValue(context.previousUpdatedAt) ?? '',
+    attachments: context.previousAttachments,
+  });
 }
 
 type SendMessageParams = {
@@ -633,17 +412,14 @@ export function useSendMessageMutation(
           }
         },
         onSettled: (_data, _error, variables) => {
-          softInvalidateChannelWithID(variables.channelID);
-          if (ENABLE_NEW_CHANNELS()) {
-            softInvalidateTargetCaches(
-              variables.channelID,
-              resolveMessageTarget({
-                channelId: variables.channelID,
-                messageId: variables.optimisticId,
-                threadId: variables.message.thread_id ?? undefined,
-              })
-            );
-          }
+          softInvalidateTargetCaches(
+            variables.channelID,
+            resolveMessageTarget({
+              channelId: variables.channelID,
+              messageId: variables.optimisticId,
+              threadId: variables.message.thread_id ?? undefined,
+            })
+          );
         },
       },
       callbacks
@@ -709,17 +485,14 @@ export function useDeleteMessageMutation(
         },
         onSettled: (_data, _error, vars) => {
           deleteNonce.cleanup(vars);
-          softInvalidateChannelWithID(vars.channelID);
-          if (ENABLE_NEW_CHANNELS()) {
-            softInvalidateTargetCaches(
-              vars.channelID,
-              resolveMessageTarget({
-                channelId: vars.channelID,
-                messageId: vars.messageID,
-                threadId: vars.threadID,
-              })
-            );
-          }
+          softInvalidateTargetCaches(
+            vars.channelID,
+            resolveMessageTarget({
+              channelId: vars.channelID,
+              messageId: vars.messageID,
+              threadId: vars.threadID,
+            })
+          );
         },
       },
       callbacks
@@ -794,16 +567,13 @@ export function usePatchMessageMutation(
         },
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);
-          softInvalidateChannelWithID(vars.channelID);
-          if (ENABLE_NEW_CHANNELS()) {
-            softInvalidateTargetCaches(
-              vars.channelID,
-              resolveMessageTarget({
-                channelId: vars.channelID,
-                messageId: vars.messageID,
-              })
-            );
-          }
+          softInvalidateTargetCaches(
+            vars.channelID,
+            resolveMessageTarget({
+              channelId: vars.channelID,
+              messageId: vars.messageID,
+            })
+          );
         },
       },
       callbacks

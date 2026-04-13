@@ -5,11 +5,12 @@
 use std::fmt::Debug;
 use std::future::Future;
 
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    Call, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent, EgressS3Config,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    Call, CallActiveResponse, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent,
+    EgressS3Config, LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -20,16 +21,22 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Create a new call record, or return `None` if one already exists for
     /// this channel (unique-constraint conflict).
-    fn create_call(
+    fn create_call<'a>(
         &self,
         call_id: &Uuid,
         channel_id: &Uuid,
         room_name: &str,
-        created_by: &str,
+        created_by: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Get an active call by channel ID.
     fn get_call_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
+
+    /// Check whether an active call exists for a channel. Queries `calls` table only.
+    fn get_active_call_by_channel(
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
@@ -41,17 +48,17 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Add a participant to a call.
-    fn add_participant(
+    fn add_participant<'a>(
         &self,
         call_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallParticipant, Self::Err>> + Send;
 
     /// Remove a participant from a call.
-    fn remove_participant(
+    fn remove_participant<'a>(
         &self,
         call_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Get all active participants for a call.
@@ -117,6 +124,12 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         segment: &TranscriptSegmentRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get the profile picture URL for a user by their `MacroUserIdStr`.
+    fn get_user_profile_picture<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -129,17 +142,17 @@ pub trait CallRtcClient: Send + Sync + 'static {
     fn delete_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Generate an access token for a participant to join a room.
-    fn generate_token(
+    fn generate_token<'a>(
         &self,
         room_name: &str,
-        participant_identity: &str,
+        participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Remove a participant from a room.
-    fn remove_participant(
+    fn remove_participant<'a>(
         &self,
         room_name: &str,
-        participant_identity: &str,
+        participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Start a room composite egress (recording). Returns the egress ID.
@@ -169,19 +182,26 @@ pub trait CallService: Send + Sync + 'static {
     /// Validate an internal call token (e.g. from the `x-macro-internal-call` header).
     fn validate_internal_call(&self, token: &str) -> bool;
 
+    /// Check if an active call exists for a channel.
+    /// Returns the call info if active, or `None` if no call exists.
+    fn check_active_call(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallActiveResponse>, CallError>> + Send;
+
     /// Get or create a call in a channel. If a call already exists, joins it;
     /// otherwise creates a new one. Always returns a join token.
     fn get_or_create_call(
         &self,
         channel_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
 
     /// Leave or end a call. Removes the user; if last participant, also deletes the room and call.
-    fn leave_or_end_call(
+    fn leave_or_end_call<'a>(
         &self,
         channel_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
 
     /// Validate and process a raw webhook event from the RTC provider.

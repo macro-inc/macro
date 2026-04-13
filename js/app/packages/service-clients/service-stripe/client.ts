@@ -3,6 +3,16 @@ import { registerClient } from '@core/util/mockClient';
 import { authServiceClient } from '@service-auth/client';
 
 /**
+ * Gets Meta _fbp (browser ID) and _fbc (click ID) values from cookies set by the Meta Pixel.
+ */
+function getMetaIds(): { fbp: string | undefined; fbc: string | undefined } {
+  const cookies = document.cookie;
+  const fbp = cookies.match(/(?:^|; )_fbp=([^;]*)/)?.[1];
+  const fbc = cookies.match(/(?:^|; )_fbc=([^;]*)/)?.[1];
+  return { fbp, fbc };
+}
+
+/**
  * Gets the Google Analytics client ID using gtag.
  * Returns a promise that resolves with the client ID or undefined if GA is blocked/unavailable.
  * Times out after 500ms to avoid blocking checkout if GA is blocked by an ad blocker.
@@ -34,12 +44,17 @@ export const stripeServiceClient = {
     tier?: string
   ) => {
     const gaClientId = await getGaClientId();
+    const { fbp, fbc } = getMetaIds();
 
     const result = await authServiceClient.createCheckoutSession({
       successUrl: `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
       cancelUrl: `${window.location.origin}/app`,
       discount: discount ?? null,
-      gaClientId: gaClientId ?? null,
+      metadata: {
+        gaClientId: gaClientId ?? null,
+        fbp: fbp ?? null,
+        fbc: fbc ?? null,
+      },
       tier,
     });
 

@@ -3,8 +3,17 @@ import { createSignal } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { MentionItem } from '../../../utils/mentionsUtils';
 
+export type MentionBucketId =
+  | 'all'
+  | 'users'
+  | 'documents'
+  | 'channels'
+  | 'emails'
+  | 'dates'
+  | 'openTabs';
+
 export interface BucketConfig<T extends MentionItem = MentionItem> {
-  id: string;
+  id: MentionBucketId;
   label: string;
   getData: () => T[];
   getFullCount: () => number;
