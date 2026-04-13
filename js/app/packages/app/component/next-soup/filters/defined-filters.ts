@@ -63,25 +63,18 @@ import {
 
 const NIL = '00000000-0000-0000-0000-000000000000';
 
-export const signalFilterDef = defineFilter({
-  id: 'signal',
-  group: 'focus',
-  predicate: signalFilter,
-  ast: { ef: ast.eq('Importance', true), emailView: 'inbox' },
-});
-
-export const noiseFilterDef = defineFilter({
-  id: 'noise',
-  group: 'focus',
-  predicate: noiseFilter,
-  ast: { ef: ast.eq('Importance', false), emailView: 'inbox' },
-});
-
 export const explicitNoiseFilterDef = defineFilter({
   id: 'explicit-noise',
   group: 'focus',
   predicate: (e: EntityData) => !explicitNoiseFilter(e),
-  ast: {},
+  ast: {
+    df: ast.neq('id', NIL),
+    chanf: ast.neq('ChannelId', NIL),
+    cf: ast.neq('ChatId', NIL),
+    pf: ast.neq('ProjectId', NIL),
+    ef: ast.neq('ThreadId', NIL),
+    emailView: 'all',
+  },
 });
 
 export const documentFilter = defineFilter({
@@ -575,6 +568,41 @@ export const notDoneFilterDef = (notificationSource: NotificationSource) =>
     },
   });
 
+export const inboxFilterDef = (notificationSource: NotificationSource) =>
+  defineFilter({
+    id: 'inbox',
+    group: 'focus',
+    predicate: (e: EntityData) =>
+      signalFilter(e) && notDonePredicate(notificationSource)(e),
+    ast: {
+      df: ast.eq('nd', false),
+      ef: ast.and(
+        ast.eq('NotificationDone', false),
+        ast.eq('Importance', true)
+      ),
+      chanf: ast.eq('NotificationDone', false),
+      cf: ast.eq('NotificationDone', false),
+      pf: ast.eq('NotificationDone', false),
+
+      emailView: 'inbox',
+    },
+  });
+
+export const noiseFilterDef = defineFilter({
+  id: 'noise',
+  group: 'focus',
+  predicate: noiseFilter,
+  ast: {
+    df: ast.eq('nd', false),
+    ef: ast.and(ast.eq('NotificationDone', false), ast.eq('Importance', false)),
+    chanf: ast.eq('NotificationDone', false),
+    cf: ast.eq('NotificationDone', false),
+    pf: ast.eq('NotificationDone', false),
+
+    emailView: 'inbox',
+  },
+});
+
 export const doneFilterDef = (notificationSource: NotificationSource) =>
   defineFilter({
     id: 'done' as const,
@@ -593,7 +621,7 @@ export const createSoupFilters = (
   getUserID: () => string | undefined
 ) => {
   return [
-    signalFilterDef,
+    inboxFilterDef(notificationSource),
     noiseFilterDef,
     explicitNoiseFilterDef,
     unreadFilterDef(notificationSource),

@@ -2,7 +2,7 @@ import {
   EXCLUDE,
   QUERY_FILTERS,
 } from '@app/component/next-soup/filters/query-filters';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
+import type { FilterID } from '@app/component/next-soup/filters';
 import {
   applyInboxQueryFilters,
   applyOtherQueryFilters,
@@ -68,7 +68,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...filters,
             ...SIGNAL_QUERY_FILTERS,
           },
-          clientFilters: ['signal', 'not-done'],
+          clientFilters: ['inbox'],
         };
       },
       noise: () => {
@@ -80,7 +80,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...filters,
             ...NOISE_QUERY_FILTERS,
           },
-          clientFilters: ['noise', 'not-done'],
+          clientFilters: ['noise'],
         };
       },
       all: () => ({
