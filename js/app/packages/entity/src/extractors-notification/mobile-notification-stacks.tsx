@@ -4,7 +4,9 @@ import {
   type NotificationStack,
   getMostRecentNotification,
   getAllNotificationsFromGroup,
+  openNotification,
 } from '@notifications';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import type { WithNotification } from '../types/notification';
 import { isChannelEntity, type EntityData } from '../types/entity';
 import { CollapsibleList } from '../components/CollapsibleList';
@@ -28,10 +30,12 @@ function MobileStackRowLayout(props: {
   stack: NotificationStack;
   entity: WithNotification<EntityData>;
   unread: boolean;
+  onClick?: (e: MouseEvent) => void;
 }) {
   return (
     <Entity.Layout
       class="w-full text-sm grid bg-edge/10 border-edge-muted"
+      onClick={props.onClick}
       style={{
         'grid-template-columns':
           'var(--soup-stack-row-unread-column-width) 1fr 8ch',
@@ -89,12 +93,22 @@ function MobileStackRow(props: {
     toast.success('Marked as done');
   };
 
+  const handleClick = async (e: MouseEvent) => {
+    e.stopPropagation();
+    const mostRecent = getMostRecentNotification(props.stack);
+    const splitManager = globalSplitManager();
+    if (!splitManager) return;
+    await openNotification(mostRecent, splitManager, e.shiftKey);
+    await notificationSource.markAsRead(mostRecent);
+  };
+
   if (!ctx) {
     return (
       <MobileStackRowLayout
         stack={props.stack}
         entity={props.entity}
         unread={unread()}
+        onClick={handleClick}
       />
     );
   }
@@ -116,6 +130,7 @@ function MobileStackRow(props: {
         stack={props.stack}
         entity={props.entity}
         unread={unread()}
+        onClick={handleClick}
       />
     </EntityRow>
   );
