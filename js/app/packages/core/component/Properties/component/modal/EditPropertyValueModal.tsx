@@ -58,15 +58,13 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     false
   );
 
-  const initialEntityRefs =
+  const [selectedEntityRefs, setSelectedEntityRefs] = createSignal<
+    EntityReference[]
+  >(
     props.property.valueType === 'ENTITY' && props.property.value != null
       ? props.property.value
-      : [];
-
-  const originalEntityOptions = entityReferencesToIdSet(initialEntityRefs);
-
-  const [selectedEntityRefs, setSelectedEntityRefs] =
-    createSignal<EntityReference[]>(initialEntityRefs);
+      : []
+  );
 
   const [selectedDate, setSelectedDate] = createSignal<Date | null>(
     props.property.valueType === 'DATE' && props.property.value != null
@@ -260,7 +258,6 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                           const refs = selectedEntityRefs();
                           return entityReferencesToIdSet(refs);
                         }}
-                        originalOptions={() => originalEntityOptions}
                         setSelectedOptions={(newOptions, entityInfo) => {
                           const currentRefs = selectedEntityRefs();
                           const updatedRefs = updateEntityReferences(
