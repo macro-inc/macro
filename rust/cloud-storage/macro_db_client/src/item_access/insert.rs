@@ -1,8 +1,47 @@
 use macro_user_id::user_id::MacroUserIdStr;
+use models_entity_access_management::EntityAccessSourceType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::user_item_access::UserItemAccess;
 use sqlx::{Executor, Postgres, Transaction};
 use uuid::Uuid;
+
+/// Insert into entity access table for a user
+#[tracing::instrument(skip(transaction), err)]
+pub async fn insert_user_entity_access(
+    transaction: &mut Transaction<'_, Postgres>,
+    user_id: MacroUserIdStr<'_>,
+    entity_id: &uuid::Uuid,
+    entity_type: &str,
+    access_level: AccessLevel,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO "entity_access" (
+        "entity_id",
+        "entity_type",
+        "source_id",
+        "source_type",
+        "access_level"
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5
+        )
+        "#,
+        entity_id,
+        entity_type,
+        user_id.as_ref(),
+        EntityAccessSourceType::User as _,
+        access_level as _,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
 
 #[tracing::instrument(skip(transaction))]
 pub async fn insert_user_item_access(

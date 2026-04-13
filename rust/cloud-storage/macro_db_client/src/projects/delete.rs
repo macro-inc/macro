@@ -1,6 +1,7 @@
 use super::get_project::get_project_chats::get_chats_from_project_ids;
 use super::get_project::get_project_documents::get_documents_from_project_ids;
 use anyhow::Context;
+use model_entity::EntityType;
 use sqlx::{Pool, Postgres, Transaction};
 
 use super::get_project::get_sub_items::get_all_sub_project_ids;
@@ -252,8 +253,15 @@ pub async fn delete_projects_bulk_tsx(
     .await
     .context("unable to delete share permissions")?;
 
-    crate::item_access::delete::delete_user_item_access_bulk(transaction, project_ids, "project")
-        .await?;
+    crate::item_access::delete::delete_user_entity_access_bulk(
+        transaction,
+        &project_ids
+            .iter()
+            .map(|p| macro_uuid::string_to_uuid(p).unwrap())
+            .collect::<Vec<uuid::Uuid>>(),
+        EntityType::Project,
+    )
+    .await?;
 
     sqlx::query!(
         r#"
