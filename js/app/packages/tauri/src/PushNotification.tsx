@@ -84,20 +84,24 @@ function usePushNotifications(
     setPermission(undefined);
   }
 
-  // On launch, once persmission state resolves, ensure persisted state is synced correct, and check if the APNS token has rotated.
+  // On launch, once permission state resolves, ensure persisted state is synced correct, and check if the APNS token has rotated.
   // iOS returns the same token if valid, or a new one if it has rotated.
   whenSettled(
     systemPermission,
     (perm) => {
-      // Here we defensively ensure our persisted perm state is synced properly, for backwards compatiblity
+      // We defensively ensure our persisted perm state is synced properly, for backwards compatiblity
       if (perm.status !== 'granted') {
         setPermission(undefined);
         return;
-      } else if (perm.status === 'granted' && permission() !== 'granted') {
-        setPermission('granted');
       }
       const storedToken = registrationResult()?.token;
-      if (!storedToken) return;
+      if (!storedToken) {
+        setPermission(undefined);
+        return;
+      }
+      if (permission() !== 'granted') {
+        setPermission('granted');
+      }
 
       registerForRemoteNotifications()
         .then((freshResult) => {
