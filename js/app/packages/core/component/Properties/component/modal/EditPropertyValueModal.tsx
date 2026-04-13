@@ -65,9 +65,8 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
 
   const originalEntityOptions = entityReferencesToIdSet(initialEntityRefs);
 
-  const [selectedEntityRefs, setSelectedEntityRefs] = createSignal<
-    EntityReference[]
-  >(initialEntityRefs);
+  const [selectedEntityRefs, setSelectedEntityRefs] =
+    createSignal<EntityReference[]>(initialEntityRefs);
 
   const [selectedDate, setSelectedDate] = createSignal<Date | null>(
     props.property.valueType === 'DATE' && props.property.value != null
