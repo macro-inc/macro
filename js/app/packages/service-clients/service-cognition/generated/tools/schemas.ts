@@ -521,6 +521,7 @@ export const ReadMetadata = z
 
 export const ReadMetadataResponse = z.object({
   documentMetadata: z.object({
+    branchName: z.union([z.string(), z.null()]).optional(),
     branchedFromId: z.union([z.string(), z.null()]).optional(),
     branchedFromVersionId: z.union([z.number().int(), z.null()]).optional(),
     createdAt: z

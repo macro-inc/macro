@@ -978,6 +978,10 @@ export interface ReadMetadataResponse {
    */
   documentMetadata: {
     /**
+     * If the document is a "task" the branch name of the document will be provided.
+     */
+    branchName?: string | null;
+    /**
      * The id of the document this document branched from
      */
     branchedFromId?: string | null;
