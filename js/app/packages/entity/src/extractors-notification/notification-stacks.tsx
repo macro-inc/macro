@@ -106,7 +106,7 @@ function NotificationStackRow(props: {
           <div class="ml-auto flex items-center gap-1 pr-2 flex-shrink-0">
             <Button
               onClick={handleMarkAsDone}
-              tooltip={'Mark notification stack done'}
+              tooltip={'Mark notification done'}
               class="border border-edge-muted text-xs text-ink-muted grid p-0 place-items-center size-6"
             >
               <CheckIcon class="size-3" />
