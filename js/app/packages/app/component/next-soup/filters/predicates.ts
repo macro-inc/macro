@@ -95,6 +95,10 @@ export function channelsFilter(entity: EntityData): boolean {
   return entity.type === 'channel' || entity.type === 'channel_message';
 }
 
+export function callsFilter(entity: EntityData): boolean {
+  return entity.type === 'call';
+}
+
 export function filesAndFolderFilter(entity: EntityData): boolean {
   if (entity.type !== 'project' && entity.type !== 'document') return false;
 

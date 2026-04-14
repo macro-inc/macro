@@ -7,6 +7,7 @@ export const LIST_VIEWS = [
   'documents',
   'tasks',
   'channels',
+  'calls',
   'folders',
   'search',
 ] as const;
@@ -20,6 +21,7 @@ export const LIST_VIEW_PATHS = {
   documents: '/documents',
   tasks: '/tasks',
   channels: '/channels',
+  calls: '/calls',
   folders: '/folders',
   search: '/search',
 } as const satisfies Record<ListView, string>;
@@ -35,6 +37,7 @@ export const LIST_VIEW_ID = {
   documents: 'documents',
   tasks: 'tasks',
   channels: 'channels',
+  calls: 'calls',
   folders: 'folders',
   search: 'search',
 } as const satisfies Record<ListView, string>;
@@ -52,7 +55,7 @@ const BLOCK_LIST_VIEW_MAP = {
   code: 'documents',
   contact: 'channels',
   csv: 'documents',
-  call: 'channels',
+  call: 'calls',
   email: 'mail',
   image: 'documents',
   md: 'documents',

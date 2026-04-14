@@ -203,6 +203,21 @@ registerComponent(
 );
 
 registerComponent(
+  'calls',
+  withAuth(() => {
+    usePageViewTracking('calls');
+    const preset = getDefaultListViewPreset('calls');
+    return (
+      <SoupView
+        viewName="Calls"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
   'folders',
   withAuth(() => {
     usePageViewTracking('folders');

@@ -308,6 +308,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   documents: DOCUMENTS_FILTER_CATEGORIES,
   tasks: TASKS_FILTER_CATEGORIES,
   channels: [],
+  calls: [],
   folders: [],
   search: [],
 };

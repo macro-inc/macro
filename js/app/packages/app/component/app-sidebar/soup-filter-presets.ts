@@ -291,6 +291,15 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
+  calls: {
+    default: 'all',
+    tabs: {
+      all: () => ({
+        queryFilters: QUERY_FILTERS.calls,
+        clientFilters: { and: ['calls'] },
+      }),
+    },
+  },
   folders: {
     default: 'owned',
     tabs: {

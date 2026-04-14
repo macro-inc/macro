@@ -20,7 +20,9 @@ type SoupPartialData<T extends SoupEntityTag> = T extends 'channel'
   ? { channel: Partial<ChannelInner> & Pick<ChannelInner, 'id'> } & Partial<
       Omit<SoupItemData<'channel'>, 'channel'>
     >
-  : Partial<SoupItemData<T>> & { id: string };
+  : T extends 'callRecord'
+    ? Partial<SoupItemData<'callRecord'>> & { callId: string }
+    : Partial<SoupItemData<T>> & { id: string };
 
 // A partial soup entity for optimistic updates.
 export type SoupEntityPartial<T extends SoupEntityTag = SoupEntityTag> = {

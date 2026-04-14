@@ -863,6 +863,7 @@ export function CanvasController(props: ParentProps) {
     const entityType = event.draggable.data.type;
     // TODO: add channel message support
     if (entityType === 'channel_message') return;
+    if (entityType === 'call') return;
 
     // Track document mention and get UUID
     let mentionUuid: string | undefined;

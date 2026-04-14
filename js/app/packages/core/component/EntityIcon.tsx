@@ -275,7 +275,7 @@ function validateEntity(entity: string): EntityWithValidIcon {
 }
 
 export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
-  call: WideChannel,
+  call: PhoneCall,
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,

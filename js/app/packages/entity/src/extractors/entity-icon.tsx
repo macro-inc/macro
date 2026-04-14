@@ -11,6 +11,7 @@ import { match } from 'ts-pattern';
 import { PulsingStar } from '../components/PulsingStar';
 import type { ChannelEntity, EntityData } from '../types/entity';
 import {
+  isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
   isTaskEntity,
@@ -68,6 +69,7 @@ export function EntityIcon(props: EntityIconProps) {
       .with({ type: 'email' }, ({ isRead, hasIcsAttachment }) =>
         hasIcsAttachment ? 'emailInvite' : isRead ? 'emailRead' : 'email'
       )
+      .when(isCallEntity, () => 'call')
       .otherwise(() => 'default');
   };
 

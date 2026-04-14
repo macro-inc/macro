@@ -100,6 +100,7 @@ export function createSoupEntityActions(): {
       if (isMobile()) return false;
       if (entities.length !== 1) return false;
       const entity = entities[0];
+      if (entity.type === 'call') return false;
       const splitManager = globalSplitManager();
       if (!splitManager) return false;
       const contentId =

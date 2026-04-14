@@ -242,6 +242,10 @@ const ROUTES: RouteDefinition[] = [
     component: LAYOUT_ROUTE.component,
   },
   {
+    path: '/calls',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
     path: '/files',
     component: LAYOUT_ROUTE.component,
   },

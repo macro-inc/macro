@@ -6,6 +6,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { useMutation } from '@tanstack/solid-query';
 import type { EntityData } from '@entity';
+import type { ItemType } from '@service-storage/client';
 import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import {
@@ -29,9 +30,9 @@ export function createBulkDeleteDssItemsMutation() {
 
       return await Promise.all(
         entities
-          .filter((e) => e.type !== 'channel_message')
+          .filter((e) => e.type !== 'channel_message' && e.type !== 'call')
           .map((e) => {
-            return deleteItem({ id: e.id, itemType: e.type });
+            return deleteItem({ id: e.id, itemType: e.type as ItemType });
           })
       );
     },

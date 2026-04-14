@@ -119,6 +119,15 @@ export type ProjectEntity = EntityBase & {
   projectId?: string;
 };
 
+export type CallEntity = EntityBase & {
+  type: 'call';
+  channelId: string;
+  channelName?: string;
+  isActive: boolean;
+  durationMs?: number;
+  participantIds: string[];
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -126,7 +135,8 @@ export type EntityData =
   | DocumentEntity
   | TaskEntity
   | EmailEntity
-  | ProjectEntity;
+  | ProjectEntity
+  | CallEntity;
 
 export const isEntityData = (item: unknown): item is EntityData => {
   if (typeof item !== 'object') return false;
@@ -172,6 +182,10 @@ export const isProjectEntity = (
   entity: EntityData
 ): entity is ProjectEntity => {
   return entity.type === 'project';
+};
+
+export const isCallEntity = (entity: EntityData): entity is CallEntity => {
+  return entity.type === 'call';
 };
 
 export const isDocumentEntity = (

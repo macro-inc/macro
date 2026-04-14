@@ -88,11 +88,13 @@ export function hasSoupEntity(entityId: string): boolean {
   return getSoupNormalizer().getObjectById(`soup:${entityId}`) != null;
 }
 
-/** Extract the canonical entity ID from a SoupApiItem (handles channel's nested `data.channel.id`). */
+/** Extract the canonical entity ID from a SoupApiItem (handles channel's nested `data.channel.id` and callRecord's `data.callId`). */
 export function getSoupItemId(item: SoupApiItem): string {
   switch (item.tag) {
     case 'channel':
       return item.data.channel.id;
+    case 'callRecord':
+      return item.data.callId;
     default:
       return item.data.id;
   }
@@ -278,6 +280,7 @@ export function buildSingleEntityFilter(
       ...base,
       email_filters: { email_thread_ids: [entityId] },
     }))
+    .with('callRecord', () => null)
     .exhaustive();
 }
 
@@ -302,6 +305,9 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
       data: { channel: { id: itemId }, viewed_at: now },
       frecency_score: current.frecency_score,
     });
+  } else if (current.tag === 'callRecord') {
+    // Call records don't have viewedAt — skip.
+    return;
   } else {
     optimisticUpdateSoupEntity({
       tag: current.tag,
@@ -337,6 +343,9 @@ export function optimisticUpdateSoupItemUpdatedAt(
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
     });
+  } else if (current.tag === 'callRecord') {
+    // Call records use endedAt/startedAt, not updatedAt — skip optimistic timestamp updates.
+    return;
   } else {
     if (!shouldUpdateOptimisticTimestamp(current.data.updatedAt, updatedAt))
       return;

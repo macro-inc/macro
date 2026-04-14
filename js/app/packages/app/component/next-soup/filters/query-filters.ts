@@ -64,6 +64,7 @@ export function filterSoupItemByRequestBody(
       ({ data }) =>
         !isIdFilteredOut(body.email_filters?.email_thread_ids, data.id)
     )
+    .with({ tag: 'callRecord' }, () => true)
     .exhaustive();
 }
 
@@ -151,6 +152,15 @@ export const QUERY_FILTERS = {
     email_filters: { recipients: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
     channel_filters: {},
+  },
+
+  calls: {
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    channel_filters: { channel_ids: EXCLUDE },
+    call_filters: {},
   },
 
   folders: {
