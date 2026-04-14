@@ -18,6 +18,7 @@ type EmptySpec = {};
 type AssertSpec<T> = T extends BlockMethodSpec ? T : EmptySpec;
 
 export interface BlockMethodRegistry {
+  call: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
   channel: EmptySpec;
   write: EmptySpec;

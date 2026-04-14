@@ -52,6 +52,7 @@ const BLOCK_LIST_VIEW_MAP = {
   code: 'documents',
   contact: 'channels',
   csv: 'documents',
+  call: 'channels',
   email: 'mail',
   image: 'documents',
   md: 'documents',

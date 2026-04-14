@@ -21,6 +21,7 @@ import FileMd from '@icon/duotone/file-md-duotone.svg';
 import FilePdf from '@icon/duotone/file-pdf-duotone.svg';
 import FileVideo from '@icon/duotone/file-video-duotone.svg';
 import FileImage from '@icon/duotone/image-duotone.svg';
+import PhoneCall from '@icon/duotone/phone-call-duotone.svg';
 import Canvas from '@icon/duotone/pencil-circle-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
 import Users from '@icon/duotone/users-duotone.svg';
@@ -84,6 +85,12 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
+  call: {
+    icon: PhoneCall,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Call',
+  },
   canvas: {
     icon: Canvas,
     foreground: 'text-canvas',
@@ -268,6 +275,7 @@ function validateEntity(entity: string): EntityWithValidIcon {
 }
 
 export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
+  call: WideChannel,
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,

@@ -40,3 +40,11 @@ export function useLeaveCallMutation() {
     },
   }));
 }
+
+export function useCallRecordQuery(callId: Accessor<string>) {
+  return useQuery(() => ({
+    queryKey: ['call', 'record', callId()],
+    queryFn: async () =>
+      await throwOnErr(() => callServiceClient.getCallRecord(callId())),
+  }));
+}
