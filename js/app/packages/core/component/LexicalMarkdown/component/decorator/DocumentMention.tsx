@@ -17,7 +17,7 @@ import {
   verifyBlockName,
 } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
-import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
@@ -303,11 +303,11 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     if (
       previewType === 'channel' &&
       props.blockParams &&
-      CHANNEL_URL_PARAMS.message in props.blockParams
+      CHANNEL_PARAMS.message in props.blockParams
     ) {
       return {
         ...baseEntity,
-        messageId: props.blockParams[CHANNEL_URL_PARAMS.message],
+        messageId: props.blockParams[CHANNEL_PARAMS.message],
       };
     }
     return baseEntity;

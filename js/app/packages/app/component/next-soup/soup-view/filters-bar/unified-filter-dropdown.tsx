@@ -404,7 +404,7 @@ const SearchableFilterSubmenu = (props: {
 
       <DropdownMenu.Portal>
         <DropdownMenu.SubContent
-          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[200px] p-1"
+          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[200px] max-w-[500px] p-1"
           onFocusOut={handleSubContentFocusOut}
         >
           {/* Search input */}
@@ -518,14 +518,32 @@ export const UnifiedFilterDropdown = () => {
       label: 'Unassigned',
       icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
     };
-    const contactOptions = contacts().map((contact) => ({
-      id: contact.id,
-      label: buildContactLabel(contact, currentUserId),
-      icon: () => (
-        <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }));
-    return [noAssigneeOption, ...contactOptions];
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const opt: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, currentUserId),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="xs"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === currentUserId) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [
+      ...(meOption ? [meOption] : []),
+      noAssigneeOption,
+      ...otherContactOptions,
+    ];
   });
 
   const toggleAssignee = (id: string) => {

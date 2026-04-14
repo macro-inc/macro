@@ -320,8 +320,7 @@ function EmailContent(props: EmailViewProps) {
   const navigateToNextMessage = () => navigateMessage('next');
 
   onMount(() => {
-    registerEmailHotkeys(scopeId(), context.thread, {
-      archiveThread: context.archiveThread,
+    registerEmailHotkeys(scopeId(), {
       blockSender: context.blockSender,
       markSenderSignal: context.markSenderSignal,
       markSenderNoise: context.markSenderNoise,

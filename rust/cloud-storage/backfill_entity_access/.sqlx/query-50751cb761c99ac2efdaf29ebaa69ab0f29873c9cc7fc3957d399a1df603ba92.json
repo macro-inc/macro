@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE ProjectHierarchy AS (\n            -- Find direct user access to projects first as starting point\n            SELECT\n                p.id,\n                uia.access_level\n            FROM \"Project\" p\n            JOIN \"UserItemAccess\" uia ON p.id = uia.item_id AND uia.item_type = 'project'\n            WHERE uia.user_id = $1 AND p.\"deletedAt\" IS NULL\n\n            UNION ALL\n\n            -- Then walk down the project tree and grab child projects, keeping parent's access\n            SELECT\n                p.id,\n                ph.access_level\n            FROM \"Project\" p\n            JOIN ProjectHierarchy ph ON p.\"parentId\" = ph.id\n            WHERE p.\"deletedAt\" IS NULL\n        ),\n        -- Now build up all the ways a user can have access to stuff\n        AllAccessGrants AS (\n            -- Explicit access to items via UserItemAccess table\n            SELECT uia.item_id, uia.item_type, uia.access_level\n            FROM \"UserItemAccess\" uia\n            -- We join to each table to check its \"deletedAt\" status.\n            -- This is more explicit and robust than using subqueries.\n            LEFT JOIN \"Document\" d ON uia.item_type = 'document' AND uia.item_id = d.id\n            LEFT JOIN \"Chat\" c ON uia.item_type = 'chat' AND uia.item_id = c.id\n            LEFT JOIN \"Project\" p ON uia.item_type = 'project' AND uia.item_id = p.id\n            WHERE uia.user_id = $1\n              -- Rule: The item must not be deleted.\n              AND (\n                  (uia.item_type = 'document' AND d.\"deletedAt\" IS NULL) OR\n                  (uia.item_type = 'chat' AND c.\"deletedAt\" IS NULL) OR\n                  (uia.item_type = 'project' AND p.\"deletedAt\" IS NULL)\n              )\n              \n            -- The rest of the unions are to get implicit access to items via project access\n            UNION ALL\n\n            -- Access to docs in visible projects \n            SELECT\n                d.id AS item_id,\n                'document' AS item_type,\n                ph.access_level\n            FROM \"Document\" d\n            JOIN ProjectHierarchy ph ON d.\"projectId\" = ph.id\n            WHERE d.\"projectId\" IS NOT NULL AND d.\"deletedAt\" IS NULL\n\n            UNION ALL\n\n            -- Access to chats in visible projects\n            SELECT\n                c.id AS item_id,\n                'chat' AS item_type,\n                ph.access_level\n            FROM \"Chat\" c\n            JOIN ProjectHierarchy ph ON c.\"projectId\" = ph.id\n            WHERE c.\"projectId\" IS NOT NULL AND c.\"deletedAt\" IS NULL\n\n            UNION ALL\n\n            -- Include the projects we found earlier\n            SELECT\n                ph.id AS item_id,\n                'project' AS item_type,\n                ph.access_level\n            FROM ProjectHierarchy ph\n        ),\n        UserAccessibleItems AS (\n            SELECT\n                item_id,\n                item_type\n            FROM AllAccessGrants\n            GROUP BY item_id, item_type\n        )\n        SELECT item_id as \"item_id!\", item_type as \"item_type!\" FROM UserAccessibleItems\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_type!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "50751cb761c99ac2efdaf29ebaa69ab0f29873c9cc7fc3957d399a1df603ba92"
+}

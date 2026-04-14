@@ -27,6 +27,7 @@ import {
 } from '@queries/soup/cache';
 import { match } from 'ts-pattern';
 import { isAfter } from 'date-fns';
+import { getChannelParams } from '@block-channel/utils/link';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -154,20 +155,31 @@ export const openEntityInNewTab = ({
     const { fileType, subType } = entity;
     const blockName = fileTypeToBlockName(subType?.type ?? fileType);
     entityPath = `/app/${blockName}/${entity.id}`;
+  } else if (entity.type === 'channel_message') {
+    entityPath = `/app/channel/${entity.channelId}`;
   } else {
     entityPath = `/app/${entity.type}/${entity.id}`;
   }
 
   // Add location params if present
-  const entityUrl = new URL(entityPath, window.location.origin);
-  if (location) {
+  let entityUrl = new URL(entityPath, window.location.origin);
+
+  if (entity.type === 'channel_message') {
+    entityUrl.searchParams.set(CHANNEL_PARAMS.message, entity.messageId);
+    if (entity.threadId) {
+      entityUrl.searchParams.set(CHANNEL_PARAMS.thread, entity.threadId);
+    }
+  } else if (location) {
     switch (location.type) {
       case 'channel':
         if (location.messageId) {
-          entityUrl.searchParams.set('channel_message_id', location.messageId);
+          entityUrl.searchParams.set(
+            CHANNEL_PARAMS.message,
+            location.messageId
+          );
         }
         if (location.threadId) {
-          entityUrl.searchParams.set('thread', location.threadId);
+          entityUrl.searchParams.set(CHANNEL_PARAMS.thread, location.threadId);
         }
         break;
       case 'email':
@@ -287,14 +299,12 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
-  // Build params for channel entities with location
-  const params =
-    entity.type === 'channel' && location?.type === 'channel'
-      ? {
-          [CHANNEL_PARAMS.message]: location.messageId,
-          [CHANNEL_PARAMS.thread]: location.threadId,
-        }
-      : undefined;
+  let params: Record<string, string> | undefined;
+  if (entity.type === 'channel' && location?.type === 'channel') {
+    params = getChannelParams(location.messageId, location.threadId);
+  } else if (entity.type === 'channel_message') {
+    params = getChannelParams(entity.messageId, entity.threadId);
+  }
 
   splitManager.openWithSplit(
     { ...content, params },
@@ -308,9 +318,20 @@ export const openEntityInSplitFromUnifiedList = async (
   );
 
   // Navigate to specific location if provided
-  if (!location) return;
-
-  await navigateToLocation(entity.id, location, blockOrchestrator);
+  if (location) {
+    await navigateToLocation(content.id, location, blockOrchestrator);
+  } else if (entity.type === 'channel_message') {
+    // NOTE: This will force target message navigation in case the split is already open.
+    await navigateToLocation(
+      entity.channelId,
+      {
+        type: 'channel',
+        messageId: entity.messageId,
+        threadId: entity.threadId,
+      },
+      blockOrchestrator
+    );
+  }
 };
 
 function getEntitySplitContent(entity: EntityData) {
@@ -320,6 +341,9 @@ function getEntitySplitContent(entity: EntityData) {
       const blockName = fileTypeToBlockName(subType?.type ?? fileType);
 
       return { type: blockName, id };
+    })
+    .with({ type: 'channel_message' }, (entity) => {
+      return { type: 'channel' as const, id: entity.channelId };
     })
     .otherwise((entity) => {
       return { type: entity.type, id: entity.id };
@@ -340,10 +364,9 @@ async function navigateToLocation(
   switch (location.type) {
     case 'channel': {
       // NOTE: this is handled by the channel block params but this can be used to re-flash an open channel
-      await blockHandle.goToLocationFromParams({
-        [CHANNEL_PARAMS.thread]: location.threadId,
-        [CHANNEL_PARAMS.message]: location.messageId,
-      });
+      await blockHandle.goToLocationFromParams(
+        getChannelParams(location.messageId, location.threadId)
+      );
       break;
     }
     case 'email': {

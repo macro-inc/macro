@@ -1,6 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use model::comms::ChannelType;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -57,6 +58,12 @@ pub struct NewAttachment {
 pub struct SimpleMention {
     pub entity_type: String,
     pub entity_id: String,
+}
+
+impl fmt::Display for SimpleMention {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.entity_type, self.entity_id)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

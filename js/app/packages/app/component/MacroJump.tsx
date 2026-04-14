@@ -181,6 +181,7 @@ const MacroJump: Component<{
   );
   onCleanup(() => {
     componentStack.pop();
+    runCleanup();
   });
 
   return (

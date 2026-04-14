@@ -78,7 +78,7 @@ export const useSearchSoupQuery = (
       const searchQuery = request().query;
       return data.pages.flatMap((page) => {
         return page.results
-          .map((result) => mapSearchResponseItem(result, searchQuery))
+          .flatMap((result) => mapSearchResponseItem(result, searchQuery))
           .filter((entity): entity is WithSearch<EntityData> => !!entity);
       });
     },

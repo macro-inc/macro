@@ -12,7 +12,7 @@ use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use notification::{
     domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
 };
@@ -29,7 +29,7 @@ use sqlx::PgPool;
 
 use crate::config::StripePriceIds;
 
-pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
@@ -44,7 +44,7 @@ type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
 pub(crate) type ReferralServiceType = ReferralServiceImpl<
     PgReferralRepo,
     StripeDiscountClient,
-    Arc<SqsNotificationIngress<SqsIngressQueue>>,
+    Arc<SqsNotificationIngress<SqsQueue>>,
 >;
 
 pub(crate) type GithubLinkServiceType =

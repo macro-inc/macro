@@ -31,7 +31,6 @@ use crate::{
     model::{
         request::{
             documents::{
-                copy::{CopyDocumentQueryParams, CopyDocumentRequest},
                 preview::GetBatchPreviewRequest,
                 save::{PreSaveDocumentRequest, SaveDocumentRequest},
                 user_document_view_location::UpsertUserDocumentViewLocationRequest,
@@ -141,7 +140,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_document_handler,
         documents::get_document_version::handler,
         documents_hex::inbound::axum_router::create_document_handler,
-        documents::copy_document::copy_document_handler,
+        documents_hex::inbound::axum_router::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
         documents_hex::inbound::axum_router::edit_document_handler,
@@ -190,6 +189,14 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_thread_replies_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
+
+        // calls
+        call::inbound::axum_router::get_or_create_call_handler,
+        call::inbound::axum_router::check_active_call_handler,
+        call::inbound::axum_router::leave_or_end_call_handler,
+        call::inbound::axum_router::get_call_record_handler,
+        call::inbound::axum_router::webhook_handler,
+        call::inbound::axum_router::transcript_handler,
 
         // pins
         pins::add_pin::add_pin_handler,
@@ -260,8 +267,9 @@ use utoipa::OpenApi;
             CreateBulkDocumentResponse, // Create document bulk
             GetDocumentListResult,
             GetDocumentSearchResponse, // Search document
-            CopyDocumentRequest,
-            CopyDocumentQueryParams, // Copy document
+            documents_hex::domain::models::CopyDocumentRequest,
+            documents_hex::domain::models::CopyDocumentQueryParams,
+            documents_hex::domain::models::CopyDocumentResponse, // Copy document
             documents_hex::domain::models::EditDocumentServiceArgs,
             documents_hex::inbound::axum_router::EditDocumentResponse, // Edit document
             UserDocumentsResponse,
@@ -326,6 +334,15 @@ use utoipa::OpenApi;
             ApiChannelAttachment,
             ApiChannelParticipant,
             ApiParticipantRole,
+
+            // Calls
+            call::domain::models::CallTokenResponse,
+            call::domain::models::CallActiveResponse,
+            call::domain::models::LeaveCallResponse,
+            call::domain::models::TranscriptSegmentRequest,
+            call::domain::models::CallRecord,
+            call::domain::models::CallRecordParticipant,
+            call::domain::models::CallRecordTranscriptSegment,
 
             DocumentSubType,
 

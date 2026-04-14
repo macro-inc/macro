@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::domain::models::{
-    AdminParticipantRole, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
+    AdminParticipantRole, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
     MemberParticipantRole, OwnerParticipantRole, ParticipantRole, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -23,6 +23,8 @@ struct MockRepo {
     chat_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
 }
 
 impl MockRepo {
@@ -38,6 +40,8 @@ impl MockRepo {
             chat_users: Arc::new(Mutex::new(vec![])),
             project_users: Arc::new(Mutex::new(vec![])),
             thread_users: Arc::new(Mutex::new(vec![])),
+            channel_users: Arc::new(Mutex::new(vec![])),
+            call_channel: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -168,6 +172,27 @@ impl AccessRepository for MockRepo {
         _thread_id: &str,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         Ok(self.thread_users.lock().await.clone())
+    }
+
+    async fn get_channel_users(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self.channel_users.lock().await.clone())
+    }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        Ok(self.call_channel.lock().await.clone())
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        Ok(self.call_channel.lock().await.clone())
     }
 }
 
@@ -1016,7 +1041,7 @@ async fn test_get_users_by_entity_thread_returns_empty_when_no_users() {
 }
 
 #[tokio::test]
-async fn test_get_users_by_entity_channel_returns_bad_request() {
+async fn test_get_users_by_entity_channel_returns_users() {
     let repo = MockRepo::new();
     let service = EntityAccessServiceImpl::new(repo);
 
@@ -1024,7 +1049,8 @@ async fn test_get_users_by_entity_channel_returns_bad_request() {
         .get_users_by_entity("11111111-1111-1111-1111-111111111111", EntityType::Channel)
         .await;
 
-    assert!(matches!(result, Err(AccessError::BadRequest(_))));
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -12,11 +12,7 @@ import {
 import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
-import {
-  transformHistoryItem,
-  transformHistoryResponse,
-  updateViewedAtAndMoveItemToFront,
-} from './transforms';
+import { transformHistoryItem, transformHistoryResponse } from './transforms';
 import type { HistoryItem } from './types';
 
 // re-export history item type from this file
@@ -54,6 +50,15 @@ export function setHistoryItemName(itemId: string, name: string) {
     ...prev,
     name,
     rawName: name,
+    updatedAt: new Date().toISOString(),
+  }));
+}
+
+export function setHistoryItemFileType(itemId: string, fileType: string) {
+  return setHistoryItemData(itemId, (prev) => ({
+    ...prev,
+    fileType,
+    updatedAt: new Date().toISOString(),
   }));
 }
 
@@ -88,16 +93,6 @@ export async function prefetchHistory() {
 export function refetchHistory() {
   return queryClient.invalidateQueries({
     queryKey: historyQueryOptions.queryKey,
-  });
-}
-
-// @ts-ignore
-// biome-ignore lint/correctness/noUnusedVariables: we may use this eventually
-function optimisticUpdateViewedAt(itemId: string) {
-  const now = new Date();
-
-  setHistoryData((old) => {
-    return updateViewedAtAndMoveItemToFront(old, itemId, now);
   });
 }
 
@@ -137,15 +132,12 @@ export function useUpsertToHistoryMutation(
         UpsertToHistoryContext
       >(
         {
-          onMutate: async (_params) => {
+          onMutate: async () => {
             await queryClient.cancelQueries({
               queryKey: historyQueryOptions.queryKey,
             });
 
             const previousData = getHistoryItems();
-
-            // NOTE: doesn't make sense to do this if it gets invalidated on refetch anyways
-            // optimisticUpdateViewedAt(params.itemId);
 
             return { previousData };
           },
@@ -155,8 +147,6 @@ export function useUpsertToHistoryMutation(
             }
           },
           onSettled: () => {
-            // NOTE: the history refetch will invalidate the optimistic update viewed at
-            // since only soup items have viewed at timestamp
             queryClient.invalidateQueries({
               queryKey: historyQueryOptions.queryKey,
             });

@@ -1,10 +1,7 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ApiThread } from '@service-email/generated/schemas';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import type { Accessor } from 'solid-js';
 
 export interface EmailHotkeyHandlers {
-  archiveThread: () => boolean;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
@@ -14,19 +11,8 @@ export interface EmailHotkeyHandlers {
 
 export function registerEmailHotkeys(
   scopeId: string,
-  threadData: Accessor<ApiThread | undefined>,
   handlers: EmailHotkeyHandlers
 ) {
-  registerHotkey({
-    hotkey: 'e',
-    scopeId: scopeId,
-    description: threadData()?.inbox_visible
-      ? 'Unarchive thread'
-      : 'Archive thread',
-    keyDownHandler: handlers.archiveThread,
-    hotkeyToken: TOKENS.email.archive,
-    displayPriority: 10,
-  });
   registerHotkey({
     hotkey: 'opt+r',
     scopeId: scopeId,

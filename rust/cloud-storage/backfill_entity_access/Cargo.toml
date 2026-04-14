@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "backfill_entity_access"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+futures = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env_var = { path = "../macro_env_var" }
+macro_uuid = { path = "../macro_uuid" }
+models_permissions = { path = "../models_permissions" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

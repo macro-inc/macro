@@ -1,7 +1,6 @@
 import type { JSX } from 'solid-js';
 import {
   createEffect,
-  createMemo,
   createSignal,
   For,
   Match,
@@ -38,6 +37,7 @@ export type EmojiEventHandler<T extends Event> = (
 export interface EmojiPickerProps {
   nameFilter?: string;
   onEmojiClick: (emoji: SimpleEmoji) => void;
+  columns?: number;
 }
 
 export interface EmojiOptionProps {
@@ -50,17 +50,20 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   const { groups, emojis: filteredEmojis, filter } = useEmojiData();
   let scrollEl!: HTMLDivElement;
 
+  const columns = () => props.columns ?? 6;
+
   function EmojiOption(props: EmojiOptionProps): JSX.Element {
     return (
       <button
         type="button"
-        class={`hover:bg-hover hover-transition-bg rounded-md p-1 ${props.isSelected ? 'bg-hover' : ''}`}
+        class={`hover:bg-hover hover-transition-bg rounded-md p-1 aspect-square w-full flex items-center justify-center ${props.isSelected ? 'bg-hover' : ''}`}
+        style={{ 'container-type': 'inline-size' }}
         onClick={() => props.onEmojiClick(props.emoji)}
         title={props.emoji.slug}
         role="option"
         aria-selected={props.isSelected}
       >
-        {renderEmoji(props.emoji.emoji, '32px')}
+        {renderEmoji(props.emoji.emoji, '90cqi')}
       </button>
     );
   }
@@ -83,7 +86,6 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
       : groups.flatMap((g) => g.emojis);
     if (!emojisToUse || emojisToUse.length === 0) return;
 
-    const EMOJIS_PER_ROW = 6;
     const totalEmojis = emojisToUse.length;
 
     if (e.key === 'ArrowRight') {
@@ -105,7 +107,7 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
       e.stopPropagation();
       setSelectedIndex((prev) => {
         if (prev === -1) return 0;
-        const nextIndex = prev + EMOJIS_PER_ROW;
+        const nextIndex = prev + columns();
         return nextIndex >= totalEmojis ? prev : nextIndex;
       });
     } else if (e.key === 'ArrowUp') {
@@ -113,7 +115,7 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
       e.stopPropagation();
       setSelectedIndex((prev) => {
         if (prev === -1) return totalEmojis - 1;
-        const nextIndex = prev - EMOJIS_PER_ROW;
+        const nextIndex = prev - columns();
         return nextIndex < 0 ? prev : nextIndex;
       });
     } else if (e.key === 'Enter') {
@@ -132,6 +134,11 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
     });
   });
 
+  const gridStyle = () => ({
+    display: 'grid',
+    'grid-template-columns': `repeat(${columns()}, 1fr)`,
+  });
+
   return (
     <div
       ref={scrollEl}
@@ -139,57 +146,53 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
       role="listbox"
       aria-label="Emoji Selector"
     >
-      {createMemo(() => {
-        return (
-          <Switch>
-            <Match
-              when={
-                !validFilter(props.nameFilter) || filteredEmojis() === undefined
-              }
-            >
-              <For each={groups}>
-                {(group): JSX.Element => (
-                  <Show when={group.emojis.length > 0}>
-                    <div class="mt-2 w-full">
-                      <p class="text-ink-extra-muted text-xs w-full flex items-center justify-start">
-                        {group.name}
-                      </p>
-                      <div class="flex flex-row flex-wrap">
-                        <For each={group.emojis}>
-                          {(emojiItem, index): JSX.Element => (
-                            <EmojiOption
-                              emoji={emojiItem}
-                              onEmojiClick={props.onEmojiClick}
-                              isSelected={selectedIndex() === index()}
-                            />
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  </Show>
-                )}
-              </For>
-            </Match>
-            <Match when={filteredEmojis() !== undefined}>
-              <div class="mt-2">
-                <span class="text-ink-extra-muted text-xs">Search Results</span>
-              </div>
+      <Switch>
+        <Match
+          when={
+            !validFilter(props.nameFilter) || filteredEmojis() === undefined
+          }
+        >
+          <For each={groups}>
+            {(group): JSX.Element => (
+              <Show when={group.emojis.length > 0}>
+                <div class="mt-2 w-full">
+                  <p class="pl-1 text-ink-extra-muted text-xs">{group.name}</p>
+                  <div style={gridStyle()}>
+                    <For each={group.emojis}>
+                      {(emojiItem, index): JSX.Element => (
+                        <EmojiOption
+                          emoji={emojiItem}
+                          onEmojiClick={props.onEmojiClick}
+                          isSelected={selectedIndex() === index()}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+            )}
+          </For>
+        </Match>
+        <Match when={filteredEmojis() !== undefined}>
+          <div class="mt-2">
+            <span class="pl-1 text-ink-extra-muted text-xs">
+              Search Results
+            </span>
+          </div>
 
-              <div class="flex flex-row flex-wrap">
-                <For each={filteredEmojis()}>
-                  {(emojiItem, index): JSX.Element => (
-                    <EmojiOption
-                      emoji={emojiItem}
-                      onEmojiClick={props.onEmojiClick}
-                      isSelected={selectedIndex() === index()}
-                    />
-                  )}
-                </For>
-              </div>
-            </Match>
-          </Switch>
-        );
-      })()}
+          <div style={gridStyle()}>
+            <For each={filteredEmojis()}>
+              {(emojiItem, index): JSX.Element => (
+                <EmojiOption
+                  emoji={emojiItem}
+                  onEmojiClick={props.onEmojiClick}
+                  isSelected={selectedIndex() === index()}
+                />
+              )}
+            </For>
+          </div>
+        </Match>
+      </Switch>
     </div>
   );
 }

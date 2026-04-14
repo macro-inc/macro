@@ -1,0 +1,45 @@
+---
+title: MCP Setup
+description: Connect AI clients to the Macro MCP server.
+---
+
+# MCP Setup
+
+Macro's MCP endpoint is:
+
+```text
+https://mcp-server.macro.com/mcp
+```
+
+The server is remote — no local process is required. Authentication happens through Macro's OAuth flow when the client connects.
+
+## Claude Code
+
+```bash
+claude mcp add --transport http macro https://mcp-server.macro.com/mcp
+```
+
+Start Claude Code, use the `macro` MCP server, and complete the browser sign-in flow when prompted.
+
+## Codex CLI
+
+```bash
+codex mcp add macro --url https://mcp-server.macro.com/mcp
+```
+
+Start Codex CLI, invoke the `macro` MCP server, and complete the OAuth login flow in the browser.
+
+## IDE / JSON Configuration
+
+For editors that accept JSON MCP server config, add this under `mcpServers`:
+
+```json
+{
+  "macro": {
+    "type": "http",
+    "url": "https://mcp-server.macro.com/mcp"
+  }
+}
+```
+
+Trigger a connection from the editor and finish the browser login flow.

@@ -6,7 +6,7 @@ use models_permissions::share_permission::channel_share_permission::{
 };
 use sqlx::{Pool, Postgres};
 
-use crate::domain::models::EditDocumentRepoArgs;
+use crate::domain::models::{EditDocumentRepoArgs, FileTypeUpdate};
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
 
@@ -120,12 +120,55 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
         document_name: Some("new-name".to_string()),
         project_id: None,
         share_permission: None,
+        file_type: None,
     })
     .await
     .unwrap();
 
     let doc = repo.get_basic_document("document-one").await.unwrap();
     assert_eq!(doc.document_name, "new-name");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: None,
+        file_type: Some(FileTypeUpdate::Set(model_file_type::FileType::Rs)),
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.file_type, Some("rs".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: None,
+        file_type: Some(FileTypeUpdate::Clear),
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.file_type, None);
 }
 
 #[sqlx::test(
@@ -140,6 +183,7 @@ async fn test_edit_document_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("new-project".to_string()),
         share_permission: None,
+        file_type: None,
     })
     .await
     .unwrap();
@@ -161,6 +205,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("new-project".to_string()),
         share_permission: None,
+        file_type: None,
     })
     .await
     .unwrap();
@@ -174,6 +219,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("".to_string()),
         share_permission: None,
+        file_type: None,
     })
     .await
     .unwrap();
@@ -198,6 +244,7 @@ async fn test_edit_document_share_permission(pool: Pool<Postgres>) {
             public_access_level: None,
             channel_share_permissions: None,
         }),
+        file_type: None,
     })
     .await
     .unwrap();
@@ -236,6 +283,7 @@ async fn test_edit_document_set_public_access_level(pool: Pool<Postgres>) {
             public_access_level: Some(AccessLevel::Edit),
             channel_share_permissions: None,
         }),
+        file_type: None,
     })
     .await
     .unwrap();
@@ -272,6 +320,7 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
             public_access_level: Some(AccessLevel::Edit),
             channel_share_permissions: None,
         }),
+        file_type: None,
     })
     .await
     .unwrap();
@@ -570,6 +619,7 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
                 access_level: Some(AccessLevel::View),
             }]),
         }),
+        file_type: None,
     })
     .await
     .unwrap();
@@ -648,6 +698,7 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
                 access_level: Some(AccessLevel::View),
             }]),
         }),
+        file_type: None,
     };
 
     // Call twice — second call should upsert without duplicates

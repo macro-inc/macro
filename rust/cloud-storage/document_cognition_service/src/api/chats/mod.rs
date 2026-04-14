@@ -1,6 +1,5 @@
 pub mod chat_history;
 pub mod chat_history_batch_messages;
-pub mod tool;
 
 use super::context::ApiContext;
 use axum::{
@@ -18,7 +17,12 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let access_repo = PgAccessRepository::new(state.db.clone());
     let access_service = EntityAccessServiceImpl::new(access_repo);
     let chat_repo = PgChatRepo::new(state.db.clone());
-    let chat_service = ChatServiceImpl::new(chat_repo);
+
+    let chat_service = ChatServiceImpl::new(
+        chat_repo,
+        state.all_tools.clone(),
+        state.tool_service_context.clone(),
+    );
     let chat_state = ChatRouterState::new(chat_service, access_service);
 
     let ensure_chat_exists = axum::middleware::from_fn_with_state(
@@ -48,16 +52,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // All /{chat_id} routes — need ensure_chat_exists for ChatAccessLevelExtractor
         .merge(
             chat_id_router(chat_state).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        .nest(
-            "/{chat_id}/tool",
-            tool::router().layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
                         macro_middleware::auth::ensure_user_exists::handler,

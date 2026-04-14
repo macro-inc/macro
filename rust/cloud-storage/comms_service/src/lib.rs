@@ -12,6 +12,7 @@ pub mod utils;
 pub use api::context::AppState as CommsHandlerState;
 pub use api::context::ChannelImpl;
 pub use api::context::DocumentPermissionJwtSecretKey;
+pub use api::context::EntityAccessServiceType;
 pub use api::router as comms_router;
 pub use api::swagger::ApiDoc as CommsApiDoc;
 

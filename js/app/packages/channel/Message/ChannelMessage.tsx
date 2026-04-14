@@ -1,11 +1,14 @@
 import { Match, Show, Switch } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 import type { MessageActions, MessageData } from './types';
 import { Message } from './Message';
 import type { ChannelMessageListMeta } from './list-meta';
 import { useMessage, MessageSelectionProvider } from './context';
 import type { MessageSelectionState } from './context';
+import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
+import { longPressHighlight } from '@core/directive/longPressHighlight';
 
 type ChannelMessageProps = {
   channelId: string;
@@ -121,22 +124,13 @@ function GroupedMessageLayout(props: {
   channelId: string;
   messageEditor?: MessageEditor;
 }) {
-  const message = useMessage();
-  const isEditing = () => isEditingMessage(props.messageEditor, message().id);
-
   return (
     <Message.Layout>
       <Message.Slot placement="icon">
         <Message.SenderIcon hidden />
       </Message.Slot>
       <Message.Slot placement="content">
-        <div
-          class="ph-no-capture flex gap-3 min-w-0"
-          classList={{
-            'items-center': !isEditing(),
-            'items-start': isEditing(),
-          }}
-        >
+        <div class={cn('ph-no-capture flex gap-3 min-w-0 items-start')}>
           <MessageContentSlot
             channelId={props.channelId}
             messageEditor={props.messageEditor}
@@ -159,6 +153,7 @@ function GroupedMessageLayout(props: {
 }
 
 export function ChannelMessage(props: ChannelMessageProps) {
+  const drawerManager = useMessageActionDrawer();
   const isGrouped = () => props.listMeta?.isGroupedWithPrevious === true;
 
   return (
@@ -166,6 +161,11 @@ export function ChannelMessage(props: ChannelMessageProps) {
       message={props.message}
       actions={props.actions}
       highlighted={props.highlighted}
+      ref={(el) =>
+        longPressHighlight(el, () => ({
+          onLongPress: () => drawerManager?.open(props.message, props.actions),
+        }))
+      }
     >
       <MessageSelectionProvider value={props.selectionState}>
         <Switch>

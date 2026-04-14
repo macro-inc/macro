@@ -15,7 +15,7 @@ pub struct SandboxNotification {
 }
 
 impl Notification for SandboxNotification {
-    const TYPE_NAME: &'static str = "sandbox_notification";
+    const TYPE_NAME: &'static str = "email-digest-notification";
 }
 
 impl NotificationExtIos for SandboxNotification {

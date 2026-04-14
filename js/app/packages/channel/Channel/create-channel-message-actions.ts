@@ -44,6 +44,8 @@ type ChannelMessageActionEffects = {
   copyToClipboard: (text: string) => Promise<void>;
   notifyCopyLinkSuccess: () => void;
   notifyCopyLinkFailure: (error: unknown) => void;
+  notifyCopyMessageTextSuccess: () => void;
+  notifyCopyMessageTextFailure: (error: unknown) => void;
 };
 
 export type CreateChannelMessageActionsOptions = {
@@ -54,6 +56,7 @@ export type CreateChannelMessageActionsOptions = {
   removeReaction: (input: RemoveReactionInput) => void;
   onReply?: MessageActionHandler;
   onEdit?: MessageActionHandler;
+  onCreateTask?: MessageActionHandler;
   effects?: Partial<ChannelMessageActionEffects>;
 };
 
@@ -71,6 +74,13 @@ function createDefaultEffects(): ChannelMessageActionEffects {
     notifyCopyLinkFailure: (error) => {
       console.error('failed to copy link', error);
       toast.failure('Failed to copy link');
+    },
+    notifyCopyMessageTextSuccess: () => {
+      toast.success('Message copied to clipboard');
+    },
+    notifyCopyMessageTextFailure: (error) => {
+      console.error('failed to copy message text', error);
+      toast.failure('Failed to copy message');
     },
   };
 }
@@ -138,13 +148,29 @@ export function createChannelMessageActions(
         : undefined,
       onCopyLink: async () => {
         try {
-          const url = buildMessageLink(effects.getLocationHref(), message.id);
+          const channelId = options.channelId();
+          const url = buildMessageLink(
+            channelId,
+            message.id,
+            message.thread_id
+          );
           await effects.copyToClipboard(url);
           effects.notifyCopyLinkSuccess();
         } catch (error) {
           effects.notifyCopyLinkFailure(error);
         }
       },
+      onCopyMessageText:
+        !isDeleted && message.content
+          ? async () => {
+              try {
+                await effects.copyToClipboard(message.content);
+                effects.notifyCopyMessageTextSuccess();
+              } catch (error) {
+                effects.notifyCopyMessageTextFailure(error);
+              }
+            }
+          : undefined,
       onEdit: canEditDelete ? options.onEdit : undefined,
       onDelete: canEditDelete
         ? () => {
@@ -157,6 +183,7 @@ export function createChannelMessageActions(
             });
           }
         : undefined,
+      onCreateTask: options.onCreateTask,
     };
   };
 }

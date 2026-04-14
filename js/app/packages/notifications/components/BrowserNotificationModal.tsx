@@ -28,7 +28,7 @@ export const BrowserNotificationModal = () => {
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">
           <Dialog.Content class="flex items-center justify-center">
-            <div class="pointer-events-auto max-w-xl bg-menu border border-edge w-lg h-fit p-2">
+            <div class="pointer-events-auto max-w-[min(36rem,calc(100%-1rem))] bg-menu border border-edge w-lg h-fit p-2">
               <div class="w-full my-1">
                 <h2 class="text-xl mb-3">Enable Browser Notifications</h2>
 

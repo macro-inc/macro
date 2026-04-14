@@ -2,15 +2,26 @@ import { type Accessor, Show, type JSX } from 'solid-js';
 import { Button } from '@ui/components/Button';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 
-export function SectionHeader(props: { label: string; action?: JSX.Element }) {
+export function AttachmentSection(props: {
+  label: string;
+  action?: JSX.Element;
+  children: JSX.Element;
+  class?: string;
+  contentClass?: string;
+}) {
   return (
-    <>
-      <div class="flex items-center justify-between px-2 py-1.5">
-        <h3 class="text-xs font-medium text-ink-muted/70">{props.label}</h3>
-        {props.action}
+    <div
+      class={`rounded-sm border border-edge-muted bg-menu py-3 ${props.class ?? ''}`}
+    >
+      <div class="flex items-center justify-between px-3 pb-3">
+        <h3 class="text-sm font-medium text-ink">{props.label}</h3>
+        <div class="shrink-0">{props.action}</div>
       </div>
-      <div class="border-b border-edge-muted/50" />
-    </>
+      <div class="border-b border-edge-muted" />
+      <div class={`px-3 pt-3 ${props.contentClass ?? ''}`}>
+        {props.children}
+      </div>
+    </div>
   );
 }
 

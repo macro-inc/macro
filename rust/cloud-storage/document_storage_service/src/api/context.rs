@@ -1,5 +1,10 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use call::{
+    domain::service::CallServiceImpl,
+    inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
+    outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
+};
 use channels::{
     domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
     outbound::pg_channels_repo::PgChannelMessagesRepo,
@@ -21,7 +26,10 @@ use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
-use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
+use email::{
+    domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
+    outbound::EmailPgRepo,
+};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::GithubSyncServiceImpl;
@@ -31,7 +39,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -56,31 +64,27 @@ pub struct InternalFlag {
     pub internal: bool,
 }
 
+type DssEmailService = EmailServiceImpl<
+    EmailPgRepo,
+    FrecencyQueryServiceImpl<FrecencyPgStorage>,
+    email::domain::ports::NoOpEnqueuer,
+>;
+
 type DssSoupState = SoupRouterState<
     SoupImpl<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        EmailServiceImpl<
-            EmailPgRepo,
-            FrecencyQueryServiceImpl<FrecencyPgStorage>,
-            email::domain::ports::NoOpEnqueuer,
-            email::domain::ports::NoOpGmailLabelModifier,
-        >,
+        ReadonlyEmailPreviewAdapter<DssEmailService>,
         ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
     >,
-    EmailServiceImpl<
-        EmailPgRepo,
-        FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
-    >,
+    DssEmailService,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
-    PermissionServiceImpl,
+    PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
 >;
 
@@ -131,6 +135,19 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .await
             .map_err(Into::into)
     }
+
+    async fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        use system_properties::SystemPropertiesService as _;
+
+        self.system_properties
+            .copy_task_properties(from_task_id, to_task_id)
+            .await
+            .map_err(Into::into)
+    }
 }
 
 pub(crate) type DocumentService = DocumentServiceImpl<
@@ -153,6 +170,28 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState =
     ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, EntityAccessService>;
+
+/// Type alias for the call connection service.
+pub(crate) type CallConnectionService =
+    ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
+
+/// Type alias for the call service.
+pub(crate) type DssCallService = CallServiceImpl<
+    PgCallRepo,
+    LivekitRtcClient,
+    CallConnectionService,
+    EntityAccessService,
+    NotificationIngressType,
+>;
+
+/// Type alias for the call router state.
+pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessService>;
+
+/// Type alias for the call webhook router state.
+pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
+
+/// Type alias for the internal call router state.
+pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
@@ -185,6 +224,9 @@ pub(crate) struct ApiContext {
     pub entity_access_service: Arc<EntityAccessService>,
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,
+    pub call_state: DssCallState,
+    pub call_webhook_state: DssCallWebhookState,
+    pub call_internal_state: DssCallInternalState,
 }
 
 env_var! {
@@ -197,6 +239,7 @@ impl From<&ApiContext> for PropertiesHandlerState {
         PropertiesHandlerState {
             db: ctx.db.clone(),
             properties_service: ctx.properties_service.clone(),
+            entity_access_service: ctx.entity_access_service.clone(),
         }
     }
 }
@@ -233,6 +276,7 @@ impl From<&ApiContext> for CommsHandlerState {
             permissions_token_secret: ctx.permissions_token_secret.clone(),
             frecency_storage: ctx.frecency_storage.clone(),
             comms_state: ctx.comms_state.clone(),
+            entity_access_service: ctx.entity_access_service.clone(),
         }
     }
 }

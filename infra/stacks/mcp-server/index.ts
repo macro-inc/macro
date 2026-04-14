@@ -60,6 +60,12 @@ const googleClientSecretArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GOOGLE_CLIENT_SECRET })
   .apply((secret) => secret.arn);
 
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const INTERNAL_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require('internal_auth_key'),
@@ -99,6 +105,10 @@ const cloudStorageServiceStack = new pulumi.StackReference(
   }
 );
 
+const emailServiceStack = new pulumi.StackReference('email-service-stack', {
+  name: `macro-inc/email-service/${stack}`,
+});
+
 export const documentStorageServiceUrl: pulumi.Output<string> =
   cloudStorageServiceStack
     .getOutput('cloudStorageServiceUrl')
@@ -111,6 +121,14 @@ const docxUploadBucketName: pulumi.Output<string> = cloudStorageServiceStack
 const docxUploadBucketArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('docxUploadBucketArn')
   .apply((arn) => arn as string);
+
+const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueArn')
+  .apply((arn) => arn as string);
+
+const emailScheduledQueueName: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueName')
+  .apply((name) => name as string);
 
 const linksharingStack = new pulumi.StackReference('linksharing-stack', {
   name: `macro-inc/link-sharing/${stack}`,
@@ -151,6 +169,7 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
     cloudfrontPrivateKeySecretArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
   ],
+  queueArns: [emailScheduledQueueArn],
   bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
   serviceContainerPort: 8080,
   healthCheckPath: '/health',
@@ -214,6 +233,10 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
       }.macro.com`,
     },
     {
+      name: 'EMAIL_SCHEDULED_QUEUE',
+      value: pulumi.interpolate`${emailScheduledQueueName}`,
+    },
+    {
       name: 'STATIC_FILE_SERVICE_URL',
       value: `https://static-file-service${
         stack === 'prod' ? '' : `-${stack}`
@@ -263,6 +286,10 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
     {
       name: 'GOOGLE_CLIENT_SECRET_KEY',
       value: GOOGLE_CLIENT_SECRET,
+    },
+    {
+      name: 'REDIS_URL',
+      value: pulumi.interpolate`redis://${MACRO_CACHE}`,
     },
     {
       name: 'MACRO_API_TOKEN_ISSUER',

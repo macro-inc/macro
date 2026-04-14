@@ -6,7 +6,6 @@ use email::{
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
 
-use email::outbound::GmailClientLabelModifier;
 use email_service::config::Config;
 use email_service::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
@@ -19,12 +18,8 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
-pub(crate) type EmailSvc = EmailServiceImpl<
-    EmailPgRepo,
-    FrecencyQueryServiceImpl<FrecencyPgStorage>,
-    sqs_client::SQS,
-    GmailClientLabelModifier,
->;
+pub(crate) type EmailSvc =
+    EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>, sqs_client::SQS>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

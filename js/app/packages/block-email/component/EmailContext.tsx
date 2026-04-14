@@ -19,19 +19,19 @@ import {
 } from '@core/user';
 import { whenSettled } from '@core/util/whenSettled';
 import { createEffectOnEntityTypeNotification } from '@notifications';
+import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
 import {
-  useArchiveThreadMutation,
   blockSenderWithToast,
-  markSenderSignalWithToast,
   markSenderNoiseWithToast,
+  markSenderSignalWithToast,
+  useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
-import { emailKeys } from '@queries/email/keys';
-import { queryClient } from '@queries/client';
 import type {
+  ApiMessage,
   ApiThread,
   ContactInfo,
-  ApiMessage,
 } from '@service-email/generated/schemas';
 import { useSearchParams } from '@solidjs/router';
 import {
@@ -59,7 +59,6 @@ const draftSavedThreadIds = new Set<string>();
 export function markThreadDraftSaved(threadId: string) {
   draftSavedThreadIds.add(threadId);
 }
-
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
 
 export type EmailContextValues = {

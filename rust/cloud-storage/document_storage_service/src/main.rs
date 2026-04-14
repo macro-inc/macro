@@ -8,6 +8,11 @@ use crate::{
     service::s3::S3,
 };
 use anyhow::Context;
+use call::{
+    domain::service::CallServiceImpl,
+    inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
+    outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
+};
 use channels::{
     domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
     outbound::pg_channels_repo::PgChannelMessagesRepo,
@@ -29,7 +34,10 @@ use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
-use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
+use email::{
+    domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
+    outbound::EmailPgRepo,
+};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
@@ -39,7 +47,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -113,6 +121,22 @@ async fn main() -> anyhow::Result<()> {
         max_connections,
         "initialized db connection"
     );
+
+    let readonly_db = match PgPoolOptions::new()
+        .min_connections(min_connections)
+        .max_connections(max_connections)
+        .connect(&config.vars.database_url_readonly)
+        .await
+    {
+        Ok(pool) => {
+            tracing::trace!("initialized readonly db connection");
+            pool
+        }
+        Err(e) => {
+            tracing::warn!(error=?e, "failed to connect to readonly db, falling back to primary");
+            db.clone()
+        }
+    };
 
     let dynamo_db = aws_sdk_dynamodb::Client::new(&aws_config);
 
@@ -205,21 +229,32 @@ async fn main() -> anyhow::Result<()> {
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
+    let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
+        EmailPgRepo::new(readonly_db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        0,
+    ));
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::new(&aws_config),
-        queue_url: config.vars.notification_queue.as_ref().to_string(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.notification_queue.as_ref().to_string(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
     });
     tracing::trace!("initialized notification ingress service");
 
-    let permission_checker = PermissionServiceImpl::new(db.clone());
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+    );
+
+    let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
     let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
@@ -231,24 +266,18 @@ async fn main() -> anyhow::Result<()> {
 
     // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
     let channel_service_for_soup = ChannelServiceImpl::new(
-        PgCommsRepo { pool: db.clone() },
-        PgUserRepo::new(db.clone()),
+        PgCommsRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+        PgUserRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
     let channel_service_for_comms = ChannelServiceImpl::new(
-        PgCommsRepo { pool: db.clone() },
+        PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
     );
 
     // Create the CommsRouterState for comms_service routes
     let comms_state = CommsRouterState::new(channel_service_for_comms);
-
-    let entity_access_service = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
-        ),
-    );
 
     let s3 = Arc::new(S3::new(
         s3_client,
@@ -284,10 +313,10 @@ async fn main() -> anyhow::Result<()> {
         config.vars.docx_document_upload_bucket.as_ref(),
     );
 
-    let connection_service = ConnectionServiceImpl::new(
-        entity_access_service.clone(),
-        Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone())),
-    );
+    let connection_gateway = Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone()));
+
+    let connection_service =
+        ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
 
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
@@ -321,6 +350,57 @@ async fn main() -> anyhow::Result<()> {
         GithubSyncClientImpl::default(),
     );
 
+    // Call service (LiveKit)
+    let transcription_agent_name =
+        config::LivekitTranscriptionAgentName::new().map(|v| v.as_ref().to_owned());
+    let internal_call_secret = config::InternalCallSecret::new().map(|v| v.as_ref().to_owned());
+    anyhow::ensure!(
+        transcription_agent_name.is_none() || internal_call_secret.is_some(),
+        "LIVEKIT_TRANSCRIPTION_AGENT_NAME is set but INTERNAL_CALL_SECRET is missing — \
+         the transcription agent will not be able to submit transcripts"
+    );
+    let livekit_rtc_client = LivekitRtcClient::new(
+        config.vars.livekit_server_url.as_ref(),
+        config.vars.livekit_api_key.as_ref(),
+        config.vars.livekit_api_secret.as_ref(),
+        transcription_agent_name,
+    );
+    let call_connection_service =
+        ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
+    let call_repo = PgCallRepo::new(db.clone());
+    let mut call_service_builder = CallServiceImpl::new(
+        call_repo,
+        livekit_rtc_client,
+        call_connection_service,
+        (*entity_access_service).clone(),
+        (*notification_ingress_service).clone(),
+        config.vars.livekit_server_url.as_ref(),
+    );
+    if let Some(secret) = internal_call_secret {
+        call_service_builder = call_service_builder.with_internal_call_secret(secret);
+    }
+    if let (Some(bucket), Some(region), Some(access_key), Some(secret)) = (
+        config::CallRecordingS3Bucket::new(),
+        config::CallRecordingS3Region::new(),
+        config::CallRecordingS3AccessKey::new(),
+        config::CallRecordingS3Secret::new(),
+    ) {
+        tracing::info!(bucket = bucket.as_ref(), "call recording enabled");
+        call_service_builder =
+            call_service_builder.with_egress(call::domain::models::EgressS3Config {
+                bucket: bucket.as_ref().to_string(),
+                region: region.as_ref().to_string(),
+                access_key: access_key.as_ref().to_string(),
+                secret: secret.as_ref().to_string(),
+            });
+    }
+
+    let call_service = Arc::new(call_service_builder);
+
+    let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
+    let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let call_internal_state = InternalCallRouterState::new(call_service.clone());
+
     // Create the SQS worker for delete document processing before config is moved
     let delete_document_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&aws_config),
@@ -332,9 +412,9 @@ async fn main() -> anyhow::Result<()> {
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
-                PgSoupRepo::new(db.clone()),
+                PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
                 frecency_service,
-                email_service.clone(),
+                readonly_email_service,
                 channel_service_for_soup,
             ),
             email_service,
@@ -369,6 +449,9 @@ async fn main() -> anyhow::Result<()> {
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
             (*entity_access_service).clone(),
         ),
+        call_state,
+        call_webhook_state,
+        call_internal_state,
     };
 
     // Spawn the delete document worker

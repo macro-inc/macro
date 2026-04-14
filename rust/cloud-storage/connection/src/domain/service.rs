@@ -3,7 +3,10 @@
 use std::sync::Arc;
 
 use entity_access::domain::ports::EntityAccessService;
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 
 use crate::domain::{
     models::{ConnectionError, InvalidationEvent},
@@ -73,6 +76,26 @@ impl<E: EntityAccessService, Cgw: ConnectionGateway> ConnectionService
         // send event to all users
         self.connection_gateway
             .bulk_send_invalidation_event(&users, invalidation_event)
+            .await
+            .map_err(|e| ConnectionError::Internal(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn send_channel_message<'a>(
+        &self,
+        users: &[MacroUserIdStr<'a>],
+        message_type: &str,
+        message: serde_json::Value,
+    ) -> Result<(), ConnectionError> {
+        if users.is_empty() {
+            tracing::trace!("no users to send channel message to");
+            return Ok(());
+        }
+
+        self.connection_gateway
+            .batch_send_message(users, message_type, message)
             .await
             .map_err(|e| ConnectionError::Internal(e.into()))?;
 

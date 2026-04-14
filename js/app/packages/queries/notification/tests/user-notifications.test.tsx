@@ -63,7 +63,7 @@ function createMockNotification(
     entity_id: 'entity-1',
     entity_type: 'document',
     created_at: new Date().toISOString(),
-    updated_at: null,
+    updated_at: new Date().toISOString(),
     viewed_at: null,
     deleted_at: null,
     done: false,
@@ -404,7 +404,7 @@ describe('optimisticInsertNotification', () => {
     seedQueryCache([createMockNotificationPage([])]);
 
     const notificationWithoutCreatedAt = createMockNotification({
-      created_at: null,
+      created_at: undefined,
     });
 
     optimisticInsertNotification(notificationWithoutCreatedAt);

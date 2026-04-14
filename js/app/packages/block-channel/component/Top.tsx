@@ -1,43 +1,32 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
-import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import {
-  NotificationsButton,
-  NOTIFICATIONS_DRAWER_ID,
-} from '@core/component/NotificationsModal';
-import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import Bell from '@icon/regular/bell.svg';
 import HashIcon from '@icon/regular/hash.svg';
-import LinkIcon from '@icon/regular/link.svg';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import ChatTextIcon from '@icon/regular/chat-text.svg';
+import PaperclipIcon from '@icon/regular/paperclip.svg';
 import UsersIcon from '@icon/regular/users.svg';
+import PhoneIcon from '@icon/regular/phone.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { createMemo, Show } from 'solid-js';
-import { AttachmentsButton } from './AttachmentsModal';
-import { useChannelContext } from '@block-channel/hooks/channel';
-import { isChannelAdminOrOwner } from '@queries/channel/derived';
-import { useChannelModals } from './ModalsProvider';
-import { ParticipantManagerButton } from './ParticipantManager';
-import { useAnalytics } from '@app/component/analytics-context';
-import {
-  SegmentedControl,
-  type SegmentedControlItem,
-} from '@core/component/SegmentedControl';
+import { isMobile } from '@core/mobile/isMobile';
+import { type JSX, Show, type Component } from 'solid-js';
+import { Tabs, type TabItem } from '@core/component/Tabs';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
+
+const CHANNEL_TAB_ICONS: Record<
+  string,
+  Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+> = {
+  messages: ChatTextIcon,
+  attachments: PaperclipIcon,
+  participants: UsersIcon,
+  call: PhoneIcon,
+};
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -73,7 +62,7 @@ type TopProps = {
 
 type ChannelTopLeftProps = TopProps & {
   lockRename?: boolean;
-  tabs?: readonly SegmentedControlItem[];
+  tabs?: readonly TabItem[];
   activeTab?: ChannelTabId;
   onTabChange?: (value: ChannelTabId) => void;
 };
@@ -84,6 +73,15 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
     blockId,
     props.channelName ?? 'New Channel'
   );
+
+  const iconTabList = () =>
+    (props.tabs ?? []).map((tab) => {
+      const Icon = CHANNEL_TAB_ICONS[tab.value];
+      return {
+        value: tab.value,
+        label: Icon ? <Icon class="size-4 touch:size-6" /> : tab.label,
+      };
+    });
 
   return (
     <SplitHeaderLeft>
@@ -101,119 +99,46 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
         </div>
         <Show when={props.tabs && props.activeTab && props.onTabChange}>
-          <div class="ph-no-capture min-w-0 shrink-0">
-            <SegmentedControl
-              list={[...(props.tabs ?? [])]}
-              value={props.activeTab}
-              onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
+          <Show
+            when={!isMobile()}
+            fallback={
+              <div class="ph-no-capture flex items-center min-w-0 shrink-0 h-full">
+                <Tabs
+                  list={iconTabList()}
+                  value={props.activeTab}
+                  onChange={(value) =>
+                    props.onTabChange?.(value as ChannelTabId)
+                  }
+                />
+              </div>
+            }
+          >
+            <CollapsibleHeaderItem
+              id="channel-tabs"
+              priority={1}
+              containerClass="ph-no-capture min-w-0 shrink-0 h-full"
+              expanded={
+                <Tabs
+                  list={[...(props.tabs ?? [])]}
+                  value={props.activeTab}
+                  onChange={(value) =>
+                    props.onTabChange?.(value as ChannelTabId)
+                  }
+                />
+              }
+              collapsed={
+                <Tabs
+                  list={iconTabList()}
+                  value={props.activeTab}
+                  onChange={(value) =>
+                    props.onTabChange?.(value as ChannelTabId)
+                  }
+                />
+              }
             />
-          </div>
+          </Show>
         </Show>
       </div>
     </SplitHeaderLeft>
-  );
-}
-
-export function Top(props: TopProps) {
-  const analytics = useAnalytics();
-
-  const blockId = useBlockId();
-  const notificationSource = useGlobalNotificationSource();
-  const channelContext = useChannelContext();
-
-  const notificationsControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
-  const attachmentsControl = useDrawerControl('attachments');
-  const channelModals = useChannelModals();
-
-  const isAdminOrOwner = createMemo(() => {
-    const channelData = channelContext.channel();
-    return isChannelAdminOrOwner(channelData);
-  });
-
-  function handleCopyLink() {
-    navigator.clipboard.writeText(
-      buildSimpleEntityUrl(
-        {
-          type: 'channel',
-          id: blockId,
-        },
-        {}
-      )
-    );
-    toast.success('Link copied to clipboard');
-  }
-  const channelName = useChannelName(
-    blockId,
-    props.channelName ?? 'New Channel'
-  );
-
-  const tools: BlockTool[] = [
-    {
-      label: 'Copy Link',
-      icon: LinkIcon,
-      action: handleCopyLink,
-      condition: () => props.channelType === ChannelTypeEnum.Public,
-    },
-    {
-      label: 'Notifications',
-      icon: Bell,
-      action: notificationsControl.toggle,
-      buttonComponent: () => (
-        <NotificationsButton
-          entity={{ id: blockId, type: 'channel' }}
-          notificationSource={notificationSource}
-          onOpenChange={(open) =>
-            open &&
-            analytics.track('notifications_panel_open', {
-              blockType: 'channel',
-            })
-          }
-        />
-      ),
-    },
-    {
-      label: 'Attachments',
-      icon: PaperclipIcon,
-      action: attachmentsControl.toggle,
-      buttonComponent: () => (
-        <AttachmentsButton attachments={channelModals.attachments} />
-      ),
-    },
-    {
-      label: 'Participants',
-      icon: UsersIcon,
-      action: () => channelModals.openParticipants(),
-      condition: () => props.channelType !== ChannelTypeEnum.DirectMessage,
-      buttonComponent: () => (
-        <ParticipantManagerButton onClick={channelModals.openParticipants} />
-      ),
-    },
-  ];
-
-  return (
-    <>
-      <ChannelTopLeft
-        channelId={props.channelId}
-        channelType={props.channelType}
-        participants={props.participants}
-        channelName={props.channelName}
-        lockRename={
-          props.channelType === ChannelTypeEnum.DirectMessage ||
-          !isAdminOrOwner()
-        }
-      />
-
-      <SplitHeaderRight>
-        <BlockLiveIndicators />
-      </SplitHeaderRight>
-
-      <ResponsiveBlockToolbar
-        tools={tools}
-        ops={[]}
-        id={blockId}
-        itemType="channel"
-        name={channelName() ?? 'New Channel'}
-      />
-    </>
   );
 }

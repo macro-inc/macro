@@ -811,6 +811,190 @@ export const createCommentResponse = zod
   );
 
 /**
+ * Returns the full [`CallRecord`] (metadata + participants + transcript)
+for a call identified by its own id. Covers both active and archived calls.
+Access is validated via channel membership (MemberParticipantRole).
+ * @summary Handler for `GET /call/record/{call_id}`.
+ */
+export const getCallRecordParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+export const getCallRecordResponse = zod
+  .object({
+    callId: zod.string().uuid().describe('The call identifier.'),
+    channelId: zod
+      .string()
+      .uuid()
+      .describe('The channel this call belongs to.'),
+    createdBy: zod.string().describe('User who created the call.'),
+    durationMs: zod
+      .number()
+      .nullish()
+      .describe('Call duration in milliseconds (None if still active).'),
+    egressId: zod.string().nullish().describe('Recording egress ID, if any.'),
+    endedAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('When the call ended (None if still active).'),
+    isActive: zod
+      .boolean()
+      .describe('Whether the call is currently active (from `calls` table).'),
+    participants: zod
+      .array(
+        zod
+          .object({
+            joinedAt: zod
+              .string()
+              .datetime({})
+              .describe('When the user joined the call.'),
+            leftAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the user left (None if still in an active call).'
+              ),
+            userId: zod.string().describe('The user id.'),
+          })
+          .describe(
+            'A participant as returned in a [`CallRecord`] (historic — includes `left_at`).'
+          )
+      )
+      .describe('Participants (both active and historic).'),
+    roomName: zod.string().describe('The RTC room name.'),
+    startedAt: zod
+      .string()
+      .datetime({})
+      .describe(
+        'When the call started (created_at for active, started_at for archived).'
+      ),
+    transcript: zod
+      .array(
+        zod
+          .object({
+            content: zod.string().describe('The transcribed text content.'),
+            endedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('When the speaker stopped (if known).'),
+            segmentId: zod
+              .string()
+              .nullish()
+              .describe('LiveKit segment ID (nullable for archived records).'),
+            sequenceNum: zod.number().describe('Ordering within the call.'),
+            speakerId: zod.string().describe("The speaker's user ID."),
+            startedAt: zod
+              .string()
+              .datetime({})
+              .describe('When the speaker started this segment.'),
+          })
+          .describe('A transcript segment as returned in a [`CallRecord`].')
+      )
+      .describe('Transcript segments ordered by `sequence_num`.'),
+  })
+  .describe(
+    'Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.'
+  );
+
+/**
+ * Gets or creates a call for the channel. If a call already exists, joins it;
+otherwise creates a new one. Always returns a join token.
+ * @summary Handler for `GET /call/{channel_id}`.
+ */
+export const getOrCreateCallParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const getOrCreateCallResponse = zod
+  .object({
+    callId: zod.string().uuid().describe('The call identifier.'),
+    channelId: zod
+      .string()
+      .uuid()
+      .describe('The channel this call is associated with.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Handler for `DELETE /call/{channel_id}`.
+ */
+export const leaveOrEndCallParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const leaveOrEndCallResponse = zod
+  .object({
+    callEnded: zod
+      .boolean()
+      .describe('Whether the entire call was ended (room deleted).'),
+  })
+  .describe('Response for the leave/end call operation.');
+
+/**
+ * Returns 200 with call info if an active call exists, or 204 No Content if not.
+ * @summary Handler for `GET /call/{channel_id}/active`.
+ */
+export const checkActiveCallParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const checkActiveCallResponse = zod
+  .object({
+    callId: zod.string().uuid().describe('The call identifier.'),
+    channelId: zod
+      .string()
+      .uuid()
+      .describe('The channel this call belongs to.'),
+    createdAt: zod.string().datetime({}).describe('When the call was created.'),
+    createdBy: zod.string().describe('User who created the call.'),
+  })
+  .describe('Response indicating whether an active call exists for a channel.');
+
+/**
+ * Receives transcript segments from the transcription agent.
+Authenticated via the `x-macro-internal-call` shared secret.
+Duplicate segments (same `segment_id`) are ignored.
+ * @summary Handler for `POST /call/{channel_id}/transcript`.
+ */
+export const ingestTranscriptParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const ingestTranscriptBody = zod
+  .object({
+    content: zod.string().describe('The transcribed text content.'),
+    endedAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('When the speaker stopped talking for this segment.'),
+    isFinal: zod
+      .boolean()
+      .describe('Whether this is a final transcription (not interim).'),
+    segmentId: zod
+      .string()
+      .describe(
+        'LiveKit segment ID (used for deduplication across multiple submitters).'
+      ),
+    speakerId: zod
+      .string()
+      .describe("The speaker's user ID (from `lk.transcribed_track_id`)."),
+    startedAt: zod
+      .string()
+      .datetime({})
+      .describe('When the speaker started talking for this segment.'),
+  })
+  .describe('A transcript segment from LiveKit Inference STT.');
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({
@@ -2062,6 +2246,450 @@ export const editDocumentParams = zod.object({
 export const editDocumentBody = zod
   .object({
     documentName: zod.string().nullish().describe('The name of the document.'),
+    fileType: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                set: zod
+                  .enum([
+                    'docx',
+                    'pdf',
+                    'md',
+                    'canvas',
+                    'coffee',
+                    'cson',
+                    'iced',
+                    'c',
+                    'i',
+                    'cpp',
+                    'cppm',
+                    'cc',
+                    'ccm',
+                    'cxx',
+                    'cxxm',
+                    'cplusplus',
+                    'cplusplusm',
+                    'hpp',
+                    'hh',
+                    'hxx',
+                    'hplusplus',
+                    'h',
+                    'ii',
+                    'ino',
+                    'inl',
+                    'ipp',
+                    'ixx',
+                    'tpp',
+                    'txx',
+                    'hppin',
+                    'hin',
+                    'cu',
+                    'cuh',
+                    'cs',
+                    'csx',
+                    'cake',
+                    'css',
+                    'dart',
+                    'diff',
+                    'patch',
+                    'rej',
+                    'dockerfile',
+                    'containerfile',
+                    'go',
+                    'handlebars',
+                    'hbs',
+                    'hjs',
+                    'hlsl',
+                    'hlsli',
+                    'fx',
+                    'fxh',
+                    'vsh',
+                    'psh',
+                    'cginc',
+                    'compute',
+                    'html',
+                    'htm',
+                    'shtml',
+                    'xhtml',
+                    'xht',
+                    'mdoc',
+                    'jsp',
+                    'asp',
+                    'aspx',
+                    'jshtm',
+                    'volt',
+                    'ejs',
+                    'rhtml',
+                    'ini',
+                    'conf',
+                    'properties',
+                    'cfg',
+                    'directory',
+                    'gitattributes',
+                    'gitconfig',
+                    'gitmodules',
+                    'editorconfig',
+                    'repo',
+                    'java',
+                    'jav',
+                    'jsx',
+                    'js',
+                    'es6',
+                    'mjs',
+                    'cjs',
+                    'pac',
+                    'json',
+                    'bowerrc',
+                    'jscsrc',
+                    'webmanifest',
+                    'jsmap',
+                    'cssmap',
+                    'tsmap',
+                    'har',
+                    'jslintrc',
+                    'jsonld',
+                    'geojson',
+                    'ipynb',
+                    'vuerc',
+                    'jsonc',
+                    'eslintrc',
+                    'eslintrcjson',
+                    'jsfmtrc',
+                    'jshintrc',
+                    'swcrc',
+                    'hintrc',
+                    'babelrc',
+                    'jsonl',
+                    'ndjson',
+                    'codesnippets',
+                    'jl',
+                    'jmd',
+                    'sty',
+                    'cls',
+                    'bbx',
+                    'cbx',
+                    'tex',
+                    'ltx',
+                    'ctx',
+                    'bib',
+                    'less',
+                    'log',
+                    'lua',
+                    'mak',
+                    'mk',
+                    'mkd',
+                    'mdwn',
+                    'mdown',
+                    'markdown',
+                    'markdn',
+                    'mdtxt',
+                    'mdtext',
+                    'workbook',
+                    'm',
+                    'mm',
+                    'pl',
+                    'pm',
+                    'pod',
+                    't',
+                    'psgi',
+                    'raku',
+                    'rakumod',
+                    'rakutest',
+                    'rakudoc',
+                    'nqp',
+                    'p6',
+                    'pl6',
+                    'pm6',
+                    'php',
+                    'php4',
+                    'php5',
+                    'phtml',
+                    'ctp',
+                    'ps1',
+                    'psm1',
+                    'psd1',
+                    'pssc',
+                    'psrc',
+                    'py',
+                    'rpy',
+                    'pyw',
+                    'cpy',
+                    'gyp',
+                    'gypi',
+                    'pyi',
+                    'ipy',
+                    'pyt',
+                    'r',
+                    'rhistory',
+                    'rprofile',
+                    'rt',
+                    'cshtml',
+                    'razor',
+                    'rb',
+                    'rbx',
+                    'rjs',
+                    'gemspec',
+                    'rake',
+                    'ru',
+                    'erb',
+                    'podspec',
+                    'rbi',
+                    'rs',
+                    'scss',
+                    'sass',
+                    'shader',
+                    'sh',
+                    'bash',
+                    'bashrc',
+                    'bashaliases',
+                    'bashprofile',
+                    'bashlogin',
+                    'ebuild',
+                    'eclass',
+                    'profile',
+                    'bashlogout',
+                    'xprofile',
+                    'xsession',
+                    'xsessionrc',
+                    'zsh',
+                    'zshrc',
+                    'zprofile',
+                    'zlogin',
+                    'zlogout',
+                    'zshenv',
+                    'zshtheme',
+                    'fish',
+                    'ksh',
+                    'csh',
+                    'cshrc',
+                    'tcshrc',
+                    'yashrc',
+                    'yashprofile',
+                    'sql',
+                    'dsql',
+                    'swift',
+                    'ts',
+                    'cts',
+                    'mts',
+                    'tsx',
+                    'tsbuildinfo',
+                    'xml',
+                    'xsd',
+                    'ascx',
+                    'atom',
+                    'axml',
+                    'axaml',
+                    'bpmn',
+                    'cpt',
+                    'csl',
+                    'csproj',
+                    'csprojuser',
+                    'dita',
+                    'ditamap',
+                    'dtd',
+                    'ent',
+                    'mod',
+                    'dtml',
+                    'fsproj',
+                    'fxml',
+                    'iml',
+                    'isml',
+                    'jmx',
+                    'launch',
+                    'menu',
+                    'mxml',
+                    'nuspec',
+                    'opml',
+                    'owl',
+                    'proj',
+                    'props',
+                    'pt',
+                    'publishsettings',
+                    'pubxml',
+                    'pubxmluser',
+                    'rbxlx',
+                    'rbxmx',
+                    'rdf',
+                    'rng',
+                    'rss',
+                    'shproj',
+                    'storyboard',
+                    'targets',
+                    'tld',
+                    'tmx',
+                    'vbproj',
+                    'vbprojuser',
+                    'vcxproj',
+                    'vcxprojfilters',
+                    'wsdl',
+                    'wxi',
+                    'wxl',
+                    'wxs',
+                    'xaml',
+                    'xbl',
+                    'xib',
+                    'xlf',
+                    'xliff',
+                    'xpdl',
+                    'xul',
+                    'xoml',
+                    'xsl',
+                    'xslt',
+                    'yaml',
+                    'yml',
+                    'eyaml',
+                    'eyml',
+                    'cff',
+                    'yamltmlanguage',
+                    'yamltmpreferences',
+                    'yamltmtheme',
+                    'winget',
+                    'txt',
+                    'csv',
+                    'tsv',
+                    'jpeg',
+                    'jpg',
+                    'png',
+                    'gif',
+                    'svg',
+                    'webp',
+                    'avif',
+                    'bmp',
+                    'ico',
+                    'tiff',
+                    'tif',
+                    'heic',
+                    'heif',
+                    'tar',
+                    'targz',
+                    'tgz',
+                    'gz',
+                    'bz2',
+                    'tarbz2',
+                    'tbz2',
+                    'z',
+                    'tarz',
+                    'lz',
+                    'tarlz',
+                    'xz',
+                    'tarxz',
+                    'txz',
+                    'lzma',
+                    'tarlzma',
+                    'rar',
+                    'sevenz',
+                    'zst',
+                    'tarzst',
+                    'tzst',
+                    'zip',
+                    'exe',
+                    'msi',
+                    'dll',
+                    'bat',
+                    'cmd',
+                    'com',
+                    'appimage',
+                    'app',
+                    'bin',
+                    'deb',
+                    'rpm',
+                    'apk',
+                    'dmg',
+                    'pkg',
+                    'crx',
+                    'xpi',
+                    'mp3',
+                    'wav',
+                    'ogg',
+                    'flac',
+                    'aac',
+                    'm4a',
+                    'wma',
+                    'mid',
+                    'midi',
+                    'mp4',
+                    'mkv',
+                    'webm',
+                    'avi',
+                    'mov',
+                    'wmv',
+                    'mpg',
+                    'mpeg',
+                    'm4v',
+                    'flv',
+                    'f4v',
+                    'threegp',
+                    'ttf',
+                    'otf',
+                    'woff',
+                    'woff2',
+                    'eot',
+                    'rtf',
+                    'odt',
+                    'ods',
+                    'odp',
+                    'odg',
+                    'odf',
+                    'epub',
+                    'mobi',
+                    'azw',
+                    'azw3',
+                    'djvu',
+                    'xls',
+                    'ppt',
+                    'pptx',
+                    'xlsx',
+                    'db',
+                    'sqlite',
+                    'sqlite3',
+                    'mdb',
+                    'accdb',
+                    'dbf',
+                    'plist',
+                    'toml',
+                    'env',
+                    'dot',
+                    'gv',
+                    'torrent',
+                    'ics',
+                    'vcf',
+                    'ai',
+                    'eps',
+                    'ps',
+                    'dxf',
+                    'dwg',
+                    'stl',
+                    'obj',
+                    'fbx',
+                    'blend',
+                    'dae',
+                    'threeds',
+                    'gltf',
+                    'glb',
+                    'vhd',
+                    'vhdx',
+                    'vmdk',
+                    'ova',
+                    'ovf',
+                    'iso',
+                    'img',
+                    'swf',
+                  ])
+                  .describe(
+                    'Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n'
+                  ),
+              })
+              .describe('Set the file type to a specific value.'),
+            zod.enum(['clear']).describe('Clear the file type (set to null).'),
+          ])
+          .describe(
+            'Represents a file type update: either set to a specific type or clear to null.'
+          ),
+      ])
+      .optional(),
     projectId: zod
       .string()
       .nullish()
@@ -2121,17 +2749,15 @@ export const editDocumentResponse = zod
   .describe('Edit document response.');
 
 /**
- * @summary Handles copying a given document. This is the similar to
-create_document_handler where you provide the branched_from_id,
-branched_from_version_id and document_family_id in the request body. Except
-this will not require you to re-upload the document when it's made saving
-time and resources.
+ * Copies an existing document, creating a new document with the same content.
+Does not require re-uploading the document file.
+ * @summary Handler for `POST /documents/{document_id}/copy`.
  */
-export const copyDocumentHandlerParams = zod.object({
+export const copyDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),
 });
 
-export const copyDocumentHandlerQueryParams = zod.object({
+export const copyDocumentQueryParams = zod.object({
   version_id: zod
     .number()
     .optional()
@@ -2140,124 +2766,111 @@ export const copyDocumentHandlerQueryParams = zod.object({
     ),
 });
 
-export const copyDocumentHandlerBody = zod.object({
-  documentName: zod
-    .string()
-    .describe('The name of the document without extension.'),
-  versionId: zod
-    .union([
-      zod.null(),
-      zod.object({
-        counter: zod.number(),
-        peer: zod.string(),
-      }),
-    ])
-    .optional(),
-});
-
-export const copyDocumentHandlerResponse = zod.object({
-  data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was created'),
-      deletedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document was deleted'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document and unzipped, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document (file extension)'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      projectId: zod
-        .string()
-        .nullish()
-        .describe('The id of the project that this document belongs to'),
-      projectName: zod
-        .string()
-        .nullish()
-        .describe('The name of the project that this document belongs to'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .string()
-        .datetime({})
-        .nullish()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
-    userAccessLevel: zod
-      .enum(['view', 'comment', 'edit', 'owner'])
-      .describe('Ordered from least to most access top -> bottom'),
-    viewLocation: zod
+export const copyDocumentBody = zod
+  .object({
+    documentName: zod
       .string()
-      .nullish()
-      .describe('The users view location if there is one'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
+      .describe('The name of the new document (without extension).'),
+    versionId: zod
+      .union([
+        zod.null(),
+        zod.object({
+          counter: zod.number(),
+          peer: zod.string(),
+        }),
+      ])
+      .optional(),
+  })
+  .describe('Request body for copying a document.');
+
+export const copyDocumentResponse = zod
+  .object({
+    data: zod.object({
+      documentMetadata: zod.object({
+        branchedFromId: zod
+          .string()
+          .nullish()
+          .describe('The id of the document this document branched from'),
+        branchedFromVersionId: zod
+          .number()
+          .nullish()
+          .describe(
+            'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
+          ),
+        createdAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the document was created'),
+        documentBom: zod
+          .array(
+            zod.object({
+              id: zod.string().describe('The uuid of the bom part'),
+              path: zod
+                .string()
+                .describe('The file path of the bom part content'),
+              sha: zod
+                .string()
+                .describe(
+                  'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
+                ),
+            })
+          )
+          .nullish()
+          .describe(
+            'If the document is a DOCX document, the document_bom will be present'
+          ),
+        documentFamilyId: zod
+          .number()
+          .nullish()
+          .describe('The id of the document family this document belongs to'),
+        documentId: zod.string().describe('The document id'),
+        documentName: zod.string().describe('The name of the document'),
+        documentVersionId: zod
+          .number()
+          .describe(
+            'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
+          ),
+        fileType: zod
+          .string()
+          .nullish()
+          .describe('The file type of the document'),
+        modificationData: zod
+          .any()
+          .optional()
+          .describe(
+            'The modification data for the document instance.\nThis is only used for PDF documents.'
+          ),
+        owner: zod.string().describe('The owner of the document'),
+        sha: zod
+          .string()
+          .nullish()
+          .describe(
+            'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+          ),
+        subType: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['task'])
+              .describe(
+                'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+              ),
+          ])
+          .optional(),
+        updatedAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe(
+            'The time the document instance / document BOM was updated'
+          ),
+      }),
+      presignedUrl: zod.string().nullish(),
+    }),
+    error: zod.boolean().describe('Indicates if an error occurred.'),
+  })
+  .describe('Response wrapper for the copy document endpoint.');
 
 /**
  * @summary Generates a presigned url to download the raw content of the document

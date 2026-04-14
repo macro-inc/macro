@@ -1,7 +1,8 @@
 //! Domain models for the documents crate.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
+use model::document::{DocumentMetadata, FileType};
+use model::sync_service::SyncServiceVersionID;
 use models_properties::api::requests::SetPropertyValue;
 
 /// SHA256 hash of an empty string — used for empty markdown documents (tasks).
@@ -28,6 +29,48 @@ pub enum DocumentError {
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
+}
+
+/// Response wrapper for the copy document endpoint.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CopyDocumentResponse {
+    /// Indicates if an error occurred.
+    pub error: bool,
+    /// The copied document data.
+    pub data: model::document::response::DocumentResponse,
+}
+
+/// Arguments for copying a document in the repository.
+pub struct CopyDocumentRepoArgs {
+    /// The original document metadata to copy from.
+    pub original_document: DocumentMetadata,
+    /// The new owner/copier user ID.
+    pub user_id: MacroUserIdStr<'static>,
+    /// The name for the new document.
+    pub document_name: String,
+    /// The file type of the document.
+    pub file_type: Option<FileType>,
+}
+
+/// Request body for copying a document.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CopyDocumentRequest {
+    /// The name of the new document (without extension).
+    pub document_name: String,
+    /// Optional sync service version ID for MD documents.
+    pub version_id: Option<SyncServiceVersionID>,
+}
+
+/// Query parameters for the copy document endpoint.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct CopyDocumentQueryParams {
+    /// The DB version id of the document to copy. Defaults to latest.
+    pub version_id: Option<i64>,
 }
 
 /// Arguments for creating a document in the repository.
@@ -68,6 +111,17 @@ pub struct CloudFrontConfig {
     pub browser_cache_expiry_seconds: u64,
 }
 
+/// Represents a file type update: either set to a specific type or clear to null.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum FileTypeUpdate {
+    /// Set the file type to a specific value.
+    Set(FileType),
+    /// Clear the file type (set to null).
+    Clear,
+}
+
 /// Arguments for editing a document in the repository.
 pub struct EditDocumentRepoArgs {
     /// The document ID to edit.
@@ -79,6 +133,8 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// New file type (None = no change).
+    pub file_type: Option<FileTypeUpdate>,
 }
 
 /// Arguments for the edit_document service call.
@@ -93,6 +149,9 @@ pub struct EditDocumentServiceArgs {
     /// Updated share permissions for the document.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// The new file type for the document (null to clear).
+    #[serde(default)]
+    pub file_type: Option<FileTypeUpdate>,
 }
 
 /// Query parameters for the location_v3 endpoint.

@@ -10,6 +10,8 @@ members = [
   "anthropic",
   "authentication_service",
   "authentication_service_client",
+  "backfill_entity_access",
+  "call",
   "channels",
   "chat",
   "comms_db_client",
@@ -23,6 +25,7 @@ members = [
   "convert_service",
   "cowlike",
   "dataloss_prevention_handler",
+  "decode_jwt",
   "delete_chat_handler",
   "deleted_item_poller",
   "document_cognition_service",
@@ -45,12 +48,14 @@ members = [
   "email_utils",
   "email_validator",
   "entity_access",
+  "entity_access_management",
   "frecency",
   "fusionauth",
   "github",
   "gmail_client",
   "image_proxy_service",
   "integration_tests/*",
+  "invite_email",
   "lambda_client",
   "lexical_client",
   "macro_auth",
@@ -68,6 +73,9 @@ members = [
   "macro_sha_count_client",
   "macro_share_permissions",
   "macro_uuid",
+  "mcp_auth_proxy",
+  "mcp_service",
+  "memory",
   "mention_utils",
   "model",
   "model_notifications",
@@ -98,8 +106,8 @@ members = [
   "properties_db_client",
   "properties_service",
   "rate_limit",
+  "readonly_pool",
   "referral",
-  "invite_email",
   "roles_and_permissions",
   "rpc/axum_rpc",
   "rpc/axum_rpc_emit",
@@ -129,7 +137,7 @@ members = [
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "user_quota",
-  "worker_trigger", "memory",
+  "worker_trigger",
 ]
 
 [workspace.dependencies]
@@ -164,6 +172,7 @@ ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
 hex = "0.4.3"
+hmac = "0.12.1"
 http = "1"
 http-body-util = "0.1.2"
 inquire = "0.7"
@@ -173,6 +182,8 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 ] }
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
+livekit-api = "0.4.16"
+livekit-protocol = "0.7.2"
 log = "0.4.26"
 mockall = "0.13"
 nom = "8"

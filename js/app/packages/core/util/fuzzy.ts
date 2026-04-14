@@ -36,29 +36,27 @@ export function highlightCommaSpaceSeparatedMatches(
   const textParts = text.split(',').map((p) => p.trim());
 
   const highlightedParts = textParts.map((textPart) => {
-    let highlighted = textPart;
+    const haystack = [textPart];
 
-    // Try to highlight each query part in this text part
+    const fullIdxs = uf.filter(haystack, query);
+    if (fullIdxs && fullIdxs.length > 0) {
+      const info = uf.info(fullIdxs, haystack, query);
+      if (info.ranges && info.ranges[0]) {
+        return uFuzzy.highlight(textPart, info.ranges[0], mark, '', append);
+      }
+    }
+
     for (const queryPart of queryParts) {
-      const haystack = [textPart];
       const idxs = uf.filter(haystack, queryPart);
-
       if (idxs && idxs.length > 0) {
         const info = uf.info(idxs, haystack, queryPart);
         if (info.ranges && info.ranges[0]) {
-          highlighted = uFuzzy.highlight(
-            textPart,
-            info.ranges[0],
-            mark,
-            '',
-            append
-          );
-          break; // Only highlight once per text part
+          return uFuzzy.highlight(textPart, info.ranges[0], mark, '', append);
         }
       }
     }
 
-    return highlighted;
+    return textPart;
   });
 
   return highlightedParts.join(', ');

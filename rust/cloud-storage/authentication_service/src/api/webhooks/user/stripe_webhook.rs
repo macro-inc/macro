@@ -12,11 +12,24 @@ use axum::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::Email;
+use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
 use roles_and_permissions::domain::{model::ProductTier, port::UserRolesAndPermissionsService};
 use serde::Serialize;
 use stripe_webhook::{EventObject, EventType};
+
+/// Extracts the previous status from the previous_attributes JSON value.
+fn extract_previous_status(previous_attributes: &Option<JsonValue>) -> Option<String> {
+    let attrs = previous_attributes.as_ref()?;
+    match attrs {
+        JsonValue::Object(map) => match map.get("status")? {
+            JsonValue::String(s) => Some(s.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
 use teams::domain::team_repo::TeamService;
 use tracing::Instrument;
 
@@ -74,16 +87,25 @@ pub async fn handler(
     tracing::info!(
         event_id = %event.id,
         event_type = ?event.type_,
+        event_api_version = ?event.api_version,
+        library_api_version = %"1.0.0-alpha.4 (targets 2025-09-30.clover)",
         "processing stripe event"
     );
 
     let event_type = event.type_.clone();
+    let previous_attributes = event.data.previous_attributes.clone();
     match event.type_ {
         EventType::CustomerSubscriptionCreated
         | EventType::CustomerSubscriptionUpdated
         | EventType::CustomerSubscriptionDeleted
         | EventType::CustomerSubscriptionPaused => {
-            handle_customer_subscription_event(&ctx, event.data.object, event_type).await
+            handle_customer_subscription_event(
+                &ctx,
+                event.data.object,
+                event_type,
+                previous_attributes,
+            )
+            .await
         }
         _ => {
             tracing::error!(event_type=?event.type_, "unexpected event type");
@@ -98,11 +120,12 @@ pub async fn handler(
     Ok(StatusCode::OK.into_response())
 }
 
-#[tracing::instrument(skip(ctx, event_object), err, ret)]
+#[tracing::instrument(skip(ctx, event_object, previous_attributes), err, ret)]
 async fn handle_customer_subscription_event(
     ctx: &ApiContext,
     event_object: EventObject,
     event_type: EventType,
+    previous_attributes: Option<JsonValue>,
 ) -> anyhow::Result<()> {
     let subscription = match event_object {
         EventObject::CustomerSubscriptionCreated(subscription) => subscription,
@@ -114,8 +137,47 @@ async fn handle_customer_subscription_event(
         }
     };
 
-    if subscription.status.as_str() == "incomplete" {
+    let current_status = subscription.status.as_str();
+
+    // Skip processing if the subscription is still incomplete
+    if current_status == "incomplete" {
+        tracing::info!(
+            current_status = current_status,
+            "skipping incomplete subscription"
+        );
         return Ok(());
+    }
+
+    // For subscription.updated events, check if we're transitioning from incomplete
+    // to active/trialing. If so, this is effectively a "new" subscription activation.
+    let previous_status = extract_previous_status(&previous_attributes);
+
+    tracing::info!(
+        event_type = ?event_type,
+        current_status = current_status,
+        previous_status = ?previous_status,
+        previous_attributes_raw = ?previous_attributes,
+        "subscription event status details"
+    );
+
+    let is_transition_from_incomplete =
+        matches!(event_type, EventType::CustomerSubscriptionUpdated)
+            && previous_status.as_deref() == Some("incomplete")
+            && matches!(current_status, "active" | "trialing");
+
+    if is_transition_from_incomplete {
+        tracing::info!(
+            previous_status = ?previous_status,
+            current_status = current_status,
+            "subscription transitioned from incomplete to active state"
+        );
+    } else if matches!(event_type, EventType::CustomerSubscriptionUpdated) {
+        tracing::info!(
+            previous_status = ?previous_status,
+            current_status = current_status,
+            is_transition_from_incomplete = is_transition_from_incomplete,
+            "subscription update did not qualify as incomplete transition"
+        );
     }
 
     // Stripe CustomerId and subscription CustomerId are not the same type...
@@ -159,16 +221,26 @@ async fn handle_customer_subscription_event(
         None
     };
 
-    // Extract GA client ID from subscription metadata for analytics tracking
+    // Extract tracking IDs from subscription metadata for analytics
     let ga_client_id = subscription.metadata.get("ga_client_id").cloned();
+    let fbp = subscription.metadata.get("fbp").cloned();
+    let fbc = subscription.metadata.get("fbc").cloned();
 
     tracing::info!(
         email=%email.as_ref(),
         subscription_id,
         subscription_status,
         ga_client_id=?ga_client_id,
+        fbp=?fbp,
+        fbc=?fbc,
         "processing stripe subscription"
     );
+
+    // Determine if this should be treated as a new subscription for analytics purposes.
+    // A subscription is "new" if it's a CustomerSubscriptionCreated event OR if it
+    // transitioned from incomplete to active/trialing (meaning payment succeeded).
+    let is_new_subscription = matches!(event_type, EventType::CustomerSubscriptionCreated)
+        || is_transition_from_incomplete;
 
     // Get subscription metadata, if this is a team subscription then we need to handle it
     // separately.
@@ -182,11 +254,13 @@ async fn handle_customer_subscription_event(
             &team_id,
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
+                fbp: fbp.clone(),
+                fbc: fbc.clone(),
                 email: email.as_ref().to_string(),
                 value_cents: subscription_value,
                 currency: subscription_currency,
                 status: subscription_status.to_string(),
-                is_new: matches!(event_type, EventType::CustomerSubscriptionCreated),
+                is_new: is_new_subscription,
             },
         )
         .await;
@@ -292,7 +366,10 @@ async fn handle_customer_subscription_event(
         id if id == ctx.stripe_price_ids.stripe_price_id_haiku.as_ref() => ProductTier::Haiku,
         id if id == ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref() => ProductTier::Sonnet,
         id if id == ctx.stripe_price_ids.stripe_price_id_opus.as_ref() => ProductTier::Opus,
-        _ => anyhow::bail!("unsupported price id: {price_id}"),
+        _ => {
+            tracing::warn!(price_id=?price_id.as_str(), "unsupported price id, defaulting to haiku tier");
+            ProductTier::Haiku
+        }
     };
 
     ctx.user_roles_and_permissions_service
@@ -309,11 +386,13 @@ async fn handle_customer_subscription_event(
         subscription_id,
         SubscriptionTrackingData {
             ga_client_id,
+            fbp,
+            fbc,
             email: email.as_ref().to_string(),
             value_cents: subscription_value,
             currency: subscription_currency,
             status: subscription_status.to_string(),
-            is_new: matches!(event_type, EventType::CustomerSubscriptionCreated),
+            is_new: is_new_subscription,
         },
     );
 
@@ -409,6 +488,8 @@ struct SubscriptionEvent {
 #[derive(Debug, Clone)]
 struct SubscriptionTrackingData {
     ga_client_id: Option<String>,
+    fbp: Option<String>,
+    fbc: Option<String>,
     email: String,
     value_cents: Option<i64>,
     currency: Option<String>,
@@ -424,11 +505,11 @@ fn track_stripe_subscription(
     data: SubscriptionTrackingData,
 ) {
     let Some(value_cents) = data.value_cents else {
-        tracing::debug!("skipping analytics tracking: missing value_cents");
+        tracing::warn!("skipping analytics tracking: missing value_cents");
         return;
     };
     let Some(currency) = data.currency else {
-        tracing::debug!("skipping analytics tracking: missing currency");
+        tracing::warn!("skipping analytics tracking: missing currency");
         return;
     };
 
@@ -440,6 +521,14 @@ fn track_stripe_subscription(
 
     let subscription_id = subscription_id.to_string();
 
+    tracing::info!(
+        value_cents = value_cents,
+        currency = %currency,
+        is_new = data.is_new,
+        status = %data.status,
+        "spawning analytics tracking task"
+    );
+
     tokio::spawn(
         async move {
             let event = SubscriptionEvent {
@@ -447,8 +536,19 @@ fn track_stripe_subscription(
                 value: value_cents as f64 / 100.0,
                 currency: currency.to_uppercase(),
             };
-            let user_data = MetaUserData::with_email(&data.email);
+            let user_data = MetaUserData {
+                email: Some(data.email.clone()),
+                fbp: data.fbp.clone(),
+                fbc: data.fbc.clone(),
+            };
             let event_id = Some(subscription_id.as_str());
+
+            tracing::info!(
+                status = %data.status,
+                is_new = data.is_new,
+                ga_client_id = ?data.ga_client_id,
+                "analytics tracking task started"
+            );
 
             match (data.status.as_str(), data.is_new) {
                 ("active" | "trialing", true) => {

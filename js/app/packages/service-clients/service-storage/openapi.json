@@ -594,6 +594,325 @@
         }
       }
     },
+    "/call/record/{call_id}": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/record/{call_id}`.",
+        "description": "Returns the full [`CallRecord`] (metadata + participants + transcript)\nfor a call identified by its own id. Covers both active and archived calls.\nAccess is validated via channel membership (MemberParticipantRole).",
+        "operationId": "get_call_record",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallRecord"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/webhook": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/webhook`.",
+        "description": "Receives webhook events from the RTC provider (e.g. LiveKit).\nThe `Authorization` header contains the webhook auth token\nand the body contains the raw event payload.",
+        "operationId": "call_webhook",
+        "responses": {
+          "200": {
+            "description": "Event processed"
+          },
+          "401": {
+            "description": "Invalid webhook signature"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/{channel_id}": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/{channel_id}`.",
+        "description": "Gets or creates a call for the channel. If a call already exists, joins it;\notherwise creates a new one. Always returns a join token.",
+        "operationId": "get_or_create_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `DELETE /call/{channel_id}`.",
+        "operationId": "leave_or_end_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaveCallResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No active call",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/{channel_id}/active": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/{channel_id}/active`.",
+        "description": "Returns 200 with call info if an active call exists, or 204 No Content if not.",
+        "operationId": "check_active_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallActiveResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No active call"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/{channel_id}/transcript": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/{channel_id}/transcript`.",
+        "description": "Receives transcript segments from the transcription agent.\nAuthenticated via the `x-macro-internal-call` shared secret.\nDuplicate segments (same `segment_id`) are ignored.",
+        "operationId": "ingest_transcript",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscriptSegmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Segment ingested"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No active call",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/attachments": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -1797,8 +2116,9 @@
     "/documents/{document_id}/copy": {
       "post": {
         "tags": ["document"],
-        "summary": "Handles copying a given document. This is the similar to\ncreate_document_handler where you provide the branched_from_id,\nbranched_from_version_id and document_family_id in the request body. Except\nthis will not require you to re-upload the document when it's made saving\ntime and resources.",
-        "operationId": "copy_document_handler",
+        "summary": "Handler for `POST /documents/{document_id}/copy`.",
+        "description": "Copies an existing document, creating a new document with the same content.\nDoes not require re-uploading the document file.",
+        "operationId": "copy_document",
         "parameters": [
           {
             "name": "document_id",
@@ -1836,7 +2156,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetDocumentResponse"
+                  "$ref": "#/components/schemas/CopyDocumentResponse"
                 }
               }
             }
@@ -1846,7 +2166,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1856,17 +2176,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1876,7 +2186,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1886,7 +2196,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -5499,6 +5809,187 @@
           }
         }
       },
+      "CallActiveResponse": {
+        "type": "object",
+        "description": "Response indicating whether an active call exists for a channel.",
+        "required": ["callId", "channelId", "createdBy", "createdAt"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          }
+        }
+      },
+      "CallRecord": {
+        "type": "object",
+        "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
+        "required": [
+          "callId",
+          "channelId",
+          "roomName",
+          "createdBy",
+          "startedAt",
+          "isActive",
+          "participants",
+          "transcript"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "durationMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Call duration in milliseconds (None if still active)."
+          },
+          "egressId": {
+            "type": ["string", "null"],
+            "description": "Recording egress ID, if any."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the call is currently active (from `calls` table)."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordParticipant"
+            },
+            "description": "Participants (both active and historic)."
+          },
+          "roomName": {
+            "type": "string",
+            "description": "The RTC room name."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started (created_at for active, started_at for archived)."
+          },
+          "transcript": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordTranscriptSegment"
+            },
+            "description": "Transcript segments ordered by `sequence_num`."
+          }
+        }
+      },
+      "CallRecordParticipant": {
+        "type": "object",
+        "description": "A participant as returned in a [`CallRecord`] (historic — includes `left_at`).",
+        "required": ["userId", "joinedAt"],
+        "properties": {
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the user left (None if still in an active call)."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The user id."
+          }
+        }
+      },
+      "CallRecordTranscriptSegment": {
+        "type": "object",
+        "description": "A transcript segment as returned in a [`CallRecord`].",
+        "required": ["speakerId", "content", "startedAt", "sequenceNum"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The transcribed text content."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the speaker stopped (if known)."
+          },
+          "segmentId": {
+            "type": ["string", "null"],
+            "description": "LiveKit segment ID (nullable for archived records)."
+          },
+          "sequenceNum": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Ordering within the call."
+          },
+          "speakerId": {
+            "type": "string",
+            "description": "The speaker's user ID."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the speaker started this segment."
+          }
+        }
+      },
+      "CallTokenResponse": {
+        "type": "object",
+        "description": "Response returned when creating or joining a call.",
+        "required": ["callId", "channelId", "token", "roomName", "serverUrl"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call is associated with."
+          },
+          "roomName": {
+            "type": "string",
+            "description": "The RTC room name."
+          },
+          "serverUrl": {
+            "type": "string",
+            "description": "The RTC server URL for the frontend SDK to connect to."
+          },
+          "token": {
+            "type": "string",
+            "description": "The RTC token for connecting to the room."
+          }
+        }
+      },
       "Channel": {
         "type": "object",
         "required": [
@@ -5854,21 +6345,23 @@
       },
       "CopyDocumentQueryParams": {
         "type": "object",
+        "description": "Query parameters for the copy document endpoint.",
         "properties": {
           "version_id": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "The version id of the document to copy. Defaults to copying the latest version of the document."
+            "description": "The DB version id of the document to copy. Defaults to latest."
           }
         }
       },
       "CopyDocumentRequest": {
         "type": "object",
+        "description": "Request body for copying a document.",
         "required": ["documentName"],
         "properties": {
           "documentName": {
             "type": "string",
-            "description": "The name of the document without extension."
+            "description": "The name of the new document (without extension)."
           },
           "versionId": {
             "oneOf": [
@@ -5876,9 +6369,25 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/SyncServiceVersionID"
+                "$ref": "#/components/schemas/SyncServiceVersionID",
+                "description": "Optional sync service version ID for MD documents."
               }
             ]
+          }
+        }
+      },
+      "CopyDocumentResponse": {
+        "type": "object",
+        "description": "Response wrapper for the copy document endpoint.",
+        "required": ["error", "data"],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DocumentResponse",
+            "description": "The copied document data."
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred."
           }
         }
       },
@@ -6882,6 +7391,17 @@
             "type": ["string", "null"],
             "description": "The name of the document."
           },
+          "fileType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileTypeUpdate",
+                "description": "The new file type for the document (null to clear)."
+              }
+            ]
+          },
           "projectId": {
             "type": ["string", "null"],
             "description": "The new project id of the document."
@@ -7719,6 +8239,27 @@
           "swf"
         ]
       },
+      "FileTypeUpdate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Set the file type to a specific value.",
+            "required": ["set"],
+            "properties": {
+              "set": {
+                "$ref": "#/components/schemas/FileType",
+                "description": "Set the file type to a specific value."
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "Clear the file type (set to null).",
+            "enum": ["clear"]
+          }
+        ],
+        "description": "Represents a file type update: either set to a specific type or clear to null."
+      },
       "FolderItem": {
         "type": "object",
         "required": ["name", "fullName", "relativePath", "sha"],
@@ -8274,6 +8815,17 @@
                 "$ref": "#/components/schemas/ChannelMessage"
               }
             ]
+          }
+        }
+      },
+      "LeaveCallResponse": {
+        "type": "object",
+        "description": "Response for the leave/end call operation.",
+        "required": ["callEnded"],
+        "properties": {
+          "callEnded": {
+            "type": "boolean",
+            "description": "Whether the entire call was ended (room deleted)."
           }
         }
       },
@@ -10472,6 +11024,45 @@
             "items": {
               "$ref": "#/components/schemas/CommentThread"
             }
+          }
+        }
+      },
+      "TranscriptSegmentRequest": {
+        "type": "object",
+        "description": "A transcript segment from LiveKit Inference STT.",
+        "required": [
+          "segmentId",
+          "speakerId",
+          "content",
+          "startedAt",
+          "isFinal"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The transcribed text content."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the speaker stopped talking for this segment."
+          },
+          "isFinal": {
+            "type": "boolean",
+            "description": "Whether this is a final transcription (not interim)."
+          },
+          "segmentId": {
+            "type": "string",
+            "description": "LiveKit segment ID (used for deduplication across multiple submitters)."
+          },
+          "speakerId": {
+            "type": "string",
+            "description": "The speaker's user ID (from `lk.transcribed_track_id`)."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the speaker started talking for this segment."
           }
         }
       },

@@ -3,8 +3,7 @@ use crate::domain::ports::MockSoupRepo;
 use chrono::Days;
 use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
-use email::domain::models::{EmailErr, EnrichedEmailThreadPreview, PreviewView};
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
 use frecency::domain::models::{FrecencyPageRequest, FrecencyPageResponse};
 use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
@@ -23,9 +22,9 @@ use uuid::Uuid;
 
 use super::*;
 
-struct NoopEmailService;
+struct NoopEmailPreviewService;
 
-impl EmailService for NoopEmailService {
+impl EmailPreviewServiceReadOnly for NoopEmailPreviewService {
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,
@@ -37,106 +36,6 @@ impl EmailService for NoopEmailService {
             .into_iter()
             .paginate_on(0, SimpleSortMethod::CreatedAt)
             .into_page())
-    }
-
-    async fn get_link_by_auth_id_and_macro_id(
-        &self,
-        _auth_id: &str,
-        _macro_id: MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn get_link_by_macro_id(
-        &self,
-        _macro_id: MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn get_thread_with_messages(
-        &self,
-        _receipt: EntityAccessReceipt<ViewAccessLevel>,
-        _offset: i64,
-        _limit: i64,
-    ) -> Result<Option<email::domain::models::Thread>, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn get_thread_parsed(
-        &self,
-        _receipt: EntityAccessReceipt<ViewAccessLevel>,
-        _offset: i64,
-        _limit: i64,
-    ) -> Result<Option<email::domain::models::ParsedThread>, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn create_draft(
-        &self,
-        _link: &email::domain::models::Link,
-        _input: email::domain::models::CreateDraftInput,
-    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn send_message(
-        &self,
-        _link: &email::domain::models::Link,
-        _input: email::domain::models::CreateDraftInput,
-    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn list_labels(
-        &self,
-        _link: &email::domain::models::Link,
-    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn update_thread_labels(
-        &self,
-        _access_token: &str,
-        _link: &email::domain::models::Link,
-        _thread_id: uuid::Uuid,
-        _label_id: uuid::Uuid,
-        _add: bool,
-    ) -> Result<email::domain::models::UpdateThreadLabelsResult, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn update_thread_project(
-        &self,
-        _thread_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
-        _project_receipt: Option<
-            EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
-        >,
-    ) -> Result<Option<String>, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn upsert_email_filter(
-        &self,
-        _link: &email::domain::models::Link,
-        _input: email::domain::models::UpsertEmailFilterInput,
-    ) -> Result<email::domain::models::EmailFilter, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn delete_email_filter(
-        &self,
-        _link: &email::domain::models::Link,
-        _filter_id: Uuid,
-    ) -> Result<bool, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
-    }
-
-    async fn list_email_filters(
-        &self,
-        _link: &email::domain::models::Link,
-    ) -> Result<Vec<email::domain::models::EmailFilter>, EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
 }
 
@@ -261,7 +160,7 @@ async fn it_should_not_query_frecency() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailService,
+        NoopEmailPreviewService,
         NoopCommsService,
     )
     .get_user_soup(SoupRequest {
@@ -342,7 +241,7 @@ async fn it_should_query_frecency() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(frecency_mock),
-        NoopEmailService,
+        NoopEmailPreviewService,
         NoopCommsService,
     )
     .get_user_soup(SoupRequest {
@@ -420,7 +319,7 @@ async fn it_should_sort_frecency_descending() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(frecency_mock),
-        NoopEmailService,
+        NoopEmailPreviewService,
         NoopCommsService,
     )
     .get_user_soup(SoupRequest {
@@ -509,7 +408,7 @@ async fn frecency_should_fallback() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailPreviewService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -580,7 +479,7 @@ async fn frecency_should_paginate() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailPreviewService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -653,7 +552,7 @@ async fn frecency_should_resume_cursor() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailPreviewService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -742,7 +641,7 @@ async fn frecency_fallback_cursor_should_resume() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailPreviewService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -810,7 +709,7 @@ async fn cursor_should_return_simple_sort() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailService,
+        NoopEmailPreviewService,
         NoopCommsService,
     )
     .get_user_soup(SoupRequest {
@@ -873,7 +772,7 @@ async fn cursor_should_return_frecency() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailPreviewService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -927,7 +826,7 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailService,
+        NoopEmailPreviewService,
         NoopCommsService,
     )
     .get_user_soup(SoupRequest {
@@ -973,7 +872,7 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailService,
+        NoopEmailPreviewService,
         NoopCommsService,
     )
     .get_user_soup(SoupRequest {
@@ -1019,7 +918,7 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailService,
+        NoopEmailPreviewService,
         NoopCommsService,
     )
     .get_user_soup(SoupRequest {
@@ -1077,7 +976,7 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailService,
+        NoopEmailPreviewService,
         NoopCommsService,
     )
     .get_user_soup(SoupRequest {
@@ -1151,20 +1050,25 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup_mock, frecency, NoopEmailService, NoopCommsService)
-        .get_user_soup(SoupRequest {
-            email_preview_view: PreviewView::StandardLabel(
-                email::domain::models::PreviewViewStandardLabel::Inbox,
-            ),
-            link_id: Some(Uuid::new_v4()),
-            soup_type: SoupType::UnExpanded,
-            limit: 3,
-            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
-            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-        })
-        .await
-        .unwrap()
-        .unwrap_right();
+    let res = SoupImpl::new(
+        soup_mock,
+        frecency,
+        NoopEmailPreviewService,
+        NoopCommsService,
+    )
+    .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Some(Uuid::new_v4()),
+        soup_type: SoupType::UnExpanded,
+        limit: 3,
+        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+    })
+    .await
+    .unwrap()
+    .unwrap_right();
 
     // Should have 20 items, verify is_completed values are preserved
     assert_eq!(res.items.len(), 20);

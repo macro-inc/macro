@@ -58,18 +58,13 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationRea
 }
 
 fn api_router<S: ::notification::domain::service::NotificationReader>(
-    state: ApiContext,
+    _state: ApiContext,
     ingress_state: NotificationRouterState<S>,
 ) -> Router<ApiContext> {
     let middleware = {
-        ServiceBuilder::new()
-            .layer(axum::middleware::from_fn_with_state(
-                state.jwt_args.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            ))
-            .layer(axum::middleware::from_fn(
-                macro_middleware::connection_drop_prevention_handler,
-            ))
+        ServiceBuilder::new().layer(axum::middleware::from_fn(
+            macro_middleware::connection_drop_prevention_handler,
+        ))
     };
 
     let internal_router = Router::new()

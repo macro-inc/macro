@@ -25,12 +25,11 @@ use uuid::Uuid;
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, link, gmail_token), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, link), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     link: Extension<Link>,
-    gmail_token: Extension<String>,
     Path(label_id): Path<Uuid>,
 ) -> Result<Response, Response> {
     let label = email_db_client::labels::get::fetch_label_by_id(&ctx.db, label_id, link.id)
@@ -55,38 +54,7 @@ pub async fn handler(
                 .into_response()
         })?;
 
-    let gmail_result = ctx
-        .gmail_client
-        .delete_label(gmail_token.as_str(), &label.provider_label_id)
-        .await;
-
-    if let Err(e) = &gmail_result {
-        match e {
-            gmail_client::GmailError::NotFound(_) => {
-                tracing::warn!(
-                    label_id = %label_id,
-                    provider_label_id = %label.provider_label_id,
-                    "Label not found in Gmail, but continuing with database deletion"
-                );
-            }
-            _ => {
-                tracing::error!(
-                    error = ?e,
-                    label_id = %label_id,
-                    provider_label_id = %label.provider_label_id,
-                    "Gmail API call to delete label failed"
-                );
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "delete label gmail api call failed".into(),
-                    }),
-                )
-                    .into_response());
-            }
-        }
-    }
-
+    // Optimistic: delete from DB first, then enqueue Gmail deletion
     let label_deleted =
         email_db_client::labels::delete::delete_label_by_id(&ctx.db, label_id, link.id)
             .await
@@ -102,7 +70,6 @@ pub async fn handler(
             })?;
 
     if !label_deleted {
-        // This should be rare since we already checked for existence, but handle it just in case
         return Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
@@ -111,6 +78,22 @@ pub async fn handler(
         )
             .into_response());
     }
+
+    // Enqueue Gmail label deletion to be processed by the gmail_ops worker
+    ctx.sqs_client
+        .enqueue_gmail_ops_notification(models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
+            link_id: link.id,
+            operation: models_email::gmail::gmail_ops::GmailOpsOperation::DeleteLabel(
+                models_email::gmail::gmail_ops::DeleteLabelPayload {
+                    provider_label_id: label.provider_label_id.clone(),
+                },
+            ),
+        })
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "Failed to enqueue gmail delete label operation");
+        })
+        .ok();
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }

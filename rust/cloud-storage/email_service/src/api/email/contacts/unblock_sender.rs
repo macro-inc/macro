@@ -3,8 +3,8 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use gmail_client::GmailError;
 use model::response::ErrorResponse;
+use models_email::service::link::Link;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -14,14 +14,8 @@ pub enum UnblockSenderError {
     #[error("Validation error: {0}")]
     Validation(String),
 
-    #[error("Sender is not blocked")]
-    NotBlocked,
-
-    #[error("Insufficient Gmail permissions. Please re-authenticate to grant the required scope.")]
-    Forbidden,
-
-    #[error("Gmail API error: {0}")]
-    GmailError(String),
+    #[error("Failed to enqueue unblock sender operation")]
+    EnqueueFailed,
 
     #[error("Internal error")]
     InternalError(#[from] anyhow::Error),
@@ -31,9 +25,7 @@ impl IntoResponse for UnblockSenderError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             UnblockSenderError::Validation(_) => StatusCode::BAD_REQUEST,
-            UnblockSenderError::NotBlocked => StatusCode::NOT_FOUND,
-            UnblockSenderError::Forbidden => StatusCode::FORBIDDEN,
-            UnblockSenderError::GmailError(_) | UnblockSenderError::InternalError(_) => {
+            UnblockSenderError::EnqueueFailed | UnblockSenderError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
@@ -48,16 +40,6 @@ impl IntoResponse for UnblockSenderError {
     }
 }
 
-impl From<GmailError> for UnblockSenderError {
-    fn from(e: GmailError) -> Self {
-        match e {
-            GmailError::NotFound(_) => UnblockSenderError::NotBlocked,
-            GmailError::Forbidden => UnblockSenderError::Forbidden,
-            _ => UnblockSenderError::GmailError(e.to_string()),
-        }
-    }
-}
-
 /// Request to unblock a sender.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct UnblockSenderRequest {
@@ -66,6 +48,7 @@ pub struct UnblockSenderRequest {
 }
 
 /// Unblock a sender by removing their block filter from Gmail.
+/// The actual Gmail API call is performed asynchronously by the gmail_ops worker.
 #[utoipa::path(
     post,
     tag = "Contacts",
@@ -76,38 +59,29 @@ pub struct UnblockSenderRequest {
         (status = 204),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
-        (status = 403, body = ErrorResponse),
-        (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, gmail_token), err)]
+#[tracing::instrument(skip(ctx, link, req), fields(link_id = %link.id), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    gmail_token: Extension<String>,
+    link: Extension<Link>,
     Json(req): Json<UnblockSenderRequest>,
-) -> Result<impl IntoResponse, UnblockSenderError> {
+) -> Result<StatusCode, UnblockSenderError> {
     validate_email(&req.email_address)?;
 
-    // Check if sender is currently blocked
-    let existing_filter = ctx
-        .gmail_client
-        .find_block_filter_for_sender(&gmail_token, &req.email_address)
-        .await?;
-
-    if existing_filter.is_none() {
-        return Err(UnblockSenderError::NotBlocked);
-    }
-
-    // Unblock the sender
-    let was_unblocked = ctx
-        .gmail_client
-        .unblock_sender(&gmail_token, &req.email_address)
-        .await?;
-
-    if !was_unblocked {
-        return Err(UnblockSenderError::NotBlocked);
-    }
+    ctx.sqs_client
+        .enqueue_gmail_ops_notification(models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
+            link_id: link.id,
+            operation: models_email::gmail::gmail_ops::GmailOpsOperation::UnblockSender(
+                models_email::gmail::gmail_ops::UnblockSenderPayload {
+                    email_address: req.email_address,
+                },
+            ),
+        })
+        .await
+        .inspect_err(|e| tracing::error!(error = ?e, "Failed to enqueue unblock sender operation"))
+        .map_err(|_| UnblockSenderError::EnqueueFailed)?;
 
     Ok(StatusCode::NO_CONTENT)
 }

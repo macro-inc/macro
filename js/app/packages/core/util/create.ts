@@ -2,6 +2,10 @@ import type { CodeFileExtension } from '@block-code/util/languageSupport';
 import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
 import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -107,11 +111,29 @@ export async function createTask(
 
   if (!snapshot) return;
 
+  // Ensure status is always set, defaulting to NOT_STARTED
+  const existingPropertyValues = args?.propertyValues ?? [];
+  const hasStatus = existingPropertyValues.some(
+    (p) => p.propertyId === SYSTEM_PROPERTY_IDS.STATUS
+  );
+  const propertyValues = hasStatus
+    ? existingPropertyValues
+    : [
+        ...existingPropertyValues,
+        {
+          propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+          value: {
+            type: 'select_option' as const,
+            option_id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+          },
+        },
+      ];
+
   // Create task with properties in one call
   const result = await storageServiceClient.createTask({
     taskName: args?.title ?? '',
     projectId: args?.projectId,
-    propertyValues: args?.propertyValues,
+    propertyValues,
   });
 
   invalidateUserQuota();

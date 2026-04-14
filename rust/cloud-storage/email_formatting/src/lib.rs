@@ -1,13 +1,18 @@
 use askama::Template;
 use chrono::{DateTime, Utc};
+use hmac::Hmac;
+use macro_env::Environment;
+use macro_service_urls::EnvExtMacroServiceUrls;
 use macro_user_id::cowlike::CowLike;
-use model_notifications::{NotifEvent, NotificationTitle};
+use model_notifications::NotifEvent;
 use notification::domain::models::{
-    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, UserNotificationRow,
-    email_notification_digest::ports::DigestBatch, queue_message::EmailContent,
+    Notification, NotificationExtEmail, NotificationTitle, RateLimitConfig, RateLimitKey,
+    UserNotificationRow, email_notification_digest::ports::DigestBatch,
+    queue_message::EmailContent, signing::SignedUrl,
 };
-use rootcause::Report;
+use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::time::Duration;
 
 #[derive(Template)]
@@ -15,6 +20,9 @@ use std::time::Duration;
 struct DigestTemplate {
     notifs: Vec<NotifPreview>,
     num_truncated: usize,
+    total_count: usize,
+    /// the signed url which allows a client to unsubscribe from the email in an unauthenticated context
+    unsubscribe_url: SignedUrl,
 }
 
 struct NotifPreview {
@@ -33,7 +41,7 @@ impl NotifPreview {
             .format_title(v.sender_id.as_ref().map(CowLike::copied))?;
         let body = v.notification_metadata.format_body(v.sender_id)?;
         Ok(NotifPreview {
-            created_at: v.created_at.unwrap_or(Utc::now()),
+            created_at: v.created_at,
             title,
             body,
         })
@@ -49,7 +57,11 @@ pub struct EmailDigestNotification {
 }
 
 impl EmailDigestNotification {
-    pub fn new_from_digest_batch(digest: DigestBatch) -> Result<Self, Report> {
+    pub fn new_from_digest_batch(
+        digest: DigestBatch,
+        env: Environment,
+        sha: Hmac<Sha256>,
+    ) -> Result<Self, Report> {
         let DigestBatch {
             user_id: _,
             notifications,
@@ -59,7 +71,7 @@ impl EmailDigestNotification {
         let input_len = notifications.len();
 
         fn log_err<E: std::fmt::Debug>(e: &E) {
-            tracing::warn!("{e:?}");
+            tracing::error!("{e:?}");
         }
 
         let notifs: Vec<_> = notifications
@@ -72,11 +84,27 @@ impl EmailDigestNotification {
             .collect();
 
         let preview_len = notifs.len();
+        if preview_len == 0 {
+            return Err(report!("Batch with 0 notifications"));
+        }
         let num_truncated = input_len - preview_len;
+
+        let mut unsubscribe_url = env.notification_service();
+        unsubscribe_url.set_path(&format!(
+            "/user_notifications/preferences/{}/disable",
+            Self::TYPE_NAME
+        ));
+        unsubscribe_url
+            .query_pairs_mut()
+            .append_pair("id", digest.user_id.as_ref())
+            .finish();
+        let unsubscribe_url = SignedUrl::new(unsubscribe_url, sha);
 
         let inner_html_string = DigestTemplate {
             notifs,
             num_truncated,
+            total_count: input_len,
+            unsubscribe_url,
         }
         .render()?;
 

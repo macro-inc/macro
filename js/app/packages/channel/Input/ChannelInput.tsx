@@ -21,7 +21,14 @@ import type {
   InputPersistenceKey,
 } from './types';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
-import { Match, Show, Switch, type Accessor, type JSX } from 'solid-js';
+import {
+  Match,
+  Show,
+  Switch,
+  createSignal,
+  type Accessor,
+  type JSX,
+} from 'solid-js';
 import { isReplyInput } from './types';
 import type { IUser } from '@core/user/types';
 
@@ -33,6 +40,8 @@ export type ChannelInputProps = InputCallbacks & {
   participants?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
+  /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
+  autofocus?: boolean;
 };
 
 function DefaultActions(props: { input: InputData }) {
@@ -53,6 +62,7 @@ function DefaultActions(props: { input: InputData }) {
 }
 
 export function ChannelInput(props: ChannelInputProps) {
+  const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const mentionsTracker = createMentionsTracker();
   const attachmentTracker =
     props.attachmentTracker ??
@@ -103,6 +113,7 @@ export function ChannelInput(props: ChannelInputProps) {
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
     users: props.participants,
+    scrollContainer,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
     },
@@ -153,9 +164,12 @@ export function ChannelInput(props: ChannelInputProps) {
             />
           </Input.FormatRibbon>
           <Input.EditorShell
+            ref={setScrollContainer}
             onClick={(event) => {
-              event.stopPropagation();
-              markdownEditor.controls.focus();
+              if (!isMobile()) {
+                event.stopPropagation();
+                markdownEditor.controls.focus();
+              }
             }}
           >
             <Input.Editor>
@@ -163,8 +177,8 @@ export function ChannelInput(props: ChannelInputProps) {
                 config={markdownEditor}
                 placeholder={inputState.view().placeholder}
                 initialValue={inputState.view().value}
-                autofocus={!isMobile()}
-                class="text-sm mobile:text-base"
+                autofocus={props.autofocus ?? !isMobile()}
+                class="text-sm"
               />
             </Input.Editor>
           </Input.EditorShell>

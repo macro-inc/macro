@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use entity_access::domain::models::{EntityAccessAuth, EntityType};
+pub use entity_access::domain::models::{EntityAccessAuth, EntityType};
 
 /// The invalidation message type
 pub const INVALIDATION_MESSAGE_TYPE: &str = "invalidation";

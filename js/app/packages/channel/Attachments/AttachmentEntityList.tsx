@@ -1,7 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { EntityData } from '@entity';
 import type { DateValue } from '@core/util/date';
-import { SectionHeader, LoadMoreButton } from './SectionHeader';
+import { AttachmentSection, LoadMoreButton } from './SectionHeader';
 import { AttachmentEntityRow } from './AttachmentEntityRow';
 
 export type AttachmentEntityListRow = {
@@ -20,34 +20,40 @@ export function AttachmentEntityList(props: {
   const hasDocuments = () => props.rows.length > 0;
 
   return (
-    <div class="flex flex-col">
-      <SectionHeader label="Documents" />
+    <AttachmentSection
+      label="Documents"
+      class="flex flex-1 min-h-0 flex-col md:flex-none"
+      contentClass="flex flex-1 min-h-0 flex-col"
+    >
+      <div class="flex flex-1 min-h-0 flex-col">
+        <Show when={!hasDocuments()}>
+          <div class="py-3 text-sm text-ink-faint">
+            No documents in this channel yet.
+          </div>
+        </Show>
 
-      <Show when={!hasDocuments()}>
-        <div class="text-sm text-ink-faint px-2 py-3">
-          No documents in this channel yet.
-        </div>
-      </Show>
+        <Show when={hasDocuments()}>
+          <div class="min-h-0 h-full overflow-y-auto md:h-[420px]">
+            <For each={props.rows}>
+              {(row) => (
+                <AttachmentEntityRow
+                  entity={row.entity}
+                  timestamp={row.timestamp}
+                  senderId={row.senderId}
+                  onClick={row.onClick}
+                />
+              )}
+            </For>
 
-      <Show when={hasDocuments()}>
-        <For each={props.rows}>
-          {(row) => (
-            <AttachmentEntityRow
-              entity={row.entity}
-              timestamp={row.timestamp}
-              senderId={row.senderId}
-              onClick={row.onClick}
-            />
-          )}
-        </For>
-      </Show>
-
-      <Show when={hasDocuments() && props.hasNextPage}>
-        <LoadMoreButton
-          onLoadMore={props.onLoadMore}
-          isFetching={() => props.isFetchingNextPage}
-        />
-      </Show>
-    </div>
+            <Show when={props.hasNextPage}>
+              <LoadMoreButton
+                onLoadMore={props.onLoadMore}
+                isFetching={() => props.isFetchingNextPage}
+              />
+            </Show>
+          </div>
+        </Show>
+      </div>
+    </AttachmentSection>
   );
 }

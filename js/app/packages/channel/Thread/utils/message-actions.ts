@@ -1,4 +1,6 @@
+import { buildSimpleEntityUrl } from '@core/util/url';
 import type { MessageData } from '../../Message';
+import { getChannelParams } from '@channel/Channel/link';
 
 export const DEFAULT_REACTION_EMOJI = '👍';
 
@@ -41,9 +43,11 @@ export function hasReactionFromUser(
   );
 }
 
-export function buildMessageLink(baseHref: string, messageId: string): string {
-  const url = new URL(baseHref);
-  url.searchParams.set('targetMessageId', messageId);
-  url.hash = `message-${messageId}`;
-  return url.toString();
+export function buildMessageLink(
+  channelId: string,
+  messageId: string,
+  threadId?: string | null
+): string {
+  const params = getChannelParams(messageId, threadId);
+  return buildSimpleEntityUrl({ type: 'channel', id: channelId }, params);
 }

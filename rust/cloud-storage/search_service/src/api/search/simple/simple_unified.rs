@@ -275,16 +275,21 @@ pub(in crate::api::search) async fn perform_unified_search(
         collapse,
         search_indices: {
             let mut indices = std::collections::HashSet::new();
-            if should_include_documents {
+            if should_include_documents
+                && !(filter_document_response.ids_only
+                    && filter_document_response.document_ids.is_empty())
+            {
                 indices.insert(models_opensearch::SearchEntityType::Documents);
             }
-            if should_include_chats {
+            if should_include_chats
+                && !(filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty())
+            {
                 indices.insert(models_opensearch::SearchEntityType::Chats);
             }
             if should_include_emails {
                 indices.insert(models_opensearch::SearchEntityType::Emails);
             }
-            if should_include_channels {
+            if should_include_channels && !filter_channel_response.channel_ids.is_empty() {
                 indices.insert(models_opensearch::SearchEntityType::Channels);
             }
             if should_include_projects {
@@ -366,6 +371,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                             &simple_email::FilterEmailResponse {
                                 ids_only: false,
                                 thread_ids: filter_email_response.thread_ids,
+                                importance: filter_email_response.importance,
                             },
                             name_search_term.clone(),
                             page_size,
@@ -391,6 +397,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                             name_search_term.clone(),
                             page_size,
                             email_contact_cursor_for_search,
+                            filter_email_response.importance,
                         )
                         .await
                     }

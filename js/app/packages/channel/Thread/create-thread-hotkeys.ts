@@ -9,6 +9,7 @@ import { onCleanup, type Accessor } from 'solid-js';
 import type { MessageSelection } from '../Channel/create-message-selection';
 import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
 import type { MessageActions, MessageData } from '../Message';
+import { scrollMessageIntoView } from '../scroll-utils';
 
 type CreateThreadHotkeysOptions = {
   messageListScopeId: string;
@@ -48,12 +49,6 @@ export function canEditOrDeleteThreadReplyFromHotkey(input: {
   );
 }
 
-function scrollReplyIntoView(replyId: string) {
-  document
-    .querySelector<HTMLElement>(`[data-message-id="${replyId}"]`)
-    ?.scrollIntoView({ block: 'nearest' });
-}
-
 export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
   const scope = options.messageListScopeId;
   const group = createHotkeyGroup();
@@ -76,7 +71,7 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       options.expandThread();
       const id = options.replySelection.selectFirst();
       if (id) {
-        requestAnimationFrame(() => scrollReplyIntoView(id));
+        requestAnimationFrame(() => scrollMessageIntoView(id));
       }
       return true;
     },
@@ -94,7 +89,7 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const before = options.replySelection.selectedId();
       const id = options.replySelection.selectPrevious();
       if (id && id !== before) {
-        scrollReplyIntoView(id);
+        scrollMessageIntoView(id);
       } else {
         options.replySelection.clear();
       }
@@ -113,7 +108,7 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.replySelection.selectNext();
       if (id) {
-        scrollReplyIntoView(id);
+        scrollMessageIntoView(id);
         return true;
       }
       options.replySelection.clear();

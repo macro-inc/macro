@@ -1,19 +1,20 @@
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
-import PlusIcon from '@icon/regular/plus.svg';
+import SmileyIcon from '@icon/regular/smiley.svg';
 import TrashIcon from '@icon/regular/trash.svg';
+import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
+import { useMessage, useMessageActions, useMessageSelection } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
-import { useMessage, useMessageActions, useMessageSelection } from './context';
 import { renderIcon } from './render-icon';
 import type { MessageActionEvent, MessageActionHandler } from './types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
 
-type ActionId = 'reply' | 'copy-link' | 'edit' | 'delete';
+type ActionId = 'reply' | 'copy-link' | 'create-task' | 'edit' | 'delete';
 
 type ActionItem = {
   id: ActionId;
@@ -21,6 +22,7 @@ type ActionItem = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | string;
   onClick?: MessageActionHandler;
   destructive?: boolean;
+  class?: string;
 };
 
 type ActionMenuProps = {
@@ -41,7 +43,8 @@ function ActionButton(props: {
         'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
         {
           'text-failure-ink': props.action.destructive,
-        }
+        },
+        props.action.class
       )}
       onClick={props.onClick}
     >
@@ -67,6 +70,13 @@ export function ActionMenu(props: ActionMenuProps) {
   const hasReactAction = () => actions?.onReact !== undefined;
 
   const actionItems: ActionItem[] = [
+    {
+      id: 'create-task',
+      label: 'Task',
+      icon: TaskIcon,
+      onClick: actions?.onCreateTask,
+      class: 'text-task',
+    },
     {
       id: 'reply',
       label: 'Reply',
@@ -102,7 +112,7 @@ export function ActionMenu(props: ActionMenuProps) {
         class={props.class}
         persistentVisible={emojiMenuOpen() || !!selection?.isSelected}
       >
-        <div class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets">
+        <div class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets -space-x-1">
           <Show when={hasReactAction()}>
             <For each={QUICK_REACTION_EMOJIS}>
               {(emoji) => (
@@ -129,7 +139,7 @@ export function ActionMenu(props: ActionMenuProps) {
               onEmojiSelect={(emoji) => {
                 handleReaction(emoji);
               }}
-              trigger={renderIcon(PlusIcon)}
+              trigger={renderIcon(SmileyIcon)}
               triggerProps={{
                 title: 'More reactions',
                 'aria-label': 'More reactions',

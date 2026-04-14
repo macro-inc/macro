@@ -3,6 +3,7 @@ import type { SoupState } from '../create-soup-state';
 import {
   isShareableEntityType,
   openGlobalShareModal,
+  type ShareableEntityData,
 } from '@app/component/global-share-modal/GlobalShareModal';
 
 export const makeShareAction = () => {
@@ -20,7 +21,8 @@ export const makeShareAction = () => {
     }
 
     openGlobalShareModal({
-      entity,
+      // TODO: use type guard on entity data, not the type
+      entity: entity as ShareableEntityData,
     });
   };
 

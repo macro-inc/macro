@@ -1,5 +1,5 @@
 import { For } from 'solid-js';
-import { SectionHeader } from './SectionHeader';
+import { AttachmentSection } from './SectionHeader';
 
 export function ThumbnailSkeleton() {
   return (
@@ -24,24 +24,22 @@ const DOCUMENT_SKELETON_COUNT = 6;
 
 export function MediaGallerySkeleton() {
   return (
-    <div class="flex flex-col">
-      <SectionHeader label="Photos and videos" />
-      <div class="flex flex-row flex-wrap gap-1.5 pt-3">
+    <AttachmentSection label="Photos and videos">
+      <div class="flex flex-row flex-wrap gap-1.5">
         <For each={Array.from({ length: MEDIA_SKELETON_COUNT })}>
           {() => <ThumbnailSkeleton />}
         </For>
       </div>
-    </div>
+    </AttachmentSection>
   );
 }
 
 export function AttachmentEntityListSkeleton() {
   return (
-    <div class="flex flex-col">
-      <SectionHeader label="Documents" />
+    <AttachmentSection label="Documents">
       <For each={Array.from({ length: DOCUMENT_SKELETON_COUNT })}>
         {() => <DocumentRowSkeleton />}
       </For>
-    </div>
+    </AttachmentSection>
   );
 }

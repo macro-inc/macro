@@ -1,8 +1,8 @@
-import type { BlockAliasContext } from '@core/block';
+import type { BlockAliasContext, BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { NonNullableFields } from '@core/util/withRequired';
-import { type EntityData, isTaskEntity } from '@entity';
+import { type EntityData, isTaskEntity, isChannelMessageEntity } from '@entity';
 import {
   type Component,
   createRenderEffect,
@@ -18,6 +18,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { Suspense } from 'solid-js';
 import { createContextProvider } from '@solid-primitives/context';
 import { throttledDependent } from '@core/util/debounce';
+import { getChannelParams } from '@block-channel/utils/link';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
@@ -67,13 +68,23 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           baseType: 'md',
         } as BlockAliasContext)
       : undefined;
-    return props.orchestrator.createBlockInstance(
-      props.selectedEntity.type === 'document'
-        ? fileTypeToResolvedBlockName(props.selectedEntity.fileType)
-        : props.selectedEntity.type,
-      props.selectedEntity.id,
-      { aliasContext }
-    );
+
+    let blockType: BlockName;
+    let blockId: string;
+    if (props.selectedEntity.type === 'document') {
+      blockType = fileTypeToResolvedBlockName(props.selectedEntity.fileType);
+      blockId = props.selectedEntity.id;
+    } else if (props.selectedEntity.type === 'channel_message') {
+      blockType = 'channel';
+      blockId = props.selectedEntity.channelId;
+    } else {
+      blockType = props.selectedEntity.type;
+      blockId = props.selectedEntity.id;
+    }
+
+    return props.orchestrator.createBlockInstance(blockType, blockId, {
+      aliasContext,
+    });
   };
   const [interactedWith, setInteractedWith] = createSignal(false);
 
@@ -82,6 +93,17 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     if (id !== prevId) {
       setInteractedWith(false);
     }
+
+    const entity = props.selectedEntity;
+    if (isChannelMessageEntity(entity)) {
+      const channelId = entity.channelId;
+      const messageId = entity.messageId;
+      const threadId = entity.threadId;
+      props.orchestrator.getBlockHandle(channelId).then((handle) => {
+        handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
+      });
+    }
+
     return id;
   }, props.selectedEntity.id);
 
@@ -98,8 +120,6 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       class="flex flex-col size-full"
       onFocusIn={(event) => {
         if (interactedWith()) return;
-        const relatedTarget = event.relatedTarget;
-        const currentTarget = event.currentTarget;
 
         // TODO: use state instead to determine when preview block can recieve focus
         if (event.target.hasAttribute('data-allow-focus-in-preview')) {
@@ -107,10 +127,19 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           return;
         }
 
-        if (relatedTarget instanceof HTMLElement) {
-          if (!currentTarget.contains(relatedTarget)) {
-            relatedTarget.focus();
-          }
+        // Prevent blocks from stealing focus in preview mode.
+        // Redirect to the previous element if it was outside the preview,
+        // otherwise blur the target to keep focus on the search list.
+        const relatedTarget = event.relatedTarget;
+        const currentTarget = event.currentTarget;
+
+        if (
+          relatedTarget instanceof HTMLElement &&
+          !currentTarget.contains(relatedTarget)
+        ) {
+          relatedTarget.focus();
+        } else {
+          (event.target as HTMLElement).blur?.();
         }
       }}
       onPointerDown={() => {

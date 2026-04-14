@@ -179,7 +179,7 @@ export function TopBar() {
     ...(fileType === 'docx'
       ? [
           {
-            label: 'Download Docx',
+            label: 'Download DOCX',
             icon: DownloadIcon,
             action: downloadDocx,
           } as const,

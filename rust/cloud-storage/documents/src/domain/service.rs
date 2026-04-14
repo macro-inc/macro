@@ -21,7 +21,7 @@ use model::document::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadata,
     GetDocumentResponseData, LocationResponseData, LocationResponseV3,
 };
-use model::document::{ContentType, DocumentBasic, FileType, FileTypeExt};
+use model::document::{ContentType, DocumentBasic, FileAssociation, FileType, FileTypeExt};
 use model::response::PresignedUrl;
 use s3_key::{
     build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
@@ -30,8 +30,9 @@ use s3_key::{
 use tracing;
 
 use super::models::{
-    CloudFrontConfig, CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
-    EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+    CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    CreateTaskResponse, DocumentError, EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    FileTypeUpdate, LocationQueryParams,
 };
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
@@ -609,6 +610,37 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             }
         }
 
+        if let Some(file_type_update) = &args.file_type {
+            let current_file_type = document_context
+                .file_type
+                .as_ref()
+                .and_then(|ft| FileType::from_str(ft).ok())
+                .ok_or_else(|| {
+                    DocumentError::BadRequest(
+                        "cannot change file type of a document with no file type".to_string(),
+                    )
+                })?;
+
+            let current_association = current_file_type.macro_app_path();
+
+            if !matches!(current_association, FileAssociation::Code(_)) {
+                return Err(DocumentError::BadRequest(
+                    "file type changes are only supported for code files".to_string(),
+                ));
+            }
+
+            if let FileTypeUpdate::Set(new_file_type) = file_type_update {
+                let new_association = new_file_type.macro_app_path();
+                if std::mem::discriminant(&current_association)
+                    != std::mem::discriminant(&new_association)
+                {
+                    return Err(DocumentError::BadRequest(
+                        "cannot change file type to a different association".to_string(),
+                    ));
+                }
+            }
+        }
+
         // Clean the document name (remove file extension if present)
         let document_name = args
             .document_name
@@ -620,6 +652,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
                 document_name,
                 project_id: args.project_id.clone(),
                 share_permission: args.share_permission,
+                file_type: args.file_type,
             })
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
@@ -656,6 +689,219 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             });
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, document_context, document_name))]
+    async fn copy_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: DocumentBasic,
+        user_id: MacroUserIdStr<'static>,
+        document_name: String,
+        query_version_id: Option<i64>,
+        sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
+    ) -> Result<DocumentResponse, DocumentError> {
+        use model::document::response::DocumentResponseMetadata;
+
+        if document_name.graphemes(true).count() > 100 {
+            return Err(DocumentError::BadRequest("name too long".to_string()));
+        }
+
+        if document_context.deleted_at.is_some() {
+            return Err(DocumentError::BadRequest(
+                "cannot copy deleted document".to_string(),
+            ));
+        }
+
+        let document_id = &entity_access_receipt.entity().entity_id;
+
+        // Get full document metadata (at specific version or latest)
+        let mut original_metadata = if let Some(version_id) = query_version_id {
+            self.repo
+                .get_document_metadata_at_version(document_id, version_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        } else {
+            self.repo
+                .get_document_metadata(document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        };
+
+        // Check project ownership - only copy project_id if the user owns the project
+        if let Some(project_id) = &original_metadata.project_id {
+            match self.repo.get_project_owner(project_id).await {
+                Ok(project_owner) => {
+                    if project_owner.as_ref() != user_id.as_ref() {
+                        original_metadata.project_id = None;
+                        original_metadata.project_name = None;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to get project owner");
+                    return Err(DocumentError::Internal(e.into()));
+                }
+            }
+        }
+
+        let file_type: Option<FileType> = document_context
+            .file_type
+            .as_deref()
+            .and_then(|f| FileType::from_str(f).ok());
+
+        // Validate DOCX has BOM
+        if file_type == Some(FileType::Docx) && original_metadata.document_bom.is_none() {
+            return Err(DocumentError::Internal(anyhow!("document bom is missing")));
+        }
+
+        // Clean the document name
+        let document_name = FileType::clean_document_name(&document_name).unwrap_or(document_name);
+
+        // Create the copy in the database
+        let new_metadata = self
+            .repo
+            .copy_document(CopyDocumentRepoArgs {
+                original_document: original_metadata.clone(),
+                user_id: user_id.clone(),
+                document_name,
+                file_type,
+            })
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        let new_document_id = new_metadata.document_id.clone();
+
+        // File-type-specific S3 operations
+        let copy_result = match file_type {
+            Some(FileType::Docx) => {
+                // Copy the converted PDF version
+                let url_encoded_owner = urlencoding::encode(original_metadata.owner.as_ref());
+                let source_key = build_docx_to_pdf_converted_document_key(
+                    &url_encoded_owner,
+                    &original_metadata.document_id,
+                );
+                let dest_key =
+                    build_docx_to_pdf_converted_document_key(user_id.as_ref(), &new_document_id);
+                self.upload_url_service
+                    .copy_object(&source_key, &dest_key)
+                    .await
+            }
+            Some(FileType::Md) => {
+                // Copy via sync service
+                if let Err(e) = self
+                    .sync_service_client
+                    .copy_document(
+                        &original_metadata.document_id,
+                        &new_document_id,
+                        sync_version_id,
+                    )
+                    .await
+                {
+                    tracing::error!(error=?e, "unable to copy document through sync service");
+                    self.cleanup_document(&new_document_id).await;
+                    return Err(DocumentError::Internal(e));
+                }
+
+                // Also copy S3 file
+                let source_version_id = self
+                    .repo
+                    .get_latest_document_version_id(&original_metadata.document_id)
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?
+                    .0;
+
+                let source_key = build_cloud_storage_bucket_document_key(
+                    original_metadata.owner.as_ref(),
+                    &original_metadata.document_id,
+                    source_version_id,
+                );
+                let dest_key = build_cloud_storage_bucket_document_key(
+                    user_id.as_ref(),
+                    &new_document_id,
+                    new_metadata.document_version_id,
+                );
+                // Best effort S3 copy for live collab
+                let _ = self
+                    .upload_url_service
+                    .copy_object(&source_key, &dest_key)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "unable to copy live collab document");
+                    });
+                Ok(())
+            }
+            _ => {
+                // Copy PDF parts if applicable
+                if file_type == Some(FileType::Pdf)
+                    && let Err(e) = self
+                        .repo
+                        .copy_pdf_parts(&new_document_id, &original_metadata.document_id)
+                        .await
+                {
+                    tracing::error!(error=?e, "unable to copy pdf parts");
+                    self.cleanup_document(&new_document_id).await;
+                    return Err(DocumentError::Internal(e.into()));
+                }
+
+                // Get source version id
+                let source_version_id = if file_type.is_none_or(|f| f.is_static()) {
+                    self.repo
+                        .get_document_version_id(&original_metadata.document_id)
+                        .await
+                        .map_err(|e| DocumentError::Internal(e.into()))?
+                        .0
+                } else {
+                    self.repo
+                        .get_latest_document_version_id(&original_metadata.document_id)
+                        .await
+                        .map_err(|e| DocumentError::Internal(e.into()))?
+                        .0
+                };
+
+                let source_key = build_cloud_storage_bucket_document_key(
+                    original_metadata.owner.as_ref(),
+                    &original_metadata.document_id,
+                    source_version_id,
+                );
+                let dest_key = build_cloud_storage_bucket_document_key(
+                    user_id.as_ref(),
+                    &new_document_id,
+                    new_metadata.document_version_id,
+                );
+                self.upload_url_service
+                    .copy_object(&source_key, &dest_key)
+                    .await
+            }
+        };
+
+        if let Err(e) = copy_result {
+            tracing::error!(error=?e, "unable to copy document files");
+            self.cleanup_document(&new_document_id).await;
+            return Err(DocumentError::Internal(e));
+        }
+
+        // Copy task properties if the original document is a task
+        if original_metadata.sub_type == Some(document_sub_type::DocumentSubType::Task)
+            && let Err(e) = self
+                .task_properties_service
+                .copy_task_properties(&original_metadata.document_id, &new_document_id)
+                .await
+        {
+            tracing::error!(error=?e, document_id=?new_document_id, "failed to copy task properties");
+            self.cleanup_document(&new_document_id).await;
+            return Err(DocumentError::Internal(e));
+        }
+
+        let document_response_metadata =
+            DocumentResponseMetadata::from_document_metadata(&new_metadata).map_err(|e| {
+                tracing::error!(error=?e, "unable to convert document metadata");
+                DocumentError::Internal(anyhow!("unable to convert document metadata"))
+            })?;
+
+        Ok(DocumentResponse {
+            document_metadata: document_response_metadata,
+            presigned_url: None,
+        })
     }
 
     #[tracing::instrument(skip(self))]

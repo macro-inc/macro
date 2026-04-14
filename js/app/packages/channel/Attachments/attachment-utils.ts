@@ -3,6 +3,8 @@ import { stringToItemType } from '@service-storage/client';
 import type { EntityData } from '@entity';
 import { match } from 'ts-pattern';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import type { SplitContent } from '@app/component/split-layout/layoutManager';
+import { getChannelParams } from '@channel/Channel/link';
 
 /** size-23 = 92px */
 export const THUMB_SIZE = 92;
@@ -70,7 +72,7 @@ export function buildAttachmentEntityFilters(
   };
 }
 
-export function getEntityClickContent(entity: EntityData) {
+export function getEntityClickContent(entity: EntityData): SplitContent {
   return match(entity)
     .with({ type: 'document' }, (e) => ({
       type: fileTypeToBlockName(e.subType?.type ?? e.fileType),
@@ -85,6 +87,11 @@ export function getEntityClickContent(entity: EntityData) {
     .with({ type: 'project' }, (e) => ({
       type: 'project' as const,
       id: e.id,
+    }))
+    .with({ type: 'channel_message' }, (e) => ({
+      type: 'channel' as const,
+      id: e.channelId,
+      params: getChannelParams(e.messageId, e.threadId),
     }))
     .exhaustive();
 }

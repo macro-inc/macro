@@ -3,16 +3,22 @@ import {
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
+import {
+  NIL_UUID,
+  QUERY_FILTERS,
+} from '@app/component/next-soup/filters/query-filters';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
+import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
+import { INDEX_OPTIONS } from './search-operator-autocomplete';
 import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
@@ -50,6 +56,7 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
+  const quickAccess = useQuickAccess();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -154,6 +161,32 @@ export function useFilterRefinements() {
       }
     }
 
+    // Search operator filters: index: (entity type toggles)
+    const coveredByView = new Set(
+      viewCategories().flatMap((c) => c.options.map((o) => o.id))
+    );
+    for (const option of INDEX_OPTIONS) {
+      const optionId = option.id as FilterID;
+      if (
+        !soup.filters.isActive(optionId) ||
+        coveredByView.has(optionId) ||
+        presetFilterIds.has(optionId)
+      ) {
+        continue;
+      }
+      filters.push({
+        categoryLabel: 'Index',
+        optionId: option.id,
+        optionLabel: option.label,
+        icon: option.icon,
+        categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
+        onRemove: () => {
+          soup.filters.toggle({ or: [optionId] });
+          setQueryFilters(QUERY_FILTERS.default);
+        },
+      });
+    }
+
     // Sub-filters: assignee
     const optionsMap = assigneeOptionsMap();
     for (const id of assigneeFilter()) {
@@ -164,6 +197,60 @@ export function useFilterRefinements() {
         optionLabel: option?.label ?? id,
         onRemove: () =>
           setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
+      });
+    }
+
+    // Search operator filters: in: (channel_ids)
+    const channelIds = (
+      queryFilters().channel_filters?.channel_ids ?? []
+    ).filter((id) => id !== NIL_UUID);
+    for (const channelId of channelIds) {
+      const item = quickAccess.getById(channelId);
+      const label =
+        item && 'data' in item && item.data?.name ? item.data.name : channelId;
+      filters.push({
+        categoryLabel: 'In',
+        optionId: `in:${channelId}`,
+        optionLabel: label,
+        onRemove: () =>
+          setQueryFilters((prev) => {
+            const ids = (prev.channel_filters?.channel_ids ?? []).filter(
+              (id) => id !== channelId
+            );
+            return {
+              ...prev,
+              channel_filters: {
+                ...prev.channel_filters,
+                channel_ids: ids.length > 0 ? ids : undefined,
+              },
+            };
+          }),
+      });
+    }
+
+    // Search operator filters: from: (sender_ids)
+    const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
+    for (const senderId of senderIds) {
+      const item = quickAccess.getById(senderId);
+      const label =
+        item && 'data' in item && item.data?.name ? item.data.name : senderId;
+      filters.push({
+        categoryLabel: 'From',
+        optionId: `from:${senderId}`,
+        optionLabel: label,
+        onRemove: () =>
+          setQueryFilters((prev) => {
+            const ids = (prev.channel_filters?.sender_ids ?? []).filter(
+              (id) => id !== senderId
+            );
+            return {
+              ...prev,
+              channel_filters: {
+                ...prev.channel_filters,
+                sender_ids: ids.length > 0 ? ids : undefined,
+              },
+            };
+          }),
       });
     }
 

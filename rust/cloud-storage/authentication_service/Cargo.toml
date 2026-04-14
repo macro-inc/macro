@@ -78,6 +78,7 @@ macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 maud = { version = "0.27.0" }
+miniserde = "0.1.45"
 mockall = { workspace = true }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }

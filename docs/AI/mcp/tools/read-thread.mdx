@@ -1,0 +1,16 @@
+---
+title: ReadThread
+description: "Generated from the Macro Rust tool registry."
+---
+
+# ReadThread
+
+Generated from the Macro Rust tool registry.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `contentType` | string | Yes | The type of content to read. Choose based on the type of content you want to retrieve. |
+| `ids` | array | Yes | ID(s) of the content to read. IMPORTANT: channel-message, chat-message, and content types support MULTIPLE ids! For all other content types (channel, chat-thread) provide a single id. |
+| `messagesSince` | string | Yes | A local datetime of the earliest message to include in a channel transcript following ISO 8601 format, only applicable to channels |

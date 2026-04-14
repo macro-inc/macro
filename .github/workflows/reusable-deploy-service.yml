@@ -45,7 +45,7 @@ jobs:
         hdd=40,
         spot=false,
         ssh=false,
-        'run-id=${{github.run_id}}',
+        'run-id=${{github.run_id}}-${{ inputs.service-name }}',
       ]
     steps:
       - uses: actions/checkout@v6

@@ -36,6 +36,8 @@ import Upload from '@icon/regular/upload.svg';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { debounce } from '@solid-primitives/scheduled';
+import IconGear from '@macro-icons/macro-gear.svg';
+import { openMacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 
 function useHotkeyAnalytics(): void {
   const analytics = useAnalytics();
@@ -247,6 +249,19 @@ export default function GlobalShortcuts() {
     },
     icon: AiInstructionsIcon,
     runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'MCP setup',
+    keyDownHandler: () => {
+      openMacroMcpSetupModal();
+      return true;
+    },
+    icon: IconGear,
+    runWithInputFocused: true,
+    displayPriority: 9,
+    tags: ['mcp', 'model context protocol', 'setup', 'connect macro'],
   });
 
   const setThemeScope = registerHotkey({

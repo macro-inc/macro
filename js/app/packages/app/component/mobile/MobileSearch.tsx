@@ -31,21 +31,20 @@ import {
 } from '../command/useCommandItems';
 import { SearchState } from './mobileSearchState';
 import { CommandItem } from '../command/CommandItem';
-import { getBlockNameForEntity } from '../command/CommandMenu';
 import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
 import { windowSearchMatch } from '@core/util/searchHighlight';
 import { TailSpinner } from '@core/component/TailSpinner';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { itemToBlockName } from '@core/constant/allBlocks';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'channels', label: 'Channels' },
   { id: 'dms', label: 'DMs' },
-  { id: 'notes', label: 'Notes' },
+  { id: 'documents', label: 'Documents' },
   { id: 'tasks', label: 'Tasks' },
-  { id: 'documents', label: 'Docs' },
   { id: 'chats', label: 'Chats' },
-  { id: 'projects', label: 'Projects' },
+  { id: 'projects', label: 'Folders' },
   { id: 'commands', label: 'Commands' },
 ];
 
@@ -109,7 +108,7 @@ export function MobileSearchInner() {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      const blockName = getBlockNameForEntity(item);
+      const blockName = itemToBlockName(item.data);
       if (blockName) {
         openWithSplit(
           { type: blockName, id: item.id },
@@ -281,7 +280,7 @@ function ResultsContainer(props: {
           class="flex items-center px-2 text-sm gap-2 h-10"
         >
           <SearchIcon class="size-5 p-0.5" />
-          {`Search${props.query() ? ` "${props.query()}"` : ''}`}
+          {`Full-text search for${props.query() ? ` "${props.query()}"` : ''}`}
         </button>
       </Show>
     </div>

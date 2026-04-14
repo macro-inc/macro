@@ -243,6 +243,11 @@ export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(
   true
 );
 
+export const ENABLE_DOCUMENT_MENTION_NOTIFICATIONS = resolveFeatureFlag(
+  'ENABLE_DOCUMENT_MENTION_NOTIFICATIONS',
+  DEV_MODE_ENV
+);
+
 // Auto expand stand-alone mentions to richer previews in channels
 export const ENABLE_STATIC_DOCUMENT_CARDS = resolveFeatureFlag(
   'ENABLE_STATIC_DOCUMENT_CARDS',
@@ -280,9 +285,12 @@ export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   true
 );
 
-const ENABLE_NEW_CHANNELS_OVERRIDE = getFeatureFlagOverride(
-  'ENABLE_NEW_CHANNELS'
+export const ENABLE_SEARCH_QUERY_OPERATORS = resolveFeatureFlag(
+  'ENABLE_SEARCH_QUERY_OPERATORS',
+  false
 );
+
+const ENABLE_NEW_CHANNELS_OVERRIDE = true;
 
 export function ENABLE_NEW_CHANNELS(): boolean {
   if (ENABLE_NEW_CHANNELS_OVERRIDE !== undefined) {
@@ -301,3 +309,14 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   'ENABLE_CLIENT_EMAIL_SIGNAL_FILTER',
   false
 );
+
+// skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
+const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+export function ENABLE_CALLS(): boolean {
+  if (ENABLE_CALLS_OVERRIDE !== undefined) {
+    return ENABLE_CALLS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
+}

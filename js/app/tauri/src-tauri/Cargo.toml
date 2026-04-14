@@ -28,9 +28,8 @@ serde_json = "1.0"
 tracing-oslog = { version = "0.3" }
 
 nom = "8.0.0"
-reqwest = { version = "0.12.23", default-features = false, features = [
+reqwest = { version = "0.13", features = [
   "cookies",
-  "rustls-tls",
 ] }
 serde_qs = "0.15.0"
 tauri = { workspace = true, features = [] }
@@ -61,3 +60,6 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-haptics = "2"
 tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "2b2257722f60458921eadf4a9ab4d9e1db36e34f" }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }

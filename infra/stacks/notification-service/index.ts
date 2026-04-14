@@ -47,6 +47,11 @@ const APNS_KEY_ID = aws.secretsmanager
   .apply((secret) => secret.secretString);
 const APNS_PRIVATE_KEY = config.requireSecret(`apns_private_key`);
 
+const UNSUBSCRIBE_HMAC_SECRET_KEY = `url-signing-hmac-${stack}`;
+const unsubscribeHmacSecretArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: UNSUBSCRIBE_HMAC_SECRET_KEY })
+  .apply((secret) => secret.arn);
+
 const FCM_SECRET_KEY = config.require(`fcm_secret_key`);
 const fcmCredentials: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: FCM_SECRET_KEY })
@@ -158,6 +163,7 @@ const notificationService = new NotificationService('notification-service', {
     internalApiKeyArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
     authenticationServiceInternalApiKeyArn,
+    unsubscribeHmacSecretArn,
   ],
   queueArns: [
     pushNotificationEventHandlerQueueArn,
@@ -172,7 +178,7 @@ const notificationService = new NotificationService('notification-service', {
   containerEnvVars: [
     {
       name: 'RUST_LOG',
-      value: `error,notification_service=${stack === 'prod' ? 'debug' : 'trace'},notification_db_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
+      value: `error,notification_service=${stack === 'prod' ? 'debug' : 'trace'},notification=${stack === 'prod' ? 'debug' : 'trace'},notification_db_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
     },
     {
       name: 'ENVIRONMENT',
@@ -269,6 +275,10 @@ const notificationService = new NotificationService('notification-service', {
     {
       name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
       value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
+    },
+    {
+      name: 'URL_SIGNING_HMAC',
+      value: UNSUBSCRIBE_HMAC_SECRET_KEY,
     },
     // OpenTelemetry / Datadog tracing configuration
     {

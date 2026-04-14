@@ -9,6 +9,7 @@ export type MessageData = {
   updated_at: string;
   deleted_at?: string | null;
   edited_at?: string | null;
+  thread_id?: string | null;
   attachments: ApiMessageAttachment[];
   reactions: ApiCountedReaction[];
 };
@@ -29,6 +30,8 @@ export type MessageActions = {
   onReply?: MessageActionHandler;
   onReact?: MessageActionHandler;
   onCopyLink?: MessageActionHandler;
+  onCopyMessageText?: MessageActionHandler;
   onEdit?: MessageActionHandler;
   onDelete?: MessageActionHandler;
+  onCreateTask?: MessageActionHandler;
 };

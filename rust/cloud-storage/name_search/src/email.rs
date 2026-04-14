@@ -16,6 +16,7 @@ async fn ids_search(
     highlight_pattern: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
+    importance: Option<bool>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     if thread_ids.is_empty() {
         return Err(NameSearchError::EmptyIdsWithIdsOnly);
@@ -56,6 +57,25 @@ async fn ids_search(
                     $4::timestamptz IS NULL
                     OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)
                 )
+                AND (
+                    $7::bool IS NULL
+                    OR $7::bool = (NOT (
+                        EXISTS (
+                            SELECT 1 FROM email_messages em_dep
+                            JOIN email_message_labels ml_dep ON ml_dep.message_id = em_dep.id
+                            JOIN email_labels l_dep ON ml_dep.label_id = l_dep.id
+                            WHERE em_dep.thread_id = t.id
+                            AND l_dep.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1 FROM email_messages em_pri
+                            JOIN email_message_labels ml_pri ON ml_pri.message_id = em_pri.id
+                            JOIN email_labels l_pri ON ml_pri.label_id = l_pri.id
+                            WHERE em_pri.thread_id = t.id
+                            AND l_pri.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+                        )
+                    ))
+                )
             ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC
             LIMIT $3
         "#,
@@ -65,6 +85,7 @@ async fn ids_search(
         cursor_updated_at,
         cursor_entity_id,
         highlight_pattern,
+        importance,
     )
     .fetch_all(db)
     .await
@@ -94,6 +115,7 @@ async fn owner_search<'a>(
     highlight_pattern: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
+    importance: Option<bool>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     let (cursor_updated_at, cursor_entity_id) = cursor
         .as_ref()
@@ -140,6 +162,25 @@ async fn owner_search<'a>(
                 $6::timestamptz IS NULL
                 OR (t.latest_non_spam_message_ts, t.id) < ($6, $7)
             )
+            AND (
+                $9::bool IS NULL
+                OR $9::bool = (NOT (
+                    EXISTS (
+                        SELECT 1 FROM email_messages em_dep
+                        JOIN email_message_labels ml_dep ON ml_dep.message_id = em_dep.id
+                        JOIN email_labels l_dep ON ml_dep.label_id = l_dep.id
+                        WHERE em_dep.thread_id = t.id
+                        AND l_dep.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM email_messages em_pri
+                        JOIN email_message_labels ml_pri ON ml_pri.message_id = em_pri.id
+                        JOIN email_labels l_pri ON ml_pri.label_id = l_pri.id
+                        WHERE em_pri.thread_id = t.id
+                        AND l_pri.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+                    )
+                ))
+            )
             ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC
             LIMIT $5
         "#,
@@ -151,6 +192,7 @@ async fn owner_search<'a>(
         cursor_updated_at,
         cursor_entity_id,
         highlight_pattern,
+        importance,
     )
     .fetch_all(db)
     .await
@@ -179,7 +221,7 @@ async fn owner_search<'a>(
         time = 30,
         result = true,
         key = "String",
-        convert = r#"{ format!("{}-{:?}-{}-{}-{}-{}", macro_user_id.as_ref(), thread_ids, term, ids_only, limit, cursor.as_ref().map(|c| format!("{}-{}", c.entity_id, c.updated_at)).unwrap_or_default()) }"#
+        convert = r#"{ format!("{}-{:?}-{}-{}-{}-{}-{:?}", macro_user_id.as_ref(), thread_ids, term, ids_only, limit, cursor.as_ref().map(|c| format!("{}-{}", c.entity_id, c.updated_at)).unwrap_or_default(), importance) }"#
     )
 )]
 pub async fn search_email_subjects<'a>(
@@ -190,6 +232,7 @@ pub async fn search_email_subjects<'a>(
     ids_only: bool,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
+    importance: Option<bool>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     if term.is_empty() {
         return Err(NameSearchError::EmptySearchTerm);
@@ -206,6 +249,7 @@ pub async fn search_email_subjects<'a>(
             highlight_pattern,
             limit,
             cursor,
+            importance,
         )
         .await
     } else {
@@ -217,6 +261,7 @@ pub async fn search_email_subjects<'a>(
             highlight_pattern,
             limit,
             cursor,
+            importance,
         )
         .await
     }

@@ -1,11 +1,13 @@
 use crate::api::context::ApiContext;
+use crate::api::context::EntityAccessService;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json, extract};
+use entity_access::domain::models::EntityPermission;
+use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
+use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
 use macro_db_client::share_permission::edit::edit_thread_permission;
-use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
-use macro_middleware::cloud_storage::ensure_access::thread::ThreadAccessLevelExtractor;
 use macro_share_permissions::user_item_access::update_user_item_access;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericSuccessResponse, SuccessResponse,
@@ -38,16 +40,25 @@ pub struct ThreadParams {
             (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, project), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context, project, thread_access), fields(user_id=?user_context.user_id))]
 pub async fn edit_thread_handler(
-    ThreadAccessLevelExtractor { access_level, .. }: ThreadAccessLevelExtractor<OwnerAccessLevel>,
+    thread_access: ThreadAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     thread_context: Extension<EmailThreadPermission>,
     extract::Path(ThreadParams { thread_id }): extract::Path<ThreadParams>,
-    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, PatchThreadRequestV2>,
+    project: ProjectBodyAccessLevelExtractor<
+        EditAccessLevel,
+        PatchThreadRequestV2,
+        EntityAccessService,
+    >,
 ) -> Result<Response, Response> {
     let req = project.into_inner();
+
+    let access_level = match thread_access.entity_access_receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => *access_level,
+        _ => AccessLevel::Owner,
+    };
 
     if req.project_id.is_some() && access_level != AccessLevel::Owner {
         return Err((

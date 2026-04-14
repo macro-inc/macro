@@ -93,7 +93,7 @@ const DEFAULT_LIMIT: i64 = 10;
     description = "Retrieve an email thread and its messages. Returns the thread metadata and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation."
 )]
 #[serde(rename_all = "camelCase")]
-pub struct GetThread {
+pub struct ReadThread {
     /// The ID of the email thread to retrieve.
     pub thread_id: Uuid,
     /// Maximum number of messages to return (default 10).
@@ -102,7 +102,7 @@ pub struct GetThread {
 }
 
 #[async_trait]
-impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for GetThread
+impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for ReadThread
 where
     T: EmailService,
     G: GmailTokenProvider,

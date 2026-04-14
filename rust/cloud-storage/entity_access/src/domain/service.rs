@@ -5,8 +5,8 @@ use std::str::FromStr;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, ChannelRoleResult, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission,
+        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, Entity, EntityAccessAuth,
+        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -74,6 +74,22 @@ where
             Ok(None)
         }
     }
+
+    /// Resolve a call id string to the channel id that owns it.
+    ///
+    /// Looks up both the active `calls` table and the archived `call_records`
+    /// table. Returns `NotFound` if neither has a matching row, or
+    /// `BadRequest` if the id is not a valid UUID.
+    async fn resolve_call_channel_id(&self, call_id: &str) -> Result<Uuid, AccessError> {
+        let call_uuid = Uuid::from_str(call_id)
+            .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
+        let info = self
+            .repo
+            .get_call_channel(&call_uuid)
+            .await?
+            .ok_or(AccessError::NotFound("Call not found"))?;
+        Ok(info.channel_id)
+    }
 }
 
 impl<R> EntityAccessService for EntityAccessServiceImpl<R>
@@ -123,7 +139,13 @@ where
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
-            // These entity types don't have access checks implemented yet
+            // Call access is inherited from the call's channel.
+            EntityType::Call => {
+                let channel_uuid = self.resolve_call_channel_id(entity_id).await?;
+                self.get_channel_access(&channel_uuid.to_string(), user_id)
+                    .await
+            }
+            // These entity types don't have access checks implemented yet.
             EntityType::Team | EntityType::User => Ok(None),
         }
     }
@@ -199,6 +221,19 @@ where
                     ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
                 }
             }
+            EntityType::Call => {
+                // Call permission is the caller's role on the call's channel.
+                let channel_uuid = self.resolve_call_channel_id(entity_id).await?;
+                match self
+                    .repo
+                    .get_channel_role(&channel_uuid, user_id, user_org_id)
+                    .await?
+                {
+                    ChannelRoleResult::Role(role) => Ok(EntityPermission::ChannelRole { role }),
+                    ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
+                    ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
+                }
+            }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
         }
     }
@@ -214,10 +249,37 @@ where
             EntityType::Chat => self.repo.get_chat_users(entity_id).await,
             EntityType::Project => self.repo.get_project_users(entity_id).await,
             EntityType::EmailThread => self.repo.get_thread_users(entity_id).await,
+            EntityType::Channel => {
+                let channel_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid channel_id for get_users_by_entity")
+                })?;
+                self.repo.get_channel_users(&channel_id).await
+            }
+            EntityType::Call => {
+                // Participants of a call are the members of its channel.
+                let channel_id = self.resolve_call_channel_id(entity_id).await?;
+                self.repo.get_channel_users(&channel_id).await
+            }
             _ => Err(AccessError::BadRequest(
-                "get_users_by_entity only supports Document, Chat, Project, and EmailThread",
+                "get_users_by_entity does not support this entity type",
             )),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_channel(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        self.repo.get_call_channel(call_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_channel_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        self.repo.get_call_channel_by_channel_id(channel_id).await
     }
 }
 

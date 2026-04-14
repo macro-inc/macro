@@ -1,0 +1,14 @@
+[package]
+name = "tauri-plugin-input-accessory"
+version = "0.1.0"
+edition = "2024"
+links = "tauri-plugin-input-accessory"
+
+[build-dependencies]
+tauri-plugin = { version = "2.4", features = ["build"] }
+
+[dependencies]
+tauri = { workspace = true }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { workspace = true, features = ["wry"] }

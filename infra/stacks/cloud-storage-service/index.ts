@@ -42,6 +42,12 @@ const DATABASE_URL_PROXY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const DATABASE_URL_READONLY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_db_readonly_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const DOCUMENT_STORAGE_SERVICE_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.get(`document_storage_service_auth_key`) ?? '',
@@ -259,6 +265,55 @@ const githubSyncAppPemArn: pulumi.Output<string> = aws.secretsmanager
 
 const GITHUB_SYNC_APP_CLIENT_ID = config.require('github_sync_app_client_id');
 
+const LIVEKIT_SERVER_URL = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('livekit_server_url') })
+  .apply((secret) => secret.secretString);
+
+const LIVEKIT_API_KEY = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('livekit_api_key') })
+  .apply((secret) => secret.secretString);
+
+const LIVEKIT_API_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('livekit_api_secret') })
+  .apply((secret) => secret.secretString);
+
+const INTERNAL_CALL_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('call_internal_secret') })
+  .apply((secret) => secret.secretString);
+
+const callRecordingStack = new pulumi.StackReference('call-recording-stack', {
+  name: `macro-inc/call-recording/${stack}`,
+});
+
+const callRecordingCrudPolicyArn: pulumi.Output<string> = callRecordingStack
+  .getOutput('crudPolicyArn')
+  .apply((t) => t as string);
+
+const CALL_RECORDING_S3_BUCKET: pulumi.Output<string> = callRecordingStack
+  .getOutput('callRecordingBucketId')
+  .apply((t) => t as string);
+
+const CALL_RECORDING_S3_REGION = 'us-east-1';
+const callRecordingServiceUserSecretId: pulumi.Output<string> =
+  callRecordingStack.getOutput('serviceUserSecretId').apply((t) => t as string);
+
+const callRecordingCreds = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: callRecordingServiceUserSecretId })
+  .apply(
+    (secret) =>
+      JSON.parse(secret.secretString) as {
+        accessKey: string;
+        secretAccessKey: string;
+      }
+  );
+
+const CALL_RECORDING_S3_ACCESS_KEY = callRecordingCreds.apply(
+  (c) => c.accessKey
+);
+const CALL_RECORDING_S3_SECRET = callRecordingCreds.apply(
+  (c) => c.secretAccessKey
+);
+
 const cloudStorageService = new CloudStorageService(
   `cloud-storage-service-${stack}`,
   {
@@ -291,7 +346,44 @@ const cloudStorageService = new CloudStorageService(
       githubWebhookSecretKeyArn,
       githubSyncAppPemArn,
     ],
+    callRecordingCrudPolicyArn,
     containerEnvVars: [
+      {
+        name: 'CALL_RECORDING_S3_BUCKET',
+        value: pulumi.interpolate`${CALL_RECORDING_S3_BUCKET}`,
+      },
+      {
+        name: 'CALL_RECORDING_S3_REGION',
+        value: CALL_RECORDING_S3_REGION,
+      },
+      {
+        name: 'CALL_RECORDING_S3_ACCESS_KEY',
+        value: CALL_RECORDING_S3_ACCESS_KEY,
+      },
+      {
+        name: 'CALL_RECORDING_S3_SECRET',
+        value: CALL_RECORDING_S3_SECRET,
+      },
+      {
+        name: 'INTERNAL_CALL_SECRET',
+        value: pulumi.interpolate`${INTERNAL_CALL_SECRET}`,
+      },
+      {
+        name: 'LIVEKIT_SERVER_URL',
+        value: pulumi.interpolate`${LIVEKIT_SERVER_URL}`,
+      },
+      {
+        name: 'LIVEKIT_API_KEY',
+        value: pulumi.interpolate`${LIVEKIT_API_KEY}`,
+      },
+      {
+        name: 'LIVEKIT_API_SECRET',
+        value: pulumi.interpolate`${LIVEKIT_API_SECRET}`,
+      },
+      {
+        name: 'LIVEKIT_TRANSCRIPTION_AGENT_NAME',
+        value: config.require('livekit_transcription_agent_name'),
+      },
       {
         name: 'OPENSEARCH_URL',
         value: OPENSEARCH_URL,
@@ -307,6 +399,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
+      },
+      {
+        name: 'DATABASE_URL_READONLY',
+        value: pulumi.interpolate`${DATABASE_URL_READONLY}`,
       },
       {
         name: 'REDIS_URI',

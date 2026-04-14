@@ -7,7 +7,11 @@ export const makeCopyAction = () => {
   const bulkCopyMutation = createBulkCopyDssEntityMutation();
 
   const canExecute = (entity: EntityData): boolean => {
-    return entity.type !== 'channel' && entity.type !== 'email';
+    return (
+      entity.type !== 'channel' &&
+      entity.type !== 'email' &&
+      entity.type !== 'channel_message'
+    );
   };
 
   const execute = async (entities: EntityData[]) => {

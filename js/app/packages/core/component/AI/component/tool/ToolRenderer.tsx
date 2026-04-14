@@ -1,9 +1,16 @@
+import { type Component, createContext, useContext } from 'solid-js';
 import type {
   NamedTool,
-  ToolContext,
-  ToolHandler,
   ToolName,
 } from '@service-cognition/generated/tools/tool';
+
+export const ToolErrorContext = createContext<
+  (() => string | undefined) | undefined
+>();
+export const useToolError = () => {
+  const accessor = useContext(ToolErrorContext);
+  return accessor?.();
+};
 
 export type RenderContext = {
   renderContext: {
@@ -11,14 +18,37 @@ export type RenderContext = {
   };
 };
 
-import type { Component } from 'solid-js';
+export type ToolContext<TTool extends NamedTool = NamedTool> = {
+  tool: TTool;
+  chat_id: string;
+  message_id: string;
+  part_index: number;
+  isComplete: boolean;
+};
 
-export interface ToolRendererConfig<TName extends ToolName, RenderContext> {
+export type ToolRenderContext<TName extends ToolName = ToolName> = ToolContext<
+  NamedTool<TName, 'call'>
+> & {
+  response?: NamedTool<TName, 'response'>;
+};
+
+export type ToolHandlerMap<TRenderContext> = {
+  [K in ToolName]: ToolHandler<K, TRenderContext>;
+};
+
+export interface ToolHandler<TName extends ToolName, TRenderContext> {
+  handleCall?: (
+    context: ToolContext<NamedTool<TName, 'call'>>
+  ) => void | Promise<void>;
+  handleResponse?: (
+    context: ToolContext<NamedTool<TName, 'response'>>
+  ) => void | Promise<void>;
+  render: Component<ToolRenderContext<TName> & TRenderContext>;
+}
+
+export interface ToolRendererConfig<TName extends ToolName, TRenderContext> {
   name: TName;
-  renderCall: Component<ToolContext<NamedTool<TName, 'call'>> & RenderContext>;
-  renderResponse: Component<
-    ToolContext<NamedTool<TName, 'response'>> & RenderContext
-  >;
+  render: Component<ToolRenderContext<TName> & TRenderContext>;
   handleCall?: (
     context: ToolContext<NamedTool<TName, 'call'>>
   ) => void | Promise<void>;
@@ -30,21 +60,9 @@ export interface ToolRendererConfig<TName extends ToolName, RenderContext> {
 export function createToolRenderer<TName extends ToolName>(
   config: ToolRendererConfig<TName, RenderContext>
 ) {
-  const callHandler: ToolHandler<NamedTool<TName, 'call'>, RenderContext> = {
-    render: config.renderCall,
-    handle: config.handleCall,
-  };
-
-  const responseHandler: ToolHandler<
-    NamedTool<TName, 'response'>,
-    RenderContext
-  > = {
-    render: config.renderResponse,
-    handle: config.handleResponse,
-  };
-
   return {
-    call: callHandler,
-    response: responseHandler,
+    render: config.render,
+    handleCall: config.handleCall,
+    handleResponse: config.handleResponse,
   };
 }

@@ -46,7 +46,6 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 
 interface SidebarItem {
   id: ListView;
@@ -198,7 +197,7 @@ export const registerSidebarHotkeys = ({
   registerHotkey({
     scopeId: 'global',
     hotkeyToken: TOKENS.global.inviteTeam,
-    description: 'Invite team',
+    description: 'Send Invites',
     keyDownHandler: (e) => {
       e?.preventDefault();
       setInviteModalOpen(true);
@@ -227,6 +226,30 @@ export const registerSidebarHotkeys = ({
         resetHotkeysState();
         debounceResetHotkeysState.clear();
       }
+
+      if (link.id === 'search' && !e?.shiftKey) {
+        const activeSplit = globalSplitManager()?.activeSplit();
+        const content = activeSplit?.content();
+        if (
+          activeSplit &&
+          content?.type === 'component' &&
+          content.id === 'search'
+        ) {
+          const splitEl = document.querySelector(
+            `[data-split-id="${activeSplit.id}"]`
+          );
+          const searchContainer =
+            splitEl?.querySelector<HTMLElement>('[data-soup-search]');
+          if (searchContainer) {
+            const editable =
+              searchContainer.querySelector<HTMLElement>('[contenteditable]') ??
+              searchContainer;
+            editable.focus();
+            return true;
+          }
+        }
+      }
+
       openWithSplit(
         {
           type: 'component',
@@ -465,14 +488,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class=" w-full px-2 flex flex-col">
-        <Show when={DEV_MODE_ENV}>
-          <SidebarActionButton
-            label="Invite Team"
-            isSlim={isSlim}
-            onClick={() => setInviteModalOpen(true)}
-            icon={AnimatedUsersIcon}
-          />
-        </Show>
+        <SidebarActionButton
+          label="Invite"
+          isSlim={isSlim}
+          onClick={() => setInviteModalOpen(true)}
+          icon={AnimatedUsersIcon}
+        />
 
         <SidebarActionButton
           label="New Split"
@@ -609,6 +630,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
               allowDuplicate: true,
               referredFrom: 'sidebar',
             });
+            layoutManager?.returnFocus();
           }}
         >
           <Show when={props.icon}>

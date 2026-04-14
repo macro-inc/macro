@@ -1,31 +1,31 @@
-import { Show, createEffect } from 'solid-js';
-import { reconcile, createStore } from 'solid-js/store';
-import {
-  stackNotifications,
-  type NotificationStack,
-  getMostRecentNotification,
-  openNotification,
-} from '@notifications';
-import type { WithNotification } from '../types/notification';
-import type { EntityData } from '../types/entity';
-import { CollapsibleList } from '../components/CollapsibleList';
-import {
-  filterValidNotifications,
-  filterNotDoneNotifications,
-  isNotificationUnread,
-} from '../utils/notification';
-import { NotificationContent } from './notification-content';
-import { NotificationIcon } from './notification-icon';
-import { NotificationDescription } from './notification-description';
-import { NotificationSenderIcon } from './notification-sender-icon';
-import { NotificationTimestamp } from './notification-timestamp';
-import { UnreadIndicator } from '../components/UnreadIndicator';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { cn } from '@ui/utils/classname';
-import { useNotificationStackActions } from './notification-actions';
-import { Button } from '@ui/components/Button';
 import CheckIcon from '@icon/regular/check.svg';
+import {
+  getMostRecentNotification,
+  type NotificationStack,
+  openNotification,
+  stackNotifications,
+} from '@notifications';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
+import { createEffect, type JSX, Show } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
+import { CollapsibleList } from '../components/CollapsibleList';
+import { UnreadIndicator } from '../components/UnreadIndicator';
+import type { EntityData } from '../types/entity';
+import type { WithNotification } from '../types/notification';
+import {
+  filterNotDoneNotifications,
+  filterValidNotifications,
+  isNotificationUnread,
+} from '../utils/notification';
+import { useNotificationStackActions } from './notification-actions';
+import { NotificationContent } from './notification-content';
+import { NotificationDescription } from './notification-description';
+import { NotificationIcon } from './notification-icon';
+import { NotificationSenderIcon } from './notification-sender-icon';
+import { NotificationTimestamp } from './notification-timestamp';
 
 const DEFAULT_VISIBLE_COUNT = 3;
 
@@ -38,6 +38,7 @@ interface NotificationStacksProps {
 function NotificationStackRow(props: {
   stack: NotificationStack;
   onClick?: (e: PointerEvent | MouseEvent) => void;
+  content?: JSX.Element;
 }) {
   const notificationSource = useGlobalNotificationSource();
   const unread = () => isNotificationUnread(props.stack);
@@ -105,15 +106,20 @@ function NotificationStackRow(props: {
           <div class="ml-auto flex items-center gap-1 pr-2 flex-shrink-0">
             <Button
               onClick={handleMarkAsDone}
-              tooltip={'Mark notification stack done'}
+              tooltip={'Mark notification done'}
               class="border border-edge-muted text-xs text-ink-muted grid p-0 place-items-center size-6"
             >
               <CheckIcon class="size-3" />
             </Button>
           </div>
         </div>
-        <div class="ph-no-capture mt-1 truncate min-w-0 overflow-hidden">
-          <NotificationContent stack={props.stack} />
+        <div
+          class={cn('ph-no-capture mt-1 min-w-0', {
+            'truncate overflow-hidden':
+              props.stack.type !== 'document_mention' && !props.content,
+          })}
+        >
+          {props.content ?? <NotificationContent stack={props.stack} />}
         </div>
       </div>
     </div>
@@ -137,6 +143,7 @@ export function NotificationStacks(props: NotificationStacksProps) {
       <CollapsibleList
         items={stacks}
         visibleCount={props.visibleCount ?? DEFAULT_VISIBLE_COUNT}
+        togglePosition="bottom"
       >
         {(stack) => (
           <NotificationStackRow stack={stack} onClick={props.onClick} />

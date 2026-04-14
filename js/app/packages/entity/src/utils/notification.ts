@@ -1,7 +1,8 @@
+import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import { notificationIsRead, type UnifiedNotification } from '@notifications';
 import type { NotificationStack } from '@notifications/notification-stacking';
-import type { Notification } from '../types/notification';
-import type { UnifiedNotification } from '@notifications';
 import { match } from 'ts-pattern';
+import type { Notification } from '../types/notification';
 
 /**
  * Filters out invalid notification types that shouldn't be displayed
@@ -12,7 +13,11 @@ export function filterValidNotifications(
   if (!notifications) return [];
 
   return notifications.filter((n) => {
-    return n.notification_event_type !== undefined;
+    return (
+      n.notification_event_type !== undefined &&
+      (ENABLE_DOCUMENT_MENTION_NOTIFICATIONS ||
+        n.notification_event_type !== 'document_mention')
+    );
   });
 }
 
@@ -105,11 +110,7 @@ export function isNotificationUnread(
 ): boolean {
   if ('notifications' in item && Array.isArray(item.notifications)) {
     const stack = item as NotificationStack;
-    return stack.notifications.some(
-      (notification) => !notification.viewed_at && !notification.done
-    );
+    return stack.notifications.some((n) => !notificationIsRead(n));
   }
-
-  const notification = item as Notification;
-  return !notification.viewed_at && !notification.done;
+  return !notificationIsRead(item as Notification);
 }

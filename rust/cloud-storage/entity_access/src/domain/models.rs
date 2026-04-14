@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub use model_entity::EntityType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
@@ -195,6 +196,14 @@ pub struct EntityAccessReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> EntityAccessReceipt<T> {
+    /// get the authenticated user or error
+    pub fn get_authenticated_user(&self) -> Result<&MacroUserIdStr<'static>, AccessError> {
+        match &self.auth {
+            EntityAccessAuth::Authenticated(user) => Ok(user),
+            _ => Err(AccessError::Unauthorized),
+        }
+    }
+
     /// Getter for auth
     pub fn auth(&self) -> &EntityAccessAuth {
         &self.auth
@@ -230,6 +239,15 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
             _marker: PhantomData,
         }
     }
+}
+
+/// Information about a call's channel association and share permission.
+#[derive(Debug, Clone)]
+pub struct CallChannelInfo {
+    /// The channel the call belongs to.
+    pub channel_id: Uuid,
+    /// The share permission ID for this call.
+    pub share_permission_id: String,
 }
 
 /// Errors that can occur during access checking.

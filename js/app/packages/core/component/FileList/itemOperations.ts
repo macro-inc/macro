@@ -18,6 +18,7 @@ import {
   hasPermissions,
   Permissions,
 } from '../SharePermissions';
+import type { FileType } from '@service-storage/generated/schemas/fileType';
 
 const DEFAULT_CHUNK_SIZE = 10;
 
@@ -122,6 +123,25 @@ export async function renameItem(args: {
   return true;
 }
 
+/** Backend only supports code file changes */
+export async function setFileType(args: {
+  id: string;
+  fileType: FileType;
+}): Promise<boolean> {
+  const { id, fileType } = args;
+
+  const result = await storageServiceClient.editDocument({
+    documentId: id,
+    fileType: { set: fileType },
+  });
+
+  if (isErr(result)) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function deleteItem(args: {
   itemType: ItemType;
   id: string;
@@ -159,8 +179,12 @@ export async function deleteItem(args: {
       return false;
     }
   } else {
-    if (itemType === 'channel') return false;
-    if (itemType === 'email') return false;
+    if (
+      itemType === 'channel' ||
+      itemType === 'email' ||
+      itemType === 'channel_message'
+    )
+      return false;
     const removed = await removeHistoryItem(itemType, id);
     if (!removed) return false;
   }

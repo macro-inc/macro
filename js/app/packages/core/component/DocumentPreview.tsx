@@ -1,6 +1,6 @@
 // URL params constants
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
-import { URL_PARAMS as URL_PARAMS_CHANNEL } from '@block-channel/constants';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
@@ -170,8 +170,8 @@ export const mentionsAccessories = (
   }
   // Channel block handling
   else if (blockName === 'channel') {
-    const threadId = params[URL_PARAMS_CHANNEL.thread];
-    const messageId = params[URL_PARAMS_CHANNEL.message];
+    const threadId = params[CHANNEL_PARAMS.thread];
+    const messageId = params[CHANNEL_PARAMS.message];
     if (threadId) {
       return {
         icon: 'thread',
@@ -211,7 +211,10 @@ function PopupIconButton(props: {
   return (
     <Tooltip tooltip={props.tooltip}>
       <button
-        onClick={props.onClick}
+        onClick={(e) => {
+          e.stopPropagation();
+          props.onClick();
+        }}
         class="rounded-md py-1 hover:bg-hover transition flex items-center gap-1.5"
       >
         <div class="w-fit flex justify-right items-center mx-0.5 my-0.5 text-xs font-normal text-current/90">
@@ -381,9 +384,9 @@ export function PopupPreview(props: {
     let messageId: string | undefined;
     if (
       type === 'channel' &&
-      URL_PARAMS_CHANNEL.message in props.documentInfo.params
+      CHANNEL_PARAMS.message in props.documentInfo.params
     ) {
-      messageId = props.documentInfo.params[URL_PARAMS_CHANNEL.message];
+      messageId = props.documentInfo.params[CHANNEL_PARAMS.message];
     }
     return { id: props.documentInfo.id, type, messageId };
   };
@@ -411,18 +414,29 @@ export function PopupPreview(props: {
     props.collapseInfo?.handleCollapse();
   };
 
-  const openDocument = createCallback(() => {
-    let link = `/${props.documentInfo.type}/${props.documentInfo.id}`;
-    if (props.documentInfo.params) {
-      const queryParams = new URLSearchParams(
-        props.documentInfo.params
-      ).toString();
-      link += `?${queryParams}`;
+  const openDocument = createCallback(async () => {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      console.warn('No split manager found');
+      let link = `/${props.documentInfo.type}/${props.documentInfo.id}`;
+      if (props.documentInfo.params) {
+        const queryParams = new URLSearchParams(
+          props.documentInfo.params
+        ).toString();
+        link += `?${queryParams}`;
+      }
+      navigate(link);
+      return;
     }
-    navigate(`${link}`);
+
+    splitManager.replaceAllSplits({
+      type: props.documentInfo.type,
+      id: props.documentInfo.id,
+      params: props.documentInfo.params,
+    });
   });
 
-  // Handle opening document in chat
+  // H opening document in chat
   const openChatForAttachment = useOpenChatForAttachment();
   const handleOpenInChat = () => {
     openChatForAttachment({
@@ -465,9 +479,26 @@ export function PopupPreview(props: {
     copyBranchNameToClipboard(props.documentInfo.id, docName);
   };
 
-  const openInNewSplit = createCallback(() => {
+  const isSplitAlreadyOpen = () => {
     const splitManager = globalSplitManager();
-    if (splitManager) {
+    if (!splitManager) return false;
+    return !!splitManager.getSplitByContent(
+      props.documentInfo.type,
+      props.documentInfo.id
+    );
+  };
+
+  const openInNewSplit = createCallback(async () => {
+    const splitManager = globalSplitManager();
+    if (!splitManager) return;
+
+    const existing = splitManager.getSplitByContent(
+      props.documentInfo.type,
+      props.documentInfo.id
+    );
+    if (existing) {
+      existing.activate();
+    } else {
       splitManager.createNewSplit({
         content: {
           type: props.documentInfo.type,
@@ -477,6 +508,16 @@ export function PopupPreview(props: {
         referredFrom: null,
       });
     }
+
+    if (props.documentInfo.type !== 'channel') return;
+
+    const orchestrator = splitManager.getOrchestrator();
+    const handle = await orchestrator.getBlockHandle(
+      props.documentInfo.id,
+      'channel'
+    );
+
+    await handle?.goToLocationFromParams(props.documentInfo.params);
   });
 
   /**
@@ -565,13 +606,15 @@ export function PopupPreview(props: {
         />
       );
 
-      buttons.push(
-        <PopupIconButton
-          tooltip="Open in New Split"
-          onClick={openInNewSplit}
-          icon={ColumnsPlusRight}
-        />
-      );
+      if (!isSplitAlreadyOpen()) {
+        buttons.push(
+          <PopupIconButton
+            tooltip="Open in New Split"
+            onClick={openInNewSplit}
+            icon={ColumnsPlusRight}
+          />
+        );
+      }
     }
 
     if (props.delete) {

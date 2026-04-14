@@ -6,7 +6,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
@@ -77,6 +77,8 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
         .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
+        .gmail_ops_queue(&config.gmail_ops_queue)
+        .gmail_ops_retry_queue(&config.gmail_ops_retry_queue)
         .search_event_queue(&config.search_event_queue)
         .email_backfill_queue(&config.backfill_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
@@ -128,6 +130,28 @@ async fn main() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
 
+    let gmail_ops_workers = (0..config.gmail_ops_queue_workers)
+        .map(|_| {
+            sqs_worker::SQSWorker::new(
+                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+                config.gmail_ops_queue.clone(),
+                config.gmail_ops_queue_max_messages,
+                config.queue_wait_time_seconds,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let gmail_ops_retry_workers = (0..config.gmail_ops_retry_queue_workers)
+        .map(|_| {
+            sqs_worker::SQSWorker::new(
+                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+                config.gmail_ops_retry_queue.clone(),
+                config.gmail_ops_retry_queue_max_messages,
+                config.queue_wait_time_seconds,
+            )
+        })
+        .collect::<Vec<_>>();
+
     let inbox_sync_workers = (0..config.inbox_sync_queue_workers)
         .map(|_| {
             sqs_worker::SQSWorker::new(
@@ -169,10 +193,10 @@ async fn main() -> anyhow::Result<()> {
         })
         .context("failed to connect to redis")?;
 
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::new(&aws_config),
-        queue_url: config.notification_queue.clone(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.notification_queue.clone(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
@@ -273,8 +297,58 @@ async fn main() -> anyhow::Result<()> {
         });
     }
     tracing::info!(
-        num_workers = config.inbox_sync_queue_workers,
+        num_workers = config.inbox_sync_retry_queue_workers,
         "inbox_sync retry workers started"
+    );
+
+    // process async gmail operations (label changes, block/unblock sender, etc.)
+    for worker in gmail_ops_workers {
+        let db_gmail_ops = db.clone();
+        let sqs_client_gmail_ops = sqs_client.clone();
+        let gmail_client_gmail_ops = gmail_client.clone();
+        let auth_service_client_gmail_ops = auth_service_client.clone();
+        let redis_client_gmail_ops = redis_client.clone();
+        tokio::spawn(async move {
+            email_service::pubsub::gmail_ops::worker::run_worker(
+                db_gmail_ops,
+                worker,
+                sqs_client_gmail_ops,
+                gmail_client_gmail_ops,
+                auth_service_client_gmail_ops,
+                redis_client_gmail_ops,
+                false,
+            )
+            .await;
+        });
+    }
+    tracing::info!(
+        num_workers = config.gmail_ops_queue_workers,
+        "gmail_ops workers started"
+    );
+
+    // separate queue for retries to avoid backups for rate-limited gmail operations
+    for worker in gmail_ops_retry_workers {
+        let db_gmail_ops = db.clone();
+        let sqs_client_gmail_ops = sqs_client.clone();
+        let gmail_client_gmail_ops = gmail_client.clone();
+        let auth_service_client_gmail_ops = auth_service_client.clone();
+        let redis_client_gmail_ops = redis_client.clone();
+        tokio::spawn(async move {
+            email_service::pubsub::gmail_ops::worker::run_worker(
+                db_gmail_ops,
+                worker,
+                sqs_client_gmail_ops,
+                gmail_client_gmail_ops,
+                auth_service_client_gmail_ops,
+                redis_client_gmail_ops,
+                true,
+            )
+            .await;
+        });
+    }
+    tracing::info!(
+        num_workers = config.gmail_ops_retry_queue_workers,
+        "gmail_ops retry workers started"
     );
 
     // backfill user emails upon signup

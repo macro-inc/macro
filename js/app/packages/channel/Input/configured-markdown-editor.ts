@@ -4,9 +4,13 @@ import {
   type ItemMention,
   keyboardShortcutsPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
+import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { IUser } from '@core/user/types';
+import { isIOS } from '@solid-primitives/platform';
+import type { Accessor } from 'solid-js';
 
 type CreateConfiguredChannelMarkdownEditorOptions = {
   namespace: string;
@@ -20,6 +24,7 @@ type CreateConfiguredChannelMarkdownEditorOptions = {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  scrollContainer?: Accessor<HTMLElement | undefined>;
 };
 
 export function createConfiguredChannelMarkdownEditor(
@@ -42,7 +47,7 @@ export function createConfiguredChannelMarkdownEditor(
     });
   }
 
-  return editor
+  editor
     .withEmojis()
     .withLinks({ floatingMenu: true })
     .withHistory({ timeGap: 400 })
@@ -65,4 +70,12 @@ export function createConfiguredChannelMarkdownEditor(
     )
     .onChange(options.onChange)
     .onEnter(options.onEnter);
+
+  if ((isIOS || isNativeMobilePlatform()) && options.scrollContainer) {
+    editor.use(
+      iosCursorScrollPlugin({ scrollContainer: options.scrollContainer })
+    );
+  }
+
+  return editor;
 }

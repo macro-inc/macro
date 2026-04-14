@@ -1,5 +1,5 @@
-import { FormatRibbon } from '@block-channel/component/FormatRibbon';
-import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
+import { FormatRibbon } from '@block-channel/component/DeprecatedChannelInput/FormatRibbon';
+import { useChannelMarkdownArea } from '@block-channel/component/DeprecatedChannelInput/MarkdownArea';
 import { useBlockId, useBlockName } from '@core/block';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -50,13 +50,10 @@ function CopyLinkButton() {
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
-      buildSimpleEntityUrl(
-        {
-          type: blockName,
-          id: blockId,
-        },
-        {}
-      )
+      buildSimpleEntityUrl({
+        type: blockName,
+        id: blockId,
+      })
     );
     toast.success('Link copied to clipboard');
   }

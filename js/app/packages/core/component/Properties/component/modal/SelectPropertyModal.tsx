@@ -6,7 +6,14 @@ import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
@@ -153,7 +160,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     };
 
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    onCleanup(() => window.removeEventListener('resize', handleResize));
   });
 
   return (

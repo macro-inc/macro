@@ -1,5 +1,5 @@
 mod suffix_trie;
-pub use model_file_type::{ContentType, FileType};
+pub use model_file_type::{ContentType, FileAssociation, FileType};
 use std::sync::LazyLock;
 use suffix_trie::ReversedSuffixTrie;
 

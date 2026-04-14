@@ -179,7 +179,17 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(
+        channel_id = tracing::field::Empty,
+        limit = tracing::field::Empty,
+        page_direction = tracing::field::Empty,
+        has_cursor = tracing::field::Empty,
+        load_around_message_id = tracing::field::Empty
+    )
+)]
 pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
@@ -189,6 +199,15 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: Entity
     let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let (query, direction, has_cursor) = parse_messages_query(cursor);
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let span = tracing::Span::current();
+    span.record("channel_id", tracing::field::display(channel_id));
+    span.record("limit", limit);
+    span.record("page_direction", tracing::field::debug(&direction));
+    span.record("has_cursor", has_cursor);
+    span.record(
+        "load_around_message_id",
+        tracing::field::debug(&params.load_around_message_id),
+    );
 
     let (page, has_more_newer) = match params.load_around_message_id {
         Some(message_id) => {
@@ -251,7 +270,11 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: Entity
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(channel_id = tracing::field::Empty, message_id = tracing::field::Empty)
+)]
 pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
     _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
@@ -259,6 +282,9 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAc
 ) -> Result<Json<Vec<ApiThreadReply>>, ChannelsHandlerErr> {
     let channel_id = path.channel_id;
     let message_id = path.message_id;
+    let span = tracing::Span::current();
+    span.record("channel_id", tracing::field::display(channel_id));
+    span.record("message_id", tracing::field::display(message_id));
 
     let replies = state
         .service
@@ -287,7 +313,15 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAc
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(
+        channel_id = tracing::field::Empty,
+        limit = tracing::field::Empty,
+        has_cursor = tracing::field::Empty
+    )
+)]
 pub async fn get_channel_attachments_handler<
     S: ChannelMessagesService,
     Svc: EntityAccessService,
@@ -298,8 +332,13 @@ pub async fn get_channel_attachments_handler<
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<PaginatedOpaqueCursor<ApiChannelAttachment>>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50);
+    let has_cursor = cursor.is_some();
     let query = cursor.into_query(CreatedAt, ());
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let span = tracing::Span::current();
+    span.record("channel_id", tracing::field::display(channel_id));
+    span.record("limit", limit);
+    span.record("has_cursor", has_cursor);
 
     let page = state
         .service
@@ -324,7 +363,7 @@ pub async fn get_channel_attachments_handler<
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err, skip_all, fields(channel_id = tracing::field::Empty))]
 pub async fn get_channel_participants_handler<
     S: ChannelMessagesService,
     Svc: EntityAccessService,
@@ -333,6 +372,7 @@ pub async fn get_channel_participants_handler<
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
 ) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    tracing::Span::current().record("channel_id", tracing::field::display(channel_id));
     let participants = state.service.get_channel_participants(channel_id).await?;
 
     Ok(Json(

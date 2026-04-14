@@ -18,6 +18,7 @@ use ai::types::Model;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
+use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use frecency::domain::services::FrecencyQueryServiceImpl;
@@ -54,21 +55,25 @@ async fn main() {
         email_repo,
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
-        email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
 
     // Create the channels service with real database connections
-    let comms_repo = PgCommsRepo { pool: pool.clone() };
+    let comms_repo = PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone()));
     let user_repo = PgUserRepo::new(pool.clone());
     let channels_service = ChannelServiceImpl::new(comms_repo, user_repo, frecency_storage);
 
     // Create the soup service with real database connections
-    let soup_repo = PgSoupRepo::new(pool);
-    let soup_service = SoupImpl::new(soup_repo, frecency_service, email_service, channels_service);
+    let soup_repo = PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool));
+    let soup_service = SoupImpl::new(
+        soup_repo,
+        frecency_service,
+        ReadonlyEmailPreviewAdapter(email_service.clone()),
+        channels_service,
+    );
 
     // Create the soup tool context
-    let soup_context = SoupToolContext::new(soup_service);
+    let soup_context = SoupToolContext::new(soup_service, email_service.clone());
 
     // Create the soup toolset
     let toolset = soup_toolset();

@@ -82,8 +82,9 @@ export default defineConfig({
 
   notificationService: {
     output: {
-      client: 'fetch',
-      target: './service-notification/generated/client.ts',
+      client: 'zod',
+      mode: 'split',
+      target: './service-notification/generated/zod.ts',
       schemas: './service-notification/generated/schemas',
       override: {
         useDates: false,

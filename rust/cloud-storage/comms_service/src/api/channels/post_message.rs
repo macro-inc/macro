@@ -142,9 +142,11 @@ pub async fn post_message_handler(
         let channel_id_str = channel_id.to_string();
         let user_id = message.sender_id.clone();
         let db = ctx.db.clone();
+        let entity_access_service = ctx.entity_access_service.clone();
         tokio::spawn(async move {
             update_channel_share_permissions_for_items(
                 &db,
+                &*entity_access_service,
                 user_id.0.as_ref(),
                 &channel_id_str,
                 items_to_share,
@@ -290,6 +292,7 @@ pub fn dispatch_notification_task(
 /// Updates channel share permissions for a list of items shared in a message.
 async fn update_channel_share_permissions_for_items(
     db: &PgPool,
+    entity_access_service: &impl entity_access::domain::ports::EntityAccessService,
     user_id: &str,
     channel_id: &str,
     items: Vec<(String, String)>,
@@ -297,7 +300,12 @@ async fn update_channel_share_permissions_for_items(
     tracing::trace!(items=?items, "updating channel share permissions for items");
     for (item_id, item_type) in items {
         if let Err(e) = channel_permissions::update_channel_share_permission(
-            db, user_id, channel_id, &item_id, &item_type,
+            db,
+            entity_access_service,
+            user_id,
+            channel_id,
+            &item_id,
+            &item_type,
         )
         .await
         {

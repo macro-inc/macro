@@ -9,7 +9,7 @@ import { ChannelAttachmentEntitySection } from './ChannelAttachmentEntitySection
 export function ChannelAttachmentsTab(props: { channelId: string }) {
   return (
     <div class="relative flex-1 min-h-0 overflow-y-auto">
-      <div class="macro-message-width macro-message-padding mx-auto w-full py-4 flex flex-col gap-6">
+      <div class="macro-message-width macro-message-padding mx-auto flex h-full min-h-0 w-full flex-col gap-6 py-4">
         <Suspense fallback={<MediaGallerySkeleton />}>
           <ChannelAttachmentMediaSection channelId={props.channelId} />
         </Suspense>

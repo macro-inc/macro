@@ -334,16 +334,17 @@ impl NotificationDbOps for PgPool {
             .map(|id| id.to_string())
             .collect();
 
-        sqlx::query!(
+        let created_at = sqlx::query_scalar!(
             r#"
             INSERT INTO user_notification (notification_id, user_id)
             SELECT $1, user_id
             FROM UNNEST($2::text[]) as user_id
+            RETURNING created_at::timestamptz as "created_at!"
             "#,
             notification_id,
             &user_ids
         )
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
 
         tx.commit().await?;
@@ -363,9 +364,9 @@ impl NotificationDbOps for PgPool {
                 entity: entity.clone(),
                 sent: false,
                 done: false,
-                created_at: None,
+                created_at,
                 viewed_at: None,
-                updated_at: None,
+                updated_at: created_at,
                 deleted_at: None,
                 notification_metadata: n.clone(),
                 sender_id: sender_id.clone(),
@@ -485,9 +486,9 @@ impl NotificationDbOps for PgPool {
                 n.event_item_type,
                 un.sent,
                 un.done,
-                un.created_at::timestamptz,
+                un.created_at::timestamptz as "created_at!",
                 un.seen_at::timestamptz as viewed_at,
-                un.created_at::timestamptz as updated_at,
+                un.created_at::timestamptz as "updated_at!",
                 un.deleted_at::timestamptz,
                 n.metadata as "notification_metadata: serde_json::Value",
                 n.notification_event_type as notification_event_type,
@@ -516,6 +517,7 @@ impl NotificationDbOps for PgPool {
                 |row| -> Result<UserNotificationRow<T>, rootcause::Report<Uuid>> {
                     let entity = EntityType::from_str(&row.event_item_type)
                         .map_err(|e| rootcause::report!(e))
+                        .attach(row.event_item_type)
                         .context(row.notification_id)?
                         .with_entity_string(row.event_item_id);
 
@@ -581,9 +583,9 @@ impl NotificationDbOps for PgPool {
                 n.event_item_type,
                 un.sent,
                 un.done,
-                un.created_at::timestamptz,
+                un.created_at::timestamptz as "created_at!",
                 un.seen_at::timestamptz as viewed_at,
-                un.created_at::timestamptz as updated_at,
+                un.created_at::timestamptz as "updated_at!",
                 un.deleted_at::timestamptz,
                 n.metadata as "notification_metadata: serde_json::Value",
                 n.notification_event_type as notification_event_type,
@@ -670,9 +672,9 @@ impl NotificationDbOps for PgPool {
                 n.event_item_type,
                 un.sent,
                 un.done,
-                un.created_at::timestamptz,
+                un.created_at::timestamptz as "created_at!",
                 un.seen_at::timestamptz as viewed_at,
-                un.created_at::timestamptz as updated_at,
+                un.created_at::timestamptz as "updated_at!",
                 un.deleted_at::timestamptz,
                 n.metadata as "notification_metadata: serde_json::Value",
                 n.notification_event_type as notification_event_type,

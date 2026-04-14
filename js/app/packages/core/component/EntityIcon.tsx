@@ -34,6 +34,7 @@ import WideCsv from '@macro-icons/wide/csv.svg';
 import WideDiagram from '@macro-icons/wide/diagram.svg';
 import WideDocx from '@macro-icons/wide/docx.svg';
 import WideCalendar from '@macro-icons/wide/calendar.svg';
+import WideGlobe from '@macro-icons/wide/globe.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
 import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileImage from '@macro-icons/wide/file-image.svg';
@@ -229,8 +230,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   },
   emailInvite: {
     icon: WideCalendar,
-    foreground: 'text-email',
-    background: 'bg-email-bg',
+    foreground: 'text-calendar',
+    background: 'bg-calendar-bg',
     prettyName: 'Calendar Invite',
   },
   task: {
@@ -270,7 +271,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
-  public: GlobeIcon,
+  public: WideGlobe,
   organization: Building,
   private: WideChannel,
   direct_message: WideChat,
@@ -427,6 +428,7 @@ type EntityIconData = Pick<EntityData, 'type'> & {
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
   const typeString = match(entity)
     .with({ type: 'channel' }, (e) => e.channelType || 'channel')
+    .with({ type: 'channel_message' }, (e) => e.channelType || 'channel')
     .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
     .with({ type: 'email', isRead: true }, () => 'emailRead')
     .with({ type: 'email' }, () => 'email')

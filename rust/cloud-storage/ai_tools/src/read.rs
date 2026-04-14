@@ -5,7 +5,6 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use model::chat::ChatHistory;
-use models_email::email::service::message::ParsedMessage;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -34,11 +33,6 @@ pub enum ReadContent {
         #[serde(flatten)]
         history: ChatHistory,
     },
-    Email {
-        thread_id: String,
-        subject: Option<String>,
-        messages: Vec<EmailMessage>,
-    },
     ItemPreviews {
         formatted_preview: String,
     },
@@ -54,44 +48,10 @@ pub struct DocumentMetadata {
     pub deleted: bool,
 }
 
-#[derive(Debug, JsonSchema, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EmailMessage {
-    pub message_id: String,
-    pub sender: String,
-    pub recipients: Vec<String>,
-    pub cc: Vec<String>,
-    pub bcc: Vec<String>,
-    pub content: String,
-    pub sent_at: Option<DateTime<Utc>>,
-}
-
-impl From<ParsedMessage> for EmailMessage {
-    fn from(msg: ParsedMessage) -> Self {
-        Self {
-            message_id: msg.db_id.to_string(),
-            sender: msg
-                .from
-                .as_ref()
-                .map(|f| f.email.clone())
-                .unwrap_or_default(),
-            recipients: msg.to.iter().map(|contact| contact.email.clone()).collect(),
-            cc: msg.cc.iter().map(|contact| contact.email.clone()).collect(),
-            bcc: msg
-                .bcc
-                .iter()
-                .map(|contact| contact.email.clone())
-                .collect(),
-            content: msg.body_parsed.clone().unwrap_or_default(),
-            sent_at: msg.internal_date_ts,
-        }
-    }
-}
-
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Read threaded content by ID(s). Supports reading channels, chats, emails, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.
+    description = "Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.
     Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window.",
     title = "ReadThread"
 )]
@@ -101,7 +61,7 @@ pub struct ReadThread {
     )]
     pub content_type: ContentType,
     #[schemars(
-        description = "ID(s) of the content to read. IMPORTANT: channel-message, chat-message, and email-message content types support MULTIPLE ids! For all other content types (channel, chat-thread, email-thread) provide a single id."
+        description = "ID(s) of the content to read. IMPORTANT: channel-message, chat-message, and content types support MULTIPLE ids! For all other content types (channel, chat-thread) provide a single id."
     )]
     pub ids: Vec<String>,
     #[schemars(
@@ -119,8 +79,6 @@ pub enum ContentType {
     ChannelMessage,
     ChatThread,
     ChatMessage,
-    EmailThread,
-    EmailMessage,
     Project,
 }
 
@@ -148,8 +106,6 @@ impl AsyncTool<Arc<ToolScribe>> for ReadThread {
             ContentType::ChannelMessage => self.read_channel_message(&scribe).await?,
             ContentType::ChatThread => self.read_chat_thread(&scribe).await?,
             ContentType::ChatMessage => self.read_chat_messages(&scribe).await?,
-            ContentType::EmailThread => self.read_email_thread(&scribe).await?,
-            ContentType::EmailMessage => self.read_email_message(&scribe).await?,
             ContentType::Project => self.read_project(&scribe, &request_context).await?,
         };
 
@@ -311,68 +267,6 @@ impl ReadThread {
             })?;
 
         Ok(ReadContent::Chat { history })
-    }
-
-    async fn read_email_thread(&self, scribe: &ToolScribe) -> Result<ReadContent, ToolCallError> {
-        let id = self.provide_single_id()?;
-        let messages = scribe
-            .email
-            .get_email_messages_by_thread_id(&id, 0, 100)
-            .await
-            .map_err(|e| ToolCallError {
-                description: format!("failed to fetch email thread messages: {}", e),
-                internal_error: e,
-            })?;
-
-        let subject = messages.first().and_then(|msg| msg.subject.clone());
-        let email_messages = messages.into_iter().map(EmailMessage::from).collect();
-
-        Ok(ReadContent::Email {
-            thread_id: id,
-            subject,
-            messages: email_messages,
-        })
-    }
-
-    async fn read_email_message(&self, scribe: &ToolScribe) -> Result<ReadContent, ToolCallError> {
-        let mut email_messages = Vec::new();
-        let mut subject = None;
-        let mut thread_id = String::new();
-
-        for id in &self.ids {
-            let parsed_message = match scribe.email.get_email_message_by_id(id).await {
-                Ok(msg) => msg,
-                Err(e) => {
-                    tracing::warn!("failed to fetch email message {}: {}", id, e);
-                    continue; // Skip failed messages instead of failing the entire request
-                }
-            };
-
-            // Use the subject from the first message
-            if subject.is_none() {
-                subject = parsed_message.subject.clone();
-            }
-
-            // Use the thread_id from the first message
-            if thread_id.is_empty() {
-                thread_id = id.clone();
-            }
-
-            email_messages.push(EmailMessage::from(parsed_message));
-        }
-
-        if email_messages.is_empty() {
-            return Err(ToolCallError {
-                description: "failed to fetch any email messages".to_string(),
-                internal_error: anyhow::anyhow!("all email message fetches failed"),
-            });
-        }
-
-        Ok(ReadContent::Email {
-            thread_id,
-            subject,
-            messages: email_messages,
-        })
     }
 }
 

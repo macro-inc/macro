@@ -319,7 +319,13 @@ pub async fn get_activities(
 }
 
 pub struct PgCommsRepo {
-    pub pool: PgPool,
+    pool: readonly_pool::ReadOnlyPool,
+}
+
+impl PgCommsRepo {
+    pub fn new(pool: readonly_pool::ReadOnlyPool) -> Self {
+        Self { pool }
+    }
 }
 
 impl CommsRepo for PgCommsRepo {
@@ -327,7 +333,7 @@ impl CommsRepo for PgCommsRepo {
         &self,
         req: GetChannelsParams,
     ) -> Result<Vec<ChannelWithParticipants>, rootcause::Report> {
-        Ok(get_user_channels_dynamic(&self.pool, &req).await?)
+        Ok(get_user_channels_dynamic(&self.pool.0, &req).await?)
     }
 
     async fn get_latest_channel_messages_batch(
@@ -337,13 +343,13 @@ impl CommsRepo for PgCommsRepo {
         std::collections::HashMap<ChannelId, models_comms::channel::LatestMessage>,
         rootcause::Report,
     > {
-        get_latest_channel_messages_batch(&self.pool, channels).await
+        get_latest_channel_messages_batch(&self.pool.0, channels).await
     }
 
     async fn get_activities(
         &self,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<models_comms::channel::Activity>, rootcause::Report> {
-        get_activities(&self.pool, user_id).await
+        get_activities(&self.pool.0, user_id).await
     }
 }

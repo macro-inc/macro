@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_links_history\n        SET deleted_at = NOW(),\n            deletion_reason = $2\n        WHERE link_id = $1\n          AND deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6aa68cd66ced924e43b012c317e1efe33721073350ae49882e066ac544bbb995"
+}

@@ -8,6 +8,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
+import { toast } from '@core/component/Toast/Toast';
 import { Button } from '@ui/components/Button';
 import {
   blockNameToFileExtensions,
@@ -25,8 +26,6 @@ import {
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
 import Logout from '@icon/regular/sign-out.svg';
-import QuestionCircle from '@icon/regular/question.svg';
-import { Popover } from '@kobalte/core';
 import IconUpload from '@macro-icons/macro-upload.svg';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
@@ -35,7 +34,6 @@ import {
     useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
-import { BetaTooltip } from '../BetaTooltip';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -74,6 +72,7 @@ export function Account() {
   const { showPaywall } = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
+  const [showEnableEmailModal, setShowEnableEmailModal] = createSignal<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
 
@@ -88,7 +87,6 @@ export function Account() {
   >(undefined);
 
   const emailActive = useEmailLinksStatus();
-  const [showTooltip, setShowTooltip] = createSignal<boolean>(false);
 
   const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
     const [_, response] = await authServiceClient.checkLinkExists({ idp_name: 'github' });
@@ -240,34 +238,41 @@ export function Account() {
               </div>
             }
           >
-            <TabContentRow text="Email" subtext={
-              <div class="flex items-center gap-1">
-                <span>Disabled</span>
-                <Popover.Root open={showTooltip()} gutter={10} placement={'top'}>
-                  <Popover.Anchor>
-                    <button
-                      type="button"
-                      aria-label="Why email is disabled"
-                      class="inline-flex items-center cursor-help"
-                      onPointerEnter={() => setShowTooltip(true)}
-                      onPointerLeave={() => setShowTooltip(false)}
-                      onFocus={() => setShowTooltip(true)}
-                      onBlur={() => setShowTooltip(false)}
-                    >
-                      <QuestionCircle class="size-5 text-ink-muted" />
-                    </button>
-                  </Popover.Anchor>
-                  <Popover.Portal>
-                    <Popover.Content class="z-modal">
-                      <BetaTooltip
-                        text="Email requires additional Google permissions. Select the permissions on sign-in to enable."
-                      />
-                    </Popover.Content>
-                  </Popover.Portal>
-                </Popover.Root>
+            <Show when={!showEnableEmailModal()}>
+              <div class="flex items-center justify-between mb-[18px]">
+                <div class="text-sm">Email</div>
+                <DeprecatedTextButton
+                  theme="base"
+                  text="Enable"
+                  onClick={() => setShowEnableEmailModal(true)}
+                />
               </div>
-            } />
+            </Show>
           </Show>
+        </Show>
+        <Show when={showEnableEmailModal()}>
+          <div class="flex flex-row items-center mb-[18px]">
+            <div class="text-sm">
+              Email requires additional Google permissions. Select the permissions on sign-in to enable.
+            </div>
+            <div class="ml-auto flex flex-row">
+              <DeprecatedTextButton
+                theme="clear"
+                text="Logout"
+                onClick={() => {
+                  setShowEnableEmailModal(false);
+                  logout();
+                }}
+              />
+              <DeprecatedTextButton
+                theme="clear"
+                text="Cancel"
+                onClick={() => {
+                  setShowEnableEmailModal(false);
+                }}
+              />
+            </div>
+          </div>
         </Show>
         <Show when={showEmailModal()}>
           <div class="flex flex-row items-center">
@@ -278,9 +283,16 @@ export function Account() {
               <DeprecatedTextButton
                 theme="clear"
                 text="Confirm"
-                onClick={() => {
-                  disconnectEmail();
+                onClick={async () => {
                   setShowEmailModal(false);
+                  await disconnectEmail().match(
+                    () => {
+                      toast.success('Email disabled — clearing your email data, this may take a moment.');
+                    },
+                    () => {
+                      toast.failure('Failed to disable email. Please try again.');
+                    },
+                  );
                 }}
               />
               <DeprecatedTextButton
@@ -297,7 +309,7 @@ export function Account() {
           <div class="text-sm">GitHub</div>
           <Show
             when={!githubLinkExists.loading}
-            fallback={<span class="text-sm text-ink-muted">Loading...</span>}
+            fallback={<span class="text-sm text-ink-muted h-8 flex items-center">Loading...</span>}
           >
             <Show
               when={!githubLinkExists()}

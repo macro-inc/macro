@@ -10,7 +10,14 @@ import {
   isScopeInActiveBranch,
   runCommand,
 } from '@core/hotkey/utils';
-import { isSearchEntity } from '@entity';
+import {
+  isSearchEntity,
+  isWithNotification,
+  filterNotDoneNotifications,
+  filterValidNotifications,
+} from '@entity';
+import { openSingleStackNotification } from '@notifications';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { onCleanup, type Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
@@ -124,6 +131,20 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hide: true,
   }).withGroup(group);
 
+  const tryOpenChannelNotification = (newSplit: boolean): boolean => {
+    const entity = soup.focus.item();
+    if (!entity) return false;
+    if (entity.type !== 'channel' || !isWithNotification(entity)) return false;
+    const validNotifs = filterNotDoneNotifications(
+      filterValidNotifications(entity.notifications?.() ?? [])
+    );
+    const splitManager = globalSplitManager();
+    return (
+      !!splitManager &&
+      openSingleStackNotification(validNotifs, splitManager, newSplit)
+    );
+  };
+
   // enter - Open entity in split
   registerHotkey({
     hotkey: ['enter'],
@@ -132,6 +153,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: 'Open',
     hide: true,
     keyDownHandler: () => {
+      if (tryOpenChannelNotification(false)) return true;
+
       const entity = soup.focus.item();
       if (!entity) return false;
 
@@ -293,6 +316,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: 'Open in new split',
     condition: () => soup.focus.id() !== undefined,
     keyDownHandler: () => {
+      if (tryOpenChannelNotification(true)) return true;
+
       const entity = soup.focus.item();
       if (!entity) return false;
       openEntityInSplitFromUnifiedList(entity, {

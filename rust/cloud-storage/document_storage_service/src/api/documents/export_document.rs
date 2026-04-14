@@ -4,14 +4,15 @@ use std::{
 };
 
 use crate::api::context::ApiContext;
+use crate::api::context::EntityAccessService;
 use axum::{
     Extension, Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use futures::StreamExt;
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::{
     document::{DocumentBasic, FileType, response::LocationResponseData},
     response::{ErrorResponse, GenericErrorResponse},
@@ -62,7 +63,7 @@ pub struct ExportDocumentResponse {
     )]
 #[tracing::instrument(skip(state, user_context, _access), fields(user_id=?user_context.user_id))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { .. }): Path<Params>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,

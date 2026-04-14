@@ -14,6 +14,7 @@ export function createBucket({
   lifecycleRules,
   enableVersioning,
   exposeHeaders,
+  tags,
 }: {
   id: string;
   bucketName: string;
@@ -21,6 +22,7 @@ export function createBucket({
   lifecycleRules?: aws.types.input.s3.BucketLifecycleRule[];
   enableVersioning?: boolean;
   exposeHeaders?: string[];
+  tags?: { [name: string]: string };
 }): Bucket {
   // Document Storage S3 Bucket
   return new aws.s3.Bucket(id, {
@@ -51,6 +53,7 @@ export function createBucket({
             targetPrefix: `${bucketName}/`,
           }
         : undefined,
+    tags,
   });
 }
 

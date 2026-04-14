@@ -9,7 +9,10 @@ import { modificationDataReplacer } from '@block-pdf/util/buildModificationData'
 import type { BlockAlias, BlockName } from '@core/block';
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { SERVER_HOSTS } from '@core/constant/servers';
+import {
+  SERVER_HOSTS,
+  SYNC_PERMISSION_TOKEN_DSS_HOST,
+} from '@core/constant/servers';
 import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
@@ -86,7 +89,6 @@ import type {
   ValidateDocumentPermissionsTokenResponse,
 } from './service';
 import { fetchPresigned } from './util/fetchPresigned';
-import { formatDocumentName } from './util/filename';
 import {
   type GetDocxFileResponse,
   getDocxExpandedParts,
@@ -120,7 +122,11 @@ export type Success = {
 };
 type SuccessResponse = { data: Success };
 
-export type ItemType = CloudStorageItemType | 'channel' | 'email';
+export type ItemType =
+  | CloudStorageItemType
+  | 'channel'
+  | 'email'
+  | 'channel_message';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
@@ -136,44 +142,6 @@ const itemTypeSet = new Set([
 export function isItemType(str: string): str is ItemType {
   return itemTypeSet.has(str);
 }
-
-const mapMetadataDocumentName = (
-  metadata: DocumentMetadata
-): DocumentMetadata => {
-  const name = formatDocumentName(metadata.documentName, metadata.fileType, {
-    fullyQualifiedBlockName: true,
-  });
-
-  return {
-    ...metadata,
-    documentName: name,
-  };
-};
-
-const mapItemDocumentName = (item: Item): Item => {
-  if (item.type !== 'document') return item;
-
-  const name = formatDocumentName(item.name, item.fileType, {
-    fullyQualifiedBlockName: true,
-  });
-
-  return {
-    ...item,
-    name,
-  };
-};
-
-const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
-  if (!('document_name' in preview)) return preview;
-
-  const name = formatDocumentName(preview.document_name, preview.file_type, {
-    fullyQualifiedBlockName: true,
-  });
-  return {
-    ...preview,
-    document_name: name,
-  };
-};
 
 export function blockNameToItemType(
   blockName: BlockName | BlockAlias
@@ -258,9 +226,11 @@ export const storageServiceClient = {
   },
 
   permissionsTokens: {
+    // Uses SYNC_PERMISSION_TOKEN_DSS_HOST instead of dssFetch so that tokens are
+    // always signed by the DSS whose JWT secret matches the sync service's secret.
     async createPermissionToken(args) {
-      return await dssFetch<GetDocumentPermissionsTokenResponse>(
-        `/documents/permissions_token/${args.document_id}`,
+      return await fetchWithToken<GetDocumentPermissionsTokenResponse>(
+        `${SYNC_PERMISSION_TOKEN_DSS_HOST}/documents/permissions_token/${args.document_id}`,
         {
           method: 'POST',
         }
@@ -278,7 +248,7 @@ export const storageServiceClient = {
   },
   async getUsersHistory() {
     return mapOk(await dssFetch<{ data: Item[] }>(`/history`), (result) => ({
-      data: result.data.map(mapItemDocumentName),
+      data: result.data,
     }));
   },
 
@@ -327,7 +297,7 @@ export const storageServiceClient = {
         };
       }>(`/documents?limit=${params.limit}&offset=${params.offset}`),
       (result) => ({
-        documents: result.data.documents.map(mapMetadataDocumentName),
+        documents: result.data.documents,
         total: result.data.total,
         nextOffset: result.data.next_offset,
       })
@@ -419,7 +389,7 @@ export const storageServiceClient = {
         const data = result.data;
         return {
           ...data,
-          documentMetadata: mapMetadataDocumentName(data.documentMetadata),
+          documentMetadata: data.documentMetadata,
         };
       }
     );
@@ -576,7 +546,7 @@ export const storageServiceClient = {
         body: JSON.stringify({ document_ids: args.document_ids }),
       }),
       (result) => ({
-        previews: result.previews.map(mapPreviewDocumentName),
+        previews: result.previews,
       })
     );
   },

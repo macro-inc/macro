@@ -16,9 +16,20 @@ use super::DocumentToolContext;
 
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ReadDocumentMetadata {
+    /// The document metadata
+    #[serde(flatten)]
+    document: DocumentMetadata,
+    /// If the document is a "task" the branch name of the document will be provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    branch_name: Option<String>,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ReadMetadataResponse {
     /// The metadata of the document
-    pub document_metadata: DocumentMetadata,
+    pub document_metadata: ReadDocumentMetadata,
     /// The users level of access to the document
     pub user_access_level: AccessLevel,
 }
@@ -64,15 +75,42 @@ where
 
         let result = service_context
             .service
-            .get_document(entity_access_receipt)
+            .get_document(entity_access_receipt.clone())
             .await
             .map_err(|e| ToolCallError {
                 description: "unable to get the document metadata".to_string(),
                 internal_error: e.into(),
             })?;
 
+        let branch_name = if let Some(sub_type) = result.document_metadata.sub_type {
+            match sub_type {
+                document_sub_type::DocumentSubType::Task => {
+                    let short_id = service_context
+                        .service
+                        .get_short_id(entity_access_receipt)
+                        .await
+                        .map_err(|e| ToolCallError {
+                            description: "unable to get the short id".to_string(),
+                            internal_error: e.into(),
+                        })?;
+
+                    let name = result.document_metadata.document_name.clone();
+                    let slugified_name = name.replace(" ", "-").to_lowercase();
+
+                    Some(format!("macro-{short_id}-{slugified_name}"))
+                }
+            }
+        } else {
+            None
+        };
+
+        let document_metadata = ReadDocumentMetadata {
+            document: result.document_metadata,
+            branch_name,
+        };
+
         Ok(ReadMetadataResponse {
-            document_metadata: result.document_metadata,
+            document_metadata,
             user_access_level: result.user_access_level,
         })
     }

@@ -2,7 +2,6 @@ use crate::api::context::DcsScribe;
 use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
 use ai::types::{Attachment, ImageData};
 use ai_format::document::Document;
-use ai_tools::read::EmailMessage;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     chat::{AttachmentType, ChatAttachmentWithName},
@@ -109,18 +108,11 @@ pub async fn fetchium(
                     .unwrap_or("No Subject")
                     .to_string();
 
-                let thread = thread
-                    .into_iter()
-                    .map(EmailMessage::from)
-                    .collect::<Vec<_>>();
-
-                let formatted_content = ai_tools::read::ReadContent::Email {
-                    thread_id: attachment.attachment_id.clone(),
-                    subject: Some(subject.clone()),
-                    messages: thread,
-                };
-
-                let content = serde_json::to_string_pretty(&formatted_content)?;
+                let content = thread
+                    .iter()
+                    .map(serde_json::to_string_pretty)
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join("\n");
 
                 Ok(Attachment::Text(
                     Document {

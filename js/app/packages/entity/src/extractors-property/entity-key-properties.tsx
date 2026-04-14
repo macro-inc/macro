@@ -30,6 +30,7 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
+    .with({ type: 'channel_message' }, () => EntityType.CHANNEL)
     .exhaustive();
 }
 

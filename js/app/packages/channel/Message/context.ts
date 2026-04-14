@@ -17,6 +17,22 @@ export function useMessageActions(): MessageActions | undefined {
   return useContext(MessageActionsContext);
 }
 
+export type MessageActionDrawerState = {
+  isOpen: Accessor<boolean>;
+  message: Accessor<MessageData | undefined>;
+  actions: Accessor<MessageActions | undefined>;
+  open: (message: MessageData, actions: MessageActions | undefined) => void;
+  close: () => void;
+};
+
+const MessageActionDrawerContext = createContext<MessageActionDrawerState>();
+export const MessageActionDrawerContextProvider =
+  MessageActionDrawerContext.Provider;
+
+export function useMessageActionDrawer(): MessageActionDrawerState | undefined {
+  return useContext(MessageActionDrawerContext);
+}
+
 export type MessageSelectionState = {
   isSelected: boolean;
 };

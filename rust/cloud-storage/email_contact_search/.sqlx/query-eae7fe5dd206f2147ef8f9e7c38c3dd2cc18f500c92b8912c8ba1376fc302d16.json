@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT t.id as \"thread_id!\", t.latest_non_spam_message_ts as \"updated_at!\"\n        FROM email_threads t\n        WHERE t.id IN (\n            SELECT DISTINCT ecsi.thread_id\n            FROM email_contact_search_index ecsi\n            WHERE ecsi.link_id = (SELECT id FROM email_links WHERE macro_id = $1)\n              AND (ecsi.contact_name ILIKE $2 OR ecsi.contact_email ILIKE $2)\n        )\n        AND t.latest_non_spam_message_ts IS NOT NULL\n        AND (\n            $4::timestamptz IS NULL\n            OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)\n        )\n        AND (\n            $6::bool IS NULL\n            OR $6::bool = (NOT (\n                EXISTS (\n                    SELECT 1 FROM email_messages em_dep\n                    JOIN email_message_labels ml_dep ON ml_dep.message_id = em_dep.id\n                    JOIN email_labels l_dep ON ml_dep.label_id = l_dep.id\n                    WHERE em_dep.thread_id = t.id\n                    AND l_dep.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')\n                )\n                AND NOT EXISTS (\n                    SELECT 1 FROM email_messages em_pri\n                    JOIN email_message_labels ml_pri ON ml_pri.message_id = em_pri.id\n                    JOIN email_labels l_pri ON ml_pri.label_id = l_pri.id\n                    WHERE em_pri.thread_id = t.id\n                    AND l_pri.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')\n                )\n            ))\n        )\n        ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC\n        LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "eae7fe5dd206f2147ef8f9e7c38c3dd2cc18f500c92b8912c8ba1376fc302d16"
+}

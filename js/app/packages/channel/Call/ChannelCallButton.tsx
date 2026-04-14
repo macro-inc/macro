@@ -1,0 +1,60 @@
+import { Show } from 'solid-js';
+import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
+import { Button } from '@ui/components/Button';
+import PhoneIcon from '@icon/regular/phone.svg';
+import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
+import { useActiveCallQuery } from '@queries/call/call';
+import { useCall } from './useCall';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+
+export function ChannelCallButton(props: { channelId: string }) {
+  const { setActiveTab } = useChannelTab();
+  const call = useCall(() => props.channelId, {
+    onJoin: () => setActiveTab('call'),
+    onLeave: () => setActiveTab(DEFAULT_CHANNEL_TAB),
+  });
+
+  const activeCallQuery = useActiveCallQuery(() => props.channelId);
+  const isCallInProgress = () => !!activeCallQuery.data;
+  const isHighlighted = () => call.isInThisChannel() || isCallInProgress();
+
+  const isPending = () => call.isJoining() || call.isLeaving();
+
+  const tooltip = () => {
+    if (call.isInThisChannel()) return 'Leave Call';
+    if (isCallInProgress()) return 'Join Call';
+    return 'Call';
+  };
+
+  const handleClick = async () => {
+    if (isPending()) return;
+    try {
+      if (call.isInThisChannel()) {
+        await call.leaveCall();
+      } else {
+        await call.joinCall();
+      }
+    } catch (e) {
+      console.error('Call action failed', e);
+    }
+  };
+
+  return (
+    <Button
+      onClick={handleClick}
+      disabled={isPending()}
+      tooltip={tooltip()}
+      class={
+        isHighlighted()
+          ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent-ink'
+          : 'px-1'
+      }
+      size={isTouchDevice() ? 'icon-md' : 'icon-sm'}
+    >
+      <Show when={call.isInThisChannel()} fallback={<PhoneIcon />}>
+        <PhoneDisconnectIcon />
+      </Show>
+    </Button>
+  );
+}

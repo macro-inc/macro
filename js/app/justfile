@@ -1,10 +1,17 @@
 dev-tauri:
     cd packages/app && bun run --bun dev:tauri
 
-# Run the app with all services locally
+# List available local service names
+local-services:
+    @sed -n "s/.*'\([a-z][-a-z]*\)':.*/\1/p" packages/core/constant/servers.ts | sort -u
+
+# Run the app with local services (defaults to ALL)
 # This assumes you have followed the RUNNING_LOCALLLY.md instructions
+servers := 'ALL'
+port := '3000'
+
 local:
-    cd packages/app && VITE_LOCAL_SERVERS='ALL' bun run --bun dev
+    cd packages/app && PORT='{{port}}' VITE_LOCAL_SERVERS='{{servers}}' bun run --bun dev
 
 local-dcs:
     cd packages/app && VITE_LOCAL_SERVERS='cognition-service,cognition-websocket-service' bun run --bun dev

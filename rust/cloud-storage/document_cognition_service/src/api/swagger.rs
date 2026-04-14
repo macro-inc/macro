@@ -7,6 +7,9 @@ use crate::api::{
     stream::chat_message::{
         self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
     },
+    stream::stop::{
+        self as stream_stop, StopChatStreamError, StopChatStreamRequest, StopChatStreamResponse,
+    },
 };
 use crate::model::{
     response::{
@@ -22,7 +25,9 @@ use ai::types::{ModelMetadata, Provider};
 
 use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
 use chat::inbound::{
-    self as chat_inbound, CreateChatRequest, GetChatPermissionsResponse, PatchChatRequest,
+    self as chat_inbound, CallToolRequest, CallToolResponse, CreateChatRequest,
+    GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
+    UpdateToolResponseRequest,
 };
 
 use model::{
@@ -59,6 +64,10 @@ use utoipa::OpenApi;
             chat_inbound::permanently_delete_chat_handler,
             chat_inbound::patch_chat_handler,
             chat_inbound::revert_delete_handler,
+            chat_inbound::update_tool_call_handler,
+            chat_inbound::update_tool_response_handler,
+            chat_inbound::call_tool_handler,
+            chat_inbound::reject_tool_call_handler,
             get_models::get_models_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
             citations::get_citation_handler,
@@ -66,6 +75,7 @@ use utoipa::OpenApi;
             chat_history::get_chat_history_handler,
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
             chat_message::send_chat_message,
+            stream_stop::stop_chat_stream,
             memory_api::get_memory_handler
         ),
         components(
@@ -112,6 +122,13 @@ use utoipa::OpenApi;
                 GetChatPermissionsResponse,
                 GetChatResponse,
 
+                // Tool Operations
+                UpdateToolCallRequest,
+                UpdateToolResponseRequest,
+                CallToolRequest,
+                CallToolResponse,
+                RejectToolCallRequest,
+
                 // Share Permission
                 UpdateOperation,
 
@@ -132,6 +149,9 @@ use utoipa::OpenApi;
                 HttpSendChatMessageRequest,
                 SendChatMessageResponse,
                 ChatMessageError,
+                StopChatStreamRequest,
+                StopChatStreamResponse,
+                StopChatStreamError,
                 StreamError,
                 ToolSet,
 

@@ -37,6 +37,7 @@ type CreateCloudStorageServiceServiceArgs = {
   healthCheckPath: string;
   secretKeyArns: (pulumi.Output<string> | string)[];
   queueArns: (pulumi.Output<string> | string)[];
+  callRecordingCrudPolicyArn: pulumi.Output<string> | string;
   tags: { [key: string]: string };
 };
 
@@ -68,6 +69,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       cloudStorageClusterName,
       secretKeyArns,
       queueArns,
+      callRecordingCrudPolicyArn,
       tags,
     }: CreateCloudStorageServiceServiceArgs,
     opts?: pulumi.ComponentResourceOptions
@@ -170,7 +172,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
             },
           ],
         },
-        tags: this.tags,
+        tags: { ...this.tags, 'call-recording-access': 'true' },
       },
       { parent: this }
     );
@@ -207,6 +209,14 @@ export class CloudStorageService extends pulumi.ComponentResource {
         policyArn: queuePolicy.arn,
       },
       { parent: this, dependsOn: [queuePolicy, this.role] }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `${BASE_NAME}-role-call-recording-att-${stack}`,
+      {
+        role: this.role,
+        policyArn: pulumi.interpolate`${callRecordingCrudPolicyArn}`,
+      }
     );
 
     // ecr image

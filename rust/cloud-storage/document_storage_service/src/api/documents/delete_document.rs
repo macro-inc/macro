@@ -1,12 +1,13 @@
 use crate::api::context::ApiContext;
+use crate::api::context::EntityAccessService;
 use crate::api::util::count_occurrences;
 use axum::Json;
 use axum::extract::State;
 use axum::response::Response;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::TryStreamExt;
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::document::DocumentBasic;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
@@ -37,9 +38,9 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, user_context, _access), fields(user_id=?user_context.user_id))]
 pub async fn permanently_delete_document_handler(
-    access: DocumentAccessExtractor<OwnerAccessLevel>,
+    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,

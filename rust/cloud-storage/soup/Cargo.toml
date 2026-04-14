@@ -30,7 +30,7 @@ axum = [
   "models_soup/schema",
 ]
 inbound = ["email/inbound", "ports"]
-outbound = ["dep:sqlx", "ports"]
+outbound = ["dep:readonly_pool", "dep:sqlx", "ports"]
 ports = ["dep:tokio", "frecency/ports"]
 
 
@@ -59,6 +59,7 @@ models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 non_empty = { path = "../non_empty" }
 properties_db_client = { path = "../properties_db_client/" }
+readonly_pool = { path = "../readonly_pool", optional = true }
 recursion = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

@@ -13,6 +13,7 @@ use contacts_service::queue::MessageQueue;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use secretsmanager_client::SecretManager;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -84,12 +85,22 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let redis_client =
+        redis::Client::open(config.redis_uri.as_str()).context("failed to create redis client")?;
+
+    let rate_limit_service = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client,
+        },
+    };
+
     api::setup_and_serve(AppState {
         config: Arc::new(config),
-        db,
+        db: db.clone(),
         jwt_args,
         internal_api_secret,
-        contacts_service: Arc::new(Service),
+        contacts_service: Arc::new(Service(db)),
+        rate_limit_service,
     })
     .await?;
     Ok(())

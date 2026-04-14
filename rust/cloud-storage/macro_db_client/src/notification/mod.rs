@@ -1,11 +1,8 @@
 use anyhow::Context;
-use macro_user_id::user_id::MacroUserIdStr;
+use document_sub_type::DocumentSubType;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
-use crate::document::get_basic_documents;
-use crate::{
-    chat::get_basic_chat, document::get_basic_document,
-    projects::get_project::get_basic_project::get_basic_project,
-};
+use crate::{chat::get_basic_chat, projects::get_project::get_basic_project::get_basic_project};
 
 pub mod document;
 pub mod project;
@@ -17,6 +14,8 @@ pub struct BasicCloudStorageItemMetadata {
     pub item_name: String,
     pub item_owner: MacroUserIdStr<'static>,
     pub file_type: Option<String>,
+    /// Raw sub_type string from DB (e.g. "task"). None for non-task documents.
+    pub sub_type: Option<String>,
 }
 
 /// Gets the basic cloud storage item metadata for a given item
@@ -29,15 +28,36 @@ pub async fn get_basic_cloud_storage_item_metadata(
     match item_type {
         "document" => {
             tracing::trace!("getting document metadata");
-            let basic_document_metadata = get_basic_document(db, item_id)
-                .await
-                .context("unable to get document metadata")?;
+            let row = sqlx::query!(
+                r#"
+                SELECT
+                    d.id as "document_id",
+                    d.owner,
+                    d.name as "document_name",
+                    d."fileType" as "file_type",
+                    dst.sub_type as "sub_type?: DocumentSubType"
+                FROM
+                    "Document" d
+                LEFT JOIN document_sub_type dst ON dst.document_id = d.id
+                WHERE d.id = $1
+                LIMIT 1
+                "#,
+                item_id,
+            )
+            .fetch_one(db)
+            .await
+            .context("unable to get document metadata")?;
+
+            let owner = MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| anyhow::anyhow!("invalid owner id: {e}"))?
+                .into_owned();
 
             Ok(BasicCloudStorageItemMetadata {
-                item_id: basic_document_metadata.document_id,
-                item_name: basic_document_metadata.document_name,
-                item_owner: basic_document_metadata.owner,
-                file_type: basic_document_metadata.file_type,
+                item_id: row.document_id,
+                item_name: row.document_name,
+                item_owner: owner,
+                file_type: row.file_type,
+                sub_type: row.sub_type.map(|st| st.to_string()),
             })
         }
         "chat" => {
@@ -51,6 +71,7 @@ pub async fn get_basic_cloud_storage_item_metadata(
                 item_name: basic_chat_metadata.name,
                 item_owner: basic_chat_metadata.user_id,
                 file_type: None,
+                sub_type: None,
             })
         }
         "project" => {
@@ -63,6 +84,7 @@ pub async fn get_basic_cloud_storage_item_metadata(
                 item_name: project_metadata.name,
                 item_owner: project_metadata.user_id,
                 file_type: None,
+                sub_type: None,
             })
         }
         _ => Err(anyhow::anyhow!("invalid item type")),
@@ -81,20 +103,39 @@ pub async fn get_basic_cloud_storage_documents_metadata(
 
     tracing::trace!("getting metadata for {} documents", document_ids.len());
 
-    let basic_documents = get_basic_documents(db, document_ids)
-        .await
-        .context("unable to get documents metadata")?;
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            d.id as "document_id",
+            d.owner,
+            d.name as "document_name",
+            d."fileType" as "file_type",
+            dst.sub_type as "sub_type?: DocumentSubType"
+        FROM
+            "Document" d
+        LEFT JOIN document_sub_type dst ON dst.document_id = d.id
+        WHERE d.id = ANY($1)
+        "#,
+        document_ids,
+    )
+    .fetch_all(db)
+    .await
+    .context("unable to get documents metadata")?;
 
-    // Transform documents into BasicCloudStorageItemMetadata with their IDs
-    let result = basic_documents
+    let result = rows
         .into_iter()
-        .map(|doc| BasicCloudStorageItemMetadata {
-            item_id: doc.document_id,
-            item_name: doc.document_name,
-            item_owner: doc.owner,
-            file_type: doc.file_type,
+        .map(|row| {
+            MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| anyhow::anyhow!("invalid owner id: {e}"))
+                .map(|owner| BasicCloudStorageItemMetadata {
+                    item_id: row.document_id,
+                    item_name: row.document_name,
+                    item_owner: owner.into_owned(),
+                    file_type: row.file_type,
+                    sub_type: row.sub_type.map(|st| st.to_string()),
+                })
         })
-        .collect();
+        .collect::<anyhow::Result<Vec<_>>>()?;
 
     Ok(result)
 }

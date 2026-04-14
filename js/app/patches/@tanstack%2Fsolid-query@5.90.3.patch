@@ -1,0 +1,30 @@
+diff --git a/node_modules/@tanstack/solid-query/.bun-tag-45b322634d70fffb b/.bun-tag-45b322634d70fffb
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@tanstack/solid-query/.bun-tag-4e44056cd98d1d17 b/.bun-tag-4e44056cd98d1d17
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/build/dev.js b/build/dev.js
+index d1b3addc6fc214c5508f903fda375f38e14acfd7..cc27b37db9ab24a07ed6ec0bfd31da3fd1a6bd8b 100644
+--- a/build/dev.js
++++ b/build/dev.js
+@@ -191,6 +191,7 @@ function useBaseQuery(options, Observer, queryClient) {
+     },
+     {
+       storage: createDeepSignal,
++      initialValue: !observerResult.isLoading ? observerResult : undefined,
+       get deferStream() {
+         return options().deferStream;
+       },
+diff --git a/build/index.js b/build/index.js
+index afe1550d6dd52e4dd7cacf1dc8850463f0a55986..3079aee613917690286dc2aed99572d15555d1d7 100644
+--- a/build/index.js
++++ b/build/index.js
+@@ -182,6 +182,7 @@ function useBaseQuery(options, Observer, queryClient) {
+     },
+     {
+       storage: createDeepSignal,
++      initialValue: !observerResult.isLoading ? observerResult : undefined,
+       get deferStream() {
+         return options().deferStream;
+       },

@@ -375,11 +375,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     setSelectedIndex(0);
   });
 
-  // Scroll VList to selected index (offset by pinned count)
+  // Scroll VList to selected index only during keyboard navigation
   createEffect(() => {
     const index = selectedIndex();
     const pCount = pinnedCount();
-    if (index >= pCount && virtualizerHandle) {
+    if (keyboardMode() && index >= pCount && virtualizerHandle) {
       virtualizerHandle.scrollToIndex(index - pCount, { align: 'nearest' });
     }
   });

@@ -7,7 +7,7 @@ import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import XIcon from '@icon/regular/x.svg';
-import { Dialog } from '@kobalte/core/dialog';
+import { Dialog, useDialogContext } from '@kobalte/core/dialog';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import {
   type Accessor,
@@ -49,6 +49,8 @@ type LightboxProps = {
 };
 
 export function Lightbox(props: LightboxProps) {
+  const dialogContext = useDialogContext();
+
   const [zoompinchHandle, setZoompinchHandle] = createSignal<
     ZoompinchHandle | undefined
   >();
@@ -192,10 +194,10 @@ export function Lightbox(props: LightboxProps) {
     if (!handle) return;
     const { engine, wrapperElement: wrapper } = handle;
 
-    const hasNav = props.onPrevious != null || props.onNext != null;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') {
+      if (e.key === 'Escape') {
+        dialogContext.close();
+      } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         props.onPrevious?.();
       } else if (e.key === 'ArrowRight') {
@@ -203,7 +205,7 @@ export function Lightbox(props: LightboxProps) {
         props.onNext?.();
       }
     };
-    if (hasNav) window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
 
     let mouseMoveListenerTimeoutId: number | undefined;
     if (!isMobile()) {
@@ -263,7 +265,7 @@ export function Lightbox(props: LightboxProps) {
     }
 
     onCleanup(() => {
-      if (hasNav) window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown);
       window.clearTimeout(mouseMoveListenerTimeoutId);
       window.removeEventListener('mousemove', handleMouseMove);
       if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);

@@ -44,7 +44,7 @@ impl SQS {
             return enqueue_link_manager_notification(&self.inner, link_manager_queue, message)
                 .await;
         }
-        Err(anyhow::anyhow!("link_manager_queue is not configured"))
+        anyhow::bail!("link_manager_queue is not configured")
     }
 
     /// Sends a message to the email backfill queue
@@ -124,6 +124,37 @@ impl EmailMessageEnqueuer for SQS {
             delay_seconds,
         )
         .await
+    }
+
+    #[tracing::instrument(skip(self, messages, labels_to_add, labels_to_remove), err)]
+    async fn enqueue_gmail_ops_modify_labels_batch(
+        &self,
+        link_id: Uuid,
+        messages: Vec<(Uuid, String)>,
+        labels_to_add: Vec<String>,
+        labels_to_remove: Vec<String>,
+    ) -> Result<(), Self::Err> {
+        use models_email::gmail::gmail_ops::{
+            GmailOpsOperation, GmailOpsPubsubMessage, ModifyMessageLabelsPayload,
+        };
+
+        let gmail_ops_messages: Vec<GmailOpsPubsubMessage> = messages
+            .into_iter()
+            .map(
+                |(db_message_id, provider_message_id)| GmailOpsPubsubMessage {
+                    link_id,
+                    operation: GmailOpsOperation::ModifyMessageLabels(ModifyMessageLabelsPayload {
+                        db_message_id,
+                        provider_message_id,
+                        labels_to_add: labels_to_add.clone(),
+                        labels_to_remove: labels_to_remove.clone(),
+                    }),
+                },
+            )
+            .collect();
+
+        self.enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
+            .await
     }
 }
 

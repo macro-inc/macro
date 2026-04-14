@@ -28,6 +28,15 @@ pub trait EmailMessageEnqueuer: Send + Sync + 'static {
         message_id: Uuid,
         delay_seconds: Option<i32>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Enqueue a batch of Gmail label modification operations to the gmail_ops worker queue.
+    fn enqueue_gmail_ops_modify_labels_batch(
+        &self,
+        link_id: Uuid,
+        messages: Vec<(Uuid, String)>,
+        labels_to_add: Vec<String>,
+        labels_to_remove: Vec<String>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 pub trait EmailRepo: Send + Sync + 'static {
@@ -250,6 +259,39 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<EmailFilter>, Self::Err>> + Send;
 }
 
+/// Read-only trait for fetching email thread previews.
+/// Used by soup to restrict access to only read email operations as it uses the read replica database.
+pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
+    fn get_email_thread_previews(
+        &self,
+        req: GetEmailsRequest,
+    ) -> impl Future<
+        Output = Result<
+            PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
+            EmailErr,
+        >,
+    > + Send;
+}
+
+/// Newtype adapter that restricts a full `EmailService` to read-only preview access.
+/// Wrapping is explicit so readonly wiring is intentional — a bare `EmailServiceImpl`
+/// will *not* silently satisfy `EmailPreviewServiceReadOnly`.
+pub struct ReadonlyEmailPreviewAdapter<T>(pub T);
+
+impl<T: EmailService> EmailPreviewServiceReadOnly for ReadonlyEmailPreviewAdapter<T> {
+    fn get_email_thread_previews(
+        &self,
+        req: GetEmailsRequest,
+    ) -> impl Future<
+        Output = Result<
+            PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
+            EmailErr,
+        >,
+    > + Send {
+        EmailService::get_email_thread_previews(&self.0, req)
+    }
+}
+
 pub trait EmailService: Send + Sync + 'static {
     fn get_email_thread_previews(
         &self,
@@ -351,18 +393,6 @@ pub trait EmailService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<EmailFilter>, EmailErr>> + Send;
 }
 
-/// Port for modifying Gmail message labels via the provider API.
-pub trait GmailLabelModifier: Send + Sync + 'static {
-    /// Add and remove labels on a single message identified by its provider message ID.
-    fn modify_message_labels(
-        &self,
-        access_token: &str,
-        provider_message_id: &str,
-        label_ids_to_add: &[String],
-        label_ids_to_remove: &[String],
-    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
-}
-
 /// Port for fetching a Gmail access token for a given email link.
 ///
 /// The domain service receives the token as an opaque `&str`. This trait
@@ -400,22 +430,6 @@ impl GmailTokenProvider for NoOpGmailTokenProvider {
     }
 }
 
-/// No-op label modifier for callers that don't need Gmail label operations.
-#[derive(Clone)]
-pub struct NoOpGmailLabelModifier;
-
-impl GmailLabelModifier for NoOpGmailLabelModifier {
-    async fn modify_message_labels(
-        &self,
-        _access_token: &str,
-        _provider_message_id: &str,
-        _label_ids_to_add: &[String],
-        _label_ids_to_remove: &[String],
-    ) -> Result<(), EmailErr> {
-        Ok(())
-    }
-}
-
 /// No-op enqueuer for callers that don't need send capability.
 #[derive(Clone)]
 pub struct NoOpEnqueuer;
@@ -428,6 +442,16 @@ impl EmailMessageEnqueuer for NoOpEnqueuer {
         _link_id: Uuid,
         _message_id: Uuid,
         _delay_seconds: Option<i32>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn enqueue_gmail_ops_modify_labels_batch(
+        &self,
+        _link_id: Uuid,
+        _messages: Vec<(Uuid, String)>,
+        _labels_to_add: Vec<String>,
+        _labels_to_remove: Vec<String>,
     ) -> Result<(), Self::Err> {
         Ok(())
     }

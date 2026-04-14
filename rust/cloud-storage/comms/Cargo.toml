@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 inbound = ["dep:axum", "dep:model_user", "dep:utoipa"]
-outbound = ["dep:sqlx"]
+outbound = ["dep:readonly_pool", "dep:sqlx"]
 
 
 [dependencies]
@@ -21,6 +21,7 @@ model-entity = { path = "../model-entity" }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
+readonly_pool = { path = "../readonly_pool", optional = true }
 recursion = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

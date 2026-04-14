@@ -1,4 +1,5 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
@@ -33,6 +34,7 @@ async function fetchChannelPreviews(
           ...base,
           access: 'access' as const,
           loading: false,
+          rawName: channel.channel_name,
           name: channel.channel_name,
           channelType: channel.channel_type,
         };
@@ -94,6 +96,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           ...base,
           access: 'access' as const,
           loading: false,
+          rawName: doc.document_name,
           name: doc.document_name,
           fileType: doc.file_type as FileType,
           owner: doc.owner,
@@ -140,6 +143,7 @@ async function fetchChatPreviews(ids: string[]): Promise<PreviewItem[]> {
           ...base,
           access: 'access' as const,
           loading: false,
+          rawName: chat.chat_name,
           name: chat.chat_name,
           owner: chat.owner,
           updatedAt: chat.updated_at,
@@ -176,6 +180,7 @@ async function fetchProjectPreviews(
       type: 'project' as const,
       loading: false as const,
       ...rest,
+      rawName: rest.name,
       updatedAt,
     };
   });
@@ -213,6 +218,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         ...base,
         access: 'access' as const,
         loading: false as const,
+        rawName: subject,
         name: subject,
         owner: sender as string | undefined,
         updatedAt: data.thread.updated_at,
@@ -286,11 +292,10 @@ export async function fetchPreviewBatch(
 export function defaultNameTransform(item: PreviewItem): PreviewItem {
   if (item.loading) return item;
   if (item.access !== 'access') return item;
-  if (item.name === '') {
-    return {
-      ...item,
-      name: itemToSafeName(item),
-    };
-  }
-  return item;
+  const rawName = item.rawName === '' ? itemToSafeName(item) : item.rawName;
+  const fileType = 'fileType' in item ? item.fileType : undefined;
+  const name = formatDocumentName(rawName, fileType, {
+    fullyQualifiedBlockName: true,
+  });
+  return { ...item, rawName, name };
 }

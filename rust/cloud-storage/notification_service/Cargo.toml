@@ -26,10 +26,13 @@ aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+decode_jwt = { path = "../decode_jwt" }
 email_formatting = { path = "../email_formatting" }
 email_validator = { path = "../email_validator" }
+hmac = { workspace = true }
 http-body-util = { workspace = true }
 itertools = { workspace = true }
+last_online_tracker = { path = "../last_online_tracker" }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_cors = { path = "../macro_cors" }
@@ -47,21 +50,21 @@ model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response" }
 model_file_type = { path = "../model_file_type" }
-last_online_tracker = { path = "../last_online_tracker" }
 model_notifications = { path = "../model_notifications" }
 model_user = { path = "../model_user", features = ["axum"] }
 models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 notification = { path = "../notification", features = ["axum"] }
-rate_limit = { path = "../rate_limit" }
 notification_db_client = { path = "../notification_db_client" }
 paste = { workspace = true }
+rate_limit = { path = "../rate_limit" }
 redis = { workspace = true }
 regex = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ses_client = { path = "../ses_client" }
+sha2 = { workspace = true }
 sns_client = { path = "../sns_client" }
 sqlx = { workspace = true }
 thiserror = { workspace = true }

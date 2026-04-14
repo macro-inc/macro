@@ -1,12 +1,19 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
-import type { DateValue } from '@core/util/date';
 import type { Item } from '@service-storage/generated/schemas/item';
 import type { HistoryItem, HistoryQueryResponse } from './types';
+import { formatDocumentName } from '@service-storage/util/filename';
 
 export function transformHistoryItem(item: Item): HistoryItem {
+  const safeName = itemToSafeName(item);
+  const name =
+    item.type === 'document'
+      ? formatDocumentName(safeName, item.fileType, {
+          fullyQualifiedBlockName: true,
+        })
+      : safeName;
   const base = {
     id: item.id,
-    name: itemToSafeName(item),
+    name,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     deletedAt: item.deletedAt,
@@ -44,29 +51,4 @@ export function transformHistoryResponse(
   response: HistoryQueryResponse
 ): HistoryItem[] {
   return response.data.map(transformHistoryItem);
-}
-
-/**
- * Pure function: Updates an item's viewedAt timestamp and moves it to the front.
- * Returns a new array without mutating the input.
- */
-export function updateViewedAtAndMoveItemToFront(
-  items: HistoryItem[],
-  itemId: string,
-  timestamp: DateValue
-): HistoryItem[] {
-  const itemIndex = items.findIndex((item) => item.id === itemId);
-
-  // Item not found, return original array
-  if (itemIndex === -1) return items;
-
-  const item = items[itemIndex];
-  const updatedItem: HistoryItem = { ...item, viewedAt: timestamp };
-
-  // Return new array with updated item at front
-  return [
-    updatedItem,
-    ...items.slice(0, itemIndex),
-    ...items.slice(itemIndex + 1),
-  ];
 }
