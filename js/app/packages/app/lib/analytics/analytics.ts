@@ -22,7 +22,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
  */
 const DEVICE_PROPERTY = 'macro_device' as const;
 
-function getDeviceType(): 'desktop-app' | 'desktop-web' | 'mobile-web' | 'mobile-app' {
+function getDeviceType():
+  | 'desktop-app'
+  | 'desktop-web'
+  | 'mobile-web'
+  | 'mobile-app' {
   const platform = getPlatform();
   if (platform === 'ios' || platform === 'android') return 'mobile-app';
   if (platform === 'desktop') return 'desktop-app';
@@ -95,7 +99,6 @@ export const createAnalytics = () => {
     data?: Record<string, unknown>
   ) => {
     const enriched = { [DEVICE_PROPERTY]: getDeviceType(), ...data };
-    console.log('[Analytics]', event, enriched, disabled ? '(disabled)' : '');
 
     if (disabled) return;
 
