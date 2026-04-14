@@ -3,7 +3,6 @@ import {
   type PresetContext,
   type SoupFiltersPreset,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -76,7 +75,7 @@ const useCurrentListView = () => {
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const { setQueryFilters, setActiveTab } = useSoupView();
+  const { filterAst, setActiveTab } = useSoupView();
   const user = useUserContext();
 
   const getPresetContext = (): PresetContext => ({
@@ -86,7 +85,7 @@ export const useApplyPreset = () => {
 
   const applyPreset = (preset: SoupFiltersPreset) => {
     batch(() => {
-      setQueryFilters(preset.queryFilters);
+      filterAst.set(preset.ast);
       soup.filters.set({ and: preset.clientFilters });
     });
   };

@@ -29,8 +29,7 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
-import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
-import { SharedEmailFilter } from '@service-storage/generated/schemas';
+import { ast, NIL_UUID } from '@app/component/next-soup/filters';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
@@ -112,7 +111,7 @@ const Block: Component = () => {
   }
 
   const projectSoup = createSoupState({
-    initialFilters: ['project-content'],
+    initialFilters: { and: ['project-content'] },
     filterConfigs: [
       {
         id: 'project-content',
@@ -184,23 +183,17 @@ const ProjectEntityList = (props: {
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
         soup={props.soup}
-        queryFilters={{
-          channel_filters: {
-            channel_ids: [NIL_UUID],
-          },
-          chat_filters: {
-            project_ids: [props.projectId],
-          },
-          project_filters: {
-            project_ids: [props.projectId],
-          },
-          document_filters: {
-            project_ids: [props.projectId],
-          },
-          email_filters: {
-            project_ids: [props.projectId],
-            shared: SharedEmailFilter.include,
-          },
+        initialFilterAst={{
+          // Filter documents by project
+          df: ast.eq('pid', props.projectId),
+          // Filter chats by project
+          cf: ast.eq('ProjectId', props.projectId),
+          // Filter projects by project (current project only)
+          pf: ast.eq('ProjectId', props.projectId),
+          // Exclude channels
+          chanf: ast.eq('ChannelId', NIL_UUID),
+          // Filter emails by project
+          ef: ast.eq('ProjectId', props.projectId),
         }}
       >
         <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />

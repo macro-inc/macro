@@ -396,7 +396,7 @@ function SplitPanel(props: SplitPanelProps) {
   });
 
   const nextSoup = createSoupState({
-    initialFilters: ['explicit-noise'],
+    initialFilters: { and: ['explicit-noise'] },
   });
 
   return (

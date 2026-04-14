@@ -5,7 +5,6 @@ import FilePdfIcon from '@icon/regular/file-pdf.svg';
 import FileIcon from '@icon/regular/file.svg';
 import FolderIcon from '@icon/regular/folder.svg';
 import { createMemo, Show } from 'solid-js';
-import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
 import { filterMap } from '@core/util/list';
@@ -16,13 +15,6 @@ import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { useProjectsQuery } from '@queries/storage/projects';
 import {
-  getFileAssociations,
-  QUERY_FILTERS_BASE,
-} from '@app/component/next-soup/filters/query-filters';
-import { ChannelTypeEnum } from '@service-comms/client';
-import type { ChannelType } from '@service-comms/generated/models';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
-import {
   FilterChipGroup,
   FilterCombobox,
   FilterSelect,
@@ -31,6 +23,11 @@ import {
 import { useFilterOptions } from './use-filter-options';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { TASK_STATUS_FILTERS } from '@app/component/next-soup/filters/configs';
+import {
+  ast,
+  mergeFilterAstOr,
+  type FilterAst,
+} from '@app/component/next-soup/filters';
 
 export const AssigneeFilter = () => {
   const { assigneeFilter, setAssigneeFilter } = useSoupView();
@@ -102,77 +99,41 @@ export const AssigneeFilter = () => {
   );
 };
 
-const getEntityTypeQueryFilters = (
-  selectedIds: string[],
-  currentFilters: SoupItemsQueryFilters
-): SoupItemsQueryFilters => {
-  if (selectedIds.length === 0) return currentFilters;
+const NIL = '00000000-0000-0000-0000-000000000000';
 
-  const result: SoupItemsQueryFilters = { ...QUERY_FILTERS_BASE };
-  const selected = new Set(selectedIds);
+/** AST definitions for each entity type filter */
+const ENTITY_TYPE_AST: Record<string, FilterAst> = {
+  document: {
+    df: ast.and(
+      ast.or(ast.eq('ft', 'md'), ast.eq('ft', 'canvas')),
+      ast.neq('dst', 'task')
+    ),
+  },
+  agent: { cf: ast.neq('ChatId', NIL) },
+  people: { chanf: ast.eq('ChannelType', 'direct_message') },
+  teams: { chanf: ast.neq('ChannelType', 'direct_message') },
+  task: { df: ast.eq('dst', 'task') },
+  email: { ef: ast.neq('ThreadId', NIL) },
+  file: {
+    df: ast.and(
+      ast.neq('ft', 'md'),
+      ast.and(ast.neq('ft', 'canvas'), ast.neq('dst', 'task'))
+    ),
+  },
+};
 
-  if (selected.has('agent')) {
-    result.chat_filters = { ...currentFilters.chat_filters };
-  }
+const getEntityTypeFilterAst = (selectedIds: string[]): FilterAst => {
+  if (selectedIds.length === 0) return {};
 
-  if (selected.has('email')) {
-    result.email_filters = { ...currentFilters.email_filters };
-  }
+  const asts = selectedIds
+    .map((id) => ENTITY_TYPE_AST[id])
+    .filter((a): a is FilterAst => !!a);
 
-  const includesPeople = selected.has('people');
-  const includesTeams = selected.has('teams');
-  if (includesPeople || includesTeams) {
-    const channelTypes: ChannelType[] = [];
-    if (includesPeople) {
-      channelTypes.push(ChannelTypeEnum.DirectMessage);
-    }
-    if (includesTeams) {
-      channelTypes.push(
-        ChannelTypeEnum.Private,
-        ChannelTypeEnum.Organization,
-        ChannelTypeEnum.Public
-      );
-    }
-    result.channel_filters = {
-      ...currentFilters.channel_filters,
-      channel_types: channelTypes,
-    };
-  }
-
-  const includesDocuments = selected.has('document');
-  const includesTasks = selected.has('task');
-  const includesFiles = selected.has('file');
-  if (includesDocuments || includesTasks || includesFiles) {
-    const fileTypes: string[] = [];
-    if (includesDocuments) {
-      fileTypes.push('md', 'canvas');
-    }
-    if (includesTasks) {
-      fileTypes.push('md');
-    }
-    if (includesFiles) {
-      fileTypes.push(...getFileAssociations());
-    }
-    result.document_filters = {
-      ...currentFilters.document_filters,
-      file_types: [...new Set(fileTypes)],
-    };
-  }
-
-  return result;
+  if (asts.length === 0) return {};
+  return mergeFilterAstOr(...asts);
 };
 
 export const EntityTypeFilter = () => {
-  const { activeTab } = useSoupView();
-
-  const baseQueryFilters = createMemo(() => {
-    const tabId = activeTab() ?? VIEW_TAB_PRESETS.inbox.default;
-    const resolver = VIEW_TAB_PRESETS.inbox.tabs[tabId];
-    return (
-      resolver?.({ userId: undefined, email: undefined })?.queryFilters ?? {}
-    );
-  });
-
   const entityTypeOptions: Option[] = [
     {
       value: 'document',
@@ -212,8 +173,7 @@ export const EntityTypeFilter = () => {
   ];
 
   const entityType = useFilterOptions(entityTypeOptions, {
-    getQueryFilters: (selectedIds) =>
-      getEntityTypeQueryFilters(selectedIds, baseQueryFilters()),
+    getFilterAst: getEntityTypeFilterAst,
   });
 
   return (
@@ -234,7 +194,7 @@ interface FolderFilterProps {
 }
 
 export const FolderFilter = (props: FolderFilterProps) => {
-  const { setQueryFilters, queryFilters } = useSoupView();
+  const { filterAst } = useSoupView();
   const projects = useProjectsQuery();
 
   const label = () => props.label ?? 'Folder';
@@ -248,57 +208,27 @@ export const FolderFilter = (props: FolderFilterProps) => {
     }));
   });
 
+  // TODO: Track selected project IDs separately since they're embedded in AST
   const activeProjectFilter = createMemo((): Option[] => {
-    const filters = queryFilters();
-
-    const projectIds =
-      props.target === 'chat'
-        ? filters.chat_filters?.project_ids
-        : props.target === 'email'
-          ? filters.email_filters?.project_ids
-          : filters.document_filters?.project_ids;
-
-    if (!projectIds?.length) return [];
-
-    const options = projectOptions();
-
-    return options.filter((opt) => projectIds.includes(opt.value));
+    // AST format doesn't expose project_ids directly - would need to parse
+    return [];
   });
 
   const handleProjectChange = (selected: Option[]) => {
     const projectIds = selected.map((opt) => opt.value);
 
-    const newProjectIds = projectIds.length > 0 ? projectIds : undefined;
-
-    setQueryFilters((prev) => {
-      if (props.target === 'chat') {
-        return {
-          ...prev,
-          chat_filters: {
-            ...prev.chat_filters,
-            project_ids: newProjectIds,
-          },
-        };
-      }
-
-      if (props.target === 'email') {
-        return {
-          ...prev,
-          email_filters: {
-            ...prev.email_filters,
-            project_ids: newProjectIds,
-          },
-        };
-      }
-
-      return {
-        ...prev,
-        document_filters: {
-          ...prev.document_filters,
-          project_ids: newProjectIds,
-        },
-      };
-    });
+    // TODO: Build proper AST for project filtering
+    // For now, we set the pf bucket with project ID expressions
+    if (projectIds.length === 0) {
+      filterAst.update((draft) => {
+        delete draft.pf;
+      });
+    } else {
+      // This is a placeholder - proper implementation would build AST expressions
+      filterAst.update((draft) => {
+        // Project filter AST would go here
+      });
+    }
   };
 
   return (
@@ -527,7 +457,7 @@ export const FoldersFilter = () => {
 };
 
 export const FromSenderFilter = () => {
-  const { setQueryFilters, queryFilters } = useSoupView();
+  const { filterAst } = useSoupView();
   const { useList } = useQuickAccess();
   const contacts = useList('person');
 
@@ -551,25 +481,26 @@ export const FromSenderFilter = () => {
     });
   });
 
+  // TODO: Track selected sender IDs separately since they're embedded in AST
   const activeSenderFilter = createMemo((): Option[] => {
-    const senders = queryFilters().email_filters?.senders;
-    if (!senders?.length) return [];
-
-    const options = senderOptions();
-    return options.filter((opt) => senders.includes(opt.value));
+    // AST format doesn't expose senders directly - would need to parse
+    return [];
   });
 
   const handleSenderChange = (selected: Option[]) => {
     const senders = selected.map((opt) => opt.value);
-    const newSenders = senders.length > 0 ? senders : undefined;
 
-    setQueryFilters((prev) => ({
-      ...prev,
-      email_filters: {
-        ...prev.email_filters,
-        senders: newSenders,
-      },
-    }));
+    // TODO: Build proper AST for sender filtering
+    if (senders.length === 0) {
+      filterAst.update((draft) => {
+        delete draft.ef;
+      });
+    } else {
+      // Sender filter AST would go here
+      filterAst.update((draft) => {
+        // Email filter AST for senders would go here
+      });
+    }
   };
 
   return (

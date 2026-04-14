@@ -12,8 +12,6 @@ export {
   type FilterGroupConfig,
   type FilterPredicate,
   type SetFiltersInput,
-  type ScopedFilterId,
-  type ScopedFilterEntry,
   type SetFiltersCallback,
   type CurrentFilterState,
 } from './create-filter-state';
@@ -25,11 +23,15 @@ export {
   scopeFilterAst,
   ast,
   NIL_UUID,
+  createFilterAstState,
+  channelIdsToAst,
+  senderIdsToAst,
   type FilterAst,
   type AstExpr,
   type AstBucket,
   type EmailView,
   type DefinedFilter,
+  type FilterAstState,
 } from './define-filter';
 
 export {

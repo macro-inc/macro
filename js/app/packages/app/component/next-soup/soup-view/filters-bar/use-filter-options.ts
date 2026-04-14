@@ -1,20 +1,20 @@
 import { batch, createMemo } from 'solid-js';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import type { FilterAst } from '@app/component/next-soup/filters';
 import type { Option } from './filter-primitives';
 
 type UseFilterOptionsConfig = {
   multiple?: boolean;
-  /** Optional function to compute query filters based on selected option values */
-  getQueryFilters?: (selectedIds: string[]) => SoupItemsQueryFilters;
+  /** Optional function to compute filter AST based on selected option values */
+  getFilterAst?: (selectedIds: string[]) => FilterAst;
 };
 
 export const useFilterOptions = (
   options: Option[],
   config: UseFilterOptionsConfig = {}
 ) => {
-  const { multiple = true, getQueryFilters } = config;
-  const { soup, setQueryFilters } = useSoupView();
+  const { multiple = true, getFilterAst } = config;
+  const { soup, filterAst } = useSoupView();
 
   const optionIds = options.map((opt) => opt.value);
 
@@ -39,8 +39,8 @@ export const useFilterOptions = (
       ];
       soup.filters.set({ and: currentAndIds, or: newOrIds });
 
-      if (getQueryFilters) {
-        setQueryFilters(getQueryFilters(selectedIds));
+      if (getFilterAst) {
+        filterAst.set(getFilterAst(selectedIds));
       }
     });
   };

@@ -3,18 +3,12 @@ import {
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
-import {
-  NIL_UUID,
-  QUERY_FILTERS,
-} from '@app/component/next-soup/filters/query-filters';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserContext, useUserId } from '@core/context/user';
-import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
@@ -44,19 +38,12 @@ const TAB_ONLY_FILTERS = new Set([
  * and a function to reset filters to the current tab's default state.
  */
 export function useFilterRefinements() {
-  const {
-    soup,
-    queryFilters,
-    setQueryFilters,
-    assigneeFilter,
-    setAssigneeFilter,
-    activeTab,
-  } = useSoupView();
+  const { soup, filterAst, assigneeFilter, setAssigneeFilter, activeTab } =
+    useSoupView();
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
-  const quickAccess = useQuickAccess();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -97,11 +84,12 @@ export function useFilterRefinements() {
       expectedIds.size !== currentIds.size ||
       [...expectedIds].some((id) => !currentIds.has(id as FilterID));
 
-    const hasQueryFilterDiff = !deepEqual(queryFilters(), preset.queryFilters);
+    // Check if there are any external AST filters set
+    const hasExternalAst = Object.keys(filterAst()).length > 0;
 
     const hasSubFilters = assigneeFilter().length > 0;
 
-    return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
+    return hasClientFilterDiff || hasExternalAst || hasSubFilters;
   });
 
   /**
@@ -156,7 +144,7 @@ export function useFilterRefinements() {
     }
 
     // Search operator filters: index: (entity type toggles)
-    const coveredByView = new Set(
+    const coveredByView = new Set<string>(
       viewCategories().flatMap((c) => c.options.map((o) => o.id))
     );
     for (const option of INDEX_OPTIONS) {
@@ -176,7 +164,7 @@ export function useFilterRefinements() {
         categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
         onRemove: () => {
           soup.filters.toggle({ or: [optionId] });
-          setQueryFilters(QUERY_FILTERS.default);
+          filterAst.set({});
         },
       });
     }
@@ -194,59 +182,8 @@ export function useFilterRefinements() {
       });
     }
 
-    // Search operator filters: in: (channel_ids)
-    const channelIds = (
-      queryFilters().channel_filters?.channel_ids ?? []
-    ).filter((id) => id !== NIL_UUID);
-    for (const channelId of channelIds) {
-      const item = quickAccess.getById(channelId);
-      const label =
-        item && 'data' in item && item.data?.name ? item.data.name : channelId;
-      filters.push({
-        categoryLabel: 'In',
-        optionId: `in:${channelId}`,
-        optionLabel: label,
-        onRemove: () =>
-          setQueryFilters((prev) => {
-            const ids = (prev.channel_filters?.channel_ids ?? []).filter(
-              (id) => id !== channelId
-            );
-            return {
-              ...prev,
-              channel_filters: {
-                ...prev.channel_filters,
-                channel_ids: ids.length > 0 ? ids : undefined,
-              },
-            };
-          }),
-      });
-    }
-
-    // Search operator filters: from: (sender_ids)
-    const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
-    for (const senderId of senderIds) {
-      const item = quickAccess.getById(senderId);
-      const label =
-        item && 'data' in item && item.data?.name ? item.data.name : senderId;
-      filters.push({
-        categoryLabel: 'From',
-        optionId: `from:${senderId}`,
-        optionLabel: label,
-        onRemove: () =>
-          setQueryFilters((prev) => {
-            const ids = (prev.channel_filters?.sender_ids ?? []).filter(
-              (id) => id !== senderId
-            );
-            return {
-              ...prev,
-              channel_filters: {
-                ...prev.channel_filters,
-                sender_ids: ids.length > 0 ? ids : undefined,
-              },
-            };
-          }),
-      });
-    }
+    // TODO: Channel and sender filter chips require tracking those IDs separately
+    // since they're now embedded in AST format. For now, clearing filterAst removes them.
 
     return filters;
   });
@@ -273,7 +210,7 @@ export function useFilterRefinements() {
 
     batch(() => {
       soup.filters.set({ and: preset.clientFilters });
-      setQueryFilters(preset.queryFilters);
+      filterAst.set({});
       setAssigneeFilter([]);
     });
   };

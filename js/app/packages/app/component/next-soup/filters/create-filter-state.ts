@@ -1,5 +1,5 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
-import type { AstBucket, FilterAst } from './define-filter';
+import type { FilterAst } from './define-filter';
 
 export type FilterPredicate<T> = (entity: T) => boolean;
 
@@ -18,16 +18,11 @@ export type FilterGroupConfig = {
 
 type FilterIdInput<TId extends string> = TId | (string & {});
 
-/** Filter ID with optional target scope for AST generation */
-export type ScopedFilterId<TId extends string = string> =
-  | FilterIdInput<TId>
-  | { id: FilterIdInput<TId>; targets: AstBucket[] };
-
 export type SetFiltersInput<TId extends string = string> = {
   /** Filters that must ALL pass (AND logic) - typically from presets */
-  readonly and?: readonly ScopedFilterId<TId>[];
+  readonly and?: readonly FilterIdInput<TId>[];
   /** Filters where ANY must pass (OR logic) - typically from user selection */
-  readonly or?: readonly ScopedFilterId<TId>[];
+  readonly or?: readonly FilterIdInput<TId>[];
 };
 
 export type CurrentFilterState<TId extends string> = {
@@ -42,16 +37,10 @@ export type SetFiltersCallback<TId extends string> = (
   current: CurrentFilterState<TId>
 ) => SetFiltersInput<TId>;
 
-/** Internal representation of a filter with optional scope */
-type ScopedFilter<TFilter> = {
-  readonly filter: TFilter;
-  readonly targets?: AstBucket[];
-};
-
 /** Internal representation of active filters */
 type ActiveFiltersState<TFilter> = {
-  readonly andFilters: readonly ScopedFilter<TFilter>[];
-  readonly orFilters: readonly ScopedFilter<TFilter>[];
+  readonly andFilters: readonly TFilter[];
+  readonly orFilters: readonly TFilter[];
 };
 
 export type FilterStateOptions<T, TFilter extends FilterConfig<T, string>> = {
@@ -63,12 +52,6 @@ export type FilterStateOptions<T, TFilter extends FilterConfig<T, string>> = {
   readonly initialFilters?: SetFiltersInput<string>;
 };
 
-/** A filter with its optional scope for AST generation */
-export type ScopedFilterEntry<TFilter> = {
-  readonly filter: TFilter;
-  readonly targets?: AstBucket[];
-};
-
 export type FilterState<
   T,
   TFilter extends FilterConfig<T, string>,
@@ -78,10 +61,6 @@ export type FilterState<
   readonly andFilters: Accessor<readonly TFilter[]>;
   /** Currently active OR filter configs */
   readonly orFilters: Accessor<readonly TFilter[]>;
-  /** AND filters with their scope information for AST generation */
-  readonly andFiltersWithScope: Accessor<readonly ScopedFilterEntry<TFilter>[]>;
-  /** OR filters with their scope information for AST generation */
-  readonly orFiltersWithScope: Accessor<readonly ScopedFilterEntry<TFilter>[]>;
   /** All currently active filter configs (both AND and OR) */
   readonly active: Accessor<readonly TFilter[]>;
   /** IDs of currently active filters */
@@ -126,44 +105,25 @@ export function createFilterState<
   const getFilter = (id: FilterIdInput<TId>): TFilter | undefined =>
     filterMap.get(id);
 
-  /** Extract the ID from a scoped filter reference */
-  const extractId = (input: ScopedFilterId<TId>): string =>
-    typeof input === 'object' && 'id' in input
-      ? String(input.id)
-      : String(input);
-
-  /** Extract the targets from a scoped filter reference */
-  const extractTargets = (
-    input: ScopedFilterId<TId>
-  ): AstBucket[] | undefined =>
-    typeof input === 'object' && 'targets' in input ? input.targets : undefined;
-
-  /** Resolve scoped filter IDs to scoped filters */
-  const resolveScopedFilters = (
-    inputs: readonly ScopedFilterId<TId>[] | undefined
-  ): ScopedFilter<TFilter>[] => {
+  /** Resolve filter IDs to filter configs */
+  const resolveFilters = (
+    inputs: readonly FilterIdInput<TId>[] | undefined
+  ): TFilter[] => {
     if (!inputs) return [];
-
-    const resolved: ScopedFilter<TFilter>[] = [];
-    for (const input of inputs) {
-      const id = extractId(input);
-      const filter = filterMap.get(id);
-      if (filter) {
-        resolved.push({
-          filter,
-          targets: extractTargets(input),
-        });
-      }
+    const resolved: TFilter[] = [];
+    for (const id of inputs) {
+      const filter = filterMap.get(String(id));
+      if (filter) resolved.push(filter);
     }
     return resolved;
   };
 
   // Initialize with initial filters
-  const initialAndFilters = resolveScopedFilters(
-    initialFilters.and as ScopedFilterId<TId>[] | undefined
+  const initialAndFilters = resolveFilters(
+    initialFilters.and as FilterIdInput<TId>[] | undefined
   );
-  const initialOrFilters = resolveScopedFilters(
-    initialFilters.or as ScopedFilterId<TId>[] | undefined
+  const initialOrFilters = resolveFilters(
+    initialFilters.or as FilterIdInput<TId>[] | undefined
   );
 
   const [state, setState] = createSignal<ActiveFiltersState<TFilter>>({
@@ -171,15 +131,8 @@ export function createFilterState<
     orFilters: initialOrFilters,
   });
 
-  const andFilters = createMemo(() => state().andFilters.map((s) => s.filter));
-  const orFilters = createMemo(() => state().orFilters.map((s) => s.filter));
-
-  const andFiltersWithScope = createMemo(() =>
-    state().andFilters.map((s) => ({ filter: s.filter, targets: s.targets }))
-  );
-  const orFiltersWithScope = createMemo(() =>
-    state().orFilters.map((s) => ({ filter: s.filter, targets: s.targets }))
-  );
+  const andFilters = createMemo(() => state().andFilters);
+  const orFilters = createMemo(() => state().orFilters);
 
   const active = createMemo(() => [...andFilters(), ...orFilters()]);
   const activeIds = createMemo(() => active().map((f) => f.id) as TId[]);
@@ -197,24 +150,23 @@ export function createFilterState<
         : input;
 
     setState({
-      andFilters: resolveScopedFilters(resolved.and),
-      orFilters: resolveScopedFilters(resolved.or),
+      andFilters: resolveFilters(resolved.and),
+      orFilters: resolveFilters(resolved.or),
     });
   };
 
   const toggleFilters = (
-    currentFilters: readonly ScopedFilter<TFilter>[],
-    toToggle: readonly ScopedFilter<TFilter>[]
-  ): ScopedFilter<TFilter>[] => {
+    currentFilters: readonly TFilter[],
+    toToggle: readonly TFilter[]
+  ): TFilter[] => {
     let result = [...currentFilters];
 
-    for (const scoped of toToggle) {
-      const { filter } = scoped;
-      const isCurrentlyActive = result.some((s) => s.filter.id === filter.id);
+    for (const filter of toToggle) {
+      const isCurrentlyActive = result.some((f) => f.id === filter.id);
 
       if (isCurrentlyActive) {
         // Deactivate
-        result = result.filter((s) => s.filter.id !== filter.id);
+        result = result.filter((f) => f.id !== filter.id);
       } else {
         // Activate - handle group exclusivity based on allowMultiple
         if (filter.group) {
@@ -223,10 +175,10 @@ export function createFilterState<
 
           if (!allowMultiple) {
             // Remove other filters in the same group
-            result = result.filter((s) => s.filter.group !== filter.group);
+            result = result.filter((f) => f.group !== filter.group);
           }
         }
-        result.push(scoped);
+        result.push(filter);
       }
     }
 
@@ -242,8 +194,8 @@ export function createFilterState<
           })
         : input;
 
-    const andToToggle = resolveScopedFilters(resolved.and);
-    const orToToggle = resolveScopedFilters(resolved.or);
+    const andToToggle = resolveFilters(resolved.and);
+    const orToToggle = resolveFilters(resolved.or);
 
     const current = state();
 
@@ -287,8 +239,6 @@ export function createFilterState<
   return {
     andFilters,
     orFilters,
-    andFiltersWithScope,
-    orFiltersWithScope,
     active,
     activeIds,
     isActive,

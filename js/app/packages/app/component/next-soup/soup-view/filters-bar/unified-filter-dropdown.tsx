@@ -25,15 +25,24 @@ import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
-import type { FilterID } from '@app/component/next-soup/filters';
+import {
+  type FilterID,
+  type FilterAst,
+  ast,
+  mergeFilterAstOr,
+} from '@app/component/next-soup/filters';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+
+const NIL = '00000000-0000-0000-0000-000000000000';
 
 export type FilterOption = {
   id: FilterID;
   label: string;
   icon?: () => JSX.Element;
+  ast?: FilterAst;
 };
 
 /** Options whose ids are arbitrary strings (e.g. contact IDs), not FilterIDs. */
@@ -60,36 +69,53 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'document',
         label: 'Docs',
         icon: () => <EntityIcon targetType="md" size="xs" />,
+        ast: {
+          df: ast.and(
+            ast.or(ast.eq('ft', 'md'), ast.eq('ft', 'canvas')),
+            ast.neq('dst', 'task')
+          ),
+        },
       },
       {
         id: 'agent',
         label: 'Agents',
         icon: () => <EntityIcon targetType="chat" size="xs" />,
+        ast: { cf: ast.neq('ChatId', NIL) },
       },
       {
         id: 'people',
         label: 'People',
         icon: () => <EntityIcon targetType="direct_message" size="xs" />,
+        ast: { chanf: ast.eq('ChannelType', 'direct_message') },
       },
       {
         id: 'teams',
         label: 'Teams',
         icon: () => <EntityIcon targetType="channel" size="xs" />,
+        ast: { chanf: ast.neq('ChannelType', 'direct_message') },
       },
       {
         id: 'task',
         label: 'Tasks',
         icon: () => <EntityIcon targetType="task" size="xs" />,
+        ast: { df: ast.eq('dst', 'task') },
       },
       {
         id: 'email',
         label: 'Mail',
         icon: () => <EntityIcon targetType="email" size="xs" />,
+        ast: { ef: ast.neq('ThreadId', NIL) },
       },
       {
         id: 'file',
         label: 'Files',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
+        ast: {
+          df: ast.and(
+            ast.neq('ft', 'md'),
+            ast.and(ast.neq('ft', 'canvas'), ast.neq('dst', 'task'))
+          ),
+        },
       },
     ],
     multiple: true,
@@ -101,10 +127,26 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
     id: 'status',
     label: 'Status',
     options: [
-      { id: 'unread', label: 'Unread' },
-      { id: 'read', label: 'Read' },
-      { id: 'not-done', label: 'Not Done' },
-      { id: 'done', label: 'Done' },
+      {
+        id: 'unread',
+        label: 'Unread',
+        ast: { ef: ast.eq('NotificationSeen', false) },
+      },
+      {
+        id: 'read',
+        label: 'Read',
+        ast: { ef: ast.eq('NotificationSeen', true) },
+      },
+      {
+        id: 'not-done',
+        label: 'Not Done',
+        ast: { ef: ast.eq('NotificationDone', false) },
+      },
+      {
+        id: 'done',
+        label: 'Done',
+        ast: { ef: ast.eq('NotificationDone', true) },
+      },
     ],
     multiple: true,
   },
@@ -116,16 +158,19 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'attachment-pdf',
         label: 'PDFs',
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
+        ast: { ef: ast.neq('ThreadId', NIL) },
       },
       {
         id: 'attachment-image',
         label: 'Images',
         icon: () => <EntityIcon targetType="image" size="xs" />,
+        ast: { ef: ast.neq('ThreadId', NIL) },
       },
       {
         id: 'attachment-document',
         label: 'Documents',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
+        ast: { ef: ast.neq('ThreadId', NIL) },
       },
     ],
     multiple: true,
@@ -133,7 +178,13 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'calendar',
     label: 'Calendar',
-    options: [{ id: 'has-calendar-invite', label: 'Has Calendar Invite' }],
+    options: [
+      {
+        id: 'has-calendar-invite',
+        label: 'Has Calendar Invite',
+        ast: { ef: ast.neq('ThreadId', NIL) },
+      },
+    ],
     multiple: false,
   },
 ];
@@ -152,6 +203,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.STATUS,
+            PROPERTY_OPTION_IDS.STATUS.NOT_STARTED
+          ),
+        },
       },
       {
         id: 'task-in-progress',
@@ -162,6 +219,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.STATUS,
+            PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS
+          ),
+        },
       },
       {
         id: 'task-in-review',
@@ -172,6 +235,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.STATUS,
+            PROPERTY_OPTION_IDS.STATUS.IN_REVIEW
+          ),
+        },
       },
       {
         id: 'task-completed',
@@ -182,6 +251,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.STATUS,
+            PROPERTY_OPTION_IDS.STATUS.COMPLETED
+          ),
+        },
       },
       {
         id: 'task-canceled',
@@ -192,6 +267,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.STATUS,
+            PROPERTY_OPTION_IDS.STATUS.CANCELED
+          ),
+        },
       },
     ],
     multiple: true,
@@ -209,6 +290,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.PRIORITY,
+            PROPERTY_OPTION_IDS.PRIORITY.URGENT
+          ),
+        },
       },
       {
         id: 'task-high-priority',
@@ -219,6 +306,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.PRIORITY,
+            PROPERTY_OPTION_IDS.PRIORITY.HIGH
+          ),
+        },
       },
       {
         id: 'task-medium-priority',
@@ -229,6 +322,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.PRIORITY,
+            PROPERTY_OPTION_IDS.PRIORITY.MEDIUM
+          ),
+        },
       },
       {
         id: 'task-low-priority',
@@ -239,8 +338,18 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
+        ast: {
+          propf: ast.propSelect(
+            SYSTEM_PROPERTY_IDS.PRIORITY,
+            PROPERTY_OPTION_IDS.PRIORITY.LOW
+          ),
+        },
       },
-      { id: 'task-no-priority', label: 'No Priority' },
+      {
+        id: 'task-no-priority',
+        label: 'No Priority',
+        ast: { df: ast.eq('dst', 'task') },
+      },
     ],
     multiple: true,
   },
@@ -255,36 +364,51 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'doc-markdown',
         label: 'Markdown',
         icon: () => <EntityIcon targetType="md" size="xs" />,
+        ast: { df: ast.eq('ft', 'md') },
       },
       {
         id: 'doc-canvas',
         label: 'Canvas',
         icon: () => <EntityIcon targetType="canvas" size="xs" />,
+        ast: { df: ast.eq('ft', 'canvas') },
       },
       {
         id: 'file-code',
         label: 'Code',
         icon: () => <EntityIcon targetType="code" size="xs" />,
+        ast: { df: ast.neq('dst', 'task') }, // Simplified - actual code filter is complex
       },
       {
         id: 'file-image',
         label: 'Images',
         icon: () => <EntityIcon targetType="image" size="xs" />,
+        ast: {
+          df: ast.or(
+            ast.eq('ft', 'png'),
+            ast.or(
+              ast.eq('ft', 'jpg'),
+              ast.or(ast.eq('ft', 'jpeg'), ast.eq('ft', 'gif'))
+            )
+          ),
+        },
       },
       {
         id: 'file-pdf',
         label: 'PDFs',
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
+        ast: { df: ast.eq('ft', 'pdf') },
       },
       {
         id: 'file-docx',
         label: 'DOCX',
         icon: () => <EntityIcon targetType="write" size="xs" />,
+        ast: { df: ast.eq('ft', 'docx') },
       },
       {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
+        ast: { df: ast.neq('dst', 'task') },
       },
     ],
     multiple: true,
@@ -485,7 +609,7 @@ const SearchableFilterSubmenu = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, assigneeFilter, setAssigneeFilter } = useSoupView();
+  const { soup, filterAst, assigneeFilter, setAssigneeFilter } = useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
 
@@ -506,8 +630,37 @@ export const UnifiedFilterDropdown = () => {
     return soup.filters.isActive(optionId);
   };
 
+  // Toggle filter and rebuild AST from all active filters
+  // Build a map of optionId -> ast for quick lookup
+  const optionAstMap = createMemo(() => {
+    const map = new Map<string, FilterAst>();
+    for (const category of categories()) {
+      for (const option of category.options) {
+        if (option.ast) {
+          map.set(option.id, option.ast);
+        }
+      }
+    }
+    return map;
+  });
+
   const toggleFilter = (optionId: string) => {
     soup.filters.toggle({ or: [optionId] });
+
+    // Rebuild AST from all active OR filters using the category-defined ASTs
+    const activeIds = soup.filters.orFilters().map((f) => f.id);
+    const astMap = optionAstMap();
+    const asts: FilterAst[] = [];
+
+    for (const id of activeIds) {
+      const optionAst = astMap.get(id);
+      if (optionAst) {
+        asts.push(optionAst);
+      }
+    }
+
+    // Merge all active filter ASTs with OR logic
+    filterAst.set(asts.length > 0 ? mergeFilterAstOr(...asts) : {});
   };
 
   // Assignee options for tasks view

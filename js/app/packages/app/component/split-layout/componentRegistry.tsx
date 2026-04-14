@@ -107,7 +107,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Inbox"
-        queryFilters={preset.queryFilters}
+        initialFilterAst={preset.ast}
         initialClientFilters={preset.clientFilters}
         disableLocalSearch
       />
@@ -127,7 +127,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Agents"
-        queryFilters={preset.queryFilters}
+        initialFilterAst={preset.ast}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -142,7 +142,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Email"
-        queryFilters={preset.queryFilters}
+        initialFilterAst={preset.ast}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -161,7 +161,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Documents"
-        queryFilters={preset.queryFilters}
+        initialFilterAst={preset.ast}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -180,7 +180,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Tasks"
-        queryFilters={preset.queryFilters}
+        initialFilterAst={preset.ast}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -195,7 +195,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Channels"
-        queryFilters={preset.queryFilters}
+        initialFilterAst={preset.ast}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -214,7 +214,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Files"
-        queryFilters={preset.queryFilters}
+        initialFilterAst={preset.ast}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -233,7 +233,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Search"
-        queryFilters={preset.queryFilters}
+        initialFilterAst={preset.ast}
         initialClientFilters={preset.clientFilters}
       />
     );

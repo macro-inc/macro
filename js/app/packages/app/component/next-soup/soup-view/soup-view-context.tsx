@@ -6,20 +6,14 @@ import {
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import {
-  isTaskEntity,
   isWithNotification,
   type EntityData,
-  type TaskEntityWithProperties,
   type WithNotification,
   type WithSearch,
 } from '@entity';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useNotificationsForEntity } from '@notifications';
-import {
-  type SoupParams,
-  type SoupBody,
-  useSoupAstItemsQuery,
-} from '@queries/soup/items';
+import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
 import {
   type Accessor,
   createContext,
@@ -34,17 +28,11 @@ import {
   useContext,
 } from 'solid-js';
 import {
-  createAssigneeFilter,
-  unassignedFilter,
-  type FilterAst,
-  type AstBucket,
-} from '@app/component/next-soup/filters';
-import {
+  createFilterAstState,
   mergeFilterAst,
-  mergeFilterAstOr,
-  scopeFilterAst,
-} from '@app/component/next-soup/filters/define-filter';
-import { NO_ASSIGNEE } from './task-sub-filter-matcher';
+  type FilterAst,
+  type FilterAstState,
+} from '@app/component/next-soup/filters';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
@@ -87,8 +75,7 @@ interface SoupViewContextValues {
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
-  queryFilters: Accessor<SoupBody>;
-  setQueryFilters: Setter<SoupBody>;
+  filterAst: FilterAstState;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
@@ -113,7 +100,7 @@ export const useMaybeSoupView = () => useContext(SoupViewContext);
 
 interface SoupViewContextProviderProps {
   soup?: SoupState;
-  queryFilters?: SoupBody;
+  initialFilterAst?: FilterAst;
   disableLocalSearch?: boolean;
 }
 
@@ -146,8 +133,28 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const [internalQueryFilters, setInternalQueryFilters] =
-    createSignal<SoupBody>({ ...(props.queryFilters ?? {}) });
+  const [internalFilterAst, setInternalFilterAst] = createSignal<FilterAst>(
+    props.initialFilterAst ?? {}
+  );
+
+  const filterAst = createFilterAstState(internalFilterAst, (ast) => {
+    // Invalidate query cache when filter AST changes to avoid refetching all pages
+    queryClient.setQueryData(
+      soupKeys.astItems({
+        params: soupParams(),
+        body: soupBody(),
+      }).queryKey,
+      (prev: InfiniteData<SoupPage> | SoupPage | undefined) => {
+        if (!prev) return;
+        if ('pages' in prev) {
+          prev.pages.splice(1, prev.pages.length);
+          return prev;
+        }
+        return prev;
+      }
+    );
+    setInternalFilterAst(ast);
+  });
 
   const [searchPaused, setSearchPaused] = createSignal(false);
   const [searchMentions, setSearchMentions] = createSignal<string[]>([]);
@@ -161,66 +168,18 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  const queryFilters = createMemo(() => {
-    const base = internalQueryFilters();
-
-    return {
-      ...base,
-    };
-  });
-
+  // soupBody is now directly derived from filterAst
+  // Callers are responsible for setting the AST when toggling filters
   const soupBody = createMemo(() => {
-    // Helper to get AST from a filter config, applying scope if specified
-    const getFilterAst = (
-      filter: { ast?: FilterAst | ((ctx: unknown) => FilterAst) },
-      targets?: AstBucket[]
-    ): FilterAst => {
-      if (!filter.ast) return {};
-      const filterAst =
-        typeof filter.ast === 'function' ? filter.ast({}) : filter.ast;
-      return targets ? scopeFilterAst(filterAst, targets) : filterAst;
-    };
-
-    // AND filters (from presets) - merged with AND logic
-    const andAsts: FilterAst[] = soup.filters
-      .andFiltersWithScope()
-      .map(({ filter, targets }) => getFilterAst(filter, targets));
-
-    // OR filters (from user selection) - merged with OR logic
-    const orAsts: FilterAst[] = soup.filters
-      .orFiltersWithScope()
-      .map(({ filter, targets }) => getFilterAst(filter, targets));
-
-    // Assignee filters are OR'd together (user can select multiple assignees)
-    const currentAssigneeFilter = assigneeFilter();
-    for (const id of currentAssigneeFilter) {
-      if (id === NO_ASSIGNEE) {
-        orAsts.push(unassignedFilter.toAst());
-      } else {
-        orAsts.push(createAssigneeFilter(id).toAst());
-      }
-    }
-
-    // Merge: (AND filters) AND (OR filters)
-    const andResult = andAsts.length > 0 ? mergeFilterAst(...andAsts) : {};
-    const orResult = orAsts.length > 0 ? mergeFilterAstOr(...orAsts) : {};
-
-    // Combine AND and OR results
-    if (andAsts.length > 0 && orAsts.length > 0) {
-      return mergeFilterAst(andResult, orResult);
-    } else if (andAsts.length > 0) {
-      return andResult;
-    } else if (orAsts.length > 0) {
-      // If only OR filters, still need to apply default exclusions
-      return mergeFilterAst(orResult);
-    }
-
-    return {};
+    const ast = internalFilterAst();
+    if (Object.keys(ast).length === 0) return {};
+    // Apply default exclusions for unspecified entity buckets
+    return mergeFilterAst(ast);
   });
 
   const search = createSearchState({
     soup,
-    queryFilters,
+    filterAst: internalFilterAst,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
     searchMentions,
@@ -270,32 +229,6 @@ export const SoupViewContextProvider: FlowComponent<
       enabled: !search.isSearching(),
     })
   );
-
-  const setQueryFilters: Setter<SoupBody> = (next) => {
-    // To avoid fetching all pages again when coming back to the current query filters,
-    // we set the query cache to only contain the first page of data which is the only
-    // one to be refetched
-    queryClient.setQueryData(
-      soupKeys.items({
-        params: soupParams(),
-        body: soupBody(),
-      }).queryKey,
-      (prev: InfiniteData<SoupPage> | SoupPage) => {
-        if (!prev) return;
-
-        if ('pages' in prev) {
-          // Just to avoid spreading and new array creation, works the same but slightly
-          // better performance
-          prev.pages.splice(1, prev.pages.length);
-          return prev;
-        }
-
-        return prev;
-      }
-    );
-
-    setInternalQueryFilters(next);
-  };
 
   const items = createMemo<SoupEntity[]>(
     (prev) => {
@@ -437,8 +370,7 @@ export const SoupViewContextProvider: FlowComponent<
     featuredIds: search.featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
-    queryFilters,
-    setQueryFilters,
+    filterAst,
     assigneeFilter,
     setAssigneeFilter,
     activeTab,

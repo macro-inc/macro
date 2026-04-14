@@ -211,3 +211,70 @@ export function mergeFilterAst(...asts: FilterAst[]): FilterAst {
 
   return result;
 }
+
+// ============================================================================
+// FilterAst State Helpers
+// ============================================================================
+
+export interface FilterAstState {
+  /** Current AST value */
+  (): FilterAst;
+  /** Replace the entire AST */
+  set: (ast: FilterAst) => void;
+  /** Produce-style update: mutate a draft copy */
+  update: (producer: (draft: FilterAst) => void) => void;
+}
+
+/**
+ * Creates a FilterAst state with produce-style updates.
+ * Usage:
+ *   filterAst()                          // read current value
+ *   filterAst.set({ df: ... })           // replace entirely
+ *   filterAst.update(draft => {          // produce-style mutation
+ *     draft.chanf = ast.eq('ChannelId', id);
+ *     draft.emailView = 'inbox';
+ *   });
+ */
+export function createFilterAstState(
+  get: () => FilterAst,
+  set: (ast: FilterAst) => void
+): FilterAstState {
+  const state = (() => get()) as FilterAstState;
+
+  state.set = set;
+
+  state.update = (producer) => {
+    const draft = { ...get() };
+    producer(draft);
+    set(draft);
+  };
+
+  return state;
+}
+
+// ============================================================================
+// AST Builders for Common Patterns
+// ============================================================================
+
+/**
+ * Build AST for filtering by channel IDs (OR'd together).
+ * Returns empty object if no IDs provided.
+ */
+export function channelIdsToAst(ids: string[]): FilterAst {
+  const filtered = ids.filter((id) => id && id !== NIL_UUID);
+  if (filtered.length === 0) return {};
+  const exprs = filtered.map((id) => ast.eq('ChannelId', id));
+  return { chanf: exprs.reduce((a, b) => ast.or(a, b)) };
+}
+
+/**
+ * Build AST for filtering by sender IDs (OR'd together).
+ * Returns empty object if no IDs provided.
+ */
+export function senderIdsToAst(ids: string[]): FilterAst {
+  const filtered = ids.filter((id) => id && id !== NIL_UUID);
+  if (filtered.length === 0) return {};
+  // Sender filtering applies to channel messages
+  const exprs = filtered.map((id) => ast.eq('Sender', id));
+  return { chanf: exprs.reduce((a, b) => ast.or(a, b)) };
+}

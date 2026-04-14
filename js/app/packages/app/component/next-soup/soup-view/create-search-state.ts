@@ -6,10 +6,10 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
+import type { FilterAst } from '@app/component/next-soup/filters';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { isChannelEntity, type EntityData } from '@entity';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import {
   useSearchSoupQuery,
   validateSearchServiceText,
@@ -27,7 +27,7 @@ const freshSearch = createSoupFreshSearch();
 
 interface CreateSearchStateArgs {
   soup: SoupState;
-  queryFilters: Accessor<SoupItemsQueryFilters>;
+  filterAst: Accessor<FilterAst>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
   searchMentions?: Accessor<string[]>;
@@ -35,7 +35,7 @@ interface CreateSearchStateArgs {
 
 export const createSearchState = ({
   soup,
-  queryFilters,
+  filterAst,
   disableLocalSearch,
   searchPaused,
   searchMentions,
@@ -66,26 +66,28 @@ export const createSearchState = ({
 
   const searchUnifiedNameContentRequest = createMemo(
     (): UnifiedSearchRequest => {
-      const filters = queryFilters();
       const query = debouncedSearchForService();
       const mentionIds =
         isSearchServiceDebounceSettled() && !isSearchServiceDisabled()
           ? searchMentions?.()
           : undefined;
+
+      // Search service uses legacy filter format - we pass minimal filters here
+      // since entity filtering is done via AST on the soup items query
+      const filters =
+        mentionIds && mentionIds.length > 0
+          ? {
+              channel_filters: {
+                mentions: mentionIds.map((id) => `user:${id}`),
+              },
+            }
+          : {};
+
       return {
         search_on: 'name_content',
         match_type: 'partial',
         query,
-        filters:
-          mentionIds && mentionIds.length > 0
-            ? {
-                ...filters,
-                channel_filters: {
-                  ...filters.channel_filters,
-                  mentions: mentionIds.map((id) => `user:${id}`),
-                },
-              }
-            : filters,
+        filters,
       };
     }
   );
@@ -142,8 +144,9 @@ export const createSearchState = ({
 
   // we will hide local results if there are channel filters because we only want message results
   const hasChannelQueryFilters = () => {
-    const cf = queryFilters().channel_filters;
-    return !!(cf?.channel_ids?.length || cf?.sender_ids?.length);
+    // Check if the chanf bucket has any expressions (indicating channel filtering)
+    const ast = filterAst();
+    return ast.chanf !== undefined;
   };
 
   const filteredLocalFuzzyResults = createMemo(() => {

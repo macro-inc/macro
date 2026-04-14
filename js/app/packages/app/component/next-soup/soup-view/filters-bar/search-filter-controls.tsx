@@ -4,20 +4,23 @@ import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-ic
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
-import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
   soupViewCacheKey,
   activeSoupViewCounts,
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { SoupBody } from '@queries/soup/items';
 import { batch, createEffect, createMemo, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
-import type { ChannelFilters } from '@service-storage/generated/schemas';
+import {
+  ast,
+  channelIdsToAst,
+  senderIdsToAst,
+  type FilterAst,
+} from '@app/component/next-soup/filters';
 
-type ChannelSubFilters = Pick<ChannelFilters, 'channel_ids' | 'sender_ids'>;
+type ChannelSubFilters = { channel_ids?: string[]; sender_ids?: string[] };
 
 function getCachedChannelSubFilters(contentId: string): ChannelSubFilters {
   if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
@@ -43,32 +46,34 @@ function cacheChannelSubFilters(contentId: string, filters: ChannelSubFilters) {
   }
 }
 
-export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
+const NIL = '00000000-0000-0000-0000-000000000000';
+
+export const INDEX_OPTIONS: (Option & { ast: FilterAst })[] = [
   {
     value: 'channels',
     label: 'Channels',
     icon: () => (
       <EntityIcon targetType="channel" size="xs" theme="monochrome" />
     ),
-    queryFilters: QUERY_FILTERS.channels,
+    ast: { chanf: ast.neq('ChannelId', NIL) },
   },
   {
     value: 'document-or-file',
     label: 'Documents',
     icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.documentAndFile,
+    ast: { df: ast.neq('dst', 'task') },
   },
   {
     value: 'task',
     label: 'Tasks',
     icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.task,
+    ast: { df: ast.eq('dst', 'task') },
   },
   {
     value: 'email',
     label: 'Email',
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.email,
+    ast: { ef: ast.neq('ThreadId', NIL) },
   },
   {
     value: 'folders',
@@ -76,13 +81,13 @@ export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
     icon: () => (
       <EntityIcon targetType="project" size="xs" theme="monochrome" />
     ),
-    queryFilters: QUERY_FILTERS.folders,
+    ast: { pf: ast.neq('ProjectId', NIL) },
   },
   {
     value: 'agent',
     label: 'Agents',
     icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.agent,
+    ast: { cf: ast.neq('ChatId', NIL) },
   },
 ];
 
@@ -93,7 +98,7 @@ const INDEX_SELECT_OPTIONS: Option[] = INDEX_OPTIONS.map((o) => ({
 }));
 
 export const SearchIndexFilter = () => {
-  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const { soup, filterAst } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
 
@@ -106,15 +111,6 @@ export const SearchIndexFilter = () => {
 
   const isChannelsActive = () =>
     activeIndex().some((o) => o.value === 'channels');
-
-  createEffect(() => {
-    if (!isChannelsActive()) return;
-    const cf = queryFilters().channel_filters;
-    const sub: ChannelSubFilters = {};
-    if (cf?.channel_ids?.length) sub.channel_ids = cf.channel_ids;
-    if (cf?.sender_ids?.length) sub.sender_ids = cf.sender_ids;
-    cacheChannelSubFilters(contentId, sub);
-  });
 
   const handleChange = (selected: Option[]) => {
     batch(() => {
@@ -130,23 +126,20 @@ export const SearchIndexFilter = () => {
           soup.filters.toggle({ or: [opt.value as FilterID] });
           if (opt.value === 'channels') {
             const cached = getCachedChannelSubFilters(contentId);
-            setQueryFilters({
-              ...opt.queryFilters,
-              channel_filters: {
-                ...opt.queryFilters.channel_filters,
-                ...cached,
-              },
+            // Build AST with cached channel/sender filters
+            const channelAst = channelIdsToAst(cached.channel_ids ?? []);
+            const senderAst = senderIdsToAst(cached.sender_ids ?? []);
+            filterAst.set({
+              ...opt.ast,
+              ...channelAst,
+              ...senderAst,
             });
           } else {
-            setQueryFilters({
-              ...opt.queryFilters,
-            });
+            filterAst.set(opt.ast);
           }
         }
       } else {
-        setQueryFilters({
-          ...QUERY_FILTERS.default,
-        });
+        filterAst.set({});
       }
     });
   };
@@ -190,7 +183,9 @@ export const SearchIndexFilter = () => {
 };
 
 const InChannelFilter = () => {
-  const { setQueryFilters, queryFilters } = useSoupView();
+  const { filterAst } = useSoupView();
+  const panel = useSplitPanelOrThrow();
+  const contentId = panel.handle.content().id;
   const { useList } = useQuickAccess();
   const channels = useList('channel', 'dm');
 
@@ -208,8 +203,10 @@ const InChannelFilter = () => {
       }))
   );
 
+  // Get active channel IDs from cache (since AST doesn't expose IDs directly)
   const activeChannelFilter = createMemo((): Option[] => {
-    const ids = queryFilters().channel_filters?.channel_ids;
+    const cached = getCachedChannelSubFilters(contentId);
+    const ids = cached.channel_ids;
     if (!ids?.length) return [];
     return channelOptions().filter((opt) => ids.includes(opt.value));
   });
@@ -223,13 +220,19 @@ const InChannelFilter = () => {
 
   const handleChange = (selected: Option[]) => {
     const ids = selected.map((opt) => opt.value);
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        channel_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
+    const cached = getCachedChannelSubFilters(contentId);
+    cacheChannelSubFilters(contentId, {
+      ...cached,
+      channel_ids: ids.length > 0 ? ids : undefined,
+    });
+
+    // Update AST with new channel filter
+    filterAst.update((draft) => {
+      const channelAst = channelIdsToAst(ids);
+      if (channelAst.chanf) {
+        draft.chanf = channelAst.chanf;
+      }
+    });
   };
 
   return (
@@ -256,7 +259,9 @@ const InChannelFilter = () => {
 };
 
 const FromSenderFilter = () => {
-  const { setQueryFilters, queryFilters } = useSoupView();
+  const { filterAst } = useSoupView();
+  const panel = useSplitPanelOrThrow();
+  const contentId = panel.handle.content().id;
   const { useList } = useQuickAccess();
   const contacts = useList('person');
   const userId = useUserId();
@@ -285,8 +290,10 @@ const FromSenderFilter = () => {
     return [...(me ? [me] : []), ...others];
   });
 
+  // Get active sender IDs from cache
   const activeSenderFilter = createMemo((): Option[] => {
-    const ids = queryFilters().channel_filters?.sender_ids;
+    const cached = getCachedChannelSubFilters(contentId);
+    const ids = cached.sender_ids;
     if (!ids?.length) return [];
     return senderOptions().filter((opt) => ids.includes(opt.value));
   });
@@ -300,13 +307,24 @@ const FromSenderFilter = () => {
 
   const handleChange = (selected: Option[]) => {
     const ids = selected.map((opt) => opt.value);
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        sender_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
+    const cached = getCachedChannelSubFilters(contentId);
+    cacheChannelSubFilters(contentId, {
+      ...cached,
+      sender_ids: ids.length > 0 ? ids : undefined,
+    });
+
+    // Update AST with new sender filter
+    filterAst.update((draft) => {
+      const senderAst = senderIdsToAst(ids);
+      // Sender filter merges into chanf bucket
+      if (senderAst.chanf) {
+        if (draft.chanf) {
+          draft.chanf = ast.or(draft.chanf, senderAst.chanf);
+        } else {
+          draft.chanf = senderAst.chanf;
+        }
+      }
+    });
   };
 
   return (
