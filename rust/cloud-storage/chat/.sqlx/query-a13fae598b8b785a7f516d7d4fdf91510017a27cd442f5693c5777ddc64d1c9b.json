@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT\n            d.\"documentId\",\n            LENGTH(REGEXP_REPLACE(d.\"content\", '\\s', '', 'g')) AS content_length\n        FROM\n            \"DocumentText\" d\n        WHERE\n            d.\"documentId\" = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "documentId",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "content_length",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "a13fae598b8b785a7f516d7d4fdf91510017a27cd442f5693c5777ddc64d1c9b"
+}

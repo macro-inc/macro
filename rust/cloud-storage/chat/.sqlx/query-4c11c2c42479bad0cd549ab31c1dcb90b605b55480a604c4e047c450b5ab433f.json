@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) as \"count\"\n            FROM \"Document\" d\n            LEFT JOIN \"DocumentText\" dt ON d.id = dt.\"documentId\"\n            WHERE d.\"deletedAt\" IS NULL\n            AND dt.\"documentId\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4c11c2c42479bad0cd549ab31c1dcb90b605b55480a604c4e047c450b5ab433f"
+}

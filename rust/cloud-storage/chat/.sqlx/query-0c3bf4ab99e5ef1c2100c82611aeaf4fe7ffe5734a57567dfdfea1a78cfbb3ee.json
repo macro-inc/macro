@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            p.\"id\" as \"item_id!\",\n            p.\"createdAt\" as \"created_at!\",\n            p.\"updatedAt\" as \"updated_at!\",\n            p.\"deletedAt\" as \"deleted_at?\",\n            p.\"parentId\" as \"parent_project_id?\",\n            uh.\"updatedAt\" as \"viewed_at?\",\n            p.\"userId\" as \"user_id\",\n            p.\"name\"\n        FROM\n            \"Project\" p\n        LEFT JOIN\n            \"UserHistory\" uh ON uh.\"itemId\" = p.\"id\"\n                AND uh.\"userId\" = $1\n                AND uh.\"itemType\" = 'project'\n        WHERE\n            p.\"id\" = ANY($2)\n        ORDER BY\n            p.\"updatedAt\" DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at!",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at!",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "deleted_at?",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "parent_project_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "viewed_at?",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0c3bf4ab99e5ef1c2100c82611aeaf4fe7ffe5734a57567dfdfea1a78cfbb3ee"
+}

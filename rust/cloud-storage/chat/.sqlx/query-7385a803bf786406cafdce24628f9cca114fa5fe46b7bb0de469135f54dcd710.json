@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    d.id\n                FROM\n                    \"Document\" d\n                WHERE\n                    d.id = ANY($1)\n                    AND d.\"projectId\" = ANY($2)\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7385a803bf786406cafdce24628f9cca114fa5fe46b7bb0de469135f54dcd710"
+}

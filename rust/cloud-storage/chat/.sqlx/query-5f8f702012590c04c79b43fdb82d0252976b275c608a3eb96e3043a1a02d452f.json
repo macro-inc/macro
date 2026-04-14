@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            d.id,\n            d.name,\n            d.owner,\n            d.\"fileType\" as \"file_type!\",\n            di.id as \"document_version_id?\"\n        FROM\n            \"Document\" d\n        LEFT JOIN \"DocumentText\" dt ON d.id = dt.\"documentId\"\n        LEFT JOIN LATERAL (\n            SELECT\n                i.id\n            FROM\n                \"DocumentInstance\" i\n            WHERE\n                i.\"documentId\" = d.id\n            ORDER BY\n                i.\"createdAt\" ASC\n            LIMIT 1\n        ) di ON true\n        WHERE\n            d.\"deletedAt\" IS NULL\n            AND dt.\"documentId\" IS NULL\n            AND d.\"fileType\" IS NOT NULL\n        ORDER BY d.\"createdAt\" DESC\n        LIMIT $1 OFFSET $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "file_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "document_version_id?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "5f8f702012590c04c79b43fdb82d0252976b275c608a3eb96e3043a1a02d452f"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"ItemLastAccessed\" (\"item_id\", \"item_type\", \"last_accessed\")\n        VALUES ($1, $2, $3)\n        ON CONFLICT (\"item_id\", \"item_type\") DO UPDATE\n        SET \"last_accessed\" = $3;\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "71b975abc8c63ea8116cd8944e99d46e5747660807a30564921bc371ddd1338d"
+}

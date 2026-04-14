@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"BlockedEmail\" (email)\n            SELECT email FROM unnest($1::text[]) AS email\n            ON CONFLICT (email) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dae0d3d0cdf09f727a8b7c3ecc9f3ae64ea91023d356c47232736672cd1ba5ec"
+}

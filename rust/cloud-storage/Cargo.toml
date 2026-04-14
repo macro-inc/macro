@@ -48,6 +48,7 @@ members = [
   "email_utils",
   "email_validator",
   "entity_access",
+  "entity_access_db_utils",
   "entity_access_management",
   "frecency",
   "fusionauth",

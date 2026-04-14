@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"SharePermission\" (\"isPublic\", \"publicAccessLevel\", \"createdAt\", \"updatedAt\")\n            VALUES ($1, $2, NOW(), NOW())\n            RETURNING id, \"isPublic\" as is_public, \"publicAccessLevel\" as public_access_level;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "public_access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "79c6974496c155f372a458d21240a09730630660ae75e8f6e5cfd8f5ba0ceb4e"
+}

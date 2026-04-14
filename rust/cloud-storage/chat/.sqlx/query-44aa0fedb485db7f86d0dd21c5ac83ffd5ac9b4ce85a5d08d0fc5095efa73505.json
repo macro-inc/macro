@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT oem.email\n        FROM \"OrganizationEmailMatches\" oem\n        JOIN \"Organization\" o ON o.\"id\" = oem.\"organizationId\"\n        WHERE oem.\"organizationId\" = $1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "44aa0fedb485db7f86d0dd21c5ac83ffd5ac9b4ce85a5d08d0fc5095efa73505"
+}

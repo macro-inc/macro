@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"account_merge_request\"\n        WHERE \"id\" = $1\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7bb408bf30aecce0065dcfcf07da69efaab69905bb6b97d5d57ad591ff8c2006"
+}

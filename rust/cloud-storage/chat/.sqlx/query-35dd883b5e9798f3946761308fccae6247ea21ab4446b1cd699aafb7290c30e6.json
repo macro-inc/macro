@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_invite (id, team_id, email, team_role, invited_by, created_at, last_sent_at)\n            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())\n            RETURNING id, email, team_id, team_role as \"team_role!: models_team::TeamRole\", invited_by, created_at as \"created_at!: chrono::DateTime<chrono::Utc>\", last_sent_at as \"last_sent_at!: chrono::DateTime<chrono::Utc>\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_role!: models_team::TeamRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "invited_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_sent_at!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "35dd883b5e9798f3946761308fccae6247ea21ab4446b1cd699aafb7290c30e6"
+}

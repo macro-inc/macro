@@ -1,9 +1,6 @@
 use document_sub_type::DocumentSubType;
-use entity_access::domain::models::AccessLevel;
-use entity_access_management::domain::models::EntityAccessSourceType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::VersionIDWithTimeStamps;
-use model_entity::EntityType;
 use model_file_type::FileType;
 use models_permissions::share_permission::SharePermissionV2;
 
@@ -193,34 +190,6 @@ pub async fn insert_history<'a>(
         &document_id.to_string(),
         "document",
         created_at.naive_utc()
-    )
-    .execute(transaction.as_mut())
-    .await?;
-
-    Ok(())
-}
-
-/// Inserts user entity access
-#[tracing::instrument(skip(transaction), err)]
-pub async fn insert_entity_access<'a>(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    document_id: &uuid::Uuid,
-    user_id: &MacroUserIdStr<'a>,
-) -> Result<(), sqlx::Error> {
-    let entity_type_str: &str = EntityType::Document.into();
-
-    sqlx::query!(
-        r#"
-            INSERT INTO "entity_access" (
-            "entity_id", "entity_type", "source_id", "source_type", "access_level", "created_at", "updated_at"
-            )
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-            "#,
-        document_id,
-        entity_type_str,
-        user_id.as_ref(),
-        EntityAccessSourceType::User as _,
-        AccessLevel::Owner as _,
     )
     .execute(transaction.as_mut())
     .await?;

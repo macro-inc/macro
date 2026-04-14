@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM \"DocumentPermission\"\n            WHERE \"sharePermissionId\" = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "514af45f8facfb915211cc9b0a92991b831dc11f9ab91d92b368340fa0aa8f8f"
+}

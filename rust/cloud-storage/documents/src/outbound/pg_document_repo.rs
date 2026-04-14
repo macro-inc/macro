@@ -446,7 +446,15 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         // Insert user entity access (Owner level)
-        create::insert_entity_access(&mut transaction, &document_id, &user_id).await?;
+        entity_access_db_utils::insert_entity_access_row(
+            &mut transaction,
+            &document_id,
+            entity_access_db_utils::EntityType::Document,
+            user_id.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await?;
 
         // Link to email attachment if provided
         if let Some(attachment_id) = email_attachment_id {
@@ -728,7 +736,17 @@ impl DocumentRepo for PgDocumentRepo {
         create::set_share_permission(&mut transaction, &document_id, file_type).await?;
 
         // Insert user entity access (Owner level)
-        create::insert_entity_access(&mut transaction, &document_id, &user_id).await?;
+
+        // Insert user entity access (Owner level)
+        entity_access_db_utils::insert_entity_access_row(
+            &mut transaction,
+            &document_id,
+            entity_access_db_utils::EntityType::Document,
+            user_id.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await?;
 
         // Insert user history
         let now = chrono::Utc::now();
