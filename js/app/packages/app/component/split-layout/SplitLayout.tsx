@@ -505,25 +505,28 @@ function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
 
   let startX = 0;
   let startTime = 0;
+  let animationTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(animationTimer));
 
   function animateComplete(onDone: () => void) {
     setIsAnimatingOut(true);
     setDragOffset(window.innerWidth);
-    const t = setTimeout(() => {
+    animationTimer = setTimeout(() => {
       batch(() => {
         setIsAnimatingOut(false);
         setDragOffset(0);
         onDone();
       });
     }, SWIPE_ANIMATION_MS);
-    onCleanup(() => clearTimeout(t));
   }
 
   function animateSnapBack() {
     setIsAnimatingOut(true);
     setDragOffset(0);
-    const t = setTimeout(() => setIsAnimatingOut(false), SWIPE_ANIMATION_MS);
-    onCleanup(() => clearTimeout(t));
+    animationTimer = setTimeout(
+      () => setIsAnimatingOut(false),
+      SWIPE_ANIMATION_MS
+    );
   }
 
   function triggerAnimatedSwipeBack() {
@@ -611,7 +614,11 @@ function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
+      onTouchCancel={() => {
+        if (!isDragging()) return;
+        setIsDragging(false);
+        animateSnapBack();
+      }}
     >
       <Show when={slotAData()}>
         {(a) => (

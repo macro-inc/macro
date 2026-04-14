@@ -118,7 +118,7 @@ export type SplitState = {
   mount: SplitMount; // contains pinned element
   referredFrom: ReferredFrom;
   /** When true, this split is the mobile background (previous page). Excluded from URL encoding. */
-  isBackground?: boolean;
+  isBackground: boolean;
 };
 
 export type CreateNewSplitOptions = {
@@ -699,10 +699,11 @@ export function createSplitLayout(
   };
 
   const getUrl = () => {
+    const visibleSplits = state.splits.filter((s) => !s.isBackground);
     return (
-      state.splits.map((s) => getAliasOrType(s.content)).join('/') +
+      visibleSplits.map((s) => getAliasOrType(s.content)).join('/') +
       '/' +
-      state.splits.map((s) => s.content.id).join('/')
+      visibleSplits.map((s) => s.content.id).join('/')
     );
   };
 
