@@ -336,6 +336,21 @@ export default function InteractiveOnboarding() {
 
   createEffect(
     on(
+      () => state.currentLesson(),
+      (lesson) => {
+        if (!lesson) return;
+
+        analytics.track('onboarding_step', {
+          id: lesson.definition.id,
+          index: lesson.index,
+          state: 'viewed',
+        });
+      }
+    )
+  );
+
+  createEffect(
+    on(
       () => state.dismissed(),
       (dismissed) => {
         if (dismissed) navigateAway();
