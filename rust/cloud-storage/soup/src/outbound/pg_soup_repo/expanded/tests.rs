@@ -5320,25 +5320,18 @@ async fn test_dyn_filter_is_email_attachment_false(db: PgPool) -> anyhow::Result
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Result<()> {
-    use document_sub_type::DocumentSubType;
-    use filter_ast::Expr;
-    use item_filters::ast::document::DocumentLiteral;
-
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
 
-    // Manually construct an AST with NOT(sub_type = task)
-    let negated_task_filter = Expr::is_not(Expr::Literal(DocumentLiteral::SubType(
-        DocumentSubType::Task,
-    )));
-
-    let filters = EntityFilterAst {
-        document_filter: Some(std::sync::Arc::new(negated_task_filter)),
-        project_filter: None,
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        properties_filter: None,
-    };
+    // Construct an AST with NOT(sub_type = task) via JSON deserialization
+    // This tests the fix for NULL handling: NOT (dt.sub_type IS NOT NULL AND dt.sub_type = 'task')
+    // Which correctly expands to: dt.sub_type IS NULL OR dt.sub_type != 'task'
+    let filters: EntityFilterAst = serde_json::from_value(serde_json::json!({
+        "df": {
+            "!": {
+                "l": { "dst": "task" }
+            }
+        }
+    }))?;
 
     let items = expanded_dynamic_cursor_soup(
         &db,
