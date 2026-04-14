@@ -92,9 +92,10 @@ export const createAnalytics = () => {
     event: EventName,
     data?: Record<string, unknown>
   ) => {
-    if (disabled) return;
-
     const enriched = { device: getDeviceType(), ...data };
+    console.log('[Analytics]', event, enriched, disabled ? '(disabled)' : '');
+
+    if (disabled) return;
 
     try {
       match(provider)
@@ -118,8 +119,6 @@ export const createAnalytics = () => {
     data?: Record<string, unknown>,
     providersToSendTo: AnalyticsProvider[] = DEFAULT_ANALYTICS_PROVIDERS
   ) => {
-    if (disabled) return;
-
     for (const provider of providersToSendTo) {
       sendEvent(provider, event, data);
     }
