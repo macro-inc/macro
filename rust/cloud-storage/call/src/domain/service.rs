@@ -23,7 +23,9 @@ use super::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
     GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
 };
-use super::ports::{CallRecordQueryService, CallRepository, CallRtcClient, CallService, RecordingStorage};
+use super::ports::{
+    CallRecordQueryService, CallRepository, CallRtcClient, CallService, RecordingStorage,
+};
 
 /// The concrete call service implementation.
 pub struct CallServiceImpl<
@@ -600,6 +602,10 @@ impl<
         let call_id = Uuid::parse_str(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
 
+        let user_id = receipt
+            .get_authenticated_user()
+            .map_err(|_| CallError::Auth)?;
+
         let mut record = self
             .repo
             .get_call_record_by_call_id(&call_id)
@@ -615,6 +621,12 @@ impl<
                 .inspect_err(|e| tracing::error!(error=?e, "failed to presign recording URL"))
                 .ok();
         }
+
+        record.channel_name = self
+            .repo
+            .resolve_channel_name(&record.channel_id, user_id.copied())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
 
         Ok(record)
     }

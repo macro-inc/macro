@@ -103,13 +103,13 @@ use model::{
     version::DocumentStorageServiceApiVersion,
 };
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::email_thread::{
     SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
-use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};

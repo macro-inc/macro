@@ -827,8 +827,7 @@ impl CallRepository for PgCallRepo {
             .iter()
             .filter(|(_, (name, ct))| {
                 ct == "direct_message"
-                    || (ct == "private"
-                        && name.as_ref().map_or(true, |n| n.trim().is_empty()))
+                    || (ct == "private" && name.as_ref().map_or(true, |n| n.trim().is_empty()))
             })
             .map(|(id, _)| *id)
             .collect();
@@ -873,10 +872,7 @@ impl CallRepository for PgCallRepo {
             let lookup: NameLookup = name_rows
                 .into_iter()
                 .filter_map(|row| {
-                    let name = display_name(
-                        row.first_name.as_deref(),
-                        row.last_name.as_deref(),
-                    )?;
+                    let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
                     Some((row.user_profile_id, name))
                 })
                 .collect();
@@ -887,9 +883,7 @@ impl CallRepository for PgCallRepo {
         for record in &mut records {
             if let Some((name, channel_type)) = channel_map.get(&record.channel_id) {
                 let empty = Vec::new();
-                let participants = participant_map
-                    .get(&record.channel_id)
-                    .unwrap_or(&empty);
+                let participants = participant_map.get(&record.channel_id).unwrap_or(&empty);
                 record.channel_name = Some(resolve_channel_name(
                     channel_type,
                     name.as_deref(),
@@ -922,5 +916,90 @@ impl CallRepository for PgCallRepo {
         .fetch_optional(&self.pool)
         .await
         .map(|opt| opt.flatten())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resolve_channel_name<'a>(
+        &self,
+        channel_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Option<String>, Self::Err> {
+        let Some(channel_info) = sqlx::query!(
+            r#"
+            SELECT name, channel_type::text as "channel_type!"
+            FROM comms_channels
+            WHERE id = $1
+            "#,
+            channel_id
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        let channel_type = &channel_info.channel_type;
+        let needs_participants = channel_type == "direct_message"
+            || (channel_type == "private"
+                && channel_info
+                    .name
+                    .as_ref()
+                    .map_or(true, |n| n.trim().is_empty()));
+
+        let (participant_ids, name_lookup) = if !needs_participants {
+            (Vec::new(), NameLookup::new())
+        } else {
+            let participant_rows = sqlx::query!(
+                r#"
+                SELECT user_id
+                FROM comms_channel_participants
+                WHERE channel_id = $1 AND left_at IS NULL
+                "#,
+                channel_id
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let mut ids = Vec::new();
+            let mut all_user_ids = Vec::new();
+            for row in participant_rows {
+                let uid = MacroUserIdStr::parse_from_str(&row.user_id)
+                    .expect("valid user id from db")
+                    .into_owned();
+                all_user_ids.push(row.user_id);
+                ids.push(uid);
+            }
+
+            let name_rows = sqlx::query!(
+                r#"
+                SELECT u.id as user_profile_id, mui.first_name, mui.last_name
+                FROM macro_user_info mui
+                JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+                WHERE u.id = ANY($1)
+                "#,
+                &all_user_ids
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let lookup: NameLookup = name_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
+                    Some((row.user_profile_id, name))
+                })
+                .collect();
+
+            (ids, lookup)
+        };
+
+        Ok(Some(resolve_channel_name(
+            channel_type,
+            channel_info.name.as_deref(),
+            &participant_ids,
+            channel_id,
+            user_id.copied(),
+            &name_lookup,
+        )))
     }
 }

@@ -25,20 +25,19 @@ pub fn resolve_channel_name(
     name_lookup: &NameLookup,
 ) -> String {
     match channel_type {
-        "organization" | "public" => {
-            channel_name.map(|n| n.to_string()).unwrap_or_else(|| {
-                tracing::warn!(?channel_id, "organization or public channel should have a name");
-                if channel_type == "organization" {
-                    "Organization"
-                } else {
-                    "Public"
-                }
-                .to_string()
-            })
-        }
-        "private" => {
-            resolve_private_channel_name(channel_name, participant_user_ids, name_lookup)
-        }
+        "organization" | "public" => channel_name.map(|n| n.to_string()).unwrap_or_else(|| {
+            tracing::warn!(
+                ?channel_id,
+                "organization or public channel should have a name"
+            );
+            if channel_type == "organization" {
+                "Organization"
+            } else {
+                "Public"
+            }
+            .to_string()
+        }),
+        "private" => resolve_private_channel_name(channel_name, participant_user_ids, name_lookup),
         "direct_message" => resolve_direct_message_channel_name(
             channel_name,
             participant_user_ids,

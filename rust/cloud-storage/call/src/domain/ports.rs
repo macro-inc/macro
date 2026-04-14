@@ -156,6 +156,13 @@ pub trait CallRepository: Send + Sync + 'static {
         limit: u32,
         filter: &LiteralTree<CallLiteral>,
     ) -> impl Future<Output = Result<Vec<CallRecord>, Self::Err>> + Send;
+
+    /// Resolve the display name for a single channel.
+    fn resolve_channel_name<'a>(
+        &self,
+        channel_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
