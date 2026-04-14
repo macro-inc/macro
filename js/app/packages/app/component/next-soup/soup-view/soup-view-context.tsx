@@ -36,13 +36,19 @@ import {
 import {
   createAssigneeFilter,
   unassignedFilter,
+  type FilterAst,
+  type AstBucket,
 } from '@app/component/next-soup/filters';
+import {
+  mergeFilterAst,
+  mergeFilterAstOr,
+  scopeFilterAst,
+} from '@app/component/next-soup/filters/define-filter';
 import { NO_ASSIGNEE } from './task-sub-filter-matcher';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
 import type { SoupPage } from '@service-storage/generated/schemas';
-import { mergeFilterAst } from '@app/component/next-soup/filters/define-filter';
 
 type Row<T> = {
   original: T;
@@ -164,19 +170,52 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const soupBody = createMemo(() => {
-    const asts = soup.filters.active().map((f) => f.ast({}));
+    // Helper to get AST from a filter config, applying scope if specified
+    const getFilterAst = (
+      filter: { ast?: FilterAst | ((ctx: unknown) => FilterAst) },
+      targets?: AstBucket[]
+    ): FilterAst => {
+      if (!filter.ast) return {};
+      const filterAst =
+        typeof filter.ast === 'function' ? filter.ast({}) : filter.ast;
+      return targets ? scopeFilterAst(filterAst, targets) : filterAst;
+    };
 
-    // Include assignee filter ASTs
+    // AND filters (from presets) - merged with AND logic
+    const andAsts: FilterAst[] = soup.filters
+      .andFiltersWithScope()
+      .map(({ filter, targets }) => getFilterAst(filter, targets));
+
+    // OR filters (from user selection) - merged with OR logic
+    const orAsts: FilterAst[] = soup.filters
+      .orFiltersWithScope()
+      .map(({ filter, targets }) => getFilterAst(filter, targets));
+
+    // Assignee filters are OR'd together (user can select multiple assignees)
     const currentAssigneeFilter = assigneeFilter();
     for (const id of currentAssigneeFilter) {
       if (id === NO_ASSIGNEE) {
-        asts.push(unassignedFilter.toAst());
+        orAsts.push(unassignedFilter.toAst());
       } else {
-        asts.push(createAssigneeFilter(id).toAst());
+        orAsts.push(createAssigneeFilter(id).toAst());
       }
     }
 
-    return mergeFilterAst(...asts);
+    // Merge: (AND filters) AND (OR filters)
+    const andResult = andAsts.length > 0 ? mergeFilterAst(...andAsts) : {};
+    const orResult = orAsts.length > 0 ? mergeFilterAstOr(...orAsts) : {};
+
+    // Combine AND and OR results
+    if (andAsts.length > 0 && orAsts.length > 0) {
+      return mergeFilterAst(andResult, orResult);
+    } else if (andAsts.length > 0) {
+      return andResult;
+    } else if (orAsts.length > 0) {
+      // If only OR filters, still need to apply default exclusions
+      return mergeFilterAst(orResult);
+    }
+
+    return {};
   });
 
   const search = createSearchState({

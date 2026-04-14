@@ -2,7 +2,10 @@ import {
   EXCLUDE,
   QUERY_FILTERS,
 } from '@app/component/next-soup/filters/query-filters';
-import type { FilterID } from '@app/component/next-soup/filters';
+import type {
+  FilterID,
+  ScopedFilterId,
+} from '@app/component/next-soup/filters';
 import {
   applyInboxQueryFilters,
   applyOtherQueryFilters,
@@ -35,7 +38,8 @@ export const NOISE_QUERY_FILTERS = {
 
 export type SoupFiltersPreset = {
   queryFilters: SoupBody;
-  clientFilters: FilterID[];
+  /** Client filters to apply. Supports scoped filters: `{ id: 'filter-id', targets: ['pf'] }` */
+  clientFilters: ScopedFilterId<FilterID>[];
 };
 
 // Tab preset configuration types
@@ -108,11 +112,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       },
       running: () => ({
         queryFilters: QUERY_FILTERS.agent,
-        clientFilters: ['agent'],
+        clientFilters: ['agent', { id: 'owned-entity', targets: ['cf'] }],
       }),
       shared: () => ({
         queryFilters: QUERY_FILTERS.agent,
-        clientFilters: ['agent', 'shared-agent'],
+        clientFilters: ['agent', { id: 'shared-entity', targets: ['cf'] }],
       }),
     },
   },
@@ -161,7 +165,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           email_filters: { shared: SharedEmailFilter.only },
           emailView: 'all',
         },
-        clientFilters: ['email'],
+        clientFilters: ['email', { id: 'shared-entity', targets: ['ef'] }],
       }),
       all: () => ({
         queryFilters: {
@@ -188,7 +192,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             },
             project_filters: { project_ids: EXCLUDE },
           },
-          clientFilters: ['document-or-file'],
+          clientFilters: [
+            'document-or-file',
+            { id: 'owned-entity', targets: ['df'] },
+          ],
         };
       },
       shared: () => ({
@@ -200,7 +207,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           project_filters: { project_ids: EXCLUDE },
         },
-        clientFilters: ['document-or-file', 'shared-entity'],
+        clientFilters: [
+          'document-or-file',
+          { id: 'shared-entity', targets: ['ef'] },
+        ],
       }),
       attachments: () => ({
         queryFilters: {
@@ -259,7 +269,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               owners: [ctx.userId],
             },
           },
-          clientFilters: ['task', 'active-task'],
+          clientFilters: [
+            'task',
+            'active-task',
+            { id: 'owned-entity', targets: ['df'] },
+          ],
         };
       },
       all: () => ({
@@ -298,7 +312,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...QUERY_FILTERS.folders,
             project_filters: { owners: [ctx.userId] },
           },
-          clientFilters: ['folders'],
+          clientFilters: ['folders', { id: 'owned-entity', targets: ['pf'] }],
         };
       },
       all: () => ({

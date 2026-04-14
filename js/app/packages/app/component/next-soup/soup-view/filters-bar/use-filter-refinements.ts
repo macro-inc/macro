@@ -175,7 +175,7 @@ export function useFilterRefinements() {
         icon: option.icon,
         categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
         onRemove: () => {
-          soup.filters.toggle([optionId]);
+          soup.filters.toggle({ or: [optionId] });
           setQueryFilters(QUERY_FILTERS.default);
         },
       });
@@ -256,14 +256,14 @@ export function useFilterRefinements() {
   };
 
   const removeFilter = (optionId: string) => {
-    soup.filters.toggle([optionId as FilterID]);
+    soup.filters.toggle({ or: [optionId as FilterID] });
   };
 
   const replaceFilter = (oldOptionId: string, newOptionId: string) => {
     // Toggle off the old filter and toggle on the new one
     batch(() => {
-      soup.filters.toggle([oldOptionId as FilterID]);
-      soup.filters.toggle([newOptionId as FilterID]);
+      soup.filters.toggle({ or: [oldOptionId as FilterID] });
+      soup.filters.toggle({ or: [newOptionId as FilterID] });
     });
   };
 
@@ -272,7 +272,7 @@ export function useFilterRefinements() {
     if (!preset) return;
 
     batch(() => {
-      soup.filters.set(preset.clientFilters);
+      soup.filters.set({ and: preset.clientFilters });
       setQueryFilters(preset.queryFilters);
       setAssigneeFilter([]);
     });

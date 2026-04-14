@@ -1,8 +1,8 @@
 import {
   VIEW_TAB_PRESETS,
   type PresetContext,
+  type SoupFiltersPreset,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -84,13 +84,10 @@ export const useApplyPreset = () => {
     email: user.email(),
   });
 
-  const applyPreset = (preset: {
-    queryFilters: SoupItemsQueryFilters;
-    clientFilters: FilterID[];
-  }) => {
+  const applyPreset = (preset: SoupFiltersPreset) => {
     batch(() => {
       setQueryFilters(preset.queryFilters);
-      soup.filters.set(preset.clientFilters);
+      soup.filters.set({ and: preset.clientFilters });
     });
   };
 

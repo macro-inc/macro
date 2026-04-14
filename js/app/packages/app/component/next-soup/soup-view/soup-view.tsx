@@ -671,11 +671,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
         applyTabPreset(contentId, initialPersistedState.activeTab);
       if (!applied) {
         batch(() => {
-          soup.filters.set(
-            isStale
+          soup.filters.set({
+            and: isStale
               ? (props.initialClientFilters ?? [])
-              : (initialPersistedState.filters ?? [])
-          );
+              : (initialPersistedState.filters ?? []),
+          });
           setQueryFilters(
             isStale
               ? QUERY_FILTERS.default
@@ -690,7 +690,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       });
     } else {
       if (props.initialClientFilters) {
-        soup.filters.set(props.initialClientFilters);
+        soup.filters.set({ and: props.initialClientFilters });
       }
     }
   });

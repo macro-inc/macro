@@ -30,13 +30,14 @@ export const useFilterOptions = (
         : [];
 
     batch(() => {
-      // Get current active IDs, remove options from this group, add newly selected
-      const currentIds = soup.filters.activeIds();
-      const newIds = [
-        ...currentIds.filter((id) => !optionIds.includes(id)),
+      // Get current AND filter IDs, remove options from this group, add newly selected to OR
+      const currentAndIds = soup.filters.andFilters().map((f) => f.id);
+      const currentOrIds = soup.filters.orFilters().map((f) => f.id);
+      const newOrIds = [
+        ...currentOrIds.filter((id) => !optionIds.includes(id)),
         ...selectedIds,
       ];
-      soup.filters.set(newIds);
+      soup.filters.set({ and: currentAndIds, or: newOrIds });
 
       if (getQueryFilters) {
         setQueryFilters(getQueryFilters(selectedIds));

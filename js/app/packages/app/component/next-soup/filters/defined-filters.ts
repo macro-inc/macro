@@ -484,6 +484,20 @@ export const sharedEntityFilter = (getUserID: () => string | undefined) =>
     },
   });
 
+export const ownedEntityFilter = (getUserID: () => string | undefined) =>
+  defineFilter({
+    id: 'owned-entity' as const,
+    predicate: (e: EntityData) => !sharedEntityPredicate(getUserID)(e),
+    ast: () => {
+      const userId = getUserID() ?? '';
+      return {
+        df: ast.eq('o', userId),
+        cf: ast.eq('Owner', userId),
+        pf: ast.eq('Owner', userId),
+      };
+    },
+  });
+
 export const ownedAgentFilterDef = (getUserID: () => string | undefined) =>
   defineFilter({
     id: 'owned-agent' as const,
@@ -644,6 +658,7 @@ export const createSoupFilters = (
     attachmentImageFilter,
     attachmentDocumentFilter,
     sharedEntityFilter(getUserID),
+    ownedEntityFilter(getUserID),
     ownedAgentFilterDef(getUserID),
     sharedAgentFilterDef(getUserID),
     assignedToFilter(getUserID),

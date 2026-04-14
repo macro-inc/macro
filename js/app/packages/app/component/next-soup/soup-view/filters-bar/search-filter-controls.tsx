@@ -120,14 +120,14 @@ export const SearchIndexFilter = () => {
     batch(() => {
       for (const opt of INDEX_OPTIONS) {
         if (soup.filters.isActive(opt.value)) {
-          soup.filters.toggle([opt.value as FilterID]);
+          soup.filters.toggle({ or: [opt.value as FilterID] });
         }
       }
 
       if (selected.length > 0) {
         const opt = INDEX_OPTIONS.find((o) => o.value === selected[0].value);
         if (opt) {
-          soup.filters.toggle([opt.value as FilterID]);
+          soup.filters.toggle({ or: [opt.value as FilterID] });
           if (opt.value === 'channels') {
             const cached = getCachedChannelSubFilters(contentId);
             setQueryFilters({

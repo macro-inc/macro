@@ -507,7 +507,7 @@ export const UnifiedFilterDropdown = () => {
   };
 
   const toggleFilter = (optionId: string) => {
-    soup.filters.toggle([optionId]);
+    soup.filters.toggle({ or: [optionId] });
   };
 
   // Assignee options for tasks view

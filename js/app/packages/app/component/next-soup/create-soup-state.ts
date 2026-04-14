@@ -7,6 +7,7 @@ import {
   type FilterConfig,
   type FilterGroupConfig,
   type FilterID,
+  type SetFiltersInput,
 } from '@app/component/next-soup/filters';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
@@ -32,7 +33,7 @@ export type SortConfig<T> = {
 
 interface SoupContextOptions<TId extends string = FilterID> {
   initialData?: SoupEntity[];
-  initialFilters?: TId[];
+  initialFilters?: SetFiltersInput<TId>;
   filterConfigs?: FilterConfig<SoupEntity>[];
   filterGroups?: FilterGroupConfig[];
   wrapNavigation?: boolean;

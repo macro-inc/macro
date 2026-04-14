@@ -11,11 +11,18 @@ export {
   type FilterConfig,
   type FilterGroupConfig,
   type FilterPredicate,
+  type SetFiltersInput,
+  type ScopedFilterId,
+  type ScopedFilterEntry,
+  type SetFiltersCallback,
+  type CurrentFilterState,
 } from './create-filter-state';
 
 export {
   defineFilter,
   mergeFilterAst,
+  mergeFilterAstOr,
+  scopeFilterAst,
   ast,
   NIL_UUID,
   type FilterAst,
