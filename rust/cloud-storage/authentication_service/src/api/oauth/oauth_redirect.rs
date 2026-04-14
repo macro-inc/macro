@@ -201,6 +201,14 @@ async fn update_url_with_session_code(
         return Ok(url);
     };
 
+    // Strip any existing token params from the URL (e.g. from a previous login
+    // attempt embedded in the original_url) before appending the new one.
+    let filtered: Vec<(String, String)> = url
+        .query_pairs()
+        .filter(|(k, _)| k != "token")
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    url.query_pairs_mut().clear().extend_pairs(filtered);
     url.query_pairs_mut().append_pair("token", &session_code.0);
 
     write_db(session_code).await?;

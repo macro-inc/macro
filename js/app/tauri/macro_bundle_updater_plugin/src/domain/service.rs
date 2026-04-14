@@ -195,7 +195,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         let version_str = version.to_string().to_lowercase();
         bundle.push(PathBuf::from(version_str));
         self.fs_repo.create_dir_all(&bundle).await?;
-        bundle.push(Path::new("/bundle.zip"));
+        bundle.push("bundle.zip");
         Ok(bundle)
     }
 }

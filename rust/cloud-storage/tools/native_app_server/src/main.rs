@@ -8,6 +8,7 @@ use native_app_service::{
     },
     inbound::{RouterState, native_app_router},
 };
+use tower_http::services::ServeFile;
 use url::Url;
 
 /// Bundle fetcher that always reports a very high version, forcing an update.
@@ -30,12 +31,15 @@ impl GetJsBundleSemver for AlwaysUpdateFetcher {
     }
 }
 
+const ADDR: &str = "127.0.0.1:3001";
+const ARCHIVE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/app-archive.zip");
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
     let bundle_url: Url = std::env::var("BUNDLE_URL")
-        .unwrap_or_else(|_| "http://localhost:3000/app-archive.zip".to_string())
+        .unwrap_or_else(|_| format!("http://{ADDR}/app-archive.zip"))
         .parse()
         .expect("BUNDLE_URL must be a valid URL");
 
@@ -54,11 +58,14 @@ async fn main() {
         inner: Arc::new(service),
     };
 
-    let app = native_app_router(state);
+    let app = native_app_router(state)
+        .route_service(
+            "/app-archive.zip",
+            ServeFile::new(ARCHIVE_PATH),
+        );
 
-    let addr = "0.0.0.0:3001";
-    tracing::info!("Listening on {addr}");
+    tracing::info!("Listening on {ADDR}");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(ADDR).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
