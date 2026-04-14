@@ -83,7 +83,7 @@ impl UpdateRepo for BundleClient {
             .and_then(|x| x.parse::<usize>().ok())
             .map(Progress::from_total);
 
-        let mut file = tokio::fs::File::create_new(destination.as_ref())
+        let mut file = tokio::fs::File::create(destination.as_ref())
             .await
             .map_err(|e| report!(e).context(DownloadBundleError::FileError))?;
 

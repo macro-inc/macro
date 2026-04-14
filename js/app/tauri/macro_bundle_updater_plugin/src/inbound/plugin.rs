@@ -119,13 +119,12 @@ pub fn perform_update<R: Runtime>(
     tracing::info!("Setting bundle root to {bundle_dir:?}");
     *bundle_root.0.write().map_err(|e| e.to_string())? = Some(bundle_dir);
 
-    let url: Url = "tauri://localhost/app/index.html"
-        .parse()
-        .expect("valid url");
-
+    // Navigate to the updated bundle, preserving the current hash route.
     if let Some(webview) = app_handle.webview_windows().values().next() {
-        tracing::info!("Bundle update complete, navigating to {url}");
-        let _ = webview.navigate(url);
+        tracing::info!("Bundle update complete, navigating to updated bundle");
+        let _ = webview.eval(
+            "window.location.href = 'tauri://localhost/app/index.html' + window.location.hash;"
+        );
     }
     Ok(())
 }

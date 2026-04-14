@@ -44,7 +44,7 @@ async fn main() {
         .expect("BUNDLE_URL must be a valid URL");
 
     let checksum = std::env::var("BUNDLE_CHECKSUM")
-        .unwrap_or_else(|_| "d407a7bd65b3a50120285c31d7d6c50924760c05c8beb62090a4cf8124870ba1".to_string());
+        .unwrap_or_else(|_| "1be759e3b1befdd6639cd89f93e9aa79857ca5c06c06e71de9b3702a9cd8af29".to_string());
 
     let service = NativeAppServiceImpl {
         bundle_fetcher: AlwaysUpdateFetcher { bundle_url, checksum },
