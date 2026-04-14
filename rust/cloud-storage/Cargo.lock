@@ -3910,6 +3910,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cool_asserts",
+ "entity_access_db_utils",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
