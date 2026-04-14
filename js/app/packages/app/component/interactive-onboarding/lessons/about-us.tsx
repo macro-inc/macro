@@ -104,7 +104,11 @@ export const aboutUsLesson: LessonDefinition = {
   demo: AboutUsDemo,
   order: 60,
   onContinue: async () => {
-    analytics.track('sign_up', { method: 'google' }, ['ga', 'meta-pixel', 'posthog']);
+    analytics.track('sign_up', { method: 'google' }, [
+      'ga',
+      'meta-pixel',
+      'posthog',
+    ]);
 
     const success = await startSsoLogin({
       returnPath: `${ROUTER_BASE_CONCAT}welcome?google=1`,
