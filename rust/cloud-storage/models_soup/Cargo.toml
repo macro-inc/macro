@@ -10,6 +10,7 @@ schema = ["dep:utoipa"]
 
 [dependencies]
 anyhow = { workspace = true }
+call = { path = "../call", default-features = false }
 chrono = { workspace = true }
 comms = { path = "../comms" }
 document_sub_type = { path = "../document_sub_type" }

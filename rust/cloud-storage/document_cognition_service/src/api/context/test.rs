@@ -204,6 +204,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     ));
 
     let ingress_queue = SqsQueue::new(

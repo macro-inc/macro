@@ -1,3 +1,4 @@
+use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
@@ -277,6 +278,26 @@ impl SoupRequest<Option<EntityFilterAst>> {
         })
     }
 
+    pub(crate) fn build_call_request(&self) -> Option<GetCallRecordsRequest> {
+        match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => Some(GetCallRecordsRequest {
+                user_id: self.user.clone(),
+                limit: self.limit as u32,
+                filter: f.as_ref().and_then(|f| f.call_filter.clone()),
+            }),
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                filter,
+                ..
+            }))) => Some(GetCallRecordsRequest {
+                user_id: self.user.clone(),
+                limit: self.limit as u32,
+                filter: filter.as_ref().and_then(|f| f.call_filter.clone()),
+            }),
+            // query by frecency not yet implemented for call records
+            SoupQuery::Frecency(_) => None,
+        }
+    }
+
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
         Some(GetChannelsRequest {
             macro_id: self.user.clone(),
@@ -352,6 +373,8 @@ pub enum SoupErr {
     EmailErr(#[from] email::domain::models::EmailErr),
     #[error("A comms error has occured, see logs for more details")]
     CommsErr,
+    #[error("A call error has occurred, see logs for more details")]
+    CallErr,
     #[error(transparent)]
     AstErr(#[from] ExpandErr),
 }

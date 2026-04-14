@@ -3,19 +3,45 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::{HashMap, HashSet};
+
 use chrono::Utc;
 use entity_access::domain::models::AccessLevel;
-use macro_user_id::user_id::MacroUserIdStr;
+use filter_ast::Expr;
+use item_filters::ast::{LiteralTree, call::CallLiteral};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::domain::channel_name::{NameLookup, display_name, resolve_channel_name};
 use crate::domain::models::{
     Call, CallParticipant, CallRecord, CallRecordParticipant, CallRecordTranscriptSegment,
     TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallRepository;
+
+/// Extract channel_id UUIDs from a call filter AST.
+fn extract_channel_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
+    let Some(expr) = filter else {
+        return Vec::new();
+    };
+    let mut ids = Vec::new();
+    collect_channel_ids(expr, &mut ids);
+    ids
+}
+
+fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
+    match expr {
+        Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            collect_channel_ids(a, ids);
+            collect_channel_ids(b, ids);
+        }
+        Expr::Not(inner) => collect_channel_ids(inner, ids),
+    }
+}
 
 /// Postgres implementation of [`CallRepository`].
 pub struct PgCallRepo {
@@ -565,6 +591,7 @@ impl CallRepository for PgCallRepo {
                 egress_id: active.egress_id,
                 recording_key: active.recording_key,
                 recording_url: None,
+                channel_name: None,
                 is_active: true,
                 participants,
                 transcript,
@@ -640,10 +667,241 @@ impl CallRepository for PgCallRepo {
             egress_id: archived.egress_id,
             recording_key: archived.recording_key,
             recording_url: None,
+            channel_name: None,
             is_active: false,
             participants,
             transcript,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_records_by_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        limit: u32,
+        filter: &LiteralTree<CallLiteral>,
+    ) -> Result<Vec<CallRecord>, Self::Err> {
+        // Fetch call headers from both active and archived tables, ordered by
+        // start time descending. We intentionally exclude transcripts (too
+        // large for the soup feed).
+        let channel_ids = extract_channel_ids(filter);
+        let has_channel_filter = !channel_ids.is_empty();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                room_name as "room_name!",
+                created_by as "created_by!",
+                created_at as "started_at!",
+                NULL::timestamptz as "ended_at",
+                NULL::bigint as "duration_ms",
+                egress_id,
+                recording_key,
+                true as "is_active!"
+            FROM calls c
+            WHERE EXISTS (
+                SELECT 1 FROM call_participants cp
+                WHERE cp.call_id = c.id AND cp.user_id = $1 AND cp.left_at IS NULL
+            )
+            AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
+            UNION ALL
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                room_name as "room_name!",
+                created_by as "created_by!",
+                started_at as "started_at!",
+                ended_at as "ended_at",
+                duration_ms as "duration_ms",
+                egress_id,
+                recording_key,
+                false as "is_active!"
+            FROM call_records cr
+            WHERE EXISTS (
+                SELECT 1 FROM call_record_participants crp
+                WHERE crp.call_record_id = cr.id AND crp.user_id = $1
+            )
+            AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
+            ORDER BY "started_at!" DESC
+            LIMIT $2
+            "#,
+            user_id.as_ref(),
+            limit as i64,
+            has_channel_filter,
+            &channel_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut records = Vec::with_capacity(rows.len());
+        for row in rows {
+            // Fetch participants from the appropriate table.
+            let participants = if row.is_active {
+                sqlx::query!(
+                    r#"
+                    SELECT user_id, joined_at, left_at
+                    FROM call_participants
+                    WHERE call_id = $1
+                    ORDER BY joined_at ASC
+                    "#,
+                    row.call_id,
+                )
+                .fetch_all(&self.pool)
+                .await?
+                .into_iter()
+                .map(|p| CallRecordParticipant {
+                    user_id: p.user_id,
+                    joined_at: p.joined_at,
+                    left_at: p.left_at,
+                })
+                .collect()
+            } else {
+                sqlx::query!(
+                    r#"
+                    SELECT user_id, joined_at, left_at
+                    FROM call_record_participants
+                    WHERE call_record_id = $1
+                    ORDER BY joined_at ASC
+                    "#,
+                    row.call_id,
+                )
+                .fetch_all(&self.pool)
+                .await?
+                .into_iter()
+                .map(|p| CallRecordParticipant {
+                    user_id: p.user_id,
+                    joined_at: p.joined_at,
+                    left_at: p.left_at,
+                })
+                .collect()
+            };
+
+            records.push(CallRecord {
+                call_id: row.call_id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+                duration_ms: row.duration_ms,
+                egress_id: row.egress_id,
+                recording_key: row.recording_key,
+                recording_url: None,
+                channel_name: None,
+                is_active: row.is_active,
+                participants,
+                transcript: Vec::new(),
+            });
+        }
+
+        // --- Resolve channel names ---
+        let unique_channel_ids: Vec<Uuid> = {
+            let mut seen = HashSet::new();
+            records
+                .iter()
+                .filter_map(|r| seen.insert(r.channel_id).then_some(r.channel_id))
+                .collect()
+        };
+
+        let channel_info_rows = sqlx::query!(
+            r#"
+            SELECT id, name, channel_type::text as "channel_type!"
+            FROM comms_channels
+            WHERE id = ANY($1)
+            "#,
+            &unique_channel_ids
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let channel_map: HashMap<Uuid, (Option<String>, String)> = channel_info_rows
+            .into_iter()
+            .map(|r| (r.id, (r.name, r.channel_type)))
+            .collect();
+
+        // Identify channels needing participant-based name resolution
+        // (DM channels or unnamed private channels).
+        let needs_participants: Vec<Uuid> = channel_map
+            .iter()
+            .filter(|(_, (name, ct))| {
+                ct == "direct_message"
+                    || (ct == "private"
+                        && name.as_ref().map_or(true, |n| n.trim().is_empty()))
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        let (participant_map, name_lookup) = if needs_participants.is_empty() {
+            (HashMap::new(), NameLookup::new())
+        } else {
+            let participant_rows = sqlx::query!(
+                r#"
+                SELECT channel_id, user_id
+                FROM comms_channel_participants
+                WHERE channel_id = ANY($1) AND left_at IS NULL
+                "#,
+                &needs_participants
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let mut part_map: HashMap<Uuid, Vec<MacroUserIdStr<'static>>> = HashMap::new();
+            let mut all_user_ids = HashSet::new();
+            for row in participant_rows {
+                let uid = MacroUserIdStr::parse_from_str(&row.user_id)
+                    .expect("valid user id from db")
+                    .into_owned();
+                all_user_ids.insert(row.user_id);
+                part_map.entry(row.channel_id).or_default().push(uid);
+            }
+
+            let user_id_strings: Vec<String> = all_user_ids.into_iter().collect();
+            let name_rows = sqlx::query!(
+                r#"
+                SELECT u.id as user_profile_id, mui.first_name, mui.last_name
+                FROM macro_user_info mui
+                JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+                WHERE u.id = ANY($1)
+                "#,
+                &user_id_strings
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let lookup: NameLookup = name_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let name = display_name(
+                        row.first_name.as_deref(),
+                        row.last_name.as_deref(),
+                    )?;
+                    Some((row.user_profile_id, name))
+                })
+                .collect();
+
+            (part_map, lookup)
+        };
+
+        for record in &mut records {
+            if let Some((name, channel_type)) = channel_map.get(&record.channel_id) {
+                let empty = Vec::new();
+                let participants = participant_map
+                    .get(&record.channel_id)
+                    .unwrap_or(&empty);
+                record.channel_name = Some(resolve_channel_name(
+                    channel_type,
+                    name.as_deref(),
+                    participants,
+                    &record.channel_id,
+                    user_id.copied(),
+                    &name_lookup,
+                ));
+            }
+        }
+
+        Ok(records)
     }
 
     #[tracing::instrument(err, skip(self))]

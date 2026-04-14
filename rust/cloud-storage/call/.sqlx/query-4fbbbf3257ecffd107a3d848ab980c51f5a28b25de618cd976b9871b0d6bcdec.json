@@ -1,0 +1,79 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id as \"call_id!\",\n                channel_id as \"channel_id!\",\n                room_name as \"room_name!\",\n                created_by as \"created_by!\",\n                created_at as \"started_at!\",\n                NULL::timestamptz as \"ended_at\",\n                NULL::bigint as \"duration_ms\",\n                egress_id,\n                recording_key,\n                true as \"is_active!\"\n            FROM calls c\n            WHERE EXISTS (\n                SELECT 1 FROM call_participants cp\n                WHERE cp.call_id = c.id AND cp.user_id = $1 AND cp.left_at IS NULL\n            )\n            AND ($3::bool IS FALSE OR c.channel_id = ANY($4))\n            UNION ALL\n            SELECT\n                id as \"call_id!\",\n                channel_id as \"channel_id!\",\n                room_name as \"room_name!\",\n                created_by as \"created_by!\",\n                started_at as \"started_at!\",\n                ended_at as \"ended_at\",\n                duration_ms as \"duration_ms\",\n                egress_id,\n                recording_key,\n                false as \"is_active!\"\n            FROM call_records cr\n            WHERE EXISTS (\n                SELECT 1 FROM call_record_participants crp\n                WHERE crp.call_record_id = cr.id AND crp.user_id = $1\n            )\n            AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))\n            ORDER BY \"started_at!\" DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "room_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "egress_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "recording_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Bool",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "4fbbbf3257ecffd107a3d848ab980c51f5a28b25de618cd976b9871b0d6bcdec"
+}

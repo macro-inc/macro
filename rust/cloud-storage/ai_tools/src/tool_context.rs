@@ -118,6 +118,7 @@ pub type ToolSoupService = SoupImpl<
     ToolFrecencyService,
     ReadonlyEmailPreviewAdapter<ToolEmailService>,
     ToolCommsService,
+    call::domain::ports::NoOpCallRecordQueryService,
 >;
 
 /// No-op notification service for properties (tools don't send assignment notifications)

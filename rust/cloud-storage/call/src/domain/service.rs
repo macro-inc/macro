@@ -21,9 +21,9 @@ use uuid::Uuid;
 
 use super::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
 };
-use super::ports::{CallRepository, CallRtcClient, CallService, RecordingStorage};
+use super::ports::{CallRecordQueryService, CallRepository, CallRtcClient, CallService, RecordingStorage};
 
 /// The concrete call service implementation.
 pub struct CallServiceImpl<
@@ -655,4 +655,31 @@ fn extract_recording_key(file_url: &str) -> &str {
         .find("calls/")
         .map(|idx| &file_url[idx + "calls/".len()..])
         .unwrap_or(file_url)
+}
+
+/// Lightweight implementation of [`CallRecordQueryService`] for read-only
+/// call record queries. Unlike [`CallServiceImpl`], this only requires a
+/// repository — no RTC client, notifications, or entity access.
+pub struct CallRecordQueryServiceImpl<R: CallRepository> {
+    repo: R,
+}
+
+impl<R: CallRepository> CallRecordQueryServiceImpl<R> {
+    /// Create a new query service with the given repository.
+    pub fn new(repo: R) -> Self {
+        Self { repo }
+    }
+}
+
+impl<R: CallRepository> CallRecordQueryService for CallRecordQueryServiceImpl<R> {
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_call_records(
+        &self,
+        req: GetCallRecordsRequest,
+    ) -> Result<Vec<CallRecord>, CallError> {
+        self.repo
+            .get_call_records_by_user(req.user_id.copied(), req.limit, &req.filter)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
 }

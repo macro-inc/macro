@@ -76,6 +76,7 @@ type DssSoupState = SoupRouterState<
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
         ReadonlyEmailPreviewAdapter<DssEmailService>,
         ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
+        call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     >,
     DssEmailService,
 >;

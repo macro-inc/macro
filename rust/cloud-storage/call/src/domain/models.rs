@@ -3,6 +3,7 @@
 use std::fmt;
 
 use chrono::{DateTime, Utc};
+use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -196,12 +197,25 @@ pub struct CallRecord {
     pub recording_key: Option<String>,
     /// Presigned URL for the call recording, if available.
     pub recording_url: Option<String>,
+    /// Resolved display name for the channel.
+    pub channel_name: Option<String>,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
     /// Participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
     /// Transcript segments ordered by `sequence_num`.
     pub transcript: Vec<CallRecordTranscriptSegment>,
+}
+
+/// Request to fetch recent call records for a user (used by Soup).
+#[derive(Debug)]
+pub struct GetCallRecordsRequest {
+    /// The user whose call records to fetch.
+    pub user_id: MacroUserIdStr<'static>,
+    /// Maximum number of records to return.
+    pub limit: u32,
+    /// Optional filter to narrow results (e.g. by channel_id).
+    pub filter: LiteralTree<CallLiteral>,
 }
 
 /// Errors that can occur during call operations.

@@ -9,6 +9,8 @@
  * Describes a bundle of filters that should be applied across different entity types
  */
 export interface EntityFilterAst {
+  /** the filters that should be applied to the call entity */
+  callf?: unknown;
   /** the filters that should be applied to the chat entity */
   cf?: unknown;
   /** the filters that should be applied to the channel entity */

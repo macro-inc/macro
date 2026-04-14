@@ -12,6 +12,7 @@ anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log"] }
+call = { path = "../call", default-features = false, features = ["ports"] }
 comms = { path = "../comms", features = ["outbound"] }
 document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents", features = ["ai_tools"] }

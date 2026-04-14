@@ -414,7 +414,16 @@ export const GetThreadResponse = z.object({
 export const ListEntities = z
   .object({
     includeTypes: z.union([
-      z.array(z.enum(['document', 'ai_chat', 'project', 'email', 'channel'])),
+      z.array(
+        z.enum([
+          'document',
+          'ai_chat',
+          'project',
+          'email',
+          'channel',
+          'call_record',
+        ])
+      ),
       z.null(),
     ]),
     sortBy: z.enum(['recently_viewed', 'recently_updated', 'recently_created']),
@@ -449,6 +458,11 @@ export const ListEntitiesResponse = z.object({
           id: z.string().uuid(),
           name: z.union([z.string(), z.null()]).optional(),
           type: z.literal('channel'),
+        }),
+        z.object({
+          createdBy: z.string(),
+          id: z.string().uuid(),
+          type: z.literal('callRecord'),
         }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(

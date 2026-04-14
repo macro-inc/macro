@@ -356,7 +356,8 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
             SoupItem::Chat(_)
             | SoupItem::Project(_)
             | SoupItem::EmailThread(_)
-            | SoupItem::Channel(_) => None,
+            | SoupItem::Channel(_)
+            | SoupItem::CallRecord(_) => None,
         })
         .expect("The document should exist");
     let expected_doc_id = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(); // doc-in-A

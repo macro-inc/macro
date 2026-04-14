@@ -5835,6 +5835,19 @@
           }
         }
       },
+      "CallFilters": {
+        "type": "object",
+        "description": "Filters for call records.",
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs to filter calls by. Empty to include all calls."
+          }
+        }
+      },
       "CallRecord": {
         "type": "object",
         "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
@@ -5858,6 +5871,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
           },
           "createdBy": {
             "type": "string",
@@ -7578,6 +7595,9 @@
         "type": "object",
         "description": "Describes a bundle of filters that should be applied across different entity types",
         "properties": {
+          "callf": {
+            "description": "the filters that should be applied to the call entity"
+          },
           "cf": {
             "description": "the filters that should be applied to the chat entity"
           },
@@ -7602,6 +7622,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "call_filters": {
+            "$ref": "#/components/schemas/CallFilters",
+            "description": "the bundled [CallFilters]"
+          },
           "channel_filters": {
             "$ref": "#/components/schemas/ChannelFilters",
             "description": "the bundled [ChannelFilters]"
@@ -10396,6 +10420,85 @@
           }
         }
       },
+      "SoupCallRecord": {
+        "type": "object",
+        "description": "A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.",
+        "required": [
+          "callId",
+          "channelId",
+          "createdBy",
+          "startedAt",
+          "isActive",
+          "participants"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "durationMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Call duration in milliseconds (None if still active)."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the call is currently active."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupCallRecordParticipant"
+            },
+            "description": "Participants in the call."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started."
+          }
+        }
+      },
+      "SoupCallRecordParticipant": {
+        "type": "object",
+        "description": "A participant in a call record, as displayed in Soup.",
+        "required": ["userId", "joinedAt"],
+        "properties": {
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the user left (None if still in an active call)."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The user id."
+          }
+        }
+      },
       "SoupChannel": {
         "allOf": [
           {
@@ -10796,6 +10899,19 @@
               "tag": {
                 "type": "string",
                 "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCallRecord"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["callRecord"]
               }
             }
           }

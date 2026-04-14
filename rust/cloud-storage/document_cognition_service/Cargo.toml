@@ -37,6 +37,7 @@ ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 async-openai = { workspace = true }
+call = { path = "../call", default-features = false, features = ["ports"] }
 aws-sdk-secretsmanager = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 aws-sdk-dynamodb = { workspace = true }

@@ -21,6 +21,7 @@ tokio = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
 aws-sdk-sqs = { workspace = true }
+call = { path = "../call", default-features = false, features = ["ports"] }
 model_user = { path = "../model_user", features = ["axum"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }

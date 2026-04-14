@@ -9,9 +9,12 @@ use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use item_filters::ast::{LiteralTree, call::CallLiteral};
+
 use super::models::{
     Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallTokenResponse,
-    CallWebhookEvent, EgressS3Config, LeaveCallResponse, TranscriptSegmentRequest,
+    CallWebhookEvent, EgressS3Config, GetCallRecordsRequest, LeaveCallResponse,
+    TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -140,6 +143,19 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallRecord>, Self::Err>> + Send;
+
+    /// Fetch the most recent call records where the given user was a
+    /// participant, spanning both active (`calls` + `call_participants`)
+    /// and archived (`call_records` + `call_record_participants`) tables.
+    /// Transcript data is intentionally omitted. Results are ordered by
+    /// start time descending and capped at `limit`.
+    /// An optional filter tree can narrow results (e.g. by channel_id).
+    fn get_call_records_by_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        limit: u32,
+        filter: &LiteralTree<CallLiteral>,
+    ) -> impl Future<Output = Result<Vec<CallRecord>, Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
@@ -259,4 +275,32 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<MemberParticipantRole>,
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
+}
+
+/// Lightweight read-only port for querying call records in Soup.
+///
+/// This trait is intentionally separate from [`CallService`] — Soup only
+/// needs a read-only list of recent call records, not the full call
+/// management API.
+pub trait CallRecordQueryService: Send + Sync + 'static {
+    /// Fetch the most recent call records the user participated in,
+    /// ordered by `started_at` descending. Transcript data is excluded.
+    fn get_user_call_records(
+        &self,
+        req: GetCallRecordsRequest,
+    ) -> impl Future<Output = Result<Vec<CallRecord>, CallError>> + Send;
+}
+
+/// No-op implementation of [`CallRecordQueryService`] for services
+/// that do not have call infrastructure.
+pub struct NoOpCallRecordQueryService;
+
+impl CallRecordQueryService for NoOpCallRecordQueryService {
+    /// Always returns an empty list.
+    async fn get_user_call_records(
+        &self,
+        _req: GetCallRecordsRequest,
+    ) -> Result<Vec<CallRecord>, CallError> {
+        Ok(Vec::new())
+    }
 }

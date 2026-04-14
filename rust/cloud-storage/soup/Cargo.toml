@@ -38,6 +38,7 @@ ports = ["dep:tokio", "frecency/ports"]
 ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
+call = { path = "../call", default-features = false, features = ["ports"] }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true }

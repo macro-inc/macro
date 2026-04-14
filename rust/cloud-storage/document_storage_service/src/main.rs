@@ -422,6 +422,10 @@ async fn main() -> anyhow::Result<()> {
         config.queue_wait_time_seconds,
     );
 
+    let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        PgCallRepo::new(readonly_db.clone()),
+    );
+
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
@@ -429,6 +433,7 @@ async fn main() -> anyhow::Result<()> {
                 frecency_service,
                 readonly_email_service,
                 channel_service_for_soup,
+                call_record_query_service,
             ),
             email_service,
         ),

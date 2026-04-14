@@ -829,7 +829,14 @@ export interface ListEntities {
    * Filter to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails.
    */
   includeTypes:
-    | ('document' | 'ai_chat' | 'project' | 'email' | 'channel')[]
+    | (
+        | 'document'
+        | 'ai_chat'
+        | 'project'
+        | 'email'
+        | 'channel'
+        | 'call_record'
+      )[]
     | null;
   /**
    * How to sort results: recently_viewed (default), recently_updated, or recently_created.
@@ -870,6 +877,11 @@ export interface ListEntitiesResponse {
         id: string;
         name?: string | null;
         type: 'channel';
+      }
+    | {
+        createdBy: string;
+        id: string;
+        type: 'callRecord';
       }
   )[];
   summary: string;

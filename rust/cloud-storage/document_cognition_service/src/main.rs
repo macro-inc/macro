@@ -164,6 +164,7 @@ async fn main() -> anyhow::Result<()> {
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     ));
 
     tracing::info!("initialized soup service");

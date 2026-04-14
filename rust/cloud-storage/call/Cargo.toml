@@ -36,6 +36,8 @@ connection = { path = "../connection", default-features = false, features = [
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = [
   "ports",
 ] }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters" }
 livekit-api = { workspace = true, optional = true }
 livekit-protocol = { workspace = true, optional = true }
 macro_aws_config = { path = "../macro_aws_config", optional = true, features = ["s3"] }

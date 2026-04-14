@@ -176,6 +176,7 @@ async fn build_tool_context(
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;

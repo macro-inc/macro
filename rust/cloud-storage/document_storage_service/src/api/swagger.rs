@@ -109,6 +109,7 @@ use models_soup::email_thread::{
     SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
+use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
@@ -343,6 +344,8 @@ use utoipa::OpenApi;
             call::domain::models::CallRecord,
             call::domain::models::CallRecordParticipant,
             call::domain::models::CallRecordTranscriptSegment,
+            SoupCallRecord,
+            SoupCallRecordParticipant,
 
             DocumentSubType,
 

@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT share_permission_id FROM call_records WHERE id = $1",
+  "query": "\n        SELECT project_id\n        FROM email_threads\n        WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "share_permission_id",
+        "name": "project_id",
         "type_info": "Text"
       }
     ],
@@ -15,8 +15,8 @@
       ]
     },
     "nullable": [
-      false
+      true
     ]
   },
-  "hash": "a7baf370108371fedbc9eec0287181a1581a3cc2c483b49f0b7579dd7338bd22"
+  "hash": "83dea9ffef9207e919ec708a6570c6f4090dbdbbb9f5f609edbad91becbc1bb4"
 }

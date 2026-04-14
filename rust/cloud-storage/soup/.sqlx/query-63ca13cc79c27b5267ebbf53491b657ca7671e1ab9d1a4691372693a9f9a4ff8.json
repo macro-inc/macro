@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT user_id\n        FROM call_record_participants\n        WHERE call_record_id = $1\n        ORDER BY joined_at ASC\n        ",
+  "query": "\n        SELECT DISTINCT cp.user_id\n        FROM comms_channel_participants cp\n        WHERE cp.channel_id = $1 AND cp.left_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "5764bc7a77e72625b9f348045d6ee0a3f1c0e1e6b81c50118f20fc7e6881eb9d"
+  "hash": "63ca13cc79c27b5267ebbf53491b657ca7671e1ab9d1a4691372693a9f9a4ff8"
 }
