@@ -13,6 +13,8 @@ use tauri::{Manager, Runtime, UriSchemeResponder};
 
 use macro_bundle_updater_plugin::BundleRoot;
 
+type ProtocolHandler = Box<dyn Fn(&str, http::Request<Vec<u8>>, UriSchemeResponder) + Send + Sync>;
+
 /// Strip the `/app` or `/app/` prefix used as the frontend base path.
 fn strip_app_prefix(path: &str) -> &str {
     path.strip_prefix("/app/")
@@ -46,7 +48,7 @@ fn rewrite_uri(uri: &str) -> String {
 pub fn get<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     window_origin: &str,
-) -> tauri::webview::UriSchemeProtocolHandler {
+) -> ProtocolHandler {
     let upstream = tauri::protocol::tauri::get(app_handle.clone(), window_origin, None);
     let origin = window_origin.to_string();
 
@@ -76,7 +78,8 @@ pub fn get<R: Runtime>(
 
             let asset_path = strip_app_prefix(path);
 
-            let guard = bundle_root.unwrap().0.read().unwrap();
+            let br = bundle_root.unwrap();
+            let guard = br.0.read().unwrap();
             let root_dir = guard.as_ref().unwrap();
             let file_path = root_dir.join(asset_path);
 

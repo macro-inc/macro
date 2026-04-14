@@ -206,8 +206,9 @@ pub fn run() {
             // However, tauri_protocol::get needs AppHandle upfront.
             // Use a lazy init pattern via the context.
             let window_origin = window_origin.to_string();
-            let handler: std::sync::OnceLock<tauri::webview::UriSchemeProtocolHandler> =
-                std::sync::OnceLock::new();
+            let handler: std::sync::OnceLock<
+                Box<dyn Fn(&str, http::Request<Vec<u8>>, tauri::UriSchemeResponder) + Send + Sync>,
+            > = std::sync::OnceLock::new();
 
             move |ctx, request, responder| {
                 let h = handler.get_or_init(|| {
