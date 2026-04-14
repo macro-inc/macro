@@ -42,7 +42,12 @@ export function CallBlockAdapter() {
                 <Show when={data().recordingUrl}>
                   {(url) => (
                     <div class="p-4 border-b border-edge flex justify-center">
-                      <video class="w-3/4 rounded" controls crossorigin="anonymous" src={url()} />
+                      <video
+                        class="w-3/4 rounded"
+                        controls
+                        crossorigin="anonymous"
+                        src={url()}
+                      />
                     </div>
                   )}
                 </Show>
