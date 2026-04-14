@@ -11,10 +11,28 @@ import {
   type SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { createMemo, Switch, Match } from 'solid-js';
+import { createMemo, createSignal, Switch, Match } from 'solid-js';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+
+type SortOpenProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
 
 export const SoupViewContextSort = () => {
   const panel = useSplitPanelOrThrow();
+
+  const [sortOpen, setSortOpen] = createSignal(false);
+
+  registerHotkey({
+    hotkey: 's',
+    scopeId: panel.splitHotkeyScope,
+    description: 'Open sort menu',
+    keyDownHandler: () => {
+      setSortOpen(true);
+      return true;
+    },
+  });
 
   const component = createMemo(() => {
     const content = panel.handle.content();
@@ -28,28 +46,33 @@ export const SoupViewContextSort = () => {
     return component() === listView;
   };
 
+  const openProps = (): SortOpenProps => ({
+    open: sortOpen(),
+    onOpenChange: setSortOpen,
+  });
+
   return (
     <Switch>
       <Match when={isComponentListView('inbox')}>
-        <InboxSort />
+        <InboxSort {...openProps()} />
       </Match>
       <Match when={isComponentListView('agents')}>
-        <AgentsSort />
+        <AgentsSort {...openProps()} />
       </Match>
       <Match when={isComponentListView('mail')}>
-        <MailSort />
+        <MailSort {...openProps()} />
       </Match>
       <Match when={isComponentListView('documents')}>
-        <DocumentsSort />
+        <DocumentsSort {...openProps()} />
       </Match>
       <Match when={isComponentListView('tasks')}>
-        <TasksSort />
+        <TasksSort {...openProps()} />
       </Match>
       <Match when={isComponentListView('channels')}>
-        <ChannelsSort />
+        <ChannelsSort {...openProps()} />
       </Match>
       <Match when={isComponentListView('folders')}>
-        <FilesSort />
+        <FilesSort {...openProps()} />
       </Match>
     </Switch>
   );
@@ -69,7 +92,7 @@ const useSortDropdown = (options: SortOption[] = DEFAULT_SORT_OPTIONS) => {
   return { value, onChange, options };
 };
 
-const InboxSort = () => {
+const InboxSort = (props: SortOpenProps) => {
   const sort = useSortDropdown();
 
   return (
@@ -77,11 +100,13 @@ const InboxSort = () => {
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
     />
   );
 };
 
-const AgentsSort = () => {
+const AgentsSort = (props: SortOpenProps) => {
   const sort = useSortDropdown();
 
   return (
@@ -89,11 +114,13 @@ const AgentsSort = () => {
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
     />
   );
 };
 
-const MailSort = () => {
+const MailSort = (props: SortOpenProps) => {
   const sort = useSortDropdown(EMAIL_SORT_OPTIONS);
 
   return (
@@ -101,11 +128,13 @@ const MailSort = () => {
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
     />
   );
 };
 
-const DocumentsSort = () => {
+const DocumentsSort = (props: SortOpenProps) => {
   const sort = useSortDropdown(DOCUMENT_SORT_OPTIONS);
 
   return (
@@ -113,11 +142,13 @@ const DocumentsSort = () => {
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
     />
   );
 };
 
-const TasksSort = () => {
+const TasksSort = (props: SortOpenProps) => {
   const sort = useSortDropdown(TASK_SORT_OPTIONS);
 
   return (
@@ -125,11 +156,13 @@ const TasksSort = () => {
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
     />
   );
 };
 
-const ChannelsSort = () => {
+const ChannelsSort = (props: SortOpenProps) => {
   const sort = useSortDropdown(CHANNEL_SORT_OPTIONS);
 
   return (
@@ -137,11 +170,13 @@ const ChannelsSort = () => {
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
     />
   );
 };
 
-const FilesSort = () => {
+const FilesSort = (props: SortOpenProps) => {
   const sort = useSortDropdown();
 
   return (
@@ -149,6 +184,8 @@ const FilesSort = () => {
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
     />
   );
 };
