@@ -154,6 +154,29 @@ function createCallState() {
 
   // --- internal helpers ---
 
+  /** (Re-)attach the Krisp processor to the current mic track. */
+  async function ensureKrispOnMicTrack(r: Room) {
+    if (!store.isNoiseSuppressed) return;
+    if (!isKrispNoiseFilterSupported()) return;
+
+    const micPub = r.localParticipant.getTrackPublication(
+      Track.Source.Microphone
+    );
+    if (!micPub?.track) return;
+
+    try {
+      // Destroy the old instance — it's bound to the previous track.
+      const prev = krispFilter();
+      if (prev) prev.destroy();
+
+      const krisp = KrispNoiseFilter();
+      await (micPub.track as LocalTrack).setProcessor(krisp);
+      setKrispFilter(krisp);
+    } catch (e) {
+      console.error('failed to re-attach Krisp noise filter', e);
+    }
+  }
+
   function bumpTrackVersion() {
     setStore('trackVersion', (v) => v + 1);
   }
@@ -307,6 +330,8 @@ function createCallState() {
         await r.localParticipant.setMicrophoneEnabled(true, {
           deviceId: { exact: deviceId },
         });
+        // New track was created — re-attach the Krisp processor
+        await ensureKrispOnMicTrack(r);
       }
     } catch (e) {
       console.error('failed to switch audio input device', e);
@@ -401,19 +426,8 @@ function createCallState() {
 
     // Register Krisp noise filter on the mic track
     if (isKrispNoiseFilterSupported()) {
-      try {
-        const micPub = targetRoom.localParticipant.getTrackPublication(
-          Track.Source.Microphone
-        );
-        if (micPub?.track) {
-          const krisp = KrispNoiseFilter();
-          await (micPub.track as LocalTrack).setProcessor(krisp);
-          setKrispFilter(krisp);
-          setStore('isNoiseSuppressed', true);
-        }
-      } catch (e) {
-        console.error('failed to enable Krisp noise filter', e);
-      }
+      setStore('isNoiseSuppressed', true);
+      await ensureKrispOnMicTrack(targetRoom);
     }
 
     // Enumerate available devices and track active ones
@@ -446,6 +460,8 @@ function createCallState() {
           true,
           deviceId ? { deviceId: { exact: deviceId } } : undefined
         );
+        // New track was created — re-attach the Krisp processor
+        await ensureKrispOnMicTrack(r);
       }
       setStore('isAudioMuted', newMuted);
     } catch (e) {
