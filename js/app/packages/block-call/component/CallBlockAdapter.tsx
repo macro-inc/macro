@@ -7,22 +7,13 @@ import { CallTranscript } from './CallTranscript';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { format } from 'date-fns';
 import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
+import { formatCallDuration } from '../utils';
 
 function isUnauthorized(error: Error | null): boolean {
   if (error instanceof MaybeResultError) {
     return error.errors[0]?.code === 'UNAUTHORIZED';
   }
   return false;
-}
-
-function formatCallDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
 }
 
 function formatCallDate(dateStr: string): string {

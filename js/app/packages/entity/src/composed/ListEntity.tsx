@@ -74,16 +74,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { isMobile } from '@core/mobile/isMobile';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import { DisplayName } from '@entity/components/DisplayName';
-
-function formatCallDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
+import { formatCallDuration } from '@block-call/utils';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 

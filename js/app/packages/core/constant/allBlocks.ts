@@ -207,7 +207,7 @@ export function blockNameToDefaultFile(block?: BlockName | string | null) {
 }
 
 type ItemLike = {
-  type: ItemType;
+  type: ItemType | 'call';
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;
