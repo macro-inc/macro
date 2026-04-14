@@ -292,8 +292,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             options={destinationOptions}
             triggerMode="input"
             noBrackets
-            hideBorder
-            noPadding
+            class="border-1 border-edge-muted/50 p-1"
             focusOnMount
             mobileHorizontalScroll
           />

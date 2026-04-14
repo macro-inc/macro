@@ -42,6 +42,7 @@ import {
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
+import { cn } from '@ui/utils/classname';
 
 function RecipientChip(props: {
   icon?: JSX.Element;
@@ -240,6 +241,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
   mobileHorizontalScroll?: boolean;
+  class?: string;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -474,12 +476,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           ? (props.placeholder ?? placeholderText())
           : undefined
       }
-      class="ph-no-capture w-full text-sm offset-2 bg-input"
-      classList={{
-        'border border-edge': !props.hideBorder,
-        'py-2': !props.noPadding,
-        'focus-within:bracket-offset-2': !props.noBrackets,
-      }}
+      class={cn(
+        'ph-no-capture w-full text-sm offset-2 bg-input',
+        !props.hideBorder && 'border border-edge',
+        !props.noPadding && 'py-2',
+        !props.noBrackets && 'focus-within:bracket-offset-2',
+        props.class
+      )}
     >
       <Combobox.Control<CombinedRecipientItem>>
         {(state) => {
