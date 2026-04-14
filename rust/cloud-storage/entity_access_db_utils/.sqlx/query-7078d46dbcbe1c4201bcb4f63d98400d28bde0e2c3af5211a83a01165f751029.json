@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    DELETE FROM entity_access\n                    WHERE (source_id = ANY($1) AND source_type = 'channel')\n                    AND (entity_id = ANY($2) OR granted_from_project_id = ANY($3))\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7078d46dbcbe1c4201bcb4f63d98400d28bde0e2c3af5211a83a01165f751029"
+}

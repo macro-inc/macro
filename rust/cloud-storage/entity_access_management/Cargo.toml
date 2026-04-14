@@ -6,7 +6,12 @@ version = "0.1.0"
 
 [features]
 default = ["outbound", "ports"]
-outbound = ["dep:sqlx", "models_entity_access_management/db", "ports"]
+outbound = [
+  "dep:entity_access_db_utils",
+  "dep:sqlx",
+  "models_entity_access_management/db",
+  "ports",
+]
 ports = []
 
 [dependencies]
@@ -25,6 +30,7 @@ models_entity_access_management = { path = "../models_entity_access_management",
 models_permissions = { path = "../models_permissions" }
 
 # Database
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]
