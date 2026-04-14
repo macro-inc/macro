@@ -20,6 +20,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
  * `isTouchDevice()` (checks `pointer: coarse` media query) to distinguish
  * a phone/tablet browser ('mobile-web') from a desktop browser ('desktop-web').
  */
+const DEVICE_PROPERTY = 'macro_device' as const;
+
 function getDeviceType(): 'desktop-app' | 'desktop-web' | 'mobile-web' | 'mobile-app' {
   const platform = getPlatform();
   if (platform === 'ios' || platform === 'android') return 'mobile-app';
@@ -92,7 +94,7 @@ export const createAnalytics = () => {
     event: EventName,
     data?: Record<string, unknown>
   ) => {
-    const enriched = { device: getDeviceType(), ...data };
+    const enriched = { [DEVICE_PROPERTY]: getDeviceType(), ...data };
     console.log('[Analytics]', event, enriched, disabled ? '(disabled)' : '');
 
     if (disabled) return;
@@ -162,23 +164,23 @@ export const createAnalytics = () => {
 
     const pagePath = opts?.path ?? window.location.pathname;
     const pageLocation = opts?.location ?? window.location.href;
-    const device = getDeviceType();
+    const deviceType = getDeviceType();
 
     try {
       gtag('event', 'page_view', {
-        device,
+        [DEVICE_PROPERTY]: deviceType,
         page_title: pageTitle,
         page_location: pageLocation,
         page_path: pagePath,
       });
 
       fbq('track', 'PageView', {
-        device,
+        [DEVICE_PROPERTY]: deviceType,
         content_name: pageTitle,
       });
 
       posthog.capture('$pageview', {
-        device,
+        [DEVICE_PROPERTY]: deviceType,
         $current_url: pageLocation,
         $pathname: pagePath,
         $title: pageTitle,
