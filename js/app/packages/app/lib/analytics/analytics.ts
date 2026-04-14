@@ -95,7 +95,10 @@ export const createAnalytics = () => {
     data?: Record<string, unknown>,
     providersToSendTo: AnalyticsProvider[] = DEFAULT_ANALYTICS_PROVIDERS
   ) => {
-    if (disabled) return;
+    if (disabled) {
+      console.log('[Analytics]', event, data);
+      return;
+    }
 
     for (const provider of providersToSendTo) {
       sendEvent(provider, event, data);
