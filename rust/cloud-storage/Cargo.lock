@@ -1883,6 +1883,7 @@ dependencies = [
  "model",
  "model-entity",
  "model_user",
+ "models_entity_access_management",
  "models_permissions",
  "roles_and_permissions",
  "serde",

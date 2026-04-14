@@ -97,12 +97,12 @@ async fn create_chat_creates_user_item_access(pool: Pool<Postgres>) {
     let row = sqlx::query(
         r#"
         SELECT "access_level"::text as "access_level"
-        FROM "UserItemAccess"
-        WHERE "user_id" = $1 AND "item_id" = $2 AND "item_type" = 'chat'
+        FROM "entity_access"
+        WHERE "source_id" = $1 AND "entity_id" = $2
         "#,
     )
     .bind("macro|test@example.com")
-    .bind(&chat_id)
+    .bind(macro_uuid::string_to_uuid(&chat_id).unwrap())
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -379,15 +379,16 @@ async fn permanently_delete_chat_removes_user_item_access(pool: Pool<Postgres>) 
 
     repo.permanently_delete(&chat_id).await.unwrap();
 
-    let count: (i64,) = sqlx::query_as(
-        r#"SELECT COUNT(*) FROM "UserItemAccess" WHERE "item_id" = $1 AND "item_type" = 'chat'"#,
+    let count: i64 = sqlx::query!(
+        r#"SELECT COUNT(id) AS result FROM "entity_access" WHERE "entity_id" = $1"#,
+        &macro_uuid::string_to_uuid(&chat_id).unwrap(),
     )
-    .bind(&chat_id)
+    .map(|r| r.result.unwrap_or(0))
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(count.0, 0);
+    assert_eq!(count, 0);
 }
 
 #[sqlx::test(

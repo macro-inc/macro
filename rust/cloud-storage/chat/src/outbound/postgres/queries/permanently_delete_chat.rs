@@ -1,5 +1,6 @@
 //! Permanently delete a chat and all associated data.
 
+use model_entity::EntityType;
 use sqlx::{Postgres, Transaction};
 
 /// Hard-delete a chat: remove pins, history, permissions, access, and the chat row.
@@ -38,8 +39,9 @@ pub(crate) async fn permanently_delete_chat(
     .await?;
 
     sqlx::query!(
-        r#"DELETE FROM "UserItemAccess" WHERE "item_id" = $1 AND "item_type" = 'chat'"#,
-        chat_id,
+        r#"DELETE FROM "entity_access" WHERE "entity_id" = $1 AND "entity_type" = $2"#,
+        macro_uuid::string_to_uuid(chat_id).unwrap(),
+        EntityType::Chat.as_ref(),
     )
     .execute(tx.as_mut())
     .await?;

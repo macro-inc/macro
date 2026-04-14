@@ -6,11 +6,18 @@ version = "0.1.0"
 
 [features]
 default = ["inbound", "outbound", "ports"]
-inbound = ["dep:axum", "dep:model_user", "dep:roles_and_permissions", "entity_access/inbound", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:model_user",
+  "dep:roles_and_permissions",
+  "entity_access/inbound",
+  "ports",
+]
 outbound = [
   "dep:macro_share_permissions",
   "dep:macro_uuid",
   "dep:sqlx",
+  "models_entity_access_management/db",
   "ports",
 ]
 ports = []
@@ -28,6 +35,7 @@ entity_access_management = { path = "../entity_access_management", default-featu
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
+models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
 models_permissions = { path = "../models_permissions" }
 serde = { workspace = true }
 serde_json = { workspace = true }
