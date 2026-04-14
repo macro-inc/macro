@@ -15,6 +15,7 @@ use macro_user_id::{
 use model_entity::EntityType;
 use sqlx::{Pool, Postgres};
 
+pub mod call_access;
 pub mod call_channel;
 pub mod channel_membership;
 pub mod channel_role;

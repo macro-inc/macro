@@ -21,6 +21,7 @@ outbound = [
   "dep:livekit-protocol",
   "dep:models_permissions",
   "dep:sqlx",
+  "models_entity_access_management/db",
   "ports",
 ]
 ports = ["dep:entity_access", "dep:tokio"]
@@ -46,6 +47,7 @@ models_pagination = { path = "../models_pagination" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
+models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
 models_permissions = { path = "../models_permissions", optional = true }
 notification = { path = "../notification" }
 serde = { workspace = true }

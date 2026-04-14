@@ -56,6 +56,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// Get the highest access level a user has for a call.
+    fn get_call_access(
+        &self,
+        call_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
     /// Check if a user is a member of the specified channels.
     ///
     /// Returns the subset of channel_ids that the user is a participant of.
