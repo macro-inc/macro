@@ -131,11 +131,12 @@ function GroupedMessageLayout(props: {
       </Message.Slot>
       <Message.Slot placement="content">
         <div class={cn('ph-no-capture flex gap-3 min-w-0 items-start')}>
-          <MessageContentSlot
-            channelId={props.channelId}
-            messageEditor={props.messageEditor}
-            class="flex-1 min-w-0"
-          />
+          <div class="flex-1 min-w-0">
+            <MessageContentSlot
+              channelId={props.channelId}
+              messageEditor={props.messageEditor}
+            />
+          </div>
           <GroupedMeta messageEditor={props.messageEditor} />
         </div>
       </Message.Slot>
