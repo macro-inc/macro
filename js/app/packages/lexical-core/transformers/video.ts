@@ -2,8 +2,8 @@ import type { ElementTransformer } from '@lexical/markdown';
 import type { ElementNode, LexicalNode } from 'lexical';
 import { $createVideoNode, $isVideoNode, VideoNode } from '../nodes/VideoNode';
 
-// Internal transformer for videos with constrained dimensions
-export const I_VIDEO_CONSTRAINED: ElementTransformer = {
+// Internal transformer — always uses <m-video> for unambiguous round-tripping.
+export const I_VIDEO: ElementTransformer = {
   dependencies: [VideoNode],
   type: 'element',
   regExp: /<m-video>(.*?)<\/m-video>/,
@@ -11,12 +11,6 @@ export const I_VIDEO_CONSTRAINED: ElementTransformer = {
     if (!$isVideoNode(node)) return null;
     if (node.getSrcType() === 'local') return null;
     if (!node.getUrl()) return null;
-
-    const constrainedWidth = node.getConstrainedWidth();
-    const constrainedHeight = node.getConstrainedHeight();
-    if (constrainedWidth == null && constrainedHeight == null) {
-      return null;
-    }
 
     const data = JSON.stringify({
       url: node.getUrl(),
@@ -26,8 +20,8 @@ export const I_VIDEO_CONSTRAINED: ElementTransformer = {
       height: node.getHeight(),
       scale: node.getScale(),
       controls: node.getControls(),
-      constrainedWidth,
-      constrainedHeight,
+      constrainedWidth: node.getConstrainedWidth(),
+      constrainedHeight: node.getConstrainedHeight(),
     });
 
     return `<m-video>${data}</m-video>`;
@@ -52,31 +46,5 @@ export const I_VIDEO_CONSTRAINED: ElementTransformer = {
     } catch (e) {
       console.error('Failed to parse m-video:', e);
     }
-  },
-};
-
-// Standard video transformer (for videos without constraints)
-export const VIDEO: ElementTransformer = {
-  dependencies: [VideoNode],
-  type: 'element',
-  export: (node: LexicalNode) => {
-    if (!$isVideoNode(node)) return null;
-    if (node.getSrcType() === 'local') return null;
-    if (!node.getUrl()) return null;
-
-    const url = node.getUrl();
-    return `![video](${url})`;
-  },
-  regExp: /!\[video\]\(([^)\s]+)\)$/,
-  replace: (node, _, match) => {
-    const [, videoUrl] = match;
-    const videoNode = $createVideoNode({
-      srcType: 'url',
-      url: videoUrl,
-      width: 0,
-      height: 0,
-      id: '',
-    });
-    node.replace(videoNode);
   },
 };

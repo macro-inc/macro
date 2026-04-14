@@ -814,6 +814,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     let validJson = true;
     try {
       const parsed = JSON.parse(text);
+      console.log(
+        '[MarkdownEditor] incoming serialized state:',
+        JSON.stringify(parsed)
+      );
       initializeEditorWithState(editor, parsed);
 
       // don't open any hanging inline searches.
