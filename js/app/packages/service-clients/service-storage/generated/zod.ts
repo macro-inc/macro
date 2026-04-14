@@ -7973,7 +7973,6 @@ export const createProjectHandlerBody = zod.object({
   name: zod.string().describe('The name of the project.'),
   projectParentId: zod
     .string()
-    .uuid()
     .nullish()
     .describe('The project that the new project will belong to.'),
 });

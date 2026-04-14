@@ -6612,7 +6612,6 @@
           },
           "projectParentId": {
             "type": ["string", "null"],
-            "format": "uuid",
             "description": "The project that the new project will belong to."
           }
         }
