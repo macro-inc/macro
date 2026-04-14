@@ -385,9 +385,13 @@ async fn main() -> anyhow::Result<()> {
         }
         _ => None,
     };
-    let recording_storage = egress_config
-        .as_ref()
-        .map(call::outbound::s3_recording_storage::S3RecordingStorage::new);
+    let recording_storage = match &egress_config {
+        Some(config) => Some(
+            call::outbound::s3_recording_storage::S3RecordingStorage::new(config.bucket.clone())
+                .await,
+        ),
+        None => None,
+    };
     let mut call_service_builder = CallServiceImpl::new(
         call_repo,
         livekit_rtc_client,

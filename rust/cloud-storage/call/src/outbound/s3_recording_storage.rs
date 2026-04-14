@@ -2,35 +2,20 @@
 
 use std::time::Duration;
 
-use crate::domain::models::EgressS3Config;
 use crate::domain::ports::RecordingStorage;
 
-/// Presigned-URL generator backed by an S3 client built from egress credentials.
+/// Presigned-URL generator backed by an S3 client from [`macro_aws_config`].
 pub struct S3RecordingStorage {
     client: aws_sdk_s3::Client,
     bucket: String,
 }
 
 impl S3RecordingStorage {
-    /// Build from the egress S3 configuration.
-    pub fn new(config: &EgressS3Config) -> Self {
-        let creds = aws_sdk_s3::config::Credentials::new(
-            &config.access_key,
-            &config.secret,
-            None,
-            None,
-            "call-egress",
-        );
-        let s3_config = aws_sdk_s3::Config::builder()
-            .region(aws_sdk_s3::config::Region::new(config.region.clone()))
-            .credentials_provider(creds)
-            .behavior_version_latest()
-            .build();
-
-        Self {
-            client: aws_sdk_s3::Client::from_conf(s3_config),
-            bucket: config.bucket.clone(),
-        }
+    /// Build using the shared AWS config from [`macro_aws_config`] and
+    /// the bucket name from the egress configuration.
+    pub async fn new(bucket: String) -> Self {
+        let client = macro_aws_config::s3_client().await;
+        Self { client, bucket }
     }
 }
 
@@ -48,6 +33,6 @@ impl RecordingStorage for S3RecordingStorage {
             .presigned(presigning_config)
             .await?;
 
-        Ok(presigned.uri().to_string())
+        Ok(macro_aws_config::transform_aws_url(presigned.uri()))
     }
 }

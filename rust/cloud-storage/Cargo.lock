@@ -1748,6 +1748,7 @@ dependencies = [
  "entity_access",
  "livekit-api",
  "livekit-protocol",
+ "macro_aws_config",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
