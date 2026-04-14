@@ -121,7 +121,7 @@ export function useFilterRefinements() {
    */
   const activeFiltersList = createMemo((): ActiveFilter[] => {
     const preset = currentPreset();
-    const presetFilterIds = new Set(preset?.clientFilters ?? []);
+    const presetFilterIds = new Set<string>(preset?.clientFilters ?? []);
 
     const filters: ActiveFilter[] = [];
     for (const category of viewCategories()) {

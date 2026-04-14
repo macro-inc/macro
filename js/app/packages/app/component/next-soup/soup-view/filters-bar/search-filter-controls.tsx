@@ -10,7 +10,7 @@ import {
   activeSoupViewCounts,
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { batch, createEffect, createMemo, Show } from 'solid-js';
+import { batch, createMemo, createSignal, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import {
@@ -102,17 +102,29 @@ export const SearchIndexFilter = () => {
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
 
+  // Initialize from soup.filters state
+  const initialIndex = INDEX_OPTIONS.find((opt) =>
+    soup.filters.isActive(opt.value)
+  );
+  const [selectedIndex, setSelectedIndex] = createSignal<string | null>(
+    initialIndex?.value ?? null
+  );
+
   const activeIndex = createMemo((): Option[] => {
-    const found = INDEX_OPTIONS.find((opt) => soup.filters.isActive(opt.value));
+    const value = selectedIndex();
+    if (!value) return [];
+    const found = INDEX_OPTIONS.find((opt) => opt.value === value);
     return found
       ? [{ value: found.value, label: found.label, icon: found.icon }]
       : [];
   });
 
-  const isChannelsActive = () =>
-    activeIndex().some((o) => o.value === 'channels');
+  const isChannelsActive = () => selectedIndex() === 'channels';
 
   const handleChange = (selected: Option[]) => {
+    const newValue = selected.length > 0 ? selected[0].value : null;
+    setSelectedIndex(newValue);
+
     batch(() => {
       for (const opt of INDEX_OPTIONS) {
         if (soup.filters.isActive(opt.value)) {
@@ -120,8 +132,8 @@ export const SearchIndexFilter = () => {
         }
       }
 
-      if (selected.length > 0) {
-        const opt = INDEX_OPTIONS.find((o) => o.value === selected[0].value);
+      if (newValue) {
+        const opt = INDEX_OPTIONS.find((o) => o.value === newValue);
         if (opt) {
           soup.filters.toggle({ or: [opt.value as FilterID] });
           if (opt.value === 'channels') {
@@ -149,7 +161,7 @@ export const SearchIndexFilter = () => {
     return active.length > 0 ? active[0].label : 'All';
   });
 
-  const hasActiveIndex = () => activeIndex().length > 0;
+  const hasActiveIndex = () => selectedIndex() !== null;
 
   const clearFilters = () => {
     cacheChannelSubFilters(contentId, {});
@@ -189,6 +201,11 @@ const InChannelFilter = () => {
   const { useList } = useQuickAccess();
   const channels = useList('channel', 'dm');
 
+  // Initialize from cache, use signal for reactivity
+  const [channelIds, setChannelIds] = createSignal<string[]>(
+    getCachedChannelSubFilters(contentId).channel_ids ?? []
+  );
+
   const channelOptions = createMemo((): Option[] =>
     channels()
       .filter((ch) => ch.data.name)
@@ -203,11 +220,9 @@ const InChannelFilter = () => {
       }))
   );
 
-  // Get active channel IDs from cache (since AST doesn't expose IDs directly)
   const activeChannelFilter = createMemo((): Option[] => {
-    const cached = getCachedChannelSubFilters(contentId);
-    const ids = cached.channel_ids;
-    if (!ids?.length) return [];
+    const ids = channelIds();
+    if (ids.length === 0) return [];
     return channelOptions().filter((opt) => ids.includes(opt.value));
   });
 
@@ -220,17 +235,26 @@ const InChannelFilter = () => {
 
   const handleChange = (selected: Option[]) => {
     const ids = selected.map((opt) => opt.value);
+
+    // Update signal for UI reactivity
+    setChannelIds(ids);
+
+    // Update cache for persistence
     const cached = getCachedChannelSubFilters(contentId);
     cacheChannelSubFilters(contentId, {
       ...cached,
       channel_ids: ids.length > 0 ? ids : undefined,
     });
 
-    // Update AST with new channel filter
+    // Rebuild chanf from new channel IDs and existing sender IDs
+    const senderIds = cached.sender_ids ?? [];
     filterAst.update((draft) => {
       const channelAst = channelIdsToAst(ids);
-      if (channelAst.chanf) {
-        draft.chanf = channelAst.chanf;
+      const senderAst = senderIdsToAst(senderIds);
+      if (channelAst.chanf && senderAst.chanf) {
+        draft.chanf = ast.or(channelAst.chanf, senderAst.chanf);
+      } else {
+        draft.chanf = channelAst.chanf ?? senderAst.chanf;
       }
     });
   };
@@ -266,6 +290,11 @@ const FromSenderFilter = () => {
   const contacts = useList('person');
   const userId = useUserId();
 
+  // Initialize from cache, use signal for reactivity
+  const [senderIds, setSenderIds] = createSignal<string[]>(
+    getCachedChannelSubFilters(contentId).sender_ids ?? []
+  );
+
   const senderOptions = createMemo((): Option[] => {
     const currentUserId = userId();
     let me: Option | undefined;
@@ -290,11 +319,9 @@ const FromSenderFilter = () => {
     return [...(me ? [me] : []), ...others];
   });
 
-  // Get active sender IDs from cache
   const activeSenderFilter = createMemo((): Option[] => {
-    const cached = getCachedChannelSubFilters(contentId);
-    const ids = cached.sender_ids;
-    if (!ids?.length) return [];
+    const ids = senderIds();
+    if (ids.length === 0) return [];
     return senderOptions().filter((opt) => ids.includes(opt.value));
   });
 
@@ -307,22 +334,26 @@ const FromSenderFilter = () => {
 
   const handleChange = (selected: Option[]) => {
     const ids = selected.map((opt) => opt.value);
+
+    // Update signal for UI reactivity
+    setSenderIds(ids);
+
+    // Update cache for persistence
     const cached = getCachedChannelSubFilters(contentId);
     cacheChannelSubFilters(contentId, {
       ...cached,
       sender_ids: ids.length > 0 ? ids : undefined,
     });
 
-    // Update AST with new sender filter
+    // Rebuild chanf from existing channel IDs and new sender IDs
+    const channelIds = cached.channel_ids ?? [];
     filterAst.update((draft) => {
+      const channelAst = channelIdsToAst(channelIds);
       const senderAst = senderIdsToAst(ids);
-      // Sender filter merges into chanf bucket
-      if (senderAst.chanf) {
-        if (draft.chanf) {
-          draft.chanf = ast.or(draft.chanf, senderAst.chanf);
-        } else {
-          draft.chanf = senderAst.chanf;
-        }
+      if (channelAst.chanf && senderAst.chanf) {
+        draft.chanf = ast.or(channelAst.chanf, senderAst.chanf);
+      } else {
+        draft.chanf = channelAst.chanf ?? senderAst.chanf;
       }
     });
   };
