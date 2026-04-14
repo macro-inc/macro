@@ -96,11 +96,11 @@ pub trait CallRepository: Send + Sync + 'static {
     /// Returns the new `call_records` id.
     fn archive_call(&self, call_id: &Uuid) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
 
-    /// Set the recording URL on an archived call record.
-    fn set_recording_url(
+    /// Set the recording key on an archived call record.
+    fn set_recording_key(
         &self,
         call_record_id: &Uuid,
-        recording_url: &str,
+        recording_key: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Find a call record by its egress ID (for webhook handling).
@@ -109,14 +109,14 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
-    /// Set the recording URL on an active call (by egress ID).
+    /// Set the recording key on an active call (by egress ID).
     ///
     /// Used when `egress_ended` arrives before the call is archived.
     /// Returns `true` if a matching active call was found and updated.
-    fn set_active_call_recording_url(
+    fn set_active_call_recording_key(
         &self,
         egress_id: &str,
-        recording_url: &str,
+        recording_key: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Insert a transcript segment for an active call.
@@ -140,6 +140,28 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallRecord>, Self::Err>> + Send;
+}
+
+/// Storage port for generating presigned recording URLs.
+pub trait RecordingStorage: Send + Sync + 'static {
+    /// Generate a presigned GET URL for a recording key.
+    ///
+    /// The key is in `UUID/TIMESTAMP.ext` format. Implementations must
+    /// prepend the appropriate prefix (e.g. `calls/`) when constructing
+    /// the full object key.
+    fn presign_recording_url(
+        &self,
+        recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+}
+
+impl<T: RecordingStorage> RecordingStorage for Option<T> {
+    async fn presign_recording_url(&self, recording_key: &str) -> anyhow::Result<String> {
+        match self {
+            Some(inner) => inner.presign_recording_url(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).

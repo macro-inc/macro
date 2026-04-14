@@ -863,6 +863,10 @@ export const getCallRecordResponse = zod
           )
       )
       .describe('Participants (both active and historic).'),
+    recordingUrl: zod
+      .string()
+      .nullish()
+      .describe('Presigned URL for the call recording, if available.'),
     roomName: zod.string().describe('The RTC room name.'),
     startedAt: zod
       .string()
@@ -7969,6 +7973,7 @@ export const createProjectHandlerBody = zod.object({
   name: zod.string().describe('The name of the project.'),
   projectParentId: zod
     .string()
+    .uuid()
     .nullish()
     .describe('The project that the new project will belong to.'),
 });

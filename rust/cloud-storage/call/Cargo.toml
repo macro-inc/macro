@@ -15,6 +15,7 @@ inbound = [
   "ports",
 ]
 outbound = [
+  "dep:aws-sdk-s3",
   "dep:livekit-api",
   "dep:livekit-protocol",
   "dep:models_permissions",
@@ -25,6 +26,7 @@ ports = ["dep:entity_access", "dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 connection = { path = "../connection", default-features = false, features = [

@@ -326,7 +326,7 @@ impl CallRepository for PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_url, share_permission_id
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -342,11 +342,11 @@ impl CallRepository for PgCallRepo {
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
-        // Insert into call_records (including egress_id and any early recording_url).
+        // Insert into call_records (including egress_id and any early recording_key).
         // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_url, share_permission_id)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, share_permission_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
             call_id,
@@ -357,7 +357,7 @@ impl CallRepository for PgCallRepo {
             now,
             duration_ms,
             call.egress_id,
-            call.recording_url,
+            call.recording_key,
             &call.share_permission_id,
         )
         .execute(tx.as_mut())
@@ -406,17 +406,17 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn set_recording_url(
+    async fn set_recording_key(
         &self,
         call_record_id: &Uuid,
-        recording_url: &str,
+        recording_key: &str,
     ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            UPDATE call_records SET recording_url = $2 WHERE id = $1
+            UPDATE call_records SET recording_key = $2 WHERE id = $1
             "#,
             call_record_id,
-            recording_url,
+            recording_key,
         )
         .execute(&self.pool)
         .await?;
@@ -439,17 +439,17 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn set_active_call_recording_url(
+    async fn set_active_call_recording_key(
         &self,
         egress_id: &str,
-        recording_url: &str,
+        recording_key: &str,
     ) -> Result<bool, Self::Err> {
         let result = sqlx::query!(
             r#"
-            UPDATE calls SET recording_url = $2 WHERE egress_id = $1
+            UPDATE calls SET recording_key = $2 WHERE egress_id = $1
             "#,
             egress_id,
-            recording_url,
+            recording_key,
         )
         .execute(&self.pool)
         .await?;
@@ -503,7 +503,7 @@ impl CallRepository for PgCallRepo {
         // Try active `calls` first.
         if let Some(active) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key
             FROM calls
             WHERE id = $1
             "#,
@@ -563,6 +563,8 @@ impl CallRepository for PgCallRepo {
                 ended_at: None,
                 duration_ms: None,
                 egress_id: active.egress_id,
+                recording_key: active.recording_key,
+                recording_url: None,
                 is_active: true,
                 participants,
                 transcript,
@@ -572,7 +574,7 @@ impl CallRepository for PgCallRepo {
         // Fall back to archived `call_records`.
         let Some(archived) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key
             FROM call_records
             WHERE id = $1
             "#,
@@ -636,6 +638,8 @@ impl CallRepository for PgCallRepo {
             ended_at: Some(archived.ended_at),
             duration_ms: Some(archived.duration_ms),
             egress_id: archived.egress_id,
+            recording_key: archived.recording_key,
+            recording_url: None,
             is_active: false,
             participants,
             transcript,

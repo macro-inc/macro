@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id\n            FROM call_records\n            WHERE id = $1\n            ",
+  "query": "\n        SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms\n        FROM call_records\n        WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -37,11 +37,6 @@
         "ordinal": 6,
         "name": "duration_ms",
         "type_info": "Int8"
-      },
-      {
-        "ordinal": 7,
-        "name": "egress_id",
-        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -56,9 +51,8 @@
       false,
       false,
       false,
-      false,
-      true
+      false
     ]
   },
-  "hash": "ca2128680337c450ace5d58cbbf31cc419b098d4396b83e0ef1e8798e4f83050"
+  "hash": "58bbac52930eed32381004f41604e394292af9ad8de8d7ce3ed45358ad62adba"
 }

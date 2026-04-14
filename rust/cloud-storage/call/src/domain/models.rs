@@ -191,6 +191,11 @@ pub struct CallRecord {
     pub duration_ms: Option<i64>,
     /// Recording egress ID, if any.
     pub egress_id: Option<String>,
+    /// S3 object key for the call recording (internal, not serialized).
+    #[serde(skip_serializing)]
+    pub recording_key: Option<String>,
+    /// Presigned URL for the call recording, if available.
+    pub recording_url: Option<String>,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
     /// Participants (both active and historic).

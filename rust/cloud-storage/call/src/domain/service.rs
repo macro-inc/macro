@@ -1,5 +1,8 @@
 //! Call service implementation.
 
+#[cfg(test)]
+mod test;
+
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use entity_access::domain::ports::EntityAccessService;
@@ -20,7 +23,7 @@ use super::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
     LeaveCallResponse, TranscriptSegmentRequest,
 };
-use super::ports::{CallRepository, CallRtcClient, CallService};
+use super::ports::{CallRepository, CallRtcClient, CallService, RecordingStorage};
 
 /// The concrete call service implementation.
 pub struct CallServiceImpl<
@@ -29,12 +32,14 @@ pub struct CallServiceImpl<
     Cn: ConnectionService,
     E: EntityAccessService,
     N: NotificationIngress,
+    S: RecordingStorage,
 > {
     repo: R,
     rtc_client: C,
     connection_service: Cn,
     entity_access_service: E,
     notification_ingress: N,
+    recording_storage: S,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
@@ -46,7 +51,8 @@ impl<
     Cn: ConnectionService,
     E: EntityAccessService,
     N: NotificationIngress,
-> CallServiceImpl<R, C, Cn, E, N>
+    S: RecordingStorage,
+> CallServiceImpl<R, C, Cn, E, N, S>
 {
     /// Create a new call service.
     pub fn new(
@@ -55,6 +61,7 @@ impl<
         connection_service: Cn,
         entity_access_service: E,
         notification_ingress: N,
+        recording_storage: S,
         server_url: impl Into<String>,
     ) -> Self {
         Self {
@@ -63,6 +70,7 @@ impl<
             connection_service,
             entity_access_service,
             notification_ingress,
+            recording_storage,
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
@@ -175,7 +183,8 @@ impl<
     Cn: ConnectionService,
     E: EntityAccessService,
     N: NotificationIngress,
-> CallService for CallServiceImpl<R, C, Cn, E, N>
+    S: RecordingStorage,
+> CallService for CallServiceImpl<R, C, Cn, E, N, S>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -538,9 +547,10 @@ impl<
                     return Ok(());
                 };
 
-                tracing::info!(egress_id, file_url, "egress recording completed");
+                let recording_key = extract_recording_key(file_url);
+                tracing::info!(egress_id, recording_key, "egress recording completed");
 
-                // Find the archived call record by egress_id and update the recording URL.
+                // Find the archived call record by egress_id and update the recording key.
                 if let Some(call_record_id) = self
                     .repo
                     .get_call_record_by_egress_id(egress_id)
@@ -548,7 +558,7 @@ impl<
                     .map_err(|e| CallError::Internal(e.into()))?
                 {
                     self.repo
-                        .set_recording_url(&call_record_id, file_url)
+                        .set_recording_key(&call_record_id, recording_key)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
                 } else {
@@ -556,7 +566,7 @@ impl<
                     // archive_call can carry it forward.
                     let updated = self
                         .repo
-                        .set_active_call_recording_url(egress_id, file_url)
+                        .set_active_call_recording_key(egress_id, recording_key)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
                     if !updated {
@@ -590,11 +600,23 @@ impl<
         let call_id = Uuid::parse_str(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
 
-        self.repo
+        let mut record = self
+            .repo
             .get_call_record_by_call_id(&call_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?
-            .ok_or_else(|| CallError::NotFound(call_id.to_string()))
+            .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+
+        if let Some(recording_key) = &record.recording_key {
+            record.recording_url = self
+                .recording_storage
+                .presign_recording_url(recording_key)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to presign recording URL"))
+                .ok();
+        }
+
+        Ok(record)
     }
 
     #[tracing::instrument(err, skip(self, segment))]
@@ -621,4 +643,16 @@ impl<
 
         Ok(())
     }
+}
+
+/// Extract the recording key from a full S3 URL.
+///
+/// Given `https://bucket.s3.amazonaws.com/calls/UUID/TIMESTAMP.mp4`,
+/// returns `UUID/TIMESTAMP.mp4`. Falls back to the full URL if it does
+/// not contain the `calls/` prefix.
+fn extract_recording_key(file_url: &str) -> &str {
+    file_url
+        .find("calls/")
+        .map(|idx| &file_url[idx + "calls/".len()..])
+        .unwrap_or(file_url)
 }

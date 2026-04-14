@@ -83,6 +83,7 @@ export * from './callRecordEgressId';
 export * from './callRecordEndedAt';
 export * from './callRecordParticipant';
 export * from './callRecordParticipantLeftAt';
+export * from './callRecordRecordingUrl';
 export * from './callRecordTranscriptSegment';
 export * from './callRecordTranscriptSegmentEndedAt';
 export * from './callRecordTranscriptSegmentSegmentId';
