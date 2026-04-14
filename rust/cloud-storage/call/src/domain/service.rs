@@ -689,8 +689,9 @@ impl<R: CallRepository> CallRecordQueryService for CallRecordQueryServiceImpl<R>
         &self,
         req: GetCallRecordsRequest,
     ) -> Result<Vec<CallRecord>, CallError> {
+        let filter = req.query.filter();
         self.repo
-            .get_call_records_by_user(req.user_id.copied(), req.limit, &req.filter)
+            .get_call_records_by_user(req.user_id.copied(), req.limit, filter)
             .await
             .map_err(|e| CallError::Internal(e.into()))
     }

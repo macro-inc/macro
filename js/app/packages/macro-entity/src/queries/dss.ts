@@ -18,26 +18,22 @@ import {
 } from '@queries/soup/cache';
 
 export function createBulkDeleteDssItemsMutation() {
-  const isUnsupportedEntity = (entity: EntityData) => {
+  const isDeletable = (entity: EntityData) => {
     const type = entity.type;
-    return type !== 'chat' && type !== 'document' && type !== 'project';
+    return type === 'chat' || type === 'document' || type === 'project';
   };
   return useMutation(() => ({
     mutationFn: async (entities: EntityData[]) => {
-      if (entities.some(isUnsupportedEntity)) {
-        throw new Error(`Unsupported entity types`);
-      }
-
+      const deletable = entities.filter(isDeletable);
       return await Promise.all(
-        entities
-          .filter((e) => e.type !== 'channel_message' && e.type !== 'call')
-          .map((e) => {
-            return deleteItem({ id: e.id, itemType: e.type as ItemType });
-          })
+        deletable.map((e) => {
+          return deleteItem({ id: e.id, itemType: e.type as ItemType });
+        })
       );
     },
     onMutate: async (entities: EntityData[]) => {
-      const ids = new Set(entities.map((e) => e.id));
+      const deletable = entities.filter(isDeletable);
+      const ids = new Set(deletable.map((e) => e.id));
       const soupSnapshot = removeSoupEntities(ids);
       const searchSnapshot = removeSearchEntities(ids);
       return { soupSnapshot, searchSnapshot };

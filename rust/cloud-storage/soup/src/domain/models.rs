@@ -279,23 +279,29 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_call_request(&self) -> Option<GetCallRecordsRequest> {
-        match &self.cursor {
-            SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => Some(GetCallRecordsRequest {
-                user_id: self.user.clone(),
-                limit: self.limit as u32,
-                filter: f.as_ref().and_then(|f| f.call_filter.clone()),
-            }),
-            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
-                filter,
-                ..
-            }))) => Some(GetCallRecordsRequest {
-                user_id: self.user.clone(),
-                limit: self.limit as u32,
-                filter: filter.as_ref().and_then(|f| f.call_filter.clone()),
-            }),
-            // query by frecency not yet implemented for call records
-            SoupQuery::Frecency(_) => None,
-        }
+        Some(GetCallRecordsRequest {
+            user_id: self.user.clone(),
+            limit: self.limit as u32,
+            query: match &self.cursor {
+                SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
+                    *t,
+                    f.as_ref().and_then(|f| f.call_filter.clone()),
+                )),
+                SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                    id,
+                    limit,
+                    val,
+                    filter,
+                }))) => Some(Query::Cursor(CursorWithValAndFilter {
+                    id: *id,
+                    limit: *limit,
+                    val: val.clone(),
+                    filter: filter.as_ref().and_then(|f| f.call_filter.clone()),
+                })),
+                // query by frecency not yet implemented for call records
+                SoupQuery::Frecency(_) => None,
+            }?,
+        })
     }
 
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {

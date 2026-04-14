@@ -107,7 +107,7 @@ export function MobileSearchInner() {
     }
 
     // Handle entity items (documents, channels, chats, etc.)
-    if (isEntityItem(item) && item.data.type !== 'call') {
+    if (isEntityItem(item)) {
       const blockName = itemToBlockName(item.data);
       if (blockName) {
         openWithSplit(

@@ -5,6 +5,7 @@ use std::fmt;
 use chrono::{DateTime, Utc};
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
+use models_pagination::{Query, SimpleSortMethod};
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -214,8 +215,8 @@ pub struct GetCallRecordsRequest {
     pub user_id: MacroUserIdStr<'static>,
     /// Maximum number of records to return.
     pub limit: u32,
-    /// Optional filter to narrow results (e.g. by channel_id).
-    pub filter: LiteralTree<CallLiteral>,
+    /// Sort or cursor-based pagination query with optional filter.
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<CallLiteral>>,
 }
 
 /// Errors that can occur during call operations.

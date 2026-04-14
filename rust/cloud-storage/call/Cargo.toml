@@ -42,6 +42,7 @@ livekit-api = { workspace = true, optional = true }
 livekit-protocol = { workspace = true, optional = true }
 macro_aws_config = { path = "../macro_aws_config", optional = true, features = ["s3"] }
 macro_user_id = { path = "../macro_user_id" }
+models_pagination = { path = "../models_pagination" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }

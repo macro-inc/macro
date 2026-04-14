@@ -18,7 +18,11 @@ const RECENTLY_VIEWED_GC_TIME = 10 * 60 * 1000; // 10 minutes
 
 const recentlyViewedArgs: SoupItemsQueryArgs = {
   params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
-  body: {},
+  body: {
+    call_filters: {
+      channel_ids: ['00000000-0000-0000-0000-000000000000'],
+    },
+  },
 };
 
 const recentlyViewedQueryKey = soupKeys.items(recentlyViewedArgs).queryKey;

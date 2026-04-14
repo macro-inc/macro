@@ -135,6 +135,7 @@ type AppSidebarProps = {
 };
 
 type SidebarHotkeyDeps = {
+  links: SidebarItem[];
   hotkeyVisible: () => boolean;
   setHotkeyVisible: (visible: boolean) => void;
   resetHotkeysState: VoidFunction;
@@ -144,6 +145,7 @@ type SidebarHotkeyDeps = {
 };
 
 export const registerSidebarHotkeys = ({
+  links,
   isSlim,
   onOpenChange,
   openWithSplit,
@@ -172,7 +174,7 @@ export const registerSidebarHotkeys = ({
   });
 
   const registeredGoToKeys = new Set<ValidHotkey>([
-    ...SIDEBAR_LINKS.map((link) => link.hotkey),
+    ...links.map((link) => link.hotkey),
   ]);
 
   // When the go to command scope is active, we want to prevent
@@ -228,7 +230,7 @@ export const registerSidebarHotkeys = ({
   });
 
   // Register navigation shortcuts in the global GO_TO command scope
-  for (const link of SIDEBAR_LINKS) {
+  for (const link of links) {
     const openSidebarView = (e?: KeyboardEvent) => {
       e?.preventDefault();
       if (hotkeyVisible()) {
@@ -420,6 +422,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   registerSidebarHotkeys({
+    links: visibleLinks(),
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,
