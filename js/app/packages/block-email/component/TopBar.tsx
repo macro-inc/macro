@@ -107,10 +107,13 @@ export function TopBar(props: {
   const openTaskCompose = () => {
     const threadId = emailCtx.thread()?.db_id;
     if (!threadId) return;
+    const title =
+      props.title.length > 70 ? `${props.title.slice(0, 70)}...` : props.title;
     popoverSplit({
       type: 'component',
       id: 'task-compose',
       params: {
+        initialTitle: title,
         initialContent: buildMentionMarkdownString({
           type: 'document',
           documentId: threadId,
@@ -160,17 +163,19 @@ export function TopBar(props: {
       buttonComponent: () => {
         const [hovering, setHovering] = createSignal(false);
         return (
-          <button
-            class="h-7 px-2 flex items-center gap-1 rounded-xs text-xs hover:bg-hover hover-transition-bg"
-            onMouseEnter={() => setHovering(true)}
-            onMouseLeave={() => setHovering(false)}
-            onClick={openTaskCompose}
-          >
-            <div class="size-4 text-task">
-              <AnimatedTaskIcon triggerAnimation={hovering()} />
-            </div>
-            <span class="text-ink">Task</span>
-          </button>
+          <div class="border-1 border-edge-muted flex items-stretch rounded-xs">
+            <button
+              class="h-7 px-2 flex items-center gap-1 text-xs hover:bg-hover hover-transition-bg"
+              onMouseEnter={() => setHovering(true)}
+              onMouseLeave={() => setHovering(false)}
+              onClick={openTaskCompose}
+            >
+              <div class="size-4 text-task">
+                <AnimatedTaskIcon triggerAnimation={hovering()} />
+              </div>
+              <span class="text-ink">Task</span>
+            </button>
+          </div>
         );
       },
     },

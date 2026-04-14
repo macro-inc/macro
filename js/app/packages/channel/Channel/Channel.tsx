@@ -43,7 +43,7 @@ import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useChannelName, useChannelActivity } from '@core/context/channels';
-import { buildMentionMarkdownString } from '@lexical-core';
+import { buildMentionMarkdownString, markdownToPlainText } from '@lexical-core';
 import { createActivityTracker } from '@channel/activity-tracker';
 import {
   invalidateChannelsActivity,
@@ -223,10 +223,14 @@ export function Channel(props: ChannelProps) {
       messageEditor.start(message);
     },
     onCreateTask: (ctx) => {
+      const plainText = markdownToPlainText(ctx.message.content).trim();
+      const title =
+        plainText.length > 70 ? `${plainText.slice(0, 70)}...` : plainText;
       popoverSplit({
         type: 'component',
         id: 'task-compose',
         params: {
+          initialTitle: title,
           initialContent: buildMentionMarkdownString({
             type: 'document',
             documentId: props.channelId,
