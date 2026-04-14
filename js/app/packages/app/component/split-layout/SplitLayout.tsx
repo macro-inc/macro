@@ -313,15 +313,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     setTabTitle(splitManager.tabTitle());
   });
 
-  // Wire the mobile swipe layout into the split manager so that any call to
-  // splitManager.openWithSplit() is automatically routed through it on mobile.
-  if (mobileSwipeLayout) {
-    splitManager.setMobileForwardOverride(mobileSwipeLayout.navigateForward);
-    onCleanup(() => {
-      splitManager.setMobileForwardOverride(undefined);
-    });
-  }
-
   // <For> on plain ids for stable referential equality
   const ids = createMemo(() => splits().map(({ id }) => id));
 

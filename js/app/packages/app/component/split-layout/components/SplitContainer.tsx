@@ -90,8 +90,6 @@ export function SplitContainer(
             'opacity-100': panel.isPanelActive() || panel.handle.isSpotLight(),
             'size-full': !panel.handle.isSpotLight(),
             'opacity-85': !panel.isPanelActive(),
-            // On mobile swipe back, we want smooth opacity shift
-            'transition-opacity': isMobile(),
           }}
           ref={(ref) => {
             setRef(ref);

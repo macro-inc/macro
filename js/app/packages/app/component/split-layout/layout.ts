@@ -95,8 +95,7 @@ export function useSplitLayout() {
     if (!splitManager) {
       return 0;
     }
-    // Exclude background splits (mobile swipe-back) from the visible count.
-    return splitManager.splits().filter((s) => !s.isBackground).length;
+    return splitManager.getVisibleSplitCount();
   }
 
   return {

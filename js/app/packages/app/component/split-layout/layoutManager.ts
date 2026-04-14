@@ -117,8 +117,6 @@ export type SplitState = {
   content: SplitContent; // mirror of current history entry
   mount: SplitMount; // contains pinned element
   referredFrom: ReferredFrom;
-  /** When true, this split is the mobile background (previous page). Excluded from URL encoding. */
-  isBackground: boolean;
 };
 
 export type CreateNewSplitOptions = {
@@ -126,13 +124,9 @@ export type CreateNewSplitOptions = {
   activate?: boolean;
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
-  /** When true, marks this split as a mobile background split (excluded from URL). */
-  isBackground?: boolean;
   /**
    * Optional prior navigation entries to pre-populate this split's history stack.
    * The `content` field is appended as the final (current) entry.
-   * Used by the mobile swipe-back system to give BG splits an accurate history so
-   * `previousContent()` is correct if this split is ever promoted to foreground.
    */
   initialHistory?: SplitContent[];
 };
@@ -149,14 +143,14 @@ export type OpenWithSplitOptions = {
 };
 
 /**
- * Callback injected by the mobile swipe layout to intercept forward navigation.
- * When set, `openWithSplit` delegates to this instead of its normal split logic,
- * so the previous page stays mounted as a background split for swipe-back.
+ * A navigation interceptor registered by, e.g. mobile swipe layout.
+ * Called at the start of `openWithSplit`. Return `{ handled: true }` to consume
+ * the navigation; return `{ handled: false }` to let the normal split logic run.
  */
-export type MobileForwardOverride = (
+export type NavigationInterceptor = (
   content: SplitContent,
-  options?: { referredFrom?: ReferredFrom }
-) => void;
+  options: OpenWithSplitOptions
+) => { handled: boolean };
 
 function keyOfSplitState(s: SplitState): SplitKey {
   return `${s.content.type}:${s.content.id}`;
@@ -305,15 +299,23 @@ export type SplitManager = {
   /** Close all popover splits */
   closeAllPopovers: () => void;
 
-  /** Set or clear the background flag on a split (used by mobile swipe-back). */
-  setBackground: (id: SplitId, value: boolean) => void;
+  /** Count of splits not excluded by the current exclusion filter. */
+  getVisibleSplitCount: () => number;
 
   /**
-   * Register a mobile forward-navigation override.
-   * When set, `openWithSplit` calls this instead of its normal split logic,
-   * keeping the old page alive as a background split for swipe-back.
+   * Register a predicate that marks certain splits as excluded — excluded splits
+   * are hidden from URL encoding, duplicate detection, and content lookup.
+   * Used for mobile swipe back behavior, where we want to ignore the bg split.
    */
-  setMobileForwardOverride: (fn: MobileForwardOverride | undefined) => void;
+  setExclusionFilter: (
+    fn: ((split: SplitState) => boolean) | undefined
+  ) => void;
+
+  /**
+   * Register a navigation interceptor. Called at the start of `openWithSplit`;
+   * if it returns `{ handled: true }` the normal split logic is skipped.
+   */
+  setNavigationInterceptor: (fn: NavigationInterceptor | undefined) => void;
 
   /** Get reactive accessor to popovers map */
   popovers: () => Map<
@@ -429,10 +431,11 @@ function sameNonComponentIdentity(a: SplitContent, b: SplitContent): boolean {
 
 function isDuplicateSplit(
   splits: SplitState[],
-  content: SplitContent
+  content: SplitContent,
+  isExcluded: (split: SplitState) => boolean = () => false
 ): boolean {
   return splits
-    .filter((s) => !s.isBackground)
+    .filter((s) => !isExcluded(s))
     .some((split) => sameNonComponentIdentity(split.content, content));
 }
 
@@ -469,8 +472,9 @@ export function createSplitLayout(
 
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
 
-  // Injected by the mobile swipe layout to intercept forward navigation.
-  let mobileForwardOverride: MobileForwardOverride | undefined;
+  let exclusionFilter: ((split: SplitState) => boolean) | undefined;
+  let navigationInterceptor: NavigationInterceptor | undefined;
+  const isExcluded = (split: SplitState) => exclusionFilter?.(split) ?? false;
 
   const canAppendSplit = createMemo(
     () => resizeContext()?.canFit({ minSize: 400 }) ?? true
@@ -508,16 +512,9 @@ export function createSplitLayout(
     initialContent: SplitContent;
     isDefault?: boolean;
     referredFrom?: ReferredFrom;
-    isBackground?: boolean;
     initialHistory?: SplitContent[];
   }): SplitState {
-    const {
-      initialContent,
-      isDefault,
-      referredFrom,
-      isBackground,
-      initialHistory,
-    } = options;
+    const { initialContent, isDefault, referredFrom, initialHistory } = options;
     const id = newSplitId();
     const history = createHistory<SplitContent>();
     const content = attachAliasContext(initialContent);
@@ -543,7 +540,6 @@ export function createSplitLayout(
       content,
       mount,
       referredFrom: referredFrom ?? null,
-      isBackground: isBackground ?? false,
     };
   }
 
@@ -693,13 +689,13 @@ export function createSplitLayout(
 
   const getUrlSegments = () => {
     return state.splits
-      .filter((s) => !s.isBackground)
+      .filter((s) => !isExcluded(s))
       .flatMap((s) => [getAliasOrType(s.content), s.content.id])
       .map(String);
   };
 
   const getUrl = () => {
-    const visibleSplits = state.splits.filter((s) => !s.isBackground);
+    const visibleSplits = state.splits.filter((s) => !isExcluded(s));
     return (
       visibleSplits.map((s) => getAliasOrType(s.content)).join('/') +
       '/' +
@@ -842,18 +838,15 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const {
-      content,
-      activate,
-      referredFrom,
-      allowDuplicate,
-      isBackground,
-      initialHistory,
-    } = options;
+    const { content, activate, referredFrom, allowDuplicate, initialHistory } =
+      options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
-    if (!allowDuplicate && isDuplicateSplit(state.splits, initialContent)) {
+    if (
+      !allowDuplicate &&
+      isDuplicateSplit(state.splits, initialContent, isExcluded)
+    ) {
       const existingSplit = state.splits.find(
         (s) =>
           s.content.type === initialContent.type &&
@@ -867,7 +860,6 @@ export function createSplitLayout(
       initialContent,
       isDefault,
       referredFrom,
-      isBackground,
       initialHistory,
     });
 
@@ -921,7 +913,7 @@ export function createSplitLayout(
     id: string
   ): SplitHandle | undefined {
     const match = state.splits.find(
-      (s) => s.content.type === type && s.content.id === id && !s.isBackground
+      (s) => s.content.type === type && s.content.id === id && !isExcluded(s)
     );
     if (!match) return;
     return getSplit(match.id);
@@ -1070,11 +1062,9 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
   ): SplitHandle | undefined {
-    // Mobile: delegate forward navigation to the swipe layout so the previous
-    // page stays mounted as a background split for swipe-back.
-    if (mobileForwardOverride && !options.mergeHistory) {
-      mobileForwardOverride(content, { referredFrom: options.referredFrom });
-      return undefined;
+    if (navigationInterceptor) {
+      const result = navigationInterceptor(content, options);
+      if (result.handled) return undefined;
     }
 
     const existingSplit = getSplitByContent(content.type, content.id);
@@ -1174,13 +1164,13 @@ export function createSplitLayout(
     closeAllPopovers,
     popovers: () => state.popovers,
     canAppendSplit,
-    setBackground: (id: SplitId, value: boolean) => {
-      setState('splits', (splits) =>
-        splits.map((s) => (s.id === id ? { ...s, isBackground: value } : s))
-      );
+    getVisibleSplitCount: () =>
+      state.splits.filter((s) => !isExcluded(s)).length,
+    setExclusionFilter: (fn) => {
+      exclusionFilter = fn;
     },
-    setMobileForwardOverride: (fn: MobileForwardOverride | undefined) => {
-      mobileForwardOverride = fn;
+    setNavigationInterceptor: (fn) => {
+      navigationInterceptor = fn;
     },
   };
 }

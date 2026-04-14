@@ -1,4 +1,4 @@
-import { batch, createSignal } from 'solid-js';
+import { batch, createSignal, onCleanup } from 'solid-js';
 import type {
   OpenWithSplitOptions,
   ReferredFrom,
@@ -8,23 +8,19 @@ import type {
 } from '../layoutManager';
 
 export type MobileSwipeLayout = {
+  /** Split ID currently in slot A (may be FG or BG depending on fgIsSlotA). */
   slotASplitId: () => SplitId | undefined;
+  /** Split ID currently in slot B (may be FG or BG depending on fgIsSlotA). */
   slotBSplitId: () => SplitId | undefined;
   /** True when slot A is the foreground; false when slot B is the foreground. */
   fgIsSlotA: () => boolean;
+  /** True when a background split is available to swipe back to. */
   canGoBack: () => boolean;
   /**
-   * Intercepts forward navigation on mobile.
-   * Puts the new content into the current BG slot, demotes the current FG to BG,
-   * then flips the FG/BG role — zero remount on the new FG slot.
-   */
-  navigateForward: (
-    content: SplitContent,
-    options?: Pick<OpenWithSplitOptions, 'referredFrom'>
-  ) => void;
-  /**
-   * Completes a swipe-back. Flips the FG/BG role so the current BG slot becomes FG, destroys the old FG, and mounts a
+   * Completes a swipe-back. Flips the FG/BG role so the current BG slot becomes FG
+   * (no remount for the promoted panel), destroys the old FG, and lazily mounts a
    * new BG from the promoted split's history into the old FG slot.
+   * Called by MobileSwipeBackContainer after its animation finishes.
    */
   completeSwipeBack: () => void;
   /**
@@ -33,7 +29,8 @@ export type MobileSwipeLayout = {
    */
   setAnimatedTrigger: (trigger: (() => void) | undefined) => void;
   /**
-   * Initiate a swipe-back
+   * Initiate a swipe-back — animated if container has registered a trigger,
+   * otherwise completes immediately. Called by the split header back button.
    */
   swipeBack: () => void;
 };
@@ -58,6 +55,19 @@ export function createMobileSwipeLayout(
 
   const fgSplitId = () => (fgIsSlotA() ? slotASplitId() : slotBSplitId());
   const bgSplitId = () => (fgIsSlotA() ? slotBSplitId() : slotASplitId());
+
+  // The BG split is always exactly bgSplitId() — derive exclusion directly from
+  // the slot signals rather than maintaining a separate set.
+  splitManager.setExclusionFilter((split) => split.id === bgSplitId());
+  splitManager.setNavigationInterceptor((content, options) => {
+    if (options.mergeHistory) return { handled: false };
+    navigateForward(content, options);
+    return { handled: true };
+  });
+  onCleanup(() => {
+    splitManager.setExclusionFilter(undefined);
+    splitManager.setNavigationInterceptor(undefined);
+  });
 
   function canGoBack() {
     return bgSplitId() !== undefined;
@@ -90,16 +100,9 @@ export function createMobileSwipeLayout(
         initialHistory: newFgInitialHistory,
         activate: true,
         referredFrom,
-        isBackground: false,
       });
 
-      // Demote FG → BG
-      if (currentFgId) {
-        splitManager.setBackground(currentFgId, true);
-      }
-
       setNewFgSlotId(newFgHandle.id);
-
       toggleFgSlot();
     });
   }
@@ -108,7 +111,7 @@ export function createMobileSwipeLayout(
     const isFgA = fgIsSlotA();
     const currentFgId = fgSplitId();
     const currentBgId = bgSplitId();
-    // New BG content (page behind the promoted split) goes into the old FG slot (it becomes BG after swap).
+    // New BG content goes into the old FG slot (it becomes BG after the swap).
     const setNewBgSlotId = isFgA ? setSlotASplitId : setSlotBSplitId;
 
     if (!currentBgId) return;
@@ -126,21 +129,16 @@ export function createMobileSwipeLayout(
         splitManager.removeSplit(currentFgId);
       }
 
-      // Promote BG → FG
-      splitManager.setBackground(currentBgId, false);
-
       const newBgHandle = newBgContent
         ? splitManager.createNewSplit({
             content: newBgContent,
             initialHistory: newBgInitialHistory,
             activate: false,
             referredFrom: null,
-            isBackground: true,
           })
         : undefined;
 
       setNewBgSlotId(newBgHandle?.id);
-
       toggleFgSlot();
     });
   }
@@ -163,7 +161,6 @@ export function createMobileSwipeLayout(
     slotBSplitId,
     fgIsSlotA,
     canGoBack,
-    navigateForward,
     completeSwipeBack,
     setAnimatedTrigger,
     swipeBack,
