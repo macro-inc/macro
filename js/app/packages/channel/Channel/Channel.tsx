@@ -236,7 +236,12 @@ export function Channel(props: ChannelProps) {
             documentId: props.channelId,
             documentName: channelName() ?? '',
             blockName: 'channel',
-            blockParams: { channel_message_id: ctx.message.id },
+            blockParams: {
+              channel_message_id: ctx.message.id,
+              ...(ctx.message.thread_id && {
+                channel_thread_id: ctx.message.thread_id,
+              }),
+            },
           }),
         },
       });
