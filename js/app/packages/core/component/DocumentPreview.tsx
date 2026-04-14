@@ -48,7 +48,17 @@ import { globalSplitManager } from 'app/signal/splitLayout';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { isErr } from '@core/util/maybeResult';
 import type { Component, JSX } from 'solid-js';
-import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
@@ -270,7 +280,11 @@ function UserInfo(props: { userId: string }) {
 /**
  * Popup preview component for document references
  */
-function ImageCoverStrip(props: { documentId: string; fileType?: string; class?: string }) {
+function ImageCoverStrip(props: {
+  documentId: string;
+  fileType?: string;
+  class?: string;
+}) {
   const query = useBinaryDocumentQuery(() => props.documentId);
 
   // Captured once at mount: true means the spinner was shown and we should fade in.
@@ -290,7 +304,9 @@ function ImageCoverStrip(props: { documentId: string; fileType?: string; class?:
     fetchBinary(presignedUrl, 'blob').then((result) => {
       if (isErr(result)) return;
       const [, blob] = result;
-      objectUrl = URL.createObjectURL(new Blob([blob], { type: 'image/svg+xml' }));
+      objectUrl = URL.createObjectURL(
+        new Blob([blob], { type: 'image/svg+xml' })
+      );
       setSvgObjectUrl(objectUrl);
     });
 

@@ -223,7 +223,8 @@ export async function upload(
       presignedUrl,
       buffer,
       sha,
-      type: (contentType || (fileType && MIME_TYPE_BY_FILE_TYPE[fileType])) as MimeType,
+      type: (contentType ||
+        (fileType && MIME_TYPE_BY_FILE_TYPE[fileType])) as MimeType,
     }))
   ) {
     console.error('failed to upload', documentId, 'removing...');
