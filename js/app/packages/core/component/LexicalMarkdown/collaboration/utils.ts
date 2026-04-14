@@ -88,20 +88,12 @@ export async function createMarkdownStateFromContent(
   });
 
   if (content) {
-    console.log(
-      '[createMarkdownStateFromContent] input markdown:',
-      JSON.stringify(content)
-    );
     setEditorStateFromMarkdown(ephemeralLexicalWrapper.editor, content);
   } else {
     initializeEditorEmpty(ephemeralLexicalWrapper.editor);
   }
 
   const serialized = ephemeralLexicalWrapper.editor.getEditorState().toJSON();
-  console.log(
-    '[createMarkdownStateFromContent] output serialized state:',
-    JSON.stringify(serialized)
-  );
 
   return serialized;
 }

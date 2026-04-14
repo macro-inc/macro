@@ -416,11 +416,6 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
 
-    console.log(
-      '[ComposeTask] outgoing markdown content:',
-      JSON.stringify(taskContent)
-    );
-
     if (!createMore()) {
       // Snapshot the draft locally, then clear localStorage so a new dialog
       // opened while this creation is in flight starts blank.

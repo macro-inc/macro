@@ -29,18 +29,29 @@ export const I_VIDEO: ElementTransformer = {
   replace: (parent: ElementNode, _, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
-      if (!data.url) throw new Error('Missing url field');
+      if (typeof data.url !== 'string' || !data.url) {
+        throw new Error('Missing or invalid url field');
+      }
+
+      const constrainedWidth =
+        data.constrainedWidth != null
+          ? Number(data.constrainedWidth) || undefined
+          : undefined;
+      const constrainedHeight =
+        data.constrainedHeight != null
+          ? Number(data.constrainedHeight) || undefined
+          : undefined;
 
       const videoNode = $createVideoNode({
-        srcType: data.srcType || 'url',
+        srcType: String(data.srcType || 'url'),
         url: data.url,
-        id: data.id || '',
-        width: data.width || 0,
-        height: data.height || 0,
-        scale: data.scale || 1,
-        controls: data.controls ?? true,
-        constrainedWidth: data.constrainedWidth ?? undefined,
-        constrainedHeight: data.constrainedHeight ?? undefined,
+        id: String(data.id || ''),
+        width: Number(data.width) || 0,
+        height: Number(data.height) || 0,
+        scale: Number(data.scale) || 1,
+        controls: typeof data.controls === 'boolean' ? data.controls : true,
+        constrainedWidth,
+        constrainedHeight,
       });
       parent.append(videoNode);
     } catch (e) {
