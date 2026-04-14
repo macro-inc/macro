@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"UserHistory\" (\"userId\", \"itemId\", \"itemType\", \"createdAt\", \"updatedAt\")\n        SELECT u.user_id, u.item_id, 'document', NOW(), NOW()\n        FROM UNNEST($1::text[], $2::text[]) AS u(item_id, user_id)\n        ON CONFLICT (\"userId\", \"itemId\", \"itemType\") DO UPDATE\n        SET \"updatedAt\" = NOW();\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1ee4ffd924167f7e5cda2be1ac66506c341547cd49c76e365129d91650474605"
+}

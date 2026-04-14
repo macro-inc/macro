@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE \"Experiment\" SET active = false AND ended_at = NOW() WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5553458fc15f58a3a981b54210e10ebf8de2788f357c3af3932a6516c235271e"
+}

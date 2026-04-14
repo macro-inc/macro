@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"document_email\" (document_id, email_attachment_id)\n            VALUES ($1, $2) \n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "95dda7d94d399b451c4ba4a78ed6809895c255a103ca296451cbfe6c99833e8f"
+}

@@ -94,14 +94,16 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
-        queries::insert_user_item_access::insert_user_item_access(
+        entity_access_db_utils::insert_entity_access_row(
             &mut tx,
-            user_id.copied(),
             &macro_uuid::string_to_uuid(&chat_id).unwrap(),
-            AccessLevel::Owner,
+            entity_access_db_utils::EntityType::Chat,
+            user_id.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
         )
         .await
-        .map_err(to_chat_err)?;
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "create_chat transaction error");
@@ -193,14 +195,16 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
-        queries::insert_user_item_access::insert_user_item_access(
+        entity_access_db_utils::insert_entity_access_row(
             &mut tx,
-            user_id.copied(),
             &macro_uuid::string_to_uuid(&chat_id).unwrap(),
-            AccessLevel::Owner,
+            entity_access_db_utils::EntityType::Chat,
+            user_id.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
         )
         .await
-        .map_err(to_chat_err)?;
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id)
             .await
