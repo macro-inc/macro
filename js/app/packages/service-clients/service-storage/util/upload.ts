@@ -11,18 +11,8 @@ import { filenameWithoutExtension } from '@service-storage/util/filename';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { storageWS } from '@service-storage/websocket';
 import { createUploadToast, toast } from 'core/component/Toast/Toast';
+import { FileTypeMap } from '../fileTypeMap';
 import { uploadDocx } from './uploadDocx';
-
-// Fallback MIME types for file types where the server may not return contentType
-// (e.g. older backend versions). Mirrors the mapping in block-image/definition.ts.
-const MIME_TYPE_BY_FILE_TYPE: Partial<Record<string, MimeType>> = {
-  svg: 'image/svg+xml',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-};
 
 const dismissToast = (toastId: number | null) => {
   if (toastId !== null) toaster.dismiss(toastId);
@@ -218,13 +208,21 @@ export async function upload(
     },
   ] = newfile;
 
+  const fallbackMime = fileType
+    ? (FileTypeMap[fileType as keyof typeof FileTypeMap]?.mime as
+        | MimeType
+        | undefined)
+    : undefined;
+  const resolvedContentType = (contentType ||
+    fallbackMime ||
+    'application/octet-stream') as MimeType;
+
   if (
     !(await uploadWithPresignedUrl({
       presignedUrl,
       buffer,
       sha,
-      type: (contentType ||
-        (fileType && MIME_TYPE_BY_FILE_TYPE[fileType])) as MimeType,
+      type: resolvedContentType,
     }))
   ) {
     console.error('failed to upload', documentId, 'removing...');

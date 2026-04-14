@@ -300,25 +300,28 @@ function ImageCoverStrip(props: {
     const presignedUrl = query.data;
     if (!presignedUrl || props.fileType !== 'svg') return;
 
+    const controller = new AbortController();
     let objectUrl: string | undefined;
-    fetchBinary(presignedUrl, 'blob').then((result) => {
-      if (isErr(result)) return;
-      const [, blob] = result;
-      objectUrl = URL.createObjectURL(
-        new Blob([blob], { type: 'image/svg+xml' })
-      );
-      setSvgObjectUrl(objectUrl);
-    });
+    fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
+      (result) => {
+        if (controller.signal.aborted || isErr(result)) return;
+        const [, blob] = result;
+        objectUrl = URL.createObjectURL(
+          new Blob([blob], { type: 'image/svg+xml' })
+        );
+        setSvgObjectUrl(objectUrl);
+      }
+    );
 
     onCleanup(() => {
+      controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       setSvgObjectUrl(undefined);
     });
   });
 
-  const displayUrl = createMemo(() =>
-    props.fileType === 'svg' ? svgObjectUrl() : query.data
-  );
+  const displayUrl = () =>
+    props.fileType === 'svg' ? svgObjectUrl() : query.data;
 
   return (
     <div
