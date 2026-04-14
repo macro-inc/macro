@@ -5,6 +5,27 @@ import {
 } from '@app/lib/analytics/providers';
 import { PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
+import { getPlatform } from '@core/util/platform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+
+/**
+ * Resolves the user's device context for analytics enrichment.
+ *
+ * `getPlatform()` reads the build-time `VITE_PLATFORM` env var:
+ *   - Tauri iOS/Android builds → 'ios' | 'android' → 'mobile-app'
+ *   - Tauri desktop build → 'desktop' → 'desktop-app'
+ *   - Web build → 'web' (used by both desktop and mobile browsers)
+ *
+ * Desktop and mobile browsers share the same web build, so we use
+ * `isTouchDevice()` (checks `pointer: coarse` media query) to distinguish
+ * a phone/tablet browser ('mobile-web') from a desktop browser ('desktop-web').
+ */
+function getDeviceType(): 'desktop-app' | 'desktop-web' | 'mobile-web' | 'mobile-app' {
+  const platform = getPlatform();
+  if (platform === 'ios' || platform === 'android') return 'mobile-app';
+  if (platform === 'desktop') return 'desktop-app';
+  return isTouchDevice() ? 'mobile-web' : 'desktop-web';
+}
 
 export type AnalyticsProvider = 'ga' | 'meta-pixel' | 'posthog';
 
@@ -73,16 +94,18 @@ export const createAnalytics = () => {
   ) => {
     if (disabled) return;
 
+    const enriched = { device: getDeviceType(), ...data };
+
     try {
       match(provider)
         .with('ga', () => {
-          gtag('event', event, data);
+          gtag('event', event, enriched);
         })
         .with('meta-pixel', () => {
-          fbq('track', event, data ?? {});
+          fbq('track', event, enriched);
         })
         .with('posthog', () => {
-          posthog.capture(event, data);
+          posthog.capture(event, enriched);
         })
         .exhaustive();
     } catch (e) {
@@ -140,19 +163,23 @@ export const createAnalytics = () => {
 
     const pagePath = opts?.path ?? window.location.pathname;
     const pageLocation = opts?.location ?? window.location.href;
+    const device = getDeviceType();
 
     try {
       gtag('event', 'page_view', {
+        device,
         page_title: pageTitle,
         page_location: pageLocation,
         page_path: pagePath,
       });
 
       fbq('track', 'PageView', {
+        device,
         content_name: pageTitle,
       });
 
       posthog.capture('$pageview', {
+        device,
         $current_url: pageLocation,
         $pathname: pagePath,
         $title: pageTitle,
