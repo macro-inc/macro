@@ -5310,3 +5310,70 @@ async fn test_dyn_filter_is_email_attachment_false(db: PgPool) -> anyhow::Result
 
     Ok(())
 }
+
+// Test filtering documents by NOT sub_type = task (excludes tasks, includes non-tasks with NULL sub_type)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Result<()> {
+    use document_sub_type::DocumentSubType;
+    use filter_ast::Expr;
+    use item_filters::ast::document::DocumentLiteral;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Manually construct an AST with NOT(sub_type = task)
+    let negated_task_filter = Expr::is_not(Expr::Literal(DocumentLiteral::SubType(
+        DocumentSubType::Task,
+    )));
+
+    let filters = EntityFilterAst {
+        document_filter: Some(std::sync::Arc::new(negated_task_filter)),
+        project_filter: None,
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        properties_filter: None,
+    };
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let mut task_doc_count = 0;
+    let mut non_task_doc_count = 0;
+
+    for item in &items {
+        if let SoupItem::Document(doc) = item {
+            if doc.sub_type.is_some() {
+                task_doc_count += 1;
+            } else {
+                non_task_doc_count += 1;
+            }
+        }
+    }
+
+    // The NOT filter should exclude all task documents
+    assert_eq!(
+        task_doc_count, 0,
+        "Should get 0 task documents with NOT task filter"
+    );
+    // Should return non-task documents (those with NULL sub_type)
+    assert!(
+        non_task_doc_count > 0,
+        "Should get non-task documents (NULL sub_type) with NOT task filter"
+    );
+
+    Ok(())
+}
