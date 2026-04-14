@@ -48,6 +48,7 @@ where
             EntityType::Chat => self.repo.get_chat_access(entity_id, user_id).await,
             EntityType::Project => self.repo.get_project_access(entity_id, user_id).await,
             EntityType::EmailThread => self.repo.get_thread_access(entity_id, user_id).await,
+            EntityType::Call => self.repo.get_call_access(entity_id, user_id).await,
             _ => unreachable!("Only optimized types should call this method"),
         }
     }
@@ -134,17 +135,12 @@ where
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
-            | EntityType::EmailThread => {
+            | EntityType::EmailThread
+            | EntityType::Call => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
-            // Call access is inherited from the call's channel.
-            EntityType::Call => {
-                let channel_uuid = self.resolve_call_channel_id(entity_id).await?;
-                self.get_channel_access(&channel_uuid.to_string(), user_id)
-                    .await
-            }
             // These entity types don't have access checks implemented yet.
             EntityType::Team | EntityType::User => Ok(None),
         }
@@ -196,7 +192,8 @@ where
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
-            | EntityType::EmailThread => {
+            | EntityType::EmailThread
+            | EntityType::Call => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
@@ -211,19 +208,6 @@ where
                 let channel_uuid = Uuid::from_str(entity_id)
                     .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
 
-                match self
-                    .repo
-                    .get_channel_role(&channel_uuid, user_id, user_org_id)
-                    .await?
-                {
-                    ChannelRoleResult::Role(role) => Ok(EntityPermission::ChannelRole { role }),
-                    ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
-                    ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
-                }
-            }
-            EntityType::Call => {
-                // Call permission is the caller's role on the call's channel.
-                let channel_uuid = self.resolve_call_channel_id(entity_id).await?;
                 match self
                     .repo
                     .get_channel_role(&channel_uuid, user_id, user_org_id)

@@ -7,9 +7,12 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
 use entity_access::domain::models::AccessLevel;
+
 use filter_ast::Expr;
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_entity::EntityType;
+use models_entity_access_management::EntityAccessSourceType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::PgPool;
@@ -106,6 +109,36 @@ impl CallRepository for PgCallRepo {
             &share_permission.id,
             &channel_id.to_string(),
             share_permission.channel_share_permissions.as_ref().unwrap()[0].access_level as _,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // owner entity access row
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, $2, $3, $4, $5)              
+            "#,
+            call_id,
+            EntityType::Call.as_ref(),
+            created_by.as_ref(),
+            EntityAccessSourceType::User as _,
+            AccessLevel::Owner as _,
+        )
+        .execute(tx.as_mut())
+        .await?;
+
+        // channel entity access row
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, $2, $3, $4, $5)              
+            "#,
+            call_id,
+            EntityType::Call.as_ref(),
+            &channel_id.to_string(),
+            EntityAccessSourceType::Channel as _,
+            AccessLevel::View as _,
         )
         .execute(tx.as_mut())
         .await?;

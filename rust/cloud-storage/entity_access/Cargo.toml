@@ -51,6 +51,7 @@ sqlx = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
+macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -99,6 +99,21 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_call_access(
+        &self,
+        call_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let call_uuid = call_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn check_user_channel_membership(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
