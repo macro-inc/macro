@@ -157,7 +157,8 @@ export function CommandMenuInner(props: {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      const blockName = itemToBlockName(item.data);
+      const blockName =
+        item.data.type === 'call' ? 'call' : itemToBlockName(item.data);
       if (blockName) {
         openWithSplit(
           { type: blockName, id: item.id },
