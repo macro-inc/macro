@@ -362,7 +362,7 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         // false is equivalent to disabled/no-op.
         filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(false)) => String::new(),
         filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) => {
-            format!("dt.sub_type = '{st}'")
+            format!("(dt.sub_type IS NOT NULL AND dt.sub_type = '{st}')")
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::IsEmailAttachment(true)) => {
             r#"EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#
