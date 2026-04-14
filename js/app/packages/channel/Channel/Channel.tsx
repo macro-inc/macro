@@ -120,7 +120,7 @@ export function Channel(props: ChannelProps) {
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
     initialTargetMessageReplyId: props.targetMessageReplyId,
-    messageKeys: () => messageIndex.keys(),
+    messageKeys: () => messageIndex.keys,
     navigation: threadListNavigation,
     didInitialScroll: () => threadListScrollState()?.didInitialScroll ?? false,
   });
@@ -137,8 +137,8 @@ export function Channel(props: ChannelProps) {
     () => messagesQuery.data as ChannelMessagesData | undefined
   );
 
-  const messages = createMemo(() => messageIndex.items());
-  const messageById = () => messageIndex.byId();
+  const messages = createMemo(() => [...messageIndex.items]);
+  const messageById = () => messageIndex.byId;
 
   const participants = useChannelParticipants(() => props.channelId);
 
@@ -240,7 +240,7 @@ export function Channel(props: ChannelProps) {
   });
 
   const selection = createMessageSelection({
-    keys: () => messageIndex.keys(),
+    keys: () => messageIndex.keys,
   });
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
@@ -332,7 +332,7 @@ export function Channel(props: ChannelProps) {
             >
               <Show when={messages().length > 0}>
                 <ThreadList
-                  keys={() => messageIndex.keys()}
+                  keys={() => messageIndex.keys}
                   initialScrollTarget={threadListInitialScrollTarget()}
                   shift={shift}
                   prepend={threadPaginator.isPrepending}
@@ -345,7 +345,7 @@ export function Channel(props: ChannelProps) {
                     const message = () => messageById().get(item.id);
                     const state = threadManager.getOrCreateThreadState(item.id);
                     const isNewestThread = () =>
-                      item.id === messageIndex.keys().at(-1);
+                      item.id === messageIndex.keys.at(-1);
 
                     return (
                       <Show when={message()}>
