@@ -9,6 +9,7 @@ import { useNavigate } from '@solidjs/router';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createSelector,
@@ -16,6 +17,7 @@ import {
   For,
   on,
   onCleanup,
+  onMount,
   type Setter,
   Show,
   Suspense,
@@ -46,6 +48,10 @@ import { isListViewID } from '@app/constants/list-views';
 import { isMobile } from '@core/mobile/isMobile';
 import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { cn } from '@ui/utils/classname';
+import {
+  createMobileSwipeLayout,
+  type MobileSwipeLayout,
+} from './mobile/createMobileSwipeLayout';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -280,6 +286,11 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const splitManager = createSplitLayout(blockOrchestrator, decodedPairs());
   const [, setTabTitle] = tabTitleSignal;
 
+  // Create the mobile swipe layout once on mobile devices.
+  const mobileSwipeLayout: MobileSwipeLayout | undefined = isMobile()
+    ? createMobileSwipeLayout(splitManager)
+    : undefined;
+
   // Store a ref to each panel by id
   const panelRefs = new Map<SplitId, HTMLDivElement>();
   createEffect(
@@ -302,6 +313,15 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     setTabTitle(splitManager.tabTitle());
   });
 
+  // Wire the mobile swipe layout into the split manager so that any call to
+  // splitManager.openWithSplit() is automatically routed through it on mobile.
+  if (mobileSwipeLayout) {
+    splitManager.setMobileForwardOverride(mobileSwipeLayout.navigateForward);
+    onCleanup(() => {
+      splitManager.setMobileForwardOverride(undefined);
+    });
+  }
+
   // <For> on plain ids for stable referential equality
   const ids = createMemo(() => splits().map(({ id }) => id));
 
@@ -313,31 +333,47 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       <div
         class={cn('size-full p-2 mobile:p-0', { 'pl-0': isSidebarVisible() })}
       >
-        <Resize.Zone
-          direction="horizontal"
-          gutter={4}
-          captureResizeCtx={splitManager.setResizeContext}
-        >
-          <For each={ids()}>
-            {(id, index) => (
-              <Show when={splitManager.getSplit(id)}>
-                {(handle) => (
-                  <Suspense>
-                    <Resize.Panel id={id} minSize={400} index={index()}>
-                      <SplitPanel
-                        split={splits()[index()]!}
-                        handle={handle()}
-                        active={activeSplitSelector(id)}
-                        setPanelRef={(panelRef) => panelRefs.set(id, panelRef)}
-                        index={index()}
-                      />
-                    </Resize.Panel>
-                  </Suspense>
+        <Show
+          when={isMobile() && mobileSwipeLayout}
+          fallback={
+            // Desktop: side-by-side resizable splits.
+            <Resize.Zone
+              direction="horizontal"
+              gutter={4}
+              captureResizeCtx={splitManager.setResizeContext}
+            >
+              <For each={ids()}>
+                {(id, index) => (
+                  <Show when={splitManager.getSplit(id)}>
+                    {(handle) => (
+                      <Suspense>
+                        <Resize.Panel id={id} minSize={400} index={index()}>
+                          <SplitPanel
+                            split={splits()[index()]!}
+                            handle={handle()}
+                            active={activeSplitSelector(id)}
+                            setPanelRef={(panelRef) =>
+                              panelRefs.set(id, panelRef)
+                            }
+                            index={index()}
+                          />
+                        </Resize.Panel>
+                      </Suspense>
+                    )}
+                  </Show>
                 )}
-              </Show>
-            )}
-          </For>
-        </Resize.Zone>
+              </For>
+            </Resize.Zone>
+          }
+        >
+          {/* Mobile: stacked FG/BG layout with swipe-back gesture. */}
+          <MobileSwipeBackContainer
+            splitManager={splitManager}
+            mobileSwipeLayout={mobileSwipeLayout!}
+            splits={splits}
+            panelRefs={panelRefs}
+          />
+        </Show>
       </div>
       <PopoverSplitRenderer
         popovers={splitManager.popovers}
@@ -441,5 +477,200 @@ function SplitPanel(props: SplitPanelProps) {
         </SplitContainer>
       </SplitPanelContext.Provider>
     </SoupContextProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mobile swipe-back stacked layout
+// ---------------------------------------------------------------------------
+
+const SWIPE_EDGE_THRESHOLD = 28; // px from left edge to initiate gesture
+const SWIPE_VELOCITY_THRESHOLD = 0.3; // px/ms — fast flick completes swipe
+const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
+const SWIPE_ANIMATION_MS = 150;
+
+type MobileSwipeBackContainerProps = {
+  splitManager: SplitManager;
+  mobileSwipeLayout: MobileSwipeLayout;
+  splits: Accessor<ReadonlyArray<SplitState>>;
+  panelRefs: Map<SplitId, HTMLDivElement>;
+};
+
+function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
+  const { splitManager, mobileSwipeLayout } = props;
+
+  const [dragOffset, setDragOffset] = createSignal(0);
+  const [isDragging, setIsDragging] = createSignal(false);
+  const [isAnimatingOut, setIsAnimatingOut] = createSignal(false);
+
+  let startX = 0;
+  let startTime = 0;
+
+  function animateComplete(onDone: () => void) {
+    setIsAnimatingOut(true);
+    setDragOffset(window.innerWidth);
+    const t = setTimeout(() => {
+      batch(() => {
+        setIsAnimatingOut(false);
+        setDragOffset(0);
+        onDone();
+      });
+    }, SWIPE_ANIMATION_MS);
+    onCleanup(() => clearTimeout(t));
+  }
+
+  function animateSnapBack() {
+    setIsAnimatingOut(true);
+    setDragOffset(0);
+    const t = setTimeout(() => setIsAnimatingOut(false), SWIPE_ANIMATION_MS);
+    onCleanup(() => clearTimeout(t));
+  }
+
+  function triggerAnimatedSwipeBack() {
+    if (!mobileSwipeLayout.canGoBack()) return;
+    animateComplete(() => mobileSwipeLayout.completeSwipeBack());
+  }
+
+  // Register the animated trigger so the back button can invoke it.
+  onMount(() => mobileSwipeLayout.setAnimatedTrigger(triggerAnimatedSwipeBack));
+  onCleanup(() => mobileSwipeLayout.setAnimatedTrigger(undefined));
+
+  function handleTouchStart(e: TouchEvent) {
+    if (!mobileSwipeLayout.canGoBack()) return;
+    const touch = e.touches[0];
+    if (!touch || touch.clientX > SWIPE_EDGE_THRESHOLD) return;
+    startX = touch.clientX;
+    startTime = Date.now();
+    setIsDragging(true);
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    if (!isDragging()) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = Math.max(0, touch.clientX - startX);
+    setDragOffset(dx);
+  }
+
+  function handleTouchEnd() {
+    if (!isDragging()) return;
+    setIsDragging(false);
+    const dx = dragOffset();
+    const elapsed = Date.now() - startTime;
+    const velocity = elapsed > 0 ? dx / elapsed : 0;
+    const threshold = window.innerWidth * SWIPE_DISTANCE_THRESHOLD;
+    if (dx > threshold || velocity > SWIPE_VELOCITY_THRESHOLD) {
+      animateComplete(() => mobileSwipeLayout.completeSwipeBack());
+    } else {
+      animateSnapBack();
+    }
+  }
+
+  const slotAData = createMemo(() => {
+    const id = mobileSwipeLayout.slotASplitId();
+    if (!id) return undefined;
+    const split = props.splits().find((s) => s.id === id);
+    const rawHandle = splitManager.getSplit(id);
+    if (!split || !rawHandle) return undefined;
+    const handle: SplitHandle = {
+      ...rawHandle,
+      goBack: () => mobileSwipeLayout.swipeBack(),
+      canGoBack: () => mobileSwipeLayout.canGoBack(),
+    };
+    return { split, handle };
+  });
+
+  const slotBData = createMemo(() => {
+    const id = mobileSwipeLayout.slotBSplitId();
+    if (!id) return undefined;
+    const split = props.splits().find((s) => s.id === id);
+    const rawHandle = splitManager.getSplit(id);
+    if (!split || !rawHandle) return undefined;
+    const handle: SplitHandle = {
+      ...rawHandle,
+      goBack: () => mobileSwipeLayout.swipeBack(),
+      canGoBack: () => mobileSwipeLayout.canGoBack(),
+    };
+    return { split, handle };
+  });
+
+  // FG translation style — applied only to the currently-active FG slot div.
+  const fgStyle = () => ({
+    transform: `translateX(${dragOffset()}px)`,
+    transition: isDragging()
+      ? 'none'
+      : isAnimatingOut()
+        ? `transform ${SWIPE_ANIMATION_MS}ms ease-out`
+        : 'none',
+    'will-change': 'transform',
+  });
+
+  return (
+    <div
+      class="relative size-full overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+    >
+      <Show when={slotAData()}>
+        {(a) => (
+          <div
+            class={cn('absolute inset-0', {
+              'z-10': mobileSwipeLayout.fgIsSlotA(),
+              '-z-100 pointer-events-none': !mobileSwipeLayout.fgIsSlotA(),
+            })}
+            style={mobileSwipeLayout.fgIsSlotA() ? fgStyle() : undefined}
+          >
+            {/*
+             * Key by content id so that SplitPanel (and its soup state) remounts when the slot's content changes, needed for dock / soup-view navigation.
+             */}
+            <Show when={a().split.content.id} keyed>
+              {(_contentId) => (
+                <Suspense>
+                  <SplitPanel
+                    split={a().split}
+                    handle={a().handle}
+                    active={mobileSwipeLayout.fgIsSlotA()}
+                    setPanelRef={(ref) =>
+                      props.panelRefs.set(a().split.id, ref)
+                    }
+                    index={0}
+                  />
+                </Suspense>
+              )}
+            </Show>
+          </div>
+        )}
+      </Show>
+
+      <Show when={slotBData()}>
+        {(b) => (
+          <div
+            class={cn('absolute inset-0', {
+              'z-10': !mobileSwipeLayout.fgIsSlotA(),
+              '-z-100 pointer-events-none': mobileSwipeLayout.fgIsSlotA(),
+            })}
+            style={!mobileSwipeLayout.fgIsSlotA() ? fgStyle() : undefined}
+          >
+            <Show when={b().split.content.id} keyed>
+              {(_contentId) => (
+                <Suspense>
+                  <SplitPanel
+                    split={b().split}
+                    handle={b().handle}
+                    active={!mobileSwipeLayout.fgIsSlotA()}
+                    setPanelRef={(ref) =>
+                      props.panelRefs.set(b().split.id, ref)
+                    }
+                    index={1}
+                  />
+                </Suspense>
+              )}
+            </Show>
+          </div>
+        )}
+      </Show>
+    </div>
   );
 }

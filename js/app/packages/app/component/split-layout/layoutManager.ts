@@ -117,6 +117,8 @@ export type SplitState = {
   content: SplitContent; // mirror of current history entry
   mount: SplitMount; // contains pinned element
   referredFrom: ReferredFrom;
+  /** When true, this split is the mobile background (previous page). Excluded from URL encoding. */
+  isBackground?: boolean;
 };
 
 export type CreateNewSplitOptions = {
@@ -124,6 +126,15 @@ export type CreateNewSplitOptions = {
   activate?: boolean;
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
+  /** When true, marks this split as a mobile background split (excluded from URL). */
+  isBackground?: boolean;
+  /**
+   * Optional prior navigation entries to pre-populate this split's history stack.
+   * The `content` field is appended as the final (current) entry.
+   * Used by the mobile swipe-back system to give BG splits an accurate history so
+   * `previousContent()` is correct if this split is ever promoted to foreground.
+   */
+  initialHistory?: SplitContent[];
 };
 
 export type OpenWithSplitOptions = {
@@ -136,6 +147,16 @@ export type OpenWithSplitOptions = {
   preferNewSplit?: boolean;
   handle?: SplitHandle;
 };
+
+/**
+ * Callback injected by the mobile swipe layout to intercept forward navigation.
+ * When set, `openWithSplit` delegates to this instead of its normal split logic,
+ * so the previous page stays mounted as a background split for swipe-back.
+ */
+export type MobileForwardOverride = (
+  content: SplitContent,
+  options?: { referredFrom?: ReferredFrom }
+) => void;
 
 function keyOfSplitState(s: SplitState): SplitKey {
   return `${s.content.type}:${s.content.id}`;
@@ -222,7 +243,7 @@ export type SplitManager = {
   openWithSplit: (
     content: SplitContent,
     options?: OpenWithSplitOptions
-  ) => SplitHandle;
+  ) => SplitHandle | undefined;
 
   /** Set a split as active by its split id  */
   activateSplit: (id: SplitId) => void;
@@ -284,6 +305,16 @@ export type SplitManager = {
   /** Close all popover splits */
   closeAllPopovers: () => void;
 
+  /** Set or clear the background flag on a split (used by mobile swipe-back). */
+  setBackground: (id: SplitId, value: boolean) => void;
+
+  /**
+   * Register a mobile forward-navigation override.
+   * When set, `openWithSplit` calls this instead of its normal split logic,
+   * keeping the old page alive as a background split for swipe-back.
+   */
+  setMobileForwardOverride: (fn: MobileForwardOverride | undefined) => void;
+
   /** Get reactive accessor to popovers map */
   popovers: () => Map<
     string,
@@ -327,6 +358,12 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   goBack: () => void;
   close: () => void;
   reset: () => void;
+  /** Returns the content item one step back in this split's history, without mutating. */
+  previousContent: () => SplitContent | null;
+  /**
+   * Returns all history items up to and including the current one.
+   */
+  history: () => SplitContent[];
   id: SplitId;
   /** Component metadata store (only available for component splits) */
   meta: () => Store<TMeta> | undefined;
@@ -394,9 +431,9 @@ function isDuplicateSplit(
   splits: SplitState[],
   content: SplitContent
 ): boolean {
-  return splits.some((split) =>
-    sameNonComponentIdentity(split.content, content)
-  );
+  return splits
+    .filter((s) => !s.isBackground)
+    .some((split) => sameNonComponentIdentity(split.content, content));
 }
 
 export function createSplitLayout(
@@ -432,6 +469,9 @@ export function createSplitLayout(
 
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
 
+  // Injected by the mobile swipe layout to intercept forward navigation.
+  let mobileForwardOverride: MobileForwardOverride | undefined;
+
   const canAppendSplit = createMemo(
     () => resizeContext()?.canFit({ minSize: 400 }) ?? true
   );
@@ -460,19 +500,38 @@ export function createSplitLayout(
     ]);
   }
 
+  const findSplitById = (id: SplitId) => state.splits.find((s) => s.id === id);
+  const splitIndexById = (id: SplitId) =>
+    state.splits.findIndex((s) => s.id === id);
+
   function buildSplit(options: {
     initialContent: SplitContent;
     isDefault?: boolean;
     referredFrom?: ReferredFrom;
+    isBackground?: boolean;
+    initialHistory?: SplitContent[];
   }): SplitState {
-    const { initialContent, isDefault, referredFrom } = options;
+    const {
+      initialContent,
+      isDefault,
+      referredFrom,
+      isBackground,
+      initialHistory,
+    } = options;
     const id = newSplitId();
     const history = createHistory<SplitContent>();
     const content = attachAliasContext(initialContent);
 
-    // If enabled, we always want to be able to go back to the default split
-    if (!isDefault && ENABLE_DEFAULT_ALWAYS_IN_HISTORY) {
-      history.push(DEFAULT_SPLIT_CONTENT);
+    if (initialHistory && initialHistory.length > 0) {
+      // Pre-populate prior navigation entries so previousContent() is accurate.
+      for (const item of initialHistory) {
+        history.push(attachAliasContext(item));
+      }
+    } else {
+      // If enabled, we always want to be able to go back to the default split
+      if (!isDefault && ENABLE_DEFAULT_ALWAYS_IN_HISTORY) {
+        history.push(DEFAULT_SPLIT_CONTENT);
+      }
     }
 
     history.push(content);
@@ -484,6 +543,7 @@ export function createSplitLayout(
       content,
       mount,
       referredFrom: referredFrom ?? null,
+      isBackground: isBackground ?? false,
     };
   }
 
@@ -496,7 +556,7 @@ export function createSplitLayout(
     const content = attachAliasContext(next);
     if (isDuplicateSplit(otherSplits, next)) return;
 
-    const splitIndex = state.splits.findIndex((s) => s.id === split.id);
+    const splitIndex = splitIndexById(split.id);
     if (splitIndex >= 0 && !sameIdentity(split.content, content)) {
       setSplitNamesById(
         produce((map) => {
@@ -556,7 +616,7 @@ export function createSplitLayout(
   }
 
   function back(id: SplitId) {
-    const i = state.splits.findIndex((s) => s.id === id);
+    const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const split = state.splits[i];
@@ -569,7 +629,7 @@ export function createSplitLayout(
   }
 
   function forward(id: SplitId) {
-    const i = state.splits.findIndex((s) => s.id === id);
+    const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const split = state.splits[i];
@@ -585,7 +645,7 @@ export function createSplitLayout(
     id: SplitId,
     predicate: (content: SplitContent) => boolean
   ) {
-    const i = state.splits.findIndex((s) => s.id === id);
+    const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const split = state.splits[i];
@@ -607,7 +667,7 @@ export function createSplitLayout(
     }
   ) {
     const { next, mergeHistory, referredFrom } = options;
-    const i = state.splits.findIndex((s) => s.id === id);
+    const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const content = attachAliasContext(next);
@@ -623,7 +683,7 @@ export function createSplitLayout(
   }
 
   function reset(id: SplitId) {
-    const i = state.splits.findIndex((s) => s.id === id);
+    const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const split = state.splits[i];
@@ -633,6 +693,7 @@ export function createSplitLayout(
 
   const getUrlSegments = () => {
     return state.splits
+      .filter((s) => !s.isBackground)
       .flatMap((s) => [getAliasOrType(s.content), s.content.id])
       .map(String);
   };
@@ -658,7 +719,7 @@ export function createSplitLayout(
     if (state.splits.length <= 1 && !isSettingsPanelOpen()) {
       return;
     }
-    const split = state.splits.find((s) => s.id === id);
+    const split = findSplitById(id);
     if (!split) {
       console.error(`Split with id ${id} not found`);
       return;
@@ -689,10 +750,10 @@ export function createSplitLayout(
   }
 
   const getSplit = (id: SplitId): SplitHandle | undefined => {
-    const s = () => state.splits.find((x) => x.id === id);
+    const s = () => findSplitById(id);
     const currentSplit = s();
     if (!currentSplit) return;
-    const content = () => s()!.content;
+    const content = () => currentSplit.content;
 
     return {
       id: currentSplit.id,
@@ -707,6 +768,17 @@ export function createSplitLayout(
         replace(currentSplit.id, { next, mergeHistory, referredFrom }),
       removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
         removeFromHistory(currentSplit.id, predicate);
+      },
+      previousContent: () => {
+        const s = findSplitById(currentSplit.id);
+        if (!s) return null;
+        const idx = s.history.index;
+        return idx > 0 ? (s.history.items[idx - 1] ?? null) : null;
+      },
+      history: () => {
+        const s = findSplitById(currentSplit.id);
+        if (!s) return [];
+        return s.history.items.slice(0, s.history.index + 1) as SplitContent[];
       },
       close: () => {
         // If there's only one split and it's the default split, then no-op
@@ -769,7 +841,14 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const { content, activate, referredFrom, allowDuplicate } = options;
+    const {
+      content,
+      activate,
+      referredFrom,
+      allowDuplicate,
+      isBackground,
+      initialHistory,
+    } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
@@ -783,7 +862,13 @@ export function createSplitLayout(
       return getSplit(existingSplit!.id)!;
     }
 
-    const split = buildSplit({ initialContent, isDefault, referredFrom });
+    const split = buildSplit({
+      initialContent,
+      isDefault,
+      referredFrom,
+      isBackground,
+      initialHistory,
+    });
 
     setState('splits', (previousSplits) => [...previousSplits, split]);
 
@@ -803,7 +888,7 @@ export function createSplitLayout(
   }
 
   function removeSplit(id: SplitId, createNewOnEmpty: boolean = true) {
-    const idx = state.splits.findIndex((s) => s.id === id);
+    const idx = splitIndexById(id);
     if (idx < 0) return;
 
     contentChangeListeners.delete(id);
@@ -835,7 +920,7 @@ export function createSplitLayout(
     id: string
   ): SplitHandle | undefined {
     const match = state.splits.find(
-      (s) => s.content.type === type && s.content.id === id
+      (s) => s.content.type === type && s.content.id === id && !s.isBackground
     );
     if (!match) return;
     return getSplit(match.id);
@@ -983,7 +1068,14 @@ export function createSplitLayout(
   function openWithSplit(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
-  ): SplitHandle {
+  ): SplitHandle | undefined {
+    // Mobile: delegate forward navigation to the swipe layout so the previous
+    // page stays mounted as a background split for swipe-back.
+    if (mobileForwardOverride && !options.mergeHistory) {
+      mobileForwardOverride(content, { referredFrom: options.referredFrom });
+      return undefined;
+    }
+
     const existingSplit = getSplitByContent(content.type, content.id);
 
     if (!options.allowDuplicate && existingSplit) {
@@ -1081,5 +1173,13 @@ export function createSplitLayout(
     closeAllPopovers,
     popovers: () => state.popovers,
     canAppendSplit,
+    setBackground: (id: SplitId, value: boolean) => {
+      setState('splits', (splits) =>
+        splits.map((s) => (s.id === id ? { ...s, isBackground: value } : s))
+      );
+    },
+    setMobileForwardOverride: (fn: MobileForwardOverride | undefined) => {
+      mobileForwardOverride = fn;
+    },
   };
 }
