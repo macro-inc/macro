@@ -97,7 +97,7 @@ impl ChatRepo for PgChatRepo {
         queries::insert_user_item_access::insert_user_item_access(
             &mut tx,
             user_id.copied(),
-            &chat_id,
+            &macro_uuid::string_to_uuid(&chat_id).unwrap(),
             AccessLevel::Owner,
         )
         .await
@@ -196,7 +196,7 @@ impl ChatRepo for PgChatRepo {
         queries::insert_user_item_access::insert_user_item_access(
             &mut tx,
             user_id.copied(),
-            &chat_id,
+            &macro_uuid::string_to_uuid(&chat_id).unwrap(),
             AccessLevel::Owner,
         )
         .await
