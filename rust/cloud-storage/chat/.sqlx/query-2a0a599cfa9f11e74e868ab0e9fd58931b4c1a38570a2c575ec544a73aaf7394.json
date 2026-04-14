@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"DocumentText\" (\"documentId\", \"content\", \"tokenCount\")\n        SELECT $1, content, \"tokenCount\" FROM \"DocumentText\"\n        WHERE \"documentId\" = $2\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a0a599cfa9f11e74e868ab0e9fd58931b4c1a38570a2c575ec544a73aaf7394"
+}

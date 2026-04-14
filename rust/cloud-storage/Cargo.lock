@@ -1763,6 +1763,7 @@ dependencies = [
  "chrono",
  "connection",
  "entity_access",
+ "entity_access_db_utils",
  "filter_ast",
  "item_filters",
  "livekit-api",
@@ -1774,7 +1775,6 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_user",
- "models_entity_access_management",
  "models_pagination",
  "models_permissions",
  "notification",
@@ -1889,6 +1889,7 @@ dependencies = [
  "axum",
  "chrono",
  "entity_access",
+ "entity_access_db_utils",
  "entity_access_management",
  "http-body-util",
  "macro_db_migrator",
@@ -3299,6 +3300,7 @@ dependencies = [
  "document_sub_type",
  "dotenvy",
  "entity_access",
+ "entity_access_db_utils",
  "entity_access_management",
  "futures",
  "hex",
@@ -3903,6 +3905,23 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "entity_access_db_utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "models_entity_access_management",
+ "models_permissions",
+ "serde",
+ "sqlx",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -6054,6 +6073,7 @@ dependencies = [
  "cached",
  "chrono",
  "document_sub_type",
+ "entity_access_db_utils",
  "futures",
  "macro_user_id",
  "macro_uuid",

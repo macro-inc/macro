@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"OrganizationInvitation\"\n        WHERE email = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "454e1202630627f0f8c9f876f1917d6cfbed8fc192939cc0e5e43b86905a4ca2"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"Thread\"\n            SET \"deletedAt\" = NOW()\n            WHERE id = $1 and \"deletedAt\" IS NULL\n            RETURNING \"deletedAt\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "deletedAt",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c922ac06eee1109006d3bf676ab8b8341b10cfee0b725409138cfdde038712aa"
+}

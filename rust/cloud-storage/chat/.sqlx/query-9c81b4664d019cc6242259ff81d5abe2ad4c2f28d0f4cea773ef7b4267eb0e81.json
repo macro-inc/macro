@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE macro_user\n        SET has_trialed = $2\n        WHERE email = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c81b4664d019cc6242259ff81d5abe2ad4c2f28d0f4cea773ef7b4267eb0e81"
+}
