@@ -827,7 +827,7 @@ impl CallRepository for PgCallRepo {
             .iter()
             .filter(|(_, (name, ct))| {
                 ct == "direct_message"
-                    || (ct == "private" && name.as_ref().map_or(true, |n| n.trim().is_empty()))
+                    || (ct == "private" && name.as_ref().is_none_or(|n| n.trim().is_empty()))
             })
             .map(|(id, _)| *id)
             .collect();
@@ -944,7 +944,7 @@ impl CallRepository for PgCallRepo {
                 && channel_info
                     .name
                     .as_ref()
-                    .map_or(true, |n| n.trim().is_empty()));
+                    .is_none_or(|n| n.trim().is_empty()));
 
         let (participant_ids, name_lookup) = if !needs_participants {
             (Vec::new(), NameLookup::new())
