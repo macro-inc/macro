@@ -98,9 +98,9 @@ export const createAnalytics = () => {
     event: EventName,
     data?: Record<string, unknown>
   ) => {
-    const enriched = { [DEVICE_PROPERTY]: getDeviceType(), ...data };
-
     if (disabled) return;
+
+    const enriched = { ...data, [DEVICE_PROPERTY]: getDeviceType() };
 
     try {
       match(provider)
