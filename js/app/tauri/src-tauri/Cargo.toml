@@ -20,8 +20,10 @@ tauri-build = { version = "2.3.1", features = [] }
 default = []
 
 [dependencies]
+http = "1"
 log = "0.4"
 logger = { path = "../logger" }
+mime_guess = "2"
 rootcause = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

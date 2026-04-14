@@ -28,7 +28,7 @@ export const createAppViteConfig = ({
     const isTauriPlatform = platform !== 'web' || isLegacyTauriBuild;
 
     return {
-      base: command === 'serve' || isTauriPlatform ? '/' : '/app',
+      base: command === 'serve' ? '/' : '/app',
       assetsInclude: ['**/*.glb'],
       css: {
         preprocessorMaxWorkers: true,

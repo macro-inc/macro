@@ -1,4 +1,5 @@
 use logger::Logger;
+use macro_bundle_updater_plugin::BundleRoot;
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
@@ -7,10 +8,13 @@ use rootcause::{Report, report};
 use serde::Serialize;
 #[cfg(target_os = "ios")]
 use std::sync::OnceLock;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
 use tauri::{Manager, Runtime};
+
+mod tauri_protocol;
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -185,7 +189,34 @@ pub fn run() {
             .plugin(tauri_plugin_auth::init());
     }
 
+    // Window origin differs by platform:
+    // macOS/iOS/Linux: tauri://localhost
+    // Windows/Android: https://tauri.localhost (or http://)
+    let window_origin = if cfg!(any(target_os = "windows", target_os = "android")) {
+        "https://tauri.localhost"
+    } else {
+        "tauri://localhost"
+    };
+
     builder
+        .register_asynchronous_uri_scheme_protocol("tauri", {
+            // Build this outside the closure so we only create it once.
+            // We need the AppHandle which isn't available until setup, but
+            // register_asynchronous_uri_scheme_protocol gives us UriSchemeContext.
+            // However, tauri_protocol::get needs AppHandle upfront.
+            // Use a lazy init pattern via the context.
+            let window_origin = window_origin.to_string();
+            let handler: std::sync::OnceLock<tauri::webview::UriSchemeProtocolHandler> =
+                std::sync::OnceLock::new();
+
+            move |ctx, request, responder| {
+                let h = handler.get_or_init(|| {
+                    tauri_protocol::get(ctx.app_handle().clone(), &window_origin)
+                });
+                h(ctx.webview_label(), request, responder);
+            }
+        })
+        .manage(BundleRoot(RwLock::new(None)))
         .manage(HeartbeatState {
             alive: AtomicBool::new(true),
             generation: AtomicU64::new(0),

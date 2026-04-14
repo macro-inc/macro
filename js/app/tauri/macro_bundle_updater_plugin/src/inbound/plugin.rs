@@ -94,9 +94,10 @@ pub fn grant_bundle_update(
 }
 
 #[tauri::command]
-#[tracing::instrument(err, skip(service))]
+#[tracing::instrument(err, skip(service, bundle_root))]
 pub fn perform_update<R: Runtime>(
     service: tauri::State<'_, Mutex<Service>>,
+    bundle_root: tauri::State<'_, crate::BundleRoot>,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<(), String> {
     let Ok(service) = service.lock() else {
@@ -110,9 +111,17 @@ pub fn perform_update<R: Runtime>(
         }
     };
 
-    let Ok(url) = Url::from_file_path(&entrypoint) else {
-        return Err(format!("Failed to construct file URL from {entrypoint:?}"));
-    };
+    // Set the bundle root to the parent of index.html (the unzipped directory)
+    let bundle_dir = entrypoint
+        .parent()
+        .ok_or_else(|| format!("entrypoint {entrypoint:?} has no parent directory"))?
+        .to_path_buf();
+    tracing::info!("Setting bundle root to {bundle_dir:?}");
+    *bundle_root.0.write().map_err(|e| e.to_string())? = Some(bundle_dir);
+
+    let url: Url = "tauri://localhost/app/index.html"
+        .parse()
+        .expect("valid url");
 
     if let Some(webview) = app_handle.webview_windows().values().next() {
         tracing::info!("Bundle update complete, navigating to {url}");
