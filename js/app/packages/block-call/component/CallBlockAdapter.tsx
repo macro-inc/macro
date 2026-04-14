@@ -4,6 +4,9 @@ import { MaybeResultError } from '@core/util/maybeResult';
 import { useCallRecordQuery } from '@queries/call/call';
 import { Match, Show, Switch } from 'solid-js';
 import { CallTranscript } from './CallTranscript';
+import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import { format } from 'date-fns';
+import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
 
 function isUnauthorized(error: Error | null): boolean {
   if (error instanceof MaybeResultError) {
@@ -12,15 +15,65 @@ function isUnauthorized(error: Error | null): boolean {
   return false;
 }
 
+function formatCallDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function formatCallDate(dateStr: string): string {
+  return format(new Date(dateStr), 'MMM d, yyyy h:mm a');
+}
+
+function CallHeader(props: { record: CallRecord }) {
+  return (
+    <div class="px-4 py-3 border-b border-edge shrink-0 flex items-center gap-3">
+      <PhoneCallIcon class="size-5 text-ink-muted shrink-0" />
+      <div class="flex flex-col min-w-0">
+        <h2 class="text-sm font-medium text-ink truncate">
+          {props.record.channelName ?? 'Call'}
+        </h2>
+        <div class="flex items-center gap-2 text-xs text-ink-muted">
+          <Show when={props.record.endedAt}>
+            {(endedAt) => <span>{formatCallDate(endedAt())}</span>}
+          </Show>
+          <Show when={props.record.durationMs}>
+            {(ms) => (
+              <>
+                <span>&middot;</span>
+                <span>{formatCallDuration(ms())}</span>
+              </>
+            )}
+          </Show>
+          <Show when={props.record.isActive}>
+            <span class="text-success font-medium">In progress</span>
+          </Show>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CallBlockAdapter() {
   const callId = useBlockId();
   const callRecord = useCallRecordQuery(() => callId);
 
   return (
     <div class="h-full flex flex-col overflow-hidden">
-      <div class="px-4 py-3 border-b border-edge shrink-0">
-        <h2 class="text-sm font-medium text-ink">Call Recording</h2>
-      </div>
+      <Show
+        when={callRecord.data}
+        fallback={
+          <div class="px-4 py-3 border-b border-edge shrink-0">
+            <h2 class="text-sm font-medium text-ink">Call Recording</h2>
+          </div>
+        }
+      >
+        {(data) => <CallHeader record={data()} />}
+      </Show>
       <div class="flex-1 overflow-y-auto">
         <Switch>
           <Match when={callRecord.isLoading}>
