@@ -10,7 +10,7 @@ import {
   activeSoupViewCounts,
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { batch, createMemo, createSignal, Show } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import {
@@ -49,6 +49,30 @@ function cacheChannelSubFilters(contentId: string, filters: ChannelSubFilters) {
     );
   } catch {
     // best-effort: quota or security errors should not break filter flow
+  }
+}
+
+function getCachedEmailSubFilters(contentId: string): EmailSubFilters {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
+  try {
+    const raw = localStorage.getItem(
+      soupViewCacheKey(contentId, 'email-sub-filters')
+    );
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function cacheEmailSubFilters(contentId: string, filters: EmailSubFilters) {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return;
+  try {
+    localStorage.setItem(
+      soupViewCacheKey(contentId, 'email-sub-filters'),
+      JSON.stringify(filters)
+    );
+  } catch {
+    // best-effort
   }
 }
 
@@ -125,13 +149,15 @@ export const SearchIndexFilter = () => {
       : [];
   });
 
-  const isChannelsActive = () => selectedIndex() === 'channels';
+  const isChannelsActive = () =>
+    activeIndex().some((o) => o.value === 'channels');
+  const isEmailActive = () => activeIndex().some((o) => o.value === 'email');
 
   createEffect(() => {
     if (!isEmailActive()) return;
-    const ef = queryFilters().email_filters;
-    // Use null as sentinel for "explicitly cleared" since undefined is dropped by JSON.stringify
-    cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
+    // const ef = queryFilters().email_filters;
+    // // Use null as sentinel for "explicitly cleared" since undefined is dropped by JSON.stringify
+    // cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
   });
 
   const handleChange = (selected: Option[]) => {
@@ -166,13 +192,13 @@ export const SearchIndexFilter = () => {
               'importance' in cached
                 ? (cached.importance ?? undefined)
                 : opt.queryFilters.email_filters?.importance;
-            setQueryFilters({
-              ...opt.queryFilters,
-              email_filters: {
-                ...opt.queryFilters.email_filters,
-                importance,
-              },
-            });
+            // setQueryFilters({
+            //   ...opt.queryFilters,
+            //   email_filters: {
+            //     ...opt.queryFilters.email_filters,
+            //     importance,
+            //   },
+            // });
           } else {
             filterAst.set(opt.ast);
           }

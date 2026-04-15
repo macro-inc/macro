@@ -76,7 +76,7 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return false;
 
-    const expectedIds = new Set(preset.clientFilters);
+    const expectedIds = new Set(preset.clientFilters.or);
 
     const currentIds = new Set(soup.filters.activeIds() as FilterID[]);
 
@@ -121,7 +121,7 @@ export function useFilterRefinements() {
    */
   const activeFiltersList = createMemo((): ActiveFilter[] => {
     const preset = currentPreset();
-    const presetFilterIds = new Set<string>(preset?.clientFilters ?? []);
+    const presetFilterIds = new Set<string>(preset?.clientFilters.or ?? []);
 
     const filters: ActiveFilter[] = [];
     for (const category of viewCategories()) {
