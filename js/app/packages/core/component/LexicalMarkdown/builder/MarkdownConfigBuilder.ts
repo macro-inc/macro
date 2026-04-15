@@ -120,6 +120,11 @@ export class EditorConfigBuilder implements EditorBuilder {
     return this;
   }
 
+  withDraggableBlocks(): this {
+    this.state.draggableBlocks = true;
+    return this;
+  }
+
   singleLine(): this {
     this.state.singleLine = true;
     return this;

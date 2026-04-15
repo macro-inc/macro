@@ -5,6 +5,7 @@ import type { Store } from 'solid-js/store';
 import type { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import type {
   createAccessoryStore,
+  createDraggableBlockStore,
   createDragInsertStore,
   ItemMention,
   PluginManager,
@@ -127,6 +128,8 @@ export interface EditorConfig {
   actions: ActionsOptions | false;
   /** When true, decorator components skip backend fetches (e.g. preview API). */
   skipPreviewFetch: boolean;
+  /** Enable drag-to-rearrange handles on top-level blocks. */
+  draggableBlocks?: boolean;
 }
 
 /** @internal consumed by MarkdownShell; do not access directly */
@@ -143,6 +146,9 @@ export interface EditorInternals {
   emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined;
   dragInsertStore: ReturnType<typeof createDragInsertStore>[0] | undefined;
+  draggableBlockStore:
+    | ReturnType<typeof createDraggableBlockStore>[0]
+    | undefined;
   fileDropConfig: MediaDropOptions | undefined;
 }
 

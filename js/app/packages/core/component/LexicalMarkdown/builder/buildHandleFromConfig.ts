@@ -3,7 +3,9 @@ import { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import {
   codePlugin,
   createAccessoryStore,
+  createDraggableBlockStore,
   createDragInsertStore,
+  draggableBlockPlugin,
   dragInsertPlugin,
   emojisPlugin,
   filePastePlugin,
@@ -174,6 +176,18 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     plugins.use(dragInsertPlugin({ setState: setDragInsertStore }));
   }
 
+  // Drag-to-rearrange blocks (uses root element fallback since no anchor ref
+  // is available during builder-time configuration).
+  const draggableBlockStoreResult = config.draggableBlocks
+    ? createDraggableBlockStore()
+    : undefined;
+  const draggableBlockStore = draggableBlockStoreResult?.[0];
+  const setDraggableBlockStore = draggableBlockStoreResult?.[1];
+
+  if (config.draggableBlocks && setDraggableBlockStore) {
+    plugins.use(draggableBlockPlugin({ setState: setDraggableBlockStore }));
+  }
+
   // File clipboard paste — auto-register when fileDrop is enabled, since
   // dragInsertPlugin blocks DRAG_DROP_PASTE (Lexical's built-in paste-files
   // path) without processing the files. A custom filePaste config from
@@ -272,6 +286,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       emojisMenuOps,
       accessoryStore,
       dragInsertStore,
+      draggableBlockStore,
       fileDropConfig,
     },
   };
