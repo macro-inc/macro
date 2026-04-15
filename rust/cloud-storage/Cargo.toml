@@ -37,7 +37,6 @@ members = [
   "documents",
   "docx_unzip_handler",
   "dynamodb_client",
-  "email_contact_search",
   "email_db_client",
   "email_refresh_handler",
   "email_scheduled_handler",
