@@ -1,10 +1,11 @@
-import { $isListItemNode, $isListNode } from '@lexical/list';
+import { $isListItemNode, $isListNode, type ListItemNode } from '@lexical/list';
 import { $getNearestNodeFromDOMNode } from 'lexical';
 import { Show, useContext } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
+  $collectNestedGroup,
   DRAG_DATA_FORMAT,
   type DraggableBlockState,
 } from '../../plugins/draggable-block/draggableBlockPlugin';
@@ -65,18 +66,41 @@ export function DraggableBlockMenu(props: {
 
     let nodeKey = '';
     let dragImageElem: HTMLElement = elem;
+    // Elements to temporarily hide so the parent list can be used as drag
+    // image showing only the dragged group.
+    let hideElems: HTMLElement[] = [];
+    let listElemForImage: HTMLElement | null = null;
+
     ed.read(() => {
       const node = $getNearestNodeFromDOMNode(elem);
       if (!node) return;
 
-      // First item of a list → drag the entire list (same for sublists).
       if ($isListItemNode(node)) {
         const parent = node.getParent();
+
+        // First item of a list → drag the entire list.
         if (parent && $isListNode(parent) && parent.getFirstChild() === node) {
           nodeKey = parent.getKey();
-          const listElem = ed.getElementByKey(nodeKey);
-          if (listElem) dragImageElem = listElem;
+          const le = ed.getElementByKey(nodeKey);
+          if (le) dragImageElem = le;
           return;
+        }
+
+        // Non-first item with nested children: figure out which sibling
+        // <li>s to temporarily hide so the parent list preview only shows
+        // the dragged group.
+        if (parent && $isListNode(parent)) {
+          const group = $collectNestedGroup(node as ListItemNode);
+          if (group.length > 1) {
+            const groupKeys = new Set(group.map((n) => n.getKey()));
+            for (const child of parent.getChildren()) {
+              if (!groupKeys.has(child.getKey())) {
+                const el = ed.getElementByKey(child.getKey());
+                if (el) hideElems.push(el);
+              }
+            }
+            listElemForImage = ed.getElementByKey(parent.getKey());
+          }
         }
       }
 
@@ -84,14 +108,29 @@ export function DraggableBlockMenu(props: {
     });
     if (!nodeKey) return;
 
-    // Use the block element itself as the drag image.
-    const { transform } = dragImageElem.style;
-    dragImageElem.style.transform = 'translateZ(0)';
     event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setDragImage(dragImageElem, 0, 0);
-    setTimeout(() => {
-      dragImageElem.style.transform = transform;
-    });
+
+    const listImg = listElemForImage;
+    if (hideElems.length > 0 && listImg) {
+      // Temporarily hide non-group siblings so the parent list element
+      // only shows the items being dragged.  The browser captures the
+      // drag image snapshot synchronously, so restoring in setTimeout is
+      // safe.
+      for (const el of hideElems) el.style.display = 'none';
+      listImg.style.transform = 'translateZ(0)';
+      event.dataTransfer.setDragImage(listImg, 0, 0);
+      setTimeout(() => {
+        for (const el of hideElems) el.style.display = '';
+        listImg.style.transform = '';
+      });
+    } else {
+      const { transform } = dragImageElem.style;
+      dragImageElem.style.transform = 'translateZ(0)';
+      event.dataTransfer.setDragImage(dragImageElem, 0, 0);
+      setTimeout(() => {
+        dragImageElem.style.transform = transform;
+      });
+    }
 
     event.dataTransfer.setData(DRAG_DATA_FORMAT, nodeKey);
     props.setState({ isDragging: true });

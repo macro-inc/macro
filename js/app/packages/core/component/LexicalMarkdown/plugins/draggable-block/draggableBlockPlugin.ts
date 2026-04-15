@@ -1,4 +1,9 @@
-import { $createListNode, $isListItemNode, $isListNode } from '@lexical/list';
+import {
+  $createListNode,
+  $isListItemNode,
+  $isListNode,
+  type ListItemNode,
+} from '@lexical/list';
 import { mergeRegister } from '@lexical/utils';
 import {
   $getNearestNodeFromDOMNode,
@@ -158,6 +163,47 @@ function getBlockElement(
   return blockElem;
 }
 
+/**
+ * Collect a ListItemNode together with any immediately following siblings that
+ * represent nested content.  Exported for use by the drag-handle component.
+ *
+ * Handles two nesting strategies:
+ *
+ * 1. **Flat-indent** — siblings with a higher `getIndent()` value.
+ * 2. **Tree-nesting** — a sibling ListItemNode whose only children are
+ *    ListNodes (a "nesting wrapper" with no text of its own).
+ *
+ * Must be called inside an editor.update() context.
+ */
+export function $collectNestedGroup(item: ListItemNode): ListItemNode[] {
+  const indent = item.getIndent();
+  const group: ListItemNode[] = [item];
+  let sibling = item.getNextSibling();
+
+  while (sibling && $isListItemNode(sibling)) {
+    const sib = sibling as ListItemNode;
+
+    // Flat-indent: higher indent means nested under us.
+    if (sib.getIndent() > indent) {
+      group.push(sib);
+      sibling = sib.getNextSibling();
+      continue;
+    }
+
+    // Tree-nesting: a ListItemNode whose only children are ListNodes is a
+    // wrapper that holds nested content for the previous item.
+    const children = sib.getChildren();
+    if (children.length > 0 && children.every((c) => $isListNode(c))) {
+      group.push(sib);
+      sibling = sib.getNextSibling();
+      continue;
+    }
+
+    break;
+  }
+  return group;
+}
+
 // ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
@@ -285,10 +331,21 @@ function registerDraggableBlock(
         draggedParent &&
         draggedParent === targetParent
       ) {
+        const group = $collectNestedGroup(draggedNode as ListItemNode);
+
         if (insertBefore) {
-          targetNode.insertBefore(draggedNode);
+          // Insert the whole group before the target, preserving order.
+          for (const item of group) {
+            targetNode.insertBefore(item);
+          }
         } else {
-          targetNode.insertAfter(draggedNode);
+          // Insert the whole group after the target, preserving order.
+          // Walk backwards so each insertAfter stacks correctly.
+          let anchor = targetNode;
+          for (const item of group) {
+            anchor.insertAfter(item);
+            anchor = item;
+          }
         }
         return;
       }
@@ -301,9 +358,12 @@ function registerDraggableBlock(
         draggedParent &&
         $isListNode(draggedParent)
       ) {
+        const group = $collectNestedGroup(draggedNode as ListItemNode);
         const listType = draggedParent.getListType();
         const newList = $createListNode(listType);
-        newList.append(draggedNode);
+        for (const item of group) {
+          newList.append(item);
+        }
 
         // Resolve the insertion target to a top-level node when the
         // cursor is over a list item in a *different* list.
@@ -329,9 +389,51 @@ function registerDraggableBlock(
         return;
       }
 
+      // ── Non-list block dropped onto a list item → split the list ──
+      if (
+        !$isListItemNode(draggedNode) &&
+        $isListItemNode(targetNode) &&
+        targetParent &&
+        $isListNode(targetParent)
+      ) {
+        const listNode = targetParent;
+        const children = listNode.getChildren();
+        const listType = listNode.getListType();
+
+        // Determine the split index.  When inserting after the target,
+        // include any nesting-wrapper siblings that belong to it.
+        const targetGroup = $collectNestedGroup(targetNode as ListItemNode);
+        const lastInGroup = targetGroup[targetGroup.length - 1];
+        const splitIndex = insertBefore
+          ? targetNode.getIndexWithinParent()
+          : lastInGroup.getIndexWithinParent() + 1;
+
+        const beforeItems = children.slice(0, splitIndex);
+        const afterItems = children.slice(splitIndex);
+
+        // Build the "before" list (items above the split).
+        if (beforeItems.length > 0) {
+          const beforeList = $createListNode(listType);
+          for (const item of beforeItems) beforeList.append(item);
+          listNode.insertBefore(beforeList);
+        }
+
+        // Insert the dragged block at the split point.
+        listNode.insertBefore(draggedNode);
+
+        // Build the "after" list (items below the split).
+        if (afterItems.length > 0) {
+          const afterList = $createListNode(listType);
+          for (const item of afterItems) afterList.append(item);
+          listNode.insertBefore(afterList);
+        }
+
+        // Remove the now-empty original list.
+        listNode.remove();
+        return;
+      }
+
       // ── Default: top-level block move ──────────────────────────────
-      // Resolve list-item targets to their parent list so a whole block
-      // doesn't end up inside another list.
       if (
         $isListItemNode(targetNode) &&
         targetParent &&
