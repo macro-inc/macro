@@ -6,10 +6,6 @@ pub struct Config {
     /// For deployed applications, this is a secret stored in AWS Secrets Manager.
     pub database_url: String,
 
-    /// The connection URL for the read-only Postgres replica.
-    /// For deployed applications, this is a secret stored in AWS Secrets Manager.
-    pub database_url_readonly: String,
-
     /// The port to listen for HTTP requests on.
     pub port: usize,
 
@@ -47,9 +43,6 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let database_url =
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
-
-        let database_url_readonly =
-            std::env::var("DATABASE_URL_READONLY").unwrap_or_else(|_| database_url.clone());
 
         let port: usize = std::env::var("PORT")
             .unwrap_or("8080".to_string())
@@ -94,7 +87,6 @@ impl Config {
 
         Ok(Config {
             database_url,
-            database_url_readonly,
             port,
             search_event_queue,
             queue_max_messages,

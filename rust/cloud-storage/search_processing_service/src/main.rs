@@ -53,20 +53,6 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let database_url_readonly = match config.environment {
-        Environment::Local => config.database_url_readonly.clone(),
-        _ => match secretsmanager_client
-            .get_secret_value(&config.database_url_readonly)
-            .await
-        {
-            Ok(v) => v.to_string(),
-            Err(e) => {
-                tracing::warn!(error=?e, "failed to get readonly db secret, falling back to primary");
-                database_url.clone()
-            }
-        },
-    };
-
     let opensearch_password = match config.environment {
         Environment::Local => config.opensearch_password.clone(),
         _ => secretsmanager_client
@@ -94,22 +80,6 @@ async fn main() -> anyhow::Result<()> {
         max_connections,
         "initialized db connection"
     );
-
-    let readonly_db = match PgPoolOptions::new()
-        .min_connections(min_connections)
-        .max_connections(max_connections)
-        .connect(&database_url_readonly)
-        .await
-    {
-        Ok(pool) => {
-            tracing::trace!("initialized readonly db connection");
-            pool
-        }
-        Err(e) => {
-            tracing::warn!(error=?e, "failed to connect to readonly db, falling back to primary");
-            db.clone()
-        }
-    };
 
     let opensearch_client = OpensearchClient::new(
         config.opensearch_url.clone(),
@@ -157,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
             config.queue_wait_time_seconds,
         );
         let ctx = SearchProcessingContext {
-            db: readonly_db.clone(),
+            db: db.clone(),
             worker: Arc::new(worker.clone()),
             document_storage_bucket: config.document_storage_bucket.clone(),
             s3_client: Arc::new(s3_client),
