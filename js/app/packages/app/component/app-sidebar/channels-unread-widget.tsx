@@ -14,12 +14,15 @@ import ChannelIcon from '@macro-icons/wide/channel.svg?component-solid';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSenderName } from '@app/component/app-sidebar/utils';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { Tooltip } from '@core/component/Tooltip';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import { isChannelNotification } from '@notifications/notification-helpers';
+import type { SidebarState } from '@app/component/app-sidebar/sidebar';
+import { cn } from '@ui/utils/classname';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -81,7 +84,11 @@ function groupByChannel(
   return groups;
 }
 
-function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
+function ChannelGroupItem(props: {
+  sidebarState: SidebarState;
+  group: ChannelGroup;
+  animate?: boolean;
+}) {
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
   onMount(() => {
@@ -136,55 +143,77 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     });
   };
 
+  const isSidebarSlim = () => props.sidebarState === 'slim';
+
   return (
     <ContextMenu>
       <ContextMenu.Trigger class="w-full">
-        <Button
-          as={'a'}
-          href={`/channel/${props.group.entityId}`}
-          class="flex items-center justify-start gap-3 w-full cursor-default rounded-xs"
-          draggable={false}
-          variant="ghost"
-          size="sm"
-          classList={{
-            'opacity-0 -translate-y-2': !isVisible(),
-            'opacity-100 translate-y-0': isVisible(),
-          }}
-          onClick={(e) => {
-            if (e.button === 1) return;
-
-            e.preventDefault();
-            navigateToLatestNotification(e.shiftKey);
-          }}
+        <Tooltip
+          tooltip={<span class="text-xs">{displayName()}</span>}
+          placement="right"
+          hide={!isSidebarSlim()}
         >
-          <div class="flex-shrink-0">
-            <Show
-              when={props.group.isDM && props.group.latestSenderId}
-              fallback={
-                <div class="size-4 text-ink-muted">
-                  <ChannelIcon />
-                </div>
-              }
+          <Button
+            as={'a'}
+            href={`/channel/${props.group.entityId}`}
+            class={cn(
+              'flex items-center size-full cursor-default rounded-xs',
+              isSidebarSlim() ? 'justify-center p-2' : 'justify-start gap-3'
+            )}
+            draggable={false}
+            variant="ghost"
+            size={isSidebarSlim() ? 'icon' : 'sm'}
+            classList={{
+              'opacity-0 -translate-y-2': !isVisible(),
+              'opacity-100 translate-y-0': isVisible(),
+            }}
+            onClick={(e) => {
+              if (e.button === 1) return;
+
+              e.preventDefault();
+              navigateToLatestNotification(e.shiftKey);
+            }}
+          >
+            <div
+              class={cn(
+                'relative flex items-center justify-center flex-shrink-0',
+                isSidebarSlim() ? 'size-6' : 'size-5'
+              )}
             >
-              <UserIcon
-                id={props.group.latestSenderId!}
-                size="xs"
-                suppressClick
-                showTooltip={false}
-              />
+              <Show
+                when={props.group.isDM && props.group.latestSenderId}
+                fallback={
+                  <div class="size-4 text-ink-muted">
+                    <ChannelIcon />
+                  </div>
+                }
+              >
+                <UserIcon
+                  id={props.group.latestSenderId!}
+                  size={'fill'}
+                  suppressClick
+                  showTooltip={false}
+                />
+              </Show>
+
+              <Show when={isSidebarSlim()}>
+                <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full" />
+              </Show>
+            </div>
+
+            <Show when={!isSidebarSlim()}>
+              <span class="text-sm font-medium text-ink truncate">
+                {displayName()}
+              </span>
             </Show>
-          </div>
 
-          <span class="text-sm font-medium text-ink truncate">
-            {displayName()}
-          </span>
-
-          <Show when={count() > 0}>
-            <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
-              {count()}
-            </span>
-          </Show>
-        </Button>
+            <Show when={count() > 0 && props.sidebarState === 'expanded'}>
+              <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
+                {count()}
+              </span>
+            </Show>
+          </Button>
+        </Tooltip>
       </ContextMenu.Trigger>
 
       <ContextMenu.Portal>
@@ -207,7 +236,7 @@ function filterUnreadNotDone(notifications: UnifiedNotification[]) {
   return notifications.filter((n) => !n.viewed_at && !n.done);
 }
 
-export const ChannelsUnreadWidget = () => {
+export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = () => [...notificationSource.notifications()];
 
@@ -248,14 +277,32 @@ export const ChannelsUnreadWidget = () => {
 
   return (
     <Show when={channelGroups().length > 0}>
-      <section class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
-        <header class="text-xs font-medium text-ink-muted ml-3">
+      <section
+        class={cn(
+          'w-full h-full flex flex-col justify-center',
+          props.sidebarState === 'slim'
+            ? 'px-1 py-2 items-center'
+            : 'px-2 py-1.5'
+        )}
+      >
+        <header
+          class={cn(
+            'text-xs font-medium text-ink-muted ml-2 mb-2',
+            props.sidebarState === 'slim' && 'sr-only'
+          )}
+        >
           <h1>Unread</h1>
         </header>
 
-        <div class="flex-1 overflow-hidden">
+        <div class="flex-1">
           <For each={channelGroups()}>
-            {(group) => <ChannelGroupItem group={group} animate={false} />}
+            {(group) => (
+              <ChannelGroupItem
+                sidebarState={props.sidebarState}
+                group={group}
+                animate={false}
+              />
+            )}
           </For>
         </div>
       </section>
