@@ -26,9 +26,9 @@ import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
 import type { FilterID } from '@app/component/next-soup/filters';
+import { type FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
   mergeFilterData,
-  emptyFilterData,
   applyFilterData,
   type FilterData,
 } from '@app/component/next-soup/filters/filter-store';
@@ -37,13 +37,10 @@ import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 
-const NIL = '00000000-0000-0000-0000-000000000000';
-
 export type FilterOption = {
   id: FilterID;
   label: string;
   icon?: () => JSX.Element;
-  filterData?: Partial<FilterData>;
 };
 
 /** Options whose ids are arbitrary strings (e.g. contact IDs), not FilterIDs. */
@@ -70,48 +67,36 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'document',
         label: 'Docs',
         icon: () => <EntityIcon targetType="md" size="xs" />,
-        filterData: {
-          include: { fileType: ['md', 'canvas'] },
-          exclude: { subType: ['task'] },
-        },
       },
       {
         id: 'agent',
         label: 'Agents',
         icon: () => <EntityIcon targetType="chat" size="xs" />,
-        filterData: { exclude: { chatId: [NIL] } },
       },
       {
         id: 'people',
         label: 'People',
         icon: () => <EntityIcon targetType="direct_message" size="xs" />,
-        filterData: { include: { channelType: ['direct_message'] } },
       },
       {
         id: 'teams',
         label: 'Teams',
         icon: () => <EntityIcon targetType="channel" size="xs" />,
-        filterData: { exclude: { channelType: ['direct_message'] } },
       },
       {
         id: 'task',
         label: 'Tasks',
         icon: () => <EntityIcon targetType="task" size="xs" />,
-        filterData: { include: { subType: ['task'] } },
       },
       {
         id: 'email',
         label: 'Mail',
         icon: () => <EntityIcon targetType="email" size="xs" />,
-        filterData: { exclude: { threadId: [NIL] } },
       },
       {
         id: 'file',
         label: 'Files',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
-        filterData: {
-          exclude: { fileType: ['md', 'canvas'], subType: ['task'] },
-        },
       },
     ],
     multiple: true,
@@ -123,26 +108,10 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
     id: 'status',
     label: 'Status',
     options: [
-      {
-        id: 'unread',
-        label: 'Unread',
-        filterData: { include: { emailSeen: [false] } },
-      },
-      {
-        id: 'read',
-        label: 'Read',
-        filterData: { include: { emailSeen: [true] } },
-      },
-      {
-        id: 'not-done',
-        label: 'Not Done',
-        filterData: { include: { emailDone: [false] } },
-      },
-      {
-        id: 'done',
-        label: 'Done',
-        filterData: { include: { emailDone: [true] } },
-      },
+      { id: 'unread', label: 'Unread' },
+      { id: 'read', label: 'Read' },
+      { id: 'not-done', label: 'Not Done' },
+      { id: 'done', label: 'Done' },
     ],
     multiple: true,
   },
@@ -154,19 +123,16 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'attachment-pdf',
         label: 'PDFs',
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
-        filterData: { exclude: { threadId: [NIL] } },
       },
       {
         id: 'attachment-image',
         label: 'Images',
         icon: () => <EntityIcon targetType="image" size="xs" />,
-        filterData: { exclude: { threadId: [NIL] } },
       },
       {
         id: 'attachment-document',
         label: 'Documents',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
-        filterData: { exclude: { threadId: [NIL] } },
       },
     ],
     multiple: true,
@@ -174,13 +140,7 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'calendar',
     label: 'Calendar',
-    options: [
-      {
-        id: 'has-calendar-invite',
-        label: 'Has Calendar Invite',
-        filterData: { exclude: { threadId: [NIL] } },
-      },
-    ],
+    options: [{ id: 'has-calendar-invite', label: 'Has Calendar Invite' }],
     multiple: false,
   },
 ];
@@ -199,15 +159,6 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-              value: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
-            },
-          ],
-        },
       },
       {
         id: 'task-in-progress',
@@ -218,15 +169,6 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-              value: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
-            },
-          ],
-        },
       },
       {
         id: 'task-in-review',
@@ -237,15 +179,6 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-              value: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
-            },
-          ],
-        },
       },
       {
         id: 'task-completed',
@@ -256,15 +189,6 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-              value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
-            },
-          ],
-        },
       },
       {
         id: 'task-canceled',
@@ -275,15 +199,6 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-              value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
-            },
-          ],
-        },
       },
     ],
     multiple: true,
@@ -301,15 +216,6 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
-              value: PROPERTY_OPTION_IDS.PRIORITY.URGENT,
-            },
-          ],
-        },
       },
       {
         id: 'task-high-priority',
@@ -320,15 +226,6 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
-              value: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
-            },
-          ],
-        },
       },
       {
         id: 'task-medium-priority',
@@ -339,15 +236,6 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
-              value: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM,
-            },
-          ],
-        },
       },
       {
         id: 'task-low-priority',
@@ -358,21 +246,8 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        filterData: {
-          properties: [
-            {
-              type: 'select',
-              propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
-              value: PROPERTY_OPTION_IDS.PRIORITY.LOW,
-            },
-          ],
-        },
       },
-      {
-        id: 'task-no-priority',
-        label: 'No Priority',
-        filterData: { include: { subType: ['task'] } },
-      },
+      { id: 'task-no-priority', label: 'No Priority' },
     ],
     multiple: true,
   },
@@ -387,43 +262,36 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'doc-markdown',
         label: 'Markdown',
         icon: () => <EntityIcon targetType="md" size="xs" />,
-        filterData: { include: { fileType: ['md'] } },
       },
       {
         id: 'doc-canvas',
         label: 'Canvas',
         icon: () => <EntityIcon targetType="canvas" size="xs" />,
-        filterData: { include: { fileType: ['canvas'] } },
       },
       {
         id: 'file-code',
         label: 'Code',
         icon: () => <EntityIcon targetType="code" size="xs" />,
-        filterData: { exclude: { subType: ['task'] } }, // Simplified - actual code filter is complex
       },
       {
         id: 'file-image',
         label: 'Images',
         icon: () => <EntityIcon targetType="image" size="xs" />,
-        filterData: { include: { fileType: ['png', 'jpg', 'jpeg', 'gif'] } },
       },
       {
         id: 'file-pdf',
         label: 'PDFs',
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
-        filterData: { include: { fileType: ['pdf'] } },
       },
       {
         id: 'file-docx',
         label: 'DOCX',
         icon: () => <EntityIcon targetType="write" size="xs" />,
-        filterData: { include: { fileType: ['docx'] } },
       },
       {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
-        filterData: { exclude: { subType: ['task'] } },
       },
     ],
     multiple: true,
@@ -646,34 +514,21 @@ export const UnifiedFilterDropdown = () => {
     return soup.filters.isActive(optionId);
   };
 
-  // Toggle filter and rebuild filter data from all active filters
-  // Build a map of optionId -> filterData for quick lookup
-  const optionFilterDataMap = createMemo(() => {
-    const map = new Map<string, Partial<FilterData>>();
-    for (const category of categories()) {
-      for (const option of category.options) {
-        if (option.filterData) {
-          map.set(option.id, option.filterData);
-        }
-      }
-    }
-    return map;
-  });
-
   const toggleFilter = (optionId: string) => {
     soup.filters.toggle({ or: [optionId] });
 
-    // Rebuild filter data from all active OR filters
-    const activeIds = soup.filters.orFilters().map((f) => f.id);
-    const filterDataMap = optionFilterDataMap();
+    // Rebuild filter data from all active filters using their query definitions
+    const ctx: FilterContext = { userId: userId(), assignees: assigneeFilter() };
+    const sources: Partial<FilterData>[] = [];
 
-    const activeSources = activeIds
-      .map((id) => filterDataMap.get(id))
-      .filter((d): d is Partial<FilterData> => d !== undefined);
+    for (const id of soup.filters.activeIds()) {
+      const filter = soup.filters.getFilter(id);
+      if (!filter?.query) continue;
+      const query = typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
+      sources.push(query);
+    }
 
-    const merged = mergeFilterData(...activeSources);
-
-    setFilters((d) => applyFilterData(d, merged));
+    setFilters((d) => applyFilterData(d, mergeFilterData(...sources)));
   };
 
   // Assignee options for tasks view

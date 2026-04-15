@@ -1,4 +1,5 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
+import type { QueryInput, QueryFn } from './configs/base';
 
 export type FilterPredicate<T> = (entity: T) => boolean;
 
@@ -6,6 +7,7 @@ export type FilterConfig<T, TId extends string = string> = {
   readonly id: TId;
   readonly predicate: FilterPredicate<T>;
   readonly group?: string;
+  readonly query?: QueryInput | QueryFn;
 };
 
 export type FilterGroupConfig = {

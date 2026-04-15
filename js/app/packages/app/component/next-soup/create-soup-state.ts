@@ -26,6 +26,7 @@ const toFilterConfigs = (filters: readonly FilterDefinition[]): FilterConfig<Sou
     id: f.id,
     group: f.group,
     predicate: () => true, // Context-aware filtering happens in soup-view-context
+    query: f.query,
   }));
 
 export type NavigationResult<T> = { item: T; index: number } | undefined;
