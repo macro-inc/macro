@@ -297,16 +297,6 @@ impl ChatRepo for PgChatRepo {
             )
             .await
             .map_err(to_chat_err)?;
-
-            macro_share_permissions::user_item_access::update_user_item_access(
-                &mut tx,
-                user_id.as_ref(),
-                chat_id,
-                "chat",
-                share_permission,
-            )
-            .await
-            .map_err(to_chat_err)?;
         }
 
         tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
