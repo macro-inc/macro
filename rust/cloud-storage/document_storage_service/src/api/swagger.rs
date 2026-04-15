@@ -221,9 +221,6 @@ use utoipa::OpenApi;
         projects::get_project::get_project_handler,
         projects::revert_delete_project::handler,
 
-        // threads
-        threads::edit_thread::edit_thread_handler,
-
         entity::get_entity_permission::handler,
 
         // /recents

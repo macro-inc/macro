@@ -1,4 +1,3 @@
-pub mod request;
 pub mod response;
 
 use serde::{Deserialize, Serialize};
