@@ -517,4 +517,110 @@ mod tests {
 
         Ok(())
     }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("get_thread_ids_by_contact_ids"))
+    )]
+    async fn test_get_thread_ids_by_sender_contact(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        // Contact A is sender in Thread 1 and Thread 3
+        let sender_id = uuid!("00000000-0000-0000-0000-0000000c9001");
+        let result = get_thread_ids_by_contact_ids(&pool, &[sender_id]).await?;
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&uuid!("00000000-0000-0000-0000-000000009201")));
+        assert!(result.contains(&uuid!("00000000-0000-0000-0000-000000009203")));
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("get_thread_ids_by_contact_ids"))
+    )]
+    async fn test_get_thread_ids_by_recipient_contact(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        // Contact B is a recipient in Thread 1 only
+        let recipient_id = uuid!("00000000-0000-0000-0000-0000000c9002");
+        let result = get_thread_ids_by_contact_ids(&pool, &[recipient_id]).await?;
+
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&uuid!("00000000-0000-0000-0000-000000009201")));
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("get_thread_ids_by_contact_ids"))
+    )]
+    async fn test_get_thread_ids_by_contact_in_both_roles(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        // Contact C is sender in Thread 2 and recipient in Thread 3
+        let both_id = uuid!("00000000-0000-0000-0000-0000000c9003");
+        let result = get_thread_ids_by_contact_ids(&pool, &[both_id]).await?;
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&uuid!("00000000-0000-0000-0000-000000009202")));
+        assert!(result.contains(&uuid!("00000000-0000-0000-0000-000000009203")));
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("get_thread_ids_by_contact_ids"))
+    )]
+    async fn test_get_thread_ids_by_orphan_contact(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        // Contact D has no messages
+        let orphan_id = uuid!("00000000-0000-0000-0000-0000000c9004");
+        let result = get_thread_ids_by_contact_ids(&pool, &[orphan_id]).await?;
+
+        assert!(result.is_empty());
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("get_thread_ids_by_contact_ids"))
+    )]
+    async fn test_get_thread_ids_by_multiple_contacts_dedupes(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        // Contact A (sender in Thread 1,3) + Contact C (sender in Thread 2, recipient in Thread 3)
+        // Thread 3 should only appear once
+        let contact_a = uuid!("00000000-0000-0000-0000-0000000c9001");
+        let contact_c = uuid!("00000000-0000-0000-0000-0000000c9003");
+        let result = get_thread_ids_by_contact_ids(&pool, &[contact_a, contact_c]).await?;
+
+        assert_eq!(result.len(), 3);
+        assert!(result.contains(&uuid!("00000000-0000-0000-0000-000000009201")));
+        assert!(result.contains(&uuid!("00000000-0000-0000-0000-000000009202")));
+        assert!(result.contains(&uuid!("00000000-0000-0000-0000-000000009203")));
+
+        Ok(())
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn test_get_thread_ids_by_contact_ids_empty_input(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        let result = get_thread_ids_by_contact_ids(&pool, &[]).await?;
+        assert!(result.is_empty());
+
+        Ok(())
+    }
 }

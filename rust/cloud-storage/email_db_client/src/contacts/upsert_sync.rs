@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::parse::service_to_db::map_new_contact_to_db;
 use models_email::db;
 use models_email::service::contact::Contact;
