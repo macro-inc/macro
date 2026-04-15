@@ -231,6 +231,7 @@ function registerDraggableBlock(
   const { setState } = props;
   let isDraggingBlock = false;
   let isKeyboardMode = false;
+  let hasNonCollapsedSelection = false;
   let rafId: number | null = null;
   let latestMouseEvent: MouseEvent | null = null;
 
@@ -249,10 +250,6 @@ function registerDraggableBlock(
     if (event.buttons > 0) return;
 
     // Hide drag menu if there's a non-collapsed range selection
-    const hasNonCollapsedSelection = editor.read(() => {
-      const selection = $getSelection();
-      return $isRangeSelection(selection) && !selection.isCollapsed();
-    });
     if (hasNonCollapsedSelection) {
       clearHover();
       return;
@@ -554,7 +551,9 @@ function registerDraggableBlock(
     SELECTION_CHANGE_COMMAND,
     () => {
       const selection = $getSelection();
-      if ($isRangeSelection(selection) && !selection.isCollapsed()) {
+      hasNonCollapsedSelection =
+        $isRangeSelection(selection) && !selection.isCollapsed();
+      if (hasNonCollapsedSelection) {
         clearHover();
       }
       return false;
