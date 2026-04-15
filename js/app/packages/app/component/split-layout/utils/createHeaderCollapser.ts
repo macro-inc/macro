@@ -2,6 +2,9 @@ import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import type { CollapsibleRegistration, HeaderCollapser } from '../context';
 
+const OVERFLOW_EPSILON_PX = 2;
+const UNCOLLAPSE_HYSTERESIS_PX = 12;
+
 /**
  * Returns the actual rendered content width of a container's children.
  *
@@ -41,6 +44,18 @@ export function createHeaderCollapser(
   const naturalWidths = new Map<string, number>();
   const collapsedWidths = new Map<string, number>();
   let observer: ResizeObserver | null = null;
+  let rafId: number | null = null;
+  let evaluateQueued = false;
+
+  const scheduleEvaluate = () => {
+    if (evaluateQueued) return;
+    evaluateQueued = true;
+    rafId = requestAnimationFrame(() => {
+      evaluateQueued = false;
+      rafId = null;
+      evaluate();
+    });
+  };
 
   const evaluate = () => {
     const headerLeft = getContainer();
@@ -48,7 +63,7 @@ export function createHeaderCollapser(
 
     // Attach ResizeObserver lazily on first call when headerLeft exists
     if (!observer) {
-      observer = new ResizeObserver(() => queueMicrotask(evaluate));
+      observer = new ResizeObserver(() => scheduleEvaluate());
       observer.observe(headerLeft);
     }
 
@@ -63,7 +78,11 @@ export function createHeaderCollapser(
       }
     }
 
-    const overflow = headerLeft.scrollWidth > headerLeft.offsetWidth;
+    const contentWidth = getContentWidth(headerLeft);
+    const availableWidth = headerLeft.offsetWidth;
+    const overflowAmount = contentWidth - availableWidth;
+    const spare = availableWidth - contentWidth;
+    const overflow = overflowAmount > OVERFLOW_EPSILON_PX;
 
     if (overflow) {
       // Collapse the first uncollapsed item (lowest priority number)
@@ -72,7 +91,7 @@ export function createHeaderCollapser(
         .sort((a, b) => a.priority - b.priority);
       if (uncollapsed.length > 0) {
         uncollapsed[0].setCollapsed(true);
-        queueMicrotask(evaluate);
+        scheduleEvaluate();
       }
     } else {
       // Try to uncollapse the last-collapsed item (highest priority number = collapsed last)
@@ -87,13 +106,11 @@ export function createHeaderCollapser(
         // element's current footprint (the icon button that will disappear on uncollapse).
         const collapsedWidth = collapsedWidths.get(item.id) ?? 0;
         const needed = naturalWidth - collapsedWidth;
-        // The container is flex-grow so scrollWidth === offsetWidth when no overflow —
-        // measure the actual rendered content width instead.
-        const contentWidth = getContentWidth(headerLeft);
-        const spare = headerLeft.offsetWidth - contentWidth;
-        if (spare >= needed + 1) {
+        // Require real spare room before uncollapsing so widths near the
+        // threshold do not bounce between states on every resize/layout pass.
+        if (spare >= needed + UNCOLLAPSE_HYSTERESIS_PX) {
           item.setCollapsed(false);
-          queueMicrotask(evaluate);
+          scheduleEvaluate();
         }
       }
     }
@@ -102,7 +119,7 @@ export function createHeaderCollapser(
   // Re-evaluate when panel width changes
   createEffect(() => {
     panelSizeWidth();
-    queueMicrotask(evaluate);
+    scheduleEvaluate();
   });
 
   // Re-evaluate when any item's collapsed state changes
@@ -111,10 +128,13 @@ export function createHeaderCollapser(
     for (const item of items) {
       item.collapsed();
     }
-    queueMicrotask(evaluate);
+    scheduleEvaluate();
   });
 
-  onCleanup(() => observer?.disconnect());
+  onCleanup(() => {
+    observer?.disconnect();
+    if (rafId !== null) cancelAnimationFrame(rafId);
+  });
 
   return {
     register(reg: CollapsibleRegistration) {
