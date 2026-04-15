@@ -1,5 +1,4 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
-import type { FilterAst } from './define-filter';
 
 export type FilterPredicate<T> = (entity: T) => boolean;
 
@@ -7,8 +6,6 @@ export type FilterConfig<T, TId extends string = string> = {
   readonly id: TId;
   readonly predicate: FilterPredicate<T>;
   readonly group?: string;
-  /** Optional AST for server-side filtering */
-  readonly ast?: FilterAst | ((ctx: unknown) => FilterAst);
 };
 
 export type FilterGroupConfig = {
@@ -18,11 +15,12 @@ export type FilterGroupConfig = {
 
 type FilterIdInput<TId extends string> = TId | (string & {});
 
-export type SetFiltersInput<TId extends string = string> = {
-  /** Filters that must ALL pass (AND logic) - typically from presets */
-  readonly and?: readonly FilterIdInput<TId>[];
-  /** Filters where ANY must pass (OR logic) - typically from user selection */
-  readonly or?: readonly FilterIdInput<TId>[];
+export type SetFiltersInput<
+  TFilter extends FilterConfig<unknown>,
+  TId extends string = TFilter['id'],
+> = {
+  readonly and?: readonly (TFilter | FilterIdInput<TId>)[];
+  readonly or?: readonly (TFilter | FilterIdInput<TId>)[];
 };
 
 export type CurrentFilterState<TId extends string> = {
@@ -30,26 +28,20 @@ export type CurrentFilterState<TId extends string> = {
   readonly orIds: readonly TId[];
 };
 
-/**
- * Callback function for updating filters based on current state.
- */
-export type SetFiltersCallback<TId extends string> = (
-  current: CurrentFilterState<TId>
-) => SetFiltersInput<TId>;
+export type SetFiltersCallback<
+  TFilter extends FilterConfig<unknown>,
+  TId extends string,
+> = (current: CurrentFilterState<TId>) => SetFiltersInput<TFilter, TId>;
 
-/** Internal representation of active filters */
 type ActiveFiltersState<TFilter> = {
   readonly andFilters: readonly TFilter[];
   readonly orFilters: readonly TFilter[];
 };
 
 export type FilterStateOptions<T, TFilter extends FilterConfig<T, string>> = {
-  /** All available filter configurations */
   readonly filters: readonly TFilter[];
-  /** Filter group configurations for controlling mutual exclusivity */
   readonly groups?: readonly FilterGroupConfig[];
-  /** Initial active filter IDs (applied as AND filters) */
-  readonly initialFilters?: SetFiltersInput<string>;
+  readonly initialFilters?: readonly string[];
 };
 
 export type FilterState<
@@ -57,29 +49,20 @@ export type FilterState<
   TFilter extends FilterConfig<T, string>,
   TId extends string = TFilter['id'],
 > = {
-  /** Currently active AND filter configs */
   readonly andFilters: Accessor<readonly TFilter[]>;
-  /** Currently active OR filter configs */
   readonly orFilters: Accessor<readonly TFilter[]>;
-  /** All currently active filter configs (both AND and OR) */
   readonly active: Accessor<readonly TFilter[]>;
-  /** IDs of currently active filters */
   readonly activeIds: Accessor<readonly TId[]>;
-  /** Check if a filter is active by ID */
   readonly isActive: (id: FilterIdInput<TId>) => boolean;
-  /** Clear all active filters */
   readonly clear: () => void;
-  /** Toggle filters on/off. Respects group exclusivity. */
   readonly toggle: (
-    input: SetFiltersInput<TId> | SetFiltersCallback<TId>
+    input: SetFiltersInput<TFilter, TId> | SetFiltersCallback<TFilter, TId>
   ) => void;
-  /** Set filters with explicit AND/OR grouping. Replaces all current filters. */
-  readonly set: (input: SetFiltersInput<TId> | SetFiltersCallback<TId>) => void;
-  /** Get a filter config by ID */
+  readonly set: (
+    input: SetFiltersInput<TFilter, TId> | SetFiltersCallback<TFilter, TId>
+  ) => void;
   readonly getFilter: (id: FilterIdInput<TId>) => TFilter | undefined;
-  /** All available filter configs */
   readonly available: readonly TFilter[];
-  /** Test if an entity passes the active filters. */
   readonly test: (entity: T) => boolean;
 };
 
@@ -91,7 +74,7 @@ export function createFilterState<
   const {
     filters: availableFilters,
     groups = [],
-    initialFilters = {},
+    initialFilters = [],
   } = options;
 
   const filterMap = new Map<string, TFilter>(
@@ -102,50 +85,55 @@ export function createFilterState<
     groups.map((g) => [g.id, g])
   );
 
-  const getFilter = (id: FilterIdInput<TId>): TFilter | undefined =>
-    filterMap.get(id);
-
-  /** Resolve filter IDs to filter configs */
-  const resolveFilters = (
-    inputs: readonly FilterIdInput<TId>[] | undefined
-  ): TFilter[] => {
-    if (!inputs) return [];
-    const resolved: TFilter[] = [];
-    for (const id of inputs) {
-      const filter = filterMap.get(String(id));
-      if (filter) resolved.push(filter);
-    }
-    return resolved;
-  };
-
-  // Initialize with initial filters
-  const initialAndFilters = resolveFilters(
-    initialFilters.and as FilterIdInput<TId>[] | undefined
-  );
-  const initialOrFilters = resolveFilters(
-    initialFilters.or as FilterIdInput<TId>[] | undefined
-  );
+  const initialAndFilters = initialFilters
+    .map((id) => filterMap.get(id))
+    .filter((f): f is TFilter => f !== undefined);
 
   const [state, setState] = createSignal<ActiveFiltersState<TFilter>>({
     andFilters: initialAndFilters,
-    orFilters: initialOrFilters,
+    orFilters: [],
   });
 
   const andFilters = createMemo(() => state().andFilters);
   const orFilters = createMemo(() => state().orFilters);
 
-  const active = createMemo(() => [...andFilters(), ...orFilters()]);
+  const active = createMemo(() => [
+    ...state().andFilters,
+    ...state().orFilters,
+  ]);
   const activeIds = createMemo(() => active().map((f) => f.id) as TId[]);
+
+  const getFilter = (id: FilterIdInput<TId>): TFilter | undefined =>
+    filterMap.get(id);
 
   const isActive = (id: FilterIdInput<TId>): boolean =>
     activeIds().includes(id as TId);
 
-  const set = (input: SetFiltersInput<TId> | SetFiltersCallback<TId>) => {
+  const resolveFilters = (
+    input: readonly (TFilter | FilterIdInput<TId>)[] | undefined
+  ): TFilter[] => {
+    if (!input) return [];
+
+    const resolved: TFilter[] = [];
+    for (const item of input) {
+      if (typeof item === 'string') {
+        const filter = getFilter(item);
+        if (filter) resolved.push(filter);
+      } else {
+        resolved.push(item);
+      }
+    }
+    return resolved;
+  };
+
+  const set = (
+    input: SetFiltersInput<TFilter, TId> | SetFiltersCallback<TFilter, TId>
+  ) => {
     const resolved =
       typeof input === 'function'
         ? input({
-            andIds: andFilters().map((f) => f.id) as TId[],
-            orIds: orFilters().map((f) => f.id) as TId[],
+            andIds: state().andFilters.map((f) => f.id) as TId[],
+            orIds: state().orFilters.map((f) => f.id) as TId[],
           })
         : input;
 
@@ -165,16 +153,13 @@ export function createFilterState<
       const isCurrentlyActive = result.some((f) => f.id === filter.id);
 
       if (isCurrentlyActive) {
-        // Deactivate
         result = result.filter((f) => f.id !== filter.id);
       } else {
-        // Activate - handle group exclusivity based on allowMultiple
         if (filter.group) {
           const groupConfig = groupMap.get(filter.group);
           const allowMultiple = groupConfig?.allowMultiple ?? false;
 
           if (!allowMultiple) {
-            // Remove other filters in the same group
             result = result.filter((f) => f.group !== filter.group);
           }
         }
@@ -185,12 +170,14 @@ export function createFilterState<
     return result;
   };
 
-  const toggle = (input: SetFiltersInput<TId> | SetFiltersCallback<TId>) => {
+  const toggle = (
+    input: SetFiltersInput<TFilter, TId> | SetFiltersCallback<TFilter, TId>
+  ) => {
     const resolved =
       typeof input === 'function'
         ? input({
-            andIds: andFilters().map((f) => f.id) as TId[],
-            orIds: orFilters().map((f) => f.id) as TId[],
+            andIds: state().andFilters.map((f) => f.id) as TId[],
+            orIds: state().orFilters.map((f) => f.id) as TId[],
           })
         : input;
 
@@ -213,24 +200,16 @@ export function createFilterState<
   };
 
   const test = (entity: T): boolean => {
-    const andList = andFilters();
-    const orList = orFilters();
+    const { andFilters: andList, orFilters: orList } = state();
 
-    // If no filters are active, everything passes
-    if (andList.length === 0 && orList.length === 0) {
-      return true;
+    if (andList.length === 0 && orList.length === 0) return true;
+
+    if (andList.length > 0 && !andList.every((f) => f.predicate(entity))) {
+      return false;
     }
 
-    // All AND filters must pass
-    if (andList.length > 0) {
-      const passesAnd = andList.every((f) => f.predicate(entity));
-      if (!passesAnd) return false;
-    }
-
-    // At least one OR filter must pass (if any OR filters are active)
-    if (orList.length > 0) {
-      const passesOr = orList.some((f) => f.predicate(entity));
-      if (!passesOr) return false;
+    if (orList.length > 0 && !orList.some((f) => f.predicate(entity))) {
+      return false;
     }
 
     return true;
