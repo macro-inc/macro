@@ -1,7 +1,7 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { QueryInput, QueryFn } from './configs/base';
 
-export type FilterPredicate<T> = (entity: T) => boolean;
+export type FilterPredicate<T> = (entity: T, ctx?: unknown) => boolean;
 
 export type FilterConfig<T, TId extends string = string> = {
   readonly id: TId;
@@ -70,7 +70,7 @@ export type FilterState<
   ) => void;
   readonly getFilter: (id: FilterIdInput<TId>) => TFilter | undefined;
   readonly available: readonly TFilter[];
-  readonly test: (entity: T) => boolean;
+  readonly test: (entity: T, ctx?: unknown) => boolean;
 };
 
 export function createFilterState<
@@ -208,16 +208,16 @@ export function createFilterState<
     });
   };
 
-  const test = (entity: T): boolean => {
+  const test = (entity: T, ctx?: unknown): boolean => {
     const { andFilters: andList, orFilters: orList } = state();
 
     if (andList.length === 0 && orList.length === 0) return true;
 
-    if (andList.length > 0 && !andList.every((f) => f.predicate(entity))) {
+    if (andList.length > 0 && !andList.every((f) => f.predicate(entity, ctx))) {
       return false;
     }
 
-    if (orList.length > 0 && !orList.some((f) => f.predicate(entity))) {
+    if (orList.length > 0 && !orList.some((f) => f.predicate(entity, ctx))) {
       return false;
     }
 

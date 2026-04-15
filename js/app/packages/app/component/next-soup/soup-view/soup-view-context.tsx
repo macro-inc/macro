@@ -27,10 +27,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import {
-  SOUP_FILTERS,
-  type FilterContext,
-} from '@app/component/next-soup/filters/configs/';
+import type { FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
   createFilterStore,
   type FilterData,
@@ -138,7 +135,9 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const [filters, setFiltersInternal, getAst] = createFilterStore(props.initialFilters);
+  const [filters, setFiltersInternal, getAst] = createFilterStore(
+    props.initialFilters
+  );
 
   const setFilters: FilterSetter = (fn) => {
     // Invalidate query cache when filters change to avoid refetching all pages
@@ -191,19 +190,6 @@ export const SoupViewContextProvider: FlowComponent<
     notificationSource,
     assignees: assigneeFilter(),
   });
-
-  // Test entity against active filters using context-aware predicates
-  const testFilters = (entity: EntityData): boolean => {
-    const activeIds = soup.filters.activeIds();
-    if (activeIds.length === 0) return true;
-
-    const ctx = getFilterContext();
-    return activeIds.every((id) => {
-      const filter = SOUP_FILTERS.find((f) => f.id === id);
-      if (!filter?.predicate) return true;
-      return filter.predicate(entity, ctx);
-    });
-  };
 
   const attachNotifications = (entity: EntityData) => {
     return {
@@ -289,10 +275,11 @@ export const SoupViewContextProvider: FlowComponent<
 
   const baseEntities = () => {
     let transformed = items();
+    const ctx = getFilterContext();
 
     const next = [];
     for (const entity of transformed) {
-      if (!testFilters(entity)) {
+      if (!soup.filters.test(entity, ctx)) {
         continue;
       }
       next.push(entity);
