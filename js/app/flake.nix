@@ -4,14 +4,12 @@
     flake-utils.url = "github:numtide/flake-utils";
     fenix.url = "github:nix-community/fenix";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
-    nixpkgs-biome.url = "github:NixOS/nixpkgs/af70ad706db919d644586e8f95c1d8d3d0a1ac56";
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      nixpkgs-biome,
       flake-utils,
       fenix,
     }:
@@ -23,7 +21,6 @@
           config.allowUnfree = true;
           config.android_sdk.accept_license = true;
         };
-        pkgs-biome = nixpkgs-biome.legacyPackages.${system};
 
         isDarwin = pkgs.stdenv.isDarwin;
         isLinux = pkgs.stdenv.isLinux;
@@ -55,7 +52,7 @@
           pkg-config
           just
           bun
-          pkgs-biome.biome
+          biome
           nodejs_24
           typescript-language-server
           cargo-tauri

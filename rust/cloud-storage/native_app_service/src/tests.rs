@@ -32,7 +32,10 @@ impl GetJsBundleSemver for MockBundleFetcher {
         "https://example.com".parse().unwrap()
     }
 
-    async fn get_app_bundle_checksum(&self, _version: &semver::Version) -> Result<String, UpdateErr> {
+    async fn get_app_bundle_checksum(
+        &self,
+        _version: &semver::Version,
+    ) -> Result<String, UpdateErr> {
         Ok("abc123".to_string())
     }
 }

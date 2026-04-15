@@ -101,11 +101,7 @@ pub struct SyncRedirectParams {
 pub async fn sync_redirect_handler<T: GithubSyncService>(
     axum::extract::Query(_params): axum::extract::Query<SyncRedirectParams>,
 ) -> Redirect {
-    Redirect::temporary(
-        macro_env::Environment::new_or_prod()
-            .app()
-            .as_str(),
-    )
+    Redirect::temporary(macro_env::Environment::new_or_prod().app().as_str())
 }
 
 /// Extractor that validates an incoming GitHub webhook event.

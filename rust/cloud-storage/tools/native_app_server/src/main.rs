@@ -26,7 +26,10 @@ impl GetJsBundleSemver for AlwaysUpdateFetcher {
         self.bundle_url.clone()
     }
 
-    async fn get_app_bundle_checksum(&self, _version: &semver::Version) -> Result<String, UpdateErr> {
+    async fn get_app_bundle_checksum(
+        &self,
+        _version: &semver::Version,
+    ) -> Result<String, UpdateErr> {
         Ok(self.checksum.clone())
     }
 }
@@ -43,11 +46,15 @@ async fn main() {
         .parse()
         .expect("BUNDLE_URL must be a valid URL");
 
-    let checksum = std::env::var("BUNDLE_CHECKSUM")
-        .unwrap_or_else(|_| "1be759e3b1befdd6639cd89f93e9aa79857ca5c06c06e71de9b3702a9cd8af29".to_string());
+    let checksum = std::env::var("BUNDLE_CHECKSUM").unwrap_or_else(|_| {
+        "1be759e3b1befdd6639cd89f93e9aa79857ca5c06c06e71de9b3702a9cd8af29".to_string()
+    });
 
     let service = NativeAppServiceImpl {
-        bundle_fetcher: AlwaysUpdateFetcher { bundle_url, checksum },
+        bundle_fetcher: AlwaysUpdateFetcher {
+            bundle_url,
+            checksum,
+        },
         platform_data: PlatformData {
             ios_development_team_id: String::new(),
             ios_app_bundle_id: String::new(),
@@ -58,11 +65,8 @@ async fn main() {
         inner: Arc::new(service),
     };
 
-    let app = native_app_router(state)
-        .route_service(
-            "/app-archive.zip",
-            ServeFile::new(ARCHIVE_PATH),
-        );
+    let app =
+        native_app_router(state).route_service("/app-archive.zip", ServeFile::new(ARCHIVE_PATH));
 
     tracing::info!("Listening on {ADDR}");
 

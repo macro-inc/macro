@@ -28,7 +28,10 @@ where
 
         let most_recent = self.bundle_fetcher.get_app_semver().await?;
         if most_recent > cur_ver {
-            let checksum = self.bundle_fetcher.get_app_bundle_checksum(&most_recent).await?;
+            let checksum = self
+                .bundle_fetcher
+                .get_app_bundle_checksum(&most_recent)
+                .await?;
             return Ok(Some(BundleUpdate {
                 version: most_recent,
                 notes: None,

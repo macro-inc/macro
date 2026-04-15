@@ -64,9 +64,7 @@ impl GetJsBundleSemver for DefaultBundleFetcher {
     }
 
     fn get_app_bundle_path(&self) -> Url {
-        self.base_url
-            .join(self.bundle_archive_name)
-            .unwrap()
+        self.base_url.join(self.bundle_archive_name).unwrap()
     }
 
     #[tracing::instrument(skip(self), ret, err)]
@@ -75,10 +73,10 @@ impl GetJsBundleSemver for DefaultBundleFetcher {
         version: &semver::Version,
     ) -> Result<String, UpdateErr> {
         // return cached checksum if version matches
-        if let Some((cached_ver, cached_checksum)) = self.checksum_cache.read().await.as_ref() {
-            if cached_ver == version {
-                return Ok(cached_checksum.clone());
-            }
+        if let Some((cached_ver, cached_checksum)) = self.checksum_cache.read().await.as_ref()
+            && cached_ver == version
+        {
+            return Ok(cached_checksum.clone());
         }
 
         let checksum = self.compute_checksum().await?;

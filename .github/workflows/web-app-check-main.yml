@@ -47,7 +47,7 @@ jobs:
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          version: 2.4.7
+          version: 2.4.10
       - name: Generate API Types
         if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
@@ -70,7 +70,7 @@ jobs:
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          version: 2.4.7
+          version: 2.4.10
       - name: Run Biome
         working-directory: js/app
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -121,7 +121,7 @@ jobs:
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          version: 2.4.7
+          version: 2.4.10
       - name: Cycles Import Check
         working-directory: js/app
         run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles

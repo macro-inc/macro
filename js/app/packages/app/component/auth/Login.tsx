@@ -84,7 +84,9 @@ export function Login() {
     // token may be an array if the redirect URL contained duplicate token params;
     // take the last one as it is the most recently appended by the auth service
     const rawToken = searchParams.token;
-    const session_code = Array.isArray(rawToken) ? rawToken[rawToken.length - 1] : rawToken;
+    const session_code = Array.isArray(rawToken)
+      ? rawToken[rawToken.length - 1]
+      : rawToken;
     if (session_code && typeof session_code === 'string') {
       console.log({ session_code });
       unsetTokenPromise();
