@@ -334,6 +334,35 @@ pub async fn get_all_thread_ids_paginated(
     Ok(result)
 }
 
+/// Returns distinct thread IDs where any of the given contact IDs appear as a sender or recipient.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_thread_ids_by_contact_ids(
+    pool: &PgPool,
+    contact_ids: &[Uuid],
+) -> anyhow::Result<Vec<Uuid>> {
+    if contact_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let thread_ids = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT m.thread_id as "thread_id!"
+        FROM email_messages m
+        WHERE m.from_contact_id = ANY($1)
+        UNION
+        SELECT DISTINCT m.thread_id as "thread_id!"
+        FROM email_messages m
+        JOIN email_message_recipients mr ON m.id = mr.message_id
+        WHERE mr.contact_id = ANY($1)
+        "#,
+        contact_ids
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(thread_ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

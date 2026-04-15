@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT m.thread_id as \"thread_id!\"\n        FROM email_messages m\n        WHERE m.from_contact_id = ANY($1)\n        UNION\n        SELECT DISTINCT m.thread_id as \"thread_id!\"\n        FROM email_messages m\n        JOIN email_message_recipients mr ON m.id = mr.message_id\n        WHERE mr.contact_id = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "40bfe125ad0bde96466e2a8ed9083c72877347fafb9fbcde0935ac10290b7cb0"
+}
