@@ -178,6 +178,33 @@ export const TOKENS = {
     },
   },
 
+  // markdown editor
+  md: {
+    bold: 'md.bold',
+    italic: 'md.italic',
+    underline: 'md.underline',
+    strikethrough: 'md.strikethrough',
+    highlight: 'md.highlight',
+    inlineCode: 'md.inlineCode',
+    superscript: 'md.superscript',
+    subscript: 'md.subscript',
+    heading1: 'md.heading1',
+    heading2: 'md.heading2',
+    heading3: 'md.heading3',
+    paragraph: 'md.paragraph',
+    quote: 'md.quote',
+    codeBlock: 'md.codeBlock',
+    bulletList: 'md.bulletList',
+    numberedList: 'md.numberedList',
+    checklist: 'md.checklist',
+    link: 'md.link',
+    image: 'md.image',
+    video: 'md.video',
+    math: 'md.math',
+    table: 'md.table',
+    divider: 'md.divider',
+  },
+
   // create menu
   create: {
     note: 'create.note',

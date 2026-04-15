@@ -11,6 +11,8 @@ import { useBlockId } from '@core/block';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
+import { registerMarkdownCommands } from './useMarkdownCommands';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -177,6 +179,23 @@ export function Notebook() {
         hide: true,
       })
     );
+  });
+
+  // Register markdown formatting commands on the block scope so they appear in
+  // Cmd+K, but only when the editor has focus (not just the block container).
+  const [editorHasFocus, setEditorHasFocus] = createSignal(false);
+  createEffect(() => {
+    const editor = md.editor;
+    if (!editor) return;
+    const cleanup = editorFocusSignal(editor, setEditorHasFocus);
+    onCleanup(cleanup);
+  });
+  createEffect(() => {
+    if (!scopeId()) return;
+    const group = untrack(() =>
+      registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus)
+    );
+    onCleanup(() => group.dispose());
   });
 
   // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.

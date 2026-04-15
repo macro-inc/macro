@@ -468,7 +468,11 @@ export function runCommand(
       }
     }
 
-    const captured = command.keyDownHandler?.(e);
+    // For proxied hotkeys, skip the handler when triggered by a real keyboard
+    // event (let the proxied system, e.g. Lexical, handle the keystroke).
+    // The handler still runs when invoked from the command menu (e is undefined).
+    const captured =
+      e && command.proxiedHotkey ? false : command.keyDownHandler?.(e);
     stopPropagation = captured ?? stopPropagation;
 
     if (captured) {
@@ -619,6 +623,7 @@ export function registerScopeSignalHotkey(
       hide: args.hide,
       icon: args.icon,
       tags: args.tags,
+      proxiedHotkey: args.proxiedHotkey,
     });
 
     disposer = result.dispose;

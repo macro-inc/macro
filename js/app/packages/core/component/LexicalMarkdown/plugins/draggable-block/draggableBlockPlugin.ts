@@ -9,8 +9,11 @@ import {
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
   KEY_DOWN_COMMAND,
+  SELECTION_CHANGE_COMMAND,
   type LexicalEditor,
 } from 'lexical';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
@@ -244,6 +247,16 @@ function registerDraggableBlock(
     }
     // Ignore mouse-moves while a button is held (text selection, etc.)
     if (event.buttons > 0) return;
+
+    // Hide drag menu if there's a non-collapsed range selection
+    const hasNonCollapsedSelection = editor.read(() => {
+      const selection = $getSelection();
+      return $isRangeSelection(selection) && !selection.isCollapsed();
+    });
+    if (hasNonCollapsedSelection) {
+      clearHover();
+      return;
+    }
 
     // Keep the current hover while the cursor sits on the drag handle itself.
     if (target.closest('.draggable-block-menu')) return;
@@ -536,6 +549,19 @@ function registerDraggableBlock(
     COMMAND_PRIORITY_HIGH
   );
 
+  // Hide drag handle when there's a non-collapsed selection
+  const unregisterSelectionChange = editor.registerCommand(
+    SELECTION_CHANGE_COMMAND,
+    () => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection) && !selection.isCollapsed()) {
+        clearHover();
+      }
+      return false;
+    },
+    COMMAND_PRIORITY_HIGH
+  );
+
   function cleanup() {
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
@@ -544,6 +570,7 @@ function registerDraggableBlock(
     document.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('scroll', onScroll, true);
     unregisterKeyDown();
+    unregisterSelectionChange();
   }
 
   if (props.anchorElem) {
