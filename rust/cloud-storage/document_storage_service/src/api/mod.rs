@@ -135,12 +135,6 @@ fn api_router(state: ApiContext) -> Router {
             soup::inbound::axum_router::soup_router(state.soup_router_state.clone()),
         )
         .nest(
-            "/threads",
-            threads::router(state.clone()).layer(axum::middleware::from_fn(
-                macro_middleware::connection_drop_prevention_handler,
-            )),
-        )
-        .nest(
             "/user_document_view_location",
             user_document_view_location::router(state.clone()).layer(axum::middleware::from_fn(
                 macro_middleware::connection_drop_prevention_handler,
