@@ -26,7 +26,7 @@ use crate::{
             self,
             recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
         },
-        saved_views, threads, user_document_view_location,
+        saved_views, user_document_view_location,
     },
     model::{
         request::{
