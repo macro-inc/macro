@@ -215,6 +215,7 @@ async fn process_and_store_contacts(
 
 const REINDEX_BATCH_SIZE: usize = 50;
 
+#[tracing::instrument(skip(db, sqs_client, link, changed_contact_ids))]
 async fn reindex_threads_for_changed_contacts(
     db: &PgPool,
     sqs_client: &SQS,
