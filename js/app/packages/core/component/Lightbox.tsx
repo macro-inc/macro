@@ -285,7 +285,7 @@ export function Lightbox(props: LightboxProps) {
   const navButtonClass =
     'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50';
 
-  const navVisible = () => isTouchDevice() || isToolbarVisible();
+  const navVisible = () => true;
 
   return (
     <div
@@ -299,7 +299,7 @@ export function Lightbox(props: LightboxProps) {
     >
       <Dialog.Content class="flex items-center justify-center bg-panel">
         {/* Toolbar */}
-        <LightboxToolbar isVisible={isToolbarVisible()}>
+        <LightboxToolbar isVisible={true}>
           <DeprecatedIconButton
             icon={isCopying() ? SpinnerIcon : ClipboardIcon}
             theme="clear"
