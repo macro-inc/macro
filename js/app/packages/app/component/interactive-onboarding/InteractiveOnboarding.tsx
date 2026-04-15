@@ -138,7 +138,7 @@ export default function InteractiveOnboarding() {
     const current = state.currentLesson();
     if (!current || !readyToContinue()) return;
 
-    analytics.track('onboarding_step', {
+    analytics.track(`onboarding_step_${current.definition.id.replaceAll('-', '_')}`, {
       id: current.definition.id,
       index: current.index,
       state: 'completed',
@@ -172,7 +172,7 @@ export default function InteractiveOnboarding() {
 
     if (!current) return;
 
-    analytics.track('onboarding_step', {
+    analytics.track(`onboarding_step_${current.definition.id.replaceAll('-', '_')}`, {
       id: current.definition.id,
       index: current.index,
       state: 'skipped',
@@ -340,7 +340,7 @@ export default function InteractiveOnboarding() {
       (lesson) => {
         if (!lesson) return;
 
-        analytics.track('onboarding_step', {
+        analytics.track(`onboarding_step_${lesson.definition.id.replaceAll('-', '_')}`, {
           id: lesson.definition.id,
           index: lesson.index,
           state: 'viewed',
