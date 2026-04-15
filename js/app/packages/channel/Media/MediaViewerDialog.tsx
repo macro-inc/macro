@@ -36,7 +36,7 @@ function VideoViewerContent(props: {
         'padding-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
-      <Dialog.Content class="relative flex h-full w-full items-center justify-center bg-panel">
+      <Dialog.Content class="flex items-center justify-center bg-panel">
         <LightboxToolbar isVisible={true}>
           <Dialog.CloseButton>
             <DeprecatedIconButton

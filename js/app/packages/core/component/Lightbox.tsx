@@ -297,7 +297,7 @@ export function Lightbox(props: LightboxProps) {
         'padding-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
-      <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
+      <Dialog.Content class="flex items-center justify-center bg-panel">
         {/* Toolbar */}
         <LightboxToolbar isVisible={isToolbarVisible()}>
           <DeprecatedIconButton
