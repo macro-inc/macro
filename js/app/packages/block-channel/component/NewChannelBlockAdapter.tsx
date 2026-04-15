@@ -8,9 +8,14 @@ import {
   ChannelTabProvider,
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
+import {
+  isJoinCallRequested,
+  URL_PARAMS as CHANNEL_URL_PARAMS,
+} from '@channel/Channel/link';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
-import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import { createSignal, Match, onMount, Show, Suspense, Switch } from 'solid-js';
+import { useSearchParams } from '@solidjs/router';
 import { blockHandleSignal } from '@core/signal/load';
 import { createMethodRegistration } from '@core/orchestrator';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -29,6 +34,7 @@ import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipant
 import {
   CallAudioSink,
   CallProvider,
+  ChannelCallAutoJoin,
   ChannelCallButton,
   ChannelCallTab,
   useCall,
@@ -40,6 +46,7 @@ import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
   [URL_PARAMS.thread]?: string;
+  [CHANNEL_URL_PARAMS.joinCall]?: string;
 };
 
 export type BlockChannelProps = ChannelTargetMessageParams;
@@ -66,11 +73,17 @@ function NewTop(props: { channelId: string }) {
   const call = useCall(() => props.channelId);
   const participants = () =>
     participantsQuery.isLoading ? [] : participantsQuery.data;
+  // Show the Call tab whenever we're actually in the call, mid-join, or
+  // the tab is being displayed (e.g. via the auto-join flow that flips
+  // `activeTab` to `call` before the join request resolves).
+  const showCallTab = () =>
+    ENABLE_CALLS() &&
+    (call.isInThisChannel() || call.isJoining() || activeTab() === 'call');
   const tabs = () => {
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelTypeEnum.DirectMessage)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
-    if (!ENABLE_CALLS() || !call.isInThisChannel())
+    if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');
     return filtered.map((tab) =>
       tab.value === 'call' ? { ...tab, label: <CallTabLabel /> } : tab
@@ -104,8 +117,35 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const isPreview = !!useMaybePreviewPanel();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
-  const [activeTab, setActiveTab] =
-    createSignal<ChannelTabId>(DEFAULT_CHANNEL_TAB);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Decide whether the user asked to auto-join the call (via ?join_call=true
+  // deep link or programmatic open props) before creating signals so we
+  // can land directly on the Call tab without flashing Messages first.
+  // Skipped inside a preview panel so hover-previews don't auto-join.
+  const wantsJoinCall =
+    !isPreview &&
+    (isJoinCallRequested(props[CHANNEL_URL_PARAMS.joinCall]) ||
+      isJoinCallRequested(searchParams[CHANNEL_URL_PARAMS.joinCall]));
+
+  const [activeTab, setActiveTab] = createSignal<ChannelTabId>(
+    wantsJoinCall ? 'call' : DEFAULT_CHANNEL_TAB
+  );
+  const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
+
+  // Clear the URL param after consuming it so a reload doesn't re-trigger
+  // the join if the user has since left the call.
+  onMount(() => {
+    if (
+      wantsJoinCall &&
+      searchParams[CHANNEL_URL_PARAMS.joinCall] !== undefined
+    ) {
+      setSearchParams(
+        { [CHANNEL_URL_PARAMS.joinCall]: undefined },
+        { replace: true }
+      );
+    }
+  });
 
   const convertTargetMessage = (
     params: ChannelTargetMessageParams
@@ -135,6 +175,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           setActiveTab(DEFAULT_CHANNEL_TAB);
           handle.goToMessage(targetMessageId, targetMessageReplyId);
         }
+
+        if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
+          // Flip to the call tab eagerly so the user sees the "Joining
+          // call…" placeholder instead of whatever tab they were on.
+          setActiveTab('call');
+          setPendingJoinCall(true);
+        }
       },
     });
   };
@@ -143,6 +190,11 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
       <CallProvider>
         <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
+          <ChannelCallAutoJoin
+            channelId={channelId}
+            pendingJoinCall={pendingJoinCall}
+            onHandled={() => setPendingJoinCall(false)}
+          />
           <div class="h-full flex flex-col">
             {/*
               Mounted above <Switch> so remote call audio keeps playing when
@@ -166,7 +218,10 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
                 <ChannelParticipantsTab channelId={channelId} />
               </Match>
               <Match when={activeTab() === 'call'}>
-                <ChannelCallTab channelId={channelId} />
+                <ChannelCallTab
+                  channelId={channelId}
+                  pendingJoin={pendingJoinCall}
+                />
               </Match>
             </Switch>
             <NewTop channelId={channelId} />
