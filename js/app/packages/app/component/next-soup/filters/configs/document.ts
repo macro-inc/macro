@@ -1,12 +1,6 @@
 import { codeFileExtensions } from '@block-code/util/languageSupport';
-import { isDocumentEntity, getEntityProjectId } from '@entity';
-import { config, IMAGE_EXTENSIONS, isNotTask, NIL } from './base';
-
-export const inFolderFilter = config({
-  id: 'in-folder',
-  predicate: (e) => !!getEntityProjectId(e),
-  query: { exclude: { projectId: [NIL] } },
-});
+import { isDocumentEntity } from '@entity';
+import { config, IMAGE_EXTENSIONS, isNotTask, isEmailAttachment } from './base';
 
 export const docMarkdownFilter = config({
   id: 'doc-markdown',
@@ -20,10 +14,20 @@ export const docCanvasFilter = config({
   query: { include: { fileType: ['canvas'] } },
 });
 
+/**
+ * Email attachments filter - filters for documents that are email attachments.
+ * Server-side only: `isEmailAttachment` is not available on client entity.
+ */
+export const emailAttachmentsFilter = config({
+  id: 'email-attachments',
+  predicate: (e) => e.type === 'document', // Server handles actual filtering via `iea`
+  query: isEmailAttachment,
+});
+
 export const DOCUMENT_CONTEXTUAL_FILTERS = [
-  inFolderFilter,
   docMarkdownFilter,
   docCanvasFilter,
+  emailAttachmentsFilter,
 ] as const;
 
 export const fileCodeFilter = config({

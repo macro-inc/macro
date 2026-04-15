@@ -53,13 +53,6 @@ const priorityFilter = <TId extends string>(
     query: { properties: [propSelect(SYSTEM_PROPERTY_IDS.PRIORITY, priority)] },
   });
 
-export const taskFilter = config({
-  id: 'task',
-  group: 'entity-type',
-  predicate: taskPredicate,
-  query: isTask,
-});
-
 export const taskNotStartedFilter = statusFilter(
   'task-not-started',
   PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,

@@ -5,6 +5,7 @@ import {
   projectFilter as projectPredicate,
   activeAgentFilter as activeAgentPredicate,
   taskFilter as taskPredicate,
+  callsFilter as callsPredicate,
 } from '../predicates';
 import { config, isAgent, isNotTask, NIL } from './base';
 
@@ -49,4 +50,10 @@ export const inFolderFilter = config({
   id: 'in-folder',
   predicate: (e) => !!getEntityProjectId(e),
   query: { exclude: { projectId: [NIL] } },
+});
+
+export const callsFilter = config({
+  id: 'calls',
+  predicate: callsPredicate,
+  query: { exclude: { callChannelId: [NIL] } },
 });

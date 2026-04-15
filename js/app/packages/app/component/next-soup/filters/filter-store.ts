@@ -7,7 +7,7 @@ type BackendAst =
   | { '!': BackendAst }
   | { l: unknown };
 
-type QueryTarget = 'df' | 'ef' | 'chanf' | 'cf' | 'pf' | 'propf';
+type QueryTarget = 'df' | 'ef' | 'chanf' | 'cf' | 'pf' | 'callf' | 'propf';
 type EmailView = 'inbox' | 'drafts' | 'all';
 
 type TargetAstMap = {
@@ -53,18 +53,22 @@ const FIELD_CONFIG = {
   documentOwnerId: { target: 'df', field: 'o' },
   documentSeen: { target: 'df', field: 'ns' },
   documentDone: { target: 'df', field: 'nd' },
+  isEmailAttachment: { target: 'df', field: 'iea' },
 
   // Emails (ef)
   threadId: { target: 'ef', field: 'ThreadId' },
   emailSeen: { target: 'ef', field: 'NotificationSeen' },
   emailDone: { target: 'ef', field: 'NotificationDone' },
   importance: { target: 'ef', field: 'Importance' },
+  sender: { target: 'ef', field: 'Sender' },
+  shared: { target: 'ef', field: 'Shared' },
 
   // Channels (chanf)
   channelId: { target: 'chanf', field: 'ChannelId' },
   channelType: { target: 'chanf', field: 'ChannelType' },
   channelSeen: { target: 'chanf', field: 'NotificationSeen' },
   channelDone: { target: 'chanf', field: 'NotificationDone' },
+  channelImportance: { target: 'chanf', field: 'Importance' },
 
   // Chats (cf)
   chatId: { target: 'cf', field: 'ChatId' },
@@ -77,6 +81,9 @@ const FIELD_CONFIG = {
   folderOwnerId: { target: 'pf', field: 'Owner' },
   folderSeen: { target: 'pf', field: 'NotificationSeen' },
   folderDone: { target: 'pf', field: 'NotificationDone' },
+
+  // Calls (callf)
+  callChannelId: { target: 'callf', field: 'ChannelId' },
 } as const satisfies Record<string, FieldConfig>;
 
 type FieldName = keyof typeof FIELD_CONFIG;
@@ -89,14 +96,18 @@ type FieldValueMap = {
   documentOwnerId: string;
   documentSeen: boolean;
   documentDone: boolean;
+  isEmailAttachment: boolean;
   threadId: string;
   emailSeen: boolean;
   emailDone: boolean;
   importance: boolean;
+  sender: string;
+  shared: 'exclude' | 'include' | 'only';
   channelId: string;
   channelType: string;
   channelSeen: boolean;
   channelDone: boolean;
+  channelImportance: boolean;
   chatId: string;
   chatOwnerId: string;
   chatSeen: boolean;
@@ -105,6 +116,7 @@ type FieldValueMap = {
   folderOwnerId: string;
   folderSeen: boolean;
   folderDone: boolean;
+  callChannelId: string;
 };
 
 export type PropertyFilter = {
@@ -163,6 +175,7 @@ function compileToAst(data: FilterData): TargetAstMap {
     chanf: [],
     cf: [],
     pf: [],
+    callf: [],
     propf: [],
   };
 

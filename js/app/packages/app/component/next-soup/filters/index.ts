@@ -35,10 +35,15 @@ export {
 } from './define-filter';
 
 export {
-  createSoupFilters,
-  createAssigneeFilter,
-  unassignedFilter,
+  SOUP_FILTERS,
   SOUP_FILTER_GROUPS,
   ENTITY_TYPE_FILTERS,
+  TASK_STATUS_FILTERS,
+  TASK_PRIORITY_FILTERS,
+  NO_ASSIGNEE,
+  assigneeFilter,
+  assignedToMeFilter,
   type FilterID,
-} from './defined-filters';
+  type FilterDefinition,
+  type FilterContext,
+} from './configs';

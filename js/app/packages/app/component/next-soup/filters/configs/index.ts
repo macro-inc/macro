@@ -6,6 +6,8 @@ export * from './email';
 export * from './task';
 export * from './general';
 
+export { ENTITY_TYPE_FILTERS } from './entity-type';
+export { TASK_STATUS_FILTERS, TASK_PRIORITY_FILTERS } from './task';
 import { ENTITY_TYPE_FILTERS } from './entity-type';
 import {
   channelsFilter,
@@ -14,8 +16,10 @@ import {
   activeAgentFilter,
   notTaskFilter,
   documentOrFileFilter,
+  callsFilter,
+  inFolderFilter,
 } from './entity';
-import { DOCUMENT_CONTEXTUAL_FILTERS, FILE_TYPE_FILTERS } from './document';
+import { DOCUMENT_CONTEXTUAL_FILTERS, FILE_TYPE_FILTERS, emailAttachmentsFilter } from './document';
 import { TASK_STATUS_FILTERS, TASK_PRIORITY_FILTERS, activeTaskFilter, assignedToMeFilter, assigneeFilter } from './task';
 import {
   emailDraftsFilter,
@@ -65,6 +69,9 @@ export const SOUP_FILTERS = [
   notTaskFilter,
   documentOrFileFilter,
   activeTaskFilter,
+  callsFilter,
+  emailAttachmentsFilter,
+  inFolderFilter,
   ...ENTITY_TYPE_FILTERS,
   ...TASK_STATUS_FILTERS,
   ...TASK_PRIORITY_FILTERS,
