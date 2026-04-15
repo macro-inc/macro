@@ -53,7 +53,7 @@ export const parameterGroupArn = parameterGroup.arn;
 const database = new aws.rds.Instance(
   'database',
   {
-    applyImmediately: false,
+    applyImmediately: stack !== 'prod',
     identifier: `macro-db-${stack}`,
     engine: 'postgres',
     engineVersion: config.require('engine_version'),
