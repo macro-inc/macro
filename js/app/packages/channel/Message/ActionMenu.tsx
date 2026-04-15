@@ -1,8 +1,8 @@
 import ReplyIcon from '@macro-icons/wide/reply.svg';
-import LinkIcon from '@macro-icons/wide/link.svg';
-import EditIcon from '@macro-icons/wide/edit.svg';
+import LinkIcon from '@macro-icons/square/link.svg';
+import EditIcon from '@macro-icons/square/edit.svg';
 import EllipsisIcon from '@macro-icons/square/ellipsis.svg';
-import TrashIcon from '@macro-icons/wide/bin.svg';
+import TrashIcon from '@macro-icons/square/trash.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
@@ -40,12 +40,12 @@ function ActionButton(props: {
       aria-label={props.action.label}
       data-message-action={props.action.id}
       class={cn(
-        'size-8 flex items-center justify-center text-ink hover:bg-hover hover-transition-bg',
+        'h-8 px-2 flex items-center justify-center text-ink hover:bg-hover hover-transition-bg',
         props.action.class
       )}
       onClick={props.onClick}
     >
-      {renderIcon(props.action.icon)}
+      <span class="block size-5">{renderIcon(props.action.icon, 'w-full h-full')}</span>
     </button>
   );
 }
@@ -84,12 +84,14 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+      class: 'px-1.5',
     },
     {
       id: 'edit',
       label: 'Edit',
       icon: EditIcon,
       onClick: actions?.onEdit,
+      class: 'px-1.5',
     },
     {
       id: 'delete',
@@ -97,7 +99,7 @@ export function ActionMenu(props: ActionMenuProps) {
       icon: TrashIcon,
       onClick: actions?.onDelete,
       destructive: true,
-      class: 'text-failure-ink',
+      class: 'px-1.5 text-failure-ink',
     },
   ];
 
