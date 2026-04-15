@@ -143,17 +143,13 @@ impl EmailQueryBuilder {
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut content_bool_query = self.inner.build_content_bool_query()?;
 
-        // For multi-term searches, replace the default content-only must clause with a
-        // simple_query_string that searches across all email fields (addresses, names, subject, content)
-        if self.inner.terms.len() > 1 {
-            let query_string = build_simple_query_string(&self.inner.terms);
-            let sqs = SimpleQueryStringQuery::new(
-                query_string,
-                EMAIL_SIMPLE_QUERY_FIELDS.iter().copied(),
-            )
-            .default_operator("AND");
-            content_bool_query.set_must(sqs.into());
-        }
+        // Replace the default content-only must clause with a simple_query_string that
+        // searches across all email fields (addresses, names, subject, content).
+        let query_string = build_simple_query_string(&self.inner.terms);
+        let sqs =
+            SimpleQueryStringQuery::new(query_string, EMAIL_SIMPLE_QUERY_FIELDS.iter().copied())
+                .default_operator("AND");
+        content_bool_query.set_must(sqs.into());
 
         // CUSTOM ATTRIBUTES SECTION
         // If link_ids are provided, add them to the query
