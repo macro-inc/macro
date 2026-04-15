@@ -145,7 +145,7 @@ function ChannelGroupItem(props: {
 
   const isSlim = () => props.isSlim ?? false;
 
-  const buttonContent = (
+  const ButtonContent = () => (
     <Button
       as={'a'}
       href={`/channel/${props.group.entityId}`}
@@ -212,11 +212,11 @@ function ChannelGroupItem(props: {
               tooltip={<span class="text-xs">{displayName()}</span>}
               placement="right"
             >
-              {buttonContent}
+              <ButtonContent />
             </Tooltip>
           }
         >
-          {buttonContent}
+          <ButtonContent />
         </Show>
       </ContextMenu.Trigger>
 
