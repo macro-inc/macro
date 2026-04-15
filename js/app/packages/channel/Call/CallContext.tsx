@@ -169,8 +169,14 @@ function createCallState() {
       const prev = krispFilter();
       if (prev) prev.destroy();
 
-      const krisp = KrispNoiseFilter();
+      // `quality: 'high'` tells the Krisp model to filter more aggressively,
+      // which matters for noisy offices (cars, chairs, cans, etc.).
+      const krisp = KrispNoiseFilter({ quality: 'high' });
       await (micPub.track as LocalTrack).setProcessor(krisp);
+      // `setProcessor` attaches the processor but does not activate filtering —
+      // per LiveKit's documented usage, `setEnabled(true)` must be called
+      // explicitly after attach for the filter to actually process audio.
+      await krisp.setEnabled(true);
       setKrispFilter(krisp);
     } catch (e) {
       console.error('failed to re-attach Krisp noise filter', e);
