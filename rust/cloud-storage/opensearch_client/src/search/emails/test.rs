@@ -50,6 +50,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         match_type: "partial".to_string(),
         collapse: true,
         ids_only: false,
+        subject_only: false,
     }
     .into();
 

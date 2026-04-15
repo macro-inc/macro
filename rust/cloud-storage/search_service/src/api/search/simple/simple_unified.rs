@@ -363,13 +363,13 @@ pub(in crate::api::search) async fn perform_unified_search(
             }
         },
         async {
-            // For Name-only mode, only search emails via OpenSearch (subject/contact
-            // fields are covered by simple_query_string). Other entity types use PG
-            // name searches above. For Content/NameContent, search all indices.
+            // For Name-only mode, only search emails via OpenSearch (subject field
+            // via simple_query_string). Other entity types use PG name searches above.
             let mut args = unified_search_args;
             if matches!(search_on, SearchOn::Name) {
                 args.search_indices
                     .retain(|i| *i == models_opensearch::SearchEntityType::Emails);
+                args.email_search_args.subject_only = true;
             }
             if args.search_indices.is_empty() {
                 Ok((vec![], SearchCursorOption::Done))

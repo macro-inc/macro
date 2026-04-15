@@ -95,6 +95,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             include_labels: args.email_search_args.include_labels,
             exclude_labels: args.email_search_args.exclude_labels,
             importance: args.email_search_args.importance,
+            subject_only: args.email_search_args.subject_only,
         }
     }
 }
@@ -161,6 +162,7 @@ pub struct UnifiedEmailSearchArgs {
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
+    pub subject_only: bool,
 }
 
 #[derive(Debug, Default, Clone)]
