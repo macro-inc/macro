@@ -278,15 +278,25 @@ pub(crate) fn parse_highlight_hit(
             .map(|v| v.iter().map(|f| normalize_highlight_fragment(f)).collect())
             .unwrap_or_default(),
         sender: highlight
-            .get("sender")
+            .get("sender_name")
+            .or_else(|| highlight.get("sender"))
             .and_then(|v| v.first())
             .map(|v| v.to_string()),
         recipients: highlight
-            .get("recipients")
+            .get("recipient_names")
+            .or_else(|| highlight.get("recipients"))
             .map(|v| v.to_vec())
             .unwrap_or_default(),
-        cc: highlight.get("cc").map(|v| v.to_vec()).unwrap_or_default(),
-        bcc: highlight.get("bcc").map(|v| v.to_vec()).unwrap_or_default(),
+        cc: highlight
+            .get("cc_names")
+            .or_else(|| highlight.get("cc"))
+            .map(|v| v.to_vec())
+            .unwrap_or_default(),
+        bcc: highlight
+            .get("bcc_names")
+            .or_else(|| highlight.get("bcc"))
+            .map(|v| v.to_vec())
+            .unwrap_or_default(),
     }
 }
 
