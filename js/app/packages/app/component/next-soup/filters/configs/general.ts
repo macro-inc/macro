@@ -22,7 +22,7 @@ export const inboxFilter = config({
     include: {
       documentDone: [false],
       emailDone: [false],
-      importance: [true],
+      emailImportance: [true],
       channelDone: [false],
       chatDone: [false],
       folderDone: [false],
@@ -39,7 +39,7 @@ export const noiseFilterDef = config({
     include: {
       documentDone: [false],
       emailDone: [false],
-      importance: [false],
+      emailImportance: [false],
       channelDone: [false],
       chatDone: [false],
       folderDone: [false],

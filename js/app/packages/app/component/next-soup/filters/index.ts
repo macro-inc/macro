@@ -46,4 +46,4 @@ export {
   type FilterID,
   type FilterDefinition,
   type FilterContext,
-} from './configs';
+} from './configs/index';

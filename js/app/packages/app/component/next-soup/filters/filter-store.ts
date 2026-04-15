@@ -8,7 +8,7 @@ type BackendAst =
   | { l: unknown };
 
 type QueryTarget = 'df' | 'ef' | 'chanf' | 'cf' | 'pf' | 'callf' | 'propf';
-type EmailView = 'inbox' | 'drafts' | 'all';
+export type EmailView = 'inbox' | 'drafts' | 'sent' | 'all';
 
 type TargetAstMap = {
   [K in QueryTarget]?: BackendAst;
@@ -59,7 +59,7 @@ const FIELD_CONFIG = {
   threadId: { target: 'ef', field: 'ThreadId' },
   emailSeen: { target: 'ef', field: 'NotificationSeen' },
   emailDone: { target: 'ef', field: 'NotificationDone' },
-  importance: { target: 'ef', field: 'Importance' },
+  emailImportance: { target: 'ef', field: 'Importance' },
   sender: { target: 'ef', field: 'Sender' },
   shared: { target: 'ef', field: 'Shared' },
 
@@ -100,7 +100,7 @@ type FieldValueMap = {
   threadId: string;
   emailSeen: boolean;
   emailDone: boolean;
-  importance: boolean;
+  emailImportance: boolean;
   sender: string;
   shared: 'exclude' | 'include' | 'only';
   channelId: string;
@@ -141,11 +141,6 @@ export type FilterData = {
 
 export type FilterSetter = (fn: (draft: FilterData) => void) => void;
 
-export type FilterStore = [
-  filters: FilterData & { ast: Accessor<TargetAstMap> },
-  setFilters: FilterSetter,
-];
-
 export function createFilterStore(initial?: Partial<FilterData>) {
   const [data, setData] = createStore<FilterData>({
     include: initial?.include ?? {},
@@ -155,8 +150,9 @@ export function createFilterStore(initial?: Partial<FilterData>) {
   });
 
   const setFilters: FilterSetter = (fn) => setData(produce(fn));
+  const filters: Accessor<FilterData> = () => data;
 
-  return [data, setFilters, () => compileToAst(data)] as const;
+  return [filters, setFilters, () => compileToAst(data)] as const;
 }
 
 function propToAst(p: PropertyFilter): BackendAst {
