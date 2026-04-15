@@ -20,7 +20,6 @@ axum = { workspace = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../comms_db_client" }
 document_sub_type = { path = "../document_sub_type" }
-email_contact_search = { path = "../email_contact_search" }
 email_db_client = { path = "../email_db_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
