@@ -1,3 +1,4 @@
+import { $isListItemNode, $isListNode } from '@lexical/list';
 import { $getNearestNodeFromDOMNode } from 'lexical';
 import { Show, useContext } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
@@ -7,7 +8,7 @@ import {
   DRAG_DATA_FORMAT,
   type DraggableBlockState,
 } from '../../plugins/draggable-block/draggableBlockPlugin';
-import DotsSixVerticalIcon from '@icon/regular/dots-six-vertical.svg';
+import DotsSixVerticalIcon from '@icon/bold/dots-six-vertical-bold.svg';
 
 const HANDLE_SIZE = 20;
 const HANDLE_GAP = 4;
@@ -63,18 +64,33 @@ export function DraggableBlockMenu(props: {
     if (!elem || !event.dataTransfer || !ed) return;
 
     let nodeKey = '';
+    let dragImageElem: HTMLElement = elem;
     ed.read(() => {
       const node = $getNearestNodeFromDOMNode(elem);
-      if (node) nodeKey = node.getKey();
+      if (!node) return;
+
+      // First item of a list → drag the entire list (same for sublists).
+      if ($isListItemNode(node)) {
+        const parent = node.getParent();
+        if (parent && $isListNode(parent) && parent.getFirstChild() === node) {
+          nodeKey = parent.getKey();
+          const listElem = ed.getElementByKey(nodeKey);
+          if (listElem) dragImageElem = listElem;
+          return;
+        }
+      }
+
+      nodeKey = node.getKey();
     });
     if (!nodeKey) return;
 
     // Use the block element itself as the drag image.
-    const { transform } = elem.style;
-    elem.style.transform = 'translateZ(0)';
-    event.dataTransfer.setDragImage(elem, 0, 0);
+    const { transform } = dragImageElem.style;
+    dragImageElem.style.transform = 'translateZ(0)';
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setDragImage(dragImageElem, 0, 0);
     setTimeout(() => {
-      elem.style.transform = transform;
+      dragImageElem.style.transform = transform;
     });
 
     event.dataTransfer.setData(DRAG_DATA_FORMAT, nodeKey);
@@ -93,20 +109,24 @@ export function DraggableBlockMenu(props: {
   return (
     <Show when={props.active}>
       <Portal>
-        {/* Drag handle — DEBUG: always visible & interactive */}
+        {/* Drag handle */}
         <div
-          class="draggable-block-menu fixed z-50 flex items-center justify-center cursor-grab rounded bg-[hotpink]"
+          class="draggable-block-menu fixed z-10 flex items-center justify-center cursor-grab rounded transition-opacity duration-100"
+          classList={{
+            'opacity-0 pointer-events-none': !handlePosition(),
+            'opacity-100': !!handlePosition(),
+          }}
           style={{
             top: (handlePosition()?.top ?? -9999) + 'px',
             left: (handlePosition()?.left ?? -9999) + 'px',
             width: HANDLE_SIZE + 'px',
             height: HANDLE_SIZE + 'px',
           }}
-          draggable={true}
+          draggable={!!handlePosition()}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <DotsSixVerticalIcon class="size-4 text-white pointer-events-none" />
+          <DotsSixVerticalIcon class="size-5 text-ink-extra-muted opacity-50 pointer-events-none" />
         </div>
 
         {/* Drop target line */}

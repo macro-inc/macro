@@ -1,3 +1,4 @@
+import { $createListNode, $isListItemNode, $isListNode } from '@lexical/list';
 import { mergeRegister } from '@lexical/utils';
 import {
   $getNearestNodeFromDOMNode,
@@ -35,7 +36,7 @@ export const createDraggableBlockStore = () => {
 // ---------------------------------------------------------------------------
 
 function getTopLevelNodeKeys(editor: LexicalEditor): string[] {
-  return editor.getEditorState().read(() => $getRoot().getChildrenKeys());
+  return editor.read(() => $getRoot().getChildrenKeys());
 }
 
 function getCollapsedMargins(elem: HTMLElement): {
@@ -62,9 +63,45 @@ function getCollapsedMargins(elem: HTMLElement): {
 }
 
 /**
- * Find the top-level block element whose vertical extent contains the given
- * clientY coordinate.  When {@link useEdgeAsDefault} is true, positions above
- * the first block or below the last block snap to those blocks respectively.
+ * Given a list DOM element, find the `<li>` child closest to {@link clientY}.
+ * Uses midpoint-distance so there are no dead zones between items.
+ *
+ * Must be called from within an existing editor.read() context.
+ */
+function $getListItemElement(
+  editor: LexicalEditor,
+  listElem: HTMLElement,
+  clientY: number
+): HTMLElement | null {
+  const listNode = $getNearestNodeFromDOMNode(listElem);
+  if (!listNode || !$isListNode(listNode)) return null;
+
+  let closest: HTMLElement | null = null;
+  let closestDist = Infinity;
+
+  for (const child of listNode.getChildren()) {
+    if (!$isListItemNode(child)) continue;
+    const li = editor.getElementByKey(child.getKey());
+    if (!li) continue;
+    const rect = li.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    const dist = Math.abs(clientY - mid);
+    if (dist < closestDist) {
+      closestDist = dist;
+      closest = li;
+    }
+  }
+  return closest;
+}
+
+/**
+ * Find the draggable element at the given clientY coordinate.
+ *
+ * For most blocks this is the top-level element.  For lists we drill into the
+ * `<li>` items so individual list items can be reordered.
+ *
+ * When {@link useEdgeAsDefault} is true, positions above the first block or
+ * below the last block snap to those blocks respectively.
  */
 function getBlockElement(
   editor: LexicalEditor,
@@ -76,7 +113,7 @@ function getBlockElement(
 
   let blockElem: HTMLElement | null = null;
 
-  editor.getEditorState().read(() => {
+  editor.read(() => {
     if (useEdgeAsDefault) {
       const firstElem = editor.getElementByKey(topLevelNodeKeys[0]);
       const lastElem = editor.getElementByKey(
@@ -103,6 +140,15 @@ function getBlockElement(
         event.clientY >= rect.top - marginTop &&
         event.clientY <= rect.bottom + marginBottom
       ) {
+        // If this is a list, drill into its items.
+        const node = $getNodeByKey(key);
+        if (node && $isListNode(node)) {
+          const li = $getListItemElement(editor, elem, event.clientY);
+          if (li) {
+            blockElem = li;
+            return;
+          }
+        }
         blockElem = elem;
         return;
       }
@@ -131,7 +177,6 @@ function registerDraggableBlock(
 ) {
   const { setState } = props;
   let isDraggingBlock = false;
-  let currentDebugElem: HTMLElement | null = null; // DEBUG
 
   // -- Mouse tracking (hover detection) ------------------------------------
   // Attached to `document` so movement in the left margin (where the drag
@@ -166,21 +211,11 @@ function registerDraggableBlock(
     }
 
     const blockElem = getBlockElement(editor, event);
-    // DEBUG: highlight hovered element
-    const prev = currentDebugElem;
-    if (prev && prev !== blockElem) prev.style.background = '';
-    if (blockElem) blockElem.style.background = 'yellow';
-    currentDebugElem = blockElem;
     setState({ hoveredElement: blockElem });
   }
 
   function clearHover() {
     if (isDraggingBlock) return;
-    // DEBUG: clear highlight
-    if (currentDebugElem) {
-      currentDebugElem.style.background = '';
-      currentDebugElem = null;
-    }
     setState({ hoveredElement: null });
   }
 
@@ -194,6 +229,7 @@ function registerDraggableBlock(
 
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
 
     const targetBlockElem = getBlockElement(editor, event, true);
     if (!targetBlockElem) {
@@ -231,10 +267,79 @@ function registerDraggableBlock(
       const draggedNode = $getNodeByKey(dragData);
       if (!draggedNode) return;
 
-      const targetNode = $getNearestNodeFromDOMNode(targetBlockElem);
+      let targetNode = $getNearestNodeFromDOMNode(targetBlockElem);
       if (!targetNode) return;
 
-      // Dropping on itself is a no-op.
+      if (targetNode === draggedNode) return;
+
+      const draggedParent = draggedNode.getParent();
+      const targetParent = $isListItemNode(targetNode)
+        ? targetNode.getParent()
+        : null;
+
+      // ── Same-list reorder ──────────────────────────────────────────
+      // Both nodes are ListItemNodes sharing the same ListNode parent.
+      if (
+        $isListItemNode(draggedNode) &&
+        $isListItemNode(targetNode) &&
+        draggedParent &&
+        draggedParent === targetParent
+      ) {
+        if (insertBefore) {
+          targetNode.insertBefore(draggedNode);
+        } else {
+          targetNode.insertAfter(draggedNode);
+        }
+        return;
+      }
+
+      // ── List-item extracted to root level ──────────────────────────
+      // A ListItemNode dragged outside its parent list needs to be
+      // wrapped in a fresh ListNode of the same type.
+      if (
+        $isListItemNode(draggedNode) &&
+        draggedParent &&
+        $isListNode(draggedParent)
+      ) {
+        const listType = draggedParent.getListType();
+        const newList = $createListNode(listType);
+        newList.append(draggedNode);
+
+        // Resolve the insertion target to a top-level node when the
+        // cursor is over a list item in a *different* list.
+        let insertTarget = targetNode;
+        if (
+          $isListItemNode(targetNode) &&
+          targetParent &&
+          $isListNode(targetParent)
+        ) {
+          insertTarget = targetParent;
+        }
+
+        if (insertBefore) {
+          insertTarget.insertBefore(newList);
+        } else {
+          insertTarget.insertAfter(newList);
+        }
+
+        // Remove the source list if it's now empty.
+        if (draggedParent.getChildrenSize() === 0) {
+          draggedParent.remove();
+        }
+        return;
+      }
+
+      // ── Default: top-level block move ──────────────────────────────
+      // Resolve list-item targets to their parent list so a whole block
+      // doesn't end up inside another list.
+      if (
+        $isListItemNode(targetNode) &&
+        targetParent &&
+        $isListNode(targetParent)
+      ) {
+        targetNode = targetParent;
+      }
+
       if (targetNode === draggedNode) return;
 
       if (insertBefore) {
