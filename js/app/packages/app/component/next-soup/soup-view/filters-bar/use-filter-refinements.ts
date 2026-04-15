@@ -9,6 +9,7 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
+import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserContext, useUserId } from '@core/context/user';
 import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo } from 'solid-js';
@@ -39,12 +40,13 @@ const TAB_ONLY_FILTERS = new Set([
  * and a function to reset filters to the current tab's default state.
  */
 export function useFilterRefinements() {
-  const { soup, filters, setFilters, assigneeFilter, setAssigneeFilter, activeTab } =
+  const { soup, filters: filterData, setFilters, assigneeFilter, setAssigneeFilter, activeTab } =
     useSoupView();
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
+  const quickAccess = useQuickAccess();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -77,7 +79,7 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return false;
 
-    const expectedIds = new Set(preset.clientFilters.or);
+    const expectedIds = new Set(preset.clientFilters);
 
     const currentIds = new Set(soup.filters.activeIds() as FilterID[]);
 
@@ -86,11 +88,11 @@ export function useFilterRefinements() {
       [...expectedIds].some((id) => !currentIds.has(id as FilterID));
 
     // Check if there are any external filters set
-    const filterData = filters();
+    const currentFilterData = filterData();
     const hasExternalFilters =
-      Object.keys(filterData.include).length > 0 ||
-      Object.keys(filterData.exclude).length > 0 ||
-      filterData.properties.length > 0;
+      Object.keys(currentFilterData.include).length > 0 ||
+      Object.keys(currentFilterData.exclude).length > 0 ||
+      currentFilterData.properties.length > 0;
 
     const hasSubFilters = assigneeFilter().length > 0;
 
@@ -126,7 +128,7 @@ export function useFilterRefinements() {
    */
   const activeFiltersList = createMemo((): ActiveFilter[] => {
     const preset = currentPreset();
-    const presetFilterIds = new Set<string>(preset?.clientFilters.or ?? []);
+    const presetFilterIds = new Set<string>(preset?.clientFilters ?? []);
 
     const filters: ActiveFilter[] = [];
     for (const category of viewCategories()) {
@@ -187,8 +189,53 @@ export function useFilterRefinements() {
       });
     }
 
-    // TODO: Channel and sender filter chips require tracking those IDs separately
-    // since they're stored in the filter store. For now, clearing filters removes them.
+    // Channel filter chips (In:)
+    const channelIds = filterData().include.channelId ?? [];
+    for (const channelId of channelIds) {
+      const item = quickAccess.getById(channelId);
+      const label =
+        item && 'data' in item && item.data?.name ? item.data.name : channelId;
+      filters.push({
+        categoryLabel: 'In',
+        optionId: `in:${channelId}`,
+        optionLabel: label,
+        onRemove: () =>
+          setFilters((d) => {
+            const ids = (d.include.channelId ?? []).filter(
+              (id) => id !== channelId
+            );
+            if (ids.length > 0) {
+              d.include.channelId = ids;
+            } else {
+              delete d.include.channelId;
+            }
+          }),
+      });
+    }
+
+    // Sender filter chips (From:)
+    const senderIds = filterData().include.channelSenderId ?? [];
+    for (const senderId of senderIds) {
+      const item = quickAccess.getById(senderId);
+      const label =
+        item && 'data' in item && item.data?.name ? item.data.name : senderId;
+      filters.push({
+        categoryLabel: 'From',
+        optionId: `from:${senderId}`,
+        optionLabel: label,
+        onRemove: () =>
+          setFilters((d) => {
+            const ids = (d.include.channelSenderId ?? []).filter(
+              (id) => id !== senderId
+            );
+            if (ids.length > 0) {
+              d.include.channelSenderId = ids;
+            } else {
+              delete d.include.channelSenderId;
+            }
+          }),
+      });
+    }
 
     return filters;
   });
