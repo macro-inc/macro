@@ -180,36 +180,46 @@ where
 
         let event_count = events.len();
 
-        let ids: Result<Vec<_>, _> = events.iter().map(AggregateId::from_event_record).collect();
-        let ids = ids?;
+        let result: Result<EventAggregationStats, anyhow::Error> = async {
+            let ids: Result<Vec<_>, _> =
+                events.iter().map(AggregateId::from_event_record).collect();
+            let ids = ids?;
 
-        let aggregates = self
-            .event_storage
-            .get_aggregates_for_users_entities(ids)
-            .await?;
+            let aggregates = self
+                .event_storage
+                .get_aggregates_for_users_entities(ids)
+                .await?;
 
-        let rx = self
-            .sync_worker
-            .process_message(events, aggregates, self.time.now())
-            .await
-            .map_err(|r| anyhow::anyhow!("Tried to send message to closed worker: {r:?}"))?;
+            let rx = self
+                .sync_worker
+                .process_message(events, aggregates, self.time.now())
+                .await
+                .map_err(|r| anyhow::anyhow!("Tried to send message to closed worker: {r:?}"))?;
 
-        let AggregationOutput {
-            events,
-            aggregates,
-            existing_aggregate_count,
-            new_aggregate_count,
-        } = rx.await?;
+            let AggregationOutput {
+                events,
+                aggregates,
+                existing_aggregate_count,
+                new_aggregate_count,
+            } = rx.await?;
 
-        self.event_storage.set_aggregates(aggregates).await?;
+            self.event_storage.set_aggregates(aggregates).await?;
 
-        self.event_storage.mark_processed(events).await?;
+            self.event_storage.mark_processed(events).await?;
 
-        Ok(EventAggregationStats {
-            event_count,
-            existing_aggregate_count,
-            new_aggregate_count,
-        })
+            Ok(EventAggregationStats {
+                event_count,
+                existing_aggregate_count,
+                new_aggregate_count,
+            })
+        }
+        .await;
+
+        if result.is_err() {
+            self.event_storage.rollback().await;
+        }
+
+        result
     }
 }
 
