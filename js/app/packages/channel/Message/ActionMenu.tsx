@@ -1,8 +1,8 @@
-import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
-import LinkIcon from '@icon/regular/link.svg';
-import PencilIcon from '@icon/regular/pencil.svg';
-import SmileyIcon from '@icon/regular/smiley.svg';
-import TrashIcon from '@icon/regular/trash.svg';
+import ReplyIcon from '@macro-icons/wide/reply.svg';
+import LinkIcon from '@macro-icons/wide/link.svg';
+import EditIcon from '@macro-icons/wide/edit.svg';
+import EllipsisIcon from '@macro-icons/square/ellipsis.svg';
+import TrashIcon from '@macro-icons/wide/bin.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
@@ -40,10 +40,7 @@ function ActionButton(props: {
       aria-label={props.action.label}
       data-message-action={props.action.id}
       class={cn(
-        'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
-        {
-          'text-failure-ink': props.action.destructive,
-        },
+        'size-8 flex items-center justify-center text-ink hover:bg-hover hover-transition-bg',
         props.action.class
       )}
       onClick={props.onClick}
@@ -75,7 +72,6 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Task',
       icon: TaskIcon,
       onClick: actions?.onCreateTask,
-      class: 'text-task',
     },
     {
       id: 'reply',
@@ -92,7 +88,7 @@ export function ActionMenu(props: ActionMenuProps) {
     {
       id: 'edit',
       label: 'Edit',
-      icon: PencilIcon,
+      icon: EditIcon,
       onClick: actions?.onEdit,
     },
     {
@@ -101,6 +97,7 @@ export function ActionMenu(props: ActionMenuProps) {
       icon: TrashIcon,
       onClick: actions?.onDelete,
       destructive: true,
+      class: 'text-failure-ink',
     },
   ];
 
@@ -139,7 +136,7 @@ export function ActionMenu(props: ActionMenuProps) {
               onEmojiSelect={(emoji) => {
                 handleReaction(emoji);
               }}
-              trigger={renderIcon(SmileyIcon)}
+              trigger={renderIcon(EllipsisIcon)}
               triggerProps={{
                 title: 'More reactions',
                 'aria-label': 'More reactions',
@@ -148,6 +145,7 @@ export function ActionMenu(props: ActionMenuProps) {
                   'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
               }}
             />
+            <div class="w-px h-5 bg-edge-muted mx-1" />
           </Show>
 
           <For each={visibleActions}>
