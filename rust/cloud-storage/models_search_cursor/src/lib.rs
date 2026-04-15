@@ -95,8 +95,6 @@ pub struct SearchCursor {
     pub chat_name_cursor: SearchCursorOption,
     /// The content cursor
     pub content_cursor: SearchCursorOption,
-    /// The email subject cursor
-    pub email_subject_cursor: SearchCursorOption,
     /// The project cursor
     pub project_name_cursor: SearchCursorOption,
 }
@@ -122,7 +120,6 @@ impl SearchCursor {
         self.document_name_cursor.is_done()
             && self.chat_name_cursor.is_done()
             && self.content_cursor.is_done()
-            && self.email_subject_cursor.is_done()
             && self.project_name_cursor.is_done()
     }
 }

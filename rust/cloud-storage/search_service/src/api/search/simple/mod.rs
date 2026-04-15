@@ -13,7 +13,6 @@ pub(in crate::api) mod filter;
 pub(in crate::api) mod simple_channel;
 pub(in crate::api) mod simple_chat;
 pub(in crate::api) mod simple_document;
-pub(in crate::api) mod simple_email;
 pub(in crate::api) mod simple_project;
 pub mod simple_unified;
 

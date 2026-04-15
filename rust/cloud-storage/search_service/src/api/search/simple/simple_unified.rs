@@ -1,6 +1,6 @@
 use crate::api::search::simple::filter::FilterVariantToSearchArgs;
 
-use crate::api::search::simple::{simple_chat, simple_document, simple_email, simple_project};
+use crate::api::search::simple::{simple_chat, simple_document, simple_project};
 use crate::api::{
     context::SearchHandlerState,
     search::{SearchPaginationParams, simple::SearchError},
@@ -26,7 +26,6 @@ use opensearch_client::search::unified::UnifiedSearchArgs;
 enum SearchSource {
     DocumentName,
     ChatName,
-    EmailSubject,
     ProjectName,
     Content,
 }
@@ -176,7 +175,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let should_include_projects = search_filters.should_include_projects;
     let should_include_emails = search_filters.should_include_emails;
     let email_terms = split_search_terms(&terms);
-    let is_email_multi_term = email_terms.len() > 1;
 
     // Await all tasks in parallel
     let (
@@ -239,10 +237,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         .as_ref()
         .map(|c| c.chat_name_cursor.clone())
         .unwrap_or_default();
-    let email_cursor = cursor
-        .as_ref()
-        .map(|c| c.email_subject_cursor.clone())
-        .unwrap_or_default();
     let project_cursor = cursor
         .as_ref()
         .map(|c| c.project_name_cursor.clone())
@@ -256,7 +250,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Clone cursors for passing to search functions (originals needed for cursor regeneration)
     let document_cursor_for_search = document_cursor.clone();
     let chat_cursor_for_search = chat_cursor.clone();
-    let email_cursor_for_search = email_cursor.clone();
     let project_cursor_for_search = project_cursor.clone();
     let content_cursor_for_search = content_cursor.clone();
 
@@ -299,7 +292,7 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Call search functions in parallel for included entity types
     // search_names handles Done cursors internally by returning early
-    let (doc_name_results, chat_results, email_results, project_results, content_results) = tokio::join!(
+    let (doc_name_results, chat_results, project_results, content_results) = tokio::join!(
         async {
             if should_include_documents {
                 match search_on {
@@ -337,32 +330,6 @@ pub(in crate::api::search) async fn perform_unified_search(
                             name_search_term.clone(),
                             page_size,
                             chat_cursor_for_search,
-                        )
-                        .await
-                    }
-                    SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
-                }
-            } else {
-                Ok((vec![], SearchCursorOption::Done))
-            }
-        },
-        async {
-            // Skip PG email name/subject search for multi-term queries — OpenSearch
-            // simple_query_string already covers subject and contact fields.
-            if should_include_emails && !is_email_multi_term {
-                match search_on {
-                    SearchOn::Name | SearchOn::NameContent => {
-                        simple_email::search_names(
-                            &ctx.db,
-                            &user_id,
-                            &simple_email::FilterEmailResponse {
-                                ids_only: false,
-                                thread_ids: filter_email_response.thread_ids,
-                                importance: filter_email_response.importance,
-                            },
-                            name_search_term.clone(),
-                            page_size,
-                            email_cursor_for_search,
                         )
                         .await
                     }
@@ -417,14 +384,12 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Extract results and next cursors
     let (doc_hits, doc_next_cursor) = doc_name_results?;
     let (chat_hits, chat_next_cursor) = chat_results?;
-    let (email_hits, email_next_cursor) = email_results?;
     let (project_hits, project_next_cursor) = project_results?;
     let (content_hits, content_next_cursor) = content_results?;
 
     // Track original counts before combining
     let doc_name_count = doc_hits.len();
     let chat_name_count = chat_hits.len();
-    let email_subject_count = email_hits.len();
     let project_name_count = project_hits.len();
     let content_count = content_hits.len();
 
@@ -433,7 +398,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             "combine_and_sort_results",
             doc_name_count,
             chat_name_count,
-            email_subject_count,
             project_name_count,
             content_count
         )
@@ -448,10 +412,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         combined.extend(chat_hits.into_iter().map(|hit| TaggedSearchHit {
             hit,
             source: SearchSource::ChatName,
-        }));
-        combined.extend(email_hits.into_iter().map(|hit| TaggedSearchHit {
-            hit,
-            source: SearchSource::EmailSubject,
         }));
         combined.extend(project_hits.into_iter().map(|hit| TaggedSearchHit {
             hit,
@@ -499,10 +459,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             .iter()
             .filter(|h| h.source == SearchSource::ChatName)
             .count();
-        let included_email_subjects = final_tagged
-            .iter()
-            .filter(|h| h.source == SearchSource::EmailSubject)
-            .count();
         let included_project_names = final_tagged
             .iter()
             .filter(|h| h.source == SearchSource::ProjectName)
@@ -529,14 +485,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             &chat_cursor,
         );
 
-        let new_email_cursor = compute_next_cursor(
-            &email_next_cursor,
-            included_email_subjects,
-            email_subject_count,
-            find_last_of_source(&final_tagged, SearchSource::EmailSubject),
-            &email_cursor,
-        );
-
         let new_project_cursor = compute_next_cursor(
             &project_next_cursor,
             included_project_names,
@@ -556,7 +504,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         // Build next cursor if any source has more results
         let has_more = new_doc_cursor.has_more()
             || new_chat_cursor.has_more()
-            || new_email_cursor.has_more()
             || new_project_cursor.has_more()
             || new_content_cursor.has_more();
 
@@ -565,7 +512,6 @@ pub(in crate::api::search) async fn perform_unified_search(
                 document_name_cursor: new_doc_cursor,
                 chat_name_cursor: new_chat_cursor,
                 content_cursor: new_content_cursor,
-                email_subject_cursor: new_email_cursor,
                 project_name_cursor: new_project_cursor,
             };
             cursor.encode()
