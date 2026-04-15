@@ -750,7 +750,7 @@ export function createSplitLayout(
     const s = () => findSplitById(id);
     const currentSplit = s();
     if (!currentSplit) return;
-    const content = () => currentSplit.content;
+    const content = () => s()!.content;
 
     return {
       id: currentSplit.id,
