@@ -5,6 +5,7 @@ export type AppEvents = {
   onboarding_start: Record<string, unknown>;
   onboarding_step: Record<string, unknown>; // payload -
   onboarding_completed: Record<string, unknown>;
+  login_from_onboarding: Record<string, unknown>;
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;

@@ -10,6 +10,7 @@ import {
 
 export type UseEmailSearchMentionOptions = {
   searchTerm: Accessor<string>;
+  enabled?: Accessor<boolean | undefined>;
 };
 
 export type UseEmailSearchMentionResult = {
@@ -23,7 +24,7 @@ export type UseEmailSearchMentionResult = {
 export function useEmailSearchMention(
   options: UseEmailSearchMentionOptions
 ): UseEmailSearchMentionResult {
-  const { searchTerm } = options;
+  const { searchTerm, enabled } = options;
 
   // Build search query args for remote email search
   const args = createLazyMemo((): SearchSoupQueryArgs => {
@@ -44,7 +45,9 @@ export function useEmailSearchMention(
     };
   });
 
-  const emailSearchQuery = useSearchSoupQuery(args);
+  const emailSearchQuery = useSearchSoupQuery(args, () => ({
+    enabled: enabled?.(),
+  }));
 
   const emailList = createLazyMemo((): EntityItem[] => {
     if (emailSearchQuery.status !== 'success') return [];

@@ -512,10 +512,25 @@ impl<
                 if remaining == 0 {
                     tracing::info!(call_id = %call.id, room_name, "last participant left, archiving call");
                     let channel_id = call.channel_id;
+                    let egress_id = call.egress_id.clone();
                     self.repo
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+
+                    // Stop egress explicitly before deleting the room. DeleteRoom
+                    // is expected to cascade-stop egress, but a failed or slow
+                    // DeleteRoom can leave egress running and billing. Doing it
+                    // first makes the runaway-billing case impossible.
+                    if let Some(egress_id) = egress_id {
+                        self.rtc_client
+                            .stop_egress(&egress_id)
+                            .await
+                            .inspect_err(
+                                |e| tracing::error!(error=?e, egress_id, "failed to stop egress"),
+                            )
+                            .ok();
+                    }
 
                     self.rtc_client
                         .delete_room(room_name)

@@ -7,6 +7,7 @@ import { PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 import { getPlatform } from '@core/util/platform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 
 /**
  * Resolves the user's device context for analytics enrichment.
@@ -21,6 +22,13 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
  * a phone/tablet browser ('mobile-web') from a desktop browser ('desktop-web').
  */
 const DEVICE_PROPERTY = 'macro_device' as const;
+const ENVIRONMENT_PROPERTY = 'macro_environment' as const;
+
+function getEnvironment(): 'dev' | 'prod' | 'unknown' {
+  if (PROD_MODE_ENV) return 'prod';
+  if (DEV_MODE_ENV) return 'dev';
+  return 'unknown';
+}
 
 function getDeviceType():
   | 'desktop-app'
@@ -100,7 +108,11 @@ export const createAnalytics = () => {
   ) => {
     if (disabled) return;
 
-    const enriched = { ...data, [DEVICE_PROPERTY]: getDeviceType() };
+    const enriched = {
+      ...data,
+      [DEVICE_PROPERTY]: getDeviceType(),
+      [ENVIRONMENT_PROPERTY]: getEnvironment(),
+    };
 
     try {
       match(provider)
@@ -168,10 +180,12 @@ export const createAnalytics = () => {
     const pagePath = opts?.path ?? window.location.pathname;
     const pageLocation = opts?.location ?? window.location.href;
     const deviceType = getDeviceType();
+    const environment = getEnvironment();
 
     try {
       gtag('event', 'page_view', {
         [DEVICE_PROPERTY]: deviceType,
+        [ENVIRONMENT_PROPERTY]: environment,
         page_title: pageTitle,
         page_location: pageLocation,
         page_path: pagePath,
@@ -179,11 +193,13 @@ export const createAnalytics = () => {
 
       fbq('track', 'PageView', {
         [DEVICE_PROPERTY]: deviceType,
+        [ENVIRONMENT_PROPERTY]: environment,
         content_name: pageTitle,
       });
 
       posthog.capture('$pageview', {
         [DEVICE_PROPERTY]: deviceType,
+        [ENVIRONMENT_PROPERTY]: environment,
         $current_url: pageLocation,
         $pathname: pagePath,
         $title: pageTitle,

@@ -1,18 +1,15 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
+import { isMobile } from '@core/mobile/isMobile';
+import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { tabTitleSignal } from '@core/signal/tabTitle';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { useNavigate } from '@solidjs/router';
-import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
   createMemo,
   createSelector,
-  createSignal,
   For,
   on,
   onCleanup,
@@ -20,32 +17,25 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
-import { SplitContainer } from './components/SplitContainer';
-import {
-  SplitLayoutContext,
-  SplitPanelContext,
-  type SplitPanelContextType,
-} from './context';
-import { useSplitLayout } from './layout';
+import { SplitPanel } from './components/SplitPanel';
+import { SplitLayoutContext } from './context';
 import {
   createSplitLayout,
   type SplitContent,
   SplitEvent,
   type SplitEventWithType,
-  type SplitHandle,
   type SplitId,
   type SplitManager,
   type SplitState,
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
-import { createHeaderCollapser } from './utils/createHeaderCollapser';
-import { registerSplitHotkeys } from './registerSplitHotkeys';
-import { isListViewID } from '@app/constants/list-views';
-import { isMobile } from '@core/mobile/isMobile';
-import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { cn } from '@ui/utils/classname';
+import {
+  createMobileSwipeLayout,
+  type MobileSwipeLayout,
+} from './mobile/createMobileSwipeLayout';
+import { MobileSwipeBackContainer } from './mobile/MobileSwipeBackContainer';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -80,7 +70,7 @@ function createLayoutUrlSync(
 
   /** Syncs changes from the layout manager to the URL*/
   createEffect(
-    on([() => splitManager.splits().length], () => {
+    on([() => splitManager.getUrlSegments().join('/')], () => {
       if (urlLayoutDrift()) {
         // Flush the state to the url
         navigate(`/${splitManager.getUrlSegments().join('/')}`);
@@ -280,6 +270,11 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const splitManager = createSplitLayout(blockOrchestrator, decodedPairs());
   const [, setTabTitle] = tabTitleSignal;
 
+  // Create the mobile swipe layout once on mobile devices.
+  const mobileSwipeLayout: MobileSwipeLayout | undefined = isMobile()
+    ? createMobileSwipeLayout(splitManager)
+    : undefined;
+
   // Store a ref to each panel by id
   const panelRefs = new Map<SplitId, HTMLDivElement>();
   createEffect(
@@ -313,31 +308,47 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       <div
         class={cn('size-full p-2 mobile:p-0', { 'pl-0': isSidebarVisible() })}
       >
-        <Resize.Zone
-          direction="horizontal"
-          gutter={4}
-          captureResizeCtx={splitManager.setResizeContext}
-        >
-          <For each={ids()}>
-            {(id, index) => (
-              <Show when={splitManager.getSplit(id)}>
-                {(handle) => (
-                  <Suspense>
-                    <Resize.Panel id={id} minSize={400} index={index()}>
-                      <SplitPanel
-                        split={splits()[index()]!}
-                        handle={handle()}
-                        active={activeSplitSelector(id)}
-                        setPanelRef={(panelRef) => panelRefs.set(id, panelRef)}
-                        index={index()}
-                      />
-                    </Resize.Panel>
-                  </Suspense>
+        <Show
+          when={isMobile() && mobileSwipeLayout}
+          fallback={
+            // Desktop: side-by-side resizable splits.
+            <Resize.Zone
+              direction="horizontal"
+              gutter={4}
+              captureResizeCtx={splitManager.setResizeContext}
+            >
+              <For each={ids()}>
+                {(id, index) => (
+                  <Show when={splitManager.getSplit(id)}>
+                    {(handle) => (
+                      <Suspense>
+                        <Resize.Panel id={id} minSize={400} index={index()}>
+                          <SplitPanel
+                            split={splits()[index()]!}
+                            handle={handle()}
+                            active={activeSplitSelector(id)}
+                            setPanelRef={(panelRef) =>
+                              panelRefs.set(id, panelRef)
+                            }
+                            index={index()}
+                          />
+                        </Resize.Panel>
+                      </Suspense>
+                    )}
+                  </Show>
                 )}
-              </Show>
-            )}
-          </For>
-        </Resize.Zone>
+              </For>
+            </Resize.Zone>
+          }
+        >
+          {/* Mobile: stacked FG/BG layout with swipe-back gesture. */}
+          <MobileSwipeBackContainer
+            splitManager={splitManager}
+            mobileSwipeLayout={mobileSwipeLayout!}
+            splits={splits}
+            panelRefs={panelRefs}
+          />
+        </Show>
       </div>
       <PopoverSplitRenderer
         popovers={splitManager.popovers}
@@ -348,98 +359,5 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
         }}
       />
     </SplitLayoutContext.Provider>
-  );
-}
-
-type SplitPanelProps = {
-  split: SplitState;
-  handle: SplitHandle;
-  active: boolean;
-  setPanelRef: (ref: HTMLDivElement) => void;
-  index: number;
-};
-
-function SplitPanel(props: SplitPanelProps) {
-  const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
-  const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
-    `split=${props.split.id}`
-  );
-
-  const panelSize = createElementSize(panelRef);
-  const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
-
-  const [previewState, setPreviewState] = createSignal(false);
-
-  const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
-  const headerCollapser = createHeaderCollapser(
-    () => layoutRefs.headerLeft,
-    () => panelSize.width
-  );
-
-  const splitLayoutHelpers = useSplitLayout();
-  registerSplitHotkeys({
-    splitHotkeyScope,
-    insertSplit: splitLayoutHelpers.insertSplit,
-    closeSplit: () => props.handle.close(),
-    toggleSpotlight: () => props.handle.toggleSpotlight(),
-    canGoBack: () => props.handle.canGoBack(),
-    goBack: () => props.handle.goBack(),
-    canGoForward: () => props.handle.canGoForward(),
-    goForward: () => props.handle.goForward(),
-    replaceSplit: splitLayoutHelpers.replaceSplit,
-    splitName: () => props.handle.displayName(),
-    getSplitCount: () => splitLayoutHelpers.getSplitCount(),
-    isNotUnifiedList: () => {
-      const content = props.handle.content();
-      return !isListViewID(content.id);
-    },
-  });
-
-  const nextSoup = createSoupState({
-    initialFilters: ['explicit-noise'],
-  });
-
-  return (
-    <SoupContextProvider soup={nextSoup}>
-      <SplitPanelContext.Provider
-        value={{
-          handle: props.handle,
-          splitHotkeyScope,
-          isPanelActive: () => props.active,
-          panelRef,
-          panelSize,
-          layoutRefs,
-          contentOffsetTop,
-          setContentOffsetTop,
-          previewState: [previewState, setPreviewState],
-          headerCollapser,
-        }}
-      >
-        <SplitContainer
-          id={props.split.id}
-          ref={(ref) => {
-            setPanelRef(ref);
-            props.setPanelRef(ref);
-            attachHotKeys(ref);
-          }}
-          tl={props.index === 0 && !isMobile()}
-          bl={props.index === 0 && !isMobile()}
-          tr={
-            splitLayoutHelpers.getSplitCount() > 1 &&
-            props.index === splitLayoutHelpers.getSplitCount() - 1 &&
-            !isMobile()
-          }
-          br={
-            splitLayoutHelpers.getSplitCount() > 1 &&
-            props.index === splitLayoutHelpers.getSplitCount() - 1 &&
-            !isMobile()
-          }
-        >
-          <Suspense>
-            <Dynamic component={props.split.mount.element} />
-          </Suspense>
-        </SplitContainer>
-      </SplitPanelContext.Provider>
-    </SoupContextProvider>
   );
 }

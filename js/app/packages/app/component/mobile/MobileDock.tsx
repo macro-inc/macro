@@ -182,7 +182,13 @@ export function MobileDock() {
   });
 
   const navigate = (id: ListView) => {
-    openWithSplit({ type: 'component', id }, { mergeHistory: true });
+    // If we're already on a soup/component view, replace in-place (mergeHistory)
+    // so the tab switch doesn't push a new entry into the swipe-back BG slot.
+    // From any other view (document, task, etc.) treat it as forward navigation
+    // so the user can swipe back to where they were.
+    const fgContent = globalSplitManager()?.activeSplit()?.content();
+    const isOnSoupView = fgContent?.type === 'component';
+    openWithSplit({ type: 'component', id }, { mergeHistory: isOnSoupView });
   };
 
   return (

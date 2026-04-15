@@ -85,6 +85,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
     scopeId: panel.splitHotkeyScope,
+    registrationType: 'add',
     description: 'Search',
     keyDownHandler: () => {
       editor.controls.focus();

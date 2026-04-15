@@ -150,6 +150,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         }
       : useEmailSearchMention({
           searchTerm,
+          enabled: () => !props.sources || props.sources.includes('emails'),
         });
 
   const dateOptions = useDateSearch({ query: searchTerm });

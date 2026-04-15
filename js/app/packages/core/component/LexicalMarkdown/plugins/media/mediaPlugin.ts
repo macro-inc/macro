@@ -88,8 +88,9 @@ export const UPDATE_MEDIA_SIZE_COMMAND: LexicalCommand<
   [NodeKey, { width: number; height: number }, MediaType]
 > = createCommand('UPDATE_MEDIA_SIZE_COMMAND');
 
-export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<MediaType> =
-  createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
+export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<
+  MediaType | 'all'
+> = createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
 
 export function validateMediaFile(file: File, mediaType: MediaType): boolean {
   const ext = fileExtension(file.name);
@@ -539,7 +540,12 @@ function registerMediaPlugin(editor: LexicalEditor) {
       (mediaType) => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = mediaType === 'video' ? 'video/*' : 'image/*';
+        input.accept = 'image/*';
+        if (mediaType === 'video') {
+          input.accept = 'video/*';
+        } else if (mediaType === 'all') {
+          input.accept = 'image/*,video/*';
+        }
         input.multiple = true;
         input.style.display = 'none';
 

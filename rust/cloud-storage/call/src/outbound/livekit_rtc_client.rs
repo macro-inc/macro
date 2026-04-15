@@ -73,7 +73,13 @@ impl CallRtcClient for LivekitRtcClient {
     #[tracing::instrument(err, skip(self))]
     async fn create_room(&self, room_name: &str) -> anyhow::Result<()> {
         self.room_client
-            .create_room(room_name, CreateRoomOptions::default())
+            .create_room(
+                room_name,
+                CreateRoomOptions {
+                    empty_timeout: 60,
+                    ..Default::default()
+                },
+            )
             .await?;
         Ok(())
     }

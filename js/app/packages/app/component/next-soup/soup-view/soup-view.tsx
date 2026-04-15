@@ -76,7 +76,7 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useHotkeyDOMScope, registerHotkey } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
@@ -211,6 +211,19 @@ export const SoupView = (props: SoupViewProps) => {
   };
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
+  const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
+
+  registerHotkey({
+    hotkey: 'cmd+f',
+    scopeId: panel.splitHotkeyScope,
+    registrationType: 'add',
+    description: 'Search',
+    keyDownHandler: () => {
+      if (narrowSearchExpanded() || !searchIsCollapsed()) return false;
+      setNarrowSearchExpanded(true);
+      return true;
+    },
+  });
 
   const isMailView = createMemo(() => {
     const content = panel.handle.content();
@@ -232,7 +245,9 @@ export const SoupView = (props: SoupViewProps) => {
       value={{
         ...panel,
         halfSplitState: () =>
-          soup.previewEntity() ? { side: 'left', percentage: 30 } : undefined,
+          soup.previewEntity() && soup.focus.item()
+            ? { side: 'left', percentage: 30 }
+            : undefined,
       }}
     >
       <SoupViewContextProvider
@@ -259,8 +274,8 @@ export const SoupView = (props: SoupViewProps) => {
                     <CollapsibleHeaderItem
                       id="tabs"
                       priority={1}
-                      expanded={<SoupViewTabs />}
-                      collapsed={<CollapsedSoupViewTabs />}
+                      expanded={() => <SoupViewTabs />}
+                      collapsed={() => <CollapsedSoupViewTabs />}
                       containerClass="h-full"
                     />
                   </Show>
@@ -291,14 +306,15 @@ export const SoupView = (props: SoupViewProps) => {
                   id="search"
                   priority={0}
                   onCollapsedChange={(isCollapsed) => {
+                    setSearchIsCollapsed(isCollapsed);
                     if (!isCollapsed) setNarrowSearchExpanded(false);
                   }}
-                  expanded={
+                  expanded={() => (
                     <div class="w-52">
                       <SoupSearchbar variant="secondary" />
                     </div>
-                  }
-                  collapsed={
+                  )}
+                  collapsed={() => (
                     <Show when={!narrowSearchExpanded()}>
                       <Tooltip
                         tooltip={
@@ -314,7 +330,7 @@ export const SoupView = (props: SoupViewProps) => {
                         </Button>
                       </Tooltip>
                     </Show>
-                  }
+                  )}
                 />
               </Show>
             </SplitHeaderRight>
@@ -968,7 +984,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
             onClear={soup.selection.clear}
           />
         </Show>
-        <Show when={soup.previewEntity() || panel.previewState[0]()}>
+        <Show
+          when={
+            (soup.previewEntity() || panel.previewState[0]()) &&
+            !!soup.focus.item()
+          }
+        >
           <PreviewPanel
             ref={setPreviewPanelRef}
             selectedEntity={soup.focus.item()}
