@@ -12,6 +12,7 @@ use uuid::Uuid;
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
+const CALL_ARCHIVED: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca2ed);
 static USER_A: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
 static USER_B: LazyLock<MacroUserIdStr<'static>> =
@@ -339,13 +340,13 @@ async fn archive_call_preserves_id_and_share_permission(
     Ok(())
 }
 
-// -- set_active_call_recording_url --------------------------------------------
+// -- set_active_call_recording_key --------------------------------------------
 
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn set_active_call_recording_url_updates_matching_call(
+async fn set_active_call_recording_key_updates_matching_call(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
@@ -355,23 +356,29 @@ async fn set_active_call_recording_url_updates_matching_call(
 
     // Should update and return true.
     let updated = repo
-        .set_active_call_recording_url("egress-123", "s3://bucket/recording.mp4")
+        .set_active_call_recording_key(
+            "egress-123",
+            "0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4",
+        )
         .await?;
     assert!(updated);
 
-    // Verify the URL is on the active call.
+    // Verify the key is on the active call.
     let call = repo.get_call_by_channel_id(&CH1).await?.unwrap();
     assert_eq!(call.egress_id.as_deref(), Some("egress-123"));
 
-    // Now archive and verify recording_url carries forward.
+    // Now archive and verify recording_key carries forward.
     let record_id = repo.archive_call(&CALL1).await?;
-    let url = sqlx::query_scalar!(
-        r#"SELECT recording_url FROM call_records WHERE id = $1"#,
+    let key = sqlx::query_scalar!(
+        r#"SELECT recording_key FROM call_records WHERE id = $1"#,
         record_id,
     )
     .fetch_one(&pool)
     .await?;
-    assert_eq!(url.as_deref(), Some("s3://bucket/recording.mp4"));
+    assert_eq!(
+        key.as_deref(),
+        Some("0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4")
+    );
 
     Ok(())
 }
@@ -380,13 +387,16 @@ async fn set_active_call_recording_url_updates_matching_call(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn set_active_call_recording_url_returns_false_when_no_match(
+async fn set_active_call_recording_key_returns_false_when_no_match(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
 
     let updated = repo
-        .set_active_call_recording_url("nonexistent-egress", "s3://bucket/recording.mp4")
+        .set_active_call_recording_key(
+            "nonexistent-egress",
+            "0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4",
+        )
         .await?;
     assert!(!updated);
 
@@ -498,5 +508,113 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     .await?;
     assert_eq!(ephemeral, 0);
 
+    Ok(())
+}
+
+// -- get_call_record_by_call_id ----------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let now = Utc::now();
+
+    // Ingest two transcript segments into the active call.
+    repo.create_transcript_segment(
+        &CALL1,
+        &TranscriptSegmentRequest {
+            segment_id: "seg-live-1".to_string(),
+            speaker_id: USER_A.to_string(),
+            content: "hello there".to_string(),
+            started_at: now,
+            ended_at: Some(now),
+            is_final: true,
+        },
+    )
+    .await?;
+    repo.create_transcript_segment(
+        &CALL1,
+        &TranscriptSegmentRequest {
+            segment_id: "seg-live-2".to_string(),
+            speaker_id: USER_B.to_string(),
+            content: "general kenobi".to_string(),
+            started_at: now,
+            ended_at: Some(now),
+            is_final: true,
+        },
+    )
+    .await?;
+
+    let record = repo
+        .get_call_record_by_call_id(&CALL1)
+        .await?
+        .expect("active call should be found");
+
+    assert_eq!(record.call_id, CALL1);
+    assert_eq!(record.channel_id, CH1);
+    assert!(record.is_active);
+    assert!(record.ended_at.is_none());
+    assert!(record.duration_ms.is_none());
+
+    // Participants from fixture.
+    let user_ids: Vec<&str> = record
+        .participants
+        .iter()
+        .map(|p| p.user_id.as_str())
+        .collect();
+    assert_eq!(user_ids, vec![USER_A.as_ref(), USER_B.as_ref()]);
+
+    // Transcripts ordered by sequence_num.
+    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript[0].sequence_num, 1);
+    assert_eq!(record.transcript[0].content, "hello there");
+    assert_eq!(
+        record.transcript[0].segment_id.as_deref(),
+        Some("seg-live-1")
+    );
+    assert_eq!(record.transcript[1].sequence_num, 2);
+    assert_eq!(record.transcript[1].content, "general kenobi");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should be found");
+
+    assert_eq!(record.call_id, CALL_ARCHIVED);
+    assert_eq!(record.channel_id, CH1);
+    assert!(!record.is_active);
+    assert!(record.ended_at.is_some());
+    assert_eq!(record.duration_ms, Some(300_000));
+    assert_eq!(record.egress_id.as_deref(), Some("egress-arch-1"));
+
+    // Participants from archived fixture (both have left_at).
+    assert_eq!(record.participants.len(), 2);
+    assert!(record.participants.iter().all(|p| p.left_at.is_some()));
+
+    // Transcripts ordered by sequence_num.
+    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(record.transcript[1].content, "archived reply");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_none_for_unknown(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo.get_call_record_by_call_id(&Uuid::now_v7()).await?;
+    assert!(record.is_none());
     Ok(())
 }

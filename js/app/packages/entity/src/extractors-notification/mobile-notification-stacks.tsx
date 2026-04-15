@@ -1,25 +1,23 @@
-import { Show, useContext, createEffect, type JSX } from 'solid-js';
+import { useContext, createEffect, type JSX } from 'solid-js';
 import { reconcile, createStore } from 'solid-js/store';
 import {
   type NotificationStack,
   getMostRecentNotification,
   getAllNotificationsFromGroup,
+  openNotification,
 } from '@notifications';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import type { WithNotification } from '../types/notification';
 import { isChannelEntity, type EntityData } from '../types/entity';
 import { CollapsibleList } from '../components/CollapsibleList';
-import {
-  extractMessageContent,
-  isNotificationUnread,
-} from '../utils/notification';
+import { isNotificationUnread } from '../utils/notification';
 import { Entity } from '../entity';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { cn } from '@ui/utils/classname';
+import { NotificationContent } from './notification-content';
 
 export type EntityRowConfig = {
   swipeLeftColor?: string;
@@ -32,13 +30,12 @@ function MobileStackRowLayout(props: {
   stack: NotificationStack;
   entity: WithNotification<EntityData>;
   unread: boolean;
+  onClick?: (e: MouseEvent) => void;
 }) {
-  const msgContent = () =>
-    extractMessageContent(getMostRecentNotification(props.stack));
-
   return (
     <Entity.Layout
       class="w-full text-sm grid bg-edge/10 border-edge-muted"
+      onClick={props.onClick}
       style={{
         'grid-template-columns':
           'var(--soup-stack-row-unread-column-width) 1fr 8ch',
@@ -68,17 +65,11 @@ function MobileStackRowLayout(props: {
       </Entity.Slot>
       <Entity.Slot
         placement="body"
-        class="text-ink-extra-muted truncate pb-2 min-h-[1lh] pr-4"
+        class={cn('text-ink-extra-muted pb-2 min-h-[1lh] pr-4', {
+          truncate: props.stack.type !== 'document_mention',
+        })}
       >
-        <Show when={msgContent()}>
-          {(content) => (
-            <StaticMarkdown
-              theme={unifiedListMarkdownTheme}
-              markdown={content()}
-              singleLine
-            />
-          )}
-        </Show>
+        <NotificationContent stack={props.stack} />
       </Entity.Slot>
     </Entity.Layout>
   );
@@ -102,12 +93,22 @@ function MobileStackRow(props: {
     toast.success('Marked as done');
   };
 
+  const handleClick = async (e: MouseEvent) => {
+    e.stopPropagation();
+    const mostRecent = getMostRecentNotification(props.stack);
+    const splitManager = globalSplitManager();
+    if (!splitManager) return;
+    await openNotification(mostRecent, splitManager, e.shiftKey);
+    await notificationSource.markAsRead(mostRecent);
+  };
+
   if (!ctx) {
     return (
       <MobileStackRowLayout
         stack={props.stack}
         entity={props.entity}
         unread={unread()}
+        onClick={handleClick}
       />
     );
   }
@@ -129,6 +130,7 @@ function MobileStackRow(props: {
         stack={props.stack}
         entity={props.entity}
         unread={unread()}
+        onClick={handleClick}
       />
     </EntityRow>
   );

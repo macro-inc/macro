@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './callFilters';
 export * from './channelFilters';
 export * from './channelFiltersImportance';
 export * from './channelFiltersOrgId';

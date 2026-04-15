@@ -8,6 +8,7 @@ import {
 import { Entity } from '../entity';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import {
+  isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
   isEmailEntity,
@@ -73,6 +74,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { isMobile } from '@core/mobile/isMobile';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import { DisplayName } from '@entity/components/DisplayName';
+import { formatCallDuration } from '@block-call/utils';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
@@ -541,6 +543,26 @@ function NarrowInboxLayout(props: LayoutProps) {
             </Show>
           </Entity.Slot>
         </Match>
+        <Match when={isCallEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <Entity.Slot
+              placement="body"
+              class="flex flex-col pb-2 min-h-[2lh] pr-4"
+            >
+              <span class="text-ink-muted text-xs truncate">
+                {entity().channelName ?? 'Call'}
+              </span>
+              <span class="text-ink-extra-muted text-xs">
+                <Show
+                  when={entity().durationMs}
+                  fallback={entity().isActive ? 'In progress' : 'No duration'}
+                >
+                  {(ms) => formatCallDuration(ms())}
+                </Show>
+              </span>
+            </Entity.Slot>
+          )}
+        </Match>
         <Match when={true}>
           <Entity.Slot placement="body" class="pb-2 min-h-[2lh] pr-4" />
         </Match>
@@ -670,6 +692,21 @@ function WideLayout(props: LayoutProps) {
                   </>
                 )}
               </Show>
+            )}
+          </Match>
+          <Match when={isCallEntity(props.entity) && props.entity}>
+            {(entity) => (
+              <>
+                <Entity.Title entity={entity()} />
+                <span class="text-ink-extra-muted font-medium truncate">
+                  <Show
+                    when={entity().durationMs}
+                    fallback={entity().isActive ? 'In progress' : ''}
+                  >
+                    {(ms) => formatCallDuration(ms())}
+                  </Show>
+                </span>
+              </>
             )}
           </Match>
           <Match when={props.entity}>

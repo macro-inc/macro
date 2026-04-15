@@ -811,6 +811,103 @@ export const createCommentResponse = zod
   );
 
 /**
+ * Returns the full [`CallRecord`] (metadata + participants + transcript)
+for a call identified by its own id. Covers both active and archived calls.
+Access is validated via channel membership (MemberParticipantRole).
+ * @summary Handler for `GET /call/record/{call_id}`.
+ */
+export const getCallRecordParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+export const getCallRecordResponse = zod
+  .object({
+    callId: zod.string().uuid().describe('The call identifier.'),
+    channelId: zod
+      .string()
+      .uuid()
+      .describe('The channel this call belongs to.'),
+    channelName: zod
+      .string()
+      .nullish()
+      .describe('Resolved display name for the channel.'),
+    createdBy: zod.string().describe('User who created the call.'),
+    durationMs: zod
+      .number()
+      .nullish()
+      .describe('Call duration in milliseconds (None if still active).'),
+    egressId: zod.string().nullish().describe('Recording egress ID, if any.'),
+    endedAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('When the call ended (None if still active).'),
+    isActive: zod
+      .boolean()
+      .describe('Whether the call is currently active (from `calls` table).'),
+    participants: zod
+      .array(
+        zod
+          .object({
+            joinedAt: zod
+              .string()
+              .datetime({})
+              .describe('When the user joined the call.'),
+            leftAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the user left (None if still in an active call).'
+              ),
+            userId: zod.string().describe('The user id.'),
+          })
+          .describe(
+            'A participant as returned in a [`CallRecord`] (historic — includes `left_at`).'
+          )
+      )
+      .describe('Participants (both active and historic).'),
+    recordingUrl: zod
+      .string()
+      .nullish()
+      .describe('Presigned URL for the call recording, if available.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    startedAt: zod
+      .string()
+      .datetime({})
+      .describe(
+        'When the call started (created_at for active, started_at for archived).'
+      ),
+    transcript: zod
+      .array(
+        zod
+          .object({
+            content: zod.string().describe('The transcribed text content.'),
+            endedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('When the speaker stopped (if known).'),
+            segmentId: zod
+              .string()
+              .nullish()
+              .describe('LiveKit segment ID (nullable for archived records).'),
+            sequenceNum: zod.number().describe('Ordering within the call.'),
+            speakerId: zod.string().describe("The speaker's user ID."),
+            startedAt: zod
+              .string()
+              .datetime({})
+              .describe('When the speaker started this segment.'),
+          })
+          .describe('A transcript segment as returned in a [`CallRecord`].')
+      )
+      .describe('Transcript segments ordered by `sequence_num`.'),
+  })
+  .describe(
+    'Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.'
+  );
+
+/**
  * Gets or creates a call for the channel. If a call already exists, joins it;
 otherwise creates a new one. Always returns a join token.
  * @summary Handler for `GET /call/{channel_id}`.
@@ -4603,6 +4700,65 @@ export const getItemsSoupResponse = zod.object({
             ),
           tag: zod.enum(['channel']),
         }),
+        zod.object({
+          data: zod
+            .object({
+              callId: zod.string().uuid().describe('The call identifier.'),
+              channelId: zod
+                .string()
+                .uuid()
+                .describe('The channel this call belongs to.'),
+              channelName: zod
+                .string()
+                .nullish()
+                .describe('Resolved display name for the channel.'),
+              createdBy: zod.string().describe('User who created the call.'),
+              durationMs: zod
+                .number()
+                .nullish()
+                .describe(
+                  'Call duration in milliseconds (None if still active).'
+                ),
+              endedAt: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the call ended (None if still active).'),
+              isActive: zod
+                .boolean()
+                .describe('Whether the call is currently active.'),
+              participants: zod
+                .array(
+                  zod
+                    .object({
+                      joinedAt: zod
+                        .string()
+                        .datetime({})
+                        .describe('When the user joined the call.'),
+                      leftAt: zod
+                        .string()
+                        .datetime({})
+                        .nullish()
+                        .describe(
+                          'When the user left (None if still in an active call).'
+                        ),
+                      userId: zod.string().describe('The user id.'),
+                    })
+                    .describe(
+                      'A participant in a call record, as displayed in Soup.'
+                    )
+                )
+                .describe('Participants in the call.'),
+              startedAt: zod
+                .string()
+                .datetime({})
+                .describe('When the call started.'),
+            })
+            .describe(
+              'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
+            ),
+          tag: zod.enum(['callRecord']),
+        }),
       ])
       .and(
         zod.object({
@@ -4624,6 +4780,17 @@ export const postItemsSoupBodyLimitMin = 0;
 
 export const postItemsSoupBody = zod
   .object({
+    call_filters: zod
+      .object({
+        channel_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Channel IDs to filter calls by. Empty to include all calls.'
+          ),
+      })
+      .optional()
+      .describe('Filters for call records.'),
     channel_filters: zod
       .object({
         channel_ids: zod
@@ -6209,6 +6376,65 @@ export const postItemsSoupResponse = zod.object({
             ),
           tag: zod.enum(['channel']),
         }),
+        zod.object({
+          data: zod
+            .object({
+              callId: zod.string().uuid().describe('The call identifier.'),
+              channelId: zod
+                .string()
+                .uuid()
+                .describe('The channel this call belongs to.'),
+              channelName: zod
+                .string()
+                .nullish()
+                .describe('Resolved display name for the channel.'),
+              createdBy: zod.string().describe('User who created the call.'),
+              durationMs: zod
+                .number()
+                .nullish()
+                .describe(
+                  'Call duration in milliseconds (None if still active).'
+                ),
+              endedAt: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the call ended (None if still active).'),
+              isActive: zod
+                .boolean()
+                .describe('Whether the call is currently active.'),
+              participants: zod
+                .array(
+                  zod
+                    .object({
+                      joinedAt: zod
+                        .string()
+                        .datetime({})
+                        .describe('When the user joined the call.'),
+                      leftAt: zod
+                        .string()
+                        .datetime({})
+                        .nullish()
+                        .describe(
+                          'When the user left (None if still in an active call).'
+                        ),
+                      userId: zod.string().describe('The user id.'),
+                    })
+                    .describe(
+                      'A participant in a call record, as displayed in Soup.'
+                    )
+                )
+                .describe('Participants in the call.'),
+              startedAt: zod
+                .string()
+                .datetime({})
+                .describe('When the call started.'),
+            })
+            .describe(
+              'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
+            ),
+          tag: zod.enum(['callRecord']),
+        }),
       ])
       .and(
         zod.object({
@@ -6230,6 +6456,10 @@ export const postItemsSoupAstBodyLimitMin = 0;
 
 export const postItemsSoupAstBody = zod
   .object({
+    callf: zod
+      .any()
+      .optional()
+      .describe('the filters that should be applied to the call entity'),
     cf: zod
       .any()
       .optional()
@@ -7481,6 +7711,65 @@ export const postItemsSoupAstResponse = zod.object({
               })
             ),
           tag: zod.enum(['channel']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              callId: zod.string().uuid().describe('The call identifier.'),
+              channelId: zod
+                .string()
+                .uuid()
+                .describe('The channel this call belongs to.'),
+              channelName: zod
+                .string()
+                .nullish()
+                .describe('Resolved display name for the channel.'),
+              createdBy: zod.string().describe('User who created the call.'),
+              durationMs: zod
+                .number()
+                .nullish()
+                .describe(
+                  'Call duration in milliseconds (None if still active).'
+                ),
+              endedAt: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the call ended (None if still active).'),
+              isActive: zod
+                .boolean()
+                .describe('Whether the call is currently active.'),
+              participants: zod
+                .array(
+                  zod
+                    .object({
+                      joinedAt: zod
+                        .string()
+                        .datetime({})
+                        .describe('When the user joined the call.'),
+                      leftAt: zod
+                        .string()
+                        .datetime({})
+                        .nullish()
+                        .describe(
+                          'When the user left (None if still in an active call).'
+                        ),
+                      userId: zod.string().describe('The user id.'),
+                    })
+                    .describe(
+                      'A participant in a call record, as displayed in Soup.'
+                    )
+                )
+                .describe('Participants in the call.'),
+              startedAt: zod
+                .string()
+                .datetime({})
+                .describe('When the call started.'),
+            })
+            .describe(
+              'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
+            ),
+          tag: zod.enum(['callRecord']),
         }),
       ])
       .and(

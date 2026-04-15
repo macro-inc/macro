@@ -12,6 +12,7 @@ anthropic = { path = "../anthropic" }
 anyhow.workspace = true
 async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
+call = { path = "../call", default-features = false, features = ["ports"] }
 chrono.workspace = true
 dateparser.workspace = true
 comms = { path = "../comms", features = ["outbound"] }

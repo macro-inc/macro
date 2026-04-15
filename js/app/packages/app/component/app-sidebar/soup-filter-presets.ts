@@ -144,10 +144,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           ast: {
             df: ast.and(ast.neq('dst', 'task'), ast.eq('o', ctx.userId)),
           },
-          clientFilters: [
-            'document-or-file',
-            'owned-entity',
-          ],
+          clientFilters: ['document-or-file', 'owned-entity'],
         };
       },
       shared: (ctx) => {
@@ -156,10 +153,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           ast: {
             df: ast.and(ast.neq('dst', 'task'), ast.neq('o', ctx.userId)),
           },
-          clientFilters: [
-            'document-or-file',
-            'shared-entity',
-          ],
+          clientFilters: ['document-or-file', 'shared-entity'],
         };
       },
       attachments: () => ({
@@ -207,11 +201,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           ast: {
             df: ast.and(ast.eq('dst', 'task'), ast.eq('o', ctx.userId)),
           },
-          clientFilters: [
-            'task',
-            'active-task',
-            'owned-entity',
-          ],
+          clientFilters: ['task', 'active-task', 'owned-entity'],
         };
       },
       all: () => ({
@@ -237,6 +227,15 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
+  calls: {
+    default: 'all',
+    tabs: {
+      all: () => ({
+        queryFilters: QUERY_FILTERS.calls,
+        clientFilters: { and: ['calls'] },
+      }),
+    },
+  },
   folders: {
     default: 'owned',
     tabs: {
@@ -258,7 +257,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       all: () => ({
         ast: {},
-        clientFilters: [],
+        clientFilters: { and: [], or: [] },
       }),
     },
   },

@@ -1,4 +1,5 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { Dialog } from '@kobalte/core/dialog';
 import type { EntityData } from '@entity';
 import {
@@ -11,39 +12,6 @@ import {
 import { BulkDeleteView } from './BulkDeleteView';
 import { BulkMoveToProjectView } from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
-
-export const BulkEditEntityModalTitle = (props: { title: string }) => {
-  return <h2 class="text-xl mb-4">{props.title}</h2>;
-};
-
-export const BulkEditEntityModalActionFooter = (props: {
-  onCancel: () => void;
-  onConfirm: () => void;
-  confirmText: string;
-  isDisabled?: boolean;
-}) => {
-  return (
-    <div class="flex w-full justify-end items-stretch tex-sm gap-1">
-      <button
-        class="py-1 px-3 text-sm border-edge-muted border bg-panel"
-        onClick={props.onCancel}
-      >
-        Cancel
-      </button>
-      <button
-        class="uppercase py-1 px-3 text-sm font-semibold border"
-        classList={{
-          'text-accent bg-accent/10 border-accent/20': !props.isDisabled,
-          'text-ink-disabled bg-egde/10 border-edge-muted': props.isDisabled,
-        }}
-        onClick={props.onConfirm}
-        disabled={props.isDisabled}
-      >
-        {props.confirmText}
-      </button>
-    </div>
-  );
-};
 
 const BulkEditEntityModalContent = (props: {
   isOpen: Accessor<boolean>;
@@ -74,36 +42,31 @@ const BulkEditEntityModalContent = (props: {
       modal={true}
     >
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay" />
-        <div class="fixed inset-0 z-modal">
-          <Dialog.Content>
-            <div class="pointer-events-auto max-w-[min(36rem,calc(100%-1rem))] bg-menu border border-edge-muted w-lg h-fit p-2 mt-[25vh] mx-auto">
-              <div class="w-full my-1">
-                <Show when={props.view === 'rename'}>
-                  <BulkRenameEntitiesView
-                    entities={props.entities}
-                    onFinish={handleFinish}
-                    onCancel={handleCancel}
-                  />
-                </Show>
-                <Show when={props.view === 'moveToProject'}>
-                  <BulkMoveToProjectView
-                    entities={props.entities}
-                    onFinish={handleFinish}
-                    onCancel={handleCancel}
-                  />
-                </Show>
-                <Show when={props.view === 'delete'}>
-                  <BulkDeleteView
-                    entities={props.entities}
-                    onFinish={handleFinish}
-                    onCancel={handleCancel}
-                  />
-                </Show>
-              </div>
-            </div>
-          </Dialog.Content>
-        </div>
+        <DialogWrapper>
+          <div class="flex flex-col text-ink">
+            <Show when={props.view === 'rename'}>
+              <BulkRenameEntitiesView
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+              />
+            </Show>
+            <Show when={props.view === 'moveToProject'}>
+              <BulkMoveToProjectView
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+              />
+            </Show>
+            <Show when={props.view === 'delete'}>
+              <BulkDeleteView
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+              />
+            </Show>
+          </div>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );

@@ -9,6 +9,7 @@ use sqlx::{Pool, Postgres, types::Uuid};
 pub(in crate::api::search) struct FilterEmailResponse {
     pub thread_ids: Vec<String>,
     pub ids_only: bool,
+    pub importance: Option<bool>,
 }
 
 /// Performs the name search over email subjects
@@ -43,6 +44,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         filter_email_response.ids_only,
         limit,
         inner_cursor,
+        filter_email_response.importance,
     )
     .await
     .map_err(SearchError::NameSearch)
@@ -76,6 +78,7 @@ pub(in crate::api::search::simple) async fn search_contacts<'a>(
     term: String,
     limit: u32,
     cursor: models_search_cursor::SearchCursorOption,
+    importance: Option<bool>,
 ) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
     // If cursor is Done, no more results to fetch
     let inner_cursor = match cursor {
@@ -85,7 +88,7 @@ pub(in crate::api::search::simple) async fn search_contacts<'a>(
         models_search_cursor::SearchCursorOption::NotDone(c) => c,
     };
 
-    email_contact_search::search_email_contacts(db, user_id, term, limit, inner_cursor)
+    email_contact_search::search_email_contacts(db, user_id, term, limit, inner_cursor, importance)
         .await
         .map_err(SearchError::EmailContactSearch)
         .map(|response| {

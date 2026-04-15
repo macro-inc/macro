@@ -68,6 +68,7 @@ export const fileTypeColors: Record<
   image: 'bg-image/20 group/item',
   canvas: 'bg-canvas/20 group/item',
   video: 'bg-video/20 group/item',
+  call: defaultFileColor,
   contact: defaultFileColor,
   default: defaultFileColor,
   chat: defaultFileColor,

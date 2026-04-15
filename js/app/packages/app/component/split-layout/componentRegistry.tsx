@@ -203,6 +203,21 @@ registerComponent(
 );
 
 registerComponent(
+  'calls',
+  withAuth(() => {
+    usePageViewTracking('calls');
+    const preset = getDefaultListViewPreset('calls');
+    return (
+      <SoupView
+        viewName="Calls"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
   'folders',
   withAuth(() => {
     usePageViewTracking('folders');
@@ -252,7 +267,12 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
-  return <ComposeTask initialContent={params?.initialContent} />;
+  return (
+    <ComposeTask
+      initialContent={params?.initialContent}
+      initialTitle={params?.initialTitle}
+    />
+  );
 });
 registerComponent(
   'import-linear',

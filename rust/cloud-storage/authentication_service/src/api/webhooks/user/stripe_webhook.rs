@@ -366,7 +366,10 @@ async fn handle_customer_subscription_event(
         id if id == ctx.stripe_price_ids.stripe_price_id_haiku.as_ref() => ProductTier::Haiku,
         id if id == ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref() => ProductTier::Sonnet,
         id if id == ctx.stripe_price_ids.stripe_price_id_opus.as_ref() => ProductTier::Opus,
-        _ => anyhow::bail!("unsupported price id: {price_id}"),
+        _ => {
+            tracing::warn!(price_id=?price_id.as_str(), "unsupported price id, defaulting to haiku tier");
+            ProductTier::Haiku
+        }
     };
 
     ctx.user_roles_and_permissions_service

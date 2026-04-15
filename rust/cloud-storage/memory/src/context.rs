@@ -114,6 +114,7 @@ pub async fn build_tool_service_context(
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     ));
 
     // Document tool context

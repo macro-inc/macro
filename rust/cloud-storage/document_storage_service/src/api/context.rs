@@ -76,6 +76,7 @@ type DssSoupState = SoupRouterState<
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
         ReadonlyEmailPreviewAdapter<DssEmailService>,
         ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
+        call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     >,
     DssEmailService,
 >;
@@ -182,6 +183,7 @@ pub(crate) type DssCallService = CallServiceImpl<
     CallConnectionService,
     EntityAccessService,
     NotificationIngressType,
+    Option<call::outbound::s3_recording_storage::S3RecordingStorage>,
 >;
 
 /// Type alias for the call router state.

@@ -155,6 +155,14 @@ pub struct ChannelReplyMetadata {
     pub sender_profile_picture_url: Option<String>,
 }
 
+/// The sub type of a document in a notification.
+/// Serializes as `{ "type": "task" }` matching the storage service pattern.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum NotificationDocumentSubType {
+    Task,
+}
+
 /// Someone mentioned a document in a channel
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -168,6 +176,10 @@ pub struct DocumentMentionMetadata {
     /// The file type of the document
     #[serde(alias = "file_type")]
     pub file_type: Option<String>,
+    /// The sub type of the document (e.g. task)
+    #[serde(alias = "sub_type")]
+    #[serde(default)]
+    pub sub_type: Option<NotificationDocumentSubType>,
     #[serde(default)]
     pub sender_profile_picture_url: Option<String>,
 }

@@ -21,7 +21,8 @@ use entity_access::{
     domain::models::MemberParticipantRole,
     domain::ports::EntityAccessService,
     inbound::axum_extractors::{
-        CallWithChannelIdAccessLevelExtractor, ChannelAccessLevelExtractor,
+        CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor,
+        ChannelAccessLevelExtractor,
     },
 };
 use model_error_response::ErrorResponse;
@@ -29,7 +30,8 @@ use model_user::axum_extractor::MacroUserExtractor;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CallActiveResponse, CallError, CallTokenResponse, LeaveCallResponse, TranscriptSegmentRequest,
+    CallActiveResponse, CallError, CallRecord, CallTokenResponse, LeaveCallResponse,
+    TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
 
@@ -74,6 +76,7 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 /// - `GET /{channel_id}` — get or create a call (join existing or start new)
 /// - `GET /{channel_id}/active` — check if an active call exists
 /// - `DELETE /{channel_id}` — leave or end a call
+/// - `GET /record/{call_id}` — get a full call record (transcript + participants)
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -89,6 +92,7 @@ where
             "/{channel_id}/active",
             get(check_active_call_handler::<S, Svc>),
         )
+        .route("/record/{call_id}", get(get_call_record_handler::<S, Svc>))
         .with_state(state)
 }
 
@@ -278,6 +282,37 @@ pub async fn check_active_call_handler<S: CallService, Svc: EntityAccessService>
         Some(response) => Ok(Json(response).into_response()),
         None => Ok(StatusCode::NO_CONTENT.into_response()),
     }
+}
+
+/// Handler for `GET /call/record/{call_id}`.
+///
+/// Returns the full [`CallRecord`] (metadata + participants + transcript)
+/// for a call identified by its own id. Covers both active and archived calls.
+/// Access is validated via channel membership (MemberParticipantRole).
+#[utoipa::path(
+    get,
+    operation_id = "get_call_record",
+    path = "/call/record/{call_id}",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 200, body = CallRecord),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<MemberParticipantRole, Svc>,
+) -> Result<Json<CallRecord>, CallError> {
+    let record = state
+        .service
+        .get_call_record(access.entity_access_receipt)
+        .await?;
+    Ok(Json(record))
 }
 
 /// Handler for `DELETE /call/{channel_id}`.

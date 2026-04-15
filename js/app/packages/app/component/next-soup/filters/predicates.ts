@@ -39,8 +39,6 @@ export function unreadFilter(notificationSource: NotificationSource) {
 export function notDoneFilter(notificationSource: NotificationSource) {
   return function (entity: WithNotification<EntityData>) {
     if (entity.type === 'email') return !entity.done;
-    // Tasks are handled by signalFilter based on assignee/status, not notifications
-    if (isTaskEntity(entity)) return true;
 
     const notifications =
       notificationSource.notificationsByEntity()[compositeEntity(entity)];
@@ -95,6 +93,10 @@ export function fileFilter(entity: EntityData): boolean {
 
 export function channelsFilter(entity: EntityData): boolean {
   return entity.type === 'channel' || entity.type === 'channel_message';
+}
+
+export function callsFilter(entity: EntityData): boolean {
+  return entity.type === 'call';
 }
 
 export function filesAndFolderFilter(entity: EntityData): boolean {

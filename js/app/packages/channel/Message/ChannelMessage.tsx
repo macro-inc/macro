@@ -124,26 +124,19 @@ function GroupedMessageLayout(props: {
   channelId: string;
   messageEditor?: MessageEditor;
 }) {
-  const message = useMessage();
-  const isEditing = () => isEditingMessage(props.messageEditor, message().id);
-
   return (
     <Message.Layout>
       <Message.Slot placement="icon">
         <Message.SenderIcon hidden />
       </Message.Slot>
       <Message.Slot placement="content">
-        <div
-          class={cn(
-            'ph-no-capture flex gap-3 min-w-0',
-            isEditing() ? 'items-start' : 'items-center'
-          )}
-        >
-          <MessageContentSlot
-            channelId={props.channelId}
-            messageEditor={props.messageEditor}
-            class="flex-1 min-w-0"
-          />
+        <div class={cn('ph-no-capture flex gap-3 min-w-0 items-start')}>
+          <div class="flex-1 min-w-0">
+            <MessageContentSlot
+              channelId={props.channelId}
+              messageEditor={props.messageEditor}
+            />
+          </div>
           <GroupedMeta messageEditor={props.messageEditor} />
         </div>
       </Message.Slot>

@@ -43,6 +43,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateUserQuota } from '@queries/auth';
+import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { createEffect, createSignal, getOwner, Show } from 'solid-js';
@@ -165,6 +166,16 @@ function ChatInner(props: {
     invalidateUserQuota();
   });
 
+  const onStop = async () => {
+    if (!chat.isGenerating()) return;
+    const streamId = chat.stream()?.id()?.stream_id;
+    if (!streamId) return;
+    await cognitionApiServiceClient.stopChatStream({
+      chat_id: chat.chatId(),
+      stream_id: streamId,
+    });
+  };
+
   const saveChatState = (state: StoredStuff) => {
     storeChatState(props.data.chat.id, state);
   };
@@ -212,6 +223,18 @@ function ChatInner(props: {
     },
     hotkeyToken: TOKENS.block.focus,
     hide: true,
+  });
+
+  // Ctrl+C while AI is generating stops the stream.
+  registerScopeSignalHotkey(scopeId, {
+    hotkey: 'ctrl+c',
+    description: 'Stop AI response',
+    condition: () => chat.isGenerating(),
+    keyDownHandler: () => {
+      void onStop();
+      return true;
+    },
+    hotkeyToken: TOKENS.chat.stop,
   });
 
   // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
@@ -275,6 +298,7 @@ function ChatInner(props: {
               onChange={setMarkdownText}
               chatId={chat.chatId()}
               onSend={onSend}
+              onStop={onStop}
               autoFocusOnMount={true}
             />
           </div>

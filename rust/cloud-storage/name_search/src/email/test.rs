@@ -16,7 +16,8 @@ async fn test_search_email_subjects_empty_term(pool: Pool<Postgres>) -> anyhow::
         .map(|l| l.lowercase())
         .unwrap();
 
-    let result = search_email_subjects(&pool, &user_id, &[], "".to_string(), false, 10, None).await;
+    let result =
+        search_email_subjects(&pool, &user_id, &[], "".to_string(), false, 10, None, None).await;
 
     assert!(result.is_err());
     assert!(matches!(
@@ -38,8 +39,17 @@ async fn test_search_email_subjects_ids_only_with_empty_ids(
         .map(|l| l.lowercase())
         .unwrap();
 
-    let result =
-        search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), true, 10, None).await;
+    let result = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "invoice".to_string(),
+        true,
+        10,
+        None,
+        None,
+    )
+    .await;
 
     assert!(result.is_err());
     assert!(matches!(
@@ -73,6 +83,7 @@ async fn test_search_email_subjects_ids_only_mode(pool: Pool<Postgres>) -> anyho
         "invoice".to_string(),
         true,
         10,
+        None,
         None,
     )
     .await?;
@@ -115,8 +126,17 @@ async fn test_search_email_subjects_normal_mode_owned_threads(
         .unwrap();
 
     // Search for "invoice" across all user1's email threads
-    let response =
-        search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 10, None).await?;
+    let response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "invoice".to_string(),
+        false,
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     // Should return 3 threads matching "invoice" (2 with "invoice" + 1 with "INVOICE")
     assert_eq!(response.items.len(), 3);
@@ -153,20 +173,47 @@ async fn test_search_email_subjects_case_insensitive(pool: Pool<Postgres>) -> an
         .unwrap();
 
     // Search with uppercase term should match both lowercase and uppercase subjects
-    let response =
-        search_email_subjects(&pool, &user_id, &[], "INVOICE".to_string(), false, 10, None).await?;
+    let response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "INVOICE".to_string(),
+        false,
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     assert_eq!(response.items.len(), 3);
 
     // Search with lowercase term should also match both
-    let response =
-        search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 10, None).await?;
+    let response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "invoice".to_string(),
+        false,
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     assert_eq!(response.items.len(), 3);
 
     // Search with mixed case
-    let response =
-        search_email_subjects(&pool, &user_id, &[], "InVoIcE".to_string(), false, 10, None).await?;
+    let response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "InVoIcE".to_string(),
+        false,
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     assert_eq!(response.items.len(), 3);
 
@@ -198,6 +245,7 @@ async fn test_search_email_subjects_with_shared_threads(
         false,
         10,
         None,
+        None,
     )
     .await?;
 
@@ -218,8 +266,17 @@ async fn test_search_email_subjects_pagination_limit(pool: Pool<Postgres>) -> an
         .unwrap();
 
     // Search with limit of 2
-    let response =
-        search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 2, None).await?;
+    let response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "invoice".to_string(),
+        false,
+        2,
+        None,
+        None,
+    )
+    .await?;
 
     assert_eq!(response.items.len(), 2);
 
@@ -249,8 +306,17 @@ async fn test_search_email_subjects_pagination_cursor(pool: Pool<Postgres>) -> a
         .unwrap();
 
     // First page with limit of 2
-    let first_response =
-        search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 2, None).await?;
+    let first_response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "invoice".to_string(),
+        false,
+        2,
+        None,
+        None,
+    )
+    .await?;
 
     assert_eq!(first_response.items.len(), 2);
     assert!(first_response.cursor.has_more());
@@ -270,6 +336,7 @@ async fn test_search_email_subjects_pagination_cursor(pool: Pool<Postgres>) -> a
         false,
         2,
         cursor,
+        None,
     )
     .await?;
 
@@ -325,6 +392,7 @@ async fn test_search_email_subjects_no_results(pool: Pool<Postgres>) -> anyhow::
         false,
         10,
         None,
+        None,
     )
     .await?;
 
@@ -344,8 +412,17 @@ async fn test_search_email_subjects_partial_match(pool: Pool<Postgres>) -> anyho
         .unwrap();
 
     // Search for partial term "meet" should match "meeting"
-    let response =
-        search_email_subjects(&pool, &user_id, &[], "meet".to_string(), false, 10, None).await?;
+    let response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "meet".to_string(),
+        false,
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     assert_eq!(response.items.len(), 2);
     assert_eq!(
@@ -379,8 +456,17 @@ async fn test_search_email_subjects_user_isolation(pool: Pool<Postgres>) -> anyh
         .unwrap();
 
     // Search for "User2" - user1 should not see user2's private email threads
-    let response =
-        search_email_subjects(&pool, &user_id, &[], "User2".to_string(), false, 10, None).await?;
+    let response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "User2".to_string(),
+        false,
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     // Should return 0 results (user2's emails are not linked to user1)
     assert_eq!(response.items.len(), 0);
@@ -413,6 +499,7 @@ async fn test_search_email_subjects_searches_oldest_message(
         false,
         10,
         None,
+        None,
     )
     .await?;
 
@@ -430,6 +517,7 @@ async fn test_search_email_subjects_searches_oldest_message(
         "Payment Processed".to_string(),
         false,
         10,
+        None,
         None,
     )
     .await?;
@@ -455,8 +543,17 @@ async fn test_search_email_subjects_multiple_messages_per_thread(
         .unwrap();
 
     // Thread 11111111 has multiple messages - should return thread only once with oldest subject
-    let response =
-        search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 10, None).await?;
+    let response = search_email_subjects(
+        &pool,
+        &user_id,
+        &[],
+        "invoice".to_string(),
+        false,
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     // Count how many times thread 11111111 appears (should be exactly once)
     let count = response

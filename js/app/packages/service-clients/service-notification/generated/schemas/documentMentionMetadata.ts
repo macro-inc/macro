@@ -6,6 +6,7 @@
  */
 import type { DocumentMentionMetadataFileType } from './documentMentionMetadataFileType';
 import type { DocumentMentionMetadataSenderProfilePictureUrl } from './documentMentionMetadataSenderProfilePictureUrl';
+import type { DocumentMentionMetadataSubType } from './documentMentionMetadataSubType';
 
 /**
  * Someone mentioned a document in a channel
@@ -18,4 +19,5 @@ export interface DocumentMentionMetadata {
   /** The owner of the document */
   owner: string;
   senderProfilePictureUrl?: DocumentMentionMetadataSenderProfilePictureUrl;
+  subType?: DocumentMentionMetadataSubType;
 }

@@ -161,6 +161,10 @@ function BasePathComponent() {
     invalidateUserInfo();
   }
 
+  if (searchParams.subscriptionCancel === 'true') {
+    analytics.track('subscription_cancel', { tier: searchParams.tier });
+  }
+
   if (searchParams.upgrade === 'true') {
     sessionStorage.setItem('showUpgradeModal', 'true');
   }
@@ -235,6 +239,10 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/channels',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/calls',
     component: LAYOUT_ROUTE.component,
   },
   {

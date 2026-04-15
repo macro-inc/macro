@@ -2,6 +2,7 @@ import type { Transformer } from '@lexical/markdown';
 import { I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
+import { I_VIDEO } from './video';
 import {
   E_BLOCK_EQUATION_NODE,
   E_INLINE_EQUATION_NODE,
@@ -52,6 +53,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   MARK_XML,
   SEARCH_MATCH,
   HR,
+  I_VIDEO,
   I_IMAGE_CONSTRAINED,
   IMAGE, // Standard markdown images (fallback)
   I_USER_MENTION,
@@ -75,6 +77,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
 export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   HR,
   MARK_XML,
+  I_VIDEO,
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
   E_TABLE_NODE,
@@ -107,6 +110,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   MARK_XML,
   SEARCH_MATCH,
   HR,
+  I_VIDEO,
   I_IMAGE_CONSTRAINED,
   IMAGE,
   BR_TAG_TO_LINE_BREAK,

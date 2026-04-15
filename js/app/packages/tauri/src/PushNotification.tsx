@@ -1,5 +1,4 @@
 import { isOk } from '@core/util/maybeResult';
-import { whenSettled } from '@core/util/whenSettled';
 import {
   checkPermissions,
   type NotificationEvent,
@@ -16,67 +15,58 @@ import { invalidateUserNotifications } from '@queries/notification/user-notifica
 import { notificationServiceClient } from '@service-notification/client';
 import { makePersisted } from '@solid-primitives/storage';
 import {
-  type Accessor,
   createContext,
   createEffect,
   createResource,
   createSignal,
   type JSX,
-  type Setter,
 } from 'solid-js';
 import { triggerNavigation } from './navigation';
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
+import { whenSettled } from '@core/util/whenSettled';
 
 function usePushNotifications(
   deviceType: 'android' | 'ios',
   onPushNotification?: (event: NotificationEvent) => void
 ) {
-  const [systemPermission, { refetch }] = createResource(checkPermissions);
+  const [systemPermission] = createResource(checkPermissions);
 
   const [registrationResult, setRegistrationResult] = makePersisted(
     createSignal<NotificationRegistrationResult | undefined>(undefined)
   );
 
-  /// signal which returns the value of the system push notification token
-  // only if the system permission status is granted
-  const tokenToSend = () => {
-    if (systemPermission.latest?.status !== 'granted') return undefined;
-    return registrationResult()?.token;
-  };
-
-  const createResourceStorage = (): [
-    Accessor<'granted' | 'denied' | undefined>,
-    Setter<'granted' | 'denied' | undefined>,
-  ] => {
-    const [get, set] = makePersisted(
-      createSignal<'granted' | 'denied' | undefined>(undefined)
-    );
-    return [get, set];
-  };
-  const [permission, { refetch: reloadServer }] = createResource<
-    'granted' | 'denied',
-    string
-  >(
-    tokenToSend,
-    async (token) => {
-      const res = await notificationServiceClient.registerDevice({
-        deviceType,
-        token,
-      });
-      return isOk(res) ? 'granted' : 'denied';
-    },
-    { storage: createResourceStorage }
+  const [permission, setPermission] = makePersisted(
+    createSignal<'granted' | 'denied' | undefined>(undefined)
   );
+
+  async function registerDeviceWithNotificationService(
+    token: string
+  ): Promise<'granted' | 'denied'> {
+    const res = await notificationServiceClient.registerDevice({
+      deviceType,
+      token,
+    });
+    const result = isOk(res) ? ('granted' as const) : ('denied' as const);
+    setPermission(result);
+    return result;
+  }
 
   async function requestNotificationRegistration() {
     const perm = await requestPermissions();
-    await refetch();
-    if (perm.status !== 'granted') return 'denied';
+    if (perm.status !== 'granted') {
+      setPermission(undefined);
+      setRegistrationResult(undefined);
+      return 'denied';
+    }
     const reg = await registerForRemoteNotifications();
+    if (!reg.token) {
+      setPermission(undefined);
+      setRegistrationResult(undefined);
+      return 'denied';
+    }
     setRegistrationResult(reg);
-    await reloadServer();
-    return permission.latest!;
+    return await registerDeviceWithNotificationService(reg.token);
   }
 
   async function unregisterPushNotifications() {
@@ -91,16 +81,27 @@ function usePushNotifications(
       console.warn('Cannot unregister device with no token set');
     }
     setRegistrationResult(undefined);
+    setPermission(undefined);
   }
 
-  // On launch, once permission status resolves, check if the APNS token has rotated.
+  // On launch, once permission state resolves, ensure persisted state is synced correct, and check if the APNS token has rotated.
   // iOS returns the same token if valid, or a new one if it has rotated.
   whenSettled(
     systemPermission,
     (perm) => {
-      if (perm.status !== 'granted') return;
+      // We defensively ensure our persisted perm state is synced properly, for backwards compatiblity
+      if (perm.status !== 'granted') {
+        setPermission(undefined);
+        return;
+      }
       const storedToken = registrationResult()?.token;
-      if (!storedToken) return;
+      if (!storedToken) {
+        setPermission(undefined);
+        return;
+      }
+      if (permission() !== 'granted') {
+        setPermission('granted');
+      }
 
       registerForRemoteNotifications()
         .then((freshResult) => {
@@ -111,8 +112,9 @@ function usePushNotifications(
               token: storedToken,
             });
             setRegistrationResult(freshResult);
-            // tokenToSend() emits the new value, triggering the createResource fetcher
-            // to register the new token with the backend.
+            registerDeviceWithNotificationService(freshResult.token).catch(
+              console.error
+            );
           }
         })
         .catch(console.error);

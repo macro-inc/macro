@@ -15,6 +15,7 @@ import {
   hasNoPriority,
   hasAssignees,
   isUnassigned,
+  callsFilter,
   channelsFilter,
   filesAndFolderFilter,
   activeAgentFilter,
@@ -324,6 +325,11 @@ export const createSoupFilters = (
       id: 'channels',
       label: 'Channels',
       predicate: channelsFilter,
+    },
+    {
+      id: 'calls',
+      label: 'Calls',
+      predicate: callsFilter,
     },
     {
       id: 'file-folder',

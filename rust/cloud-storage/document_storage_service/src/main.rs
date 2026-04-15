@@ -368,31 +368,44 @@ async fn main() -> anyhow::Result<()> {
     let call_connection_service =
         ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
     let call_repo = PgCallRepo::new(db.clone());
+    let egress_config = match (
+        config::CallRecordingS3Bucket::new(),
+        config::CallRecordingS3Region::new(),
+        config::CallRecordingS3AccessKey::new(),
+        config::CallRecordingS3Secret::new(),
+    ) {
+        (Some(bucket), Some(region), Some(access_key), Some(secret)) => {
+            tracing::info!(bucket = bucket.as_ref(), "call recording enabled");
+            Some(call::domain::models::EgressS3Config {
+                bucket: bucket.as_ref().to_string(),
+                region: region.as_ref().to_string(),
+                access_key: access_key.as_ref().to_string(),
+                secret: secret.as_ref().to_string(),
+            })
+        }
+        _ => None,
+    };
+    let recording_storage = match &egress_config {
+        Some(config) => Some(
+            call::outbound::s3_recording_storage::S3RecordingStorage::new(config.bucket.clone())
+                .await,
+        ),
+        None => None,
+    };
     let mut call_service_builder = CallServiceImpl::new(
         call_repo,
         livekit_rtc_client,
         call_connection_service,
         (*entity_access_service).clone(),
         (*notification_ingress_service).clone(),
+        recording_storage,
         config.vars.livekit_server_url.as_ref(),
     );
     if let Some(secret) = internal_call_secret {
         call_service_builder = call_service_builder.with_internal_call_secret(secret);
     }
-    if let (Some(bucket), Some(region), Some(access_key), Some(secret)) = (
-        config::CallRecordingS3Bucket::new(),
-        config::CallRecordingS3Region::new(),
-        config::CallRecordingS3AccessKey::new(),
-        config::CallRecordingS3Secret::new(),
-    ) {
-        tracing::info!(bucket = bucket.as_ref(), "call recording enabled");
-        call_service_builder =
-            call_service_builder.with_egress(call::domain::models::EgressS3Config {
-                bucket: bucket.as_ref().to_string(),
-                region: region.as_ref().to_string(),
-                access_key: access_key.as_ref().to_string(),
-                secret: secret.as_ref().to_string(),
-            });
+    if let Some(config) = egress_config {
+        call_service_builder = call_service_builder.with_egress(config);
     }
 
     let call_service = Arc::new(call_service_builder);
@@ -409,6 +422,10 @@ async fn main() -> anyhow::Result<()> {
         config.queue_wait_time_seconds,
     );
 
+    let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        PgCallRepo::new(readonly_db.clone()),
+    );
+
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
@@ -416,6 +433,7 @@ async fn main() -> anyhow::Result<()> {
                 frecency_service,
                 readonly_email_service,
                 channel_service_for_soup,
+                call_record_query_service,
             ),
             email_service,
         ),

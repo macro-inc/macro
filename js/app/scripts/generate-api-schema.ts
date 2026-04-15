@@ -58,22 +58,10 @@ async function buildOpenApiBinaries(
 	console.log("Build complete.\n");
 }
 
-// Run pre-built binary directly (no cargo lock needed)
-async function runOpenApiBinary(
-	crateName: string,
-	rustCloudStorageDir = getRustCloudStorageDir(),
-): Promise<string> {
-	const binaryPath = path.join(
-		rustCloudStorageDir,
-		"target",
-		"debug",
-		`${crateName}_openapi`,
-	);
-	const result = await $`${binaryPath}`.text();
-	return result;
-}
+// Run a named binary from the debug directory with a timeout and stderr capture.
+// Throws with stderr content on non-zero exit or timeout so CI failures aren't silent.
+const BINARY_TIMEOUT_MS = 120_000;
 
-// Run a named binary from the debug directory
 async function runBinary(
 	binaryName: string,
 	rustCloudStorageDir = getRustCloudStorageDir(),
@@ -84,24 +72,47 @@ async function runBinary(
 		"debug",
 		binaryName,
 	);
-	const result = await $`${binaryPath}`.text();
-	return result;
+	const proc = Bun.spawn([binaryPath], { stdout: "pipe", stderr: "pipe" });
+	const TIMEOUT_SENTINEL = Symbol("timeout");
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	const timeoutPromise = new Promise<typeof TIMEOUT_SENTINEL>((resolve) => {
+		timeout = setTimeout(() => {
+			proc.kill();
+			resolve(TIMEOUT_SENTINEL);
+		}, BINARY_TIMEOUT_MS);
+	});
+	const completionPromise = Promise.all([
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+		proc.exited,
+	]);
+	const result = await Promise.race([completionPromise, timeoutPromise]);
+	clearTimeout(timeout);
+	if (result === TIMEOUT_SENTINEL) {
+		// After the kill, the in-flight stream reads should complete quickly — grab
+		// whatever stderr was buffered, but don't wait forever if they don't.
+		const drained = await Promise.race([
+			completionPromise.catch(() => null),
+			new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_000)),
+		]);
+		const stderr = drained ? drained[1] : "";
+		throw new Error(
+			`${binaryName} timed out after ${BINARY_TIMEOUT_MS}ms\nstderr:\n${stderr}`,
+		);
+	}
+	const [stdout, stderr, exitCode] = result;
+	if (exitCode !== 0) {
+		throw new Error(
+			`${binaryName} exited with code ${exitCode}\nstderr:\n${stderr}`,
+		);
+	}
+	return stdout;
 }
 
-// Recursively sort all object keys in JSON to ensure deterministic output
-function sortJsonKeys(obj: unknown): unknown {
-	if (Array.isArray(obj)) {
-		return obj.map(sortJsonKeys);
-	}
-	if (obj !== null && typeof obj === "object") {
-		const sorted: Record<string, unknown> = {};
-		for (const key of Object.keys(obj).sort()) {
-			sorted[key] = sortJsonKeys((obj as Record<string, unknown>)[key]);
-		}
-		return sorted;
-	}
-	return obj;
-}
+const runOpenApiBinary = (
+	crateName: string,
+	rustCloudStorageDir = getRustCloudStorageDir(),
+) => runBinary(`${crateName}_openapi`, rustCloudStorageDir);
 
 const getServicesToProcess = (targetServices: string[]) => {
 	// Figure out which services to process
@@ -162,7 +173,7 @@ const processService = async (
 
 		// Run orval to generate types
 		stepStart = performance.now();
-		await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`.quiet();
+		await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
 		console.log(`[${service.name}] Orval finished (${elapsed(stepStart)})`);
 
 		// Special handling for document-cognition

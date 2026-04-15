@@ -123,6 +123,9 @@
       "@block-code/*": [
         "./packages/block-code/*"
       ],
+      "@block-call/*": [
+        "./packages/block-call/*"
+      ],
       "@block-channel/*": [
         "./packages/block-channel/*"
       ],

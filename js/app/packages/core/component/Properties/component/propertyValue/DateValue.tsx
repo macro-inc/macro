@@ -1,9 +1,9 @@
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { formatDate } from '../../utils';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import {
   EmptyValue,
-  PropertyValueDeleteButton,
   stubSaveHandler,
   type PropertyValueProps,
 } from './ValueComponents';
@@ -69,11 +69,14 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
         </Show>
       </button>
       <Show when={!isReadOnly() && isHovered() && displayValue && !isSaving()}>
-        <div class="absolute right-1 inset-y-0 flex items-center">
-          <PropertyValueDeleteButton
+        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-gradient-to-r from-transparent to-hover to-40%">
+          <button
             onClick={handleDelete}
             disabled={isSaving()}
-          />
+            class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink"
+          >
+            <DeleteIcon class="size-3" />
+          </button>
         </div>
       </Show>
     </div>

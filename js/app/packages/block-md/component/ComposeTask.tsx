@@ -541,6 +541,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     .withActions()
     .withCode()
     .withMedia({ fileDrop: true })
+    .withSelectionData()
     .onChange(setContent)
     .onFocusLeave({
       onStart: (e) => editorFocusChange(e, -1),
@@ -628,7 +629,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           }
           placeholder={props.placeholder ?? 'Add description...'}
           portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          class="shrink-1 min-h-0 h-[unset] text-base m-2 overflow-y-auto"
+          class="shrink-1 min-h-0 h-[unset] text-base m-2 overflow-y-auto p-2 scrollbar-hidden"
         />
 
         <Suspense>

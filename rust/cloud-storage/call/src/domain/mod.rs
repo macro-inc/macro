@@ -1,3 +1,6 @@
+/// Channel name resolution logic.
+pub mod channel_name;
+
 /// Domain models for calls.
 pub mod models;
 

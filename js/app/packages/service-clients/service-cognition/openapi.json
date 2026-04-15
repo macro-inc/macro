@@ -1033,6 +1033,46 @@
           }
         }
       }
+    },
+    "/stream/chat/message/stop": {
+      "post": {
+        "tags": ["stream_stop"],
+        "summary": "Stop an in-flight AI chat stream.",
+        "description": "Cancels the streaming task associated with the given `stream_id`, causing\nit to persist whatever has been generated so far and emit `StreamEnd`.\nThe caller must have at least `Edit` access to the chat.",
+        "operationId": "stop_chat_stream",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopChatStreamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stop signal sent (or stream already finished)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StopChatStreamResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StopChatStreamError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2931,6 +2971,43 @@
                 "description": "The level of public access"
               }
             ]
+          }
+        }
+      },
+      "StopChatStreamError": {
+        "type": "object",
+        "description": "Error response for the stop endpoint.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message."
+          }
+        }
+      },
+      "StopChatStreamRequest": {
+        "type": "object",
+        "description": "Request body for stopping an in-flight chat stream.",
+        "required": ["chat_id", "stream_id"],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "The chat the stream belongs to. Used to verify the caller has\npermission to stop the stream."
+          },
+          "stream_id": {
+            "type": "string",
+            "description": "The stream/message ID to stop."
+          }
+        }
+      },
+      "StopChatStreamResponse": {
+        "type": "object",
+        "description": "Response from a stop request.",
+        "required": ["stopped"],
+        "properties": {
+          "stopped": {
+            "type": "boolean",
+            "description": "`true` if a matching in-flight stream was found and cancellation was\ntriggered, `false` if the stream had already finished or was unknown."
           }
         }
       },

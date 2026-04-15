@@ -20,6 +20,7 @@ import type {
   EmailEntity,
   ChannelEntity,
   ChannelMessageEntity,
+  CallEntity,
 } from '@entity';
 import type { ChannelType } from '@service-comms/generated/models';
 import type {
@@ -358,6 +359,7 @@ export const mapSoupPageToEntityList: (
   | ProjectEntity
   | EmailEntity
   | ChannelEntity
+  | CallEntity
 )[] = (data, options) => {
   return data.items
     .filter(
@@ -374,7 +376,8 @@ export const mapSoupPageToEntityList: (
         | ChatEntity
         | ProjectEntity
         | EmailEntity
-        | ChannelEntity => {
+        | ChannelEntity
+        | CallEntity => {
         if (item.tag === 'chat') {
           return {
             ...item.data,
@@ -439,6 +442,23 @@ export const mapSoupPageToEntityList: (
             hasIcsAttachment,
             attachments,
           };
+        }
+
+        if (item.tag === 'callRecord') {
+          return {
+            type: 'call',
+            id: item.data.callId,
+            name: item.data.channelName ?? 'Call',
+            channelId: item.data.channelId,
+            channelName: item.data.channelName ?? undefined,
+            ownerId: item.data.createdBy,
+            createdAt: item.data.startedAt,
+            updatedAt: item.data.endedAt ?? item.data.startedAt,
+            sortTs: item.data.endedAt ?? item.data.startedAt,
+            isActive: item.data.isActive,
+            durationMs: item.data.durationMs ?? undefined,
+            participantIds: item.data.participants.map((p) => p.userId),
+          } satisfies CallEntity;
         }
 
         if (item.tag === 'channel') {

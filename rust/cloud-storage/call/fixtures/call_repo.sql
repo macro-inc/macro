@@ -30,3 +30,27 @@ INSERT INTO calls (id, channel_id, room_name, created_by, created_at, share_perm
 INSERT INTO call_participants (call_id, user_id, joined_at) VALUES
   ('00000000-0000-0000-0000-0000000ca110', 'macro|user-a@test.com', '2024-01-01 12:00:00+00'),
   ('00000000-0000-0000-0000-0000000ca110', 'macro|user-b@test.com', '2024-01-01 12:01:00+00');
+
+-- share permission for the archived call
+INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel", "createdAt", "updatedAt") VALUES
+  ('00000000-0000-0000-0000-00000000sp02', false, NULL, '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
+
+INSERT INTO "ChannelSharePermission" (share_permission_id, channel_id, access_level) VALUES
+  ('00000000-0000-0000-0000-00000000sp02', '00000000-0000-0000-0000-000000000c01', 'view');
+
+-- archived call record in ch1 (id = CALL_ARCHIVED)
+INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, share_permission_id) VALUES
+  ('00000000-0000-0000-0000-0000000ca2ed', '00000000-0000-0000-0000-000000000c01',
+   '00000000-0000-0000-0000-000000000c01', 'macro|user-a@test.com',
+   '2024-01-01 10:00:00+00', '2024-01-01 10:05:00+00', 300000, 'egress-arch-1',
+   '00000000-0000-0000-0000-00000000sp02');
+
+INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at) VALUES
+  ('00000000-0000-0000-0000-0000000ca2ed', 'macro|user-a@test.com', '2024-01-01 10:00:00+00', '2024-01-01 10:05:00+00'),
+  ('00000000-0000-0000-0000-0000000ca2ed', 'macro|user-b@test.com', '2024-01-01 10:01:00+00', '2024-01-01 10:04:30+00');
+
+INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num) VALUES
+  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-1', 'macro|user-a@test.com', 'archived hello',
+   '2024-01-01 10:00:05+00', '2024-01-01 10:00:07+00', 1),
+  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-2', 'macro|user-b@test.com', 'archived reply',
+   '2024-01-01 10:00:08+00', '2024-01-01 10:00:10+00', 2);

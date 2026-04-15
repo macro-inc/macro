@@ -156,6 +156,8 @@ export function signalFilter(entity: EntityData): boolean {
       return true;
     case 'channel_message':
       return true;
+    case 'call':
+      return true;
   }
 }
 

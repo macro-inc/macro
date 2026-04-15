@@ -87,7 +87,16 @@ export const createSearchState = ({
         search_on: 'name_content',
         match_type: 'partial',
         query,
-        filters,
+        filters:
+          mentionIds && mentionIds.length > 0
+            ? {
+                ...filters,
+                channel_filters: {
+                  ...filters.channel_filters,
+                  mentions: mentionIds,
+                },
+              }
+            : filters,
       };
     }
   );

@@ -3,6 +3,7 @@
 
 mod chat;
 mod document;
+#[allow(clippy::too_many_arguments)]
 mod email;
 mod project;
 

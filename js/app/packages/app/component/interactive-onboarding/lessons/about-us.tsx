@@ -8,6 +8,8 @@ import { startSsoLogin } from '@core/auth/sso';
 import { initAndStartEmailSync } from '@core/email-link';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { isTauri } from '@core/util/platform';
+// Singleton is correct here — onContinue/onCompleteParam are plain callbacks outside Solid context.
+import { analytics } from '@app/lib/analytics/analytics';
 
 function AboutUsContent(props: LessonContentProps) {
   onMount(() => {
@@ -102,6 +104,12 @@ export const aboutUsLesson: LessonDefinition = {
   demo: AboutUsDemo,
   order: 60,
   onContinue: async () => {
+    analytics.track('sign_up', { method: 'google' }, [
+      'ga',
+      'meta-pixel',
+      'posthog',
+    ]);
+
     const success = await startSsoLogin({
       returnPath: `${ROUTER_BASE_CONCAT}welcome?google=1`,
     });
@@ -125,9 +133,16 @@ export const aboutUsLesson: LessonDefinition = {
   completeOnParam: 'google',
   onCompleteParam: () =>
     initAndStartEmailSync().match(
-      () => true,
+      () => {
+        analytics.track('email_authorized');
+        return true;
+      },
       (e) => {
-        if (e.tag === 'AlreadyInitialized') return true;
+        if (e.tag === 'AlreadyInitialized') {
+          analytics.track('email_authorized');
+          return true;
+        }
+        analytics.track('email_unauthorized');
         console.error('Failed to init email link after Google auth', e);
         return false;
       }

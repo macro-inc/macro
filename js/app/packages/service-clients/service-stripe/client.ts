@@ -48,7 +48,7 @@ export const stripeServiceClient = {
 
     const result = await authServiceClient.createCheckoutSession({
       successUrl: `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
-      cancelUrl: `${window.location.origin}/app`,
+      cancelUrl: `${window.location.origin}/app?subscriptionCancel=true${tier ? `&tier=${tier}` : ''}`,
       discount: discount ?? null,
       metadata: {
         gaClientId: gaClientId ?? null,

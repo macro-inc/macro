@@ -103,6 +103,7 @@ use model::{
     version::DocumentStorageServiceApiVersion,
 };
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::email_thread::{
@@ -194,6 +195,7 @@ use utoipa::OpenApi;
         call::inbound::axum_router::get_or_create_call_handler,
         call::inbound::axum_router::check_active_call_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
+        call::inbound::axum_router::get_call_record_handler,
         call::inbound::axum_router::webhook_handler,
         call::inbound::axum_router::transcript_handler,
 
@@ -339,6 +341,11 @@ use utoipa::OpenApi;
             call::domain::models::CallActiveResponse,
             call::domain::models::LeaveCallResponse,
             call::domain::models::TranscriptSegmentRequest,
+            call::domain::models::CallRecord,
+            call::domain::models::CallRecordParticipant,
+            call::domain::models::CallRecordTranscriptSegment,
+            SoupCallRecord,
+            SoupCallRecordParticipant,
 
             DocumentSubType,
 

@@ -204,6 +204,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     ));
 
     let ingress_queue = SqsQueue::new(
@@ -326,6 +327,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service,
+        ai_stream_registry: crate::service::ai_stream_registry::AiStreamRegistry::new(Arc::new(
+            redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
+        )),
     };
     Arc::new(api_context)
 }

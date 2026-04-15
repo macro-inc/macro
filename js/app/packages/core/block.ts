@@ -45,6 +45,7 @@ import {
  * List of valid block types that can be used in the application.
  */
 export const BlockRegistry = [
+  'call',
   'chat',
   'write',
   'pdf',
@@ -86,6 +87,7 @@ export type BlockAlias = (typeof BlockAliasRegistry)[BlockAliasKeys];
  * Represents the block types that do not correspond to a document type.
  */
 export const NonDocumentBlockTypes = [
+  'call',
   'chat',
   'channel',
   'project',
@@ -126,6 +128,7 @@ function exclude(excludeSet: BlockName[]) {
  * Defines the block combinations that are valid.
  */
 export const ValidBlockCombinations: BlockCombinationRules = {
+  call: allBlockNames,
   chat: allBlockNames,
   pdf: ENABLE_PDF_MULTISPLIT ? allBlockNames : exclude(['pdf']),
   write: exclude(['write']),
@@ -144,6 +147,7 @@ export const ValidBlockCombinations: BlockCombinationRules = {
 
 // maps block name to valid parents
 export const ValidNestingCombinations: BlockCombinationRules = {
+  call: new Set([]),
   canvas: new Set(['md']),
   chat: new Set([]),
   pdf: new Set(['md']),

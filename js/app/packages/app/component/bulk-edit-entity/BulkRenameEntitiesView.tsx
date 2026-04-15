@@ -1,11 +1,11 @@
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { createMemo, createSignal, onMount, Show } from 'solid-js';
+import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { createBulkRenameDssEntityMutation } from '@macro-entity';
-import type { EntityData } from '@entity';
-import {
-  BulkEditEntityModalActionFooter,
-  BulkEditEntityModalTitle,
-} from './BulkEditEntityModal';
+import { type EntityData, InlineEntity } from '@entity';
+import { Dialog } from '@kobalte/core/dialog';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
+import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 
 type RenameMode = 'total' | 'prepend' | 'append' | 'replace';
 
@@ -96,11 +96,39 @@ export const BulkRenameEntitiesView = (props: {
   };
 
   return (
-    <div class="w-full">
-      <BulkEditEntityModalTitle title="Rename" />
+    <>
+      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+        <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+          <CloseIcon />
+        </Dialog.CloseButton>
+        <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+          Rename
+        </Dialog.Title>
+      </div>
 
-      <Show when={multi()}>
-        <div class="mb-3">
+      <div class="p-2 border-b border-edge-muted">
+        <div class="flex items-center gap-2">
+          <For each={props.entities.slice(0, 2)}>
+            {(entity) => (
+              <div
+                class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
+                  'max-w-[50%]': props.entities.length === 2,
+                })}
+              >
+                <InlineEntity entity={entity} />
+              </div>
+            )}
+          </For>
+          <Show when={props.entities.length > 2}>
+            <div class="text-muted-foreground text-xs px-2 py-1">
+              +{props.entities.length - 2} more
+            </div>
+          </Show>
+        </div>
+      </div>
+
+      <div class="p-3 flex flex-col gap-3">
+        <Show when={multi()}>
           <SegmentedControl
             label="Mode"
             value={mode()}
@@ -108,63 +136,69 @@ export const BulkRenameEntitiesView = (props: {
             onChange={(value) => setMode(value as RenameMode)}
             size="SM"
           />
-        </div>
-      </Show>
+        </Show>
 
-      <div class="w-full focus-within:bracket-offset-2 mb-3">
-        <input
-          ref={(el) => {
-            inputRef = el;
-            onMount(() => {
-              setTimeout(() => {
-                inputRef?.focus();
-                inputRef?.select();
+        <div class="w-full focus-within:bracket-offset-2">
+          <input
+            ref={(el) => {
+              inputRef = el;
+              onMount(() => {
+                setTimeout(() => {
+                  inputRef?.focus();
+                  inputRef?.select();
+                });
               });
-            });
-          }}
-          value={editValue()}
-          onInput={(e) => setEditValue(e.currentTarget.value)}
-          onKeyDown={handleKeyDown}
-          class="w-full p-2 text-sm border-1 border-edge/20 bg-menu text-ink
-                 placeholder:text-ink-placeholder focus:outline-none
-                 selection:bg-ink selection:text-panel"
-          placeholder="Enter new text..."
-        />
-      </div>
-
-      {/* Extra inputs for replace mode */}
-      <Show when={multi() && mode() === 'replace'}>
-        <div class="flex flex-col gap-2 mb-4">
-          <input
-            class="p-1 text-sm border border-edge/20 bg-menu"
-            placeholder="Find…"
-            value={replaceFind()}
-            onInput={(e) => setReplaceFind(e.currentTarget.value)}
-          />
-          <input
-            class="p-1 text-sm border border-edge/20 bg-menu"
-            placeholder="Replace with…"
-            value={replaceWith()}
-            onInput={(e) => setReplaceWith(e.currentTarget.value)}
+            }}
+            value={editValue()}
+            onInput={(e) => setEditValue(e.currentTarget.value)}
+            onKeyDown={handleKeyDown}
+            class="w-full p-2 text-sm border-1 border-edge/20 bg-menu text-ink
+                   placeholder:text-ink-placeholder focus:outline-none
+                   selection:bg-ink selection:text-panel"
+            placeholder="Enter new text..."
           />
         </div>
-      </Show>
 
-      {/* Preview */}
-      <Show when={multi() && mode() !== 'total'}>
-        <div class="text-xs opacity-70 mb-3">
-          Preview (first item):
-          <div class="mt-1 p-2 bg-surface border border-edge/10 rounded">
-            {previewName()}
+        <Show when={multi() && mode() === 'replace'}>
+          <div class="flex flex-col gap-2">
+            <input
+              class="p-1 text-sm border border-edge/20 bg-menu"
+              placeholder="Find…"
+              value={replaceFind()}
+              onInput={(e) => setReplaceFind(e.currentTarget.value)}
+            />
+            <input
+              class="p-1 text-sm border border-edge/20 bg-menu"
+              placeholder="Replace with…"
+              value={replaceWith()}
+              onInput={(e) => setReplaceWith(e.currentTarget.value)}
+            />
           </div>
-        </div>
-      </Show>
+        </Show>
 
-      <BulkEditEntityModalActionFooter
-        onCancel={props.onCancel}
-        onConfirm={finishEditing}
-        confirmText="Rename"
-      />
-    </div>
+        <Show when={multi() && mode() !== 'total'}>
+          <div class="text-xs opacity-70">
+            Preview (first item):
+            <div class="mt-1 p-2 bg-surface border border-edge/10 rounded">
+              {previewName()}
+            </div>
+          </div>
+        </Show>
+
+        <div class="flex justify-end gap-2">
+          <Button variant="ghost" class="rounded-xs" onClick={props.onCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            class="rounded-xs"
+            onClick={finishEditing}
+          >
+            Rename
+          </Button>
+        </div>
+      </div>
+    </>
   );
 };

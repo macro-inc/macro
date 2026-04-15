@@ -59,8 +59,9 @@ type RenameOnMutateResult = {
 
 const getEntityRenameData = (
   operation: EntityRenameOperation
-): EntityRenameData => {
+): EntityRenameData | null => {
   const { entity, newName } = operation;
+  if (entity.type === 'call') return null;
   return {
     id: entity.id,
     itemType: entity.type,
@@ -71,6 +72,7 @@ const getEntityRenameData = (
 
 const performEntityRename = async (operation: EntityRenameOperation) => {
   const data = getEntityRenameData(operation);
+  if (!data) return { success: false };
   const success = await renameItem(data);
   return { success };
 };
@@ -201,7 +203,9 @@ const bulkRenameMutationFn = async (
 const bulkRenameOnMutate = (
   params: BulkRenameDssEntityMutationVariables
 ): RenameOnMutateResult => {
-  const updates = params.map(getEntityRenameData);
+  const updates = params
+    .map(getEntityRenameData)
+    .filter((d): d is EntityRenameData => d !== null);
   const contexts = performOptimisticRenameUpdates(updates);
   return { contexts, updates };
 };

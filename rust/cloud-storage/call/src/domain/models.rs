@@ -3,7 +3,9 @@
 use std::fmt;
 
 use chrono::{DateTime, Utc};
+use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
+use models_pagination::{Query, SimpleSortMethod};
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -135,6 +137,86 @@ pub struct TranscriptSegmentRequest {
     pub ended_at: Option<DateTime<Utc>>,
     /// Whether this is a final transcription (not interim).
     pub is_final: bool,
+}
+
+/// A transcript segment as returned in a [`CallRecord`].
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordTranscriptSegment {
+    /// LiveKit segment ID (nullable for archived records).
+    pub segment_id: Option<String>,
+    /// The speaker's user ID.
+    pub speaker_id: String,
+    /// The transcribed text content.
+    pub content: String,
+    /// When the speaker started this segment.
+    pub started_at: DateTime<Utc>,
+    /// When the speaker stopped (if known).
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Ordering within the call.
+    pub sequence_num: i32,
+}
+
+/// A participant as returned in a [`CallRecord`] (historic — includes `left_at`).
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordParticipant {
+    /// The user id.
+    pub user_id: String,
+    /// When the user joined the call.
+    pub joined_at: DateTime<Utc>,
+    /// When the user left (None if still in an active call).
+    pub left_at: Option<DateTime<Utc>>,
+}
+
+/// Full record of a call, unifying rows from `calls` (active) and
+/// `call_records` (archived) into a single response shape.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecord {
+    /// The call identifier.
+    pub call_id: Uuid,
+    /// The channel this call belongs to.
+    pub channel_id: Uuid,
+    /// The RTC room name.
+    pub room_name: String,
+    /// User who created the call.
+    pub created_by: String,
+    /// When the call started (created_at for active, started_at for archived).
+    pub started_at: DateTime<Utc>,
+    /// When the call ended (None if still active).
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Call duration in milliseconds (None if still active).
+    pub duration_ms: Option<i64>,
+    /// Recording egress ID, if any.
+    pub egress_id: Option<String>,
+    /// S3 object key for the call recording (internal, not serialized).
+    #[serde(skip_serializing)]
+    pub recording_key: Option<String>,
+    /// Presigned URL for the call recording, if available.
+    pub recording_url: Option<String>,
+    /// Resolved display name for the channel.
+    pub channel_name: Option<String>,
+    /// Whether the call is currently active (from `calls` table).
+    pub is_active: bool,
+    /// Participants (both active and historic).
+    pub participants: Vec<CallRecordParticipant>,
+    /// Transcript segments ordered by `sequence_num`.
+    pub transcript: Vec<CallRecordTranscriptSegment>,
+}
+
+/// Request to fetch recent call records for a user (used by Soup).
+#[derive(Debug)]
+pub struct GetCallRecordsRequest {
+    /// The user whose call records to fetch.
+    pub user_id: MacroUserIdStr<'static>,
+    /// Maximum number of records to return.
+    pub limit: u32,
+    /// Sort or cursor-based pagination query with optional filter.
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<CallLiteral>>,
 }
 
 /// Errors that can occur during call operations.

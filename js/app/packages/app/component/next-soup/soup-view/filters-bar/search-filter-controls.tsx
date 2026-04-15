@@ -20,7 +20,13 @@ import {
   type FilterAst,
 } from '@app/component/next-soup/filters';
 
-type ChannelSubFilters = { channel_ids?: string[]; sender_ids?: string[] };
+import type {
+  ChannelFilters,
+  EmailFilters,
+} from '@service-storage/generated/schemas';
+
+type ChannelSubFilters = Pick<ChannelFilters, 'channel_ids' | 'sender_ids'>;
+type EmailSubFilters = Pick<EmailFilters, 'importance'>;
 
 function getCachedChannelSubFilters(contentId: string): ChannelSubFilters {
   if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
@@ -121,6 +127,13 @@ export const SearchIndexFilter = () => {
 
   const isChannelsActive = () => selectedIndex() === 'channels';
 
+  createEffect(() => {
+    if (!isEmailActive()) return;
+    const ef = queryFilters().email_filters;
+    // Use null as sentinel for "explicitly cleared" since undefined is dropped by JSON.stringify
+    cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
+  });
+
   const handleChange = (selected: Option[]) => {
     const newValue = selected.length > 0 ? selected[0].value : null;
     setSelectedIndex(newValue);
@@ -146,6 +159,20 @@ export const SearchIndexFilter = () => {
               ...channelAst,
               ...senderAst,
             });
+          } else if (opt.value === 'email') {
+            const cached = getCachedEmailSubFilters(contentId);
+            // null in cache means "explicitly cleared" — convert to undefined to override the default
+            const importance =
+              'importance' in cached
+                ? (cached.importance ?? undefined)
+                : opt.queryFilters.email_filters?.importance;
+            setQueryFilters({
+              ...opt.queryFilters,
+              email_filters: {
+                ...opt.queryFilters.email_filters,
+                importance,
+              },
+            });
           } else {
             filterAst.set(opt.ast);
           }
@@ -158,7 +185,8 @@ export const SearchIndexFilter = () => {
 
   const indexLabel = createMemo(() => {
     const active = activeIndex();
-    return active.length > 0 ? active[0].label : 'All';
+    const value = active.length > 0 ? active[0].label : 'All';
+    return `Type: ${value}`;
   });
 
   const hasActiveIndex = () => selectedIndex() !== null;
@@ -181,6 +209,9 @@ export const SearchIndexFilter = () => {
         <InChannelFilter />
         <FromSenderFilter />
       </Show>
+      <Show when={isEmailActive()}>
+        <EmailImportanceFilter />
+      </Show>
       <Show when={hasActiveIndex()}>
         <button
           type="button"
@@ -191,6 +222,53 @@ export const SearchIndexFilter = () => {
         </button>
       </Show>
     </div>
+  );
+};
+
+const EMAIL_IMPORTANCE_OPTIONS: Option[] = [
+  { value: 'signal', label: 'Signal' },
+  { value: 'noise', label: 'Noise' },
+];
+
+function importanceToOption(importance: boolean | null | undefined): Option[] {
+  if (importance === true) return [EMAIL_IMPORTANCE_OPTIONS[0]];
+  if (importance === false) return [EMAIL_IMPORTANCE_OPTIONS[1]];
+  return [];
+}
+
+const EmailImportanceFilter = () => {
+  const { setQueryFilters, queryFilters } = useSoupView();
+
+  const active = createMemo(() =>
+    importanceToOption(queryFilters().email_filters?.importance)
+  );
+
+  const label = createMemo(() => {
+    const a = active();
+    const value = a.length > 0 ? a[0].label : 'All';
+    return `Importance: ${value}`;
+  });
+
+  const handleChange = (selected: Option[]) => {
+    const importance =
+      selected.length > 0 ? selected[0].value === 'signal' : undefined;
+    setQueryFilters((prev) => ({
+      ...prev,
+      email_filters: {
+        ...prev.email_filters,
+        importance,
+      },
+    }));
+  };
+
+  return (
+    <FilterSelect
+      label={label()}
+      options={EMAIL_IMPORTANCE_OPTIONS}
+      active={active()}
+      onChange={handleChange}
+      multiple={false}
+    />
   );
 };
 

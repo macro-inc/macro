@@ -76,12 +76,16 @@ export function stackNotifications(
   const replies = filteredNotifications
     .filter(byTag('channel_message_reply'))
     .filter((n) => !isShadowed(n));
-  const others = notifications.filter((n) => !isChannelNotification(n));
+  const docMentions = notifications.filter(byTag('document_mention'));
+  const others = notifications.filter(
+    (n) => !isChannelNotification(n) && !byTag('document_mention')(n)
+  );
 
   const groups: NotificationStack[] = [
     ...mentions.flatMap((n) => makeStack('channel_mention', [n])),
     ...makeStack('channel_message_send', newMsgs),
     ...makeReplyStacks(replies),
+    ...makeStack('document_mention', docMentions),
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),
   ];
 

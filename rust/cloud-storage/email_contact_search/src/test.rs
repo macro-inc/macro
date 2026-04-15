@@ -16,7 +16,7 @@ async fn test_search_email_contacts_empty_term(pool: Pool<Postgres>) -> anyhow::
         .map(|l| l.lowercase())
         .unwrap();
 
-    let result = search_email_contacts(&pool, user_id, "".to_string(), 10, None).await;
+    let result = search_email_contacts(&pool, user_id, "".to_string(), 10, None, None).await;
 
     assert!(result.is_err());
     assert!(matches!(
@@ -39,7 +39,8 @@ async fn test_search_email_contacts_finds_sender_by_name(
         .unwrap();
 
     // Search for "Alice" - should find Thread 1 where Alice is the sender
-    let response = search_email_contacts(&pool, user_id, "Alice".to_string(), 10, None).await?;
+    let response =
+        search_email_contacts(&pool, user_id, "Alice".to_string(), 10, None, None).await?;
 
     // Should find matches (Alice is sender in thread 1, recipient in threads 1 and 2)
     assert!(!response.items.is_empty());
@@ -64,7 +65,7 @@ async fn test_search_email_contacts_finds_recipients(pool: Pool<Postgres>) -> an
         .unwrap();
 
     // Search for "Bob" - should find threads where Bob is a recipient
-    let response = search_email_contacts(&pool, user_id, "Bob".to_string(), 10, None).await?;
+    let response = search_email_contacts(&pool, user_id, "Bob".to_string(), 10, None, None).await?;
 
     assert!(!response.items.is_empty());
 
@@ -91,7 +92,8 @@ async fn test_search_email_contacts_finds_bcc_recipients(
         .unwrap();
 
     // Search for "David" - should find thread 2 where David is BCC
-    let response = search_email_contacts(&pool, user_id, "David".to_string(), 10, None).await?;
+    let response =
+        search_email_contacts(&pool, user_id, "David".to_string(), 10, None, None).await?;
 
     assert!(!response.items.is_empty());
 
@@ -118,7 +120,8 @@ async fn test_search_email_contacts_sorted_by_latest_message(
         .unwrap();
 
     // Search for "Smith" - Alice Smith appears in multiple threads
-    let response = search_email_contacts(&pool, user_id, "Smith".to_string(), 10, None).await?;
+    let response =
+        search_email_contacts(&pool, user_id, "Smith".to_string(), 10, None, None).await?;
 
     assert!(!response.items.is_empty());
 
@@ -146,11 +149,11 @@ async fn test_search_email_contacts_case_insensitive(pool: Pool<Postgres>) -> an
 
     // Search with different cases
     let response_lower =
-        search_email_contacts(&pool, user_id.clone(), "alice".to_string(), 10, None).await?;
+        search_email_contacts(&pool, user_id.clone(), "alice".to_string(), 10, None, None).await?;
     let response_upper =
-        search_email_contacts(&pool, user_id.clone(), "ALICE".to_string(), 10, None).await?;
+        search_email_contacts(&pool, user_id.clone(), "ALICE".to_string(), 10, None, None).await?;
     let response_mixed =
-        search_email_contacts(&pool, user_id, "AlIcE".to_string(), 10, None).await?;
+        search_email_contacts(&pool, user_id, "AlIcE".to_string(), 10, None, None).await?;
 
     // All should return the same number of results
     assert_eq!(response_lower.items.len(), response_upper.items.len());
@@ -170,7 +173,8 @@ async fn test_search_email_contacts_partial_match(pool: Pool<Postgres>) -> anyho
         .unwrap();
 
     // Search for partial term "John" should match "Bob Johnson"
-    let response = search_email_contacts(&pool, user_id, "John".to_string(), 10, None).await?;
+    let response =
+        search_email_contacts(&pool, user_id, "John".to_string(), 10, None, None).await?;
 
     assert!(!response.items.is_empty());
     assert!(response.items.iter().any(|r| {
@@ -192,7 +196,7 @@ async fn test_search_email_contacts_pagination_limit(pool: Pool<Postgres>) -> an
         .unwrap();
 
     // Search with limit of 2 threads - may return multiple rows per thread (one per contact match)
-    let response = search_email_contacts(&pool, user_id, "a".to_string(), 2, None).await?;
+    let response = search_email_contacts(&pool, user_id, "a".to_string(), 2, None, None).await?;
 
     // Limit applies to threads, not rows - verify we get at most 2 unique threads
     let unique_threads: std::collections::HashSet<_> =
@@ -216,7 +220,7 @@ async fn test_search_email_contacts_pagination_cursor(pool: Pool<Postgres>) -> a
 
     // First page with limit of 2
     let first_response =
-        search_email_contacts(&pool, user_id.clone(), "a".to_string(), 2, None).await?;
+        search_email_contacts(&pool, user_id.clone(), "a".to_string(), 2, None, None).await?;
 
     // Count unique threads in first page
     let first_threads: std::collections::HashSet<_> =
@@ -232,7 +236,7 @@ async fn test_search_email_contacts_pagination_cursor(pool: Pool<Postgres>) -> a
 
     // Second page using cursor
     let second_response =
-        search_email_contacts(&pool, user_id.clone(), "a".to_string(), 2, cursor).await?;
+        search_email_contacts(&pool, user_id.clone(), "a".to_string(), 2, cursor, None).await?;
 
     // Count unique threads in second page
     let second_threads: std::collections::HashSet<_> =
@@ -254,7 +258,8 @@ async fn test_search_email_contacts_user_isolation(pool: Pool<Postgres>) -> anyh
         .unwrap();
 
     // Search for "Frank" - Frank belongs to user2, not user1
-    let response = search_email_contacts(&pool, user_id, "Frank".to_string(), 10, None).await?;
+    let response =
+        search_email_contacts(&pool, user_id, "Frank".to_string(), 10, None, None).await?;
 
     // Should return 0 results (Frank is not accessible to user1)
     assert_eq!(response.items.len(), 0);
@@ -273,8 +278,15 @@ async fn test_search_email_contacts_no_results(pool: Pool<Postgres>) -> anyhow::
         .unwrap();
 
     // Search for a name that doesn't exist
-    let response =
-        search_email_contacts(&pool, user_id, "NonexistentPerson".to_string(), 10, None).await?;
+    let response = search_email_contacts(
+        &pool,
+        user_id,
+        "NonexistentPerson".to_string(),
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     assert_eq!(response.items.len(), 0);
     assert!(response.cursor.is_done());
@@ -294,7 +306,8 @@ async fn test_search_email_contacts_includes_email_address(
         .unwrap();
 
     // Search for "Alice"
-    let response = search_email_contacts(&pool, user_id, "Alice".to_string(), 10, None).await?;
+    let response =
+        search_email_contacts(&pool, user_id, "Alice".to_string(), 10, None, None).await?;
 
     assert!(!response.items.is_empty());
 
@@ -321,8 +334,15 @@ async fn test_search_email_contacts_uses_message_level_name_override(
         .unwrap();
 
     // Search for "Charles" - Thread 3 has from_name = "Charles B. Brown" which overrides contact name "Charlie Brown"
-    let response =
-        search_email_contacts(&pool, user_id.clone(), "Charles".to_string(), 10, None).await?;
+    let response = search_email_contacts(
+        &pool,
+        user_id.clone(),
+        "Charles".to_string(),
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     // Should find the message with from_name override
     let charles_match = response
@@ -353,7 +373,8 @@ async fn test_search_email_contacts_searches_both_from_name_and_contact_name(
 
     // Search for "Charlie" - should find thread 3 because the contact name is "Charlie Brown"
     // even though the from_name is "Charles B. Brown"
-    let response = search_email_contacts(&pool, user_id, "Charlie".to_string(), 10, None).await?;
+    let response =
+        search_email_contacts(&pool, user_id, "Charlie".to_string(), 10, None, None).await?;
 
     // Should find thread 3's sender by searching the contact name
     let charlie_from_match = response.items.iter().find(|r| {
@@ -383,7 +404,8 @@ async fn test_search_email_contacts_recipient_name_override(
         .unwrap();
 
     // Search for "Robert" - Thread 3 has recipient with name override "Robert J." for Bob Johnson
-    let response = search_email_contacts(&pool, user_id, "Robert".to_string(), 10, None).await?;
+    let response =
+        search_email_contacts(&pool, user_id, "Robert".to_string(), 10, None, None).await?;
 
     // Should find the recipient with name override
     let robert_match = response
@@ -412,7 +434,8 @@ async fn test_search_email_contacts_pagination_by_thread(
     // This ensures we have 2 threads to paginate over
 
     // Get first thread (limit=1, cursor=None) - should be Thread 1 (most recent)
-    let page1 = search_email_contacts(&pool, user_id.clone(), "Smith".to_string(), 1, None).await?;
+    let page1 =
+        search_email_contacts(&pool, user_id.clone(), "Smith".to_string(), 1, None, None).await?;
 
     // All results on page 1 should be from Thread 1 (the most recent)
     assert!(!page1.items.is_empty());
@@ -432,8 +455,15 @@ async fn test_search_email_contacts_pagination_by_thread(
     };
 
     // Get second thread using cursor - should be Thread 2 (second most recent)
-    let page2 =
-        search_email_contacts(&pool, user_id.clone(), "Smith".to_string(), 1, cursor1).await?;
+    let page2 = search_email_contacts(
+        &pool,
+        user_id.clone(),
+        "Smith".to_string(),
+        1,
+        cursor1,
+        None,
+    )
+    .await?;
 
     // All results on page 2 should be from Thread 2
     assert!(!page2.items.is_empty());
@@ -464,8 +494,15 @@ async fn test_search_email_contacts_by_email_address(pool: Pool<Postgres>) -> an
         .unwrap();
 
     // Search for "bob.johnson" - should match bob.johnson@example.com
-    let response =
-        search_email_contacts(&pool, user_id.clone(), "bob.johnson".to_string(), 10, None).await?;
+    let response = search_email_contacts(
+        &pool,
+        user_id.clone(),
+        "bob.johnson".to_string(),
+        10,
+        None,
+        None,
+    )
+    .await?;
 
     assert!(!response.items.is_empty());
 
@@ -478,7 +515,7 @@ async fn test_search_email_contacts_by_email_address(pool: Pool<Postgres>) -> an
 
     // Search for partial email domain - should match all @example.com contacts
     let domain_response =
-        search_email_contacts(&pool, user_id, "@example.com".to_string(), 10, None).await?;
+        search_email_contacts(&pool, user_id, "@example.com".to_string(), 10, None, None).await?;
 
     assert!(!domain_response.items.is_empty());
 
@@ -503,7 +540,7 @@ async fn test_search_email_contacts_cursor_tiebreak_on_identical_timestamps(
 
     // Page 1: limit=1 should return thread 7
     let page1 =
-        search_email_contacts(&pool, user_id.clone(), "Taylor".to_string(), 1, None).await?;
+        search_email_contacts(&pool, user_id.clone(), "Taylor".to_string(), 1, None, None).await?;
 
     let page1_thread_ids: Vec<_> = {
         let mut seen = std::collections::HashSet::new();
@@ -523,7 +560,8 @@ async fn test_search_email_contacts_cursor_tiebreak_on_identical_timestamps(
         SearchCursorOption::Done => panic!("Expected more results"),
     };
 
-    let page2 = search_email_contacts(&pool, user_id, "Taylor".to_string(), 1, cursor).await?;
+    let page2 =
+        search_email_contacts(&pool, user_id, "Taylor".to_string(), 1, cursor, None).await?;
 
     let page2_thread_ids: Vec<_> = {
         let mut seen = std::collections::HashSet::new();
