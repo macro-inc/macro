@@ -89,7 +89,7 @@ export function SplitContainer(
               panel.handle.isSpotLight(),
             'opacity-100': panel.isPanelActive() || panel.handle.isSpotLight(),
             'size-full': !panel.handle.isSpotLight(),
-            'opacity-85': !panel.isPanelActive(),
+            'opacity-85': !panel.isPanelActive() && !isMobile(),
           }}
           ref={(ref) => {
             setRef(ref);
