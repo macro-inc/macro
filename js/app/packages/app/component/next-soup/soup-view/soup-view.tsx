@@ -984,7 +984,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
             onClear={soup.selection.clear}
           />
         </Show>
-        <Show when={(soup.previewEntity() || panel.previewState[0]()) && !!soup.focus.item()}>
+        <Show
+          when={
+            (soup.previewEntity() || panel.previewState[0]()) &&
+            !!soup.focus.item()
+          }
+        >
           <PreviewPanel
             ref={setPreviewPanelRef}
             selectedEntity={soup.focus.item()}
