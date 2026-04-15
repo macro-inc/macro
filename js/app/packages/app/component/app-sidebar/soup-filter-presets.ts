@@ -214,9 +214,23 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           filters: {
             include: { subType: ['task'] },
             properties: [
-              { type: 'entity', propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES, value: ctx.userId },
-              { type: 'select', propertyId: SYSTEM_PROPERTY_IDS.STATUS, value: PROPERTY_OPTION_IDS.STATUS.COMPLETED, negate: true },
-              { type: 'select', propertyId: SYSTEM_PROPERTY_IDS.STATUS, value: PROPERTY_OPTION_IDS.STATUS.CANCELED, negate: true },
+              {
+                type: 'entity',
+                propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+                value: ctx.userId,
+              },
+              {
+                type: 'select',
+                propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+                value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+                negate: true,
+              },
+              {
+                type: 'select',
+                propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+                value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
+                negate: true,
+              },
             ],
           },
           clientFilters: ['task', 'assigned-to', 'active-task'],
