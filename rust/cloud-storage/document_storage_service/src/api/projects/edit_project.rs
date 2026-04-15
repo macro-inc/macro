@@ -12,7 +12,6 @@ use entity_access::inbound::axum_extractors::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
-use macro_share_permissions::user_item_access::update_user_item_access;
 use model::response::{GenericErrorResponse, SuccessResponse};
 use model::{project::BasicProject, response::GenericSuccessResponse};
 use model::{project::request::PatchProjectRequestV2, response::ErrorResponse, user::UserContext};
@@ -253,19 +252,6 @@ async fn patch_project_transaction(
     )
     .await
     .context("failed to patch project")?;
-
-    // Update user access if share permissions are provided
-    if let Some(share_permission) = share_permission {
-        update_user_item_access(
-            &mut transaction,
-            &user_context.user_id,
-            &project_context.id,
-            "project",
-            share_permission,
-        )
-        .await
-        .context("failed to update user item access")?;
-    }
 
     transaction
         .commit()
