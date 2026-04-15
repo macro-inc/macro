@@ -526,7 +526,9 @@ impl<
                         self.rtc_client
                             .stop_egress(&egress_id)
                             .await
-                            .inspect_err(|e| tracing::error!(error=?e, egress_id, "failed to stop egress"))
+                            .inspect_err(
+                                |e| tracing::error!(error=?e, egress_id, "failed to stop egress"),
+                            )
                             .ok();
                     }
 
