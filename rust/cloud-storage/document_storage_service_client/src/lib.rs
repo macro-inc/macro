@@ -7,8 +7,6 @@ pub mod error;
 pub mod notification;
 pub mod project;
 pub mod thread;
-pub mod update_channel_share_permission;
-pub mod update_user_channel_permissions;
 pub mod upload;
 
 #[derive(Clone)]
