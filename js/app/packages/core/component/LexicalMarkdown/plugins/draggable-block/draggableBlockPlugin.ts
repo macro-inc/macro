@@ -74,19 +74,36 @@ function $getListItemElement(
 
   let closest: HTMLElement | null = null;
   let closestDist = Infinity;
+  // Track the last "real" item (one with actual content, not just a nesting
+  // wrapper) so we can normalize wrapper hits.
+  let lastRealLi: HTMLElement | null = null;
+  let closestIsWrapper = false;
 
   for (const child of listNode.getChildren()) {
     if (!$isListItemNode(child)) continue;
     const li = editor.getElementByKey(child.getKey());
     if (!li) continue;
+
+    const isWrapper =
+      child.getChildren().length > 0 &&
+      child.getChildren().every((c) => $isListNode(c));
+
     const rect = li.getBoundingClientRect();
     const mid = rect.top + rect.height / 2;
     const dist = Math.abs(clientY - mid);
+
+    if (!isWrapper) lastRealLi = li;
+
     if (dist < closestDist) {
       closestDist = dist;
       closest = li;
+      closestIsWrapper = isWrapper;
     }
   }
+
+  // If the closest hit is a nesting wrapper, return the preceding real item
+  // instead so the handle targets the logical owner of that nested content.
+  if (closestIsWrapper && lastRealLi) return lastRealLi;
   return closest;
 }
 
@@ -344,6 +361,11 @@ function registerDraggableBlock(
         draggedParent === targetParent
       ) {
         const group = $collectNestedGroup(draggedNode as ListItemNode);
+
+        // Dropping onto a member of the dragged group is a no-op —
+        // prevents detaching nested subtrees from their logical parent.
+        const groupKeys = new Set(group.map((n) => n.getKey()));
+        if (groupKeys.has(targetNode.getKey())) return;
 
         if (insertBefore) {
           // Insert the whole group before the target, preserving order.
