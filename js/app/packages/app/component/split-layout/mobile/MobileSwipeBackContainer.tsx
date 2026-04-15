@@ -21,7 +21,7 @@ import { SplitPanel } from '../components/SplitPanel';
 const SWIPE_EDGE_THRESHOLD = 28; // px from left edge to initiate gesture
 const SWIPE_VELOCITY_THRESHOLD = 0.3; // px/ms — fast flick completes swipe
 const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
-const SWIPE_ANIMATION_MS = 100;
+const SWIPE_ANIMATION_MS = 88;
 const BG_PEEK_OFFSET = 110; // px the BG panel is offset left at rest; closes to 0 as FG slides away
 
 export type MobileSwipeBackContainerProps = {
