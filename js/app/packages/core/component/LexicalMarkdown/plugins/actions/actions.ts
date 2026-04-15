@@ -162,7 +162,7 @@ export const ACTIONS: Action[] = [
     icon: VideoIcon,
     action: (editor: LexicalEditor) => {
       queueMicrotask(() => {
-        editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'video');
+        editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'all');
       });
     },
   },
