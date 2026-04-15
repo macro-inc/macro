@@ -201,7 +201,7 @@ fn test_compute_next_cursor_all_included_search_done_returns_done() {
         Some(&make_tagged_hit(
             Uuid::new_v4(),
             Some(ts(1000)),
-            SearchSource::EmailSubject,
+            SearchSource::Content,
         )),
         &SearchCursorOption::NotDone(None),
     );
@@ -215,7 +215,7 @@ fn test_compute_next_cursor_all_included_but_search_not_done_continues() {
     // generate cursor from last included (search may have more pages)
     let entity_id = Uuid::new_v4();
     let timestamp = ts(1000);
-    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::EmailSubject);
+    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::Content);
 
     let result = compute_next_cursor(
         &SearchCursorOption::NotDone(None), // search says not done (more exists)
@@ -285,7 +285,7 @@ fn test_find_last_of_source_returns_none_when_not_found() {
         make_tagged_hit(Uuid::new_v4(), Some(ts(2000)), SearchSource::ChatName),
     ];
 
-    let last_email = find_last_of_source(&results, SearchSource::EmailSubject);
+    let last_email = find_last_of_source(&results, SearchSource::Content);
     assert!(last_email.is_none());
 }
 
@@ -336,7 +336,7 @@ fn test_cursor_logic_pagination_scenario() {
     let final_tagged: Vec<TaggedSearchHit> = vec![
         make_tagged_hit(Uuid::new_v4(), Some(ts(5000)), SearchSource::ChatName),
         make_tagged_hit(doc_ids[9], Some(timestamps[9]), SearchSource::DocumentName),
-        make_tagged_hit(Uuid::new_v4(), Some(ts(4000)), SearchSource::EmailSubject),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(4000)), SearchSource::Content),
         make_tagged_hit(doc_ids[8], Some(timestamps[8]), SearchSource::DocumentName),
         make_tagged_hit(doc_ids[7], Some(timestamps[7]), SearchSource::DocumentName),
     ];
