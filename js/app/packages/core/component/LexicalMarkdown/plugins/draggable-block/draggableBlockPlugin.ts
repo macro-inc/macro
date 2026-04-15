@@ -9,21 +9,18 @@ import {
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getRoot,
+  COMMAND_PRIORITY_HIGH,
+  KEY_DOWN_COMMAND,
   type LexicalEditor,
 } from 'lexical';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 
-/** Custom MIME type to identify block drag operations in dataTransfer. */
 export const DRAG_DATA_FORMAT = 'application/x-lexical-drag-block';
 
 export type DraggableBlockState = {
-  /** The top-level block element currently hovered by the mouse. */
   hoveredElement: HTMLElement | null;
-  /** Whether a block drag is in progress. */
   isDragging: boolean;
-  /** The block element under the cursor during a drag (drop zone). */
   targetElement: HTMLElement | null;
-  /** Whether the dragged block would land before or after the target. */
   targetPosition: 'before' | 'after' | null;
 };
 
@@ -35,10 +32,6 @@ export const createDraggableBlockStore = () => {
     targetPosition: null,
   });
 };
-
-// ---------------------------------------------------------------------------
-// Geometry helpers
-// ---------------------------------------------------------------------------
 
 function getTopLevelNodeKeys(editor: LexicalEditor): string[] {
   return editor.read(() => $getRoot().getChildrenKeys());
@@ -68,10 +61,8 @@ function getCollapsedMargins(elem: HTMLElement): {
 }
 
 /**
- * Given a list DOM element, find the `<li>` child closest to {@link clientY}.
- * Uses midpoint-distance so there are no dead zones between items.
- *
- * Must be called from within an existing editor.read() context.
+ * Given a list DOM element, find the `<li>` child closest to clientY. Uses
+ * midpoint-distance so there are no dead zones between items.
  */
 function $getListItemElement(
   editor: LexicalEditor,
@@ -105,7 +96,7 @@ function $getListItemElement(
  * For most blocks this is the top-level element.  For lists we drill into the
  * `<li>` items so individual list items can be reordered.
  *
- * When {@link useEdgeAsDefault} is true, positions above the first block or
+ * When useEdgeAsDefault is true, positions above the first block or
  * below the last block snap to those blocks respectively.
  */
 function getBlockElement(
@@ -204,10 +195,6 @@ export function $collectNestedGroup(item: ListItemNode): ListItemNode[] {
   return group;
 }
 
-// ---------------------------------------------------------------------------
-// Plugin
-// ---------------------------------------------------------------------------
-
 export type DraggableBlockPluginProps = {
   setState: SetStoreFunction<DraggableBlockState>;
   /**
@@ -223,15 +210,16 @@ function registerDraggableBlock(
 ) {
   const { setState } = props;
   let isDraggingBlock = false;
+  let isKeyboardMode = false;
+  let rafId: number | null = null;
+  let latestMouseEvent: MouseEvent | null = null;
 
-  // -- Mouse tracking (hover detection) ------------------------------------
   // Attached to `document` so movement in the left margin (where the drag
   // handle sits) is still tracked.  We use the editor root rect to scope
   // the horizontal range: from 60 px left of the content to its right edge.
-
   const HORIZONTAL_BUFFER = 60;
 
-  function onMouseMove(event: MouseEvent) {
+  function processMouseMove(event: MouseEvent) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
       clearHover();
@@ -239,6 +227,7 @@ function registerDraggableBlock(
     }
     // Ignore mouse-moves while a button is held (text selection, etc.)
     if (event.buttons > 0) return;
+
     // Keep the current hover while the cursor sits on the drag handle itself.
     if (target.closest('.draggable-block-menu')) return;
 
@@ -260,14 +249,37 @@ function registerDraggableBlock(
     setState({ hoveredElement: blockElem });
   }
 
+  function onMouseMove(event: MouseEvent) {
+    if (isKeyboardMode) {
+      isKeyboardMode = false;
+    }
+
+    latestMouseEvent = event;
+
+    if (rafId !== null) return;
+
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      if (latestMouseEvent) {
+        processMouseMove(latestMouseEvent);
+        latestMouseEvent = null;
+      }
+    });
+  }
+
   function clearHover() {
     if (isDraggingBlock) return;
     setState({ hoveredElement: null });
   }
 
-  // -- Drag event handlers -------------------------------------------------
-  // Registered in the *capture* phase so that block-drags are intercepted
-  // before the existing dragInsertPlugin (which listens in the bubble phase).
+  // Keyboard handlers (hide on typing)
+  function handleKeyboardInput() {
+    if (!isKeyboardMode) {
+      isKeyboardMode = true;
+      setState({ hoveredElement: null });
+    }
+    return false;
+  }
 
   function handleDragOver(event: DragEvent) {
     if (!event.dataTransfer?.types.includes(DRAG_DATA_FORMAT)) return;
@@ -323,8 +335,8 @@ function registerDraggableBlock(
         ? targetNode.getParent()
         : null;
 
-      // ── Same-list reorder ──────────────────────────────────────────
-      // Both nodes are ListItemNodes sharing the same ListNode parent.
+      // Same-list reorder. Both nodes are ListItemNodes sharing the same
+      // ListNode parent.
       if (
         $isListItemNode(draggedNode) &&
         $isListItemNode(targetNode) &&
@@ -350,9 +362,8 @@ function registerDraggableBlock(
         return;
       }
 
-      // ── List-item extracted to root level ──────────────────────────
-      // A ListItemNode dragged outside its parent list needs to be
-      // wrapped in a fresh ListNode of the same type.
+      // List-item extracted to root level. A ListItemNode dragged outside its
+      // parent list needs to be wrapped in a fresh ListNode of the same type.
       if (
         $isListItemNode(draggedNode) &&
         draggedParent &&
@@ -389,7 +400,7 @@ function registerDraggableBlock(
         return;
       }
 
-      // ── Non-list block dropped onto a list item → split the list ──
+      // Non-list block dropped onto a list item → split the list
       if (
         !$isListItemNode(draggedNode) &&
         $isListItemNode(targetNode) &&
@@ -433,7 +444,7 @@ function registerDraggableBlock(
         return;
       }
 
-      // ── Default: top-level block move ──────────────────────────────
+      // Default: top-level block move
       if (
         $isListItemNode(targetNode) &&
         targetParent &&
@@ -461,15 +472,11 @@ function registerDraggableBlock(
     }
   }
 
-  // -- Scroll handler (clear hover on scroll) ------------------------------
-
   function onScroll() {
     if (!isDraggingBlock) {
       setState({ hoveredElement: null });
     }
   }
-
-  // -- State reset ---------------------------------------------------------
 
   function resetState() {
     setState({
@@ -482,9 +489,6 @@ function registerDraggableBlock(
 
   // -- Listener management -------------------------------------------------
 
-  // Drag listeners go on the anchor / root so drag events from within the
-  // editor are captured.  Mouse-move goes on `document` so the margin area
-  // (where the handle lives) is covered too.
   function attachDragListeners(elem: HTMLElement) {
     elem.addEventListener('dragover', handleDragOver, true);
     elem.addEventListener('drop', handleDrop, true);
@@ -500,13 +504,29 @@ function registerDraggableBlock(
   document.addEventListener('mousemove', onMouseMove);
   window.addEventListener('scroll', onScroll, true);
 
+  // Hide drag handle when any key is pressed
+  const unregisterKeyDown = editor.registerCommand(
+    KEY_DOWN_COMMAND,
+    () => {
+      handleKeyboardInput();
+      return false;
+    },
+    COMMAND_PRIORITY_HIGH
+  );
+
+  function cleanup() {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    document.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('scroll', onScroll, true);
+    unregisterKeyDown();
+  }
+
   if (props.anchorElem) {
     attachDragListeners(props.anchorElem);
-    return mergeRegister(
-      () => detachDragListeners(props.anchorElem!),
-      () => document.removeEventListener('mousemove', onMouseMove),
-      () => window.removeEventListener('scroll', onScroll, true)
-    );
+    return mergeRegister(() => detachDragListeners(props.anchorElem!), cleanup);
   }
 
   // Fallback: attach drag listeners to the editor root element.
@@ -515,8 +535,7 @@ function registerDraggableBlock(
       if (root) attachDragListeners(root);
       if (prevRoot) detachDragListeners(prevRoot);
     }),
-    () => document.removeEventListener('mousemove', onMouseMove),
-    () => window.removeEventListener('scroll', onScroll, true)
+    cleanup
   );
 }
 

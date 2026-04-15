@@ -2,14 +2,14 @@ import { $isListItemNode, $isListNode, type ListItemNode } from '@lexical/list';
 import { $getNearestNodeFromDOMNode } from 'lexical';
 import { Show, useContext } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
-import { Portal } from 'solid-js/web';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
   $collectNestedGroup,
   DRAG_DATA_FORMAT,
   type DraggableBlockState,
 } from '../../plugins/draggable-block/draggableBlockPlugin';
-import DotsSixVerticalIcon from '@icon/bold/dots-six-vertical-bold.svg';
+import Dots from '@icon/bold/dots-six-vertical-bold.svg';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 
 const HANDLE_SIZE = 20;
 const HANDLE_GAP = 4;
@@ -30,11 +30,7 @@ export function DraggableBlockMenu(props: {
     const rootRect = editor()?.getRootElement()?.getBoundingClientRect();
     if (!rootRect) return null;
 
-    // Vertically center on the first line (approximated via line-height).
-    const lineHeight = parseInt(window.getComputedStyle(elem).lineHeight, 10);
-    const effectiveHeight = isNaN(lineHeight)
-      ? Math.min(rect.height, 28)
-      : Math.min(lineHeight, rect.height);
+    const effectiveHeight = Math.min(rect.height, 24);
 
     return {
       top: rect.top + (effectiveHeight - HANDLE_SIZE) / 2,
@@ -106,12 +102,13 @@ export function DraggableBlockMenu(props: {
 
       nodeKey = node.getKey();
     });
+
     if (!nodeKey) return;
 
     event.dataTransfer.effectAllowed = 'move';
 
-    const listImg = listElemForImage;
-    if (hideElems.length > 0 && listImg) {
+    if (hideElems.length > 0 && listElemForImage) {
+      const listImg: HTMLElement = listElemForImage;
       // Temporarily hide non-group siblings so the parent list element
       // only shows the items being dragged.  The browser captures the
       // drag image snapshot synchronously, so restoring in setTimeout is
@@ -147,8 +144,7 @@ export function DraggableBlockMenu(props: {
 
   return (
     <Show when={props.active}>
-      <Portal>
-        {/* Drag handle */}
+      <ScopedPortal scope="block">
         <div
           class="draggable-block-menu fixed z-10 flex items-center justify-center cursor-grab rounded transition-opacity duration-100"
           classList={{
@@ -165,10 +161,9 @@ export function DraggableBlockMenu(props: {
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <DotsSixVerticalIcon class="size-5 text-ink-extra-muted opacity-50 pointer-events-none" />
+          <Dots class="size-5 text-ink-extra-muted opacity-50 pointer-events-none" />
         </div>
 
-        {/* Drop target line */}
         <Show when={props.state.isDragging && targetLinePosition()}>
           {(pos) => (
             <div
@@ -182,7 +177,7 @@ export function DraggableBlockMenu(props: {
             />
           )}
         </Show>
-      </Portal>
+      </ScopedPortal>
     </Show>
   );
 }
