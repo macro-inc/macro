@@ -28,6 +28,11 @@ const parameterGroup = new aws.rds.ParameterGroup(
       { name: 'max_wal_size', value: '16384' },
       { name: 'min_wal_size', value: '4096' },
       { name: 'vacuum_cost_page_miss', value: '10' },
+      {
+        name: 'shared_preload_libraries',
+        value: 'pg_stat_statements,auto_explain',
+        applyMethod: 'pending-reboot',
+      },
     ],
     tags,
   },
@@ -39,7 +44,7 @@ export const parameterGroupArn = parameterGroup.arn;
 const database = new aws.rds.Instance(
   'database',
   {
-    applyImmediately: stack !== 'prod',
+    applyImmediately: false,
     identifier: `macro-db-${stack}`,
     engine: 'postgres',
     engineVersion: config.require('engine_version'),
