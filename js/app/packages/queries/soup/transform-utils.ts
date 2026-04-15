@@ -146,8 +146,8 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
     const terms = [
       ...new Set(
         data.results
-          .flatMap((r) => (r.highlight.sender ?? '').toLowerCase().split(/\s+/))
-          .filter(Boolean)
+          .flatMap((r) => extractSearchTerms(r.highlight.sender ?? ''))
+          .map((t) => t.toLowerCase())
       ),
     ];
     if (hasSenderMatch && data.searchQuery) {
