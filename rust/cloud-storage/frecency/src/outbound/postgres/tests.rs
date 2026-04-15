@@ -878,6 +878,7 @@ async fn test_processor_transaction_lifecycle(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn it_cannot_be_read_concurrently(pool: PgPool) {
     let test_user_id = "test_processor_tx_lifecycle";
+    // Insert an unprocessed event
     let event_id = sqlx::query_scalar!(
         r#"
         INSERT INTO frecency_events (
@@ -905,11 +906,12 @@ async fn it_cannot_be_read_concurrently(pool: PgPool) {
     assert_eq!(events.len(), 1);
     assert_eq!(events.first().unwrap().id, event_id);
 
-    // a different processor can't acquire the lock while the first holds it
+    // try to read from a second processor
+    // this fails because the first processor still holds the lock
     let err = second.get_unprocessed_events().await.unwrap_err();
     assert!(matches!(err, PollerErr::DbLockErr));
 
-    // finish the first tx
+    // finish the tx
     first.mark_processed(Vec::new()).await.unwrap();
 
     // now second can read because the transaction has finished
