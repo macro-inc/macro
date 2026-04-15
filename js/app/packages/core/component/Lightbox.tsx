@@ -1,7 +1,6 @@
 import * as stackingContext from '@core/constant/stackingContext';
 import { cn } from '@ui/utils/classname';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
@@ -54,15 +53,7 @@ export function Lightbox(props: LightboxProps) {
   const [zoompinchHandle, setZoompinchHandle] = createSignal<
     ZoompinchHandle | undefined
   >();
-  const [isToolbarVisible, setIsToolbarVisible] = createSignal(false);
   let hideToolbarTimeout: ReturnType<typeof setTimeout> | undefined;
-
-  const handleMouseMove = () => {
-    if (isTouchDevice()) return;
-    setIsToolbarVisible(true);
-    if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = setTimeout(() => setIsToolbarVisible(false), 1000);
-  };
 
   const fetchBlob = async (): Promise<Blob | undefined> => {
     if (props.getBlob) return props.getBlob();
@@ -207,13 +198,7 @@ export function Lightbox(props: LightboxProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    let mouseMoveListenerTimeoutId: number | undefined;
     if (!isMobile()) {
-      mouseMoveListenerTimeoutId = window.setTimeout(
-        () => window.addEventListener('mousemove', handleMouseMove),
-        500
-      );
-
       // Track dragging so click-to-zoom and cursor stay in sync
       let isMouseDown = false;
       let mouseDownX = 0;
@@ -266,8 +251,6 @@ export function Lightbox(props: LightboxProps) {
 
     onCleanup(() => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.clearTimeout(mouseMoveListenerTimeoutId);
-      window.removeEventListener('mousemove', handleMouseMove);
       if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
     });
   });
