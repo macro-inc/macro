@@ -150,7 +150,7 @@ export const ACTIONS: Action[] = [
     icon: ImageIcon,
     action: (editor: LexicalEditor) => {
       queueMicrotask(() => {
-        editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'image');
+        editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'all');
       });
     },
   },

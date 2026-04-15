@@ -1,4 +1,3 @@
-import { cornerClip } from '@core/util/clipPath';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 
 const MIN_IMAGE_HEIGHT = 50;
@@ -109,28 +108,10 @@ export function ResizeHandle(props: ResizeHandleProps) {
     handleRef.removeEventListener('pointerup', handlePointerUp);
   });
 
-  const translateX = () => {
-    if (props.side === 'left') {
-      return innerVisible()
-        ? 'translateX(-2px)'
-        : 'translateX(calc(-100% - 2px))';
-    } else {
-      return innerVisible()
-        ? 'translateX(calc(-100% + 2px + 1rem))'
-        : 'translateX(calc(2px + 1rem))';
-    }
-  };
-
-  const clipPath = () => {
-    return props.side === 'left'
-      ? cornerClip(0, '1rem', '1rem', 0)
-      : cornerClip('1rem', 0, 0, '1rem');
-  };
-
   return (
     <div
       ref={handleRef}
-      class="w-4 absolute top-0 h-full cursor-col-resize z-1 transition-colors duration-200 flex flex-col justify-center group"
+      class="w-4 absolute top-0 h-full cursor-col-resize z-1"
       classList={{
         'right-0': props.side === 'right',
         'left-0': props.side === 'left',
@@ -140,26 +121,16 @@ export function ResizeHandle(props: ResizeHandleProps) {
       }}
     >
       <div
-        class="w-3 h-[50%] bg-panel transition-transform duration-100 min-h-8 flex flex-row py-6 pointer-events-none"
+        class="w-1 h-[50%] min-h-8 absolute top-1/2 bg-ink ring-2 ring-panel rounded-full transition-all duration-200 pointer-events-none"
         classList={{
-          'justify-start': props.side === 'left',
-          'justify-end': props.side === 'right',
+          'right-3': props.side === 'right',
+          'left-3': props.side === 'left',
         }}
         style={{
-          transform: translateX(),
-          'clip-path': clipPath(),
+          opacity: innerVisible() || isDragging() ? 0.5 : 0,
+          transform: `translateY(-50%) ${isDragging() ? 'scale(1.2)' : 'scale(1)'}`,
         }}
-      >
-        <div
-          class="h-full w-0.25 group-hover:w-0.5 transition-transform duration-30"
-          style={{
-            transform: innerVisible() ? 'scaleY(1)' : 'scaleY(0)',
-            'background-color': isDragging()
-              ? 'var(--color-accent)'
-              : 'var(--color-ink-extra-muted)',
-          }}
-        />
-      </div>
+      />
     </div>
   );
 }
