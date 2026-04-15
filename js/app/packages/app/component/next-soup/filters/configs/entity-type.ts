@@ -9,7 +9,6 @@ import {
 } from '../predicates';
 import { config, isAgent, isEmail, isTask, NIL } from './base';
 
-
 export const documentFilter = config({
   id: 'document',
   group: 'entity-type',

@@ -141,6 +141,58 @@ export type FilterData = {
 
 export type FilterSetter = (fn: (draft: FilterData) => void) => void;
 
+/** Merge multiple partial FilterData objects into one (OR logic for same fields) */
+export function mergeFilterData(...sources: Partial<FilterData>[]): FilterData {
+  const include: FieldFilters = {};
+  const exclude: FieldFilters = {};
+  const properties: PropertyFilters = [];
+  let emailView: EmailView | undefined;
+
+  for (const source of sources) {
+    if (source.include) {
+      for (const [key, values] of Object.entries(source.include) as [FieldName, unknown[]][]) {
+        if (!values?.length) continue;
+        const existing = include[key] as unknown[] | undefined;
+        (include as Record<string, unknown[]>)[key] = existing ? [...existing, ...values] : [...values];
+      }
+    }
+
+    if (source.exclude) {
+      for (const [key, values] of Object.entries(source.exclude) as [FieldName, unknown[]][]) {
+        if (!values?.length) continue;
+        const existing = exclude[key] as unknown[] | undefined;
+        (exclude as Record<string, unknown[]>)[key] = existing ? [...existing, ...values] : [...values];
+      }
+    }
+
+    if (source.properties?.length) {
+      properties.push(...source.properties);
+    }
+
+    if (source.emailView) {
+      emailView = source.emailView;
+    }
+  }
+
+  return { include, exclude, properties, emailView };
+}
+
+/** Create an empty FilterData object */
+export const emptyFilterData = (): FilterData => ({
+  include: {},
+  exclude: {},
+  properties: [],
+  emailView: undefined,
+});
+
+/** Apply a partial FilterData to a draft (for use with setFilters) */
+export function applyFilterData(draft: FilterData, source: Partial<FilterData>): void {
+  draft.include = source.include ?? {};
+  draft.exclude = source.exclude ?? {};
+  draft.properties = source.properties ?? [];
+  draft.emailView = source.emailView;
+}
+
 export function createFilterStore(initial?: Partial<FilterData>) {
   const [data, setData] = createStore<FilterData>({
     include: initial?.include ?? {},
