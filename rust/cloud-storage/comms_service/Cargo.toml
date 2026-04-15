@@ -38,10 +38,12 @@ comms_db_client = { path = "../comms_db_client", optional = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 doppleganger = { workspace = true }
 entity_access = { path = "../entity_access" }
+entity_access_db_utils = { path = "../entity_access_db_utils" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken.workspace = true
+last_online_tracker = { path = "../last_online_tracker" }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_axum_utils = { path = "../macro_axum_utils" }
@@ -62,7 +64,6 @@ model_notifications = { path = "../model_notifications" }
 models_comms = { path = "../models_comms" }
 models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
-last_online_tracker = { path = "../last_online_tracker" }
 notification_hex = { path = "../notification", package = "notification" }
 reqwest.workspace = true
 secretsmanager_client = { path = "../secretsmanager_client" }

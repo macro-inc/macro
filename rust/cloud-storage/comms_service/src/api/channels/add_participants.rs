@@ -3,7 +3,6 @@ use crate::api::context::{AppState, ChannelImpl};
 use crate::api::extractors::{
     ChannelId, ChannelMember, ChannelName, ChannelParticipants, ChannelTypeExtractor,
 };
-use crate::channel_permissions;
 use crate::notification as comms_notification;
 use anyhow::Result;
 use axum::extract::Json;
@@ -82,22 +81,6 @@ pub async fn handler(
             )
         })?;
     }
-
-    let start = std::time::Instant::now();
-    channel_permissions::add_permissions_for_channel_users(
-        &ctx.db,
-        &channel_id.to_string(),
-        &participants,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to add permissions for channel items");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "unable to add permissions for channel items".to_string(),
-        )
-    })?;
-    tracing::info!(elapsed=?start.elapsed(), "added user channel permissions");
 
     // There should always be participants, but better safe than sorry
     let metadata = CommonChannelMetadata {

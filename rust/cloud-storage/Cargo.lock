@@ -2092,6 +2092,7 @@ dependencies = [
  "connection_gateway_client",
  "doppleganger",
  "entity_access",
+ "entity_access_db_utils",
  "frecency",
  "futures",
  "http-body-util",
