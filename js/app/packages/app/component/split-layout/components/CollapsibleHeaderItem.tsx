@@ -5,8 +5,8 @@ import { cn } from '@ui/utils/classname';
 type CollapsibleHeaderItemProps = {
   id: string;
   priority: number;
-  expanded: JSX.Element;
-  collapsed: JSX.Element;
+  expanded: () => JSX.Element;
+  collapsed: () => JSX.Element;
   onCollapsedChange?: (isCollapsed: boolean) => void;
   containerClass?: string;
 };
@@ -32,7 +32,7 @@ export function CollapsibleHeaderItem(props: CollapsibleHeaderItemProps) {
           ref={setExpandedRef}
           class={cn('flex items-center', props.containerClass)}
         >
-          {props.expanded}
+          {props.expanded()}
         </div>
       </Show>
       <Show when={isCollapsed()}>
@@ -40,7 +40,7 @@ export function CollapsibleHeaderItem(props: CollapsibleHeaderItemProps) {
           ref={setCollapsedRef}
           class={cn('flex items-center', props.containerClass)}
         >
-          {props.collapsed}
+          {props.collapsed()}
         </div>
       </Show>
     </>
