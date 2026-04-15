@@ -115,6 +115,11 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     );
   });
 
+  const isMacroSender = createMemo(() => {
+    const senderEmail = props.message.from?.email?.toLowerCase();
+    return senderEmail?.endsWith('@macro.com') ?? false;
+  });
+
   const host = createMemo(() => {
     themeUpdate();
     const hostContainer = document.createElement('div');
@@ -122,9 +127,10 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     // Style that uses a CSS variable to control image visibility
     const styleEl = document.createElement('style');
     // Normalize font in email
-    const fontOverride = isPersonal()
-      ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
-      : '';
+    const fontOverride =
+      isPersonal() && !isMacroSender()
+        ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
+        : '';
     styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
