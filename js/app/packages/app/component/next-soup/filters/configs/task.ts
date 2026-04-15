@@ -1,0 +1,187 @@
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
+import {
+  type TaskEntityWithProperties,
+  isTaskEntity,
+  getTaskAssigneeIds,
+} from '@entity';
+import {
+  isNotStarted,
+  isInProgress,
+  isInReview,
+  isCompleted,
+  isCanceled,
+  isOpen,
+  isUrgentPriority,
+  isHighPriority,
+  isMediumPriority,
+  isLowPriority,
+  hasNoPriority,
+  taskFilter as taskPredicate,
+  taskAssignedToUserFilter as taskAssignedToUserPredicate,
+} from '../predicates';
+import {
+  config,
+  propSelect,
+  propEntity,
+  isTask,
+  NO_ASSIGNEE,
+  type Predicate,
+} from './base';
+
+const statusFilter = <TId extends string>(
+  id: TId,
+  status: string,
+  predicate: Predicate
+) =>
+  config({
+    id,
+    predicate,
+    query: { properties: [propSelect(SYSTEM_PROPERTY_IDS.STATUS, status)] },
+  });
+
+const priorityFilter = <TId extends string>(
+  id: TId,
+  priority: string,
+  predicate: Predicate
+) =>
+  config({
+    id,
+    predicate,
+    query: { properties: [propSelect(SYSTEM_PROPERTY_IDS.PRIORITY, priority)] },
+  });
+
+export const taskFilter = config({
+  id: 'task',
+  group: 'entity-type',
+  predicate: taskPredicate,
+  query: isTask,
+});
+
+export const taskNotStartedFilter = statusFilter(
+  'task-not-started',
+  PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+  isNotStarted
+);
+
+export const taskInProgressFilter = statusFilter(
+  'task-in-progress',
+  PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+  isInProgress
+);
+
+export const taskInReviewFilter = statusFilter(
+  'task-in-review',
+  PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+  isInReview
+);
+
+export const taskCompletedFilter = statusFilter(
+  'task-completed',
+  PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+  isCompleted
+);
+
+export const taskCanceledFilter = statusFilter(
+  'task-canceled',
+  PROPERTY_OPTION_IDS.STATUS.CANCELED,
+  isCanceled
+);
+
+export const activeTaskFilter = config({
+  id: 'active-task',
+  predicate: (e) => taskPredicate(e) && isOpen(e),
+  query: {
+    include: { subType: ['task'] },
+    properties: [
+      propSelect(
+        SYSTEM_PROPERTY_IDS.STATUS,
+        PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+        true
+      ),
+      propSelect(
+        SYSTEM_PROPERTY_IDS.STATUS,
+        PROPERTY_OPTION_IDS.STATUS.CANCELED,
+        true
+      ),
+    ],
+  },
+});
+
+export const TASK_STATUS_FILTERS = [
+  taskNotStartedFilter,
+  taskInProgressFilter,
+  taskInReviewFilter,
+  taskCompletedFilter,
+  taskCanceledFilter,
+] as const;
+
+export const taskCriticalFilter = priorityFilter(
+  'task-critical',
+  PROPERTY_OPTION_IDS.PRIORITY.URGENT,
+  isUrgentPriority
+);
+
+export const taskHighPriorityFilter = priorityFilter(
+  'task-high-priority',
+  PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+  isHighPriority
+);
+
+export const taskMediumPriorityFilter = priorityFilter(
+  'task-medium-priority',
+  PROPERTY_OPTION_IDS.PRIORITY.MEDIUM,
+  isMediumPriority
+);
+
+export const taskLowPriorityFilter = priorityFilter(
+  'task-low-priority',
+  PROPERTY_OPTION_IDS.PRIORITY.LOW,
+  isLowPriority
+);
+
+export const taskNoPriorityFilter = config({
+  id: 'task-no-priority',
+  predicate: hasNoPriority,
+  query: isTask,
+});
+
+export const TASK_PRIORITY_FILTERS = [
+  taskCriticalFilter,
+  taskHighPriorityFilter,
+  taskMediumPriorityFilter,
+  taskLowPriorityFilter,
+  taskNoPriorityFilter,
+] as const;
+
+export const assignedToMeFilter = config({
+  id: 'assigned-to',
+  predicate: (e, ctx) => taskAssignedToUserPredicate(() => ctx.userId)(e),
+  query: (ctx) => ({
+    properties: [propEntity(SYSTEM_PROPERTY_IDS.ASSIGNEES, ctx.userId ?? '')],
+  }),
+});
+
+export const assigneeFilter = config({
+  id: 'assignee',
+  predicate: (e, ctx) => {
+    if (!ctx.assignees?.length || !isTaskEntity(e)) return true;
+    const ids = getTaskAssigneeIds(e as unknown as TaskEntityWithProperties);
+    return ctx.assignees.some((id) =>
+      id === NO_ASSIGNEE ? ids.length === 0 : ids.includes(id)
+    );
+  },
+  query: (ctx) => {
+    if (!ctx.assignees?.length) return {};
+    const userIds = ctx.assignees.filter((id) => id !== NO_ASSIGNEE);
+    if (userIds.length === 0) return isTask;
+    return {
+      ...isTask,
+      properties: [
+        userIds.map((id) => propEntity(SYSTEM_PROPERTY_IDS.ASSIGNEES, id)),
+      ],
+    };
+  },
+});
