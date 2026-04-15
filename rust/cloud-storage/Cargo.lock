@@ -9495,6 +9495,7 @@ dependencies = [
  "name_search",
  "opensearch_client",
  "properties_db_client",
+ "readonly_pool",
  "secretsmanager_client",
  "serde",
  "serde_json",

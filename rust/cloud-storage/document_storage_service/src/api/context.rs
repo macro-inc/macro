@@ -45,13 +45,13 @@ use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
 use properties_service::PropertiesHandlerState;
+use readonly_pool::ReadOnlyPool;
 use search_service::SearchHandlerState;
 use secretsmanager_client::LocalOrRemoteSecret;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
-use readonly_pool::ReadOnlyPool;
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -257,7 +257,7 @@ impl FromRef<ApiContext> for PropertiesHandlerState {
 impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
-            db: ctx.readonly_db.0.clone(),
+            db: ctx.readonly_db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
         }
     }
