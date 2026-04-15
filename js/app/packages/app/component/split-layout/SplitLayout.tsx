@@ -86,7 +86,7 @@ function createLayoutUrlSync(
 
   /** Syncs changes from the layout manager to the URL*/
   createEffect(
-    on([() => splitManager.splits().length], () => {
+    on([() => splitManager.getUrlSegments().join('/')], () => {
       if (urlLayoutDrift()) {
         // Flush the state to the url
         navigate(`/${splitManager.getUrlSegments().join('/')}`);
