@@ -588,14 +588,16 @@ function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
     return { split, handle };
   });
 
+  function getFgTransition(): string {
+    if (isDragging()) return 'none';
+    if (isAnimatingOut()) return `transform ${SWIPE_ANIMATION_MS}ms ease-out`;
+    return 'none';
+  }
+
   // FG translation style — applied only to the currently-active FG slot div.
   const fgStyle = () => ({
     transform: `translateX(${dragOffset()}px)`,
-    transition: isDragging()
-      ? 'none'
-      : isAnimatingOut()
-        ? `transform ${SWIPE_ANIMATION_MS}ms ease-out`
-        : 'none',
+    transition: getFgTransition(),
     'will-change': 'transform',
   });
 

@@ -129,6 +129,8 @@ export function createMobileSwipeLayout(
         splitManager.removeSplit(currentFgId);
       }
 
+      splitManager.activateSplit(currentBgId);
+
       const newBgHandle = newBgContent
         ? splitManager.createNewSplit({
             content: newBgContent,
