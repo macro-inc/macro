@@ -245,7 +245,9 @@ export const SoupView = (props: SoupViewProps) => {
       value={{
         ...panel,
         halfSplitState: () =>
-          soup.previewEntity() ? { side: 'left', percentage: 30 } : undefined,
+          soup.previewEntity() && soup.focus.item()
+            ? { side: 'left', percentage: 30 }
+            : undefined,
       }}
     >
       <SoupViewContextProvider
@@ -982,7 +984,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             onClear={soup.selection.clear}
           />
         </Show>
-        <Show when={soup.previewEntity() || panel.previewState[0]()}>
+        <Show when={(soup.previewEntity() || panel.previewState[0]()) && !!soup.focus.item()}>
           <PreviewPanel
             ref={setPreviewPanelRef}
             selectedEntity={soup.focus.item()}
