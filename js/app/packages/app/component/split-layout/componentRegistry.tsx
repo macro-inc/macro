@@ -271,6 +271,7 @@ registerComponent('task-compose', (params) => {
     <ComposeTask
       initialContent={params?.initialContent}
       initialTitle={params?.initialTitle}
+      initialAssigneeId={params?.initialAssigneeId}
     />
   );
 });

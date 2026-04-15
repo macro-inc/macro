@@ -160,6 +160,7 @@ export interface ComposeTaskProps {
   initialTitle?: string;
   initialContent?: string;
   placeholder?: string;
+  initialAssigneeId?: string;
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -168,7 +169,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   const currentUserId = useUserId();
 
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
-    const id = currentUserId();
+    const id = props.initialAssigneeId ?? currentUserId();
     return {
       [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
         valueType: 'ENTITY' as const,
@@ -183,7 +184,11 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   // draft init logic
   const initializeFromDraft = () => {
-    if (!props.initialTitle && !props.initialContent) {
+    if (
+      !props.initialTitle &&
+      !props.initialContent &&
+      !props.initialAssigneeId
+    ) {
       const draft = loadTaskComposerDraft();
       if (draft) {
         return {
