@@ -213,7 +213,7 @@ export const SoupView = (props: SoupViewProps) => {
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
 
-  const hotkey = registerHotkey({
+  registerHotkey({
     hotkey: 'cmd+f',
     scopeId: panel.splitHotkeyScope,
     registrationType: 'add',
