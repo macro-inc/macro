@@ -439,6 +439,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         github_sync_service: Arc::new(github_sync_service_impl),
         db: db.clone(),
+        readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),

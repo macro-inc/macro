@@ -51,6 +51,7 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
+use readonly_pool::ReadOnlyPool;
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -202,6 +203,7 @@ pub(crate) type GithubSyncServiceType =
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
+    pub readonly_db: ReadOnlyPool,
     pub redis_client: Arc<Redis>,
     pub s3_client: Arc<S3>,
     pub github_sync_service: Arc<GithubSyncServiceType>,
@@ -255,7 +257,7 @@ impl FromRef<ApiContext> for PropertiesHandlerState {
 impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
-            db: ctx.db.clone(),
+            db: ctx.readonly_db.0.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
         }
     }
