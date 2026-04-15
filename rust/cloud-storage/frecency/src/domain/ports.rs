@@ -46,11 +46,6 @@ pub trait UnprocessedEventsRepo: Send + Sync + 'static {
         &self,
         aggregates: Vec<AggregateFrecency>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Abort the current processing transaction, releasing any held locks.
-    /// Must be called when processing fails after [`UnprocessedEventsRepo::get_unprocessed_events`]
-    /// but before [`UnprocessedEventsRepo::mark_processed`] commits.
-    fn rollback(&self) -> impl Future<Output = ()> + Send;
 }
 
 /// trait for interacting with the storage of [AggregateFrecency] records

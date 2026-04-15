@@ -620,14 +620,4 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
 
         Ok(())
     }
-
-    async fn rollback(&self) {
-        if let Ok(mut guard) = self.tx.try_lock()
-            && let Some(tx) = guard.take()
-        {
-            let _ = tx.rollback().await.inspect_err(|e| {
-                tracing::error!(error = ?e, "failed to rollback frecency transaction");
-            });
-        }
-    }
 }
