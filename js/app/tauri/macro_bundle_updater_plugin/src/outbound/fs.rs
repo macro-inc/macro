@@ -44,13 +44,14 @@ impl FsRepo for FileSystem {
         &self,
         request: UnzipRequest,
     ) -> Result<std::path::PathBuf, crate::domain::models::UnzipError> {
-        tokio::task::spawn_blocking(move || -> Result<PathBuf, UnzipError> {
-            let UnzipRequest {
-                archive_path,
-                archive_target,
-                ..
-            } = request;
+        let UnzipRequest {
+            archive_path,
+            archive_target,
+            on_progress,
+        } = request;
 
+        let target = archive_target.clone();
+        tokio::task::spawn_blocking(move || -> Result<PathBuf, UnzipError> {
             let file = std::fs::File::open(archive_path)?;
 
             let mut archive = zip::ZipArchive::new(file).map_err(map_zip_err)?;
@@ -62,7 +63,13 @@ impl FsRepo for FileSystem {
             Ok(archive_target)
         })
         .await
-        .map_err(rootcause::Report::from)?
+        .map_err(rootcause::Report::from)??;
+
+        let _ = on_progress
+            .send(crate::domain::models::ProgressPercentage::complete())
+            .await;
+
+        Ok(target)
     }
 
     fn create_dir_all<P: AsRef<std::path::Path> + Send>(

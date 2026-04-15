@@ -7,6 +7,7 @@ import {
   createContext,
   createSignal,
   type JSX,
+  onCleanup,
   onMount,
   useContext,
 } from 'solid-js';
@@ -40,8 +41,11 @@ function TauriProvider(props: { children: JSX.Element }) {
 
   onMount(() => {
     listenForHeartbeat();
-    listen('bundle-update-status', (ev) => {
+    const unlistenPromise = listen('bundle-update-status', (ev) => {
       console.info('[bundle-update]', ev.payload);
+    });
+    onCleanup(() => {
+      unlistenPromise.then((unlisten) => unlisten());
     });
 
     if (value.os === 'android') {

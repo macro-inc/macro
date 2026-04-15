@@ -106,6 +106,13 @@ impl UpdateRepo for BundleClient {
             }
         }
 
+        file.flush()
+            .await
+            .map_err(|e| report!(e).context(DownloadBundleError::FileError))?;
+        file.sync_all()
+            .await
+            .map_err(|e| report!(e).context(DownloadBundleError::FileError))?;
+
         Ok(())
     }
 }

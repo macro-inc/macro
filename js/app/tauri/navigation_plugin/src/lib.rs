@@ -112,7 +112,15 @@ impl MacroNavigationPlugin {
         let is_allowed_file = url.scheme() == "file"
             && self.allowed_file_prefix.as_ref().is_some_and(|prefix| {
                 url.to_file_path()
-                    .is_ok_and(|path| path.starts_with(prefix))
+                    .ok()
+                    .and_then(|path| path.canonicalize().ok())
+                    .and_then(|canonical| {
+                        prefix
+                            .canonicalize()
+                            .ok()
+                            .map(|cp| canonical.starts_with(cp))
+                    })
+                    .unwrap_or(false)
             });
 
         if is_allowed_domain || is_allowed_file {

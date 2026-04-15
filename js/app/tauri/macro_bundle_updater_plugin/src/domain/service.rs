@@ -149,13 +149,13 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .get_update_bundle(req)
                     .await
                     .context(UpdateError::DownloadErr)?;
-                Ok(UpdateStatus::UnzipingBundle(UnzipStatus {
+                Ok(UpdateStatus::UnzippingBundle(UnzipStatus {
                     zip_filename: download_filename,
                     expected_checksum,
                     progress: ProgressPercentage::default(),
                 }))
             }
-            UpdateStatus::UnzipingBundle(unzip_status) => {
+            UpdateStatus::UnzippingBundle(unzip_status) => {
                 self.fs_repo
                     .verify_checksum(&unzip_status.zip_filename, &unzip_status.expected_checksum)
                     .await
@@ -170,7 +170,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
 
                 let status_tx = self.status_tx.clone();
                 tokio::task::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
-                    UpdateStatus::UnzipingBundle(zip) => {
+                    UpdateStatus::UnzippingBundle(zip) => {
                         zip.progress = progress;
                         true
                     }

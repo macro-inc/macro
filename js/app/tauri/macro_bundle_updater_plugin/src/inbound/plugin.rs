@@ -51,7 +51,7 @@ impl BundleUpdateEvent {
             Ok(UpdateStatus::DownloadingBundle(dl)) => BundleUpdateEvent::Downloading {
                 progress: dl.progress.value(),
             },
-            Ok(UpdateStatus::UnzipingBundle(uz)) => BundleUpdateEvent::Unzipping {
+            Ok(UpdateStatus::UnzippingBundle(uz)) => BundleUpdateEvent::Unzipping {
                 progress: uz.progress.value(),
             },
             Ok(UpdateStatus::Completed(_completed)) => BundleUpdateEvent::Completed,
@@ -150,9 +150,14 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
 
         let app_handle = app.clone();
         tauri::async_runtime::spawn(async move {
+            // Emit current state before waiting for changes
+            {
+                let event = status_rx.borrow_and_update();
+                let _ = app_handle.emit(EVENT_NAME, BundleUpdateEvent::new(&event));
+            }
             loop {
                 if status_rx.changed().await.is_err() {
-                    tracing::error!("The sender handle was dropped unuexpectedly");
+                    tracing::error!("The sender handle was dropped unexpectedly");
                     break;
                 }
                 let event = status_rx.borrow_and_update();

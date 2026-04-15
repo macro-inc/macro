@@ -101,7 +101,11 @@ impl Progress {
     }
 
     pub fn percentage(&self) -> ProgressPercentage {
-        ProgressPercentage((self.numerator as f64 / self.denominator as f64) * 100.0)
+        if self.denominator == 0 {
+            return ProgressPercentage(0.0);
+        }
+        let pct = (self.numerator as f64 / self.denominator as f64) * 100.0;
+        ProgressPercentage(pct.clamp(0.0, 100.0))
     }
 }
 
@@ -111,6 +115,11 @@ impl Progress {
 pub struct ProgressPercentage(f64);
 
 impl ProgressPercentage {
+    /// 100% progress
+    pub fn complete() -> Self {
+        Self(100.0)
+    }
+
     pub fn value(self) -> f64 {
         self.0
     }
@@ -253,6 +262,6 @@ pub enum UpdateStatus {
     UpdateFound(UpdateFoundStatus),
     NoUpdateNeeded,
     DownloadingBundle(UpdateDownloadingStatus),
-    UnzipingBundle(UnzipStatus),
+    UnzippingBundle(UnzipStatus),
     Completed(CompletedStatus),
 }

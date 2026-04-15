@@ -16,10 +16,15 @@ use macro_bundle_updater_plugin::BundleRoot;
 type ProtocolHandler = Box<dyn Fn(&str, http::Request<Vec<u8>>, UriSchemeResponder) + Send + Sync>;
 
 /// Strip the `/app` or `/app/` prefix used as the frontend base path.
+/// Only strips when `/app` is a complete path segment (not e.g. `/app.css`).
 fn strip_app_prefix(path: &str) -> &str {
-    path.strip_prefix("/app/")
-        .or_else(|| path.strip_prefix("/app"))
-        .unwrap_or(path)
+    if let Some(rest) = path.strip_prefix("/app/") {
+        return rest;
+    }
+    if path == "/app" {
+        return "";
+    }
+    path
 }
 
 /// Rewrite a URI by stripping the `/app/` prefix from the path portion.
@@ -32,6 +37,11 @@ fn rewrite_uri(uri: &str) -> String {
         "https://tauri.localhost/app",
     ] {
         if let Some(rest) = uri.strip_prefix(prefix) {
+            // Only match bare "/app" when rest is empty or starts with a
+            // path separator — avoid rewriting "/app.css" etc.
+            if !prefix.ends_with('/') && !rest.is_empty() && !rest.starts_with('/') {
+                continue;
+            }
             let origin = prefix
                 .trim_end_matches("/app/")
                 .trim_end_matches("/app");
@@ -81,9 +91,48 @@ pub fn get<R: Runtime>(
             let br = bundle_root.unwrap();
             let guard = br.0.read().unwrap();
             let root_dir = guard.as_ref().unwrap();
-            let file_path = root_dir.join(asset_path);
 
-            match std::fs::read(&file_path) {
+            // Prevent path traversal: canonicalize both paths and verify
+            // the resolved file stays within the bundle root.
+            let canonical_root = match root_dir.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    responder.respond(
+                        HttpResponse::builder()
+                            .status(StatusCode::NOT_FOUND)
+                            .header("Access-Control-Allow-Origin", &*origin)
+                            .body(Vec::new())
+                            .unwrap(),
+                    );
+                    return;
+                }
+            };
+            let file_path = root_dir.join(asset_path);
+            let canonical_file = match file_path.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    responder.respond(
+                        HttpResponse::builder()
+                            .status(StatusCode::NOT_FOUND)
+                            .header("Access-Control-Allow-Origin", &*origin)
+                            .body(Vec::new())
+                            .unwrap(),
+                    );
+                    return;
+                }
+            };
+            if !canonical_file.starts_with(&canonical_root) {
+                responder.respond(
+                    HttpResponse::builder()
+                        .status(StatusCode::FORBIDDEN)
+                        .header("Access-Control-Allow-Origin", &*origin)
+                        .body(Vec::new())
+                        .unwrap(),
+                );
+                return;
+            }
+
+            match std::fs::read(&canonical_file) {
                 Ok(data) => {
                     let mime = mime_guess::from_path(&file_path)
                         .first_or_octet_stream()
