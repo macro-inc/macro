@@ -283,7 +283,7 @@ export function Lightbox(props: LightboxProps) {
   });
 
   const navButtonClass =
-    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300';
+    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50';
 
   const navVisible = () => isTouchDevice() || isToolbarVisible();
 
@@ -325,34 +325,33 @@ export function Lightbox(props: LightboxProps) {
 
         {/* Nav arrows — desktop only */}
         <Show when={!isMobile()}>
-          <Show when={props.onPrevious}>
-            <button
-              class={cn(
-                navButtonClass,
-                'left-4',
-                navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
-              )}
-              style={{ 'z-index': stackingContext.zModal + 1 }}
-              onClick={props.onPrevious}
-              aria-label="Previous image"
-            >
-              <ChevronLeftIcon class="w-5 h-5 text-ink" />
-            </button>
-          </Show>
-          <Show when={props.onNext}>
-            <button
-              class={cn(
-                navButtonClass,
-                'right-4',
-                navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
-              )}
-              style={{ 'z-index': stackingContext.zModal + 1 }}
-              onClick={props.onNext}
-              aria-label="Next image"
-            >
-              <ChevronRightIcon class="w-5 h-5 text-ink" />
-            </button>
-          </Show>
+          <button
+            class={cn(
+              navButtonClass,
+              'left-4',
+              navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            )}
+            style={{ 'z-index': stackingContext.zModal + 1 }}
+            onClick={props.onPrevious}
+            disabled={!props.onPrevious}
+            aria-label="Previous image"
+          >
+            <ChevronLeftIcon class="w-5 h-5 text-ink" />
+          </button>
+
+          <button
+            class={cn(
+              navButtonClass,
+              'right-4',
+              navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            )}
+            style={{ 'z-index': stackingContext.zModal + 1 }}
+            onClick={props.onNext}
+            disabled={!props.onNext}
+            aria-label="Next image"
+          >
+            <ChevronRightIcon class="w-5 h-5 text-ink" />
+          </button>
         </Show>
 
         {/* Index indicator */}
