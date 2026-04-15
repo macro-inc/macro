@@ -84,7 +84,8 @@ import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 
-import type { FilterAst, FilterID } from '@app/component/next-soup/filters';
+import type { FilterID } from '@app/component/next-soup/filters';
+import type { FilterData } from '@app/component/next-soup/filters/filter-store';
 import {
   SoupViewTabs,
   CollapsedSoupViewTabs,
@@ -165,7 +166,7 @@ type PersistedSoupViewState = {
   version?: number;
   activeTab: string | undefined;
   filters: string[];
-  filterAst: FilterAst;
+  filterData: Partial<FilterData>;
   sort: SystemSortOption[];
   previewEntity: string | undefined;
   assigneeFilter: string[];
@@ -186,7 +187,7 @@ const listStateCache = new Map<
 interface SoupViewProps {
   viewName: string;
   initialClientFilters?: FilterID[];
-  initialFilterAst?: FilterAst;
+  initialFilters?: Partial<FilterData>;
   disableLocalSearch?: boolean;
 }
 
@@ -235,7 +236,7 @@ export const SoupView = (props: SoupViewProps) => {
     >
       <SoupViewContextProvider
         soup={soup}
-        initialFilterAst={props.initialFilterAst}
+        initialFilters={props.initialFilters}
         disableLocalSearch={props.disableLocalSearch}
       >
         <div class="size-full flex flex-col">
@@ -363,7 +364,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     rows,
     searchText,
     setSearchText,
-    filterAst,
+    filters,
+    setFilters,
     featuredIds,
     isSearchServiceLoading,
     isLocalSearchSettling,
@@ -671,9 +673,17 @@ export const SoupViewList = (props: SoupViewListProps) => {
           soup.filters.set({
             and: isStale
               ? (props.initialClientFilters ?? [])
-              : (initialPersistedState.filters ?? []),
+              : initialPersistedState.filters,
           });
-          filterAst.set(isStale ? {} : (initialPersistedState.filterAst ?? {}));
+          const persistedFilterData = isStale
+            ? {}
+            : (initialPersistedState.filterData ?? {});
+          setFilters((d) => {
+            d.include = persistedFilterData.include ?? {};
+            d.exclude = persistedFilterData.exclude ?? {};
+            d.properties = persistedFilterData.properties ?? [];
+            d.emailView = persistedFilterData.emailView;
+          });
           setActiveTab(initialPersistedState.activeTab);
         });
       }
@@ -695,7 +705,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           version: PERSISTED_STATE_VERSION,
           activeTab: activeTab(),
           filters: [...soup.filters.activeIds()],
-          filterAst: filterAst(),
+          filterData: filters(),
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),

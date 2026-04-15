@@ -28,11 +28,15 @@ import {
   useContext,
 } from 'solid-js';
 import {
-  createFilterAstState,
-  mergeFilterAst,
-  type FilterAst,
-  type FilterAstState,
-} from '@app/component/next-soup/filters';
+  SOUP_FILTERS,
+  type FilterContext,
+} from '@app/component/next-soup/filters/configs/';
+import {
+  createFilterStore,
+  type FilterData,
+  type FilterSetter,
+} from '@app/component/next-soup/filters/filter-store';
+import { useUserId } from '@core/context/user';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
@@ -75,7 +79,8 @@ interface SoupViewContextValues {
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
-  filterAst: FilterAstState;
+  filters: Accessor<FilterData>;
+  setFilters: FilterSetter;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
@@ -100,7 +105,7 @@ export const useMaybeSoupView = () => useContext(SoupViewContext);
 
 interface SoupViewContextProviderProps {
   soup?: SoupState;
-  initialFilterAst?: FilterAst;
+  initialFilters?: Partial<FilterData>;
   disableLocalSearch?: boolean;
 }
 
@@ -133,12 +138,10 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const [internalFilterAst, setInternalFilterAst] = createSignal<FilterAst>(
-    props.initialFilterAst ?? {}
-  );
+  const [filters, setFiltersInternal, getAst] = createFilterStore(props.initialFilters);
 
-  const filterAst = createFilterAstState(internalFilterAst, (ast) => {
-    // Invalidate query cache when filter AST changes to avoid refetching all pages
+  const setFilters: FilterSetter = (fn) => {
+    // Invalidate query cache when filters change to avoid refetching all pages
     queryClient.setQueryData(
       soupKeys.astItems({
         params: soupParams(),
@@ -153,8 +156,8 @@ export const SoupViewContextProvider: FlowComponent<
         return prev;
       }
     );
-    setInternalFilterAst(ast);
-  });
+    setFiltersInternal(fn);
+  };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
   const [searchMentions, setSearchMentions] = createSignal<string[]>([]);
@@ -168,24 +171,39 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  // soupBody is now directly derived from filterAst
-  // Callers are responsible for setting the AST when toggling filters
-  const soupBody = createMemo(() => {
-    const ast = internalFilterAst();
-    if (Object.keys(ast).length === 0) return {};
-    // Apply default exclusions for unspecified entity buckets
-    return mergeFilterAst(ast);
-  });
+  // soupBody is derived from the filter store's compiled AST
+  const soupBody = createMemo(() => getAst());
 
   const search = createSearchState({
     soup,
-    filterAst: internalFilterAst,
+    filterAst: getAst,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
     searchMentions,
   });
 
   const notificationSource = useGlobalNotificationSource();
+  const userId = useUserId();
+
+  // Create filter context for context-aware filter predicates
+  const getFilterContext = (): FilterContext => ({
+    userId: userId(),
+    notificationSource,
+    assignees: assigneeFilter(),
+  });
+
+  // Test entity against active filters using context-aware predicates
+  const testFilters = (entity: EntityData): boolean => {
+    const activeIds = soup.filters.activeIds();
+    if (activeIds.length === 0) return true;
+
+    const ctx = getFilterContext();
+    return activeIds.every((id) => {
+      const filter = SOUP_FILTERS.find((f) => f.id === id);
+      if (!filter?.predicate) return true;
+      return filter.predicate(entity, ctx);
+    });
+  };
 
   const attachNotifications = (entity: EntityData) => {
     return {
@@ -273,27 +291,10 @@ export const SoupViewContextProvider: FlowComponent<
     let transformed = items();
 
     const next = [];
-
-    const currentAssigneeFilter = assigneeFilter();
-
     for (const entity of transformed) {
-      if (!soup.filters.test(entity)) {
+      if (!testFilters(entity)) {
         continue;
       }
-
-      // Apply assignee filters using filter configs
-      if (currentAssigneeFilter.length > 0 && isTaskEntity(entity)) {
-        const matchesAny = currentAssigneeFilter.some((id) => {
-          if (id === NO_ASSIGNEE) {
-            return unassignedFilter.test(entity);
-          }
-          return createAssigneeFilter(id).test(entity);
-        });
-        if (!matchesAny) {
-          continue;
-        }
-      }
-
       next.push(entity);
     }
 
@@ -370,7 +371,8 @@ export const SoupViewContextProvider: FlowComponent<
     featuredIds: search.featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
-    filterAst,
+    filters,
+    setFilters,
     assigneeFilter,
     setAssigneeFilter,
     activeTab,

@@ -69,6 +69,7 @@ const FIELD_CONFIG = {
   channelSeen: { target: 'chanf', field: 'NotificationSeen' },
   channelDone: { target: 'chanf', field: 'NotificationDone' },
   channelImportance: { target: 'chanf', field: 'Importance' },
+  channelSenderId: { target: 'chanf', field: 'SenderId' },
 
   // Chats (cf)
   chatId: { target: 'cf', field: 'ChatId' },
@@ -108,6 +109,7 @@ type FieldValueMap = {
   channelSeen: boolean;
   channelDone: boolean;
   channelImportance: boolean;
+  channelSenderId: string;
   chatId: string;
   chatOwnerId: string;
   chatSeen: boolean;

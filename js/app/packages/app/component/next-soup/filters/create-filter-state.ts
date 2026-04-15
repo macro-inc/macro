@@ -38,10 +38,15 @@ type ActiveFiltersState<TFilter> = {
   readonly orFilters: readonly TFilter[];
 };
 
+export type InitialFiltersInput = {
+  readonly and?: readonly string[];
+  readonly or?: readonly string[];
+};
+
 export type FilterStateOptions<T, TFilter extends FilterConfig<T, string>> = {
   readonly filters: readonly TFilter[];
   readonly groups?: readonly FilterGroupConfig[];
-  readonly initialFilters?: readonly string[];
+  readonly initialFilters?: InitialFiltersInput;
 };
 
 export type FilterState<
@@ -74,7 +79,7 @@ export function createFilterState<
   const {
     filters: availableFilters,
     groups = [],
-    initialFilters = [],
+    initialFilters = {},
   } = options;
 
   const filterMap = new Map<string, TFilter>(
@@ -85,13 +90,14 @@ export function createFilterState<
     groups.map((g) => [g.id, g])
   );
 
-  const initialAndFilters = initialFilters
-    .map((id) => filterMap.get(id))
-    .filter((f): f is TFilter => f !== undefined);
+  const resolveInitialFilters = (ids: readonly string[] = []): TFilter[] =>
+    ids
+      .map((id) => filterMap.get(id))
+      .filter((f): f is TFilter => f !== undefined);
 
   const [state, setState] = createSignal<ActiveFiltersState<TFilter>>({
-    andFilters: initialAndFilters,
-    orFilters: [],
+    andFilters: resolveInitialFilters(initialFilters.and),
+    orFilters: resolveInitialFilters(initialFilters.or),
   });
 
   const andFilters = createMemo(() => state().andFilters);
@@ -101,6 +107,7 @@ export function createFilterState<
     ...state().andFilters,
     ...state().orFilters,
   ]);
+
   const activeIds = createMemo(() => active().map((f) => f.id) as TId[]);
 
   const getFilter = (id: FilterIdInput<TId>): TFilter | undefined =>

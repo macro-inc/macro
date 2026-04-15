@@ -22,7 +22,7 @@ import {
 } from './filter-primitives';
 import { useFilterOptions } from './use-filter-options';
 import { useQuickAccess } from '@core/context/quickAccess';
-import { TASK_STATUS_FILTERS } from '@app/component/next-soup/filters/configs';
+import { TASK_STATUS_FILTERS } from '@app/component/next-soup/filters/configs/';
 import {
   ast,
   mergeFilterAstOr,

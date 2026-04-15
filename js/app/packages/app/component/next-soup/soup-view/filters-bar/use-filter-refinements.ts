@@ -2,7 +2,8 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
+import type { FilterID } from '@app/component/next-soup/filters/configs/';
+import { emptyFilterData, applyFilterData } from '@app/component/next-soup/filters/filter-store';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -38,7 +39,7 @@ const TAB_ONLY_FILTERS = new Set([
  * and a function to reset filters to the current tab's default state.
  */
 export function useFilterRefinements() {
-  const { soup, filterAst, assigneeFilter, setAssigneeFilter, activeTab } =
+  const { soup, filters, setFilters, assigneeFilter, setAssigneeFilter, activeTab } =
     useSoupView();
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
@@ -84,12 +85,16 @@ export function useFilterRefinements() {
       expectedIds.size !== currentIds.size ||
       [...expectedIds].some((id) => !currentIds.has(id as FilterID));
 
-    // Check if there are any external AST filters set
-    const hasExternalAst = Object.keys(filterAst()).length > 0;
+    // Check if there are any external filters set
+    const filterData = filters();
+    const hasExternalFilters =
+      Object.keys(filterData.include).length > 0 ||
+      Object.keys(filterData.exclude).length > 0 ||
+      filterData.properties.length > 0;
 
     const hasSubFilters = assigneeFilter().length > 0;
 
-    return hasClientFilterDiff || hasExternalAst || hasSubFilters;
+    return hasClientFilterDiff || hasExternalFilters || hasSubFilters;
   });
 
   /**
@@ -164,7 +169,7 @@ export function useFilterRefinements() {
         categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
         onRemove: () => {
           soup.filters.toggle({ or: [optionId] });
-          filterAst.set({});
+          setFilters((d) => applyFilterData(d, emptyFilterData()));
         },
       });
     }
@@ -183,7 +188,7 @@ export function useFilterRefinements() {
     }
 
     // TODO: Channel and sender filter chips require tracking those IDs separately
-    // since they're now embedded in AST format. For now, clearing filterAst removes them.
+    // since they're stored in the filter store. For now, clearing filters removes them.
 
     return filters;
   });
@@ -210,7 +215,7 @@ export function useFilterRefinements() {
 
     batch(() => {
       soup.filters.set({ and: preset.clientFilters });
-      filterAst.set({});
+      setFilters((d) => applyFilterData(d, preset.filters ?? {}));
       setAssigneeFilter([]);
     });
   };

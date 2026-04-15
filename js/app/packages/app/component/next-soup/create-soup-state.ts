@@ -1,23 +1,32 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
   createFilterState,
-  createSoupFilters,
-  SOUP_FILTER_GROUPS,
   type FilterConfig,
   type FilterGroupConfig,
-  type FilterID,
   type SetFiltersInput,
 } from '@app/component/next-soup/filters';
+import {
+  SOUP_FILTERS,
+  SOUP_FILTER_GROUPS,
+  type FilterID,
+  type FilterDefinition,
+} from '@app/component/next-soup/filters/configs/';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
-import { useUserContext } from '@core/context/user';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithSearch } from '@entity';
 import { createMemo, createSignal } from 'solid-js';
 
 type SoupEntity = EntityData | WithSearch<EntityData>;
+
+/** Converts FilterDefinition[] to FilterConfig[] (predicates evaluate without context) */
+const toFilterConfigs = (filters: readonly FilterDefinition[]): FilterConfig<SoupEntity>[] =>
+  filters.map((f) => ({
+    id: f.id,
+    group: f.group,
+    predicate: () => true, // Context-aware filtering happens in soup-view-context
+  }));
 
 export type NavigationResult<T> = { item: T; index: number } | undefined;
 
@@ -54,16 +63,8 @@ export const createSoupState = <TId extends string = FilterID>(
     getItemId: (i) => i.id,
   });
 
-  const notificationSource = useGlobalNotificationSource();
-  const user = useUserContext();
-
   const filters = createFilterState({
-    filters:
-      filterConfigs ??
-      ([...createSoupFilters(
-        notificationSource,
-        user.userId
-      )] as FilterConfig<SoupEntity>[]),
+    filters: filterConfigs ?? toFilterConfigs(SOUP_FILTERS),
     groups: filterGroups ?? SOUP_FILTER_GROUPS,
     initialFilters,
   });

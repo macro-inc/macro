@@ -1,5 +1,9 @@
-import type { FilterID, FilterAst } from '@app/component/next-soup/filters';
-import { ast } from '@app/component/next-soup/filters';
+import type { FilterID } from '@app/component/next-soup/filters';
+import {
+  NIL,
+  type FilterData,
+  type EmailView,
+} from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
 import {
   PROPERTY_OPTION_IDS,
@@ -7,8 +11,8 @@ import {
 } from '@core/component/Properties/constants';
 
 export type SoupFiltersPreset = {
-  /** AST filters for server query */
-  ast: FilterAst;
+  /** Filter data for server query */
+  filters: Partial<FilterData>;
   /** Client filters to apply */
   clientFilters: FilterID[];
 };
@@ -30,25 +34,29 @@ export type ViewTabConfig = {
   tabs: TabConfig;
 };
 
-const NIL = '00000000-0000-0000-0000-000000000000';
-
-/** AST for inbox/signal: not done, importance=true for emails */
-const INBOX_SIGNAL_AST: FilterAst = {
-  df: ast.eq('nd', false),
-  ef: ast.and(ast.eq('NotificationDone', false), ast.eq('Importance', true)),
-  chanf: ast.eq('NotificationDone', false),
-  cf: ast.eq('NotificationDone', false),
-  pf: ast.eq('NotificationDone', false),
+/** Filters for inbox/signal: not done, importance=true for emails */
+const INBOX_SIGNAL_FILTERS: Partial<FilterData> = {
+  include: {
+    documentDone: [false],
+    emailDone: [false],
+    emailImportance: [true],
+    channelDone: [false],
+    chatDone: [false],
+    folderDone: [false],
+  },
   emailView: 'inbox',
 };
 
-/** AST for inbox/noise: not done, importance=false for emails */
-const INBOX_NOISE_AST: FilterAst = {
-  df: ast.eq('nd', false),
-  ef: ast.and(ast.eq('NotificationDone', false), ast.eq('Importance', false)),
-  chanf: ast.eq('NotificationDone', false),
-  cf: ast.eq('NotificationDone', false),
-  pf: ast.eq('NotificationDone', false),
+/** Filters for inbox/noise: not done, importance=false for emails */
+const INBOX_NOISE_FILTERS: Partial<FilterData> = {
+  include: {
+    documentDone: [false],
+    emailDone: [false],
+    emailImportance: [false],
+    channelDone: [false],
+    chatDone: [false],
+    folderDone: [false],
+  },
   emailView: 'inbox',
 };
 
@@ -57,20 +65,22 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'signal',
     tabs: {
       signal: () => ({
-        ast: INBOX_SIGNAL_AST,
+        filters: INBOX_SIGNAL_FILTERS,
         clientFilters: ['inbox'],
       }),
       noise: () => ({
-        ast: INBOX_NOISE_AST,
+        filters: INBOX_NOISE_FILTERS,
         clientFilters: ['noise'],
       }),
       all: () => ({
-        ast: {
-          df: ast.neq('id', NIL),
-          ef: ast.neq('ThreadId', NIL),
-          chanf: ast.neq('ChannelId', NIL),
-          cf: ast.neq('ChatId', NIL),
-          pf: ast.neq('ProjectId', NIL),
+        filters: {
+          exclude: {
+            documentId: [NIL],
+            threadId: [NIL],
+            channelId: [NIL],
+            chatId: [NIL],
+            folderId: [NIL],
+          },
           emailView: 'all',
         },
         clientFilters: ['explicit-noise'],
@@ -83,21 +93,27 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       owned: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
-          ast: { cf: ast.eq('Owner', ctx.userId) },
+          filters: {
+            include: { chatOwnerId: [ctx.userId] },
+          },
           clientFilters: ['agent'],
         };
       },
       running: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
-          ast: { cf: ast.eq('Owner', ctx.userId) },
+          filters: {
+            include: { chatOwnerId: [ctx.userId] },
+          },
           clientFilters: ['agent', 'owned-entity'],
         };
       },
       shared: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
-          ast: { cf: ast.neq('Owner', ctx.userId) },
+          filters: {
+            exclude: { chatOwnerId: [ctx.userId] },
+          },
           clientFilters: ['agent', 'shared-entity'],
         };
       },
@@ -107,30 +123,48 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'important',
     tabs: {
       important: () => ({
-        ast: { ef: ast.eq('Importance', true), emailView: 'inbox' },
+        filters: {
+          include: { emailImportance: [true] },
+          emailView: 'inbox',
+        },
         clientFilters: ['email', 'no-drafts'],
       }),
       noise: () => ({
-        ast: { ef: ast.eq('Importance', false), emailView: 'inbox' },
+        filters: {
+          include: { emailImportance: [false] },
+          emailView: 'inbox',
+        },
         clientFilters: ['email', 'no-drafts'],
       }),
       drafts: () => ({
-        ast: { ef: ast.neq('ThreadId', NIL), emailView: 'drafts' },
+        filters: {
+          exclude: { threadId: [NIL] },
+          emailView: 'drafts',
+        },
         clientFilters: ['email-drafts'],
       }),
       sent: (ctx) => {
         if (!ctx.email) return undefined;
         return {
-          ast: { ef: ast.eq('Sender', ctx.email), emailView: 'sent' },
+          filters: {
+            include: { sender: [ctx.email] },
+            emailView: 'sent',
+          },
           clientFilters: ['email', 'no-drafts'],
         };
       },
       shared: () => ({
-        ast: { ef: ast.eq('Shared', true), emailView: 'all' },
+        filters: {
+          include: { shared: ['only'] },
+          emailView: 'all',
+        },
         clientFilters: ['email', 'shared-entity'],
       }),
       all: () => ({
-        ast: { ef: ast.neq('ThreadId', NIL), emailView: 'all' },
+        filters: {
+          exclude: { threadId: [NIL] },
+          emailView: 'all',
+        },
         clientFilters: ['email'],
       }),
     },
@@ -141,8 +175,9 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       owned: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
-          ast: {
-            df: ast.and(ast.neq('dst', 'task'), ast.eq('o', ctx.userId)),
+          filters: {
+            include: { documentOwnerId: [ctx.userId] },
+            exclude: { subType: ['task'] },
           },
           clientFilters: ['document-or-file', 'owned-entity'],
         };
@@ -150,18 +185,22 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       shared: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
-          ast: {
-            df: ast.and(ast.neq('dst', 'task'), ast.neq('o', ctx.userId)),
+          filters: {
+            exclude: { subType: ['task'], documentOwnerId: [ctx.userId] },
           },
           clientFilters: ['document-or-file', 'shared-entity'],
         };
       },
       attachments: () => ({
-        ast: { df: ast.eq('iea', true) },
+        filters: {
+          include: { isEmailAttachment: [true] },
+        },
         clientFilters: ['document-or-file'],
       }),
       all: () => ({
-        ast: { df: ast.neq('dst', 'task') },
+        filters: {
+          exclude: { subType: ['task'] },
+        },
         clientFilters: ['document-or-file'],
       }),
     },
@@ -172,25 +211,13 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       'assigned-to-me': (ctx) => {
         if (!ctx.userId) return undefined;
         return {
-          ast: {
-            df: ast.eq('dst', 'task'),
-            propf: ast.and(
-              ast.propEntity(SYSTEM_PROPERTY_IDS.ASSIGNEES, ctx.userId),
-              ast.and(
-                ast.not(
-                  ast.propSelect(
-                    SYSTEM_PROPERTY_IDS.STATUS,
-                    PROPERTY_OPTION_IDS.STATUS.COMPLETED
-                  )
-                ),
-                ast.not(
-                  ast.propSelect(
-                    SYSTEM_PROPERTY_IDS.STATUS,
-                    PROPERTY_OPTION_IDS.STATUS.CANCELED
-                  )
-                )
-              )
-            ),
+          filters: {
+            include: { subType: ['task'] },
+            properties: [
+              { type: 'entity', propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES, value: ctx.userId },
+              { type: 'select', propertyId: SYSTEM_PROPERTY_IDS.STATUS, value: PROPERTY_OPTION_IDS.STATUS.COMPLETED, negate: true },
+              { type: 'select', propertyId: SYSTEM_PROPERTY_IDS.STATUS, value: PROPERTY_OPTION_IDS.STATUS.CANCELED, negate: true },
+            ],
           },
           clientFilters: ['task', 'assigned-to', 'active-task'],
         };
@@ -198,14 +225,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       'created-by-me': (ctx) => {
         if (!ctx.userId) return undefined;
         return {
-          ast: {
-            df: ast.and(ast.eq('dst', 'task'), ast.eq('o', ctx.userId)),
+          filters: {
+            include: { subType: ['task'], documentOwnerId: [ctx.userId] },
           },
           clientFilters: ['task', 'active-task', 'owned-entity'],
         };
       },
       all: () => ({
-        ast: { df: ast.eq('dst', 'task') },
+        filters: {
+          include: { subType: ['task'] },
+        },
         clientFilters: ['task'],
       }),
     },
@@ -214,15 +243,21 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'recent',
     tabs: {
       recent: () => ({
-        ast: { chanf: ast.eq('Importance', true) },
+        filters: {
+          include: { channelImportance: [true] },
+        },
         clientFilters: ['channels'],
       }),
       people: () => ({
-        ast: { chanf: ast.eq('ChannelType', 'direct_message') },
+        filters: {
+          include: { channelType: ['direct_message'] },
+        },
         clientFilters: ['people'],
       }),
       teams: () => ({
-        ast: { chanf: ast.neq('ChannelType', 'direct_message') },
+        filters: {
+          exclude: { channelType: ['direct_message'] },
+        },
         clientFilters: ['teams'],
       }),
     },
@@ -231,8 +266,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'all',
     tabs: {
       all: () => ({
-        queryFilters: QUERY_FILTERS.calls,
-        clientFilters: { and: ['calls'] },
+        filters: {
+          exclude: { callChannelId: [NIL] },
+        },
+        clientFilters: ['calls'],
       }),
     },
   },
@@ -242,12 +279,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       owned: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
-          ast: { pf: ast.eq('Owner', ctx.userId) },
+          filters: {
+            include: { folderOwnerId: [ctx.userId] },
+          },
           clientFilters: ['folders', 'owned-entity'],
         };
       },
       all: () => ({
-        ast: { pf: ast.neq('ProjectId', NIL) },
+        filters: {
+          exclude: { folderId: [NIL] },
+        },
         clientFilters: ['folders'],
       }),
     },
@@ -256,8 +297,8 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'all',
     tabs: {
       all: () => ({
-        ast: {},
-        clientFilters: { and: [], or: [] },
+        filters: {},
+        clientFilters: [],
       }),
     },
   },
@@ -303,5 +344,5 @@ export function getDefaultListViewPreset(
   }
 
   // Last resort: empty filters
-  return { ast: {}, clientFilters: [] };
+  return { filters: {}, clientFilters: [] };
 }

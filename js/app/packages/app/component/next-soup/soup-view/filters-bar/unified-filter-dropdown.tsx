@@ -25,12 +25,13 @@ import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
+import type { FilterID } from '@app/component/next-soup/filters';
 import {
-  type FilterID,
-  type FilterAst,
-  ast,
-  mergeFilterAstOr,
-} from '@app/component/next-soup/filters';
+  mergeFilterData,
+  emptyFilterData,
+  applyFilterData,
+  type FilterData,
+} from '@app/component/next-soup/filters/filter-store';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -42,7 +43,7 @@ export type FilterOption = {
   id: FilterID;
   label: string;
   icon?: () => JSX.Element;
-  ast?: FilterAst;
+  filterData?: Partial<FilterData>;
 };
 
 /** Options whose ids are arbitrary strings (e.g. contact IDs), not FilterIDs. */
@@ -69,52 +70,47 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'document',
         label: 'Docs',
         icon: () => <EntityIcon targetType="md" size="xs" />,
-        ast: {
-          df: ast.and(
-            ast.or(ast.eq('ft', 'md'), ast.eq('ft', 'canvas')),
-            ast.neq('dst', 'task')
-          ),
+        filterData: {
+          include: { fileType: ['md', 'canvas'] },
+          exclude: { subType: ['task'] },
         },
       },
       {
         id: 'agent',
         label: 'Agents',
         icon: () => <EntityIcon targetType="chat" size="xs" />,
-        ast: { cf: ast.neq('ChatId', NIL) },
+        filterData: { exclude: { chatId: [NIL] } },
       },
       {
         id: 'people',
         label: 'People',
         icon: () => <EntityIcon targetType="direct_message" size="xs" />,
-        ast: { chanf: ast.eq('ChannelType', 'direct_message') },
+        filterData: { include: { channelType: ['direct_message'] } },
       },
       {
         id: 'teams',
         label: 'Teams',
         icon: () => <EntityIcon targetType="channel" size="xs" />,
-        ast: { chanf: ast.neq('ChannelType', 'direct_message') },
+        filterData: { exclude: { channelType: ['direct_message'] } },
       },
       {
         id: 'task',
         label: 'Tasks',
         icon: () => <EntityIcon targetType="task" size="xs" />,
-        ast: { df: ast.eq('dst', 'task') },
+        filterData: { include: { subType: ['task'] } },
       },
       {
         id: 'email',
         label: 'Mail',
         icon: () => <EntityIcon targetType="email" size="xs" />,
-        ast: { ef: ast.neq('ThreadId', NIL) },
+        filterData: { exclude: { threadId: [NIL] } },
       },
       {
         id: 'file',
         label: 'Files',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
-        ast: {
-          df: ast.and(
-            ast.neq('ft', 'md'),
-            ast.and(ast.neq('ft', 'canvas'), ast.neq('dst', 'task'))
-          ),
+        filterData: {
+          exclude: { fileType: ['md', 'canvas'], subType: ['task'] },
         },
       },
     ],
@@ -130,22 +126,22 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
       {
         id: 'unread',
         label: 'Unread',
-        ast: { ef: ast.eq('NotificationSeen', false) },
+        filterData: { include: { emailSeen: [false] } },
       },
       {
         id: 'read',
         label: 'Read',
-        ast: { ef: ast.eq('NotificationSeen', true) },
+        filterData: { include: { emailSeen: [true] } },
       },
       {
         id: 'not-done',
         label: 'Not Done',
-        ast: { ef: ast.eq('NotificationDone', false) },
+        filterData: { include: { emailDone: [false] } },
       },
       {
         id: 'done',
         label: 'Done',
-        ast: { ef: ast.eq('NotificationDone', true) },
+        filterData: { include: { emailDone: [true] } },
       },
     ],
     multiple: true,
@@ -158,19 +154,19 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'attachment-pdf',
         label: 'PDFs',
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
-        ast: { ef: ast.neq('ThreadId', NIL) },
+        filterData: { exclude: { threadId: [NIL] } },
       },
       {
         id: 'attachment-image',
         label: 'Images',
         icon: () => <EntityIcon targetType="image" size="xs" />,
-        ast: { ef: ast.neq('ThreadId', NIL) },
+        filterData: { exclude: { threadId: [NIL] } },
       },
       {
         id: 'attachment-document',
         label: 'Documents',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
-        ast: { ef: ast.neq('ThreadId', NIL) },
+        filterData: { exclude: { threadId: [NIL] } },
       },
     ],
     multiple: true,
@@ -182,7 +178,7 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
       {
         id: 'has-calendar-invite',
         label: 'Has Calendar Invite',
-        ast: { ef: ast.neq('ThreadId', NIL) },
+        filterData: { exclude: { threadId: [NIL] } },
       },
     ],
     multiple: false,
@@ -203,11 +199,14 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.STATUS,
-            PROPERTY_OPTION_IDS.STATUS.NOT_STARTED
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+              value: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+            },
+          ],
         },
       },
       {
@@ -219,11 +218,14 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.STATUS,
-            PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+              value: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+            },
+          ],
         },
       },
       {
@@ -235,11 +237,14 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.STATUS,
-            PROPERTY_OPTION_IDS.STATUS.IN_REVIEW
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+              value: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+            },
+          ],
         },
       },
       {
@@ -251,11 +256,14 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.STATUS,
-            PROPERTY_OPTION_IDS.STATUS.COMPLETED
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+              value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+            },
+          ],
         },
       },
       {
@@ -267,11 +275,14 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.STATUS,
-            PROPERTY_OPTION_IDS.STATUS.CANCELED
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+              value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
+            },
+          ],
         },
       },
     ],
@@ -290,11 +301,14 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.PRIORITY,
-            PROPERTY_OPTION_IDS.PRIORITY.URGENT
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
+              value: PROPERTY_OPTION_IDS.PRIORITY.URGENT,
+            },
+          ],
         },
       },
       {
@@ -306,11 +320,14 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.PRIORITY,
-            PROPERTY_OPTION_IDS.PRIORITY.HIGH
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
+              value: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+            },
+          ],
         },
       },
       {
@@ -322,11 +339,14 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.PRIORITY,
-            PROPERTY_OPTION_IDS.PRIORITY.MEDIUM
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
+              value: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM,
+            },
+          ],
         },
       },
       {
@@ -338,17 +358,20 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
             class="size-3.5"
           />
         ),
-        ast: {
-          propf: ast.propSelect(
-            SYSTEM_PROPERTY_IDS.PRIORITY,
-            PROPERTY_OPTION_IDS.PRIORITY.LOW
-          ),
+        filterData: {
+          properties: [
+            {
+              type: 'select',
+              propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
+              value: PROPERTY_OPTION_IDS.PRIORITY.LOW,
+            },
+          ],
         },
       },
       {
         id: 'task-no-priority',
         label: 'No Priority',
-        ast: { df: ast.eq('dst', 'task') },
+        filterData: { include: { subType: ['task'] } },
       },
     ],
     multiple: true,
@@ -364,51 +387,43 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'doc-markdown',
         label: 'Markdown',
         icon: () => <EntityIcon targetType="md" size="xs" />,
-        ast: { df: ast.eq('ft', 'md') },
+        filterData: { include: { fileType: ['md'] } },
       },
       {
         id: 'doc-canvas',
         label: 'Canvas',
         icon: () => <EntityIcon targetType="canvas" size="xs" />,
-        ast: { df: ast.eq('ft', 'canvas') },
+        filterData: { include: { fileType: ['canvas'] } },
       },
       {
         id: 'file-code',
         label: 'Code',
         icon: () => <EntityIcon targetType="code" size="xs" />,
-        ast: { df: ast.neq('dst', 'task') }, // Simplified - actual code filter is complex
+        filterData: { exclude: { subType: ['task'] } }, // Simplified - actual code filter is complex
       },
       {
         id: 'file-image',
         label: 'Images',
         icon: () => <EntityIcon targetType="image" size="xs" />,
-        ast: {
-          df: ast.or(
-            ast.eq('ft', 'png'),
-            ast.or(
-              ast.eq('ft', 'jpg'),
-              ast.or(ast.eq('ft', 'jpeg'), ast.eq('ft', 'gif'))
-            )
-          ),
-        },
+        filterData: { include: { fileType: ['png', 'jpg', 'jpeg', 'gif'] } },
       },
       {
         id: 'file-pdf',
         label: 'PDFs',
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
-        ast: { df: ast.eq('ft', 'pdf') },
+        filterData: { include: { fileType: ['pdf'] } },
       },
       {
         id: 'file-docx',
         label: 'DOCX',
         icon: () => <EntityIcon targetType="write" size="xs" />,
-        ast: { df: ast.eq('ft', 'docx') },
+        filterData: { include: { fileType: ['docx'] } },
       },
       {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
-        ast: { df: ast.neq('dst', 'task') },
+        filterData: { exclude: { subType: ['task'] } },
       },
     ],
     multiple: true,
@@ -610,7 +625,7 @@ const SearchableFilterSubmenu = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, filterAst, assigneeFilter, setAssigneeFilter } = useSoupView();
+  const { soup, setFilters, assigneeFilter, setAssigneeFilter } = useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
 
@@ -631,14 +646,14 @@ export const UnifiedFilterDropdown = () => {
     return soup.filters.isActive(optionId);
   };
 
-  // Toggle filter and rebuild AST from all active filters
-  // Build a map of optionId -> ast for quick lookup
-  const optionAstMap = createMemo(() => {
-    const map = new Map<string, FilterAst>();
+  // Toggle filter and rebuild filter data from all active filters
+  // Build a map of optionId -> filterData for quick lookup
+  const optionFilterDataMap = createMemo(() => {
+    const map = new Map<string, Partial<FilterData>>();
     for (const category of categories()) {
       for (const option of category.options) {
-        if (option.ast) {
-          map.set(option.id, option.ast);
+        if (option.filterData) {
+          map.set(option.id, option.filterData);
         }
       }
     }
@@ -648,20 +663,17 @@ export const UnifiedFilterDropdown = () => {
   const toggleFilter = (optionId: string) => {
     soup.filters.toggle({ or: [optionId] });
 
-    // Rebuild AST from all active OR filters using the category-defined ASTs
+    // Rebuild filter data from all active OR filters
     const activeIds = soup.filters.orFilters().map((f) => f.id);
-    const astMap = optionAstMap();
-    const asts: FilterAst[] = [];
+    const filterDataMap = optionFilterDataMap();
 
-    for (const id of activeIds) {
-      const optionAst = astMap.get(id);
-      if (optionAst) {
-        asts.push(optionAst);
-      }
-    }
+    const activeSources = activeIds
+      .map((id) => filterDataMap.get(id))
+      .filter((d): d is Partial<FilterData> => d !== undefined);
 
-    // Merge all active filter ASTs with OR logic
-    filterAst.set(asts.length > 0 ? mergeFilterAstOr(...asts) : {});
+    const merged = mergeFilterData(...activeSources);
+
+    setFilters((d) => applyFilterData(d, merged));
   };
 
   // Assignee options for tasks view

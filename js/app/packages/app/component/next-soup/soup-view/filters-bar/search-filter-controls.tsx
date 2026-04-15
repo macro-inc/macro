@@ -12,13 +12,8 @@ import {
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { batch, createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
-import {
-  ast,
-  channelIdsToAst,
-  senderIdsToAst,
-  type FilterAst,
-} from '@app/component/next-soup/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs/';
+import { NIL } from '@app/component/next-soup/filters/filter-store';
 
 import type {
   ChannelFilters,
@@ -76,34 +71,28 @@ function cacheEmailSubFilters(contentId: string, filters: EmailSubFilters) {
   }
 }
 
-const NIL = '00000000-0000-0000-0000-000000000000';
-
-export const INDEX_OPTIONS: (Option & { ast: FilterAst })[] = [
+export const INDEX_OPTIONS: Option[] = [
   {
     value: 'channels',
     label: 'Channels',
     icon: () => (
       <EntityIcon targetType="channel" size="xs" theme="monochrome" />
     ),
-    ast: { chanf: ast.neq('ChannelId', NIL) },
   },
   {
     value: 'document-or-file',
     label: 'Documents',
     icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
-    ast: { df: ast.neq('dst', 'task') },
   },
   {
     value: 'task',
     label: 'Tasks',
     icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
-    ast: { df: ast.eq('dst', 'task') },
   },
   {
     value: 'email',
     label: 'Email',
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
-    ast: { ef: ast.neq('ThreadId', NIL) },
   },
   {
     value: 'folders',
@@ -111,24 +100,16 @@ export const INDEX_OPTIONS: (Option & { ast: FilterAst })[] = [
     icon: () => (
       <EntityIcon targetType="project" size="xs" theme="monochrome" />
     ),
-    ast: { pf: ast.neq('ProjectId', NIL) },
   },
   {
     value: 'agent',
     label: 'Agents',
     icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
-    ast: { cf: ast.neq('ChatId', NIL) },
   },
 ];
 
-const INDEX_SELECT_OPTIONS: Option[] = INDEX_OPTIONS.map((o) => ({
-  value: o.value,
-  label: o.label,
-  icon: o.icon,
-}));
-
 export const SearchIndexFilter = () => {
-  const { soup, filterAst } = useSoupView();
+  const { soup, setFilters, filters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
 
@@ -155,9 +136,9 @@ export const SearchIndexFilter = () => {
 
   createEffect(() => {
     if (!isEmailActive()) return;
-    // const ef = queryFilters().email_filters;
-    // // Use null as sentinel for "explicitly cleared" since undefined is dropped by JSON.stringify
-    // cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
+    const importance = filters().include.emailImportance?.[0];
+    // Use null as sentinel for "explicitly cleared" since undefined is dropped by JSON.stringify
+    cacheEmailSubFilters(contentId, { importance: importance ?? null });
   });
 
   const handleChange = (selected: Option[]) => {
@@ -172,39 +153,53 @@ export const SearchIndexFilter = () => {
       }
 
       if (newValue) {
-        const opt = INDEX_OPTIONS.find((o) => o.value === newValue);
-        if (opt) {
-          soup.filters.toggle({ or: [opt.value as FilterID] });
-          if (opt.value === 'channels') {
-            const cached = getCachedChannelSubFilters(contentId);
-            // Build AST with cached channel/sender filters
-            const channelAst = channelIdsToAst(cached.channel_ids ?? []);
-            const senderAst = senderIdsToAst(cached.sender_ids ?? []);
-            filterAst.set({
-              ...opt.ast,
-              ...channelAst,
-              ...senderAst,
-            });
-          } else if (opt.value === 'email') {
-            const cached = getCachedEmailSubFilters(contentId);
-            // null in cache means "explicitly cleared" — convert to undefined to override the default
-            const importance =
-              'importance' in cached
-                ? (cached.importance ?? undefined)
-                : opt.queryFilters.email_filters?.importance;
-            // setQueryFilters({
-            //   ...opt.queryFilters,
-            //   email_filters: {
-            //     ...opt.queryFilters.email_filters,
-            //     importance,
-            //   },
-            // });
-          } else {
-            filterAst.set(opt.ast);
-          }
+        soup.filters.toggle({ or: [newValue as FilterID] });
+
+        // Set filter store based on index type
+        if (newValue === 'channels') {
+          const cached = getCachedChannelSubFilters(contentId);
+          setFilters((d) => {
+            d.exclude.channelId = [NIL];
+            if (cached.channel_ids?.length) {
+              d.include.channelId = cached.channel_ids;
+            }
+            if (cached.sender_ids?.length) {
+              d.include.channelSenderId = cached.sender_ids;
+            }
+          });
+        } else if (newValue === 'email') {
+          const cached = getCachedEmailSubFilters(contentId);
+          setFilters((d) => {
+            d.exclude.threadId = [NIL];
+            if (cached.importance !== undefined && cached.importance !== null) {
+              d.include.emailImportance = [cached.importance];
+            }
+          });
+        } else if (newValue === 'task') {
+          setFilters((d) => {
+            d.include.subType = ['task'];
+          });
+        } else if (newValue === 'document-or-file') {
+          setFilters((d) => {
+            d.exclude.subType = ['task'];
+          });
+        } else if (newValue === 'folders') {
+          setFilters((d) => {
+            d.exclude.folderId = [NIL];
+          });
+        } else if (newValue === 'agent') {
+          setFilters((d) => {
+            d.exclude.chatId = [NIL];
+          });
         }
       } else {
-        filterAst.set({});
+        // Clear all filters
+        setFilters((d) => {
+          d.include = {};
+          d.exclude = {};
+          d.properties = [];
+          d.emailView = undefined;
+        });
       }
     });
   };
@@ -226,7 +221,7 @@ export const SearchIndexFilter = () => {
     <div class="flex items-center gap-1.5">
       <FilterSelect
         label={indexLabel()}
-        options={INDEX_SELECT_OPTIONS}
+        options={INDEX_OPTIONS}
         active={activeIndex()}
         onChange={handleChange}
         multiple={false}
@@ -263,11 +258,12 @@ function importanceToOption(importance: boolean | null | undefined): Option[] {
 }
 
 const EmailImportanceFilter = () => {
-  const { setQueryFilters, queryFilters } = useSoupView();
+  const { filters, setFilters } = useSoupView();
 
-  const active = createMemo(() =>
-    importanceToOption(queryFilters().email_filters?.importance)
-  );
+  const active = createMemo(() => {
+    const importance = filters().include.emailImportance?.[0];
+    return importanceToOption(importance);
+  });
 
   const label = createMemo(() => {
     const a = active();
@@ -278,13 +274,13 @@ const EmailImportanceFilter = () => {
   const handleChange = (selected: Option[]) => {
     const importance =
       selected.length > 0 ? selected[0].value === 'signal' : undefined;
-    setQueryFilters((prev) => ({
-      ...prev,
-      email_filters: {
-        ...prev.email_filters,
-        importance,
-      },
-    }));
+    setFilters((d) => {
+      if (importance !== undefined) {
+        d.include.emailImportance = [importance];
+      } else {
+        delete d.include.emailImportance;
+      }
+    });
   };
 
   return (
@@ -299,16 +295,13 @@ const EmailImportanceFilter = () => {
 };
 
 const InChannelFilter = () => {
-  const { filterAst } = useSoupView();
+  const { filters, setFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
   const { useList } = useQuickAccess();
   const channels = useList('channel', 'dm');
 
-  // Initialize from cache, use signal for reactivity
-  const [channelIds, setChannelIds] = createSignal<string[]>(
-    getCachedChannelSubFilters(contentId).channel_ids ?? []
-  );
+  const channelIds = () => filters().include.channelId ?? [];
 
   const channelOptions = createMemo((): Option[] =>
     channels()
@@ -340,9 +333,6 @@ const InChannelFilter = () => {
   const handleChange = (selected: Option[]) => {
     const ids = selected.map((opt) => opt.value);
 
-    // Update signal for UI reactivity
-    setChannelIds(ids);
-
     // Update cache for persistence
     const cached = getCachedChannelSubFilters(contentId);
     cacheChannelSubFilters(contentId, {
@@ -350,15 +340,12 @@ const InChannelFilter = () => {
       channel_ids: ids.length > 0 ? ids : undefined,
     });
 
-    // Rebuild chanf from new channel IDs and existing sender IDs
-    const senderIds = cached.sender_ids ?? [];
-    filterAst.update((draft) => {
-      const channelAst = channelIdsToAst(ids);
-      const senderAst = senderIdsToAst(senderIds);
-      if (channelAst.chanf && senderAst.chanf) {
-        draft.chanf = ast.or(channelAst.chanf, senderAst.chanf);
+    // Update filter store
+    setFilters((d) => {
+      if (ids.length > 0) {
+        d.include.channelId = ids;
       } else {
-        draft.chanf = channelAst.chanf ?? senderAst.chanf;
+        delete d.include.channelId;
       }
     });
   };
@@ -387,17 +374,14 @@ const InChannelFilter = () => {
 };
 
 const FromSenderFilter = () => {
-  const { filterAst } = useSoupView();
+  const { filters, setFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
   const { useList } = useQuickAccess();
   const contacts = useList('person');
   const userId = useUserId();
 
-  // Initialize from cache, use signal for reactivity
-  const [senderIds, setSenderIds] = createSignal<string[]>(
-    getCachedChannelSubFilters(contentId).sender_ids ?? []
-  );
+  const senderIds = () => filters().include.channelSenderId ?? [];
 
   const senderOptions = createMemo((): Option[] => {
     const currentUserId = userId();
@@ -439,9 +423,6 @@ const FromSenderFilter = () => {
   const handleChange = (selected: Option[]) => {
     const ids = selected.map((opt) => opt.value);
 
-    // Update signal for UI reactivity
-    setSenderIds(ids);
-
     // Update cache for persistence
     const cached = getCachedChannelSubFilters(contentId);
     cacheChannelSubFilters(contentId, {
@@ -449,15 +430,12 @@ const FromSenderFilter = () => {
       sender_ids: ids.length > 0 ? ids : undefined,
     });
 
-    // Rebuild chanf from existing channel IDs and new sender IDs
-    const channelIds = cached.channel_ids ?? [];
-    filterAst.update((draft) => {
-      const channelAst = channelIdsToAst(channelIds);
-      const senderAst = senderIdsToAst(ids);
-      if (channelAst.chanf && senderAst.chanf) {
-        draft.chanf = ast.or(channelAst.chanf, senderAst.chanf);
+    // Update filter store
+    setFilters((d) => {
+      if (ids.length > 0) {
+        d.include.channelSenderId = ids;
       } else {
-        draft.chanf = channelAst.chanf ?? senderAst.chanf;
+        delete d.include.channelSenderId;
       }
     });
   };

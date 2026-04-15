@@ -107,7 +107,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Inbox"
-        initialFilterAst={preset.ast}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
         disableLocalSearch
       />
@@ -127,7 +127,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Agents"
-        initialFilterAst={preset.ast}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -142,7 +142,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Email"
-        initialFilterAst={preset.ast}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -161,7 +161,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Documents"
-        initialFilterAst={preset.ast}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -180,7 +180,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Tasks"
-        initialFilterAst={preset.ast}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -195,7 +195,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Channels"
-        initialFilterAst={preset.ast}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -210,7 +210,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Calls"
-        queryFilters={preset.queryFilters}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -229,7 +229,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Files"
-        initialFilterAst={preset.ast}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
       />
     );
@@ -248,7 +248,7 @@ registerComponent(
     return (
       <SoupView
         viewName="Search"
-        initialFilterAst={preset.ast}
+        initialFilters={preset.filters}
         initialClientFilters={preset.clientFilters}
       />
     );
