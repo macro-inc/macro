@@ -8,7 +8,7 @@ tauri::ios_plugin_binding!(init_plugin_input_accessory);
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("input-accessory")
-        .setup(|_app, api| {
+        .setup(|_app, _api| {
             #[cfg(target_os = "ios")]
             api.register_ios_plugin(init_plugin_input_accessory)?;
             Ok(())

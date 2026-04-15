@@ -7,7 +7,7 @@ use crate::domain::{
 };
 use rootcause::{Report, prelude::ResultExt, report};
 use semver::Version;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct Service {
     handle: WorkerHandle,
