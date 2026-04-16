@@ -166,10 +166,12 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Delete a row from `call_records` by id. Participants and transcript
     /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
+    /// Returns the deleted row's `recording_key` (if any) so the caller can
+    /// clean up the associated recording object in storage.
     fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
@@ -183,12 +185,29 @@ pub trait RecordingStorage: Send + Sync + 'static {
         &self,
         recording_key: &str,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Delete the recording object identified by `recording_key`.
+    ///
+    /// Implementations must apply the same prefix as
+    /// [`presign_recording_url`](Self::presign_recording_url). Should be
+    /// idempotent — succeed if the key no longer exists.
+    fn delete_recording(
+        &self,
+        recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 impl<T: RecordingStorage> RecordingStorage for Option<T> {
     async fn presign_recording_url(&self, recording_key: &str) -> anyhow::Result<String> {
         match self {
             Some(inner) => inner.presign_recording_url(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
+    async fn delete_recording(&self, recording_key: &str) -> anyhow::Result<()> {
+        match self {
+            Some(inner) => inner.delete_recording(recording_key).await,
             None => anyhow::bail!("recording storage not configured"),
         }
     }

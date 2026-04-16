@@ -661,10 +661,21 @@ impl<
         let call_id = Uuid::parse_str(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
 
-        self.repo
+        let recording_key = self
+            .repo
             .delete_call_record(&call_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+
+        if let Some(key) = recording_key {
+            self.recording_storage
+                .delete_recording(&key)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, recording_key=%key, "failed to delete call recording from storage");
+                })
+                .ok();
+        }
 
         Ok(())
     }
