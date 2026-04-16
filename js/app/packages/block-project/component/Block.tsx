@@ -29,7 +29,7 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
-import { ast, NIL_UUID } from '@app/component/next-soup/filters';
+import { NIL_UUID } from '@app/component/next-soup/filters';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;

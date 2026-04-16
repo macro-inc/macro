@@ -7,7 +7,7 @@ import {
   hasImageAttachmentFilter as hasImageAttachmentPredicate,
   hasDocumentAttachmentFilter as hasDocumentAttachmentPredicate,
 } from '../predicates';
-import { config, isEmail } from './base'; 
+import { config, isEmail } from './base';
 
 export const emailDraftsFilter = config({
   id: 'email-drafts',

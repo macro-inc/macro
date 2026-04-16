@@ -9,7 +9,6 @@ import {
 } from '../predicates';
 import { config, isAgent, isNotTask, NIL } from './base';
 
-
 export const channelsFilter = config({
   id: 'channels',
   predicate: channelsPredicate,

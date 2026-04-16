@@ -28,7 +28,7 @@ import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
 import type { FilterID } from '@app/component/next-soup/filters';
-import { type FilterContext } from '@app/component/next-soup/filters/configs/';
+import type { FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
   addQuery,
   removeQuery,

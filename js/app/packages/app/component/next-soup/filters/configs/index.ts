@@ -19,8 +19,18 @@ import {
   callsFilter,
   inFolderFilter,
 } from './entity';
-import { DOCUMENT_CONTEXTUAL_FILTERS, FILE_TYPE_FILTERS, emailAttachmentsFilter } from './document';
-import { TASK_STATUS_FILTERS, TASK_PRIORITY_FILTERS, activeTaskFilter, assignedToMeFilter, assigneeFilter } from './task';
+import {
+  DOCUMENT_CONTEXTUAL_FILTERS,
+  FILE_TYPE_FILTERS,
+  emailAttachmentsFilter,
+} from './document';
+import {
+  TASK_STATUS_FILTERS,
+  TASK_PRIORITY_FILTERS,
+  activeTaskFilter,
+  assignedToMeFilter,
+  assigneeFilter,
+} from './task';
 import {
   emailDraftsFilter,
   noDraftsFilter,
