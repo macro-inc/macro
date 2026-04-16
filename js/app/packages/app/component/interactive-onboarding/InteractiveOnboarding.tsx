@@ -59,7 +59,7 @@ export default function InteractiveOnboarding() {
       if (result[1].sent) {
         setMobileWebStep('signup-sent');
       } else {
-        toast.failure('Email already sent.');
+        toast.alert('Email already sent.');
       }
     } else {
       const msg = result[0]?.[0]?.message ?? '';
