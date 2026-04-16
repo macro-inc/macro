@@ -1008,10 +1008,7 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete_call_record(
-        &self,
-        call_record_id: &Uuid,
-    ) -> Result<Option<String>, Self::Err> {
+    async fn delete_call_record(&self, call_record_id: &Uuid) -> Result<Option<String>, Self::Err> {
         let row = sqlx::query!(
             r#"
             DELETE FROM call_records WHERE id = $1 RETURNING recording_key
