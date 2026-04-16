@@ -3,7 +3,6 @@ import {
   NIL,
   defineQueryFilters,
   type FilterData,
-  type EmailView,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
@@ -12,7 +11,7 @@ export type SoupFiltersPreset = {
   /** Filter data for server query */
   filters: Partial<FilterData>;
   /** Client filters to apply */
-  clientFilters: FilterID[];
+  clientFilters: { and?: FilterID[]; or?: FilterID[] };
 };
 
 // Tab preset configuration types
@@ -64,11 +63,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       signal: () => ({
         filters: INBOX_SIGNAL_FILTERS,
-        clientFilters: ['inbox'],
+        clientFilters: { and: ['inbox'] },
       }),
       noise: () => ({
         filters: INBOX_NOISE_FILTERS,
-        clientFilters: ['noise'],
+        clientFilters: { and: ['noise'] },
       }),
       all: () => ({
         filters: {
@@ -81,7 +80,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           emailView: 'all',
         },
-        clientFilters: ['explicit-noise'],
+        clientFilters: { and: ['explicit-noise'] },
       }),
     },
   },
@@ -94,7 +93,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           filters: defineQueryFilters({
             include: { chatOwnerId: [ctx.userId] },
           }),
-          clientFilters: ['agent'],
+          clientFilters: { and: ['agent'] },
         };
       },
       running: (ctx) => {
@@ -103,7 +102,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           filters: defineQueryFilters({
             include: { chatOwnerId: [ctx.userId] },
           }),
-          clientFilters: ['agent', 'owned-entity'],
+          clientFilters: { and: ['agent', 'owned-entity'] },
         };
       },
       shared: (ctx) => {
@@ -112,7 +111,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           filters: defineQueryFilters({
             exclude: { chatOwnerId: [ctx.userId] },
           }),
-          clientFilters: ['agent', 'shared-entity'],
+          clientFilters: { and: ['agent', 'shared-entity'] },
         };
       },
     },
@@ -125,21 +124,21 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           include: { emailImportance: [true] },
           emailView: 'inbox',
         }),
-        clientFilters: ['email', 'no-drafts'],
+        clientFilters: { and: ['email', 'no-drafts'] },
       }),
       noise: () => ({
         filters: defineQueryFilters({
           include: { emailImportance: [false] },
           emailView: 'inbox',
         }),
-        clientFilters: ['email', 'no-drafts'],
+        clientFilters: { and: ['email', 'no-drafts'] },
       }),
       drafts: () => ({
         filters: defineQueryFilters({
           exclude: { threadId: [NIL] },
           emailView: 'drafts',
         }),
-        clientFilters: ['email-drafts'],
+        clientFilters: { and: ['email-drafts'] },
       }),
       sent: (ctx) => {
         if (!ctx.email) return undefined;
@@ -148,7 +147,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             include: { sender: [ctx.email] },
             emailView: 'sent',
           }),
-          clientFilters: ['email', 'no-drafts'],
+          clientFilters: { and: ['email', 'no-drafts'] },
         };
       },
       shared: () => ({
@@ -156,14 +155,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           include: { shared: ['only'] },
           emailView: 'all',
         }),
-        clientFilters: ['email', 'shared-entity'],
+        clientFilters: { and: ['email', 'shared-entity'] },
       }),
       all: () => ({
         filters: defineQueryFilters({
           exclude: { threadId: [NIL] },
           emailView: 'all',
         }),
-        clientFilters: ['email'],
+        clientFilters: { and: ['email'] },
       }),
     },
   },
@@ -177,7 +176,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             include: { documentOwnerId: [ctx.userId] },
             exclude: { subType: ['task'] },
           }),
-          clientFilters: ['document-or-file', 'owned-entity'],
+          clientFilters: { and: ['document-or-file', 'owned-entity'] },
         };
       },
       shared: (ctx) => {
@@ -186,20 +185,20 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           filters: defineQueryFilters({
             exclude: { subType: ['task'], documentOwnerId: [ctx.userId] },
           }),
-          clientFilters: ['document-or-file', 'shared-entity'],
+          clientFilters: { and: ['document-or-file', 'shared-entity'] },
         };
       },
       attachments: () => ({
         filters: defineQueryFilters({
           include: { isEmailAttachment: [true] },
         }),
-        clientFilters: ['document-or-file'],
+        clientFilters: { and: ['document-or-file'] },
       }),
       all: () => ({
         filters: defineQueryFilters({
           exclude: { subType: ['task'] },
         }),
-        clientFilters: ['document-or-file'],
+        clientFilters: { and: ['document-or-file'] },
       }),
     },
   },
@@ -233,7 +232,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               },
             ],
           }),
-          clientFilters: ['task', 'assigned-to', 'active-task'],
+          clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
         };
       },
       'created-by-me': (ctx) => {
@@ -242,14 +241,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           filters: defineQueryFilters({
             include: { subType: ['task'], documentOwnerId: [ctx.userId] },
           }),
-          clientFilters: ['task', 'active-task', 'owned-entity'],
+          clientFilters: { and: ['task', 'active-task', 'owned-entity'] },
         };
       },
       all: () => ({
         filters: defineQueryFilters({
           include: { subType: ['task'] },
         }),
-        clientFilters: ['task'],
+        clientFilters: { and: ['task'] },
       }),
     },
   },
@@ -260,19 +259,19 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({
           include: { channelImportance: [true] },
         }),
-        clientFilters: ['channels'],
+        clientFilters: { and: ['channels'] },
       }),
       people: () => ({
         filters: defineQueryFilters({
           include: { channelType: ['direct_message'] },
         }),
-        clientFilters: ['people'],
+        clientFilters: { and: ['people'] },
       }),
       teams: () => ({
         filters: defineQueryFilters({
           exclude: { channelType: ['direct_message'] },
         }),
-        clientFilters: ['teams'],
+        clientFilters: { and: ['teams'] },
       }),
     },
   },
@@ -283,7 +282,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({
           exclude: { callChannelId: [NIL] },
         }),
-        clientFilters: ['calls'],
+        clientFilters: { and: ['calls'] },
       }),
     },
   },
@@ -296,14 +295,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           filters: defineQueryFilters({
             include: { folderOwnerId: [ctx.userId] },
           }),
-          clientFilters: ['folders', 'owned-entity'],
+          clientFilters: { and: ['folders', 'owned-entity'] },
         };
       },
       all: () => ({
         filters: defineQueryFilters({
           exclude: { folderId: [NIL] },
         }),
-        clientFilters: ['folders'],
+        clientFilters: { and: ['folders'] },
       }),
     },
   },
@@ -312,7 +311,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       all: () => ({
         filters: {},
-        clientFilters: [],
+        clientFilters: {},
       }),
     },
   },

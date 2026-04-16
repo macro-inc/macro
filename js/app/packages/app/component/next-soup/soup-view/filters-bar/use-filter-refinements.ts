@@ -14,7 +14,6 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserContext, useUserId } from '@core/context/user';
 import { useContacts } from '@queries/contacts/contacts';
@@ -53,7 +52,6 @@ export function useFilterRefinements() {
     assigneeFilter,
     setAssigneeFilter,
     activePreset,
-    setActivePreset,
   } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();

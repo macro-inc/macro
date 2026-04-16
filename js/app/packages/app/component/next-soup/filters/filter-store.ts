@@ -248,8 +248,6 @@ function removeFieldValues(
   }
 }
 
-type PropertyRecord = Partial<Record<PropertyId, PropertyValue[]>>;
-
 function addPropertyValues(
   target: PropertyFilters,
   source: PropertyFilters | undefined
@@ -405,21 +403,25 @@ function compileToAst(data: FilterData): TargetAstMap {
 
   for (const field of Object.keys(data.include) as FieldName[]) {
     const values = data.include[field];
-    const config = FIELD_CONFIG[field];
+    const config: FieldConfig = FIELD_CONFIG[field];
 
     if (!config || !values?.length) continue;
 
-    const formatted = config.formatValue ? values.map(config.formatValue) : values;
+    const formatted = config.formatValue
+      ? values.map(config.formatValue)
+      : values;
     byTarget[config.target].push(AST.fieldOr(config.field, formatted));
   }
 
   for (const field of Object.keys(data.exclude) as FieldName[]) {
     const values = data.exclude[field];
-    const config = FIELD_CONFIG[field];
+    const config: FieldConfig = FIELD_CONFIG[field];
 
     if (!config || !values?.length) continue;
 
-    const formatted = config.formatValue ? values.map(config.formatValue) : values;
+    const formatted = config.formatValue
+      ? values.map(config.formatValue)
+      : values;
     byTarget[config.target].push(AST.not(AST.fieldOr(config.field, formatted)));
   }
 
