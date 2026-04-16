@@ -111,6 +111,10 @@ import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import type { InitialFiltersInput } from '@app/component/next-soup/filters/create-filter-state';
+import {
+  getViewPreset,
+  VIEW_TAB_PRESETS,
+} from '@app/component/app-sidebar/soup-filter-presets';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -700,11 +704,16 @@ export const SoupViewList = (props: SoupViewListProps) => {
             d.properties = persistedFilterData.properties ?? [];
             d.emailView = persistedFilterData.emailView;
           });
-          if (isListViewID(contentId) && initialPersistedState.activeTab) {
-            setActivePreset({
-              view: contentId,
-              tab: initialPersistedState.activeTab,
-            });
+          if (isListViewID(contentId)) {
+            const tab =
+              initialPersistedState.activeTab ??
+              VIEW_TAB_PRESETS[contentId].default;
+            if (tab) {
+              setActivePreset({
+                view: contentId,
+                tab,
+              });
+            }
           }
         });
       }
