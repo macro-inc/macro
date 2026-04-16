@@ -29,7 +29,7 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
-import { NIL_UUID } from '@app/component/next-soup/filters';
+import { NIL } from '@app/component/next-soup/filters/filter-store';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
@@ -196,7 +196,7 @@ const ProjectEntityList = (props: {
           },
           exclude: {
             // Exclude channels
-            channelId: [NIL_UUID],
+            channelId: [NIL],
           },
         }}
       >
