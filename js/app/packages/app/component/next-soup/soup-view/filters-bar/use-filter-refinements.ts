@@ -2,7 +2,11 @@ import {
   type PresetContext,
   getViewPreset,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID, FilterContext } from '@app/component/next-soup/filters';
+import {
+  type FilterID,
+  type FilterContext,
+  NIL_UUID,
+} from '@app/component/next-soup/filters';
 import {
   addQuery,
   applyFilterData,
@@ -208,11 +212,14 @@ export function useFilterRefinements() {
     }
 
     // Channel filter chips (In:)
-    const channelIds = filterData().include.channelId ?? [];
+    const channelIds = (filterData().include.channelId ?? []).filter(
+      (id) => id !== NIL_UUID
+    );
     for (const channelId of channelIds) {
       const item = quickAccess.getById(channelId);
       const label =
         item && 'data' in item && item.data?.name ? item.data.name : channelId;
+
       filters.push({
         categoryLabel: 'In',
         optionId: `in:${channelId}`,
