@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -32,11 +30,19 @@ pub async fn delete_user_item_access_by_item(
     item_id: &str,
     item_type: &str,
 ) -> anyhow::Result<u64> {
-    let entity_id = macro_uuid::string_to_uuid(item_id)?;
-    let entity_type = EntityType::from_str(item_type)
-        .map_err(|e| anyhow::anyhow!("Invalid item_type '{}': {}", item_type, e))?;
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM "UserItemAccess"
+        WHERE "item_id" = $1 AND "item_type" = $2
+        "#,
+        item_id,
+        item_type,
+    )
+    .execute(transaction.as_mut())
+    .await
+    .with_context(|| format!("Failed to delete access for item ID {}", item_id))?;
 
-    delete_user_entity_access_by_item(transaction, &entity_id, entity_type).await
+    Ok(result.rows_affected())
 }
 
 #[tracing::instrument(skip(transaction))]
@@ -49,14 +55,24 @@ pub async fn delete_user_item_access_bulk(
         return Ok(0);
     }
 
-    let entity_type = EntityType::from_str(item_type)
-        .map_err(|e| anyhow::anyhow!("Invalid item_type '{}': {}", item_type, e))?;
-    let entity_ids: Vec<uuid::Uuid> = item_ids
-        .iter()
-        .map(|id| macro_uuid::string_to_uuid(id))
-        .collect::<anyhow::Result<Vec<_>>>()?;
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM "UserItemAccess"
+        WHERE "item_id" = ANY($1) AND "item_type" = $2
+        "#,
+        item_ids,
+        item_type,
+    )
+    .execute(transaction.as_mut())
+    .await
+    .with_context(|| {
+        format!(
+            "Failed to delete access for multiple items of type {}",
+            item_type
+        )
+    })?;
 
-    delete_user_entity_access_bulk(transaction, &entity_ids, entity_type).await
+    Ok(result.rows_affected())
 }
 
 #[tracing::instrument(skip(transaction))]
@@ -115,16 +131,14 @@ pub async fn delete_user_item_access(
     item_id: &str,
     item_type: &str,
 ) -> anyhow::Result<u64> {
-    let entity_id = macro_uuid::string_to_uuid(item_id)?;
-
     let result = sqlx::query!(
         r#"
-        DELETE FROM entity_access
-        WHERE entity_id = $1 AND entity_type = $2 AND source_id = $3 AND source_type = 'user'
+        DELETE FROM "UserItemAccess"
+        WHERE "user_id" = $1 AND "item_id" = $2 AND "item_type" = $3
         "#,
-        entity_id,
-        item_type,
         user_id,
+        item_id,
+        item_type,
     )
     .execute(transaction.as_mut())
     .await
@@ -144,30 +158,33 @@ pub async fn delete_user_item_access_by_users_and_channel(
     user_ids: &[MacroUserIdStr<'_>],
     item_id: &str,
     item_type: &str,
-    _granted_from_channel_id: uuid::Uuid,
+    granted_from_channel_id: uuid::Uuid,
 ) -> anyhow::Result<u64> {
     if user_ids.is_empty() {
         return Ok(0);
     }
 
-    let entity_id = macro_uuid::string_to_uuid(item_id)?;
-    let source_ids: Vec<String> = user_ids.iter().map(|s| s.to_string()).collect();
+    let macro_ids: Vec<String> = user_ids.iter().map(|s| s.to_string()).collect();
 
     let result = sqlx::query!(
         r#"
-        DELETE FROM entity_access
-        WHERE source_id = ANY($1) AND entity_id = $2 AND entity_type = $3 AND source_type = 'user'
+        DELETE FROM "UserItemAccess"
+        WHERE "user_id" = ANY($1) 
+          AND "item_id" = $2 
+          AND "item_type" = $3
+          AND "granted_from_channel_id" = $4
         "#,
-        source_ids.as_slice(),
-        entity_id,
+        macro_ids.as_slice(),
+        item_id,
         item_type,
+        granted_from_channel_id,
     )
     .execute(executor)
     .await
     .with_context(|| {
         format!(
-            "Failed to delete access for users to item {}",
-            item_id
+            "Failed to delete access for users to item {} from channel {}",
+            item_id, granted_from_channel_id
         )
     })?;
 
@@ -177,38 +194,29 @@ pub async fn delete_user_item_access_by_users_and_channel(
 #[tracing::instrument(skip(transaction))]
 pub async fn delete_user_item_access_by_channel(
     transaction: &mut Transaction<'_, Postgres>,
-    channel_id: uuid::Uuid,
+    granted_from_channel_id: uuid::Uuid,
 ) -> anyhow::Result<u64> {
-    let source_id = channel_id.to_string();
-
     let result = sqlx::query!(
         r#"
-        DELETE FROM entity_access
-        WHERE source_id = $1 AND source_type = 'channel'
+        DELETE FROM "UserItemAccess"
+        WHERE "granted_from_channel_id" = $1
         "#,
-        source_id,
+        granted_from_channel_id,
     )
     .execute(transaction.as_mut())
     .await
     .with_context(|| {
         format!(
             "Failed to delete access records from channel {}",
-            channel_id
+            granted_from_channel_id
         )
     })?;
 
     Ok(result.rows_affected())
 }
 
-/// In the entity_access model, channel-based access is represented by rows with
-/// source_type='channel' and source_id=channel_id. When users leave a channel,
-/// access is resolved at query time through channel membership rather than by
-/// deleting per-user rows. This function is kept for API compatibility but is a
-/// no-op.
-///
-/// TODO(entity_access migration): If per-user rows granted from a channel need
-/// cleanup, a new mechanism to identify them is required since entity_access has
-/// no granted_from_channel_id column.
+/// Deletes all UserItemAccess records for specific users from a specific channel
+/// This is useful when users are removed from a channel and need to lose access to channel-shared items
 #[tracing::instrument(skip(db))]
 pub async fn delete_user_item_access_by_channel_and_users(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -219,17 +227,24 @@ pub async fn delete_user_item_access_by_channel_and_users(
         return Ok(0);
     }
 
-    tracing::warn!(
-        %channel_id,
-        user_count = user_ids.len(),
-        "delete_user_item_access_by_channel_and_users is a no-op in the entity_access model; \
-         channel-based access is resolved through membership at query time"
-    );
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM "UserItemAccess"
+        WHERE "granted_from_channel_id" = $1 AND "user_id" = ANY($2)
+        "#,
+        channel_id,
+        user_ids,
+    )
+    .execute(db)
+    .await
+    .with_context(|| {
+        format!(
+            "Failed to delete access records for users from channel {}",
+            channel_id
+        )
+    })?;
 
-    // Suppress unused parameter warnings
-    let _ = db;
-
-    Ok(0)
+    Ok(result.rows_affected())
 }
 
 #[cfg(test)]
@@ -240,7 +255,7 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_delete_user_item_access(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let user_id = "macro|test-user@test.com";
-        let item_id = "00000000-0000-0000-0000-000000000001";
+        let item_id = "test-item";
         let item_type = "document";
 
         let mut transaction = pool.begin().await?;
@@ -251,17 +266,15 @@ mod tests {
 
         assert_eq!(affected, 1, "Should have deleted exactly one record");
 
-        let entity_id = macro_uuid::string_to_uuid(item_id)?;
-
         // Verify it's gone
         let result = sqlx::query!(
             r#"
             SELECT COUNT(*) as count
-            FROM entity_access
-            WHERE source_id = $1 AND entity_id = $2 AND entity_type = $3 AND source_type = 'user'
+            FROM "UserItemAccess"
+            WHERE "user_id" = $1 AND "item_id" = $2 AND "item_type" = $3
             "#,
             user_id,
-            entity_id,
+            item_id,
             item_type
         )
         .fetch_one(&mut *transaction)
@@ -276,7 +289,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_delete_user_item_access_by_item(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let item_id = "00000000-0000-0000-0000-000000000002";
+        let item_id = "multi-access-item";
         let item_type = "document";
 
         let mut transaction = pool.begin().await?;
@@ -287,16 +300,14 @@ mod tests {
 
         assert_eq!(affected, 3, "Should have deleted all three records");
 
-        let entity_id = macro_uuid::string_to_uuid(item_id)?;
-
         // Verify they're all gone
         let result = sqlx::query!(
             r#"
             SELECT COUNT(*) as count
-            FROM entity_access
-            WHERE entity_id = $1 AND entity_type = $2
+            FROM "UserItemAccess"
+            WHERE "item_id" = $1 AND "item_type" = $2
             "#,
-            entity_id,
+            item_id,
             item_type
         )
         .fetch_one(&mut *transaction)
@@ -313,9 +324,9 @@ mod tests {
     async fn test_delete_user_item_access_bulk(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let item_type = "document";
         let item_ids = vec![
-            "00000000-0000-0000-0000-000000000003".to_string(),
-            "00000000-0000-0000-0000-000000000004".to_string(),
-            "00000000-0000-0000-0000-000000000005".to_string(),
+            "bulk-test-item-1".to_string(),
+            "bulk-test-item-2".to_string(),
+            "bulk-test-item-3".to_string(),
         ];
 
         let mut transaction = pool.begin().await?;
@@ -328,19 +339,14 @@ mod tests {
             "Should have deleted all six records (2 users × 3 items)"
         );
 
-        let entity_ids: Vec<uuid::Uuid> = item_ids
-            .iter()
-            .map(|id| macro_uuid::string_to_uuid(id).unwrap())
-            .collect();
-
         // Verify they're all gone
         let result = sqlx::query!(
             r#"
             SELECT COUNT(*) as count
-            FROM entity_access
-            WHERE entity_id = ANY($1) AND entity_type = $2
+            FROM "UserItemAccess"
+            WHERE "item_id" = ANY($1) AND "item_type" = $2
             "#,
-            &entity_ids,
+            &item_ids,
             item_type
         )
         .fetch_one(&mut *transaction)
@@ -371,31 +377,30 @@ mod tests {
     async fn test_delete_user_item_access_by_users_and_channel(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
-        let item_id = "f0000000-0000-0000-0000-000000000001";
+        let item_id = "channel-shared-item";
         let item_type = "document";
         let channel_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-        let entity_id = macro_uuid::string_to_uuid(item_id)?;
         let user_ids = vec![
             MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(),
             MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap(),
         ];
 
-        // First ensure test data exists in entity_access
+        // First ensure test data exists
         for user_id in &user_ids {
             sqlx::query!(
-                r#"
-                INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-                VALUES ($1, $2, $3, 'user', 'view')
-                ON CONFLICT (entity_id, entity_type, source_id, source_type)
-                WHERE granted_from_project_id IS NULL
-                DO NOTHING
-                "#,
-                entity_id,
-                item_type,
-                user_id.as_ref(),
-            )
-            .execute(&pool)
-            .await?;
+            r#"
+            INSERT INTO "UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level", "granted_from_channel_id")
+            VALUES ($1, $2, $3, $4, 'view', $5)
+            ON CONFLICT DO NOTHING
+            "#,
+            uuid::Uuid::now_v7(),
+            user_id.as_ref(),
+            item_id,
+            item_type,
+            channel_id,
+        )
+                .execute(&pool)
+                .await?;
         }
 
         // Delete the records
@@ -410,17 +415,18 @@ mod tests {
 
         // Verify they're gone
         let result = sqlx::query!(
-            r#"
-            SELECT COUNT(*) as count
-            FROM entity_access
-            WHERE source_id = ANY($1) AND entity_id = $2 AND entity_type = $3 AND source_type = 'user'
-            "#,
-            &ids,
-            entity_id,
-            item_type,
-        )
-        .fetch_one(&pool)
-        .await?;
+        r#"
+        SELECT COUNT(*) as count
+        FROM "UserItemAccess"
+        WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 AND "granted_from_channel_id" = $4
+        "#,
+        &ids,
+        item_id,
+        item_type,
+        channel_id
+    )
+            .fetch_one(&pool)
+            .await?;
 
         assert_eq!(result.count.unwrap(), 0);
 
@@ -429,38 +435,38 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_delete_user_item_access_by_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let channel_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-        let source_id = channel_id.to_string();
 
-        // First ensure test data exists in entity_access with source_type='channel'
-        let test_entity_ids = vec![
-            uuid::Uuid::parse_str("f1000000-0000-0000-0000-000000000001")?,
-            uuid::Uuid::parse_str("f1000000-0000-0000-0000-000000000002")?,
-        ];
+        // First ensure test data exists
+        let test_users = vec!["user1", "user2", "user3"];
+        let test_items = vec!["item1", "item2"];
 
-        for entity_id in &test_entity_ids {
-            sqlx::query!(
+        for user_id in &test_users {
+            for item_id in &test_items {
+                sqlx::query!(
                 r#"
-                INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-                VALUES ($1, 'document', $2, 'channel', 'view')
-                ON CONFLICT (entity_id, entity_type, source_id, source_type)
-                WHERE granted_from_project_id IS NULL
-                DO NOTHING
+                INSERT INTO "UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level", "granted_from_channel_id")
+                VALUES ($1, $2, $3, $4, 'view', $5)
+                ON CONFLICT DO NOTHING
                 "#,
-                entity_id,
-                source_id,
+                uuid::Uuid::now_v7(),
+                user_id,
+                item_id,
+                "document",
+                channel_id,
             )
-            .execute(&pool)
-            .await?;
+                    .execute(&pool)
+                    .await?;
+            }
         }
 
         // Count how many records we expect to delete
         let count_before = sqlx::query!(
             r#"
         SELECT COUNT(*) as count
-        FROM entity_access
-        WHERE source_id = $1 AND source_type = 'channel'
+        FROM "UserItemAccess"
+        WHERE "granted_from_channel_id" = $1
         "#,
-            source_id
+            channel_id
         )
         .fetch_one(&pool)
         .await?
@@ -483,10 +489,10 @@ mod tests {
         let result = sqlx::query!(
             r#"
         SELECT COUNT(*) as count
-        FROM entity_access
-        WHERE source_id = $1 AND source_type = 'channel'
+        FROM "UserItemAccess"
+        WHERE "granted_from_channel_id" = $1
         "#,
-            source_id
+            channel_id
         )
         .fetch_one(&mut *transaction)
         .await?;
@@ -509,13 +515,54 @@ mod tests {
         let channel_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
         let user_ids = vec!["user1".to_string(), "user2".to_string()];
 
-        // This function is now a no-op in the entity_access model
+        // First ensure we have test data
+        // Count how many records we expect to delete
+        let count_before = sqlx::query!(
+            r#"
+            SELECT COUNT(*) as count
+            FROM "UserItemAccess"
+            WHERE "granted_from_channel_id" = $1 AND "user_id" = ANY($2)
+            "#,
+            channel_id,
+            &user_ids
+        )
+        .fetch_one(&pool)
+        .await?
+        .count
+        .unwrap_or(0);
+
+        // If we don't have test data, we need to skip the test
+        if count_before == 0 {
+            println!("Test data for channel and users doesn't exist, skipping test");
+            return Ok(());
+        }
+
+        // Delete the records
         let affected =
             delete_user_item_access_by_channel_and_users(&pool, channel_id, &user_ids).await?;
 
         assert_eq!(
-            affected, 0,
-            "Should return 0 since this is a no-op in entity_access model"
+            affected, count_before as u64,
+            "Should have deleted the correct number of records"
+        );
+
+        // Verify the targeted records are gone
+        let result = sqlx::query!(
+            r#"
+            SELECT COUNT(*) as count
+            FROM "UserItemAccess"
+            WHERE "granted_from_channel_id" = $1 AND "user_id" = ANY($2)
+            "#,
+            channel_id,
+            &user_ids
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(
+            result.count.unwrap(),
+            0,
+            "No records should remain for these users in this channel"
         );
 
         Ok(())

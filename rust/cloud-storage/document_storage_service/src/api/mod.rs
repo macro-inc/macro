@@ -43,6 +43,7 @@ mod user_document_view_location;
 
 mod entity;
 mod items;
+mod permissions;
 pub(crate) mod swagger;
 mod threads;
 

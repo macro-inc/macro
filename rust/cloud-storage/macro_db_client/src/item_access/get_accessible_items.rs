@@ -4,8 +4,7 @@ use cached::proc_macro::cached;
 use model::item::UserAccessibleItem;
 use sqlx::{Pool, Postgres};
 
-/// Gets all accessible items for a user by querying entity_access with the user's source IDs
-/// (user ID, team memberships, and channel participations).
+/// gets all accessible items for a user, traversing nested project structure
 #[tracing::instrument(skip(db))]
 #[cfg_attr(
     not(test),
@@ -24,40 +23,97 @@ pub async fn get_user_accessible_items(
 ) -> anyhow::Result<Vec<UserAccessibleItem>> {
     let results = sqlx::query!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        WITH RECURSIVE ProjectHierarchy AS (
+            -- Find direct user access to projects first as starting point
+            SELECT
+                p.id,
+                uia.access_level
+            FROM "Project" p
+            JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
+            WHERE uia.user_id = $1 AND p."deletedAt" IS NULL
+              AND ($3 = false OR p."userId" != $1)  -- Exclude owned projects if exclude_owned = true
+
             UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
+
+            -- Then walk down the project tree and grab child projects, keeping parent's access
+            SELECT
+                p.id,
+                ph.access_level
+            FROM "Project" p
+            JOIN ProjectHierarchy ph ON p."parentId" = ph.id
+            WHERE p."deletedAt" IS NULL
+              AND ($3 = false OR p."userId" != $1)  -- Exclude owned projects if exclude_owned = true
+        ),
+        -- Now build up all the ways a user can have access to stuff
+        AllAccessGrants AS (
+            -- Explicit access to items via UserItemAccess table
+            SELECT uia.item_id, uia.item_type, uia.access_level
+            FROM "UserItemAccess" uia
+            -- We join to each table to check its "deletedAt" status.
+            -- This is more explicit and robust than using subqueries.
+            LEFT JOIN "Document" d ON uia.item_type = 'document' AND uia.item_id = d.id
+            LEFT JOIN "Chat" c ON uia.item_type = 'chat' AND uia.item_id = c.id
+            LEFT JOIN "Project" p ON uia.item_type = 'project' AND uia.item_id = p.id
+            WHERE uia.user_id = $1
+              AND ($2::text IS NULL OR uia.item_type = $2)
+              -- Rule: The item must not be deleted.
+              AND (
+                  (uia.item_type = 'document' AND d."deletedAt" IS NULL) OR
+                  (uia.item_type = 'chat' AND c."deletedAt" IS NULL) OR
+                  (uia.item_type = 'project' AND p."deletedAt" IS NULL)
+              )
+              -- Rule: If exclude_owned is true, the user must not be the creator of the item.
+              AND ($3 = false OR (
+                  (uia.item_type = 'document' AND d.owner != $1) OR
+                  (uia.item_type = 'chat' AND c."userId" != $1) OR
+                  (uia.item_type = 'project' AND p."userId" != $1)
+              ))
+
+            -- The rest of the unions are to get implicit access to items via project access
             UNION ALL
-            SELECT $1
+
+            -- Access to docs in visible projects 
+            SELECT
+                d.id AS item_id,
+                'document' AS item_type,
+                ph.access_level
+            FROM "Document" d
+            JOIN ProjectHierarchy ph ON d."projectId" = ph.id
+            WHERE ($2::text IS NULL OR 'document' = $2)
+              AND d."projectId" IS NOT NULL AND d."deletedAt" IS NULL
+              AND ($3 = false OR d.owner != $1)
+
+            UNION ALL
+
+            -- Access to chats in visible projects
+            SELECT
+                c.id AS item_id,
+                'chat' AS item_type,
+                ph.access_level
+            FROM "Chat" c
+            JOIN ProjectHierarchy ph ON c."projectId" = ph.id
+            WHERE ($2::text IS NULL OR 'chat' = $2)
+              AND c."projectId" IS NOT NULL AND c."deletedAt" IS NULL
+              AND ($3 = false OR c."userId" != $1)
+
+            UNION ALL
+
+            -- Include the projects we found earlier
+            SELECT
+                ph.id AS item_id,
+                'project' AS item_type,
+                ph.access_level
+            FROM ProjectHierarchy ph
+            WHERE ($2::text IS NULL OR 'project' = $2)
         ),
-        -- Get all entities the user has access to via entity_access
-        UserAccessibleEntities AS (
-            SELECT DISTINCT
-                ea.entity_id,
-                ea.entity_type
-            FROM entity_access ea
-            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
-            AND ($2::text IS NULL OR ea.entity_type = $2)
-        ),
-        -- Filter out deleted items and optionally exclude owned
-        FilteredItems AS (
-            SELECT uae.entity_id::text as item_id, uae.entity_type as item_type
-            FROM UserAccessibleEntities uae
-            LEFT JOIN "Document" d ON uae.entity_type = 'document' AND uae.entity_id::text = d.id
-            LEFT JOIN "Chat" c ON uae.entity_type = 'chat' AND uae.entity_id::text = c.id
-            LEFT JOIN "Project" p ON uae.entity_type = 'project' AND uae.entity_id::text = p.id
-            WHERE
-                (uae.entity_type = 'document' AND d."deletedAt" IS NULL
-                    AND ($3 = false OR d.owner != $1)) OR
-                (uae.entity_type = 'chat' AND c."deletedAt" IS NULL
-                    AND ($3 = false OR c."userId" != $1)) OR
-                (uae.entity_type = 'project' AND p."deletedAt" IS NULL
-                    AND ($3 = false OR p."userId" != $1))
+        UserAccessibleItems AS (
+            SELECT
+                item_id,
+                item_type
+            FROM AllAccessGrants
+            GROUP BY item_id, item_type
         )
-        SELECT item_id as "item_id!", item_type as "item_type!" FROM FilteredItems
+        SELECT item_id as "item_id!", item_type as "item_type!" FROM UserAccessibleItems
         "#,
         user_id,
         item_type_filter,
@@ -88,12 +144,12 @@ mod tests {
             let items = get_user_accessible_items(&pool, user_id, None, false).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
             let expected_ids: HashSet<String> = [
-                "a0000000-0000-0000-0000-0000000e0001",
-                "a0000000-0000-0000-0000-0000000e0002",
-                "a0000000-0000-0000-0000-0000000e0003",
-                "a0000000-0000-0000-0000-0000000e0004",
-                "a0000000-0000-0000-0000-0000000e0005",
-                "a0000000-0000-0000-0000-0000000e0006",
+                "project-owned",
+                "chat-owned",
+                "doc-owned",
+                "project-shared",
+                "chat-shared",
+                "doc-shared",
             ]
             .into_iter()
             .map(String::from)
@@ -108,14 +164,10 @@ mod tests {
         {
             let items = get_user_accessible_items(&pool, user_id, None, true).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "a0000000-0000-0000-0000-0000000e0004",
-                "a0000000-0000-0000-0000-0000000e0005",
-                "a0000000-0000-0000-0000-0000000e0006",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["project-shared", "chat-shared", "doc-shared"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 item_ids, expected_ids,
                 "Core function (exclude owned) failed"
@@ -128,13 +180,10 @@ mod tests {
                 get_user_accessible_items(&pool, user_id, Some("document".to_string()), false)
                     .await?;
             let id_set: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "a0000000-0000-0000-0000-0000000e0003",
-                "a0000000-0000-0000-0000-0000000e0006",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["doc-owned", "doc-shared"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 id_set, expected_ids,
                 "Documents wrapper (include owned) failed"
@@ -149,7 +198,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["a0000000-0000-0000-0000-0000000e0006"],
+                vec!["doc-shared"],
                 "Documents wrapper (exclude owned) failed"
             );
         }
@@ -159,13 +208,10 @@ mod tests {
             let items =
                 get_user_accessible_items(&pool, user_id, Some("chat".to_string()), false).await?;
             let id_set: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "a0000000-0000-0000-0000-0000000e0002",
-                "a0000000-0000-0000-0000-0000000e0005",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["chat-owned", "chat-shared"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(id_set, expected_ids, "Chats wrapper (include owned) failed");
         }
 
@@ -176,7 +222,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["a0000000-0000-0000-0000-0000000e0005"],
+                vec!["chat-shared"],
                 "Chats wrapper (exclude owned) failed"
             );
         }
@@ -187,13 +233,10 @@ mod tests {
                 get_user_accessible_items(&pool, user_id, Some("project".to_string()), false)
                     .await?;
             let id_set: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "a0000000-0000-0000-0000-0000000e0001",
-                "a0000000-0000-0000-0000-0000000e0004",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["project-owned", "project-shared"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 id_set, expected_ids,
                 "Projects wrapper (include owned) failed"
@@ -208,7 +251,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["a0000000-0000-0000-0000-0000000e0004"],
+                vec!["project-shared"],
                 "Projects wrapper (exclude owned) failed"
             );
         }
@@ -224,15 +267,10 @@ mod tests {
         {
             let items = get_user_accessible_items(&pool, user_id, None, false).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "b0000000-0000-0000-0000-0000000e0001",
-                "b0000000-0000-0000-0000-0000000e0002",
-                "b0000000-0000-0000-0000-0000000e0003",
-                "b0000000-0000-0000-0000-0000000e0004",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["project-A", "project-B", "chat-A", "doc-A"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 item_ids, expected_ids,
                 "Core function (include owned) failed on hierarchical permissions"
@@ -244,15 +282,10 @@ mod tests {
         {
             let items = get_user_accessible_items(&pool, user_id, None, true).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "b0000000-0000-0000-0000-0000000e0001",
-                "b0000000-0000-0000-0000-0000000e0002",
-                "b0000000-0000-0000-0000-0000000e0003",
-                "b0000000-0000-0000-0000-0000000e0004",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["project-A", "project-B", "chat-A", "doc-A"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 item_ids, expected_ids,
                 "Core function (exclude owned) should not change the result when the user owns nothing"
@@ -267,7 +300,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["b0000000-0000-0000-0000-0000000e0004"],
+                vec!["doc-A"],
                 "Documents wrapper (include owned) failed on hierarchical"
             );
         }
@@ -280,7 +313,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["b0000000-0000-0000-0000-0000000e0004"],
+                vec!["doc-A"],
                 "Documents wrapper (exclude owned) failed on hierarchical"
             );
         }
@@ -292,7 +325,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["b0000000-0000-0000-0000-0000000e0003"],
+                vec!["chat-A"],
                 "Chats wrapper (include owned) failed on hierarchical"
             );
         }
@@ -304,7 +337,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["b0000000-0000-0000-0000-0000000e0003"],
+                vec!["chat-A"],
                 "Chats wrapper (exclude owned) failed on hierarchical"
             );
         }
@@ -315,13 +348,10 @@ mod tests {
                 get_user_accessible_items(&pool, user_id, Some("project".to_string()), false)
                     .await?;
             let id_set: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "b0000000-0000-0000-0000-0000000e0001",
-                "b0000000-0000-0000-0000-0000000e0002",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["project-A", "project-B"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 id_set, expected_ids,
                 "Projects wrapper (include owned) failed on hierarchical"
@@ -334,13 +364,10 @@ mod tests {
                 get_user_accessible_items(&pool, user_id, Some("project".to_string()), true)
                     .await?;
             let id_set: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "b0000000-0000-0000-0000-0000000e0001",
-                "b0000000-0000-0000-0000-0000000e0002",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["project-A", "project-B"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 id_set, expected_ids,
                 "Projects wrapper (exclude owned) failed on hierarchical"
@@ -359,16 +386,11 @@ mod tests {
         {
             let items = get_user_accessible_items(&pool, user_id, None, false).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "c0000000-0000-0000-0000-0000000e0001",
-                "c0000000-0000-0000-0000-0000000e0002",
-                "c0000000-0000-0000-0000-0000000e0003",
-                "c0000000-0000-0000-0000-0000000e0004",
-                "c0000000-0000-0000-0000-0000000e0005",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> =
+                ["project-A", "project-B", "project-C", "chat-C", "doc-C"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect();
             assert_eq!(
                 item_ids, expected_ids,
                 "Core function (include owned) failed on deep hierarchy"
@@ -380,16 +402,11 @@ mod tests {
         {
             let items = get_user_accessible_items(&pool, user_id, None, true).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "c0000000-0000-0000-0000-0000000e0001",
-                "c0000000-0000-0000-0000-0000000e0002",
-                "c0000000-0000-0000-0000-0000000e0003",
-                "c0000000-0000-0000-0000-0000000e0004",
-                "c0000000-0000-0000-0000-0000000e0005",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> =
+                ["project-A", "project-B", "project-C", "chat-C", "doc-C"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect();
             assert_eq!(
                 item_ids, expected_ids,
                 "Core function (exclude owned) failed on deep hierarchy"
@@ -404,7 +421,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["c0000000-0000-0000-0000-0000000e0005"],
+                vec!["doc-C"],
                 "Documents wrapper (include owned) failed on deep hierarchy"
             );
         }
@@ -417,7 +434,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["c0000000-0000-0000-0000-0000000e0005"],
+                vec!["doc-C"],
                 "Documents wrapper (exclude owned) failed on deep hierarchy"
             );
         }
@@ -429,7 +446,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["c0000000-0000-0000-0000-0000000e0004"],
+                vec!["chat-C"],
                 "Chats wrapper (include owned) failed on deep hierarchy"
             );
         }
@@ -441,7 +458,7 @@ mod tests {
             let ids: Vec<String> = items.into_iter().map(|item| item.item_id).collect();
             assert_eq!(
                 ids,
-                vec!["c0000000-0000-0000-0000-0000000e0004"],
+                vec!["chat-C"],
                 "Chats wrapper (exclude owned) failed on deep hierarchy"
             );
         }
@@ -452,14 +469,10 @@ mod tests {
                 get_user_accessible_items(&pool, user_id, Some("project".to_string()), false)
                     .await?;
             let id_set: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "c0000000-0000-0000-0000-0000000e0001",
-                "c0000000-0000-0000-0000-0000000e0002",
-                "c0000000-0000-0000-0000-0000000e0003",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["project-A", "project-B", "project-C"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 id_set, expected_ids,
                 "Projects wrapper (include owned) failed on deep hierarchy"
@@ -472,14 +485,10 @@ mod tests {
                 get_user_accessible_items(&pool, user_id, Some("project".to_string()), true)
                     .await?;
             let id_set: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = [
-                "c0000000-0000-0000-0000-0000000e0001",
-                "c0000000-0000-0000-0000-0000000e0002",
-                "c0000000-0000-0000-0000-0000000e0003",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect();
+            let expected_ids: HashSet<String> = ["project-A", "project-B", "project-C"]
+                .into_iter()
+                .map(String::from)
+                .collect();
             assert_eq!(
                 id_set, expected_ids,
                 "Projects wrapper (exclude owned) failed on deep hierarchy"

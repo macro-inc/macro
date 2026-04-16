@@ -29,21 +29,47 @@ use uuid::Uuid;
 use crate::outbound::pg_soup_repo::{populate_properties, type_err};
 
 static PREFIX: &str = r#"
-    WITH user_source_ids AS (
-        SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+    WITH RECURSIVE ProjectHierarchy AS (
+        SELECT p.id, uia.access_level
+        FROM "Project" p
+        JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
+        WHERE uia.user_id = $1 AND p."deletedAt" IS NULL
         UNION ALL
-        SELECT t.team_id::text FROM team_user t
-            WHERE t.user_id = $1
+        SELECT p.id, ph.access_level
+        FROM "Project" p
+        JOIN ProjectHierarchy ph ON p."parentId" = ph.id
+        WHERE p."deletedAt" IS NULL
+    ),
+    AllAccessGrants AS (
+        SELECT item_id, item_type, access_level
+        FROM "UserItemAccess"
+        WHERE user_id = $1
         UNION ALL
-        SELECT $1
+        SELECT d.id AS item_id, 'document' AS item_type,
+               (SELECT ph.access_level FROM ProjectHierarchy ph WHERE ph.id = d."projectId" LIMIT 1) as access_level
+        FROM "Document" d
+        WHERE d."projectId" = ANY(ARRAY(SELECT id FROM ProjectHierarchy))
+          AND d."deletedAt" IS NULL
+        UNION ALL
+        SELECT c.id AS item_id, 'chat' AS item_type, ph.access_level
+        FROM "Chat" c
+        JOIN ProjectHierarchy ph ON c."projectId" = ph.id
+        WHERE c."projectId" IS NOT NULL AND c."deletedAt" IS NULL
+        UNION ALL
+        SELECT ph.id AS item_id, 'project' AS item_type, ph.access_level
+        FROM ProjectHierarchy ph
     ),
     UserAccessibleItems AS (
-        SELECT DISTINCT
-            ea.entity_id::text as item_id,
-            ea.entity_type as item_type
-        FROM entity_access ea
-        WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+        SELECT DISTINCT ON (item_id, item_type) item_id, item_type
+        FROM AllAccessGrants
+        ORDER BY item_id, item_type,
+            CASE access_level
+                WHEN 'owner' THEN 4
+                WHEN 'edit' THEN 3
+                WHEN 'comment' THEN 2
+                WHEN 'view' THEN 1
+                ELSE 0
+            END DESC
     ),
 "#;
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"UserItemAccess\"\n        WHERE \"granted_from_channel_id\" = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "53915ada0ceed09122ca151e1b75f23839345912f19de026d0713574d8bfb76f"
+}

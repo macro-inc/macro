@@ -5,7 +5,7 @@ use std::str::FromStr;
 ///
 /// This function checks only public `SharePermission` records (where `isPublic=true`),
 /// applied either directly to the document or inherited from its project hierarchy.
-/// It does NOT check user-specific `entity_access` records.
+/// It does NOT check user-specific `UserItemAccess` records.
 ///
 /// Use this for unauthenticated access to publicly shared documents.
 ///
@@ -63,8 +63,7 @@ pub async fn get_public_access_level_for_document(
 /// Calculates the highest effective access level a user has for a document.
 ///
 /// This function determines the best possible permission by considering three sources:
-/// 1.  **Explicit Grants**: Any `entity_access` records for the specified user (via their
-///     source IDs: user ID, team memberships, and channel participations), applied either
+/// 1.  **Explicit Grants**: Any `UserItemAccess` records for the specified user, applied either
 ///     directly to the document or inherited from its entire project hierarchy.
 /// 2.  **Public Access**: Any `SharePermission` records marked as `isPublic=true`, applied either
 ///     directly to the document or inherited from its project hierarchy.
@@ -108,40 +107,47 @@ pub async fn get_highest_access_level_for_document(
     Ok(highest_level)
 }
 
-/// Gets the document's direct access level from entity_access and public SharePermissions.
+/// Gets the document's direct access level from UserItemAccess and public SharePermissions.
 #[tracing::instrument(skip(db), err)]
 async fn get_document_direct_access_level(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_id: &str,
     user_id: &str,
 ) -> anyhow::Result<Option<AccessLevel>> {
-    let entity_id = macro_uuid::string_to_uuid(document_id).unwrap();
+    // have to use strings because the SharePermission and UserItemAccess access_level rows use different sql types
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
+        WITH RECURSIVE project_hierarchy AS (
+            SELECT p.id as project_id
+            FROM "Document" d
+            JOIN "Project" p ON d."projectId" = p.id AND p."deletedAt" IS NULL
+            WHERE d.id = $1 AND d."deletedAt" IS NULL
+            UNION ALL
+            SELECT parent.id as project_id
+            FROM project_hierarchy ph
+            JOIN "Project" parent ON parent.id = (
+                SELECT "parentId" FROM "Project" WHERE id = ph.project_id AND "parentId" IS NOT NULL AND "deletedAt" IS NULL
+            )
+        )
         SELECT access_level FROM (
-            -- Source 1: entity_access with source_ids (user, teams, channels)
-            SELECT access_level::text FROM entity_access
-            WHERE source_id = ANY(ARRAY(
-                SELECT cp.channel_id::text FROM comms_channel_participants cp
-                    WHERE cp.user_id = $3 AND cp.left_at IS NULL
-                UNION ALL
-                SELECT t.team_id::text FROM team_user t
-                    WHERE t.user_id = $3
-                UNION ALL
-                SELECT $3
-            ))
-            AND entity_id = $1
-            AND entity_type = 'document'
+            -- Source 1: Cast the AccessLevel enum to text.
+            SELECT access_level::text FROM "UserItemAccess"
+            WHERE user_id = $2 AND item_id IN (
+                SELECT $1
+                UNION
+                SELECT project_id FROM project_hierarchy
+            )
             UNION ALL
             -- Source 2: Select the publicAccessLevel (which is already text).
             SELECT "publicAccessLevel" as access_level
             FROM "SharePermission"
             WHERE "isPublic" = true AND "publicAccessLevel" IS NOT NULL AND id IN (
-                SELECT "sharePermissionId" FROM "DocumentPermission" WHERE "documentId" = $2
+                SELECT "sharePermissionId" FROM "DocumentPermission" WHERE "documentId" = $1
+                UNION
+                SELECT "sharePermissionId" FROM "ProjectPermission" WHERE "projectId" IN (SELECT project_id FROM project_hierarchy)
             )
         ) as all_levels
         "#,
-        entity_id,
         document_id,
         user_id
     )
