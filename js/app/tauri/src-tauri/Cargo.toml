@@ -35,7 +35,7 @@ reqwest = { workspace = true, features = [
 ] }
 serde_qs = "0.15.0"
 tauri = { workspace = true, features = [] }
-tauri-plugin-deep-link = "2"
+tauri-plugin-deep-link = "=2.4.5"
 tauri-plugin-http = { git = "https://github.com/seanaye/plugins-workspace", branch = "seanaye/feat/websocket-cookies", features = ["unsafe-headers"] }
 tauri-plugin-log = { version = "2", features = ["tracing"] }
 tauri-plugin-opener = "2"
