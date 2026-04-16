@@ -32,7 +32,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import MobileWebWelcome from './MobileWebWelcome';
 import MobileWebSignupSent from './MobileWebSignupSent';
-import { authServiceClient } from '@service-auth/client';
+import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { isOk } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 
@@ -41,6 +41,7 @@ export default function InteractiveOnboarding() {
   const [mobileWebStep, setMobileWebStep] = createSignal<
     'welcome' | 'signup-sent'
   >('welcome');
+  const sendMobileWelcomeEmail = useSendMobileWelcomeEmail();
 
   // Mobile web users who aren't authenticated get a dedicated welcome screen
   // with email signup instead of the full lesson flow.
@@ -52,7 +53,7 @@ export default function InteractiveOnboarding() {
       return;
     }
 
-    const result = await authServiceClient.sendMobileWelcomeEmail(email);
+    const result = await sendMobileWelcomeEmail.mutateAsync(email);
 
     if (isOk(result)) {
       if (result[1].sent) {
@@ -61,10 +62,10 @@ export default function InteractiveOnboarding() {
         toast.alert('Email already sent.');
       }
     } else {
-      const msg = result[0]?.[0]?.message ?? '';
-      if (msg.includes('429')) {
+      const code = result[0]?.[0]?.code;
+      if (code === 'RATE_LIMITED') {
         toast.failure('Rate limit exceeded.');
-      } else if (msg.includes('400')) {
+      } else if (code === 'INVALID_EMAIL') {
         toast.failure('Invalid email address.');
       } else {
         toast.failure('Internal error. Please try again.');
@@ -397,9 +398,10 @@ function InteractiveOnboardingInner() {
     if (state.currentIndex() > 0) return;
 
     analytics.track('onboarding_start', {
-      source: params.has('mobile_welcome_email')
-        ? 'mobile_welcome_email'
-        : undefined,
+      source:
+        params.get('mobile_welcome_email') === 'true'
+          ? 'mobile_welcome_email'
+          : undefined,
     });
   });
 

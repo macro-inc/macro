@@ -58,6 +58,7 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
         >
           <input
             type="email"
+            aria-label="Email address"
             placeholder="name@company.com"
             value={email()}
             onInput={(e) => setEmail(e.currentTarget.value)}
