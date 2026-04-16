@@ -11,43 +11,14 @@ type BackendAst =
 type QueryTarget = 'df' | 'ef' | 'chanf' | 'cf' | 'pf' | 'callf' | 'propf';
 export type EmailView = 'inbox' | 'drafts' | 'sent' | 'all';
 
-const ALL_ENTITY_TYPES = [
-  'email',
-  'document',
-  'channel',
-  'chat',
-  'folder',
-  'call',
-] as const;
-export type EntityType = (typeof ALL_ENTITY_TYPES)[number];
-export type TargetFilter = EntityType[] | { exclude: EntityType[] };
-
-const ENTITY_TYPE_TARGETS: Record<EntityType, QueryTarget[]> = {
-  email: ['ef'],
-  document: ['df'],
-  channel: ['chanf'],
-  chat: ['cf'],
-  folder: ['pf'],
-  call: ['callf'],
-};
-
-const TARGET_TO_ENTITY: Partial<Record<QueryTarget, EntityType>> = {
-  df: 'document',
-  ef: 'email',
-  chanf: 'channel',
-  cf: 'chat',
-  pf: 'folder',
-  callf: 'call',
-};
-
-// ID field for each target - used to generate NOT NIL filters
-const TARGET_ID_FIELD: Partial<Record<QueryTarget, string>> = {
-  df: 'id',
-  ef: 'ThreadId',
-  chanf: 'ChannelId',
-  cf: 'ChatId',
-  pf: 'ProjectId',
-  callf: 'ChannelId',
+// Maps target to the FieldName for its ID field
+const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
+  df: 'documentId',
+  ef: 'threadId',
+  chanf: 'channelId',
+  cf: 'chatId',
+  pf: 'folderId',
+  callf: 'callChannelId',
 };
 
 type TargetAstMap = {
@@ -82,7 +53,13 @@ const AST = {
 
 export const NIL = '00000000-0000-0000-0000-000000000000';
 
-type FieldConfig = { target: QueryTarget; field: string };
+type FieldConfig = {
+  target: QueryTarget;
+  field: string;
+  formatValue?: (v: unknown) => unknown;
+};
+
+const wrapPartial = (v: unknown) => ({ Partial: v });
 
 const FIELD_CONFIG = {
   // Documents (df)
@@ -101,7 +78,7 @@ const FIELD_CONFIG = {
   emailDone: { target: 'ef', field: 'NotificationDone' },
   emailImportance: { target: 'ef', field: 'Importance' },
   emailProjectId: { target: 'ef', field: 'ProjectId' },
-  sender: { target: 'ef', field: 'Sender' },
+  sender: { target: 'ef', field: 'Sender', formatValue: wrapPartial },
   shared: { target: 'ef', field: 'Shared' },
 
   // Channels (chanf)
@@ -187,18 +164,11 @@ export type FilterData = {
   exclude: FieldFilters;
   properties: PropertyFilters;
   emailView?: EmailView;
-  targets?: TargetFilter;
 };
 
 export type FilterSetter = (fn: (draft: FilterData) => void) => void;
 
 export type FilterDataInput = Partial<FilterData>;
-
-/** Resolve TargetFilter to an array of EntityTypes */
-function resolveTargets(filter: TargetFilter): EntityType[] {
-  if (Array.isArray(filter)) return filter;
-  return ALL_ENTITY_TYPES.filter((t) => !filter.exclude.includes(t));
-}
 
 /** Merge multiple partial FilterData objects into one (OR logic for same fields) */
 export function mergeFilterData(...sources: Partial<FilterData>[]): FilterData {
@@ -206,7 +176,6 @@ export function mergeFilterData(...sources: Partial<FilterData>[]): FilterData {
   const exclude: FieldFilters = {};
   const properties: PropertyFilters = [];
   let emailView: EmailView | undefined;
-  let resolvedTargets: EntityType[] | undefined;
 
   for (const source of sources) {
     addFieldValues(include, source.include);
@@ -219,22 +188,9 @@ export function mergeFilterData(...sources: Partial<FilterData>[]): FilterData {
     if (source.emailView) {
       emailView = source.emailView;
     }
-
-    if (source.targets) {
-      const sourceResolved = resolveTargets(source.targets);
-      resolvedTargets = resolvedTargets
-        ? Array.from(new Set([...resolvedTargets, ...sourceResolved]))
-        : sourceResolved;
-    }
   }
 
-  // Normalize: if all types are included, store as undefined
-  const targets =
-    resolvedTargets && resolvedTargets.length < ALL_ENTITY_TYPES.length
-      ? resolvedTargets
-      : undefined;
-
-  return { include, exclude, properties, emailView, targets };
+  return { include, exclude, properties, emailView };
 }
 
 /** Create an empty FilterData object */
@@ -243,7 +199,6 @@ export const emptyFilterData = (): FilterData => ({
   exclude: {},
   properties: [],
   emailView: undefined,
-  targets: undefined,
 });
 
 /** Apply a partial FilterData to a draft (for use with setFilters) */
@@ -255,7 +210,6 @@ export function applyFilterData(
   draft.exclude = source.exclude ?? {};
   draft.properties = source.properties ?? [];
   draft.emailView = source.emailView;
-  draft.targets = source.targets;
 }
 
 function addFieldValues(
@@ -366,14 +320,6 @@ export function addQuery(draft: FilterData, query: Partial<FilterData>): void {
   if (query.emailView) {
     draft.emailView = query.emailView;
   }
-
-  if (query.targets) {
-    const queryResolved = resolveTargets(query.targets);
-    const currentResolved = draft.targets ? resolveTargets(draft.targets) : [];
-    const merged = Array.from(new Set([...currentResolved, ...queryResolved]));
-    draft.targets =
-      merged.length < ALL_ENTITY_TYPES.length ? merged : undefined;
-  }
 }
 
 /** Remove a query's contributions from the draft (mutates draft) */
@@ -388,17 +334,32 @@ export function removeQuery(
   if (query.emailView && draft.emailView === query.emailView) {
     draft.emailView = undefined;
   }
+}
 
-  if (query.targets) {
-    const queryResolved = resolveTargets(query.targets);
-    if (draft.targets) {
-      const currentResolved = resolveTargets(draft.targets);
-      const remaining = currentResolved.filter(
-        (t) => !queryResolved.includes(t)
-      );
-      draft.targets = remaining.length > 0 ? remaining : undefined;
-    }
+/** Define query filters with automatic exclusions for unreferenced entity types */
+export function defineQueryFilters(
+  input: Partial<FilterData>
+): Partial<FilterData> {
+  const referencedTargets = new Set<QueryTarget>();
+
+  for (const field of Object.keys(input.include ?? {}) as FieldName[]) {
+    referencedTargets.add(FIELD_CONFIG[field].target);
   }
+
+  for (const field of Object.keys(input.exclude ?? {}) as FieldName[]) {
+    referencedTargets.add(FIELD_CONFIG[field].target);
+  }
+
+  if (referencedTargets.size === 0) return input;
+
+  const include: FieldFilters = { ...input.include };
+
+  for (const [target, idFieldName] of Object.entries(ID_FIELD_NAMES)) {
+    if (referencedTargets.has(target as QueryTarget)) continue;
+    (include as Record<string, unknown[]>)[idFieldName] = [NIL];
+  }
+
+  return { ...input, include };
 }
 
 export function createFilterStore(initial?: Partial<FilterData>) {
@@ -407,7 +368,6 @@ export function createFilterStore(initial?: Partial<FilterData>) {
     exclude: initial?.exclude ?? {},
     properties: initial?.properties ?? [],
     emailView: initial?.emailView,
-    targets: initial?.targets,
   });
 
   const setFilters: FilterSetter = (fn) => setData(produce(fn));
@@ -432,47 +392,7 @@ function propToAst(propertyId: string, p: PropertyValue): BackendAst {
   return p.negate ? AST.not(leaf) : leaf;
 }
 
-/** Infer which entity types to query based on explicit targets or fields being filtered */
-function inferTargets(data: FilterData): EntityType[] {
-  // Explicit targets always win
-  if (data.targets) {
-    return resolveTargets(data.targets);
-  }
-
-  // Collect targets from fields being filtered
-  const inferred = new Set<EntityType>();
-
-  for (const field of Object.keys(data.include) as FieldName[]) {
-    const config = FIELD_CONFIG[field];
-    if (config) {
-      const entityType = TARGET_TO_ENTITY[config.target];
-      if (entityType) inferred.add(entityType);
-    }
-  }
-
-  for (const field of Object.keys(data.exclude) as FieldName[]) {
-    const config = FIELD_CONFIG[field];
-    if (config) {
-      const entityType = TARGET_TO_ENTITY[config.target];
-      if (entityType) inferred.add(entityType);
-    }
-  }
-
-  // No fields filtered = query everything
-  if (inferred.size === 0) {
-    return Array.from(ALL_ENTITY_TYPES);
-  }
-
-  return Array.from(inferred);
-}
-
 function compileToAst(data: FilterData): TargetAstMap {
-  // Determine which targets to include
-  const allowedTypes = inferTargets(data);
-  const allowedTargets = new Set(
-    allowedTypes.flatMap((t) => ENTITY_TYPE_TARGETS[t])
-  );
-
   const byTarget: Record<QueryTarget, BackendAst[]> = {
     df: [],
     ef: [],
@@ -489,7 +409,8 @@ function compileToAst(data: FilterData): TargetAstMap {
 
     if (!config || !values?.length) continue;
 
-    byTarget[config.target].push(AST.fieldOr(config.field, values));
+    const formatted = config.formatValue ? values.map(config.formatValue) : values;
+    byTarget[config.target].push(AST.fieldOr(config.field, formatted));
   }
 
   for (const field of Object.keys(data.exclude) as FieldName[]) {
@@ -498,7 +419,8 @@ function compileToAst(data: FilterData): TargetAstMap {
 
     if (!config || !values?.length) continue;
 
-    byTarget[config.target].push(AST.not(AST.fieldOr(config.field, values)));
+    const formatted = config.formatValue ? values.map(config.formatValue) : values;
+    byTarget[config.target].push(AST.not(AST.fieldOr(config.field, formatted)));
   }
 
   // Properties: array of records (AND), within each record values are OR'd by property
@@ -522,33 +444,9 @@ function compileToAst(data: FilterData): TargetAstMap {
   const result: TargetAstMap = {};
 
   for (const [target, asts] of Object.entries(byTarget)) {
-    // propf applies across entity types, only include if it has filters
-    if (target === 'propf') {
-      if (asts.length > 0) {
-        result[target as QueryTarget] = AST.and(asts);
-      }
-      continue;
+    if (asts.length > 0) {
+      result[target as QueryTarget] = AST.and(asts);
     }
-
-    const idField = TARGET_ID_FIELD[target as QueryTarget];
-    if (!idField) continue;
-
-    const isAllowed = allowedTargets.has(target as QueryTarget);
-
-    if (!isAllowed) {
-      // Excluded target: send id = NIL to match nothing
-      result[target as QueryTarget] = AST.literal(idField, NIL);
-      continue;
-    }
-
-    if (asts.length === 0) {
-      // Allowed target with no filters: send NOT (id = NIL) to match all
-      result[target as QueryTarget] = AST.not(AST.literal(idField, NIL));
-      continue;
-    }
-
-    // Allowed target with filters: use the filters
-    result[target as QueryTarget] = AST.and(asts);
   }
 
   if (data.emailView) {
