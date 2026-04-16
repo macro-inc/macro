@@ -95,8 +95,7 @@ where
         )
         .route(
             "/record/{call_id}",
-            get(get_call_record_handler::<S, Svc>)
-                .delete(delete_call_record_handler::<S, Svc>),
+            get(get_call_record_handler::<S, Svc>).delete(delete_call_record_handler::<S, Svc>),
         )
         .with_state(state)
 }
