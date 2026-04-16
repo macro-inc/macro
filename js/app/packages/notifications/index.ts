@@ -39,6 +39,7 @@ export {
   getNotificationTargetName,
   shouldShowNotificationTarget,
 } from './notification-metadata';
+export { getChannelNotificationParams } from './notification-navigation';
 export { openNotificationFromId } from './notification-navigation';
 export { openNotification } from './notification-navigation';
 export { openSingleStackNotification } from './notification-navigation';

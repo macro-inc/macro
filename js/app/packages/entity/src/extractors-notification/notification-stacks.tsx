@@ -1,15 +1,28 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { toast } from '@core/component/Toast/Toast';
+import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/regular/check.svg';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import {
+  getChannelNotificationParams,
   getMostRecentNotification,
   type NotificationStack,
   openNotification,
   stackNotifications,
 } from '@notifications';
+import type { UnifiedNotification } from '@notifications';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
-import { createEffect, type JSX, Show } from 'solid-js';
+import {
+  createEffect,
+  type JSX,
+  onCleanup,
+  Show,
+  createSignal,
+  onMount,
+} from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';
 import { UnreadIndicator } from '../components/UnreadIndicator';
@@ -29,25 +42,60 @@ import { NotificationTimestamp } from './notification-timestamp';
 
 const DEFAULT_VISIBLE_COUNT = 3;
 
+function getNotificationUrl(notification: UnifiedNotification): string {
+  const { params } = getChannelNotificationParams(notification);
+  return buildSimpleEntityUrl(
+    { type: notification.entity_type, id: notification.entity_id },
+    params
+  );
+}
+
 interface NotificationStacksProps {
   entity: WithNotification<EntityData>;
-  onClick?: (e: PointerEvent | MouseEvent) => void;
+  onClick?: (e: PointerEvent | MouseEvent | KeyboardEvent) => void;
   visibleCount?: number;
 }
 
 function NotificationStackRow(props: {
   stack: NotificationStack;
-  onClick?: (e: PointerEvent | MouseEvent) => void;
+  onClick?: (e: PointerEvent | MouseEvent | KeyboardEvent) => void;
   content?: JSX.Element;
 }) {
   const notificationSource = useGlobalNotificationSource();
   const unread = () => isNotificationUnread(props.stack);
 
-  const { markStackAsDone } = useNotificationStackActions({
+  const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
     stack: props.stack,
   });
 
-  const handleClick = async (e: PointerEvent | MouseEvent) => {
+  // When a pointerdown fires while the context menu is open, register a
+  // one-shot click blocker. This handles two cases:
+  // 1. Click-to-dismiss: pointerdown closes the menu, subsequent click
+  //    should not navigate
+  // 2. Menu item click: portal is removed during click processing,
+  //    retargeted click should not navigate (also handled by the
+  //    onClick stopPropagation wrapper inside the portal)
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  const clickBlocker = (e: MouseEvent) => {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  };
+  const pointerdownHandler = () => {
+    if (!menuOpen()) return;
+    document.addEventListener('click', clickBlocker, true);
+    requestAnimationFrame(() => {
+      document.removeEventListener('click', clickBlocker, true);
+    });
+  };
+  onMount(() => {
+    document.addEventListener('pointerdown', pointerdownHandler, true);
+  });
+  onCleanup(() => {
+    document.removeEventListener('pointerdown', pointerdownHandler, true);
+    document.removeEventListener('click', clickBlocker, true);
+  });
+
+  const handleClick = async (e: PointerEvent | MouseEvent | KeyboardEvent) => {
     const mostRecent = getMostRecentNotification(props.stack);
     const splitManager = globalSplitManager();
     if (!splitManager) return;
@@ -58,71 +106,100 @@ function NotificationStackRow(props: {
     props.onClick?.(e);
   };
 
-  const handleMarkAsDone = async (e: PointerEvent | MouseEvent) => {
-    e.stopPropagation();
+  const handleMarkAsDone = async (e?: PointerEvent | MouseEvent) => {
+    e?.stopPropagation();
     await markStackAsDone();
   };
 
+  const handleMarkAsRead = async () => {
+    await markStackAsRead();
+  };
+
+  const handleCopyLink = async () => {
+    const mostRecent = getMostRecentNotification(props.stack);
+    const url = getNotificationUrl(mostRecent);
+    await navigator.clipboard.writeText(url);
+    toast.success('Link copied to clipboard');
+  };
+
   return (
-    <div
-      class={cn(
-        'flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4 hover:bg-edge/20 min-w-0 overflow-hidden'
-      )}
-      onClick={handleClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handleClick(e as unknown as MouseEvent);
-        }
-      }}
-    >
-      <div class="pt-1 flex-shrink-0">
-        <NotificationIcon stack={props.stack} class="size-4" />
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-1 text-xs min-w-0 overflow-hidden">
-          <span
-            class={cn(
-              'w-0 transition-[width] overflow-hidden duration-500 ease flex-shrink-0',
-              {
-                'w-4': unread(),
-              }
-            )}
-          >
-            <UnreadIndicator active />
-          </span>
-          <div class="flex-shrink-0">
-            <NotificationSenderIcon stack={props.stack} size="xs" />
-          </div>
-          <span class="ph-no-capture truncate min-w-0">
-            <NotificationDescription stack={props.stack} />
-          </span>
-          <span class="text-ink-extra-muted/50 flex-shrink-0">
-            {' - '}
-            <NotificationTimestamp stack={props.stack} />
-          </span>
-          <div class="ml-auto flex items-center gap-1 pr-2 flex-shrink-0">
-            <Button
-              onClick={handleMarkAsDone}
-              tooltip={'Mark notification done'}
-              class="border border-edge-muted text-xs text-ink-muted grid p-0 place-items-center size-6"
-            >
-              <CheckIcon class="size-3" />
-            </Button>
-          </div>
-        </div>
+    <ContextMenu onOpenChange={setMenuOpen}>
+      <ContextMenu.Trigger class="size-full">
         <div
-          class={cn('ph-no-capture mt-1 min-w-0', {
-            'truncate overflow-hidden':
-              props.stack.type !== 'document_mention' && !props.content,
-          })}
+          class={cn(
+            'flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4 hover:bg-edge/20 min-w-0 overflow-hidden'
+          )}
+          onClick={handleClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleClick(e);
+            }
+            if (e.key === 'e') {
+              e.preventDefault();
+              e.stopPropagation();
+              handleMarkAsDone();
+            }
+          }}
         >
-          {props.content ?? <NotificationContent stack={props.stack} />}
+          <div class="pt-1 flex-shrink-0">
+            <NotificationIcon stack={props.stack} class="size-4" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1 text-xs min-w-0 overflow-hidden">
+              <span
+                class={cn(
+                  'w-0 transition-[width] overflow-hidden duration-500 ease flex-shrink-0',
+                  {
+                    'w-4': unread(),
+                  }
+                )}
+              >
+                <UnreadIndicator active />
+              </span>
+              <div class="flex-shrink-0">
+                <NotificationSenderIcon stack={props.stack} size="xs" />
+              </div>
+              <span class="ph-no-capture truncate min-w-0">
+                <NotificationDescription stack={props.stack} />
+              </span>
+              <span class="text-ink-extra-muted/50 flex-shrink-0">
+                {' - '}
+                <NotificationTimestamp stack={props.stack} />
+              </span>
+              <div class="ml-auto flex items-center gap-1 pr-2 flex-shrink-0">
+                <Button
+                  onClick={handleMarkAsDone}
+                  tooltip={'Mark notification done'}
+                  class="border border-edge-muted text-xs text-ink-muted grid p-0 place-items-center size-6"
+                >
+                  <CheckIcon class="size-3" />
+                </Button>
+              </div>
+            </div>
+            <div
+              class={cn('ph-no-capture mt-1 min-w-0', {
+                'truncate overflow-hidden':
+                  props.stack.type !== 'document_mention' && !props.content,
+              })}
+            >
+              {props.content ?? <NotificationContent stack={props.stack} />}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <div onClick={(e) => e.stopPropagation()}>
+          <ContextMenuContent class="text-xs text-ink-muted">
+            <MenuItem text="Mark Done" onClick={() => handleMarkAsDone()} />
+            <MenuItem text="Mark Read" onClick={handleMarkAsRead} />
+            <MenuItem text="Copy Link" onClick={handleCopyLink} />
+          </ContextMenuContent>
+        </div>
+      </ContextMenu.Portal>
+    </ContextMenu>
   );
 }
 
