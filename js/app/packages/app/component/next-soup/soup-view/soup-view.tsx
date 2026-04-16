@@ -190,6 +190,13 @@ interface SoupViewProps {
   initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
   queryFilters?: SoupItemsQueryFilters;
   disableLocalSearch?: boolean;
+  /**
+   * Client-side entities to merge into the soup results. Useful for entity
+   * types (e.g. automation) that don't come back from the soup API.
+   * Visibility is controlled by the active client filter set — use a tab
+   * preset whose `clientFilters` include a predicate that matches them.
+   */
+  additionalEntities?: Accessor<EntityData[]>;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -254,6 +261,7 @@ export const SoupView = (props: SoupViewProps) => {
         soup={soup}
         queryFilters={props.queryFilters}
         disableLocalSearch={props.disableLocalSearch}
+        additionalEntities={props.additionalEntities}
       >
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">

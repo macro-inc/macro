@@ -19,6 +19,11 @@ export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 
 export { useIsShared } from './utils/shared';
 export {
+  formatTimestamp,
+  formatRelativeTimestamp,
+  formatDateAndTime,
+} from './utils/timestamp';
+export {
   filterNotDoneNotifications,
   filterValidNotifications,
 } from './utils/notification';

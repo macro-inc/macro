@@ -1,79 +1,82 @@
 import './ListEntity.css';
+import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import {
+  twoLineClampMarkdownTheme,
+  unifiedListMarkdownTheme,
+} from '@core/component/LexicalMarkdown/theme';
+import { UserIcon } from '@core/component/UserIcon';
+import { isMobile } from '@core/mobile/isMobile';
+import type { NotificationType } from '@core/types';
+import { tryMacroId, useDisplayNameParts } from '@core/user';
 import type { DateValue } from '@core/util/date';
 import {
+  HighlightRender,
   visibleLength,
   windowSearchMatch,
-  HighlightRender,
 } from '@core/util/searchHighlight';
-import { Entity } from '../entity';
+import { DisplayName } from '@entity/components/DisplayName';
+import { stackNotifications } from '@notifications';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import {
-  isCallEntity,
-  isChannelEntity,
-  isChannelMessageEntity,
-  isEmailEntity,
-  isProjectContainedEntity,
-  type ChannelEntity,
-  type EmailEntity,
-  type ProjectEntity,
-  type EntityData,
-  isTaskEntity,
-} from '../types/entity';
+  getStreamState,
+  subscribeToStreamState,
+} from '@service-connection/stream-events';
+import { mergeRefs } from '@solid-primitives/refs';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
   createContext,
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   Match,
   onCleanup,
+  type Ref,
   Show,
   Switch,
   useContext,
-  type Ref,
-  type JSX,
 } from 'solid-js';
+import { DraftBadge, SharedBadge } from '../components/Badges';
+import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
+import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
+import { UnreadIndicator } from '../components/UnreadIndicator';
+import { Entity } from '../entity';
+import type { EntityRowConfig } from '../extractors-notification';
+import { getActionVerb } from '../extractors-notification/notification-description-helpers';
+import { SearchContent } from '../extractors-search/search-content';
+import { SearchSender } from '../extractors-search/search-sender';
 import {
-  getStreamState,
-  subscribeToStreamState,
-} from '@service-connection/stream-events';
+  type ChannelEntity,
+  type EmailEntity,
+  type EntityData,
+  isCallEntity,
+  isChannelEntity,
+  isChannelMessageEntity,
+  isEmailEntity,
+  isProjectContainedEntity,
+  isAutomationEntity,
+  isTaskEntity,
+  type ProjectEntity,
+  type AutomationEntity,
+} from '../types/entity';
 import {
   isWithNotification,
   type WithNotification,
 } from '../types/notification';
-import { unreadFilterFn } from '../utils/filter';
-import { cn } from '@ui/utils/classname';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  twoLineClampMarkdownTheme,
-  unifiedListMarkdownTheme,
-} from '@core/component/LexicalMarkdown/theme';
 import type { SearchLocation } from '../types/search';
 import { isSearchEntity } from '../types/search';
-import { UserIcon } from '@core/component/UserIcon';
-import { SearchContent } from '../extractors-search/search-content';
-import { SearchSender } from '../extractors-search/search-sender';
 import { createEntityDraggable } from '../utils/draggable';
-import { UnreadIndicator } from '../components/UnreadIndicator';
-import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
-import { DraftBadge, SharedBadge } from '../components/Badges';
-import { useIsShared } from '../utils/shared';
-import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
+import { unreadFilterFn } from '../utils/filter';
 import {
   filterNotDoneNotifications,
   filterValidNotifications,
 } from '../utils/notification';
-import { getActionVerb } from '../extractors-notification/notification-description-helpers';
-import type { NotificationType } from '@core/types';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
-import { stackNotifications } from '@notifications';
-import { mergeRefs } from '@solid-primitives/refs';
-import type { EntityRowConfig } from '../extractors-notification';
-import { createElementSize } from '@solid-primitives/resize-observer';
-import { isMobile } from '@core/mobile/isMobile';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
-import { DisplayName } from '@entity/components/DisplayName';
+import { useIsShared } from '../utils/shared';
+import { formatDateAndTime } from '../utils/timestamp';
 import { formatCallDuration } from '@block-call/utils';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
@@ -215,6 +218,31 @@ function EmailSnippet(props: {
         <HighlightRender text={windowSearchMatch(content(), props.chars)} />
       )}
     </Show>
+  );
+}
+
+function AutomationSubtitle(props: { entity: AutomationEntity }) {
+  return (
+    <div class="text-xs font-mono text-right uppercase font-light">
+      <Switch>
+        <Match when={props.entity.isRunning}>
+          <span class="flex items-center justify-end gap-1.5 text-accent">
+            <span class="size-1.5 animate-pulse rounded-full bg-accent" />
+            Running
+          </span>
+        </Match>
+        <Match when={props.entity.enabled && props.entity.nextRunAt}>
+          {(nextRunAt) => (
+            <span class="text-ink-extra-muted">
+              Next run {formatDateAndTime(nextRunAt())}
+            </span>
+          )}
+        </Match>
+        <Match when={!props.entity.enabled}>
+          <span class="text-ink-extra-muted">Paused</span>
+        </Match>
+      </Switch>
+    </div>
   );
 }
 
@@ -705,6 +733,18 @@ function WideLayout(props: LayoutProps) {
                   >
                     {(ms) => formatCallDuration(ms())}
                   </Show>
+                </span>
+              </>
+            )}
+          </Match>
+          <Match when={isAutomationEntity(props.entity) && props.entity}>
+            {(entity) => (
+              <>
+                <span class="w-(--title-width) shrink-0 truncate">
+                  <Entity.Title entity={entity()} />
+                </span>
+                <span class="">
+                  <AutomationSubtitle entity={entity()} />
                 </span>
               </>
             )}

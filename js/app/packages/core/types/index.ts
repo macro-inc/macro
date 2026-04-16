@@ -5,6 +5,7 @@ export const EntityType = {
   ...BaseEntityType,
   email: 'email',
   channel_message: 'channel_message',
+  automation: 'automation',
 } as const;
 
 export type EntityType = (typeof EntityType)[keyof typeof EntityType];

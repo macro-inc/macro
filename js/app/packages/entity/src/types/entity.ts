@@ -1,4 +1,3 @@
-import { isEntityType } from '@core/types/utils';
 import type { DateValue } from '@core/util/date';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
@@ -128,6 +127,22 @@ export type CallEntity = EntityBase & {
   participantIds: string[];
 };
 
+export type AutomationEntity = EntityBase & {
+  type: 'automation';
+  /** Cron expression controlling when the automation runs. */
+  cron: string;
+  /** Whether the automation is currently enabled. */
+  enabled: boolean;
+  /** ISO timestamp of the next scheduled run, or null when paused / unscheduled. */
+  nextRunAt?: string | null;
+  /** ISO timestamp of the last completed run. */
+  lastRunAt?: string | null;
+  /** True when a run is actively claimed on the server. Derived from the
+   *  scheduled action's `claimed` timestamp + the backend's stale-claim
+   *  window; updated live via the connection-gateway websocket. */
+  isRunning?: boolean;
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -136,7 +151,19 @@ export type EntityData =
   | TaskEntity
   | EmailEntity
   | ProjectEntity
-  | CallEntity;
+  | CallEntity
+  | AutomationEntity;
+
+const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
+  'channel',
+  'channel_message',
+  'chat',
+  'document',
+  'email',
+  'project',
+  'call',
+  'automation',
+]);
 
 export const isEntityData = (item: unknown): item is EntityData => {
   if (typeof item !== 'object') return false;
@@ -147,7 +174,7 @@ export const isEntityData = (item: unknown): item is EntityData => {
 
   if (typeof item.type !== 'string') return false;
 
-  return isEntityType(item.type);
+  return ENTITY_TYPE_VALUES.has(item.type as EntityData['type']);
 };
 
 export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
@@ -186,6 +213,12 @@ export const isProjectEntity = (
 
 export const isCallEntity = (entity: EntityData): entity is CallEntity => {
   return entity.type === 'call';
+};
+
+export const isAutomationEntity = (
+  entity: EntityData
+): entity is AutomationEntity => {
+  return entity.type === 'automation';
 };
 
 export const isDocumentEntity = (

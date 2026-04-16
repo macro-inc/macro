@@ -117,6 +117,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         queryFilters: QUERY_FILTERS.agent,
         clientFilters: { and: ['agent', 'shared-agent'] },
       }),
+      automations: () => ({
+        // Server returns nothing useful here — automations are merged
+        // into the soup client-side via `additionalEntities`.
+        queryFilters: QUERY_FILTERS.agent,
+        clientFilters: { and: ['automation'] },
+      }),
     },
   },
   mail: {

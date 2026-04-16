@@ -101,5 +101,9 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
       type: 'call' as const,
       id: e.id,
     }))
+    .with({ type: 'automation' }, (e) => ({
+      type: 'automation' as const,
+      id: e.id,
+    }))
     .exhaustive();
 }

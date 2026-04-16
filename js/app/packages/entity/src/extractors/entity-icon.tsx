@@ -70,6 +70,7 @@ export function EntityIcon(props: EntityIconProps) {
         hasIcsAttachment ? 'emailInvite' : isRead ? 'emailRead' : 'email'
       )
       .when(isCallEntity, () => 'call')
+      .with({ type: 'automation' }, () => 'automation')
       .otherwise(() => 'default');
   };
 

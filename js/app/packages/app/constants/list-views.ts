@@ -65,6 +65,7 @@ const BLOCK_LIST_VIEW_MAP = {
   unknown: 'inbox',
   video: 'documents',
   write: 'documents',
+  automation: 'agents',
 } as const satisfies Record<BlockName | BlockAlias, ListView>;
 
 export const getBlockListView = (block: BlockName | BlockAlias): ListView => {

@@ -27,6 +27,7 @@ const serviceToCrate: Record<string, string> = {
 	"unfurl-service": "unfurl_service",
 	"email-service": "email_service",
 	"search-service": "search_service",
+	"scheduled-action": "scheduled_action",
 };
 
 const getRustCloudStorageDir = () =>
@@ -283,7 +284,7 @@ async function main() {
 			);
 			console.error("The following files have changed:");
 			if (diff.trim()) console.error(diff);
-			if (untrackedFiles.trim()) console.error("Untracked:\n" + untrackedFiles);
+			if (untrackedFiles.trim()) console.error(`Untracked:\n${untrackedFiles}`);
 			const gitStatus = await $`git status`.text();
 			console.error("`git status` output:");
 			console.error(gitStatus.trim());

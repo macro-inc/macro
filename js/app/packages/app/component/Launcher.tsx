@@ -51,6 +51,7 @@ import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
 import { cn } from '@ui/utils/classname';
+import { setAutomationComposerOpen } from '@block-automation/component';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -225,6 +226,10 @@ export function runCreateAction(
         },
         shouldInsert,
       });
+      return;
+    case 'automation':
+      setCreateMenuOpen(false, false);
+      setAutomationComposerOpen(true, false);
       return;
   }
 }

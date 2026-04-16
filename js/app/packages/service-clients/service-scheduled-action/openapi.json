@@ -1,0 +1,643 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "scheduled_action",
+    "description": "API for managing scheduled actions",
+    "termsOfService": "https://macro.com/terms",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "scheduled_action_health",
+        "responses": {
+          "200": {
+            "description": "health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_scheduled_actions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduledAction"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "create_scheduled_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScheduledAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledAction"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/{id}": {
+      "put": {
+        "tags": ["scheduled actions"],
+        "operationId": "update_scheduled_action",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScheduledAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledAction"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["scheduled actions"],
+        "operationId": "delete_scheduled_action",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/{id}/execute": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "execute_scheduled_action_now",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InProgressExecution"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Action is already running",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/{id}/history": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_scheduled_action_history",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActionExecutionRecord"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionExecutionRecord": {
+        "type": "object",
+        "required": [
+          "action_id",
+          "start_time",
+          "end_time",
+          "is_success",
+          "result",
+          "created_at"
+        ],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "is_success": {
+            "type": "boolean"
+          },
+          "resource_id": {
+            "type": ["string", "null"],
+            "description": "ID of the primary resource produced by this run (e.g. a chat thread).\nOpaque to the scheduler; the UI interprets it based on the action kind."
+          },
+          "result": {
+            "type": "object"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ActionKind": {
+        "type": "string",
+        "enum": ["Agent"]
+      },
+      "AgentTask": {
+        "type": "object",
+        "required": ["model", "prompt", "user_prompt"],
+        "properties": {
+          "model": {
+            "$ref": "#/components/schemas/Model"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "user_prompt": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateScheduledAction": {
+        "type": "object",
+        "description": "Client-supplied payload for creating a scheduled action. The server fills\nin `id`, `owner` (from the authenticated user), timestamps, `claimed`, and\n`next_run_at` (derived from the cron).",
+        "required": ["name", "schedule", "kind", "timezone", "task", "enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "task": {
+            "type": "object"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        }
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "InProgressExecution": {
+        "type": "object",
+        "required": ["action_id"],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "Model": {
+        "type": "string",
+        "enum": [
+          "gemini-2.5-pro",
+          "gemini-2.0-flash-001",
+          "gemini-2.0-flash-lite-001",
+          "gemini-pro-1.5",
+          "gpt-5",
+          "gpt-4.1",
+          "gpt-4o",
+          "gpt-4o-mini",
+          "o1",
+          "gpt-4o-search-preview",
+          "o3",
+          "claude-3-5-sonnet",
+          "claude-3-7-sonnet",
+          "claude-sonnet-4",
+          "claude-sonnet-4-5",
+          "claude-sonnet-4-6",
+          "claude-haiku-4-5",
+          "claude-opus-4-5",
+          "claude-opus-4-6"
+        ]
+      },
+      "Schedule": {
+        "type": "string"
+      },
+      "ScheduledAction": {
+        "type": "object",
+        "required": [
+          "owner",
+          "name",
+          "schedule",
+          "kind",
+          "created_at",
+          "updated_at",
+          "timezone",
+          "task",
+          "next_run_at",
+          "enabled"
+        ],
+        "properties": {
+          "claimed": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "When false, the cron dispatcher skips this schedule. `run_now` remains\navailable regardless."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_run_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the next scheduled firing (derived from the cron on write). UI\nuses this to render \"next run\" without having to parse the cron itself."
+          },
+          "owner": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "task": {
+            "type": "object"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ScheduledActionUpdate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["owner", "action_id", "chat_id", "type"],
+            "properties": {
+              "action_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "chat_id": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["started"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["owner", "action_id", "chat_id", "is_success", "type"],
+            "properties": {
+              "action_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "chat_id": {
+                "type": "string"
+              },
+              "is_success": {
+                "type": "boolean"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["stopped"]
+              }
+            }
+          }
+        ],
+        "description": "Live status update for a scheduled-action run, broadcast via the connection\ngateway to the owner. Clients use the `chat_id` to navigate to the run\ntranscript and the variant tag to toggle the running indicator.\n\nSerialized with a `type` tag (`started`/`stopped`) and delivered over the\nsingle `scheduled_action_update` message type on the gateway."
+      },
+      "UpdateScheduledAction": {
+        "type": "object",
+        "description": "Client-supplied payload for updating a scheduled action. Mirrors the fields\nthe repository actually writes — `id`/`owner`/timestamps/`claimed`/\n`next_run_at` are not client-mutable.",
+        "required": ["name", "schedule", "kind", "timezone", "task", "enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "task": {
+            "type": "object"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "scheduled actions",
+      "description": "Scheduled action service"
+    }
+  ]
+}

@@ -126,7 +126,8 @@ export type ItemType =
   | CloudStorageItemType
   | 'channel'
   | 'email'
-  | 'channel_message';
+  | 'channel_message'
+  | 'automation';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
@@ -155,6 +156,8 @@ export function blockNameToItemType(
       return 'project';
     case 'email':
       return 'email';
+    case 'automation':
+      return 'automation';
     default:
       return DEFAULT_ITEM_TYPE;
   }

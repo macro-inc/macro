@@ -67,3 +67,17 @@ export interface TimestampData {
   formatted: string;
   raw: number;
 }
+
+/**
+ * Formats a date + time in a single concise line, e.g. "Apr 15, 2:30 PM" or
+ * "1/27/24, 2:30 PM". Used when a row needs both pieces (e.g. automation
+ * next-run times).
+ */
+export function formatDateAndTime(date: DateValue): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const dateLabel = isSameYear(d, new Date())
+    ? format(d, 'MMM d')
+    : format(d, 'M/d/yy');
+  const timeLabel = format(d, 'h:mm a');
+  return `${dateLabel}, ${timeLabel}`;
+}

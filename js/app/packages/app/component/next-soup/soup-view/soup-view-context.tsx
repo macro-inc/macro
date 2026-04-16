@@ -104,6 +104,11 @@ interface SoupViewContextProviderProps {
   soup?: SoupState;
   queryFilters?: SoupBody;
   disableLocalSearch?: boolean;
+  /**
+   * Additional client-side entities to merge into the soup item stream.
+   * Visibility is still controlled by the active client filters.
+   */
+  additionalEntities?: Accessor<EntityData[]>;
 }
 
 type ApiSortMethod = NonNullable<SoupParams['sort_method']>;
@@ -250,9 +255,15 @@ export const SoupViewContextProvider: FlowComponent<
       if (!searching) {
         const data = itemsQuery.data;
         if (!data) return prev;
-        return data.map((e) =>
+        const base = data.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
+        const extras = props.additionalEntities?.() ?? [];
+        if (extras.length === 0) return base;
+        const extraEntities = extras.map((e) =>
+          isWithNotification(e) ? e : attachNotifications(e)
+        ) as SoupEntity[];
+        return [...extraEntities, ...base];
       }
 
       const local = search.localFuzzyResults();

@@ -182,7 +182,8 @@ export async function deleteItem(args: {
     if (
       itemType === 'channel' ||
       itemType === 'email' ||
-      itemType === 'channel_message'
+      itemType === 'channel_message' ||
+      itemType === 'automation'
     )
       return false;
     const removed = await removeHistoryItem(itemType, id);
