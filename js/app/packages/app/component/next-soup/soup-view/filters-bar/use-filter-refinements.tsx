@@ -301,7 +301,9 @@ export function useFilterRefinements() {
       if (importance !== undefined) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
         const IMPORTANCE_NOISE = 'importance:noise';
-        const currentOptionId = importance ? IMPORTANCE_SIGNAL : IMPORTANCE_NOISE;
+        const currentOptionId = importance
+          ? IMPORTANCE_SIGNAL
+          : IMPORTANCE_NOISE;
         filters.push({
           categoryLabel: 'Importance',
           optionId: currentOptionId,
