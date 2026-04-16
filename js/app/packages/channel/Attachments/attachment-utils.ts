@@ -26,7 +26,8 @@ export function itemsPerRow(containerWidth: number): number {
  * so they return nothing instead of everything.
  */
 export function buildAttachmentEntityFilters(
-  attachments: ApiChannelAttachment[]
+  attachments: ApiChannelAttachment[],
+  channelId: string
 ) {
   const documentIds: string[] = [];
   const emailIds: string[] = [];
@@ -69,6 +70,9 @@ export function buildAttachmentEntityFilters(
     project_filters: {
       project_ids: projectIds.length > 0 ? projectIds : [NIL_ID],
     },
+    call_filters: {
+      channel_ids: [channelId],
+    },
   };
 }
 
@@ -94,8 +98,8 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
       params: getChannelParams(e.messageId, e.threadId),
     }))
     .with({ type: 'call' }, (e) => ({
-      type: 'channel' as const,
-      id: e.channelId,
+      type: 'call' as const,
+      id: e.id,
     }))
     .exhaustive();
 }
