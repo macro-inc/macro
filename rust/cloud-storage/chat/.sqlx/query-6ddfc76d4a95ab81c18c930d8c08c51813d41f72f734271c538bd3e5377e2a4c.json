@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT \n                    em.source_entity_type,\n                    em.source_entity_id,\n                    em.entity_type,\n                    em.entity_id,\n                    em.user_id,\n                    em.created_at\n                FROM comms_entity_mentions em\n                WHERE em.entity_type = $1\n                  AND em.entity_id  = $2\n                  AND em.source_entity_type != 'message'\n                ORDER BY em.created_at DESC\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_entity_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_entity_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6ddfc76d4a95ab81c18c930d8c08c51813d41f72f734271c538bd3e5377e2a4c"
+}

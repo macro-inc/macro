@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n        SELECT\n            $1::uuid,\n            'document',\n            u.user_id,\n            'user',\n            'comment'\n        FROM UNNEST($2::text[]) AS u(user_id)\n        WHERE NOT EXISTS (\n            SELECT 1 FROM entity_access ea\n            WHERE ea.source_id = u.user_id\n              AND ea.entity_id = $1::uuid\n              AND ea.entity_type = 'document'\n              AND ea.source_type = 'user'\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4a2bfa5315199bda5081366a5d057a0c9d5550dba6d5986d782be4a8c94eb0b2"
+}

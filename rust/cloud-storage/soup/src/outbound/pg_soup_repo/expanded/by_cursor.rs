@@ -42,73 +42,22 @@ r#"
         -- project hierarchy.
         -- =============================================================================
 
-        -- Build the project hierarchy tree using recursive CTE.
-        -- Starting from projects the user has explicit access to, recursively find
-        -- all child projects. This enables inherited access - if you can access a
-        -- parent project, you can access all its descendants.
-        WITH RECURSIVE ProjectHierarchy AS (
-            -- Base case: projects the user has direct access to
-            SELECT p.id, uia.access_level
-            FROM "Project" p
-            JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
-            WHERE uia.user_id = $1 AND p."deletedAt" IS NULL
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
             UNION ALL
-            -- Recursive case: find child projects, inheriting parent's access level
-            SELECT p.id, ph.access_level
-            FROM "Project" p
-            JOIN ProjectHierarchy ph ON p."parentId" = ph.id
-            WHERE p."deletedAt" IS NULL
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = $1
+            UNION ALL
+            SELECT $1
         ),
 
-        -- Collect all access grants from multiple sources.
-        -- Aggregates explicit permissions AND implicit permissions inherited
-        -- through project membership.
-        AllAccessGrants AS (
-            -- Direct/explicit access grants to any item type
-            SELECT item_id, item_type, access_level
-            FROM "UserItemAccess"
-            WHERE user_id = $1
-
-            UNION ALL
-
-            -- Documents within accessible projects (inherited access).
-            -- Uses ANY(ARRAY(...)) pattern to reduce intermediate result set size.
-            SELECT d.id AS item_id, 'document' AS item_type,
-                   (SELECT ph.access_level FROM ProjectHierarchy ph WHERE ph.id = d."projectId" LIMIT 1) as access_level
-            FROM "Document" d
-            WHERE d."projectId" = ANY(ARRAY(SELECT id FROM ProjectHierarchy))
-              AND d."deletedAt" IS NULL
-
-            UNION ALL
-
-            -- Chats within accessible projects (inherited access)
-            SELECT c.id AS item_id, 'chat' AS item_type, ph.access_level
-            FROM "Chat" c
-            JOIN ProjectHierarchy ph ON c."projectId" = ph.id
-            WHERE c."projectId" IS NOT NULL AND c."deletedAt" IS NULL
-
-            UNION ALL
-
-            -- The projects themselves from the hierarchy
-            SELECT ph.id AS item_id, 'project' AS item_type, ph.access_level
-            FROM ProjectHierarchy ph
-        ),
-
-        -- Deduplicate access grants, keeping the highest permission level.
-        -- When a user has multiple access paths to the same item (e.g., direct + inherited),
-        -- we keep only one row with the highest privilege level.
         UserAccessibleItems AS (
-            SELECT DISTINCT ON (item_id, item_type) item_id, item_type
-            FROM AllAccessGrants
-            ORDER BY item_id, item_type,
-                -- Priority: owner > edit > comment > view
-                CASE access_level
-                    WHEN 'owner' THEN 4
-                    WHEN 'edit' THEN 3
-                    WHEN 'comment' THEN 2
-                    WHEN 'view' THEN 1
-                    ELSE 0
-                END DESC
+            SELECT DISTINCT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM entity_access ea
+            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
         ),
 
         -- Identify the top N items with minimal columns before joining full details.
@@ -333,46 +282,21 @@ pub async fn no_frecency_expanded_generic_soup(
 
     let mut items: Vec<SoupItem> = sqlx::query!(
 r#"        
-        WITH RECURSIVE ProjectHierarchy AS (
-            SELECT p.id, uia.access_level 
-            FROM "Project" p
-            JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
-            WHERE uia.user_id = $1 AND p."deletedAt" IS NULL
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
             UNION ALL
-            SELECT p.id, ph.access_level
-            FROM "Project" p 
-            JOIN ProjectHierarchy ph ON p."parentId" = ph.id
-            WHERE p."deletedAt" IS NULL
-        ),
-        AllAccessGrants AS (
-            SELECT item_id, item_type, access_level 
-            FROM "UserItemAccess" 
-            WHERE user_id = $1
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = $1
             UNION ALL
-            SELECT d.id AS item_id, 'document' AS item_type, ph.access_level
-            FROM "Document" d 
-            JOIN ProjectHierarchy ph ON d."projectId" = ph.id
-            WHERE d."projectId" IS NOT NULL AND d."deletedAt" IS NULL
-            UNION ALL
-            SELECT c.id AS item_id, 'chat' AS item_type, ph.access_level
-            FROM "Chat" c 
-            JOIN ProjectHierarchy ph ON c."projectId" = ph.id
-            WHERE c."projectId" IS NOT NULL AND c."deletedAt" IS NULL
-            UNION ALL
-            SELECT ph.id AS item_id, 'project' AS item_type, ph.access_level 
-            FROM ProjectHierarchy ph
+            SELECT $1
         ),
         UserAccessibleItems AS (
-            SELECT DISTINCT ON (item_id, item_type) item_id, item_type
-            FROM AllAccessGrants
-            ORDER BY item_id, item_type, 
-                CASE access_level
-                    WHEN 'owner' THEN 4
-                    WHEN 'edit' THEN 3 
-                    WHEN 'comment' THEN 2
-                    WHEN 'view' THEN 1
-                    ELSE 0
-                END DESC
+            SELECT DISTINCT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM entity_access ea
+            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
         ),
         Combined AS (
             SELECT

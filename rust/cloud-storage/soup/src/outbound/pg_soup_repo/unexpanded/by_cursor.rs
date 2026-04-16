@@ -35,20 +35,21 @@ pub async fn unexpanded_generic_cursor_soup(
 
     let mut items: Vec<SoupItem> = sqlx::query!(
         r#"
-        WITH UserAccessibleItems AS (
-            SELECT DISTINCT ON ("item_id", "item_type")
-                "item_id",
-                "item_type"
-            FROM "UserItemAccess" 
-            WHERE "user_id" = $1
-            ORDER BY "item_id", "item_type", 
-                CASE "access_level"
-                    WHEN 'owner' THEN 4
-                    WHEN 'edit' THEN 3 
-                    WHEN 'comment' THEN 2
-                    WHEN 'view' THEN 1
-                    ELSE 0
-                END DESC
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            UNION ALL
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = $1
+            UNION ALL
+            SELECT $1
+        ),
+        UserAccessibleItems AS (
+            SELECT DISTINCT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM entity_access ea
+            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
         ),
         Combined AS (
             SELECT

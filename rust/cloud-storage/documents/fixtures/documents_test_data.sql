@@ -29,7 +29,7 @@ INSERT INTO
 INSERT INTO
     public."Document" ("id", "name", "fileType", "owner") (
         SELECT
-            'document-one',
+            'd0000000-0000-0000-0000-000000000001',
             'test_document_name',
             'txt',
             'macro|user@user.com'
@@ -39,7 +39,7 @@ INSERT INTO
     public."DocumentInstance" ("revisionName", "documentId", "sha") (
         SELECT
             'test_document_name',
-            'document-one',
+            'd0000000-0000-0000-0000-000000000001',
             'sha-one'
     );
 
@@ -53,7 +53,7 @@ INSERT INTO
 INSERT INTO
     public."Document" ("id", "name", "fileType", "owner") (
         SELECT
-            'document-two',
+            'd0000000-0000-0000-0000-000000000002',
             'test_document_name',
             'pdf',
             'macro|user@user.com'
@@ -63,13 +63,13 @@ INSERT INTO
     public."DocumentBom" ("revisionName", "documentId") (
         SELECT
             'test_document_name',
-            'document-two'
+            'd0000000-0000-0000-0000-000000000002'
     );
 
 INSERT INTO
     public."Project" ("id", "name", "userId") (
         SELECT
-            'new-project',
+            'd0000000-0000-0000-0000-100000000001',
             'test_project_name',
             'macro|user@user.com'
     );
@@ -95,15 +95,15 @@ INSERT INTO public."team_user" ("user_id", "team_id", "team_role")
     VALUES ('macro|teammate2@user.com', 'a0000000-0000-0000-0000-000000000001', 'member');
 
 -- Owner access for document-one (used in share_with_team tests)
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level", "created_at", "updated_at")
-    VALUES ('b0000000-0000-0000-0000-000000000001', 'macro|user@user.com', 'document-one', 'document', 'owner', NOW(), NOW());
+INSERT INTO public.entity_access (entity_id, entity_type, source_id, source_type, access_level)
+    VALUES ('d0000000-0000-0000-0000-000000000001', 'document', 'macro|user@user.com', 'user', 'owner');
 
 -- Share permissions for document-one
 INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
     (SELECT 'sp-doc-one', true, 'read', NOW(), NOW());
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
-    (SELECT 'document-one', 'sp-doc-one');
+    (SELECT 'd0000000-0000-0000-0000-000000000001', 'sp-doc-one');
 
 -- Channel and participants for channel share permission tests
 INSERT INTO comms_channels (id, name, channel_type, owner_id) VALUES
@@ -119,4 +119,4 @@ INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt"
     (SELECT 'sp-doc-two', false, NOW(), NOW());
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
-    (SELECT 'document-two', 'sp-doc-two');
+    (SELECT 'd0000000-0000-0000-0000-000000000002', 'sp-doc-two');
