@@ -268,12 +268,13 @@ export const SearchIndexFilter = () => {
 const EMAIL_IMPORTANCE_OPTIONS: Option[] = [
   { value: 'signal', label: 'Signal' },
   { value: 'noise', label: 'Noise' },
+  ALL_OPTION,
 ];
 
 function importanceToOption(importance: boolean | null | undefined): Option[] {
   if (importance === true) return [EMAIL_IMPORTANCE_OPTIONS[0]];
   if (importance === false) return [EMAIL_IMPORTANCE_OPTIONS[1]];
-  return [];
+  return [ALL_OPTION];
 }
 
 const EmailImportanceFilter = () => {
@@ -283,15 +284,17 @@ const EmailImportanceFilter = () => {
     importanceToOption(queryFilters().email_filters?.importance)
   );
 
-  const label = createMemo(() => {
-    const a = active();
-    const value = a.length > 0 ? a[0].label : 'All';
-    return `Importance: ${value}`;
-  });
+  const hasSpecificImportance = () =>
+    active().some((o) => o.value !== ALL_OPTION.value);
+
+  const label = createMemo(() => `Importance: ${active()[0].label}`);
 
   const handleChange = (selected: Option[]) => {
+    const first = selected[0];
     const importance =
-      selected.length > 0 ? selected[0].value === 'signal' : undefined;
+      first && first.value !== ALL_OPTION.value
+        ? first.value === 'signal'
+        : undefined;
     setQueryFilters((prev) => ({
       ...prev,
       email_filters: {
@@ -308,6 +311,8 @@ const EmailImportanceFilter = () => {
       active={active()}
       onChange={handleChange}
       multiple={false}
+      hideClear
+      accentActive={hasSpecificImportance()}
     />
   );
 };
