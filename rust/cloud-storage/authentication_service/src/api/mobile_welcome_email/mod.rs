@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use model::response::{EmptyResponse, ErrorResponse};
+use model::response::ErrorResponse;
 use thiserror::Error;
 use tower::ServiceBuilder;
 use utoipa::ToSchema;
@@ -50,6 +50,12 @@ pub struct SendMobileWelcomeEmailRequest {
     pub email: String,
 }
 
+#[derive(Debug, serde::Serialize, ToSchema)]
+pub struct SendMobileWelcomeEmailResponse {
+    /// Whether the email was sent (false if it was already sent previously)
+    pub sent: bool,
+}
+
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new().route(
         "/mobile-welcome-email",
@@ -69,8 +75,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     path = "/mobile-welcome-email",
     operation_id = "send_mobile_welcome_email",
     responses(
-        (status = 200, body = EmptyResponse),
-        (status = 204),
+        (status = 200, body = SendMobileWelcomeEmailResponse),
         (status = 400, body = ErrorResponse),
         (status = 429, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
@@ -80,7 +85,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
 pub async fn handler(
     State(ctx): State<ApiContext>,
     extract::Json(req): extract::Json<SendMobileWelcomeEmailRequest>,
-) -> Result<Response, SendMobileWelcomeEmailError> {
+) -> Result<Json<SendMobileWelcomeEmailResponse>, SendMobileWelcomeEmailError> {
     if !email_validator::is_valid_email(&req.email) {
         return Err(SendMobileWelcomeEmailError::InvalidEmail);
     }
@@ -110,7 +115,7 @@ pub async fn handler(
         .await?;
 
     if !inserted {
-        return Ok(StatusCode::NO_CONTENT.into_response());
+        return Ok(Json(SendMobileWelcomeEmailResponse { sent: false }));
     }
 
     let welcome_email_content = WELCOME_EMAIL_TEMPLATE.to_string();
@@ -123,5 +128,5 @@ pub async fn handler(
         )
         .await?;
 
-    Ok((StatusCode::OK, Json(EmptyResponse {})).into_response())
+    Ok(Json(SendMobileWelcomeEmailResponse { sent: true }))
 }

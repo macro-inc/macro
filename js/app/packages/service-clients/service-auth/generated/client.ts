@@ -42,6 +42,7 @@ import type {
   ResendFusionauthVerifyUserEmailRequest,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
+  SendMobileWelcomeEmailResponse,
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
@@ -1068,13 +1069,8 @@ export const verifyMergeRequest = async (
 and the email is not blocked.
  */
 export type sendMobileWelcomeEmailResponse200 = {
-  data: EmptyResponse;
+  data: SendMobileWelcomeEmailResponse;
   status: 200;
-};
-
-export type sendMobileWelcomeEmailResponse204 = {
-  data: void;
-  status: 204;
 };
 
 export type sendMobileWelcomeEmailResponse400 = {
@@ -1092,12 +1088,10 @@ export type sendMobileWelcomeEmailResponse500 = {
   status: 500;
 };
 
-export type sendMobileWelcomeEmailResponseSuccess = (
-  | sendMobileWelcomeEmailResponse200
-  | sendMobileWelcomeEmailResponse204
-) & {
-  headers: Headers;
-};
+export type sendMobileWelcomeEmailResponseSuccess =
+  sendMobileWelcomeEmailResponse200 & {
+    headers: Headers;
+  };
 export type sendMobileWelcomeEmailResponseError = (
   | sendMobileWelcomeEmailResponse400
   | sendMobileWelcomeEmailResponse429

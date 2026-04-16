@@ -916,13 +916,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
+                  "$ref": "#/components/schemas/SendMobileWelcomeEmailResponse"
                 }
               }
             }
-          },
-          "204": {
-            "description": ""
           },
           "400": {
             "description": "",
@@ -3605,6 +3602,16 @@
           "email": {
             "type": "string",
             "description": "The email address to send the welcome email to"
+          }
+        }
+      },
+      "SendMobileWelcomeEmailResponse": {
+        "type": "object",
+        "required": ["sent"],
+        "properties": {
+          "sent": {
+            "type": "boolean",
+            "description": "Whether the email was sent (false if it was already sent previously)"
           }
         }
       },

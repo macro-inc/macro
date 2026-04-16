@@ -57,6 +57,7 @@ export * from './putUserNameQueryParamsLastName';
 export * from './resendFusionauthVerifyUserEmailRequest';
 export * from './sendInviteBody';
 export * from './sendMobileWelcomeEmailRequest';
+export * from './sendMobileWelcomeEmailResponse';
 export * from './ssoLoginParams';
 export * from './ssoRequiredResponse';
 export * from './stripeProductTier';

@@ -194,6 +194,7 @@ use model::user::{
 
                         // Mobile welcome email
                         mobile_welcome_email::SendMobileWelcomeEmailRequest,
+                        mobile_welcome_email::SendMobileWelcomeEmailResponse,
 
                         // Merge
                         CreateAccountMergeRequest,
