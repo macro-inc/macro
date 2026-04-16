@@ -518,14 +518,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                               <Tooltip
                                 placement="bottom"
                                 unstyled
-                                tooltip={
+                                tooltip={(close) => (
                                   <UserTooltip
                                     displayName={name || ''}
                                     email={email}
                                     id={opt.id}
                                     isDeleted={false}
+                                    onClose={close}
                                   />
-                                }
+                                )}
                               >
                                 <RecipientChip
                                   icon={
@@ -577,13 +578,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                               <Tooltip
                                 placement="bottom"
                                 unstyled
-                                tooltip={
+                                tooltip={(close) => (
                                   <UserTooltip
                                     displayName={email}
                                     email={email}
                                     isDeleted={false}
+                                    onClose={close}
                                   />
-                                }
+                                )}
                               >
                                 <RecipientChip
                                   icon={

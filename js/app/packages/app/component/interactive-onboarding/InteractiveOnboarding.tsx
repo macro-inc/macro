@@ -138,11 +138,14 @@ export default function InteractiveOnboarding() {
     const current = state.currentLesson();
     if (!current || !readyToContinue()) return;
 
-    analytics.track('onboarding_step', {
-      id: current.definition.id,
-      index: current.index,
-      state: 'completed',
-    });
+    analytics.track(
+      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
+      {
+        id: current.definition.id,
+        index: current.index,
+        state: 'completed',
+      }
+    );
 
     if (current.definition.onContinue) {
       // On web this redirects (returns void). On native mobile it resolves
@@ -172,11 +175,14 @@ export default function InteractiveOnboarding() {
 
     if (!current) return;
 
-    analytics.track('onboarding_step', {
-      id: current.definition.id,
-      index: current.index,
-      state: 'skipped',
-    });
+    analytics.track(
+      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
+      {
+        id: current.definition.id,
+        index: current.index,
+        state: 'skipped',
+      }
+    );
 
     state.skipLesson(current.definition.id);
     setReadyToContinue(false);
@@ -340,11 +346,14 @@ export default function InteractiveOnboarding() {
       (lesson) => {
         if (!lesson) return;
 
-        analytics.track('onboarding_step', {
-          id: lesson.definition.id,
-          index: lesson.index,
-          state: 'viewed',
-        });
+        analytics.track(
+          `onboarding_step_${lesson.definition.id.replaceAll('-', '_')}`,
+          {
+            id: lesson.definition.id,
+            index: lesson.index,
+            state: 'viewed',
+          }
+        );
       }
     )
   );

@@ -117,7 +117,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
               id="channel-tabs"
               priority={1}
               containerClass="ph-no-capture min-w-0 shrink-0 h-full"
-              expanded={
+              expanded={() => (
                 <Tabs
                   list={[...(props.tabs ?? [])]}
                   value={props.activeTab}
@@ -125,8 +125,8 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
                     props.onTabChange?.(value as ChannelTabId)
                   }
                 />
-              }
-              collapsed={
+              )}
+              collapsed={() => (
                 <Tabs
                   list={iconTabList()}
                   value={props.activeTab}
@@ -134,7 +134,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
                     props.onTabChange?.(value as ChannelTabId)
                   }
                 />
-              }
+              )}
             />
           </Show>
         </Show>

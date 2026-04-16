@@ -80,7 +80,13 @@ pub(in crate::api::oauth2) async fn handler(
     };
 
     if let Some(session_code) = session_code {
-        // Append the session code to the url
+        // Strip any existing token params from the URL before appending the new one
+        let filtered: Vec<(String, String)> = url
+            .query_pairs()
+            .filter(|(k, _)| k != "token")
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+        url.query_pairs_mut().clear().extend_pairs(filtered);
         url.query_pairs_mut().append_pair("token", &session_code);
 
         ctx.macro_cache_client

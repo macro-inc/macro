@@ -7,10 +7,12 @@ import {
   createContext,
   createSignal,
   type JSX,
+  onCleanup,
   onMount,
   useContext,
 } from 'solid-js';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
+import { listen } from '@tauri-apps/api/event';
 import { listenForHeartbeat } from './heartbeat';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
@@ -39,6 +41,12 @@ function TauriProvider(props: { children: JSX.Element }) {
 
   onMount(() => {
     listenForHeartbeat();
+    const unlistenPromise = listen('bundle-update-status', (ev) => {
+      console.info('[bundle-update]', ev.payload);
+    });
+    onCleanup(() => {
+      unlistenPromise.then((unlisten) => unlisten());
+    });
 
     if (value.os === 'android') {
       getInsets().then((insets) => {

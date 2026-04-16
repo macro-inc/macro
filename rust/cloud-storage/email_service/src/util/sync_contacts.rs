@@ -8,6 +8,8 @@ use models_email::service::pubsub::SFSUploaderMessage;
 use models_email::service::sync_token::SyncTokens;
 use sqlx::PgPool;
 use sqs_client::SQS;
+use sqs_client::search::SearchQueueMessage;
+use sqs_client::search::email::EmailThreadBatchMessage;
 use std::collections::HashSet;
 use std::time::Instant;
 
@@ -158,13 +160,14 @@ async fn process_and_store_contacts(
 
     let db_start = Instant::now();
     // Insert the processed contacts into the database without sfs_urls
-    email_db_client::contacts::upsert_sync::upsert_contacts(db, &contacts)
-        .await
-        .map_err(|e| {
-            let error_message = "Unable to upsert contacts into DB";
-            tracing::error!(error = ?e, link_id = %link.id, error_message);
-            anyhow!(error_message)
-        })?;
+    let (_rows_affected, changed_contact_ids) =
+        email_db_client::contacts::upsert_sync::upsert_contacts(db, &contacts)
+            .await
+            .map_err(|e| {
+                let error_message = "Unable to upsert contacts into DB";
+                tracing::error!(error = ?e, link_id = %link.id, error_message);
+                anyhow!(error_message)
+            })?;
 
     tracing::info!(
         duration = ?db_start.elapsed(),
@@ -172,6 +175,10 @@ async fn process_and_store_contacts(
         link_id = %link.id,
         "Inserted contacts into DB"
     );
+
+    if !changed_contact_ids.is_empty() {
+        reindex_threads_for_changed_contacts(db, sqs_client, link, &changed_contact_ids).await;
+    }
 
     if cfg!(not(feature = "sfs_map")) {
         return Ok(());
@@ -204,4 +211,58 @@ async fn process_and_store_contacts(
     });
 
     Ok(())
+}
+
+const REINDEX_BATCH_SIZE: usize = 50;
+
+#[tracing::instrument(skip(db, sqs_client, link, changed_contact_ids))]
+async fn reindex_threads_for_changed_contacts(
+    db: &PgPool,
+    sqs_client: &SQS,
+    link: &Link,
+    changed_contact_ids: &[uuid::Uuid],
+) {
+    let thread_ids = match email_db_client::threads::get::get_thread_ids_by_contact_ids(
+        db,
+        changed_contact_ids,
+    )
+    .await
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::error!(error=?e, link_id=%link.id, "Failed to get thread IDs for changed contacts");
+            return;
+        }
+    };
+
+    if thread_ids.is_empty() {
+        return;
+    }
+
+    let macro_user_id = link.macro_id.to_string();
+
+    tracing::info!(
+        num_threads = thread_ids.len(),
+        num_changed_contacts = changed_contact_ids.len(),
+        link_id = %link.id,
+        "Re-indexing threads for contacts with name changes"
+    );
+
+    let messages: Vec<SearchQueueMessage> = thread_ids
+        .chunks(REINDEX_BATCH_SIZE)
+        .map(|chunk| {
+            SearchQueueMessage::ExtractEmailThreadBatch(EmailThreadBatchMessage {
+                thread_ids: chunk.iter().map(|id| id.to_string()).collect(),
+                macro_user_id: macro_user_id.clone(),
+                index_override: None,
+            })
+        })
+        .collect();
+
+    if let Err(e) = sqs_client
+        .bulk_send_message_to_search_event_queue(messages)
+        .await
+    {
+        tracing::error!(error=?e, link_id=%link.id, "Failed to enqueue search re-index messages for contact name changes");
+    }
 }

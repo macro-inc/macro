@@ -249,6 +249,7 @@ function notificationsMutationSuccessCallback<T>(
 ) {
   queryClient.invalidateQueries({
     queryKey: notificationKeys.user._def,
+    refetchType: 'none',
   });
 }
 

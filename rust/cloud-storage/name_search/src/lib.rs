@@ -3,13 +3,10 @@
 
 mod chat;
 mod document;
-#[allow(clippy::too_many_arguments)]
-mod email;
 mod project;
 
 pub use chat::*;
 pub use document::*;
-pub use email::*;
 pub use models_opensearch::SearchEntityType;
 use models_search_cursor::{PaginatedResult, SearchCursorAttributes};
 pub use project::*;

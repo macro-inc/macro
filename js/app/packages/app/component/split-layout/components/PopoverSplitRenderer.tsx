@@ -73,6 +73,8 @@ function PopoverSplitModal(props: {
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
+    previousContent: () => null,
+    history: () => [],
     getUrlSegments: () => [],
     getUrl: () => '',
     meta: () =>

@@ -5,8 +5,6 @@ use macro_env_var::VarNameErr;
 use std::{fmt::Display, str::FromStr};
 use thiserror::Error;
 
-pub mod ext;
-
 mod var {
     macro_env_var::env_var!(
         #[derive(Clone)]

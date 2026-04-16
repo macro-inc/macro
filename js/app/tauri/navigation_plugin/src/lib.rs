@@ -1,7 +1,7 @@
 use crate::scheme::MacroScheme;
 use logger::Logger;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, path::PathBuf, sync::Arc};
 use tauri::{Manager, Runtime, plugin::Plugin};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
@@ -53,7 +53,7 @@ pub enum Platform {
 #[derive(Clone)]
 pub struct MacroNavigationPlugin {
     internal_domains: Arc<[Url]>,
-    platform: Platform,
+    allowed_file_prefix: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,17 +71,19 @@ struct MacroCallbackQuery<'a> {
 }
 
 impl MacroNavigationPlugin {
-    pub fn new(
-        allow_list: &'static [&'static str],
-        platform: Platform,
-    ) -> Result<Self, url::ParseError> {
+    pub fn new(allow_list: &'static [&'static str]) -> Result<Self, url::ParseError> {
         Ok(MacroNavigationPlugin {
             internal_domains: allow_list
                 .iter()
                 .map(|s| s.parse())
                 .collect::<Result<Arc<_>, _>>()?,
-            platform,
+            allowed_file_prefix: None,
         })
+    }
+
+    pub fn with_allowed_file_prefix(mut self, prefix: PathBuf) -> Self {
+        self.allowed_file_prefix = Some(prefix);
+        self
     }
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
@@ -101,15 +103,31 @@ impl MacroNavigationPlugin {
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
     fn as_internal_url<'a>(&self, url: &'a Url) -> Result<InternalUrl<'a>, ExternalUrl<'a>> {
-        self.internal_domains
-            .iter()
-            .any(|cur| {
-                cur.scheme().eq(url.scheme())
-                    && cur.domain().eq(&url.domain())
-                    && cur.port().eq(&url.port())
-            })
-            .then_some(InternalUrl(Cow::Borrowed(url)))
-            .ok_or(ExternalUrl(Cow::Borrowed(url)))
+        let is_allowed_domain = self.internal_domains.iter().any(|cur| {
+            cur.scheme().eq(url.scheme())
+                && cur.domain().eq(&url.domain())
+                && cur.port().eq(&url.port())
+        });
+
+        let is_allowed_file = url.scheme() == "file"
+            && self.allowed_file_prefix.as_ref().is_some_and(|prefix| {
+                url.to_file_path()
+                    .ok()
+                    .and_then(|path| path.canonicalize().ok())
+                    .and_then(|canonical| {
+                        prefix
+                            .canonicalize()
+                            .ok()
+                            .map(|cp| canonical.starts_with(cp))
+                    })
+                    .unwrap_or(false)
+            });
+
+        if is_allowed_domain || is_allowed_file {
+            Ok(InternalUrl(Cow::Borrowed(url)))
+        } else {
+            Err(ExternalUrl(Cow::Borrowed(url)))
+        }
     }
 }
 
@@ -137,7 +155,11 @@ fn transform_external_url(mut url: Url) -> Url {
             .as_str(),
         ));
     }
-    if let None = url.query_pairs().find(|(k, _v)| k.as_ref() == "is_mobile") {
+    if url
+        .query_pairs()
+        .find(|(k, _v)| k.as_ref() == "is_mobile")
+        .is_none()
+    {
         url.query_pairs_mut().append_pair("is_mobile", "true");
     }
     url
@@ -146,6 +168,20 @@ fn transform_external_url(mut url: Url) -> Url {
 impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
     fn name(&self) -> &'static str {
         std::any::type_name_of_val(self)
+    }
+
+    fn initialize(
+        &mut self,
+        app: &tauri::AppHandle<R>,
+        _config: serde_json::Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.allowed_file_prefix.is_none()
+            && let Ok(cache_dir) = app.path().app_cache_dir()
+        {
+            tracing::debug!("Setting allowed file prefix to {cache_dir:?}");
+            self.allowed_file_prefix = Some(cache_dir);
+        }
+        Ok(())
     }
 
     fn on_navigation(&mut self, webview: &tauri::Webview<R>, url: &tauri::Url) -> bool {

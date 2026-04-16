@@ -600,7 +600,7 @@ function CategoryFilterTabs() {
   const list = CATEGORIES.map((c) => ({ value: c.id, label: c.label }));
 
   return (
-    <div class="px-1.5 py-1.5 border-b border-edge-muted/50">
+    <div class="px-1.5 h-10 border-b border-edge-muted/50">
       <Tabs
         list={list}
         value={CommandState.categoryFilter()}

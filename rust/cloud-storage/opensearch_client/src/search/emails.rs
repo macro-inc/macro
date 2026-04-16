@@ -13,7 +13,7 @@ pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: &'static str = "name";
+    const TITLE_KEY: &'static str = "subject";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
 }
 
@@ -72,6 +72,8 @@ pub(crate) struct EmailQueryBuilder {
     /// ANDed together. Contradictory combinations (e.g. importance=true with
     /// include_labels=["CATEGORY_PROMOTIONS"]) will return no results.
     importance: Option<bool>,
+    /// When true, only search the subject field (for name-only search mode)
+    subject_only: bool,
 }
 
 impl EmailQueryBuilder {
@@ -86,6 +88,7 @@ impl EmailQueryBuilder {
             include_labels: Vec::new(),
             exclude_labels: Vec::new(),
             importance: None,
+            subject_only: false,
         }
     }
 
@@ -140,12 +143,23 @@ impl EmailQueryBuilder {
         self
     }
 
+    pub fn subject_only(mut self, subject_only: bool) -> Self {
+        self.subject_only = subject_only;
+        self
+    }
+
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut content_bool_query = self.inner.build_content_bool_query()?;
 
-        // For multi-term searches, replace the default content-only must clause with a
-        // simple_query_string that searches across all email fields (addresses, names, subject, content)
-        if self.inner.terms.len() > 1 {
+        // In subject_only mode (name search), replace with a match on TITLE_KEY (subject).
+        // Otherwise replace with simple_query_string across all email fields.
+        if self.subject_only {
+            let title_query = self.inner.build_title_term_query()?;
+            let mut inner = BoolQueryBuilder::new();
+            inner.minimum_should_match(1);
+            inner.should(title_query);
+            content_bool_query.set_must(inner.build().into());
+        } else {
             let query_string = build_simple_query_string(&self.inner.terms);
             let sqs = SimpleQueryStringQuery::new(
                 query_string,
@@ -298,6 +312,7 @@ pub struct EmailSearchArgs {
     pub match_type: String,
     pub collapse: bool,
     pub ids_only: bool,
+    pub subject_only: bool,
 }
 
 impl From<EmailSearchArgs> for EmailQueryBuilder {
@@ -318,6 +333,7 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .importance(args.importance)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
+            .subject_only(args.subject_only)
     }
 }
 

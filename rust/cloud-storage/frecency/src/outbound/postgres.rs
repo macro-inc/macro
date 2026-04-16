@@ -442,6 +442,21 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
     async fn get_unprocessed_events(
         &self,
     ) -> Result<Vec<EventRecordWithId<'static, i64>>, Self::Err> {
+        // Clean up any stale transaction from a previous failed processing run.
+        // Without this, a failed run leaves its tx (and advisory lock) in the mutex,
+        // causing every subsequent poll to fail on pg_try_advisory_xact_lock.
+        {
+            let mut guard = self.tx.try_lock()?;
+            if let Some(stale_tx) = guard.take() {
+                tracing::warn!(
+                    "rolling back stale frecency transaction from a previous failed run"
+                );
+                let _ = stale_tx.rollback().await.inspect_err(|e| {
+                    tracing::error!(error = ?e, "failed to rollback stale frecency transaction");
+                });
+            }
+        }
+
         let mut tx = self.pool.begin().await?;
         let true = sqlx::query_scalar!(
             r#"

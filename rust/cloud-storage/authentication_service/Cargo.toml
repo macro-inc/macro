@@ -67,7 +67,7 @@ macro_db_client = { path = "../macro_db_client", default-features = false, featu
   "team",
 ] }
 macro_entrypoint = { path = "../macro_entrypoint" }
-macro_env = { path = "../macro_env", features = ["frontend_url"] }
+macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
@@ -75,6 +75,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "user_permissions",
 ] }
 macro_tower_layers = { path = "../macro_tower_layers" }
+macro_service_urls = { path = "../macro_service_urls" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 maud = { version = "0.27.0" }

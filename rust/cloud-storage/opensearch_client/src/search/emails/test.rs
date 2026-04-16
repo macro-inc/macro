@@ -50,6 +50,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         match_type: "partial".to_string(),
         collapse: true,
         ids_only: false,
+        subject_only: false,
     }
     .into();
 
@@ -137,11 +138,10 @@ fn test_build_bool_query() -> anyhow::Result<()> {
             ],
             "must": [
                 {
-                    "bool": {
-                        "minimum_should_match": 1,
-                        "should": [
-                            {"match_phrase": {"content": "test"}}
-                        ]
+                    "simple_query_string": {
+                        "default_operator": "AND",
+                        "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
+                        "query": "(test | test@*)"
                     }
                 }
             ]

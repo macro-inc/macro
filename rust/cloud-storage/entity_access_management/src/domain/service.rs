@@ -70,10 +70,8 @@ impl<R: EntityAccessManagementRepository> EntityAccessManagementService
     ) -> Result<(), EntityAccessManagementError> {
         match (old_project_id, new_project_id) {
             // cannot both be the same
-            (Some(old_project_id), Some(new_project_id)) => {
-                if old_project_id.eq(new_project_id) {
-                    return Err(EntityAccessManagementError::InvalidProjectMove);
-                }
+            (Some(old_project_id), Some(new_project_id)) if old_project_id.eq(new_project_id) => {
+                return Err(EntityAccessManagementError::InvalidProjectMove);
             }
             // cannot both be empty
             (None, None) => {

@@ -507,11 +507,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-ink/5 my-[8px]" />
       </div>
 
-      <Show when={isExpanded()}>
-        <div class="block max-h-[clamp(10%,60%,20rem)]">
-          <ChannelsUnreadWidget />
-        </div>
-      </Show>
+      <div class="block max-h-[clamp(10%,60%,20rem)]">
+        <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
+      </div>
 
       <div class="px-2 mt-auto w-full">
         <hr class="border-edge-muted mb-[8px]" />

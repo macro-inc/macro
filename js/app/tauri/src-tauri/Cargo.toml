@@ -1,7 +1,7 @@
 [package]
 authors = ["you"]
 description = "A Tauri App"
-edition = "2024"
+edition.workspace = true
 license = ""
 name = "app"
 repository = ""
@@ -20,15 +20,17 @@ tauri-build = { version = "2.3.1", features = [] }
 default = []
 
 [dependencies]
+http = "1"
 log = "0.4"
 logger = { path = "../logger" }
+mime_guess = "2"
 rootcause = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing-oslog = { version = "0.3" }
 
 nom = "8.0.0"
-reqwest = { version = "0.13", features = [
+reqwest = { workspace = true, features = [
   "cookies",
 ] }
 serde_qs = "0.15.0"
@@ -48,8 +50,9 @@ urlencoding = "2.1.3"
 # system notifications for when the app is open
 tauri-plugin-notification = "2"
 # push notifications for mobile (when app is closed)
+macro_bundle_updater_plugin = { path = "../macro_bundle_updater_plugin" }
 navigation_plugin = { path = "../navigation_plugin" }
-tauri-plugin-notifications = { git = "https://github.com/macro-inc/tauri-plugins", rev = "2b2257722f60458921eadf4a9ab4d9e1db36e34f" }
+tauri-plugin-notifications = { git = "https://github.com/macro-inc/tauri-plugins", rev = "61520093d5c7fcd60a2ed354dc150ca9556519a4" }
 tauri-plugin-os = "2"
 tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugin-virtual-keyboard", branch = "main" }
 
@@ -59,7 +62,7 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-haptics = "2"
-tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "2b2257722f60458921eadf4a9ab4d9e1db36e34f" }
+tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "61520093d5c7fcd60a2ed354dc150ca9556519a4" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }

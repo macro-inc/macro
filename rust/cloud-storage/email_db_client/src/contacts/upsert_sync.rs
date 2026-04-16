@@ -1,14 +1,23 @@
+#[cfg(test)]
+mod test;
+
 use crate::parse::service_to_db::map_new_contact_to_db;
 use models_email::db;
 use models_email::service::contact::Contact;
 use sqlx::PgPool;
+use sqlx::types::Uuid;
+use std::collections::HashMap;
 
 /// Upsert methods used by contact sync process, triggered by initial backfill and daily cron.
-/// Upserts multiple contacts into the contacts table
+/// Upserts multiple contacts into the contacts table.
+/// Returns (rows_affected, contact_ids_with_name_changes).
 #[tracing::instrument(skip(pool, contacts), err)]
-pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Result<u64> {
+pub async fn upsert_contacts(
+    pool: &PgPool,
+    contacts: &[Contact],
+) -> anyhow::Result<(u64, Vec<Uuid>)> {
     if contacts.is_empty() {
-        return Ok(0);
+        return Ok((0, Vec::new()));
     }
 
     let db_contacts: Vec<db::contact::Contact> =
@@ -18,7 +27,7 @@ pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Res
     let mut ids = Vec::new();
     let mut link_ids = Vec::new();
     let mut email_addresses = Vec::new();
-    let mut names = Vec::new();
+    let mut names: Vec<Option<String>> = Vec::new();
     let mut original_photo_urls = Vec::new();
     let mut sfs_photo_urls = Vec::new();
 
@@ -38,8 +47,28 @@ pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Res
 
     if link_ids.is_empty() {
         tracing::warn!("No contacts with valid email addresses to insert");
-        return Ok(0);
+        return Ok((0, Vec::new()));
     }
+
+    let existing_contacts = sqlx::query!(
+        r#"
+        SELECT id, LOWER(email_address) as "email_address!", name
+        FROM email_contacts
+        WHERE (link_id, LOWER(email_address)) IN (
+            SELECT * FROM UNNEST($1::uuid[], $2::varchar[])
+        )
+        "#,
+        &link_ids,
+        &email_addresses
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let old_names: HashMap<String, (Uuid, Option<String>)> = existing_contacts
+        .into_iter()
+        .map(|row| (row.email_address, (row.id, row.name)))
+        .collect();
+
     let result = sqlx::query!(
     r#"
     INSERT INTO email_contacts (id, link_id, email_address, name, original_photo_url, sfs_photo_url, updated_at)
@@ -62,5 +91,20 @@ pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Res
 .execute(pool)
 .await?;
 
-    Ok(result.rows_affected())
+    let changed_contact_ids: Vec<Uuid> = email_addresses
+        .iter()
+        .zip(names.iter())
+        .filter_map(|(email, new_name)| {
+            let (id, old_name) = old_names.get(email.as_str())?;
+            // Mirror the COALESCE(EXCLUDED.name, email_contacts.name) logic
+            let effective_new: Option<&String> = new_name.as_ref().or(old_name.as_ref());
+            if effective_new != old_name.as_ref() {
+                Some(*id)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok((result.rows_affected(), changed_contact_ids))
 }

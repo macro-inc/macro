@@ -7,17 +7,17 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
-macro_env = { path = "../macro_env", features = ["frontend_url"] }
 reqwest = { workspace = true }
-semver = { version = "1", features = ["serde"] }
+semver = { workspace = true }
+sha2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 cool_asserts = "2"
-macro_env = { path = "../macro_env", features = ["strum"] }
 strum = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["macros", "rt"] }

@@ -1,5 +1,3 @@
-use macro_env::Environment;
-
 use crate::domain::{
     models::{BundleUpdate, BundleUpdateRequest, PlatformData, PlatformVerifier, UpdateErr},
     ports::{GetJsBundleSemver, NativeAppService},
@@ -9,9 +7,6 @@ use crate::domain::{
 pub struct NativeAppServiceImpl<T> {
     /// the implementation of [GetJsBundleSemver]
     pub bundle_fetcher: T,
-    /// the environment we are running in
-    pub environment: Environment,
-
     /// the platform data for various platforms
     pub platform_data: PlatformData,
 }
@@ -31,15 +26,17 @@ where
             semver: cur_ver,
         } = req;
 
-        let most_recent = self
-            .bundle_fetcher
-            .get_app_semver(&self.environment)
-            .await?;
+        let most_recent = self.bundle_fetcher.get_app_semver().await?;
         if most_recent > cur_ver {
+            let checksum = self
+                .bundle_fetcher
+                .get_app_bundle_checksum(&most_recent)
+                .await?;
             return Ok(Some(BundleUpdate {
                 version: most_recent,
                 notes: None,
-                url: self.bundle_fetcher.get_app_bundle_path(&self.environment),
+                url: self.bundle_fetcher.get_app_bundle_path(),
+                checksum,
             }));
         }
 

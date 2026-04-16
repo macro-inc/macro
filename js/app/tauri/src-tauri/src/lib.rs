@@ -1,16 +1,20 @@
 use logger::Logger;
+use macro_bundle_updater_plugin::BundleRoot;
+use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
-use navigation_plugin::{MacroNavigationPlugin, Platform};
 use reqwest::cookie::CookieStore;
 use reqwest::header::COOKIE;
 use rootcause::{Report, report};
 use serde::Serialize;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(target_os = "ios")]
 use std::sync::OnceLock;
+use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
 use tauri::{Manager, Runtime};
+
+mod tauri_protocol;
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -120,9 +124,7 @@ pub fn run() {
         .with_line_number(true)
         .pretty();
 
-    let registry = tracing_subscriber::registry()
-        .with(filter)
-        .with(fmt_layer);
+    let registry = tracing_subscriber::registry().with(filter).with(fmt_layer);
 
     #[cfg(target_os = "ios")]
     let registry = registry.with(tracing_oslog::OsLogger::new(
@@ -170,14 +172,11 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
         .plugin(
-            MacroNavigationPlugin::new(
-                ALLOWED_DOMAINS,
-                cfg!(mobile)
-                    .then_some(Platform::Mobile)
-                    .unwrap_or(Platform::Desktop),
-            )
-            .expect("Domains must be valid urls"),
+            macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
+                "http://localhost:3001/".parse().expect("valid url"),
+            ),
         );
 
     #[cfg(mobile)]
@@ -190,12 +189,44 @@ pub fn run() {
             .plugin(tauri_plugin_auth::init());
     }
 
+    // Window origin differs by platform:
+    // macOS/iOS/Linux: tauri://localhost
+    // Windows/Android: https://tauri.localhost (or http://)
+    let window_origin = if cfg!(any(target_os = "windows", target_os = "android")) {
+        "https://tauri.localhost"
+    } else {
+        "tauri://localhost"
+    };
+
     builder
+        .register_asynchronous_uri_scheme_protocol("tauri", {
+            // Build this outside the closure so we only create it once.
+            // We need the AppHandle which isn't available until setup, but
+            // register_asynchronous_uri_scheme_protocol gives us UriSchemeContext.
+            // However, tauri_protocol::get needs AppHandle upfront.
+            // Use a lazy init pattern via the context.
+            let window_origin = window_origin.to_string();
+            let handler: std::sync::OnceLock<
+                Box<dyn Fn(&str, http::Request<Vec<u8>>, tauri::UriSchemeResponder) + Send + Sync>,
+            > = std::sync::OnceLock::new();
+
+            move |ctx, request, responder| {
+                let h = handler.get_or_init(|| {
+                    tauri_protocol::get(ctx.app_handle().clone(), &window_origin)
+                });
+                h(ctx.webview_label(), request, responder);
+            }
+        })
+        .manage(BundleRoot(RwLock::new(None)))
         .manage(HeartbeatState {
             alive: AtomicBool::new(true),
             generation: AtomicU64::new(0),
         })
-        .invoke_handler(tauri::generate_handler![heartbeat_response])
+        .invoke_handler(tauri::generate_handler![
+            heartbeat_response,
+            macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
+            macro_bundle_updater_plugin::inbound::plugin::perform_update
+        ])
         .setup(|app| {
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {

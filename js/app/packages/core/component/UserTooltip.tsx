@@ -6,6 +6,7 @@ import { isOk } from '@core/util/maybeResult';
 import IconCheck from '@icon/regular/check.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
+import WideTask from '@macro-icons/wide/task.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
@@ -19,6 +20,7 @@ export type UserTooltipProps = {
   email?: string;
   id?: string;
   isDeleted?: boolean;
+  onClose?: () => void;
 };
 
 export function UserTooltip(props: UserTooltipProps) {
@@ -33,13 +35,15 @@ export function UserTooltip(props: UserTooltipProps) {
     navigator.clipboard.writeText(email);
     toast.success('Email copied');
     resetCopied();
+    props.onClose?.();
   }
   const currentUserId = useUserId();
-  const { openWithSplit } = useSplitLayout();
+  const { openWithSplit, popoverSplit } = useSplitLayout();
 
   const openDM = async (e: PointerEvent | MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    props.onClose?.();
     if (props.id) {
       try {
         const result = await commsServiceClient.getOrCreateDirectMessage({
@@ -60,14 +64,25 @@ export function UserTooltip(props: UserTooltipProps) {
     }
   };
 
-  // TODO (seamus): add assign task button once launch popovet split with state is possible
+  const openTaskComposer = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    props.onClose?.();
+    if (props.id) {
+      popoverSplit({
+        type: 'component',
+        id: 'task-compose',
+        params: { initialAssigneeId: props.id },
+      });
+    }
+  };
 
   const buttonStyle =
-    'px-3 text-xs w-full justify-start hover-transition-bg hover:bg-hover';
+    'px-3 text-xs w-full justify-start hover:bg-hover/20 rounded-xs';
 
   return (
     <ClippedPanel tl={!beveledCorners()} active>
-      <div class="bg-panel text-ink box-border border-accent overflow-hidden">
+      <div class="bg-panel text-ink box-border border-accent overflow-hidden max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted pointer-events-none">
             <Switch>
@@ -110,7 +125,7 @@ export function UserTooltip(props: UserTooltipProps) {
 
         <Show when={props.email || props.id}>
           <div class="border-t border-edge/20"></div>
-          <div class="py-2 flex flex-col gap-0">
+          <div class="p-2 flex flex-col gap-0">
             <Show when={props.email}>
               <Button onClick={handleCopyEmail} class={buttonStyle}>
                 {copied() ? (
@@ -129,6 +144,12 @@ export function UserTooltip(props: UserTooltipProps) {
               <Button onClick={openDM} class={buttonStyle}>
                 <WideChat class="w-3.5 h-3.5" />
                 DM
+              </Button>
+            </Show>
+            <Show when={props.id && !props.isDeleted}>
+              <Button onClick={openTaskComposer} class={buttonStyle}>
+                <WideTask class="w-3.5 h-3.5" />
+                Assign task
               </Button>
             </Show>
           </div>

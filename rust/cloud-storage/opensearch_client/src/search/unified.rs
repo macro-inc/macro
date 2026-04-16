@@ -95,6 +95,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             include_labels: args.email_search_args.include_labels,
             exclude_labels: args.email_search_args.exclude_labels,
             importance: args.email_search_args.importance,
+            subject_only: args.email_search_args.subject_only,
         }
     }
 }
@@ -161,6 +162,7 @@ pub struct UnifiedEmailSearchArgs {
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
+    pub subject_only: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -416,14 +418,24 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         search_request_builder.add_sort(sort);
     }
 
-    let highlight = Highlight::new().require_field_match(true).field(
-        "content",
+    let em_field = || {
         HighlightField::new()
             .highlight_type("plain")
             .pre_tags(vec![MacroEm::Open.to_string()])
             .post_tags(vec![MacroEm::Close.to_string()])
-            .number_of_fragments(1),
-    );
+    };
+    let highlight = Highlight::new()
+        .require_field_match(true)
+        .field("content", em_field().number_of_fragments(1))
+        .field("subject", em_field().number_of_fragments(0))
+        .field("sender", em_field().number_of_fragments(0))
+        .field("sender_name", em_field().number_of_fragments(0))
+        .field("recipients", em_field().number_of_fragments(0))
+        .field("recipient_names", em_field().number_of_fragments(0))
+        .field("cc", em_field().number_of_fragments(0))
+        .field("cc_names", em_field().number_of_fragments(0))
+        .field("bcc", em_field().number_of_fragments(0))
+        .field("bcc_names", em_field().number_of_fragments(0));
 
     search_request_builder.highlight(highlight);
 

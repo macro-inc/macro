@@ -1,7 +1,6 @@
 import * as stackingContext from '@core/constant/stackingContext';
 import { cn } from '@ui/utils/classname';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
@@ -54,15 +53,7 @@ export function Lightbox(props: LightboxProps) {
   const [zoompinchHandle, setZoompinchHandle] = createSignal<
     ZoompinchHandle | undefined
   >();
-  const [isToolbarVisible, setIsToolbarVisible] = createSignal(false);
   let hideToolbarTimeout: ReturnType<typeof setTimeout> | undefined;
-
-  const handleMouseMove = () => {
-    if (isTouchDevice()) return;
-    setIsToolbarVisible(true);
-    if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = setTimeout(() => setIsToolbarVisible(false), 1000);
-  };
 
   const fetchBlob = async (): Promise<Blob | undefined> => {
     if (props.getBlob) return props.getBlob();
@@ -207,13 +198,7 @@ export function Lightbox(props: LightboxProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    let mouseMoveListenerTimeoutId: number | undefined;
     if (!isMobile()) {
-      mouseMoveListenerTimeoutId = window.setTimeout(
-        () => window.addEventListener('mousemove', handleMouseMove),
-        500
-      );
-
       // Track dragging so click-to-zoom and cursor stay in sync
       let isMouseDown = false;
       let mouseDownX = 0;
@@ -266,8 +251,6 @@ export function Lightbox(props: LightboxProps) {
 
     onCleanup(() => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.clearTimeout(mouseMoveListenerTimeoutId);
-      window.removeEventListener('mousemove', handleMouseMove);
       if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
     });
   });
@@ -283,9 +266,9 @@ export function Lightbox(props: LightboxProps) {
   });
 
   const navButtonClass =
-    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300';
+    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50';
 
-  const navVisible = () => isTouchDevice() || isToolbarVisible();
+  const navVisible = () => true;
 
   return (
     <div
@@ -297,9 +280,9 @@ export function Lightbox(props: LightboxProps) {
         'padding-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
-      <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
+      <Dialog.Content class="flex items-center justify-center bg-panel">
         {/* Toolbar */}
-        <LightboxToolbar isVisible={isToolbarVisible()}>
+        <LightboxToolbar isVisible={true}>
           <DeprecatedIconButton
             icon={isCopying() ? SpinnerIcon : ClipboardIcon}
             theme="clear"
@@ -325,34 +308,33 @@ export function Lightbox(props: LightboxProps) {
 
         {/* Nav arrows — desktop only */}
         <Show when={!isMobile()}>
-          <Show when={props.onPrevious}>
-            <button
-              class={cn(
-                navButtonClass,
-                'left-4',
-                navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
-              )}
-              style={{ 'z-index': stackingContext.zModal + 1 }}
-              onClick={props.onPrevious}
-              aria-label="Previous image"
-            >
-              <ChevronLeftIcon class="w-5 h-5 text-ink" />
-            </button>
-          </Show>
-          <Show when={props.onNext}>
-            <button
-              class={cn(
-                navButtonClass,
-                'right-4',
-                navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
-              )}
-              style={{ 'z-index': stackingContext.zModal + 1 }}
-              onClick={props.onNext}
-              aria-label="Next image"
-            >
-              <ChevronRightIcon class="w-5 h-5 text-ink" />
-            </button>
-          </Show>
+          <button
+            class={cn(
+              navButtonClass,
+              'left-4',
+              navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            )}
+            style={{ 'z-index': stackingContext.zModal + 1 }}
+            onClick={props.onPrevious}
+            disabled={!props.onPrevious}
+            aria-label="Previous image"
+          >
+            <ChevronLeftIcon class="w-5 h-5 text-ink" />
+          </button>
+
+          <button
+            class={cn(
+              navButtonClass,
+              'right-4',
+              navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            )}
+            style={{ 'z-index': stackingContext.zModal + 1 }}
+            onClick={props.onNext}
+            disabled={!props.onNext}
+            aria-label="Next image"
+          >
+            <ChevronRightIcon class="w-5 h-5 text-ink" />
+          </button>
         </Show>
 
         {/* Index indicator */}

@@ -899,25 +899,64 @@ async fn it_cannot_be_read_concurrently(pool: PgPool) {
     .await
     .unwrap();
 
-    let processor = FrecencyPgProcessor::new(pool.clone());
+    let first = FrecencyPgProcessor::new(pool.clone());
+    let second = FrecencyPgProcessor::new(pool);
 
-    let events = processor.get_unprocessed_events().await.unwrap();
-
+    let events = first.get_unprocessed_events().await.unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events.first().unwrap().id, event_id);
 
-    // try to create a second processor and read events
-    let second = FrecencyPgProcessor::new(pool);
-    // this fails because the original processor still holds the lock
-    let _err = processor.get_unprocessed_events().await.unwrap_err();
+    // try to read from a second processor
+    // this fails because the first processor still holds the lock
+    let err = second.get_unprocessed_events().await.unwrap_err();
+    assert!(matches!(err, PollerErr::DbLockErr));
 
     // finish the tx
-    processor.mark_processed(Vec::new()).await.unwrap();
+    first.mark_processed(Vec::new()).await.unwrap();
 
     // now second can read because the transaction has finished
     let res = second.get_unprocessed_events().await.unwrap();
     assert_eq!(res.len(), 1);
     assert_eq!(res.first().unwrap().id, event_id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_stale_transaction_is_cleaned_up(pool: PgPool) {
+    let test_user_id = "test_stale_tx_cleanup";
+
+    sqlx::query!(
+        r#"
+        INSERT INTO frecency_events (
+            user_id, entity_type, event_type, timestamp,
+            connection_id, entity_id, was_processed
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, false)
+        "#,
+        test_user_id,
+        "document",
+        "open",
+        Utc::now(),
+        "conn_tx",
+        "doc_tx"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let processor = FrecencyPgProcessor::new(pool);
+
+    // First call succeeds, starts a transaction and stores it in the mutex
+    let events = processor.get_unprocessed_events().await.unwrap();
+    assert_eq!(events.len(), 1);
+
+    // Simulate a processing failure by NOT calling mark_processed.
+    // The next call to get_unprocessed_events should clean up the stale tx
+    // and successfully start a new processing cycle.
+    let events = processor.get_unprocessed_events().await.unwrap();
+    assert_eq!(events.len(), 1);
+
+    // Verify we can still complete the full lifecycle
+    processor.mark_processed(Vec::new()).await.unwrap();
 }
 
 /// Tests that mixing supported (chat_id) and unsupported (role) filters

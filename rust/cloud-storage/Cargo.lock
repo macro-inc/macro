@@ -608,6 +608,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
@@ -3571,24 +3572,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "email_contact_search"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cached",
- "chrono",
- "macro_db_migrator",
- "macro_user_id",
- "models_search_cursor",
- "serde",
- "sqlx",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "email_db_client"
 version = "0.1.0"
 dependencies = [
@@ -4476,6 +4459,7 @@ dependencies = [
  "jsonwebtoken 10.3.0 (git+https://github.com/whutchinson98/jsonwebtoken)",
  "macro_db_migrator",
  "macro_env",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -4870,6 +4854,12 @@ dependencies = [
  "http-body 1.0.1",
  "pin-project-lite",
 ]
+
+[[package]]
+name = "http-range-header"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9171a2ea8a68358193d15dd5d70c1c10a2afc3e7e4c5bc92bc9f025cebd7359c"
 
 [[package]]
 name = "http-serde"
@@ -6071,7 +6061,6 @@ dependencies = [
  "strum",
  "thiserror 2.0.17",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -6966,17 +6955,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "native_app_server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "native_app_service",
+ "semver",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "native_app_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
  "cool_asserts",
- "macro_env",
  "reqwest",
  "semver",
  "serde",
  "serde_json",
+ "sha2",
  "strum",
  "thiserror 2.0.17",
  "tokio",
@@ -9181,7 +9184,7 @@ dependencies = [
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.10",
+ "rustls-webpki 0.103.12",
  "subtle",
  "zeroize",
 ]
@@ -9220,9 +9223,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.10"
+version = "0.103.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
+checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -9471,7 +9474,6 @@ dependencies = [
  "chrono",
  "comms_db_client",
  "document_sub_type",
- "email_contact_search",
  "email_db_client",
  "futures",
  "http-body-util",
@@ -9495,6 +9497,7 @@ dependencies = [
  "name_search",
  "opensearch_client",
  "properties_db_client",
+ "readonly_pool",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -11145,7 +11148,12 @@ dependencies = [
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
+ "http-range-header",
+ "httpdate",
  "iri-string",
+ "mime",
+ "mime_guess",
+ "percent-encoding",
  "pin-project-lite",
  "tokio",
  "tokio-util",

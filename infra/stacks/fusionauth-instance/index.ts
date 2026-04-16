@@ -59,7 +59,7 @@ const passwordlessEmailTemplate = new FusionAuthEMail(
   'passwordless-email-template',
   {
     name: 'Passwordless Login',
-    defaultSubject: 'Log into Macro',
+    defaultSubject: 'Log into Macro - ${code}',
     defaultHtmlTemplate: fs.readFileSync(
       './templates/passwordless_email_template.html',
       'utf-8'
