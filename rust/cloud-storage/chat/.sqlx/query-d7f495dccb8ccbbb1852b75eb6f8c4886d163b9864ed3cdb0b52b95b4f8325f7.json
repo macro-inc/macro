@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id\n        FROM comms_channels\n        WHERE channel_type = 'private'\n        AND (\n            (\n                SELECT COUNT(*)\n                FROM comms_channel_participants cp\n                WHERE cp.channel_id = comms_channels.id\n                AND cp.user_id = ANY($1)\n            ) = CARDINALITY($1)\n            AND (\n                SELECT COUNT(*)\n                FROM comms_channel_participants\n                WHERE channel_id = comms_channels.id\n            ) = CARDINALITY($1)\n        )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d7f495dccb8ccbbb1852b75eb6f8c4886d163b9864ed3cdb0b52b95b4f8325f7"
+}

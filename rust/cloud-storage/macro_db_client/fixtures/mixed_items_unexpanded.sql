@@ -40,10 +40,10 @@ INSERT INTO public."DocumentInstance" ("id", "documentId", "sha")
 VALUES (1, 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'sha-charlie');
 
 -- User Access
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'macro|user@user.com', 'ffffffff-ffff-ffff-ffff-ffffffffffff', 'project', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', 'cccccccc-1111-1111-1111-111111111111', 'chat', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', 'owner');
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+VALUES ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user@user.com', 'user', 'owner'),
+       ('cccccccc-1111-1111-1111-111111111111', 'chat', 'macro|user@user.com', 'user', 'owner'),
+       ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', 'macro|user@user.com', 'user', 'owner');
 
 -- User History with its own distinct ordering
 INSERT INTO public."UserHistory" ("userId", "itemId", "itemType", "updatedAt")

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n        SELECT\n            u.entity_id,\n            u.entity_type,\n            u.source_id,\n            'user',\n            u.access_level::\"AccessLevel\"\n        FROM UNNEST(\n            $1::uuid[],\n            $2::text[],\n            $3::text[],\n            $4::text[]\n        ) as u(\n            entity_id,\n            entity_type,\n            source_id,\n            access_level\n        )\n        ON CONFLICT (entity_id, entity_type, source_id, source_type)\n        WHERE granted_from_project_id IS NULL\n        DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "893ba4ca56a651ac3f29465976b0809413930f77ea2b5be2af1e97759582f310"
+}

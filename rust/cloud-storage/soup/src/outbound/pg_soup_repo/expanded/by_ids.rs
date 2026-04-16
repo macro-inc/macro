@@ -43,46 +43,21 @@ pub async fn expanded_soup_by_ids<'a>(
 
     let mut items: Vec<SoupItem> = sqlx::query!(
         r#"
-        WITH RECURSIVE ProjectHierarchy AS (
-            SELECT p.id, uia.access_level 
-            FROM "Project" p
-            JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
-            WHERE uia.user_id = $1 AND p."deletedAt" IS NULL
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
             UNION ALL
-            SELECT p.id, ph.access_level
-            FROM "Project" p 
-            JOIN ProjectHierarchy ph ON p."parentId" = ph.id
-            WHERE p."deletedAt" IS NULL
-        ),
-        AllAccessGrants AS (
-            SELECT item_id, item_type, access_level 
-            FROM "UserItemAccess" 
-            WHERE user_id = $1
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = $1
             UNION ALL
-            SELECT d.id AS item_id, 'document' AS item_type, ph.access_level
-            FROM "Document" d 
-            JOIN ProjectHierarchy ph ON d."projectId" = ph.id
-            WHERE d."projectId" IS NOT NULL AND d."deletedAt" IS NULL
-            UNION ALL
-            SELECT c.id AS item_id, 'chat' AS item_type, ph.access_level
-            FROM "Chat" c 
-            JOIN ProjectHierarchy ph ON c."projectId" = ph.id
-            WHERE c."projectId" IS NOT NULL AND c."deletedAt" IS NULL
-            UNION ALL
-            SELECT ph.id AS item_id, 'project' AS item_type, ph.access_level 
-            FROM ProjectHierarchy ph
+            SELECT $1
         ),
         UserAccessibleItems AS (
-            SELECT DISTINCT ON (item_id, item_type) item_id, item_type
-            FROM AllAccessGrants
-            ORDER BY item_id, item_type, 
-                CASE access_level
-                    WHEN 'owner' THEN 4
-                    WHEN 'edit' THEN 3 
-                    WHEN 'comment' THEN 2
-                    WHEN 'view' THEN 1
-                    ELSE 0
-                END DESC
+            SELECT DISTINCT
+                ea.entity_id::text as item_id,
+                ea.entity_type as item_type
+            FROM entity_access ea
+            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
         ),
         Combined AS (
             SELECT

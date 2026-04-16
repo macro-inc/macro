@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access with source_ids (user, teams, channels)\n            SELECT access_level::text FROM entity_access\n            WHERE source_id = ANY(ARRAY(\n                SELECT cp.channel_id::text FROM comms_channel_participants cp\n                    WHERE cp.user_id = $3 AND cp.left_at IS NULL\n                UNION ALL\n                SELECT t.team_id::text FROM team_user t\n                    WHERE t.user_id = $3\n                UNION ALL\n                SELECT $3\n            ))\n            AND entity_id = $1\n            AND entity_type = 'document'\n            UNION ALL\n            -- Source 2: Select the publicAccessLevel (which is already text).\n            SELECT \"publicAccessLevel\" as access_level\n            FROM \"SharePermission\"\n            WHERE \"isPublic\" = true AND \"publicAccessLevel\" IS NOT NULL AND id IN (\n                SELECT \"sharePermissionId\" FROM \"DocumentPermission\" WHERE \"documentId\" = $2\n            )\n        ) as all_levels\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "28aca4b1b6794f9509b0cc56ea46bb4addfdd91ebf78cd2bef8026c2f6e86c77"
+}

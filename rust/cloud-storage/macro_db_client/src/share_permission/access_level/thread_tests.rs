@@ -4,18 +4,22 @@ use super::*;
 async fn test_highest_level_is_from_explicit_access_on_thread(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: Get highest access for 'user-1' on 'thread-nested'.
+    // SCENARIO: Get highest access for 'user-1' on thread-nested (eeeeeeee-eeee-eeee-eeee-000000000001).
     // EXPLICIT ACCESS: view (direct), owner (inherited from p-grandparent). Max is 'owner'.
     // PUBLIC ACCESS: view (from p-parent), edit (from p-grandparent). Max is 'edit'.
     // EXPECTATION: The overall highest level should be 'owner' from the explicit grant.
 
-    let highest_level =
-        get_highest_access_level_for_thread(&pool, "thread-nested", "user-1").await?;
+    let highest_level = get_highest_access_level_for_thread(
+        &pool,
+        "eeeeeeee-eeee-eeee-eeee-000000000001",
+        "user-1",
+    )
+    .await?;
 
     assert_eq!(
         highest_level,
         Some(AccessLevel::Owner),
-        "Expected highest level to be 'owner' from an inherited UserItemAccess record"
+        "Expected highest level to be 'owner' from an inherited entity_access record"
     );
 
     Ok(())
@@ -25,14 +29,17 @@ async fn test_highest_level_is_from_explicit_access_on_thread(
 async fn test_highest_level_is_from_public_access_on_thread(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: Get highest access for 'user-public-access-only' on 'thread-nested'.
+    // SCENARIO: Get highest access for 'user-public-access-only' on thread-nested.
     // This user has no explicit access grants.
     // PUBLIC ACCESS: view (from p-parent), edit (from p-grandparent). Max is 'edit'.
     // EXPECTATION: The overall highest level must be 'edit' from a public SharePermission.
 
-    let highest_level =
-        get_highest_access_level_for_thread(&pool, "thread-nested", "user-public-access-only")
-            .await?;
+    let highest_level = get_highest_access_level_for_thread(
+        &pool,
+        "eeeeeeee-eeee-eeee-eeee-000000000001",
+        "user-public-access-only",
+    )
+    .await?;
 
     assert_eq!(
         highest_level,
@@ -47,14 +54,18 @@ async fn test_highest_level_is_from_public_access_on_thread(
 async fn test_user_scoping_is_correct_on_thread(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: Get highest access for 'user-2' on 'thread-nested'.
+    // SCENARIO: Get highest access for 'user-2' on thread-nested.
     // EXPLICIT ACCESS: 'user-2' has 'comment' access inherited from p-parent.
     // PUBLIC ACCESS: view (from p-parent), edit (from p-grandparent). Max is 'edit'.
     // EXPECTATION: The overall highest level is 'edit' (from public), which is higher than
     // the user's explicit 'comment' grant.
 
-    let highest_level =
-        get_highest_access_level_for_thread(&pool, "thread-nested", "user-2").await?;
+    let highest_level = get_highest_access_level_for_thread(
+        &pool,
+        "eeeeeeee-eeee-eeee-eeee-000000000001",
+        "user-2",
+    )
+    .await?;
 
     assert_eq!(
         highest_level,
@@ -69,13 +80,16 @@ async fn test_user_scoping_is_correct_on_thread(
 async fn test_private_share_permissions_are_ignored_on_thread(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: A private 'owner' SharePermission is attached directly to 'thread-nested'.
+    // SCENARIO: A private 'owner' SharePermission is attached directly to thread-nested.
     // Get access for a user who would otherwise only have public access.
     // EXPECTATION: The private permission must be ignored.
 
-    let highest_level =
-        get_highest_access_level_for_thread(&pool, "thread-nested", "user-public-access-only")
-            .await?;
+    let highest_level = get_highest_access_level_for_thread(
+        &pool,
+        "eeeeeeee-eeee-eeee-eeee-000000000001",
+        "user-public-access-only",
+    )
+    .await?;
 
     assert_ne!(
         highest_level,
@@ -95,12 +109,16 @@ async fn test_private_share_permissions_are_ignored_on_thread(
 async fn test_no_permissions_returns_none_for_thread(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: Get access for any user on 'thread-private'.
+    // SCENARIO: Get access for any user on thread-private (eeeeeeee-eeee-eeee-eeee-000000000003).
     // This thread has no project and no other permissions attached.
     // EXPECTATION: The query should return an empty list, resulting in `None`.
 
-    let highest_level =
-        get_highest_access_level_for_thread(&pool, "thread-private", "user-1").await?;
+    let highest_level = get_highest_access_level_for_thread(
+        &pool,
+        "eeeeeeee-eeee-eeee-eeee-000000000003",
+        "user-1",
+    )
+    .await?;
 
     assert_eq!(
         highest_level, None,

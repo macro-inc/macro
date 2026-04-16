@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_channels AS (\n            SELECT DISTINCT c.*\n            FROM comms_channels c\n            INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id\n            WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            \n            UNION\n            \n            SELECT c.*\n            FROM comms_channels c\n            WHERE c.channel_type = 'organization'::comms_channel_type\n            AND c.org_id = $2::bigint\n        )\n        SELECT \n            id as \"id!\"\n        FROM user_channels\n        ORDER BY created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3c53847bf278b4452c56d695306bb384f3a9354e7e078bfc73ffd0b95f46dd03"
+}
