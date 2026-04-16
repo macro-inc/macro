@@ -112,7 +112,7 @@ function ChannelGroupItem(props: {
     const channel = channelData();
     if (!channel) return false;
     return (
-      channel.channel_type === 'directMessage' ||
+      channel.channel_type === 'direct_message' ||
       channel.channel_type === 'private'
     );
   });
