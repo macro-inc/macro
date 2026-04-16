@@ -1,4 +1,5 @@
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
+import type { FilterData } from '@app/component/next-soup/filters/filter-store';
 import { useSearchContext } from '@app/component/next-soup/search-context';
 import {
   createSoupFreshSearch,
@@ -6,7 +7,6 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
-import type { FilterAst } from '@app/component/next-soup/filters';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { isChannelEntity, type EntityData } from '@entity';
@@ -27,7 +27,7 @@ const freshSearch = createSoupFreshSearch();
 
 interface CreateSearchStateArgs {
   soup: SoupState;
-  filterAst: Accessor<FilterAst>;
+  filters: Accessor<FilterData>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
   searchMentions?: Accessor<string[]>;
@@ -35,7 +35,7 @@ interface CreateSearchStateArgs {
 
 export const createSearchState = ({
   soup,
-  filterAst,
+  filters,
   disableLocalSearch,
   searchPaused,
   searchMentions,
@@ -153,9 +153,10 @@ export const createSearchState = ({
 
   // we will hide local results if there are channel filters because we only want message results
   const hasChannelQueryFilters = () => {
-    // Check if the chanf bucket has any expressions (indicating channel filtering)
-    const ast = filterAst();
-    return ast.chanf !== undefined;
+    const filters_ = filters().include;
+    const channelIds = filters_.channelId ?? [];
+    const senderIds = filters_.channelSenderId ?? [];
+    return channelIds.length > 0 || senderIds.length > 0;
   };
 
   const filteredLocalFuzzyResults = createMemo(() => {

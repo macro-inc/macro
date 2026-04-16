@@ -7,7 +7,7 @@ import {
   agentFilter as agentPredicate,
   fileFilter as filePredicate,
 } from '../predicates';
-import { config, isAgent, isEmail, isTask, NIL } from './base';
+import { config, isAgent, isEmail, isTask } from './base';
 
 export const documentFilter = config({
   id: 'document',

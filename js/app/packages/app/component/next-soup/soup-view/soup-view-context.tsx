@@ -180,7 +180,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const search = createSearchState({
     soup,
-    filterAst: getAst,
+    filters,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
     searchMentions,
