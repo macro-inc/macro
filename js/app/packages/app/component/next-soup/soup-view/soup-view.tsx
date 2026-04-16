@@ -385,8 +385,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     featuredIds,
     isSearchServiceLoading,
     isLocalSearchSettling,
-    activeTab,
-    setActiveTab,
+    activePreset,
+    setActivePreset,
     assigneeFilter,
     setAssigneeFilter,
   } = useSoupView();
@@ -494,7 +494,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     previewState: () => !!soup.previewEntity(),
     getSplitCount,
     currentView,
-    activeTab,
+    activeTab: () => activePreset()?.tab,
     applyTabPreset,
   });
 
@@ -700,7 +700,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
             d.properties = persistedFilterData.properties ?? [];
             d.emailView = persistedFilterData.emailView;
           });
-          setActiveTab(initialPersistedState.activeTab);
+          if (isListViewID(contentId) && initialPersistedState.activeTab) {
+            setActivePreset({
+              view: contentId,
+              tab: initialPersistedState.activeTab,
+            });
+          }
         });
       }
       batch(() => {
@@ -719,7 +724,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       () =>
         ({
           version: PERSISTED_STATE_VERSION,
-          activeTab: activeTab(),
+          activeTab: activePreset()?.tab,
           filters: [...soup.filters.activeIds()],
           filterData: { ...filters() },
           sort: soup.sort.active().map((s) => s.id),

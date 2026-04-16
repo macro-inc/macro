@@ -1,7 +1,7 @@
 import {
   VIEW_TAB_PRESETS,
   type PresetContext,
-  type SoupFiltersPreset,
+  getViewPreset,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -75,7 +75,7 @@ const useCurrentListView = () => {
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const { setFilters, setActiveTab } = useSoupView();
+  const { setFilters, setActivePreset } = useSoupView();
   const user = useUserContext();
 
   const getPresetContext = (): PresetContext => ({
@@ -83,29 +83,21 @@ export const useApplyPreset = () => {
     email: user.email(),
   });
 
-  const applyPreset = (preset: SoupFiltersPreset) => {
+  const applyTabPreset = (view: ListView, tabId: string): boolean => {
+    const preset = getViewPreset(view, tabId, getPresetContext());
+    if (!preset) return false;
+
     batch(() => {
+      setActivePreset({ view, tab: tabId });
       setFilters((d) => {
         d.include = preset.filters.include ?? {};
         d.exclude = preset.filters.exclude ?? {};
         d.properties = preset.filters.properties ?? [];
         d.emailView = preset.filters.emailView;
+        d.targets = preset.filters.targets;
       });
       soup.filters.set({ and: preset.clientFilters });
     });
-  };
-
-  const applyTabPreset = (view: ListView, tabId: string): boolean => {
-    const config = VIEW_TAB_PRESETS[view];
-    if (!config) return false;
-    const resolver = config.tabs[tabId];
-    if (!resolver) return false;
-
-    const resolved = resolver(getPresetContext());
-    if (!resolved) return false;
-
-    setActiveTab(tabId);
-    applyPreset(resolved);
     return true;
   };
 
@@ -130,13 +122,13 @@ export const SoupViewTabs = () => {
 
 const ViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
+  const { activePreset } = useSoupView();
   const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
     <Tabs
       list={list()}
-      value={activeTab()}
+      value={activePreset()?.tab}
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
     />
@@ -147,7 +139,7 @@ const ViewTabs = (props: { view: TabbedListView }) => {
 export const CollapsedSoupViewTabs = () => {
   const listView = useCurrentListView();
   const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
+  const { activePreset } = useSoupView();
 
   const list = createMemo(() => {
     const view = listView();
@@ -156,7 +148,7 @@ export const CollapsedSoupViewTabs = () => {
   });
 
   const activeLabel = createMemo(() => {
-    const tab = activeTab();
+    const tab = activePreset()?.tab;
     return list().find((item) => item.value === tab)?.label ?? list()[0]?.label;
   });
 
@@ -173,7 +165,7 @@ export const CollapsedSoupViewTabs = () => {
               <DropdownMenu.Item
                 class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                 classList={{
-                  'font-semibold': activeTab() === item.value,
+                  'font-semibold': activePreset()?.tab === item.value,
                 }}
                 onSelect={() => {
                   const view = listView();
@@ -212,13 +204,13 @@ export const MobileSoupViewTabs = () => {
 
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
+  const { activePreset } = useSoupView();
   const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
     <Tabs
       list={list()}
-      value={activeTab()}
+      value={activePreset()?.tab}
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
       indicatorPosition="top"

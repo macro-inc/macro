@@ -33,6 +33,7 @@ import {
   type FilterData,
   type FilterSetter,
 } from '@app/component/next-soup/filters/filter-store';
+import type { ListView } from '@app/constants/list-views';
 import { useUserId } from '@core/context/user';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
@@ -63,6 +64,8 @@ type DataSource<T> = {
   fetchNextPage: VoidFunction;
 };
 
+export type ActivePreset = { view: ListView; tab: string };
+
 interface SoupViewContextValues {
   soup: SoupState;
   source: DataSource<EntityData>;
@@ -80,8 +83,8 @@ interface SoupViewContextValues {
   setFilters: FilterSetter;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
-  activeTab: Accessor<string | undefined>;
-  setActiveTab: Setter<string | undefined>;
+  activePreset: Accessor<ActivePreset | undefined>;
+  setActivePreset: Setter<ActivePreset | undefined>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -161,7 +164,9 @@ export const SoupViewContextProvider: FlowComponent<
   const [searchPaused, setSearchPaused] = createSignal(false);
   const [searchMentions, setSearchMentions] = createSignal<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
-  const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
+  const [activePreset, setActivePreset] = createSignal<ActivePreset | undefined>(
+    undefined
+  );
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
@@ -362,8 +367,8 @@ export const SoupViewContextProvider: FlowComponent<
     setFilters,
     assigneeFilter,
     setAssigneeFilter,
-    activeTab,
-    setActiveTab,
+    activePreset,
+    setActivePreset,
   };
 
   return (

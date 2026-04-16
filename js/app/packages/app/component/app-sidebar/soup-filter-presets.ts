@@ -324,39 +324,50 @@ type ContextRequiredView = 'agents' | 'documents' | 'tasks' | 'folders';
 /** Views whose default tab works without user context */
 type ContextOptionalView = Exclude<ListView, ContextRequiredView>;
 
-/**
- * Returns the default filter preset for a list view.
- * Uses the view's default tab, falling back to the first available tab
- * if the default requires context values that aren't provided.
- *
- * @param view - The list view to get the preset for
- * @param ctx - User context (required for agents, documents, tasks, folders)
- */
-export function getDefaultListViewPreset(
-  view: ContextRequiredView,
-  ctx: PresetContext
-): SoupFiltersPreset;
-export function getDefaultListViewPreset(
+/** Overload: views that don't require context */
+export function getViewPreset(
   view: ContextOptionalView,
-  ctx?: PresetContext
-): SoupFiltersPreset;
-export function getDefaultListViewPreset(
-  view: ListView,
-  ctx: PresetContext = { userId: undefined, email: undefined }
-): SoupFiltersPreset {
-  const config = VIEW_TAB_PRESETS[view];
-  const defaultResolver = config.tabs[config.default];
+  tab?: string
+): SoupFiltersPreset | undefined;
 
-  // Try default tab with provided context
-  const resolved = defaultResolver(ctx);
+/** Overload: views that require user context */
+export function getViewPreset(
+  view: ContextRequiredView,
+  tab: string | undefined,
+  ctx: PresetContext
+): SoupFiltersPreset | undefined;
+
+/** Overload: any view with context */
+export function getViewPreset(
+  view: ListView,
+  tab: string | undefined,
+  ctx: PresetContext
+): SoupFiltersPreset | undefined;
+
+export function getViewPreset(
+  view: ListView,
+  tab?: string,
+  ctx?: PresetContext
+): SoupFiltersPreset | undefined {
+  const config = VIEW_TAB_PRESETS[view];
+  if (!config) return undefined;
+
+  const tabId = tab ?? config.default;
+  const resolver = config.tabs[tabId];
+  if (!resolver) return undefined;
+
+  const presetCtx: PresetContext = ctx ?? {
+    userId: undefined,
+    email: undefined,
+  };
+  const resolved = resolver(presetCtx);
   if (resolved) return resolved;
 
   // Fallback: find first tab that works with provided context
-  for (const resolver of Object.values(config.tabs)) {
-    const fallback = resolver(ctx);
+  for (const fallbackResolver of Object.values(config.tabs)) {
+    const fallback = fallbackResolver(presetCtx);
     if (fallback) return fallback;
   }
 
-  // Last resort: empty filters
-  return { filters: {}, clientFilters: [] };
+  return undefined;
 }
