@@ -185,6 +185,7 @@ function createSplitFocusTracker(props: {
   const focusFromEvent = (event: SplitEventWithType) => {
     switch (event.type) {
       case SplitEvent.Insert: {
+        if (event.activate === false) break;
         const splitId = event.splitId;
         focusSplitById(splitId);
         break;
