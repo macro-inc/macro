@@ -131,6 +131,44 @@ fn find_tag_aware_byte_offset_handles_utf8() {
 }
 
 #[test]
+fn merge_highlights_across_at_joins_email_tokens() {
+    let input = "sent to <macro_em>hutch</macro_em>@<macro_em>macro.com</macro_em> today";
+    let result = merge_highlights_across_at(input);
+    assert_eq!(result, "sent to <macro_em>hutch@macro.com</macro_em> today");
+}
+
+#[test]
+fn merge_highlights_across_at_leaves_standalone_highlights() {
+    let input = "say <macro_em>hello</macro_em> world";
+    let result = merge_highlights_across_at(input);
+    assert_eq!(result, "say <macro_em>hello</macro_em> world");
+}
+
+#[test]
+fn merge_highlights_across_at_leaves_plain_at_symbol() {
+    let input = "contact us @ <macro_em>macro</macro_em>";
+    let result = merge_highlights_across_at(input);
+    assert_eq!(result, "contact us @ <macro_em>macro</macro_em>");
+}
+
+#[test]
+fn merge_highlights_across_at_multiple_pairs() {
+    let input = "<macro_em>a</macro_em>@<macro_em>b.com</macro_em> and <macro_em>c</macro_em>@<macro_em>d.org</macro_em>";
+    let result = merge_highlights_across_at(input);
+    assert_eq!(
+        result,
+        "<macro_em>a@b.com</macro_em> and <macro_em>c@d.org</macro_em>"
+    );
+}
+
+#[test]
+fn normalize_merges_email_highlight_tokens() {
+    let input = "hi <macro_em>hutch</macro_em>@<macro_em>macro.com</macro_em> thanks";
+    let result = normalize_highlight_fragment(input);
+    assert_eq!(result, "hi <macro_em>hutch@macro.com</macro_em> thanks");
+}
+
+#[test]
 fn window_real_world_email_fragment() {
     let input = "Hi Gabriel, We often need to copy email to other tools — our notes, todo list, or Slack. In Gmail and Outlook, this is error prone and tedious. In Superhuman Mail, it is accurate and instantaneous: Hit Cmd+C (Mac) or Ctrl+C (Windows) to copy the current message. Hit it again to copy the conversation. Hit Cmd+V (Mac) or Ctrl+V (Windows) to paste wherever you want. You can even paste straight into Superhuman Mail! No selecting, no dragging, no fuss. I'd love to hear what you think: please reply and say <macro_em>hello</macro_em> :) Speak soon, Rahul";
     let result = window_around_highlight(input, MAX_VISIBLE_FRAGMENT_CHARS);
