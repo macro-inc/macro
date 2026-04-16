@@ -36,21 +36,19 @@ import {
   INDEX_OPTIONS,
   cacheChannelSubFilters,
   cacheEmailSubFilters,
-  getCachedChannelSubFilters,
-  getCachedEmailSubFilters,
+  useSearchIndexController,
   type ChannelSubFilters,
 } from './search-filter-controls';
-import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 
 const TypeIndicator = (props: { active: boolean }) => (
   <span
     class={cn(
       'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
-      props.active ? 'bg-accent border-accent' : 'border-edge'
+      props.active ? 'border-accent' : 'border-edge'
     )}
   >
     <Show when={props.active}>
-      <CheckIcon class="size-2.5 text-page" />
+      <span class="size-2 rounded-full bg-accent" />
     </Show>
   </span>
 );
@@ -596,54 +594,7 @@ export const UnifiedFilterDropdown = () => {
   const hasActiveIndex = () =>
     INDEX_OPTIONS.some((opt) => soup.filters.isActive(opt.value));
 
-  const handleIndexChange = (newValue: string) => {
-    batch(() => {
-      for (const opt of INDEX_OPTIONS) {
-        if (soup.filters.isActive(opt.value)) {
-          soup.filters.toggle({ or: [opt.value as FilterID] });
-        }
-      }
-
-      if (newValue === 'all') {
-        cacheChannelSubFilters(contentId, {});
-        setQueryFilters({
-          ...QUERY_FILTERS.default,
-          email_filters: { importance: true },
-        });
-        return;
-      }
-
-      const opt = INDEX_OPTIONS.find((o) => o.value === newValue);
-      if (!opt) return;
-      soup.filters.toggle({ or: [opt.value as FilterID] });
-
-      if (opt.value === 'channels') {
-        const cached = getCachedChannelSubFilters(contentId);
-        setQueryFilters({
-          ...opt.queryFilters,
-          channel_filters: {
-            ...opt.queryFilters.channel_filters,
-            ...cached,
-          },
-        });
-      } else if (opt.value === 'email') {
-        const cached = getCachedEmailSubFilters(contentId);
-        const importance =
-          'importance' in cached
-            ? (cached.importance ?? undefined)
-            : opt.queryFilters.email_filters?.importance;
-        setQueryFilters({
-          ...opt.queryFilters,
-          email_filters: {
-            ...opt.queryFilters.email_filters,
-            importance,
-          },
-        });
-      } else {
-        setQueryFilters({ ...opt.queryFilters });
-      }
-    });
-  };
+  const { changeIndex: handleIndexChange } = useSearchIndexController();
 
   createEffect(() => {
     if (!isSearchView() || !isChannelsIndexActive()) return;

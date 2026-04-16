@@ -3,10 +3,7 @@ import {
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
-import {
-  NIL_UUID,
-  QUERY_FILTERS,
-} from '@app/component/next-soup/filters/query-filters';
+import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -19,6 +16,7 @@ import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
 import { INDEX_OPTIONS } from './search-operator-autocomplete';
+import { useSearchIndexController } from './search-filter-controls';
 import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
@@ -57,6 +55,9 @@ export function useFilterRefinements() {
   const contacts = useContacts();
   const currentUserId = useUserId();
   const quickAccess = useQuickAccess();
+  const channelList = quickAccess.useList('channel', 'dm');
+  const senderList = quickAccess.useList('person');
+  const { changeIndex } = useSearchIndexController();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -175,15 +176,14 @@ export function useFilterRefinements() {
         continue;
       }
       filters.push({
-        categoryLabel: 'Index',
+        categoryLabel: 'Type',
         optionId: option.id,
         optionLabel: option.label,
         icon: option.icon,
         categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
-        onRemove: () => {
-          soup.filters.toggle({ or: [optionId] });
-          setQueryFilters(QUERY_FILTERS.default);
-        },
+        multiple: false,
+        onRemove: () => changeIndex('all'),
+        onReplace: (newOptionId) => changeIndex(newOptionId),
       });
     }
 
@@ -204,14 +204,24 @@ export function useFilterRefinements() {
     const channelIds = (
       queryFilters().channel_filters?.channel_ids ?? []
     ).filter((id) => id !== NIL_UUID);
+    const channelReplaceOptions = channelIds.length > 0
+      ? (channelList()
+          .filter((ch) => ch.data.name)
+          .map((ch) => ({
+            id: ch.id,
+            label: ch.data.name,
+          })) as unknown as ActiveFilter['categoryOptions'])
+      : undefined;
     for (const channelId of channelIds) {
       const item = quickAccess.getById(channelId);
       const label =
         item && 'data' in item && item.data?.name ? item.data.name : channelId;
       filters.push({
         categoryLabel: 'In',
-        optionId: `in:${channelId}`,
+        optionId: channelId,
         optionLabel: label,
+        categoryOptions: channelReplaceOptions,
+        multiple: true,
         onRemove: () =>
           setQueryFilters((prev) => {
             const ids = (prev.channel_filters?.channel_ids ?? []).filter(
@@ -225,19 +235,41 @@ export function useFilterRefinements() {
               },
             };
           }),
+        onReplace: (newOptionId) =>
+          setQueryFilters((prev) => {
+            const existing = prev.channel_filters?.channel_ids ?? [];
+            const ids = existing
+              .filter((id) => id !== channelId && id !== newOptionId)
+              .concat(newOptionId);
+            return {
+              ...prev,
+              channel_filters: {
+                ...prev.channel_filters,
+                channel_ids: ids,
+              },
+            };
+          }),
       });
     }
 
     // Search operator filters: from: (sender_ids)
     const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
+    const senderReplaceOptions = senderIds.length > 0
+      ? (senderList().map((s) => ({
+          id: s.id,
+          label: s.data.name || s.id,
+        })) as unknown as ActiveFilter['categoryOptions'])
+      : undefined;
     for (const senderId of senderIds) {
       const item = quickAccess.getById(senderId);
       const label =
         item && 'data' in item && item.data?.name ? item.data.name : senderId;
       filters.push({
         categoryLabel: 'From',
-        optionId: `from:${senderId}`,
+        optionId: senderId,
         optionLabel: label,
+        categoryOptions: senderReplaceOptions,
+        multiple: true,
         onRemove: () =>
           setQueryFilters((prev) => {
             const ids = (prev.channel_filters?.sender_ids ?? []).filter(
@@ -251,6 +283,20 @@ export function useFilterRefinements() {
               },
             };
           }),
+        onReplace: (newOptionId) =>
+          setQueryFilters((prev) => {
+            const existing = prev.channel_filters?.sender_ids ?? [];
+            const ids = existing
+              .filter((id) => id !== senderId && id !== newOptionId)
+              .concat(newOptionId);
+            return {
+              ...prev,
+              channel_filters: {
+                ...prev.channel_filters,
+                sender_ids: ids,
+              },
+            };
+          }),
       });
     }
 
@@ -258,14 +304,29 @@ export function useFilterRefinements() {
     if (soup.filters.isActive('email')) {
       const importance = queryFilters().email_filters?.importance;
       if (importance !== undefined) {
+        const IMPORTANCE_SIGNAL = 'importance:signal';
+        const IMPORTANCE_NOISE = 'importance:noise';
         filters.push({
           categoryLabel: 'Importance',
-          optionId: importance ? 'importance:signal' : 'importance:noise',
+          optionId: importance ? IMPORTANCE_SIGNAL : IMPORTANCE_NOISE,
           optionLabel: importance ? 'Signal' : 'Noise',
+          categoryOptions: [
+            { id: IMPORTANCE_SIGNAL, label: 'Signal' },
+            { id: IMPORTANCE_NOISE, label: 'Noise' },
+          ] as unknown as ActiveFilter['categoryOptions'],
+          multiple: false,
           onRemove: () =>
             setQueryFilters((prev) => ({
               ...prev,
               email_filters: { ...prev.email_filters, importance: undefined },
+            })),
+          onReplace: (newOptionId) =>
+            setQueryFilters((prev) => ({
+              ...prev,
+              email_filters: {
+                ...prev.email_filters,
+                importance: newOptionId === IMPORTANCE_SIGNAL,
+              },
             })),
         });
       }

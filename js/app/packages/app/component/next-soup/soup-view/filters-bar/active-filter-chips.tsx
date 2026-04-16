@@ -13,12 +13,20 @@ export type ActiveFilter = {
   icon?: () => JSX.Element;
   /** Available options in this category for replacement */
   categoryOptions?: FilterOption[];
+  /** When false, the chip dropdown renders radio-style indicators instead of checkboxes. */
+  multiple?: boolean;
   /**
    * Per-chip remove handler. When present, takes precedence over the shared
    * `onRemove` prop on `ActiveFilterChips`. Use this for filters that live
    * outside `soup.filters` (e.g. assigneeFilter).
    */
   onRemove?: () => void;
+  /**
+   * Per-chip replace handler. When present, takes precedence over the shared
+   * `onReplace` prop on `ActiveFilterChips`. Use this for filters that need
+   * side effects beyond toggling `soup.filters` (e.g. updating queryFilters).
+   */
+  onReplace?: (newOptionId: string) => void;
 };
 
 interface ActiveFilterChipsProps {
@@ -104,25 +112,48 @@ const FilterChip = (props: {
               <For each={props.filter.categoryOptions}>
                 {(option) => {
                   const active = () => props.isOptionActive(option.id);
+                  const isSingleSelect = () =>
+                    props.filter.multiple === false;
                   return (
                     <DropdownMenu.Item
                       class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-default"
                       onSelect={() => {
-                        if (!active()) {
+                        if (active()) return;
+                        if (props.filter.onReplace) {
+                          props.filter.onReplace(option.id);
+                        } else {
                           props.onReplace(option.id);
                         }
                       }}
                     >
-                      <span
-                        class={cn(
-                          'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                          active() ? 'bg-accent border-accent' : 'border-edge'
-                        )}
+                      <Show
+                        when={isSingleSelect()}
+                        fallback={
+                          <span
+                            class={cn(
+                              'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                              active()
+                                ? 'bg-accent border-accent'
+                                : 'border-edge'
+                            )}
+                          >
+                            <Show when={active()}>
+                              <CheckIcon class="size-2.5 text-page" />
+                            </Show>
+                          </span>
+                        }
                       >
-                        <Show when={active()}>
-                          <CheckIcon class="size-2.5 text-page" />
-                        </Show>
-                      </span>
+                        <span
+                          class={cn(
+                            'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
+                            active() ? 'border-accent' : 'border-edge'
+                          )}
+                        >
+                          <Show when={active()}>
+                            <span class="size-2 rounded-full bg-accent" />
+                          </Show>
+                        </span>
+                      </Show>
 
                       <Show when={option.icon}>
                         {(icon) => (
