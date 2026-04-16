@@ -471,6 +471,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(() => {
     if (activeLocation() && locationReady()) {
+      console.log('HELL', activeLocation());
       editor.dispatchCommand(GO_TO_LOCATION_COMMAND, activeLocation());
     }
   });
