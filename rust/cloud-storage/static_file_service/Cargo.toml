@@ -25,6 +25,7 @@ aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs.workspace = true
 axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
+image = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../macro_cors" }
