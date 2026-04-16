@@ -2,14 +2,14 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import type { CombinedRecipientItem, WithCustomUserInput } from '@core/user';
+import type { WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 import { commsServiceClient } from '@service-comms/client';
 import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import { createSignal, Show } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { Button } from '@ui/components/Button';
 
 export function NewCallButton() {
