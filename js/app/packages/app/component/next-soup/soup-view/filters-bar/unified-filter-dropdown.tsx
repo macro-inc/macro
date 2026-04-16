@@ -621,10 +621,7 @@ export const UnifiedFilterDropdown = () => {
         id: ch.id,
         label: ch.data.name,
         icon: () => (
-          <EntityIcon
-            targetType={ch.data.channelType || 'channel'}
-            size="xs"
-          />
+          <EntityIcon targetType={ch.data.channelType || 'channel'} size="xs" />
         ),
       }))
   );
@@ -658,9 +655,7 @@ export const UnifiedFilterDropdown = () => {
       const opt: SearchableOption = {
         id: c.id,
         label:
-          c.id === uid
-            ? `${c.data.name || 'Me'} (me)`
-            : c.data.name || c.id,
+          c.id === uid ? `${c.data.name || 'Me'} (me)` : c.data.name || c.id,
         icon: () => (
           <UserIcon id={c.id} size="xs" suppressClick showTooltip={false} />
         ),
@@ -822,9 +817,7 @@ export const UnifiedFilterDropdown = () => {
                             fallback={
                               <DropdownMenu.Item
                                 class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
-                                onSelect={() =>
-                                  handleIndexChange(option.value)
-                                }
+                                onSelect={() => handleIndexChange(option.value)}
                                 closeOnSelect
                               >
                                 <TypeIndicator active={active()} />
@@ -894,9 +887,7 @@ export const UnifiedFilterDropdown = () => {
                                   <Show when={option.value === 'email'}>
                                     <DropdownMenu.Sub gutter={4}>
                                       <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
-                                        <span class="text-ink">
-                                          Importance
-                                        </span>
+                                        <span class="text-ink">Importance</span>
                                         <CaretRightIcon class="size-3 text-ink-muted" />
                                       </DropdownMenu.SubTrigger>
                                       <DropdownMenu.Portal>

@@ -119,9 +119,7 @@ const SearchableFilterChip = (props: {
   const filteredOptions = createMemo(() => {
     const q = searchQuery().toLowerCase().trim();
     if (!q) return allOptions();
-    return allOptions().filter((opt) =>
-      opt.label.toLowerCase().includes(q)
-    );
+    return allOptions().filter((opt) => opt.label.toLowerCase().includes(q));
   });
 
   const handleChange = (selected: SearchableChipOption[]) => {
@@ -302,8 +300,7 @@ const FilterChip = (props: {
                     props.filter.isOptionActive
                       ? props.filter.isOptionActive(option.id)
                       : props.isOptionActive(option.id);
-                  const isSingleSelect = () =>
-                    props.filter.multiple === false;
+                  const isSingleSelect = () => props.filter.multiple === false;
                   return (
                     <DropdownMenu.Item
                       class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-default"
