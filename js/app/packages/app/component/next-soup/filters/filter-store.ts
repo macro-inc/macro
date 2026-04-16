@@ -99,6 +99,7 @@ const FIELD_CONFIG = {
   emailSeen: { target: 'ef', field: 'NotificationSeen' },
   emailDone: { target: 'ef', field: 'NotificationDone' },
   emailImportance: { target: 'ef', field: 'Importance' },
+  emailProjectId: { target: 'ef', field: 'ProjectId' },
   sender: { target: 'ef', field: 'Sender' },
   shared: { target: 'ef', field: 'Shared' },
 
@@ -113,6 +114,7 @@ const FIELD_CONFIG = {
   // Chats (cf)
   chatId: { target: 'cf', field: 'ChatId' },
   chatOwnerId: { target: 'cf', field: 'Owner' },
+  chatProjectId: { target: 'cf', field: 'ProjectId' },
   chatSeen: { target: 'cf', field: 'NotificationSeen' },
   chatDone: { target: 'cf', field: 'NotificationDone' },
 
@@ -141,6 +143,7 @@ type FieldValueMap = {
   emailSeen: boolean;
   emailDone: boolean;
   emailImportance: boolean;
+  emailProjectId: string;
   sender: string;
   shared: 'exclude' | 'include' | 'only';
   channelId: string;
@@ -151,6 +154,7 @@ type FieldValueMap = {
   channelSenderId: string;
   chatId: string;
   chatOwnerId: string;
+  chatProjectId: string;
   chatSeen: boolean;
   chatDone: boolean;
   folderId: string;
@@ -198,31 +202,8 @@ export function mergeFilterData(...sources: Partial<FilterData>[]): FilterData {
   let resolvedTargets: EntityType[] | undefined;
 
   for (const source of sources) {
-    if (source.include) {
-      for (const [key, values] of Object.entries(source.include) as [
-        FieldName,
-        unknown[],
-      ][]) {
-        if (!values?.length) continue;
-        const existing = include[key] as unknown[] | undefined;
-        (include as Record<string, unknown[]>)[key] = existing
-          ? [...existing, ...values]
-          : [...values];
-      }
-    }
-
-    if (source.exclude) {
-      for (const [key, values] of Object.entries(source.exclude) as [
-        FieldName,
-        unknown[],
-      ][]) {
-        if (!values?.length) continue;
-        const existing = exclude[key] as unknown[] | undefined;
-        (exclude as Record<string, unknown[]>)[key] = existing
-          ? [...existing, ...values]
-          : [...values];
-      }
-    }
+    addFieldValues(include, source.include);
+    addFieldValues(exclude, source.exclude);
 
     if (source.properties?.length) {
       properties.push(...source.properties);
@@ -268,6 +249,127 @@ export function applyFilterData(
   draft.properties = source.properties ?? [];
   draft.emailView = source.emailView;
   draft.targets = source.targets;
+}
+
+function addFieldValues(
+  target: Partial<Record<FieldName, unknown[]>>,
+  source: Partial<Record<FieldName, unknown[]>> | undefined
+): void {
+  if (!source) return;
+
+  for (const key of Object.keys(source) as FieldName[]) {
+    const values = source[key];
+    if (!values?.length) continue;
+
+    const existing = target[key];
+    target[key] = existing ? [...existing, ...values] : [...values];
+  }
+}
+
+function removeFieldValues(
+  target: Partial<Record<FieldName, unknown[]>>,
+  source: Partial<Record<FieldName, unknown[]>> | undefined
+): void {
+  if (!source) return;
+
+  for (const key of Object.keys(source) as FieldName[]) {
+    const values = source[key];
+    const existing = target[key];
+    if (!values?.length || !existing) continue;
+
+    const filtered = existing.filter((v) => !values.includes(v));
+
+    if (filtered.length > 0) {
+      target[key] = filtered;
+    } else {
+      delete target[key];
+    }
+  }
+}
+
+function removeProperties(
+  draft: FilterData,
+  queryProps: PropertyFilters
+): void {
+  const propsToRemove = queryProps.flatMap((p) => (Array.isArray(p) ? p : [p]));
+  const nextProperties: PropertyFilters = [];
+
+  for (const prop of draft.properties) {
+    if (Array.isArray(prop)) {
+      const filtered = prop.filter(
+        (p) =>
+          !propsToRemove.some(
+            (qp) => qp.propertyId === p.propertyId && qp.value === p.value
+          )
+      );
+
+      if (filtered.length > 0) {
+        nextProperties.push(filtered);
+      }
+
+      continue;
+    }
+
+    const shouldRemove = propsToRemove.some(
+      (qp) => qp.propertyId === prop.propertyId && qp.value === prop.value
+    );
+
+    if (!shouldRemove) {
+      nextProperties.push(prop);
+    }
+  }
+
+  draft.properties = nextProperties;
+}
+
+/** Add a query's contributions to the draft (mutates draft) */
+export function addQuery(draft: FilterData, query: Partial<FilterData>): void {
+  addFieldValues(draft.include, query.include);
+  addFieldValues(draft.exclude, query.exclude);
+
+  if (query.properties?.length) {
+    draft.properties.push(...query.properties);
+  }
+
+  if (query.emailView) {
+    draft.emailView = query.emailView;
+  }
+
+  if (query.targets) {
+    const queryResolved = resolveTargets(query.targets);
+    const currentResolved = draft.targets ? resolveTargets(draft.targets) : [];
+    const merged = Array.from(new Set([...currentResolved, ...queryResolved]));
+    draft.targets =
+      merged.length < ALL_ENTITY_TYPES.length ? merged : undefined;
+  }
+}
+
+/** Remove a query's contributions from the draft (mutates draft) */
+export function removeQuery(
+  draft: FilterData,
+  query: Partial<FilterData>
+): void {
+  removeFieldValues(draft.include, query.include);
+  removeFieldValues(draft.exclude, query.exclude);
+
+  if (query.properties?.length) {
+    removeProperties(draft, query.properties);
+  }
+
+  if (query.emailView && draft.emailView === query.emailView) {
+    draft.emailView = undefined;
+  }
+
+  if (query.targets) {
+    const queryResolved = resolveTargets(query.targets);
+    if (draft.targets) {
+      const currentResolved = resolveTargets(draft.targets);
+      const remaining = currentResolved.filter(
+        (t) => !queryResolved.includes(t)
+      );
+      draft.targets = remaining.length > 0 ? remaining : undefined;
+    }
+  }
 }
 
 export function createFilterStore(initial?: Partial<FilterData>) {
