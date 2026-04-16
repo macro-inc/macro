@@ -19,24 +19,34 @@ pub async fn list_documents_with_access(
 
     let documents: Vec<DocumentListItem> = sqlx::query!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        WITH RECURSIVE ProjectHierarchy AS (
+            SELECT p.id, uia.access_level 
+            FROM "Project" p
+            JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
+            WHERE uia.user_id = $1 AND p."deletedAt" IS NULL
             UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
+            SELECT p.id, ph.access_level
+            FROM "Project" p 
+            JOIN ProjectHierarchy ph ON p."parentId" = ph.id
+            WHERE p."deletedAt" IS NULL
+        ),
+        AllAccessGrants AS (
+            SELECT item_id, item_type, access_level 
+            FROM "UserItemAccess" 
+            WHERE user_id = $1 AND item_type = 'document'
             UNION ALL
-            SELECT $1
+            SELECT d.id AS item_id, 'document' AS item_type, ph.access_level
+            FROM "Document" d 
+            JOIN ProjectHierarchy ph ON d."projectId" = ph.id
+            WHERE d."projectId" IS NOT NULL AND d."deletedAt" IS NULL
         ),
         UserAccessibleDocuments AS (
-            SELECT DISTINCT ON (entity_id) entity_id, access_level
-            FROM entity_access
-            WHERE source_id = ANY(SELECT source_id FROM user_source_ids)
-              AND entity_type = 'document'
-            ORDER BY entity_id,
-                CASE access_level::text
+            SELECT DISTINCT ON (item_id) item_id, access_level
+            FROM AllAccessGrants
+            ORDER BY item_id, 
+                CASE access_level
                     WHEN 'owner' THEN 4
-                    WHEN 'edit' THEN 3
+                    WHEN 'edit' THEN 3 
                     WHEN 'comment' THEN 2
                     WHEN 'view' THEN 1
                     ELSE 0
@@ -53,7 +63,7 @@ pub async fn list_documents_with_access(
             d."deletedAt"::timestamptz as "deleted_at",
             uad.access_level::text as "access_level!"
         FROM "Document" d
-        INNER JOIN UserAccessibleDocuments uad ON uad.entity_id = d.id::uuid
+        INNER JOIN UserAccessibleDocuments uad ON uad.item_id = d.id
         WHERE d."deletedAt" IS NULL
         AND ($2::text[] IS NULL OR d."fileType" = ANY($2))
         AND (
@@ -63,7 +73,7 @@ pub async fn list_documents_with_access(
                 WHEN 'comment' THEN 2
                 WHEN 'view' THEN 1
                 ELSE 0
-            END >=
+            END >= 
             CASE $3
                 WHEN 'owner' THEN 4
                 WHEN 'edit' THEN 3
@@ -112,7 +122,7 @@ mod tests {
     use models_permissions::share_permission::access_level::AccessLevel;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("list_documents_with_access")))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_list_documents_with_access_owned_documents(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
@@ -142,7 +152,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("list_documents_with_access")))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_list_documents_with_file_type_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let filters = DocumentListFilters {
             file_types: Some(vec!["md".to_string()]),
@@ -171,7 +181,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("list_documents_with_access")))]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_list_documents_with_pagination(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let filters = DocumentListFilters::default();
 
