@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use ai_tools::{
-    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
+    NoOpConnectionService, NoOpNotificationService, NoOpScheduleContext, NoOpTaskProperties,
+    ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -280,6 +281,7 @@ async fn build_tool_context(
         document_tool_context,
         properties_tool_context,
         email_tool_context,
+        schedule_tool_context: NoOpScheduleContext,
     };
 
     tracing::info!("initialized tool context");

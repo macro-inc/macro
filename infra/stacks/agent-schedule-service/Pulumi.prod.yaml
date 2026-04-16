@@ -1,0 +1,13 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  agent-schedule-service:macro_db_secret_key: macro-db-prod
+  agent-schedule-service:jwt_secret_key: fusionauth-jwt-secret-prod
+  agent-schedule-service:fusionauth_client_id: fusionauth-client-id-key-prod
+  agent-schedule-service:fusionauth_issuer: auth.macro.com
+  agent-schedule-service:internal_auth_key: document-storage-service-auth-key-prod
+  agent-schedule-service:openai_api_key: openai-key
+  agent-schedule-service:anthropic_api_key: anthropic-api-key
+  agent-schedule-service:xai-api-key: xai-api-key
+  agent-schedule-service:open-router-api-key: open-router-api-key-prod-v2
+  agent-schedule-service:perplexity-api-key: perplexity-api-key

@@ -93,6 +93,8 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "aws-sdk-secretsmanager",
+ "aws-sdk-sqs",
  "axum",
  "call",
  "chrono",
@@ -100,6 +102,7 @@ dependencies = [
  "connection",
  "cool_asserts",
  "dateparser",
+ "document_storage_service_client",
  "documents",
  "email",
  "email_service_client",
@@ -107,7 +110,11 @@ dependencies = [
  "frecency",
  "item_filters",
  "lazy_static",
+ "lexical_client",
+ "macro_aws_config",
  "macro_db_client",
+ "macro_env",
+ "macro_env_var",
  "macro_user_id",
  "model",
  "model_notifications",
@@ -120,15 +127,20 @@ dependencies = [
  "notification",
  "properties",
  "rand 0.9.3",
+ "readonly_pool",
+ "remote_env_var",
  "schemars",
  "scribe",
  "search_service_client",
+ "secretsmanager_client",
  "serde",
  "serde_json",
  "soup",
  "sqlx",
  "sqs_client",
+ "static_file_service_client",
  "strum",
+ "sync_service_client",
  "tokio",
  "tracing",
  "utoipa",
@@ -1909,6 +1921,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-tz"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6139a8597ed92cf816dfb33f5dd6cf0bb93a6adc938f11039f371bc5bcd26c3"
+dependencies = [
+ "chrono",
+ "phf 0.12.1",
+ "serde",
+]
+
+[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2504,6 +2527,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "cron"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "089df96cf6a25253b4b6b6744d86f91150a3d4df546f31a95def47976b8cba97"
+dependencies = [
+ "chrono",
+ "once_cell",
+ "phf 0.11.3",
+ "winnow",
 ]
 
 [[package]]
@@ -5726,7 +5761,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -6435,20 +6470,9 @@ dependencies = [
  "ai_tools",
  "ai_toolset",
  "anyhow",
- "aws-sdk-sqs",
  "axum",
- "call",
  "chrono",
- "comms",
- "document_storage_service_client",
- "documents",
- "email",
- "email_service_client",
- "entity_access",
- "frecency",
  "futures",
- "lexical_client",
- "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
@@ -6456,17 +6480,9 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model_user",
- "properties",
- "readonly_pool",
- "scribe",
- "search_service_client",
  "serde",
  "serde_json",
- "soup",
  "sqlx",
- "sqs_client",
- "static_file_service_client",
- "sync_service_client",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -7951,6 +7967,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "phf"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "913273894cec178f401a31ec4b656318d95473527be05c0752cc41cdc32be8b7"
+dependencies = [
+ "phf_shared 0.12.1",
+]
+
+[[package]]
 name = "phf_codegen"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8017,6 +8042,15 @@ name = "phf_shared"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
+dependencies = [
+ "siphasher 1.0.1",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06005508882fb681fd97892ecff4b7fd0fee13ef1aa569f8695dae7ab9099981"
 dependencies = [
  "siphasher 1.0.1",
 ]
@@ -9314,6 +9348,49 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f29ebaa345f945cec9fbbc532eb307f0fdad8161f281b6369539c8d84876b3d"
 dependencies = [
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "scheduled_action"
+version = "0.1.0"
+dependencies = [
+ "ai",
+ "ai_tools",
+ "ai_toolset",
+ "anyhow",
+ "aws-sdk-secretsmanager",
+ "aws-sdk-sqs",
+ "axum",
+ "chat",
+ "chrono",
+ "chrono-tz",
+ "connection_gateway_client",
+ "cron",
+ "futures",
+ "macro_auth",
+ "macro_aws_config",
+ "macro_cors",
+ "macro_db_client",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_middleware",
+ "macro_user_id",
+ "macro_uuid",
+ "memory",
+ "model",
+ "model-entity",
+ "model_notifications",
+ "model_user",
+ "notification",
+ "secretsmanager_client",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "utoipa-swagger-ui",
 ]
 
 [[package]]
