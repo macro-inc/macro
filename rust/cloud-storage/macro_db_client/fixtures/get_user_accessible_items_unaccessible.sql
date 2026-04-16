@@ -22,40 +22,38 @@ VALUES ('user-1', 'user1@test.com', 'stripe_1', 1, 'a1111111-1111-1111-1111-1111
 
 -- === Project Hierarchy (owned by user-1) ===
 INSERT INTO public."Project" ("id", "name", "userId", "parentId")
-VALUES ('project-A-iso', 'Isolated Top Project', 'user-1', NULL),
-       ('project-B-iso', 'Isolated Nested Project', 'user-1', 'project-A-iso');
+VALUES ('d0000000-0000-0000-0000-0000000e0001', 'Isolated Top Project', 'user-1', NULL),
+       ('d0000000-0000-0000-0000-0000000e0002', 'Isolated Nested Project', 'user-1', 'd0000000-0000-0000-0000-0000000e0001');
 
 -- === Items inside the hierarchy (owned by user-1) ===
 INSERT INTO public."Chat" ("id", "name", "userId", "projectId")
-VALUES ('chat-A-iso', 'Isolated Chat', 'user-1', 'project-A-iso');
+VALUES ('d0000000-0000-0000-0000-0000000e0003', 'Isolated Chat', 'user-1', 'd0000000-0000-0000-0000-0000000e0001');
 INSERT INTO public."Document" ("id", "name", "owner", "projectId")
-VALUES ('doc-B-iso', 'Isolated Document', 'user-1', 'project-B-iso');
+VALUES ('d0000000-0000-0000-0000-0000000e0004', 'Isolated Document', 'user-1', 'd0000000-0000-0000-0000-0000000e0002');
 
 -- Dependencies
 INSERT INTO public."DocumentFamily" ("id", "rootDocumentId")
-VALUES (1, 'doc-B-iso');
+VALUES (1, 'd0000000-0000-0000-0000-0000000e0004');
 INSERT INTO public."DocumentInstance" ("id", "documentId", "sha")
-VALUES (1, 'doc-B-iso', 'sha-iso');
+VALUES (1, 'd0000000-0000-0000-0000-0000000e0004', 'sha-iso');
 
--- === Grant Access to user-2 ===
--- user-1 shares the top-level project with user-2 (implicit access)
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'user-2', 'project-A-iso', 'project', 'view');
-
--- user-1 ALSO explicitly shares the nested items with user-2
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'user-2', 'chat-A-iso', 'chat', 'comment'),
-       (gen_random_uuid(), 'user-2', 'doc-B-iso', 'document', 'edit');
-
+-- === Grant Access to user-2 via entity_access ===
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
+VALUES
+    ('d0000000-0000-0000-0000-0000000e0001'::uuid, 'project', 'user-2', 'user', 'view', NULL),
+    ('d0000000-0000-0000-0000-0000000e0002'::uuid, 'project', 'user-2', 'user', 'view', 'd0000000-0000-0000-0000-0000000e0001'),
+    ('d0000000-0000-0000-0000-0000000e0003'::uuid, 'chat', 'user-2', 'user', 'comment', NULL),
+    ('d0000000-0000-0000-0000-0000000e0004'::uuid, 'document', 'user-2', 'user', 'edit', NULL);
 
 -- === Grant Access to user-1 (for completeness, so user-1 can see their own items) ===
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'user-1', 'project-A-iso', 'project', 'owner'),
-       (gen_random_uuid(), 'user-1', 'project-B-iso', 'project', 'owner'),
-       (gen_random_uuid(), 'user-1', 'chat-A-iso', 'chat', 'owner'),
-       (gen_random_uuid(), 'user-1', 'doc-B-iso', 'document', 'owner');
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+VALUES
+    ('d0000000-0000-0000-0000-0000000e0001'::uuid, 'project', 'user-1', 'user', 'owner'),
+    ('d0000000-0000-0000-0000-0000000e0002'::uuid, 'project', 'user-1', 'user', 'owner'),
+    ('d0000000-0000-0000-0000-0000000e0003'::uuid, 'chat', 'user-1', 'user', 'owner'),
+    ('d0000000-0000-0000-0000-0000000e0004'::uuid, 'document', 'user-1', 'user', 'owner');
 
 
--- CRITICAL: NO UserItemAccess records are created for user-3.
+-- CRITICAL: NO entity_access records are created for user-3.
 
 SET session_replication_role = 'origin';

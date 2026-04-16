@@ -19,11 +19,21 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Project A', 'macro|user-1@test.
        ('88888888-ffff-ffff-ffff-ffffffffffff', 'Project With Frecency', 'macro|user-1@test.com', '2024-01-17 10:00:00', '2024-02-08 10:00:00'),
        ('88888888-8888-8888-8888-888888888888', 'Project No Frecency', 'macro|user-1@test.com', '2024-01-01 10:00:00', '2024-02-07 10:00:00');
 
--- Give user access to the projects
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'macro|user-1@test.com', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'project', 'owner'),
-       (gen_random_uuid(), 'macro|user-1@test.com', '88888888-ffff-ffff-ffff-ffffffffffff', 'project', 'owner'),
-       (gen_random_uuid(), 'macro|user-1@test.com', '88888888-8888-8888-8888-888888888888', 'project', 'owner');
+-- Give user access to the projects and all items within them
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
+VALUES
+-- Direct access to projects
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'project', 'macro|user-1@test.com', 'user', 'owner', NULL),
+('88888888-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'owner', NULL),
+('88888888-8888-8888-8888-888888888888', 'project', 'macro|user-1@test.com', 'user', 'owner', NULL),
+-- Inherited access to documents and chats in project-A
+('44444444-ffff-ffff-ffff-ffffffffffff', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+('55555555-ffff-ffff-ffff-ffffffffffff', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+('44444444-4444-4444-4444-444444444444', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+('55555555-5555-5555-5555-555555555555', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+('66666666-ffff-ffff-ffff-ffffffffffff', 'chat', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+('66666666-6666-6666-6666-666666666666', 'chat', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+('77777777-7777-7777-7777-777777777777', 'chat', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 
 -- Create documents (2 with frecency, 2 without)
 -- Documents WITH frecency (should be filtered out)

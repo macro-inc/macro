@@ -88,29 +88,39 @@ VALUES ('22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Chat in A', 'macro|user-1@test.
        ('22222222-9999-9999-9999-999999999999', 'Isolated Chat', 'macro|user-1@test.com', '99999999-ffff-ffff-ffff-ffffffffffff', '2023-01-06 14:00:00', '2023-01-06 14:00:00');
 
 ---------------------------------------------------
---  USER ACCESS PERMISSIONS (UserItemAccess)
+--  USER ACCESS PERMISSIONS (entity_access)
 ---------------------------------------------------
+-- entity_access denormalizes all access including project-inherited items.
+-- So we add rows for every item the user can access.
 
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
 VALUES
--- SCENARIO: User gets 'view' on project-A. Access to items in A, B, and C should be inherited from this.
-(gen_random_uuid(), 'macro|user-1@test.com', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'project', 'view'),
+-- Direct access to project-A (view)
+('aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'view', NULL),
 
--- SCENARIO: Direct 'edit' on doc-in-B should override inherited 'view' from project-A.
--- We add a 'view' record too, to ensure DISTINCT ON correctly picks the higher 'edit' level.
-(gen_random_uuid(), 'macro|user-1@test.com', '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'view'),
-(gen_random_uuid(), 'macro|user-1@test.com', '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'edit'),
+-- Inherited access to project-B and project-C from project-A
+('bbbbbbbb-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('cccccccc-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
 
--- SCENARIO: Inherited 'owner' from project-D should override direct 'comment' on doc-in-D.
-(gen_random_uuid(), 'macro|user-1@test.com', 'dddddddd-ffff-ffff-ffff-ffffffffffff', 'project', 'owner'),
-(gen_random_uuid(), 'macro|user-1@test.com', '11111111-dddd-dddd-dddd-dddddddddddd', 'document', 'comment'),
+-- Inherited access to items in project-A hierarchy
+('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'chat', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('11111111-cccc-cccc-cccc-cccccccccccc', 'document', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('22222222-cccc-cccc-cccc-cccccccccccc', 'chat', 'macro|user-1@test.com', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
 
--- SCENARIO: Direct access to items not in any project.
-(gen_random_uuid(), 'macro|user-1@test.com', '11111111-0000-0000-0000-000000000000', 'document', 'owner'),
-(gen_random_uuid(), 'macro|user-1@test.com', '22222222-0000-0000-0000-000000000000', 'chat', 'owner');
+-- Direct 'edit' on doc-in-B (higher than inherited 'view')
+('11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'macro|user-1@test.com', 'user', 'edit', NULL),
 
--- NOTE: There are no access records for project-B, project-C, doc-in-A, chat-in-A, etc.
--- Their visibility depends entirely on the inherited permission from project-A.
+-- Direct access to project-D (owner) and its document
+('dddddddd-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'owner', NULL),
+('11111111-dddd-dddd-dddd-dddddddddddd', 'document', 'macro|user-1@test.com', 'user', 'owner', 'dddddddd-ffff-ffff-ffff-ffffffffffff'),
+('11111111-dddd-dddd-dddd-dddddddddddd', 'document', 'macro|user-1@test.com', 'user', 'comment', NULL),
+
+-- Direct access to standalone items
+('11111111-0000-0000-0000-000000000000', 'document', 'macro|user-1@test.com', 'user', 'owner', NULL),
+('22222222-0000-0000-0000-000000000000', 'chat', 'macro|user-1@test.com', 'user', 'owner', NULL);
 
 -- NOTE: There are no access records for 'project-isolated', 'doc-isolated', or 'chat-isolated'.
 -- These items should NOT be returned by the query for 'macro|user-1@test.com'.

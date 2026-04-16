@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM comms_channels\n        WHERE id = $1\n        AND EXISTS (\n            SELECT 1 FROM comms_channel_participants\n            WHERE channel_id = $1\n            AND user_id = $2\n            AND role = 'owner'::comms_participant_role\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecfb4ae58128a90c615fb3c25c24aaa6dab70b4a4e90b23913f297d806a06a7e"
+}

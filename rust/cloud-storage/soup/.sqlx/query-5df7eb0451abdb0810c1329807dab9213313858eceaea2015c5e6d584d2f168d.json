@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_user_history (link_id, thread_id, created_at, updated_at)\n        VALUES ($1, $2, NOW(), NOW())\n        ON CONFLICT (link_id, thread_id)\n        DO UPDATE SET\n            updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5df7eb0451abdb0810c1329807dab9213313858eceaea2015c5e6d584d2f168d"
+}

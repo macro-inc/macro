@@ -1,5 +1,5 @@
 -- Clean up all relevant tables to ensure a fresh state for each test.
-TRUNCATE TABLE public."User", public."Project", public."SharePermission", public."EmailThreadPermission", public."ProjectPermission", public."UserItemAccess" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE public."User", public."Project", public."SharePermission", public."EmailThreadPermission", public."ProjectPermission", public.entity_access RESTART IDENTITY CASCADE;
 
 -- Create macro_user entries (must exist before User rows).
 INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
@@ -15,9 +15,10 @@ VALUES ('user-1', 'user1@test.com', 'a1111111-1111-1111-1111-111111111111'), -- 
 -- Has no explicit grants, relies on public access.
 
 -- Create a nested project hierarchy: p-grandparent -> p-parent.
+-- Using UUIDs for project IDs since entity_access.entity_id is UUID type.
 INSERT INTO public."Project" ("id", "name", "userId", "parentId")
-VALUES ('p-grandparent', 'Grandparent Project', 'user-1', NULL),
-       ('p-parent', 'Parent Project', 'user-1', 'p-grandparent');
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'Grandparent Project', 'user-1', NULL),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'Parent Project', 'user-1', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000001');
 
 -- Create placeholder SharePermission records. These are needed for the FK constraint in EmailThreadPermission.
 INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
@@ -43,25 +44,26 @@ WHERE "id" = 'sp-thread-nested';
 
 -- Link public permissions to the project hierarchy.
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
-VALUES ('p-grandparent', 'sp-public-edit-thread'),
-       ('p-parent', 'sp-public-view-thread');
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'sp-public-edit-thread'),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'sp-public-view-thread');
 
 
 -- Link threads to projects (or not) via EmailThreadPermission.
+-- Using UUIDs for thread IDs since entity_access.entity_id is UUID type.
 INSERT INTO public."EmailThreadPermission" ("threadId", "sharePermissionId", "userId", "projectId")
-VALUES ('thread-nested', 'sp-thread-nested', 'user-1', 'p-parent'),   -- Main test subject, in a project
-       ('thread-standalone', 'sp-thread-standalone', 'user-1', NULL), -- No project link
-       ('thread-private', 'sp-thread-private', 'user-1', NULL);
+VALUES ('eeeeeeee-eeee-eeee-eeee-000000000001', 'sp-thread-nested', 'user-1', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000002'),   -- Main test subject, in a project
+       ('eeeeeeee-eeee-eeee-eeee-000000000002', 'sp-thread-standalone', 'user-1', NULL), -- No project link
+       ('eeeeeeee-eeee-eeee-eeee-000000000003', 'sp-thread-private', 'user-1', NULL);
 -- No project link, no permissions
 
 
--- Add explicit UserItemAccess records.
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
+-- Add explicit entity_access records (replacing UserItemAccess).
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
 VALUES
 -- user-1 has explicit 'view' on thread-nested, and inherited 'owner' from p-grandparent.
-('10000000-0000-0000-0000-000000000001', 'user-1', 'thread-nested', 'thread', 'view'),
-('10000000-0000-0000-0000-000000000002', 'user-1', 'p-grandparent', 'project', 'owner'),
+('eeeeeeee-eeee-eeee-eeee-000000000001', 'thread', 'user-1', 'user', 'view'),
+('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'project', 'user-1', 'user', 'owner'),
 -- user-1 also has direct 'comment' access on the standalone thread.
-('10000000-0000-0000-0000-000000000003', 'user-1', 'thread-standalone', 'thread', 'comment'),
+('eeeeeeee-eeee-eeee-eeee-000000000002', 'thread', 'user-1', 'user', 'comment'),
 -- user-2 has explicit 'comment' access inherited from p-parent, to test scoping.
-('10000000-0000-0000-0000-000000000004', 'user-2', 'p-parent', 'project', 'comment');
+('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'project', 'user-2', 'user', 'comment');

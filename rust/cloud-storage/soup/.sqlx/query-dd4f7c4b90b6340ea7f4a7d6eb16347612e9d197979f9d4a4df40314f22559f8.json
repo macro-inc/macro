@@ -1,0 +1,145 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp\n                WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            UNION ALL\n            SELECT t.team_id::text FROM team_user t\n                WHERE t.user_id = $1\n            UNION ALL\n            SELECT $1\n        ),\n        UserAccessibleItems AS (\n            SELECT DISTINCT\n                ea.entity_id::text as item_id,\n                ea.entity_type as item_type\n            FROM entity_access ea\n            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)\n        ),\n        Combined AS (\n            SELECT\n                'document' as \"item_type!\",\n                d.id as \"id!\",\n                CAST(COALESCE(di.id, db.id) as TEXT) as \"document_version_id\",\n                d.owner as \"user_id!\",\n                d.name as \"name!\",\n                d.\"branchedFromId\" as \"branched_from_id\",\n                d.\"branchedFromVersionId\" as \"branched_from_version_id\", \n                d.\"documentFamilyId\" as \"document_family_id\",\n                d.\"fileType\" as \"file_type\",\n                d.\"createdAt\"::timestamptz as \"created_at!\",\n                d.\"updatedAt\"::timestamptz as \"updated_at!\",\n                d.\"projectId\" as \"project_id\",\n                NULL as \"is_persistent\",\n                di.sha as \"sha\",\n                dt.sub_type as \"sub_type?: DocumentSubType\",\n                uh.\"updatedAt\"::timestamptz as \"viewed_at\",\n                CASE $2\n                    WHEN 'viewed_updated' THEN COALESCE(uh.\"updatedAt\", d.\"updatedAt\")\n                    WHEN 'viewed_at' THEN COALESCE(uh.\"updatedAt\", '1970-01-01 00:00:00+00')\n                    WHEN 'created_at'  THEN d.\"createdAt\"\n                    ELSE d.\"updatedAt\"\n                END::timestamptz as \"sort_ts!\",\n                CASE\n                    WHEN dt.sub_type = 'task'\n                        AND ep_status.values->'value' ? $6\n                    THEN true\n                    WHEN dt.sub_type = 'task'\n                    THEN false\n                    ELSE NULL\n                END as \"is_completed\",\n                d.\"deletedAt\"::timestamptz as \"deleted_at\"\n            FROM \"Document\" d\n            LEFT JOIN document_sub_type dt ON dt.document_id = d.id\n            LEFT JOIN entity_properties ep_status\n                ON dt.sub_type = 'task'\n                AND ep_status.entity_id = d.id\n                AND ep_status.entity_type = 'TASK'\n                AND ep_status.property_definition_id = $7\n            INNER JOIN UserAccessibleItems uai\n                ON uai.item_id = d.id\n                AND uai.item_type = 'document'\n            LEFT JOIN \"UserHistory\" uh\n                ON uh.\"itemId\" = d.id\n                AND uh.\"itemType\" = 'document'\n                AND uh.\"userId\" = $1\n            LEFT JOIN LATERAL (\n                SELECT b.id\n                FROM \"DocumentBom\" b\n                WHERE b.\"documentId\" = d.id\n                ORDER BY b.\"createdAt\" DESC\n                LIMIT 1\n            ) db ON true\n            LEFT JOIN LATERAL (\n                SELECT i.id, i.sha\n                FROM \"DocumentInstance\" i\n                WHERE i.\"documentId\" = d.id\n                ORDER BY i.\"updatedAt\" DESC\n                LIMIT 1\n            ) di ON true\n            WHERE d.\"deletedAt\" IS NULL\n\n            UNION ALL\n\n            SELECT\n                'chat' as \"item_type!\",\n                c.id as \"id!\",\n                NULL as \"document_version_id\",\n                c.\"userId\" as \"user_id!\",\n                c.name as \"name!\",\n                NULL as \"branched_from_id\",\n                NULL as \"branched_from_version_id\",\n                NULL as \"document_family_id\",\n                NULL as \"file_type\",\n                c.\"createdAt\"::timestamptz as \"created_at!\",\n                c.\"updatedAt\"::timestamptz as \"updated_at!\",\n                c.\"projectId\" as \"project_id\",\n                c.\"isPersistent\" as \"is_persistent\",\n                NULL as \"sha\",\n                NULL as \"sub_type\",\n                uh.\"updatedAt\"::timestamptz as \"viewed_at\",\n                CASE $2\n                    WHEN 'viewed_updated' THEN COALESCE(uh.\"updatedAt\", c.\"updatedAt\")\n                    WHEN 'viewed_at' THEN COALESCE(uh.\"updatedAt\", '1970-01-01 00:00:00+00')\n                    WHEN 'created_at'  THEN c.\"createdAt\"\n                    ELSE c.\"updatedAt\"\n                END::timestamptz as \"sort_ts!\",\n                NULL as \"is_completed\",\n                c.\"deletedAt\"::timestamptz as \"deleted_at\"\n            FROM \"Chat\" c\n            INNER JOIN UserAccessibleItems uai\n                ON uai.item_id = c.id\n                AND uai.item_type = 'chat'\n            LEFT JOIN \"UserHistory\" uh\n                ON uh.\"itemId\" = c.id\n                AND uh.\"itemType\" = 'chat'\n                AND uh.\"userId\" = $1\n            WHERE c.\"deletedAt\" IS NULL\n\n            UNION ALL\n\n            SELECT\n                'project' as \"item_type!\",\n                p.id as \"id!\",\n                NULL as \"document_version_id\",\n                p.\"userId\" as \"user_id!\",\n                p.name as \"name!\",\n                NULL as \"branched_from_id\",\n                NULL as \"branched_from_version_id\",\n                NULL as \"document_family_id\",\n                NULL as \"file_type\",\n                p.\"createdAt\"::timestamptz as \"created_at!\",\n                p.\"updatedAt\"::timestamptz as \"updated_at!\",\n                p.\"parentId\" as \"project_id\",\n                NULL as \"is_persistent\",\n                NULL as \"sha\",\n                NULL as \"sub_type\",\n                uh.\"updatedAt\"::timestamptz as \"viewed_at\",\n                CASE $2\n                    WHEN 'viewed_updated' THEN COALESCE(uh.\"updatedAt\", p.\"updatedAt\")\n                    WHEN 'viewed_at' THEN COALESCE(uh.\"updatedAt\", '1970-01-01 00:00:00+00')\n                    WHEN 'created_at'  THEN p.\"createdAt\"\n                    ELSE p.\"updatedAt\"\n                END::timestamptz as \"sort_ts!\",\n                NULL as \"is_completed\",\n                p.\"deletedAt\"::timestamptz as \"deleted_at\"\n            FROM \"Project\" p\n            INNER JOIN UserAccessibleItems uai\n                ON uai.item_id = p.id\n                AND uai.item_type = 'project'\n            LEFT JOIN \"UserHistory\" uh\n                ON uh.\"itemId\" = p.id\n                AND uh.\"itemType\" = 'project'\n                AND uh.\"userId\" = $1\n            WHERE p.\"deletedAt\" IS NULL\n        )\n        SELECT * \n        FROM Combined\n        WHERE ($4::timestamptz IS NULL)\n            OR (\"sort_ts!\", \"id!\") < ($4, $5)\n        ORDER BY \"sort_ts!\" DESC, \"id!\" DESC\n        LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_version_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "branched_from_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "branched_from_version_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "document_family_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "file_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_persistent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "sub_type?: DocumentSubType",
+        "type_info": {
+          "Custom": {
+            "name": "document_sub_type_value",
+            "kind": {
+              "Enum": [
+                "task"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "sort_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "is_completed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 18,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "dd4f7c4b90b6340ea7f4a7d6eb16347612e9d197979f9d4a4df40314f22559f8"
+}

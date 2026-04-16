@@ -5,7 +5,7 @@ use std::str::FromStr;
 ///
 /// This function checks only public `SharePermission` records (where `isPublic=true`),
 /// applied either directly to the project or inherited from its parent hierarchy.
-/// It does NOT check user-specific `UserItemAccess` records.
+/// It does NOT check user-specific `entity_access` records.
 ///
 /// Use this for unauthenticated access to publicly shared projects.
 ///
@@ -60,7 +60,8 @@ pub async fn get_public_access_level_for_project(
 /// Calculates the highest effective access level a user has for a project.
 ///
 /// This function determines the best possible permission by considering two sources:
-/// 1.  **Explicit Grants**: Any `UserItemAccess` records for the specified user, applied either
+/// 1.  **Explicit Grants**: Any `entity_access` records for the specified user (via their
+///     source IDs: user ID, team memberships, and channel participations), applied either
 ///     directly to the project or inherited from its entire project hierarchy.
 /// 2.  **Public Access**: Any `SharePermission` records marked as `isPublic=true`, applied either
 ///     directly to the project or inherited from its project hierarchy.
@@ -84,42 +85,34 @@ pub async fn get_highest_access_level_for_project(
     project_id: &str,
     user_id: &str,
 ) -> anyhow::Result<Option<AccessLevel>> {
-    // have to use strings because the SharePermission and UserItemAccess access_level rows use different sql types
+    let entity_id = macro_uuid::string_to_uuid(project_id).unwrap();
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
-        -- CTE to recursively find all parent projects, starting from the given project.
-        WITH RECURSIVE project_hierarchy AS (
-            -- Base case: Start with the project ID provided.
-            SELECT id as project_id
-            FROM "Project"
-            WHERE id = $1 AND "deletedAt" IS NULL
-            UNION ALL
-            -- Recursive case: Find the parent of the project from the previous step.
-            SELECT parent.id as project_id
-            FROM project_hierarchy ph
-            JOIN "Project" parent ON parent.id = (
-                SELECT "parentId" FROM "Project" WHERE id = ph.project_id AND "parentId" IS NOT NULL AND "deletedAt" IS NULL
-            )
-        )
-        -- The subquery now gathers all levels as plain text.
         SELECT access_level FROM (
-            -- Source 1: Cast the AccessLevel enum to text.
-            SELECT access_level::text FROM "UserItemAccess"
-            WHERE user_id = $2 AND item_id IN (
-                -- The hierarchy CTE includes the starting project, so this is all we need.
-                SELECT project_id FROM project_hierarchy
-            )
+            -- Source 1: entity_access with source_ids (user, teams, channels)
+            SELECT access_level::text FROM entity_access
+            WHERE source_id = ANY(ARRAY(
+                SELECT cp.channel_id::text FROM comms_channel_participants cp
+                    WHERE cp.user_id = $3 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text FROM team_user t
+                    WHERE t.user_id = $3
+                UNION ALL
+                SELECT $3
+            ))
+            AND entity_id = $1
+            AND entity_type = 'project'
             UNION ALL
             -- Source 2: Select the publicAccessLevel (which is already text).
             SELECT "publicAccessLevel" as access_level
             FROM "SharePermission"
             WHERE "isPublic" = true AND "publicAccessLevel" IS NOT NULL AND id IN (
-                -- We only need to check ProjectPermission for the items in the hierarchy.
                 SELECT "sharePermissionId" FROM "ProjectPermission"
-                WHERE "projectId" IN (SELECT project_id FROM project_hierarchy)
+                WHERE "projectId" = $2
             )
         ) as all_levels
         "#,
+        entity_id,
         project_id,
         user_id
     )

@@ -59,7 +59,7 @@ VALUES ('a6666666-6666-6666-6666-666666666666', 'test-user', 'test-user@test.com
        ('accccccc-cccc-cccc-cccc-cccccccccccc', 'uia_user5', 'uia_user5@test.com', 'stripe_uia_user5')
 ON CONFLICT (id) DO NOTHING;
 
--- Create test users needed for all UserItemAccess tests
+-- Create test users needed for all entity_access tests
 INSERT INTO public."User" ("id", "email", "macro_user_id")
 VALUES ('macro|test-user@test.com', 'test-user@test.com', 'a6666666-6666-6666-6666-666666666666'),
        ('macro|user0@test.com', 'user0@test.com', 'a7777777-7777-7777-7777-777777777777'),
@@ -70,21 +70,21 @@ VALUES ('macro|test-user@test.com', 'test-user@test.com', 'a6666666-6666-6666-66
        ('macro|user5@test.com', 'user5@test.com', 'accccccc-cccc-cccc-cccc-cccccccccccc')
 ON CONFLICT (id) DO NOTHING;
 
--- Create single user item access record for test_delete_user_item_access
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level", "created_at")
-VALUES ('00000000-0000-0000-0000-000000000001', 'macro|test-user@test.com', 'test-item', 'document', 'owner', NOW());
+-- Create single entity_access record for test_delete_user_item_access
+INSERT INTO public.entity_access (entity_id, entity_type, source_id, source_type, access_level, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000001', 'document', 'macro|test-user@test.com', 'user', 'owner', NOW(), NOW());
 
--- Create multiple user item access records for test_delete_user_item_access_by_item
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level", "created_at")
-VALUES ('00000000-0000-0000-0000-000000000002', 'macro|user1@test.com', 'multi-access-item', 'document', 'view', NOW()),
-       ('00000000-0000-0000-0000-000000000003', 'macro|user2@test.com', 'multi-access-item', 'document', 'view', NOW()),
-       ('00000000-0000-0000-0000-000000000004', 'macro|user3@test.com', 'multi-access-item', 'document', 'view', NOW());
+-- Create multiple entity_access records for test_delete_user_item_access_by_item
+INSERT INTO public.entity_access (entity_id, entity_type, source_id, source_type, access_level, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000002', 'document', 'macro|user1@test.com', 'user', 'view', NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000002', 'document', 'macro|user2@test.com', 'user', 'view', NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000002', 'document', 'macro|user3@test.com', 'user', 'view', NOW(), NOW());
 
--- Create multiple user item access records for test_delete_user_item_access_bulk
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level", "created_at")
-VALUES ('00000000-0000-0000-0000-000000000005', 'macro|user0@test.com', 'bulk-test-item-1', 'document', 'view', NOW()),
-       ('00000000-0000-0000-0000-000000000006', 'macro|user1@test.com', 'bulk-test-item-1', 'document', 'edit', NOW()),
-       ('00000000-0000-0000-0000-000000000007', 'macro|user2@test.com', 'bulk-test-item-2', 'document', 'view', NOW()),
-       ('00000000-0000-0000-0000-000000000008', 'macro|user3@test.com', 'bulk-test-item-2', 'document', 'edit', NOW()),
-       ('00000000-0000-0000-0000-000000000009', 'macro|user4@test.com', 'bulk-test-item-3', 'document', 'view', NOW()),
-       ('00000000-0000-0000-0000-000000000010', 'macro|user5@test.com', 'bulk-test-item-3', 'document', 'edit', NOW());
+-- Create multiple entity_access records for test_delete_user_item_access_bulk
+INSERT INTO public.entity_access (entity_id, entity_type, source_id, source_type, access_level, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000003', 'document', 'macro|user0@test.com', 'user', 'view', NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000003', 'document', 'macro|user1@test.com', 'user', 'edit', NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000004', 'document', 'macro|user2@test.com', 'user', 'view', NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000004', 'document', 'macro|user3@test.com', 'user', 'edit', NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000005', 'document', 'macro|user4@test.com', 'user', 'view', NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000005', 'document', 'macro|user5@test.com', 'user', 'edit', NOW(), NOW());
