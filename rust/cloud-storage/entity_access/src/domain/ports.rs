@@ -17,9 +17,6 @@ use uuid::Uuid;
 /// All methods query the database directly - no HTTP calls to external services.
 pub trait AccessRepository: Clone + Send + Sync + 'static {
     /// Get the highest access level a user has for a document.
-    ///
-    /// Considers both explicit grants (UserItemAccess) and public access
-    /// (SharePermission) inherited through the project hierarchy.
     fn get_document_access(
         &self,
         document_id: &str,
@@ -27,9 +24,6 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for a chat.
-    ///
-    /// Considers both explicit grants (UserItemAccess) and public access
-    /// (SharePermission) inherited through the project hierarchy.
     fn get_chat_access(
         &self,
         chat_id: &str,
@@ -37,9 +31,6 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for a project.
-    ///
-    /// Considers both explicit grants (UserItemAccess) and public access
-    /// (SharePermission) inherited through the project hierarchy.
     fn get_project_access(
         &self,
         project_id: &str,
@@ -47,9 +38,6 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for an email thread.
-    ///
-    /// Considers both explicit grants (UserItemAccess) and public access
-    /// (SharePermission) inherited through the project hierarchy.
     fn get_thread_access(
         &self,
         thread_id: &str,
@@ -183,7 +171,7 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Get all user IDs that have access to a given entity.
     ///
     /// For Document, Chat, Project, and EmailThread: returns user IDs with direct
-    /// access or inherited access through the project hierarchy via `UserItemAccess`.
+    /// access or inherited access through the project hierarchy via `entity_access`.
     /// For Channel: returns active channel participants.
     /// Returns `AccessError::BadRequest` for unsupported types (Team, User).
     fn get_users_by_entity(

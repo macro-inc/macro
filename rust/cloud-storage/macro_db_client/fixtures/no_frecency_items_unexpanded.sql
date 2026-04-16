@@ -1,6 +1,6 @@
 -- Fixture to test the "no frecency" unexpanded queries
 -- Creates items where some have frecency_aggregates records and some don't
--- Uses EXPLICIT UserItemAccess grants (not project-based inheritance)
+-- Uses EXPLICIT entity_access grants (not project-based inheritance)
 
 SET session_replication_role = 'replica';
 
@@ -45,17 +45,17 @@ VALUES ('88888888-ffff-ffff-ffff-ffffffffffff', 'Project With Frecency', 'macro|
 INSERT INTO public."Project" ("id", "name", "userId", "createdAt", "updatedAt")
 VALUES ('88888888-8888-8888-8888-888888888888', 'Project No Frecency', 'macro|user@user.com', '2024-01-18 10:00:00', '2024-02-07 10:00:00');
 
--- Explicit UserItemAccess grants for all items (unexpanded requires this)
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'macro|user@user.com', '44444444-ffff-ffff-ffff-ffffffffffff', 'document', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', '55555555-ffff-ffff-ffff-ffffffffffff', 'document', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', '44444444-4444-4444-4444-444444444444', 'document', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', '55555555-5555-5555-5555-555555555555', 'document', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', '66666666-ffff-ffff-ffff-ffffffffffff', 'chat', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', '66666666-6666-6666-6666-666666666666', 'chat', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', '77777777-7777-7777-7777-777777777777', 'chat', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', '88888888-ffff-ffff-ffff-ffffffffffff', 'project', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', '88888888-8888-8888-8888-888888888888', 'project', 'owner');
+-- Explicit entity_access grants for all items (unexpanded requires this)
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+VALUES ('44444444-ffff-ffff-ffff-ffffffffffff', 'document', 'macro|user@user.com', 'user', 'owner'),
+       ('55555555-ffff-ffff-ffff-ffffffffffff', 'document', 'macro|user@user.com', 'user', 'owner'),
+       ('44444444-4444-4444-4444-444444444444', 'document', 'macro|user@user.com', 'user', 'owner'),
+       ('55555555-5555-5555-5555-555555555555', 'document', 'macro|user@user.com', 'user', 'owner'),
+       ('66666666-ffff-ffff-ffff-ffffffffffff', 'chat', 'macro|user@user.com', 'user', 'owner'),
+       ('66666666-6666-6666-6666-666666666666', 'chat', 'macro|user@user.com', 'user', 'owner'),
+       ('77777777-7777-7777-7777-777777777777', 'chat', 'macro|user@user.com', 'user', 'owner'),
+       ('88888888-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user@user.com', 'user', 'owner'),
+       ('88888888-8888-8888-8888-888888888888', 'project', 'macro|user@user.com', 'user', 'owner');
 
 -- Dependencies for documents
 INSERT INTO public."DocumentFamily" ("id", "rootDocumentId")

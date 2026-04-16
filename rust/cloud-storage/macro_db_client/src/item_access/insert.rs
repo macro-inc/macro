@@ -4,46 +4,29 @@ use models_permissions::user_item_access::UserItemAccess;
 use sqlx::{Executor, Postgres, Transaction};
 use uuid::Uuid;
 
-#[tracing::instrument(skip(transaction))]
+#[tracing::instrument(skip(transaction), err)]
 pub async fn insert_user_item_access(
     transaction: &mut Transaction<'_, Postgres>,
     user_id: MacroUserIdStr<'_>,
     item_id: &str,
     item_type: &str,
     access_level: AccessLevel,
-    granted_from_channel_id: Option<Uuid>,
+    _granted_from_channel_id: Option<Uuid>,
 ) -> anyhow::Result<()> {
-    let id = macro_uuid::generate_uuid_v7();
+    let entity_id = macro_uuid::string_to_uuid(item_id)?;
 
     sqlx::query!(
         r#"
-        INSERT INTO "UserItemAccess" (
-            "id",
-            "user_id",
-            "item_id",
-            "item_type",
-            "access_level",
-            "granted_from_channel_id",
-            "created_at",
-            "updated_at"
-        )
-        VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6,
-            NOW(),
-            NOW()
-        )
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, $2, $3, 'user', $4)
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
         "#,
-        id,
-        user_id.as_ref(),
-        item_id,
+        entity_id,
         item_type,
+        user_id.as_ref(),
         access_level as _,
-        granted_from_channel_id
     )
     .execute(transaction.as_mut())
     .await?;
@@ -51,14 +34,14 @@ pub async fn insert_user_item_access(
     Ok(())
 }
 
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(executor), err)]
 pub async fn upsert_user_item_access_bulk<'e, E>(
     executor: E,
     user_ids: &[MacroUserIdStr<'_>],
     item_id: &str,
     item_type: &str,
     access_level: AccessLevel,
-    granted_from_channel_id: Option<Uuid>,
+    _granted_from_channel_id: Option<Uuid>,
 ) -> anyhow::Result<()>
 where
     E: Executor<'e, Database = Postgres>,
@@ -67,47 +50,21 @@ where
         return Ok(());
     }
 
+    let entity_id = macro_uuid::string_to_uuid(item_id)?;
     let macro_ids: Vec<String> = user_ids.iter().map(|s| s.to_string()).collect();
 
-    // Generate UUIDs for each user
-    let ids: Vec<Uuid> = user_ids
-        .iter()
-        .map(|_| macro_uuid::generate_uuid_v7())
-        .collect();
-
-    // Execute bulk insert using unnest with ON CONFLICT DO UPDATE
     sqlx::query!(
         r#"
-        INSERT INTO "UserItemAccess" (
-            "id",
-            "user_id",
-            "item_id",
-            "item_type",
-            "access_level",
-            "granted_from_channel_id",
-            "created_at",
-            "updated_at"
-        )
-        SELECT 
-            u.id, 
-            u.user_id, 
-            $1 as item_id, 
-            $2 as item_type, 
-            $3 as access_level,
-            $4 as granted_from_channel_id,
-            NOW() as created_at,
-            NOW() as updated_at
-        FROM UNNEST($5::uuid[], $6::text[]) as u(id, user_id)
-        ON CONFLICT ("user_id", "item_id", "item_type", "granted_from_channel_id") DO UPDATE 
-        SET 
-            "access_level" = EXCLUDED."access_level",
-            "updated_at" = NOW()
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT $1, $2, u.user_id, 'user', $3
+        FROM UNNEST($4::text[]) as u(user_id)
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
         "#,
-        item_id,
+        entity_id,
         item_type,
         access_level as _,
-        granted_from_channel_id,
-        &ids,
         macro_ids.as_slice(),
     )
     .execute(executor)
@@ -118,7 +75,7 @@ where
 
 /// Inserts multiple UserItemAccess records in a single database query
 /// The created_at and updated_at fields from the structs are ignored and NOW() is used instead
-#[tracing::instrument(skip(db, access_records))]
+#[tracing::instrument(skip(db, access_records), err)]
 pub async fn insert_user_item_access_batch(
     db: &sqlx::PgPool,
     access_records: &[UserItemAccess],
@@ -158,79 +115,56 @@ pub async fn insert_user_item_access_batch(
         return Ok(());
     }
 
-    // Extract the fields we need from each valid UserItemAccess record
-    let ids: Vec<Uuid> = valid_records.iter().map(|record| record.id).collect();
-    let user_ids: Vec<String> = valid_records
+    // Convert item_ids to UUIDs
+    let entity_ids: Vec<Uuid> = valid_records
+        .iter()
+        .map(|record| macro_uuid::string_to_uuid(&record.item_id))
+        .collect::<anyhow::Result<Vec<Uuid>>>()?;
+
+    let source_ids: Vec<String> = valid_records
         .iter()
         .map(|record| record.user_id.clone())
         .collect();
-    let item_ids: Vec<String> = valid_records
-        .iter()
-        .map(|record| record.item_id.clone())
-        .collect();
-    let item_types: Vec<String> = valid_records
+    let entity_types: Vec<String> = valid_records
         .iter()
         .map(|record| record.item_type.clone())
         .collect();
 
-    // Convert AccessLevel enum to strings
+    // Convert AccessLevel enum to strings for the query
     let access_level_strings: Vec<String> = valid_records
         .iter()
         .map(|record| record.access_level.to_string().to_lowercase())
         .collect();
 
-    // For optional fields, we need to handle them differently
-    let granted_from_channel_ids: Vec<Option<Uuid>> = valid_records
-        .iter()
-        .map(|record| record.granted_from_channel_id)
-        .collect();
-
     // Execute the batch insert with ON CONFLICT DO NOTHING for handling unique constraint violations
     sqlx::query!(
         r#"
-        INSERT INTO "UserItemAccess" (
-            "id",
-            "user_id",
-            "item_id",
-            "item_type",
-            "access_level",
-            "granted_from_channel_id",
-            "created_at",
-            "updated_at"
-        )
-        SELECT 
-            u.id, 
-            u.user_id, 
-            u.item_id, 
-            u.item_type, 
-            u.access_level::"AccessLevel", 
-            u.granted_from_channel_id,
-            NOW() as created_at,
-            NOW() as updated_at
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT
+            u.entity_id,
+            u.entity_type,
+            u.source_id,
+            'user',
+            u.access_level::"AccessLevel"
         FROM UNNEST(
-            $1::uuid[], 
-            $2::text[], 
-            $3::text[], 
-            $4::text[], 
-            $5::text[],
-            $6::uuid[]
+            $1::uuid[],
+            $2::text[],
+            $3::text[],
+            $4::text[]
         ) as u(
-            id, 
-            user_id, 
-            item_id, 
-            item_type, 
-            access_level, 
-            granted_from_channel_id
+            entity_id,
+            entity_type,
+            source_id,
+            access_level
         )
-        ON CONFLICT ("user_id", "item_id", "item_type", "granted_from_channel_id") 
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
         DO NOTHING
         "#,
-        &ids,
-        &user_ids as &[String],
-        &item_ids as &[String],
-        &item_types as &[String],
+        &entity_ids,
+        &entity_types as &[String],
+        &source_ids as &[String],
         &access_level_strings as &[String],
-        &granted_from_channel_ids as &[Option<Uuid>],
     )
     .execute(db)
     .await?;
@@ -257,7 +191,7 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_insert_user_item_access(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let user_id = MacroUserIdStr::parse_from_str("macro|test@test.com").unwrap();
-        let item_id = "new-test-item";
+        let item_id = "a0000000-0000-0000-0000-000000000001";
         let item_type = "document";
         let access_level = AccessLevel::Edit;
         let granted_from_channel_id = Some(Uuid::now_v7());
@@ -275,19 +209,20 @@ mod tests {
         )
         .await?;
 
+        let entity_id = macro_uuid::string_to_uuid(item_id)?;
+
         // Verify it exists
         let result = sqlx::query!(
             r#"
         SELECT COUNT(*) as count
-        FROM "UserItemAccess"
-        WHERE "user_id" = $1 AND "item_id" = $2 AND "item_type" = $3 
-        AND "access_level"::text = $4 AND "granted_from_channel_id" = $5
+        FROM entity_access
+        WHERE source_id = $1 AND entity_id = $2 AND entity_type = $3
+        AND access_level::text = $4 AND source_type = 'user'
         "#,
             user_id.as_ref(),
-            item_id,
+            entity_id,
             item_type,
             access_level.to_string(),
-            granted_from_channel_id,
         )
         .fetch_one(&mut *transaction)
         .await?;
@@ -305,7 +240,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_insert_user_item_access_bulk(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let item_id = "bulk-insert-test-item";
+        let item_id = "b0000000-0000-0000-0000-000000000001";
         let item_type = "document";
         let access_level = AccessLevel::View;
         let granted_from_channel_id = Some(Uuid::now_v7());
@@ -329,20 +264,20 @@ mod tests {
         .await?;
 
         let ids: Vec<_> = user_ids.iter().map(|x| x.to_string()).collect();
+        let entity_id = macro_uuid::string_to_uuid(item_id)?;
 
         // Verify all records exist
         let result = sqlx::query!(
             r#"
         SELECT COUNT(*) as count
-        FROM "UserItemAccess"
-        WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 
-        AND "access_level"::text = $4 AND "granted_from_channel_id" = $5
+        FROM entity_access
+        WHERE source_id = ANY($1) AND entity_id = $2 AND entity_type = $3
+        AND access_level::text = $4 AND source_type = 'user'
         "#,
             &ids,
-            item_id,
+            entity_id,
             item_type,
             access_level.to_string(),
-            granted_from_channel_id,
         )
         .fetch_one(&mut *transaction)
         .await?;
@@ -358,26 +293,24 @@ mod tests {
         for user_id in &user_ids {
             let result = sqlx::query!(
                 r#"
-            SELECT 
-                "user_id",
-                "item_id", 
-                "item_type", 
-                "access_level"::text as "access_level",
-                "granted_from_channel_id"
-            FROM "UserItemAccess"
-            WHERE "user_id" = $1 AND "item_id" = $2
+            SELECT
+                source_id,
+                entity_id,
+                entity_type,
+                access_level::text as "access_level"
+            FROM entity_access
+            WHERE source_id = $1 AND entity_id = $2 AND source_type = 'user'
             "#,
                 user_id.as_ref(),
-                item_id,
+                entity_id,
             )
             .fetch_one(&mut *transaction)
             .await?;
 
-            assert_eq!(result.user_id, user_id.as_ref());
-            assert_eq!(result.item_id, item_id);
-            assert_eq!(result.item_type, item_type);
+            assert_eq!(result.source_id, user_id.as_ref());
+            assert_eq!(result.entity_id, entity_id);
+            assert_eq!(result.entity_type, item_type);
             assert_eq!(result.access_level, Some(access_level.to_string()));
-            assert_eq!(result.granted_from_channel_id, granted_from_channel_id);
         }
 
         transaction.commit().await?;
@@ -389,11 +322,14 @@ mod tests {
     async fn test_insert_user_item_access_bulk_empty(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let mut transaction = pool.begin().await?;
 
+        let empty_item_id = "c0000000-0000-0000-0000-000000000001";
+        let entity_id = macro_uuid::string_to_uuid(empty_item_id)?;
+
         // Test with empty array
         upsert_user_item_access_bulk(
             &mut *transaction,
             &[],
-            "empty-test-item",
+            empty_item_id,
             "document",
             AccessLevel::View,
             None,
@@ -404,10 +340,10 @@ mod tests {
         let result = sqlx::query!(
             r#"
         SELECT COUNT(*) as count
-        FROM "UserItemAccess"
-        WHERE "item_id" = $1
+        FROM entity_access
+        WHERE entity_id = $1
         "#,
-            "empty-test-item",
+            entity_id,
         )
         .fetch_one(&mut *transaction)
         .await?;
@@ -427,7 +363,7 @@ mod tests {
     async fn test_insert_user_item_access_bulk_with_pool(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
-        let item_id = "pool-insert-test-item";
+        let item_id = "d0000000-0000-0000-0000-000000000001";
         let item_type = "document";
         let access_level = AccessLevel::Owner;
         let granted_from_channel_id = Some(Uuid::now_v7());
@@ -449,20 +385,20 @@ mod tests {
         .await?;
 
         let ids: Vec<_> = user_ids.iter().map(|x| x.to_string()).collect();
+        let entity_id = macro_uuid::string_to_uuid(item_id)?;
 
         // Verify all records exist
         let result = sqlx::query!(
             r#"
         SELECT COUNT(*) as count
-        FROM "UserItemAccess"
-        WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 
-        AND "access_level"::text = $4 AND "granted_from_channel_id" = $5
+        FROM entity_access
+        WHERE source_id = ANY($1) AND entity_id = $2 AND entity_type = $3
+        AND access_level::text = $4 AND source_type = 'user'
         "#,
             &ids,
-            item_id,
+            entity_id,
             item_type,
             access_level.to_string(),
-            granted_from_channel_id,
         )
         .fetch_one(&pool)
         .await?;
@@ -479,7 +415,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_insert_user_item_access_bulk_upsert(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let item_id = "upsert-test-item";
+        let item_id = "e0000000-0000-0000-0000-000000000001";
         let item_type = "document";
         let granted_from_channel_id = Some(Uuid::now_v7());
         let user_ids = vec![
@@ -488,6 +424,7 @@ mod tests {
         ];
 
         let mut transaction = pool.begin().await?;
+        let entity_id = macro_uuid::string_to_uuid(item_id)?;
 
         // Initial insert with View access level
         let initial_access_level = AccessLevel::View;
@@ -506,16 +443,15 @@ mod tests {
         // Verify initial insert
         let initial_result = sqlx::query!(
             r#"
-        SELECT "id", "user_id", "access_level"::text as "access_level"
-        FROM "UserItemAccess"
-        WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 
-        AND "granted_from_channel_id" = $4
-        ORDER BY "user_id"
+        SELECT id, source_id, access_level::text as "access_level"
+        FROM entity_access
+        WHERE source_id = ANY($1) AND entity_id = $2 AND entity_type = $3
+        AND source_type = 'user'
+        ORDER BY source_id
         "#,
             &ids,
-            item_id,
+            entity_id,
             item_type,
-            granted_from_channel_id,
         )
         .fetch_all(&mut *transaction)
         .await?;
@@ -527,7 +463,7 @@ mod tests {
         );
 
         // Store the initial IDs to verify they don't change during upsert
-        let initial_ids: Vec<Uuid> = initial_result.iter().map(|r| r.id).collect();
+        let initial_ids: Vec<i64> = initial_result.iter().map(|r| r.id).collect();
 
         // Verify initial access level
         for record in &initial_result {
@@ -551,19 +487,18 @@ mod tests {
         // Verify the upsert updated the access levels but kept the same records
         let updated_result = sqlx::query!(
             r#"
-        SELECT 
-            "id",
-            "user_id", 
-            "access_level"::text as "access_level"
-        FROM "UserItemAccess"
-        WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 
-        AND "granted_from_channel_id" = $4
-        ORDER BY "user_id"
+        SELECT
+            id,
+            source_id,
+            access_level::text as "access_level"
+        FROM entity_access
+        WHERE source_id = ANY($1) AND entity_id = $2 AND entity_type = $3
+        AND source_type = 'user'
+        ORDER BY source_id
         "#,
             &ids,
-            item_id,
+            entity_id,
             item_type,
-            granted_from_channel_id,
         )
         .fetch_all(&mut *transaction)
         .await?;
@@ -616,19 +551,18 @@ mod tests {
         // Verify the result
         let final_result = sqlx::query!(
             r#"
-        SELECT 
-            "id",
-            "user_id", 
-            "access_level"::text as "access_level"
-        FROM "UserItemAccess"
-        WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 
-        AND "granted_from_channel_id" = $4
-        ORDER BY "user_id"
+        SELECT
+            id,
+            source_id,
+            access_level::text as "access_level"
+        FROM entity_access
+        WHERE source_id = ANY($1) AND entity_id = $2 AND entity_type = $3
+        AND source_type = 'user'
+        ORDER BY source_id
         "#,
             &ids,
-            item_id,
+            entity_id,
             item_type,
-            granted_from_channel_id,
         )
         .fetch_all(&mut *transaction)
         .await?;
@@ -658,16 +592,15 @@ mod tests {
         let total_count = sqlx::query!(
             r#"
         SELECT COUNT(*) as count
-        FROM "UserItemAccess"
-        WHERE ("user_id" = ANY($1) OR "user_id" = ANY($2))
-        AND "item_id" = $3 AND "item_type" = $4
-        AND "granted_from_channel_id" = $5
+        FROM entity_access
+        WHERE (source_id = ANY($1) OR source_id = ANY($2))
+        AND entity_id = $3 AND entity_type = $4
+        AND source_type = 'user'
         "#,
             &ids,
             &["macro|user2@test.com".to_string()], // user2 from original insert, not in mixed_user_ids
-            item_id,
+            entity_id,
             item_type,
-            granted_from_channel_id,
         )
         .fetch_one(&mut *transaction)
         .await?;
