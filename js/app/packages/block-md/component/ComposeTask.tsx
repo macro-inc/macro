@@ -1,10 +1,10 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { CircleSpinner } from '@core/component/CircleSpinner';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { Hotkey } from '@core/component/Hotkey';
-
+import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
@@ -34,12 +34,11 @@ import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import ArrowSquareOutIcon from '@icon/regular/arrow-square-out.svg';
 import LinkIcon from '@icon/regular/link-simple.svg';
-import SplitIcon from '@icon/regular/square-half.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
-import { refetchSoupEntity } from '@queries/soup/cache';
+import { useQueryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserId } from '@core/context/user';
 import { propertiesServiceClient } from '@service-properties/client';
@@ -57,9 +56,6 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
-import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import CheckIcon from '@icon/regular/check.svg';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -103,8 +99,20 @@ async function createTaskWithProperties(
     return null;
   }
 
-  // refetchSoupEntity is already called inside createTask — just upsert to history
-  refetchSoupEntity(documentId, 'document');
+  toast.embed(
+    () => (
+      <TaskToastPreview id={documentId} title={taskTitle} body={taskContent} />
+    ),
+    {
+      duration: 2_000,
+    }
+  );
+
+  // Invalidate queries to refresh soup items and add to history
+  const queryClient = useQueryClient();
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.items._def,
+  });
 
   // Upsert the new task to history
   upsertToHistory({
@@ -153,6 +161,53 @@ function extractPropertyValue(
  * @param props
  * @returns
  */
+function TaskToastPreview(props: { title: string; body: string; id: string }) {
+  const [linkCopied, setLinkCopied] = createSignal(false);
+  onMount(() => {
+    try {
+      const url = buildSimpleEntityUrl(
+        {
+          type: 'task',
+          id: props.id,
+        },
+        {}
+      );
+      navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+    } finally {
+    }
+  });
+
+  return (
+    <BlockLink blockOrFileName="task" id={props.id}>
+      <div class="text-ink size-full w-96">
+        <div class="flex row items-center gap-2 mb-4">
+          <EntityIcon targetType="task" />
+          <span class="text-base font-medium">
+            {props.title ||
+              itemToSafeName({
+                type: 'document',
+                subType: { type: 'task' },
+              })}
+          </span>
+        </div>
+        <div class="text-ink-muted text-sm h-fit max-h-18 w-full truncate">
+          <StaticMarkdown
+            markdown={props.body}
+            theme={unifiedListMarkdownTheme}
+            singleLine
+          />
+        </div>
+        <Show when={linkCopied()}>
+          <div class="text-xs flex items-center gap-2 bg-success-bg text-success-ink rounded-sm mt-2 p-1">
+            <LinkIcon class="size-4" />
+            Link Copied to Clipboard
+          </div>
+        </Show>
+      </div>
+    </BlockLink>
+  );
+}
 
 export interface ComposeTaskProps {
   onCreateTask?: (title: string, content: string) => void;
@@ -160,16 +215,14 @@ export interface ComposeTaskProps {
   initialTitle?: string;
   initialContent?: string;
   placeholder?: string;
-  initialAssigneeId?: string;
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
   const splitPanel = useSplitPanelOrThrow();
-  const { popoverSplit, openWithSplit } = useSplitLayout();
   const currentUserId = useUserId();
 
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
-    const id = props.initialAssigneeId ?? currentUserId();
+    const id = currentUserId();
     return {
       [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
         valueType: 'ENTITY' as const,
@@ -184,17 +237,12 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   // draft init logic
   const initializeFromDraft = () => {
-    if (
-      !props.initialTitle &&
-      !props.initialContent &&
-      !props.initialAssigneeId
-    ) {
+    if (!props.initialTitle && !props.initialContent) {
       const draft = loadTaskComposerDraft();
       if (draft) {
         return {
           title: draft.title,
           content: draft.content,
-          editorState: draft.editorState,
           propertyValues: draft.propertyValues,
           isDraftLoaded: true,
         };
@@ -203,7 +251,6 @@ export function ComposeTask(props: ComposeTaskProps) {
     return {
       title: props.initialTitle ?? '',
       content: props.initialContent ?? '',
-      editorState: undefined,
       propertyValues: getDefaultPropertyValues(),
       isDraftLoaded: false,
     };
@@ -223,7 +270,6 @@ export function ComposeTask(props: ComposeTaskProps) {
   );
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
-  const [isCreating, setIsCreating] = createSignal(false);
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -249,7 +295,6 @@ export function ComposeTask(props: ComposeTaskProps) {
     debouncedSave({
       title: currentTitle,
       content: currentContent,
-      editorState: bodyEditor()?.getEditorState().toJSON(),
       propertyValues: currentProperties,
     });
   });
@@ -298,7 +343,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     );
   };
 
-  const properties = (): Property[] => {
+  const properties = () => {
     return filterMap(COMPOSER_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
@@ -309,8 +354,8 @@ export function ComposeTask(props: ComposeTaskProps) {
         isMultiSelect: definition.is_multi_select,
         owner: definition.owner,
         specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: new Date(0),
-        createdAt: new Date(0),
+        updatedAt: '',
+        createdAt: '',
         valueType: definition.data_type,
         value: extractPropertyValue(definition, propertyValues, options()),
         options: options().get(definition.id),
@@ -325,89 +370,12 @@ export function ComposeTask(props: ComposeTaskProps) {
     saveDate: async (property: Property, date: Date) => {
       setPropertyValues(property.propertyDefinitionId, {
         valueType: 'DATE',
-        value: date,
+        value: date.toISOString(),
       });
     },
   };
 
-  const showTaskCreatedToast = async (
-    documentId: string,
-    taskTitle: string,
-    taskContent: string
-  ) => {
-    const TaskEntityIcon = (p: { class?: string }) => (
-      <EntityIcon targetType="task" class={p.class} />
-    );
-
-    // Auto-copy link to clipboard
-    const url = buildSimpleEntityUrl({ type: 'task', id: documentId });
-    let linkCopied = false;
-    try {
-      await navigator.clipboard.writeText(url);
-      linkCopied = true;
-    } catch {
-      toast.failure('Failed to copy link to clipboard');
-    }
-
-    toast.custom(
-      {
-        title:
-          taskTitle ||
-          itemToSafeName({ type: 'document', subType: { type: 'task' } }),
-        icon: TaskEntityIcon,
-        color: 'var(--color-task)',
-        content: () => (
-          <div class="text-xs text-ink-extra-muted line-clamp-2 mb-4">
-            <StaticMarkdown
-              markdown={taskContent}
-              theme={unifiedListMarkdownTheme}
-              singleLine
-            />
-            <Show when={linkCopied}>
-              <div class="bg-hover/50 flex items-center gap-1 rounded-xs p-1">
-                <CheckIcon class="size-3" />
-                <span>Link copied to clipboard</span>
-              </div>
-            </Show>
-          </div>
-        ),
-        actions: [
-          {
-            label: 'Open',
-            icon: ArrowSquareOutIcon,
-            onClick: () => {
-              openWithSplit(
-                { type: 'task', id: documentId },
-                { referredFrom: null }
-              );
-            },
-          },
-          {
-            label: 'Open in New Split',
-            icon: SplitIcon,
-            onClick: () => {
-              openWithSplit(
-                { type: 'task', id: documentId },
-                { referredFrom: null, preferNewSplit: true }
-              );
-            },
-          },
-          {
-            label: 'Copy Link',
-            icon: LinkIcon,
-            onClick: () => {
-              navigator.clipboard.writeText(url);
-            },
-          },
-        ],
-      },
-      { duration: 5_000 }
-    );
-  };
-
   const handleCreateTask = async () => {
-    if (isCreating()) return;
-
     const taskTitle = title().trim();
     const taskContent = content().trim();
 
@@ -417,46 +385,9 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
     setErrorMessage('');
 
-    setIsCreating(true);
-
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
 
-    if (!createMore()) {
-      // Snapshot the draft locally, then clear localStorage so a new dialog
-      // opened while this creation is in flight starts blank.
-      const draftSnapshot = {
-        title: taskTitle,
-        content: taskContent,
-        propertyValues: structuredClone(unwrap(propertyValues)),
-      };
-      clearTaskComposerDraft();
-      // Close the dialog immediately
-      splitPanel.handle.close();
-      props.onClose?.();
-
-      const documentId = await createTaskWithProperties(
-        taskTitle,
-        taskContent,
-        properties,
-        definitions(),
-        (params) => upsertToHistoryMutation.mutate(params)
-      );
-
-      setIsCreating(false);
-
-      if (!documentId) {
-        // Restore the draft and re-open so the user can retry
-        saveTaskComposerDraft(draftSnapshot);
-        popoverSplit({ type: 'component', id: 'task-compose' });
-        return;
-      }
-
-      showTaskCreatedToast(documentId, taskTitle, taskContent);
-      props.onCreateTask?.(taskTitle, taskContent);
-      return;
-    }
-
-    const documentId = await createTaskWithProperties(
+    createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
@@ -464,25 +395,22 @@ export function ComposeTask(props: ComposeTaskProps) {
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
-    setIsCreating(false);
-
-    if (!documentId) {
-      return;
-    }
-
-    // Success: clear draft and notify
+    // Clear draft and reset form
     clearTaskComposerDraft();
-    showTaskCreatedToast(documentId, taskTitle, taskContent);
-    props.onCreateTask?.(taskTitle, taskContent);
+    setTitle('');
+    setContent('');
+    setPropertyValues(reconcile(getDefaultPropertyValues()));
+    setIsDraftLoaded(false);
 
-    if (createMore()) {
-      // Reset form for next task
-      setTitle('');
-      setContent('');
-      setPropertyValues(reconcile(getDefaultPropertyValues()));
-      setIsDraftLoaded(false);
-      const ed = bodyEditor();
-      ed && initializeEditorEmpty(ed);
+    const ed = bodyEditor();
+    ed && initializeEditorEmpty(ed);
+
+    if (!createMore()) {
+      splitPanel.handle.close();
+      props.onCreateTask?.(taskTitle, taskContent);
+      props.onClose?.();
+    } else {
+      props.onCreateTask?.(taskTitle, taskContent);
     }
   };
 
@@ -540,56 +468,41 @@ export function ComposeTask(props: ComposeTaskProps) {
     runWithInputFocused: true,
   });
 
-  const editorConfig = buildConfig('markdown')
-    .withMentions()
-    .withEmojis()
-    .withActions()
-    .withCode()
-    .withMedia({ fileDrop: true })
-    .withSelectionData()
-    .onChange(setContent)
-    .onFocusLeave({
-      onStart: (e) => editorFocusChange(e, -1),
-      onEnd: (e) => editorFocusChange(e, +1),
-    })
-    .onEscape(() => {
-      containerRef()?.focus();
-      return true;
-    });
-
-  const editor = editorConfig.buildHandle().lexical;
-  setBodyEditor(editor);
-
   return (
     <div
-      class="flex flex-col relative bracket-never h-full max-h-full min-h-0"
+      class="flex flex-col relative bracket-never"
       tabIndex={-1}
       ref={setContainerRef}
     >
       <div class="flex items-center gap-1 p-2">
         <Show when={splitPanel?.handle.isPopover()}>
-          <Button onMouseDown={handleClose} tabIndex={-1} size="icon-sm">
-            <XIcon />
-          </Button>
+          <DeprecatedIconButton
+            icon={XIcon}
+            onClick={handleClose}
+            size="sm"
+            tabIndex={-1}
+            theme="current"
+          />
         </Show>
         <div class="flex items-center gap-2 flex-1">
           <span class="text-sm font-medium text-ink-disabled/50">
             Create Task
           </span>
         </div>
-        <Button
-          onMouseDown={handleClearDraft}
-          tabIndex={-1}
-          tooltip="Clear Draft"
-          size="icon-sm"
-          disabled={!(content().trim() || title())}
-        >
-          <TrashIcon />
-        </Button>
+        <Show when={title() || content()}>
+          <DeprecatedIconButton
+            icon={TrashIcon}
+            onClick={handleClearDraft}
+            size="sm"
+            tabIndex={-1}
+            theme="current"
+            title="Clear draft"
+          />
+        </Show>
       </div>
-      <div class="border-b border-edge-muted/50" />
-      <div class="p-2 flex-1 min-h-0 flex flex-col">
-        <div class="shrink-0 flex p-2 gap-2 items-center">
+      <div class="w-full border-b border-edge-muted/50" />
+      <div class="p-2">
+        <div class="flex-shrink-0 flex p-2 gap-2 items-center">
           <EntityIcon targetType="task" size="sm" />
           <input
             type="text"
@@ -601,8 +514,7 @@ export function ComposeTask(props: ComposeTaskProps) {
                 setErrorMessage('');
               }
             }}
-            disabled={isCreating()}
-            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50 disabled:opacity-50"
+            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
             on:keydown={(e) => {
               if (e.key === 'Escape') {
                 const container = containerRef();
@@ -624,18 +536,22 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <MarkdownShell
-          config={editorConfig}
-          initialState={initialState.editorState}
-          initialValue={
-            initialState.editorState
-              ? undefined
-              : initialState.content || undefined
-          }
-          placeholder={props.placeholder ?? 'Add description...'}
-          portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          class="shrink-1 min-h-0 h-[unset] text-base px-2 overflow-y-auto"
-        />
+        <div class="min-h-0 text-base m-2">
+          <MarkdownTextarea
+            editable={() => true}
+            onChange={(value) => setContent(value)}
+            initialValue={content()}
+            placeholder={props.placeholder ?? 'Add description...'}
+            captureEditor={setBodyEditor}
+            onEscape={() => {
+              containerRef()?.focus();
+              return true;
+            }}
+            onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
+            onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
+            portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+          />
+        </div>
 
         <Suspense>
           <PropertiesProvider
@@ -664,6 +580,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
         </div>
       </Show>
+
       <div class="w-full border-b border-edge-muted/50" />
       <div class="flex-shrink-0 flex justify-between items-center p-2 gap-2">
         <MiniToggleSwitch
@@ -675,16 +592,10 @@ export function ComposeTask(props: ComposeTaskProps) {
         />
         <Button
           onClick={handleCreateTask}
-          class="px-3 pr-2"
-          disabled={title().trim().length === 0 || isCreating()}
-          variant="secondary"
+          class="border border-edge-muted pr-1"
+          disabled={title().trim().length === 0}
         >
-          <Show
-            when={isCreating()}
-            fallback={<EntityIcon targetType="task" theme="monochrome" />}
-          >
-            <CircleSpinner width={16} height={16} />
-          </Show>
+          <EntityIcon targetType="task" theme="monochrome" />
           Create Task
           <div class="text-[0.625rem] text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
             <Hotkey shortcut="cmd+enter" />
