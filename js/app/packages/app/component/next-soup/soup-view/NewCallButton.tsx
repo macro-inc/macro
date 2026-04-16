@@ -72,7 +72,8 @@ export function NewCallButton() {
           params: { join_call: 'true' },
         },
       });
-    } catch {
+    } catch (err) {
+      console.error('Failed to start call', err);
       toast.failure('Failed to start call');
       setIsSubmitting(false);
     }
