@@ -37,7 +37,6 @@ import { isOk } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 
 export default function InteractiveOnboarding() {
-  const analytics = useAnalytics();
   const isAuthenticated = useIsAuthenticated();
   const [mobileWebStep, setMobileWebStep] = createSignal<
     'welcome' | 'signup-sent'
