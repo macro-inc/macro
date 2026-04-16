@@ -43,7 +43,11 @@ export function useSearchFilterOptions() {
         label: ch.data.name,
         icon: () => (
           <div class="size-4">
-            <EntityIconWithAvatar entity={ch.data} />
+            <EntityIconWithAvatar
+              entity={ch.data}
+              suppressClick
+              showTooltip={false}
+            />
           </div>
         ),
       }))
