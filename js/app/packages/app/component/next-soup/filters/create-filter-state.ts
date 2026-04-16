@@ -40,15 +40,19 @@ type ActiveFiltersState<TFilter> = {
   readonly orFilters: readonly TFilter[];
 };
 
-export type InitialFiltersInput = {
-  readonly and?: readonly string[];
-  readonly or?: readonly string[];
+export type InitialFiltersInput<TId extends string> = {
+  readonly and?: readonly TId[];
+  readonly or?: readonly TId[];
 };
 
-export type FilterStateOptions<T, TFilter extends FilterConfig<T, string>> = {
+export type FilterStateOptions<
+  T,
+  TFilter extends FilterConfig<T>,
+  TId extends string = TFilter['id'],
+> = {
   readonly filters: readonly TFilter[];
   readonly groups?: readonly FilterGroupConfig[];
-  readonly initialFilters?: InitialFiltersInput;
+  readonly initialFilters?: InitialFiltersInput<TId>;
 };
 
 export type FilterState<
@@ -77,7 +81,7 @@ export function createFilterState<
   T,
   TFilter extends FilterConfig<T>,
   TId extends string = TFilter['id'],
->(options: FilterStateOptions<T, TFilter>): FilterState<T, TFilter, TId> {
+>(options: FilterStateOptions<T, TFilter, TId>): FilterState<T, TFilter, TId> {
   const {
     filters: availableFilters,
     groups = [],

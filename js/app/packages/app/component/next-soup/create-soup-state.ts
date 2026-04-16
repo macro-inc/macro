@@ -3,7 +3,7 @@ import {
   createFilterState,
   type FilterConfig,
   type FilterGroupConfig,
-  type SetFiltersInput,
+  type InitialFiltersInput,
 } from '@app/component/next-soup/filters';
 import {
   SOUP_FILTERS,
@@ -21,7 +21,9 @@ import { createMemo, createSignal } from 'solid-js';
 type SoupEntity = EntityData | WithSearch<EntityData>;
 
 /** Converts FilterDefinition[] to FilterConfig[] (predicates evaluate without context) */
-const toFilterConfigs = (filters: readonly FilterDefinition[]): FilterConfig<SoupEntity>[] =>
+const toFilterConfigs = (
+  filters: readonly FilterDefinition[]
+): FilterConfig<SoupEntity>[] =>
   filters.map((f) => ({
     id: f.id,
     group: f.group,
@@ -43,7 +45,7 @@ export type SortConfig<T> = {
 
 interface SoupContextOptions<TId extends string = FilterID> {
   initialData?: SoupEntity[];
-  initialFilters?: SetFiltersInput<TId>;
+  initialFilters?: InitialFiltersInput<TId>;
   filterConfigs?: FilterConfig<SoupEntity>[];
   filterGroups?: FilterGroupConfig[];
   wrapNavigation?: boolean;

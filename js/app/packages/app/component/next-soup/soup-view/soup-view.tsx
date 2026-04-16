@@ -84,7 +84,6 @@ import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 
-import type { FilterID } from '@app/component/next-soup/filters';
 import type { FilterData } from '@app/component/next-soup/filters/filter-store';
 import {
   SoupViewTabs,
@@ -111,6 +110,7 @@ import {
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import type { InitialFiltersInput } from '@app/component/next-soup/filters/create-filter-state';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -165,14 +165,14 @@ const useSoupNotificationInvalidators = () => {
 type PersistedSoupViewState = {
   version?: number;
   activeTab: string | undefined;
-  filters: string[];
+  filters: InitialFiltersInput<string>;
   filterData: Partial<FilterData>;
   sort: SystemSortOption[];
   previewEntity: string | undefined;
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 2;
+const PERSISTED_STATE_VERSION = 3;
 
 const listStateCache = new Map<
   string,
@@ -186,7 +186,7 @@ const listStateCache = new Map<
 
 interface SoupViewProps {
   viewName: string;
-  initialClientFilters?: FilterID[];
+  initialClientFilters?: InitialFiltersInput<string>;
   initialFilters?: Partial<FilterData>;
   disableLocalSearch?: boolean;
 }
@@ -369,7 +369,7 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  initialClientFilters?: FilterID[];
+  initialClientFilters?: InitialFiltersInput<string>;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -686,11 +686,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
         applyTabPreset(contentId, initialPersistedState.activeTab);
       if (!applied) {
         batch(() => {
-          soup.filters.set({
-            and: isStale
-              ? (props.initialClientFilters ?? [])
-              : initialPersistedState.filters,
-          });
+          soup.filters.set(
+            isStale
+              ? (props.initialClientFilters ?? {})
+              : initialPersistedState.filters
+          );
           const persistedFilterData = isStale
             ? {}
             : (initialPersistedState.filterData ?? {});
@@ -714,7 +714,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       });
     } else {
       if (props.initialClientFilters) {
-        soup.filters.set({ and: props.initialClientFilters });
+        soup.filters.set(props.initialClientFilters);
       }
     }
   });
@@ -725,7 +725,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
         ({
           version: PERSISTED_STATE_VERSION,
           activeTab: activePreset()?.tab,
-          filters: [...soup.filters.activeIds()],
+          filters: {
+            and: [...soup.filters.andFilters().map((f) => f.id)],
+            or: [...soup.filters.orFilters().map((f) => f.id)],
+          },
           filterData: { ...filters() },
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),

@@ -164,9 +164,9 @@ export const SoupViewContextProvider: FlowComponent<
   const [searchPaused, setSearchPaused] = createSignal(false);
   const [searchMentions, setSearchMentions] = createSignal<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
-  const [activePreset, setActivePreset] = createSignal<ActivePreset | undefined>(
-    undefined
-  );
+  const [activePreset, setActivePreset] = createSignal<
+    ActivePreset | undefined
+  >(undefined);
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
