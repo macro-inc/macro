@@ -77,6 +77,7 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 /// - `GET /{channel_id}/active` — check if an active call exists
 /// - `DELETE /{channel_id}` — leave or end a call
 /// - `GET /record/{call_id}` — get a full call record (transcript + participants)
+/// - `DELETE /record/{call_id}` — delete a call record
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -92,7 +93,10 @@ where
             "/{channel_id}/active",
             get(check_active_call_handler::<S, Svc>),
         )
-        .route("/record/{call_id}", get(get_call_record_handler::<S, Svc>))
+        .route(
+            "/record/{call_id}",
+            get(get_call_record_handler::<S, Svc>).delete(delete_call_record_handler::<S, Svc>),
+        )
         .with_state(state)
 }
 
@@ -313,6 +317,36 @@ pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
         .get_call_record(access.entity_access_receipt)
         .await?;
     Ok(Json(record))
+}
+
+/// Handler for `DELETE /call/record/{call_id}`.
+///
+/// Deletes a call record (and its participants/transcripts via cascade).
+/// Access is validated via channel membership (MemberParticipantRole).
+#[utoipa::path(
+    delete,
+    operation_id = "delete_call_record",
+    path = "/call/record/{call_id}",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 204, description = "Call record deleted"),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<MemberParticipantRole, Svc>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .delete_call_record(access.entity_access_receipt)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Handler for `DELETE /call/{channel_id}`.

@@ -90,6 +90,7 @@ members = [
   "models_sfs",
   "models_soup",
   "models_team",
+  "mobile_welcome_email_db_client",
   "name_search",
   "non_empty",
   "notification",

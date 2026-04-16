@@ -35,4 +35,15 @@ impl RecordingStorage for S3RecordingStorage {
 
         Ok(macro_aws_config::transform_aws_url(presigned.uri()))
     }
+
+    async fn delete_recording(&self, recording_key: &str) -> anyhow::Result<()> {
+        let full_key = format!("calls/{recording_key}");
+        self.client
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(&full_key)
+            .send()
+            .await?;
+        Ok(())
+    }
 }

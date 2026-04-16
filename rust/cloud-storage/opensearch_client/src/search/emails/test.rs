@@ -32,6 +32,18 @@ fn test_build_simple_query_string_mixed_single_and_multi_word() {
 }
 
 #[test]
+fn test_build_simple_query_string_email_term_uses_phrase() {
+    let result = build_simple_query_string(&["hutch@macro.com".to_string()]);
+    assert_eq!(result, "\"hutch@macro.com\"");
+}
+
+#[test]
+fn test_build_simple_query_string_email_term_mixed_with_word() {
+    let result = build_simple_query_string(&["hutch@macro.com".to_string(), "review".to_string()]);
+    assert_eq!(result, "\"hutch@macro.com\" + (review | review@*)");
+}
+
+#[test]
 fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<()> {
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["hello".to_string(), "test".to_string()],

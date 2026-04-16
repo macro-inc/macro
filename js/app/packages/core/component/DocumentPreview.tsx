@@ -39,6 +39,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
+import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
@@ -557,12 +558,12 @@ export function PopupPreview(props: {
       });
     }
 
-    if (props.documentInfo.type !== 'channel') return;
+    if (!isBlockNameWithLocation(props.documentInfo.type)) return;
 
     const orchestrator = splitManager.getOrchestrator();
     const handle = await orchestrator.getBlockHandle(
       props.documentInfo.id,
-      'channel'
+      props.documentInfo.type
     );
 
     await handle?.goToLocationFromParams(props.documentInfo.params);

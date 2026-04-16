@@ -5,6 +5,7 @@ import { Combobox } from '@kobalte/core/combobox';
 import { Select as KSelect } from '@kobalte/core/select';
 import { cn } from '@ui/utils/classname';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { Tooltip } from '@core/component/Tooltip';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import type { CollectionNode } from '@kobalte/core';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
@@ -21,6 +22,11 @@ interface FilterSelectProps {
   active: Option[];
   onChange: (options: Option[]) => void;
   multiple?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  tooltip?: JSX.Element;
+  hideClear?: boolean;
+  accentActive?: boolean;
 }
 
 export const FilterSelect = (props: FilterSelectProps) => {
@@ -28,7 +34,9 @@ export const FilterSelect = (props: FilterSelectProps) => {
 
   const activeFilters = createMemo(() => props.active);
   const activeCount = createMemo(() => activeFilters().length);
-  const hasActiveFilters = createMemo(() => activeCount() > 0);
+  const hasActiveFilters = createMemo(() =>
+    props.accentActive !== undefined ? props.accentActive : activeCount() > 0
+  );
 
   const renderItem = (itemProps: { item: CollectionNode<Option> }) => (
     <KSelect.Item
@@ -72,11 +80,32 @@ export const FilterSelect = (props: FilterSelectProps) => {
     }
   };
 
+  const triggerContent = () => (
+    <>
+      <span class="font-medium">{props.label}</span>
+      <Show when={multiple() && hasActiveFilters()}>
+        <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 z-1 rounded-full text-xs font-semibold bg-accent text-page">
+          {activeCount()}
+        </span>
+      </Show>
+      <ChevronDownIcon class="size-3" />
+    </>
+  );
+
+  const triggerClass = () =>
+    cn(
+      'relative transition-none rounded-xs h-full',
+      hasActiveFilters() &&
+        'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
+    );
+
   return (
     <KSelect<Option>
       options={props.options}
       value={value() as Option & Option[]}
       onChange={handleChange as (value: Option & Option[]) => void}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
       optionTextValue="label"
       optionValue="value"
       gutter={4}
@@ -84,37 +113,47 @@ export const FilterSelect = (props: FilterSelectProps) => {
       placement="bottom-start"
       itemComponent={renderItem}
     >
-      <KSelect.Trigger
-        as={Button}
-        variant="secondary"
-        size="sm"
-        class={cn(
-          'relative transition-none rounded-xs h-full',
-          hasActiveFilters() &&
-            'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
-        )}
+      <Show
+        when={props.tooltip}
+        fallback={
+          <KSelect.Trigger
+            as={Button}
+            variant="secondary"
+            size="sm"
+            class={triggerClass()}
+          >
+            {triggerContent()}
+          </KSelect.Trigger>
+        }
       >
-        <span class="font-medium">{props.label}</span>
-        <Show when={multiple() && hasActiveFilters()}>
-          <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 z-1 rounded-full text-xs font-semibold bg-accent text-page">
-            {activeCount()}
-          </span>
-        </Show>
-        <ChevronDownIcon class="size-3" />
-      </KSelect.Trigger>
+        {(tooltip) => (
+          <Tooltip tooltip={tooltip()}>
+            <KSelect.Trigger
+              as={Button}
+              variant="secondary"
+              size="sm"
+              class={triggerClass()}
+            >
+              {triggerContent()}
+            </KSelect.Trigger>
+          </Tooltip>
+        )}
+      </Show>
       <KSelect.Portal>
         <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow min-w-[var(--kb-popper-anchor-width)] p-1">
           <KSelect.Listbox />
-          <div class="w-full pt-1 mt-1 flex items-center border-t border-t-edge-muted">
-            <Button
-              variant="ghost"
-              size="sm"
-              class="ml-auto rounded-xs w-full"
-              onClick={() => props.onChange([])}
-            >
-              Clear
-            </Button>
-          </div>
+          <Show when={!props.hideClear}>
+            <div class="w-full pt-1 mt-1 flex items-center border-t border-t-edge-muted">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="ml-auto rounded-xs w-full"
+                onClick={() => props.onChange([])}
+              >
+                Clear
+              </Button>
+            </div>
+          </Show>
         </KSelect.Content>
       </KSelect.Portal>
     </KSelect>

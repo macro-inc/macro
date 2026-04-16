@@ -52,4 +52,14 @@ export const callServiceClient = {
       (result) => result
     );
   },
+
+  async deleteCallRecord(callId: string) {
+    return mapOk(
+      await fetchWithToken<Record<string, never>>(
+        `${host}/call/record/${callId}`,
+        { method: 'DELETE' }
+      ),
+      () => undefined
+    );
+  },
 };

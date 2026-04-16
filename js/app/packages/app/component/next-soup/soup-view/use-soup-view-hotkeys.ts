@@ -297,14 +297,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         splitHandle.toggleSpotlight();
         return true;
       }
-      if (closeSplitCondition()) {
-        splitHandle.close();
-        return true;
-      }
-      if (goHomeCondition()) {
-        splitHandle.goBack();
-        return true;
-      }
       return false;
     },
   });

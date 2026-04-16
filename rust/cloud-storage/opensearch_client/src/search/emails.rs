@@ -36,13 +36,19 @@ const EMAIL_SIMPLE_QUERY_FIELDS: &[&str] = &[
 /// Single-word terms become `(term | term@*)` so they match both text fields
 /// and keyword email-address fields. Multi-word terms (containing spaces) skip
 /// the `@*` pattern since email addresses never contain spaces.
+/// Email-like terms (containing `@`) are wrapped in quotes to force phrase
+/// matching on analyzed text fields — otherwise the standard analyzer tokenizes
+/// `hutch@macro.com` into `[hutch, macro, com]`, causing `macro.com` to be
+/// highlighted inside unrelated addresses like `gab@macro.com`.
 /// The email pattern is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
 fn build_simple_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains(' ') {
+            if term.contains('@') {
+                format!("\"{}\"", term)
+            } else if term.contains(' ') {
                 format!("({})", term)
             } else {
                 format!("({} | {}@*)", term, term.to_lowercase())

@@ -42,6 +42,7 @@ import {
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { globalSplitManager } from '@app/signal/splitLayout';
 
 type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
@@ -165,6 +166,28 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     };
   };
 
+  const initialTargetMessageParams = (): ChannelTargetMessageParams => {
+    const hasPropsTarget =
+      props[URL_PARAMS.message] !== undefined ||
+      props[URL_PARAMS.thread] !== undefined;
+    if (hasPropsTarget) {
+      return {
+        [URL_PARAMS.message]: props[URL_PARAMS.message],
+        [URL_PARAMS.thread]: props[URL_PARAMS.thread],
+      };
+    }
+    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    if (!isSingleSplit) return {};
+    return {
+      [URL_PARAMS.message]: searchParams[URL_PARAMS.message] as
+        | string
+        | undefined,
+      [URL_PARAMS.thread]: searchParams[URL_PARAMS.thread] as
+        | string
+        | undefined,
+    };
+  };
+
   const onChannelReady = (handle: ChannelHandle) => {
     createMethodRegistration(blockHandle, {
       goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
@@ -208,7 +231,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
                   channelId={channelId}
                   onHandleReady={onChannelReady}
                   autofocus={!isPreview}
-                  {...convertTargetMessage(props)}
+                  {...convertTargetMessage(initialTargetMessageParams())}
                 />
               </Match>
               <Match when={activeTab() === 'attachments'}>

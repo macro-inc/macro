@@ -121,7 +121,7 @@
 		"zod": "^3.23.8"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.7",
+		"@biomejs/biome": "2.4.12",
 		"@playwright/test": "^1.55.1",
 		"@solidjs/meta": "^0.29.4",
 		"@solidjs/testing-library": "^0.8.10",

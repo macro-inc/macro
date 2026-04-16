@@ -15,6 +15,9 @@ pub mod notification_rate_limit;
 #[cfg(feature = "login_code_rate_limit")]
 mod login_code_rate_limit;
 
+#[cfg(feature = "mobile_welcome_email_rate_limit")]
+pub mod mobile_welcome_email_rate_limit;
+
 #[cfg(feature = "verify_email_rate_limit")]
 pub mod verify_email_rate_limit;
 

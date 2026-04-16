@@ -29,8 +29,68 @@ import { useIsAuthenticated } from '@core/auth';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import MobileWebWelcome from './MobileWebWelcome';
+import MobileWebSignupSent from './MobileWebSignupSent';
+import { useSendMobileWelcomeEmail } from '@queries/auth';
+import { isOk } from '@core/util/maybeResult';
+import { toast } from '@core/component/Toast/Toast';
 
 export default function InteractiveOnboarding() {
+  const isAuthenticated = useIsAuthenticated();
+  const [mobileWebStep, setMobileWebStep] = createSignal<
+    'welcome' | 'signup-sent'
+  >('welcome');
+  const sendMobileWelcomeEmail = useSendMobileWelcomeEmail();
+
+  // Mobile web users who aren't authenticated get a dedicated welcome screen
+  // with email signup instead of the full lesson flow.
+  const isMobileWeb = isTouchDevice() && !isNativeMobilePlatform();
+
+  const handleMobileSignUp = async (email: string) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.failure('Invalid email address.');
+      return;
+    }
+
+    const result = await sendMobileWelcomeEmail.mutateAsync(email);
+
+    if (isOk(result)) {
+      if (result[1].sent) {
+        setMobileWebStep('signup-sent');
+      } else {
+        toast.alert('Email already sent.');
+      }
+    } else {
+      const code = result[0]?.[0]?.code;
+      if (code === 'RATE_LIMITED') {
+        toast.failure('Rate limit exceeded.');
+      } else if (code === 'INVALID_EMAIL') {
+        toast.failure('Invalid email address.');
+      } else {
+        toast.failure('Internal error. Please try again.');
+      }
+    }
+  };
+
+  return (
+    <Show
+      when={!isMobileWeb || isAuthenticated() === true}
+      fallback={
+        <Show
+          when={mobileWebStep() === 'welcome'}
+          fallback={<MobileWebSignupSent />}
+        >
+          <MobileWebWelcome onSignUp={handleMobileSignUp} />
+        </Show>
+      }
+    >
+      <InteractiveOnboardingInner />
+    </Show>
+  );
+}
+
+function InteractiveOnboardingInner() {
   const analytics = useAnalytics();
 
   const splitPanel = useSplitPanel();
@@ -337,7 +397,12 @@ export default function InteractiveOnboarding() {
   onMount(() => {
     if (state.currentIndex() > 0) return;
 
-    analytics.track('onboarding_start');
+    analytics.track('onboarding_start', {
+      source:
+        params.get('mobile_welcome_email') === 'true'
+          ? 'mobile_welcome_email'
+          : undefined,
+    });
   });
 
   createEffect(

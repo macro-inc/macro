@@ -614,6 +614,7 @@ dependencies = [
  "macro_uuid",
  "maud",
  "miniserde",
+ "mobile_welcome_email_db_client",
  "mockall",
  "model",
  "model-entity",
@@ -6561,6 +6562,16 @@ dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mobile_welcome_email_db_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "macro_db_migrator",
+ "sqlx",
+ "tracing",
 ]
 
 [[package]]

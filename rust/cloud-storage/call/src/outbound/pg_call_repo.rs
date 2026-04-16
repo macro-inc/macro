@@ -702,8 +702,10 @@ impl CallRepository for PgCallRepo {
                 true as "is_active!"
             FROM calls c
             WHERE EXISTS (
-                SELECT 1 FROM call_participants cp
-                WHERE cp.call_id = c.id AND cp.user_id = $1 AND cp.left_at IS NULL
+                SELECT 1 FROM comms_channel_participants ccp
+                WHERE ccp.channel_id = c.channel_id
+                  AND ccp.user_id = $1
+                  AND ccp.left_at IS NULL
             )
             AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
             UNION ALL
@@ -720,8 +722,10 @@ impl CallRepository for PgCallRepo {
                 false as "is_active!"
             FROM call_records cr
             WHERE EXISTS (
-                SELECT 1 FROM call_record_participants crp
-                WHERE crp.call_record_id = cr.id AND crp.user_id = $1
+                SELECT 1 FROM comms_channel_participants ccp
+                WHERE ccp.channel_id = cr.channel_id
+                  AND ccp.user_id = $1
+                  AND ccp.left_at IS NULL
             )
             AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
             ORDER BY "started_at!" DESC
@@ -1001,5 +1005,18 @@ impl CallRepository for PgCallRepo {
             user_id.copied(),
             &name_lookup,
         )))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_call_record(&self, call_record_id: &Uuid) -> Result<Option<String>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            DELETE FROM call_records WHERE id = $1 RETURNING recording_key
+            "#,
+            call_record_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.and_then(|r| r.recording_key))
     }
 }

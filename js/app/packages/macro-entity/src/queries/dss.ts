@@ -3,9 +3,11 @@ import {
   deleteItem,
   moveToFolder,
 } from '@core/component/FileList/itemOperations';
+import { throwOnErr } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 import { useMutation } from '@tanstack/solid-query';
 import type { EntityData } from '@entity';
+import { callServiceClient } from '@service-call/client';
 import type { ItemType } from '@service-storage/client';
 import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
@@ -20,16 +22,30 @@ import {
 export function createBulkDeleteDssItemsMutation() {
   const isDeletable = (entity: EntityData) => {
     const type = entity.type;
-    return type === 'chat' || type === 'document' || type === 'project';
+    return (
+      type === 'chat' ||
+      type === 'document' ||
+      type === 'project' ||
+      type === 'call'
+    );
   };
   return useMutation(() => ({
     mutationFn: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
-      return await Promise.all(
+      const results = await Promise.all(
         deletable.map((e) => {
+          if (e.type === 'call') {
+            return throwOnErr(() =>
+              callServiceClient.deleteCallRecord(e.id)
+            ).then(() => true);
+          }
           return deleteItem({ id: e.id, itemType: e.type as ItemType });
         })
       );
+      if (deletable.some((e) => e.type === 'call')) {
+        queryClient.invalidateQueries({ queryKey: ['call'] });
+      }
+      return results;
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);

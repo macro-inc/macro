@@ -163,6 +163,15 @@ pub trait CallRepository: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Delete a row from `call_records` by id. Participants and transcript
+    /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
+    /// Returns the deleted row's `recording_key` (if any) so the caller can
+    /// clean up the associated recording object in storage.
+    fn delete_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
@@ -176,12 +185,29 @@ pub trait RecordingStorage: Send + Sync + 'static {
         &self,
         recording_key: &str,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Delete the recording object identified by `recording_key`.
+    ///
+    /// Implementations must apply the same prefix as
+    /// [`presign_recording_url`](Self::presign_recording_url). Should be
+    /// idempotent — succeed if the key no longer exists.
+    fn delete_recording(
+        &self,
+        recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 impl<T: RecordingStorage> RecordingStorage for Option<T> {
     async fn presign_recording_url(&self, recording_key: &str) -> anyhow::Result<String> {
         match self {
             Some(inner) => inner.presign_recording_url(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
+    async fn delete_recording(&self, recording_key: &str) -> anyhow::Result<()> {
+        match self {
+            Some(inner) => inner.delete_recording(recording_key).await,
             None => anyhow::bail!("recording storage not configured"),
         }
     }
@@ -282,6 +308,18 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<MemberParticipantRole>,
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
+
+    /// Delete a [`CallRecord`] the caller has channel-member access to.
+    ///
+    /// Authorization is carried in the receipt produced by
+    /// `CallAccessLevelExtractor`; the entity on the receipt must be
+    /// `EntityType::Call` and its `entity_id` must be the call's UUID.
+    /// Only `call_records` rows are affected — active calls in the `calls`
+    /// table are untouched. Idempotent.
+    fn delete_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.
