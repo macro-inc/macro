@@ -634,7 +634,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           }
           placeholder={props.placeholder ?? 'Add description...'}
           portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          class="shrink-1 min-h-0 h-[unset] text-base m-2 overflow-y-auto p-2 scrollbar-hidden"
+          class="shrink-1 min-h-0 h-[unset] text-base px-2 overflow-y-auto"
         />
 
         <Suspense>

@@ -42,6 +42,7 @@ const parameterGroup = new aws.rds.ParameterGroup(
       { name: 'auto_explain.log_verbose', value: 'on' },
       { name: 'auto_explain.log_nested_statements', value: 'on' },
       { name: 'auto_explain.sample_rate', value: '1' },
+      { name: 'idle_in_transaction_session_timeout', value: '300000' },
     ],
     tags,
   },

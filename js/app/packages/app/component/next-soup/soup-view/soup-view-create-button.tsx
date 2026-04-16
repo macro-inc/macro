@@ -11,6 +11,7 @@ import UploadIcon from '@icon/regular/upload.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { createMemo, For, Show } from 'solid-js';
 import { Button } from '@ui/components/Button';
+import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
 const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, BlockName[]>> = {
@@ -59,10 +60,14 @@ export const SoupViewCreateButton = () => {
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
 
-  const options = createMemo<CreateOption[]>(() => {
+  const currentView = createMemo(() => {
     const content = panel.handle.content();
-    if (content.type !== 'component') return [];
-    const view = isListViewID(content.id) ? content.id : undefined;
+    if (content.type !== 'component') return undefined;
+    return isListViewID(content.id) ? content.id : undefined;
+  });
+
+  const options = createMemo<CreateOption[]>(() => {
+    const view = currentView();
     if (!view) return [];
     return getViewCreateOptions(view);
   });
@@ -78,46 +83,51 @@ export const SoupViewCreateButton = () => {
   };
 
   return (
-    <Show when={options().length > 0}>
-      <Show
-        when={options().length > 1}
-        fallback={
-          <Button
-            variant="secondary"
-            size="sm"
-            class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
-            onClick={() => handleSelect(options()[0])}
-          >
-            <CreateOptionIcon id={options()[0].id} />
-            Create
-          </Button>
-        }
-      >
-        <DropdownMenu placement="bottom-start" gutter={4}>
-          <DropdownMenu.Trigger
-            as={Button}
-            variant="secondary"
-            size="sm"
-            class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
-          >
-            <span>Create</span>
-            <ChevronDownIcon class="size-3" />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenuContent class="z-action-menu min-w-[160px]">
-              <For each={options()}>
-                {(item) => (
-                  <MenuItem
-                    text={item.label}
-                    icon={<CreateOptionIcon id={item.id} />}
-                    onClick={() => handleSelect(item)}
-                  />
-                )}
-              </For>
-            </DropdownMenuContent>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
+    <>
+      <Show when={currentView() === 'calls'}>
+        <NewCallButton />
       </Show>
-    </Show>
+      <Show when={options().length > 0}>
+        <Show
+          when={options().length > 1}
+          fallback={
+            <Button
+              variant="secondary"
+              size="sm"
+              class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
+              onClick={() => handleSelect(options()[0])}
+            >
+              <CreateOptionIcon id={options()[0].id} />
+              Create
+            </Button>
+          }
+        >
+          <DropdownMenu placement="bottom-start" gutter={4}>
+            <DropdownMenu.Trigger
+              as={Button}
+              variant="secondary"
+              size="sm"
+              class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
+            >
+              <span>Create</span>
+              <ChevronDownIcon class="size-3" />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenuContent class="z-action-menu min-w-[160px]">
+                <For each={options()}>
+                  {(item) => (
+                    <MenuItem
+                      text={item.label}
+                      icon={<CreateOptionIcon id={item.id} />}
+                      onClick={() => handleSelect(item)}
+                    />
+                  )}
+                </For>
+              </DropdownMenuContent>
+            </DropdownMenu.Portal>
+          </DropdownMenu>
+        </Show>
+      </Show>
+    </>
   );
 };
