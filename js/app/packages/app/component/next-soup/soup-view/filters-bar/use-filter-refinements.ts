@@ -1,14 +1,21 @@
 import {
-  VIEW_TAB_PRESETS,
   type PresetContext,
+  getViewPreset,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs/';
-import { emptyFilterData, applyFilterData } from '@app/component/next-soup/filters/filter-store';
+import type { FilterContext } from '@app/component/next-soup/filters/configs';
+import {
+  addQuery,
+  applyFilterData,
+  emptyFilterData,
+  removeQuery,
+} from '@app/component/next-soup/filters/filter-store';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserContext, useUserId } from '@core/context/user';
 import { useContacts } from '@queries/contacts/contacts';
@@ -40,8 +47,15 @@ const TAB_ONLY_FILTERS = new Set([
  * and a function to reset filters to the current tab's default state.
  */
 export function useFilterRefinements() {
-  const { soup, filters: filterData, setFilters, assigneeFilter, setAssigneeFilter, activeTab } =
-    useSoupView();
+  const {
+    soup,
+    filters: filterData,
+    setFilters,
+    assigneeFilter,
+    setAssigneeFilter,
+    activePreset,
+    setActivePreset,
+  } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
   const contacts = useContacts();
@@ -62,17 +76,9 @@ export function useFilterRefinements() {
   });
 
   const currentPreset = createMemo(() => {
-    const view = currentView();
-    if (!view) return undefined;
-
-    const viewConfig = VIEW_TAB_PRESETS[view];
-    if (!viewConfig) return undefined;
-
-    const tab = activeTab() ?? viewConfig.default;
-    const resolver = viewConfig.tabs[tab];
-    if (!resolver) return undefined;
-
-    return resolver(getPresetContext());
+    const preset = activePreset();
+    if (!preset) return undefined;
+    return getViewPreset(preset.view, preset.tab, getPresetContext());
   });
 
   const hasActiveRefinements = createMemo(() => {
@@ -140,6 +146,7 @@ export function useFilterRefinements() {
         ) {
           continue;
         }
+
         filters.push({
           categoryLabel: category.label,
           optionId: option.id,
@@ -184,8 +191,39 @@ export function useFilterRefinements() {
         categoryLabel: 'Assignee',
         optionId: id,
         optionLabel: option?.label ?? id,
-        onRemove: () =>
-          setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
+        onRemove: () => {
+          batch(() => {
+            setAssigneeFilter(assigneeFilter().filter((a) => a !== id));
+            setFilters((d) => {
+              const nextProperties = [];
+
+              for (const prop of d.properties) {
+                if (Array.isArray(prop)) {
+                  const filtered = prop.filter(
+                    (p) =>
+                      p.propertyId !== SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+                      p.value !== id
+                  );
+                  if (!filtered.length) continue;
+
+                  nextProperties.push(filtered);
+                  continue;
+                }
+
+                if (
+                  prop.propertyId === SYSTEM_PROPERTY_IDS.ASSIGNEES &&
+                  prop.value === id
+                ) {
+                  continue;
+                }
+
+                nextProperties.push(prop);
+              }
+
+              d.properties = nextProperties;
+            });
+          });
+        },
       });
     }
 
@@ -244,15 +282,39 @@ export function useFilterRefinements() {
     return soup.filters.isActive(optionId);
   };
 
+  const getFilterContext = (): FilterContext => ({
+    userId: currentUserId(),
+    assignees: assigneeFilter(),
+  });
+
+  const getFilterQuery = (optionId: string) => {
+    const filter = soup.filters.getFilter(optionId);
+    if (!filter?.query) return undefined;
+    return typeof filter.query === 'function'
+      ? filter.query(getFilterContext())
+      : filter.query;
+  };
+
   const removeFilter = (optionId: string) => {
-    soup.filters.toggle({ or: [optionId as FilterID] });
+    const query = getFilterQuery(optionId);
+    batch(() => {
+      soup.filters.toggle({ or: [optionId as FilterID] });
+      if (query) {
+        setFilters((d) => removeQuery(d, query));
+      }
+    });
   };
 
   const replaceFilter = (oldOptionId: string, newOptionId: string) => {
-    // Toggle off the old filter and toggle on the new one
+    const oldQuery = getFilterQuery(oldOptionId);
+    const newQuery = getFilterQuery(newOptionId);
     batch(() => {
       soup.filters.toggle({ or: [oldOptionId as FilterID] });
       soup.filters.toggle({ or: [newOptionId as FilterID] });
+      setFilters((d) => {
+        if (oldQuery) removeQuery(d, oldQuery);
+        if (newQuery) addQuery(d, newQuery);
+      });
     });
   };
 
@@ -262,7 +324,9 @@ export function useFilterRefinements() {
 
     batch(() => {
       soup.filters.set({ and: preset.clientFilters });
-      setFilters((d) => applyFilterData(d, preset.filters ?? {}));
+      setFilters((d) =>
+        applyFilterData(d, preset.filters ?? emptyFilterData())
+      );
       setAssigneeFilter([]);
     });
   };
