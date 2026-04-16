@@ -300,33 +300,51 @@ export function useFilterRefinements() {
     // Email importance (only when the email index is active in the search view)
     if (currentView() === 'search' && soup.filters.isActive('email')) {
       const importance = queryFilters().email_filters?.importance;
-      if (importance !== undefined) {
-        const IMPORTANCE_SIGNAL = 'importance:signal';
-        const IMPORTANCE_NOISE = 'importance:noise';
-        filters.push({
-          categoryLabel: 'Importance',
-          optionId: importance ? IMPORTANCE_SIGNAL : IMPORTANCE_NOISE,
-          optionLabel: importance ? 'Signal' : 'Noise',
-          categoryOptions: [
-            { id: IMPORTANCE_SIGNAL, label: 'Signal' },
-            { id: IMPORTANCE_NOISE, label: 'Noise' },
-          ] as unknown as ActiveFilter['categoryOptions'],
-          multiple: false,
-          onRemove: () =>
-            setQueryFilters((prev) => ({
-              ...prev,
-              email_filters: { ...prev.email_filters, importance: undefined },
-            })),
-          onReplace: (newOptionId) =>
-            setQueryFilters((prev) => ({
-              ...prev,
-              email_filters: {
-                ...prev.email_filters,
-                importance: newOptionId === IMPORTANCE_SIGNAL,
-              },
-            })),
-        });
-      }
+      const IMPORTANCE_SIGNAL = 'importance:signal';
+      const IMPORTANCE_NOISE = 'importance:noise';
+      const IMPORTANCE_ALL = 'importance:all';
+      const currentOptionId =
+        importance === true
+          ? IMPORTANCE_SIGNAL
+          : importance === false
+            ? IMPORTANCE_NOISE
+            : IMPORTANCE_ALL;
+      const currentLabel =
+        importance === true
+          ? 'Signal'
+          : importance === false
+            ? 'Noise'
+            : 'All';
+      filters.push({
+        categoryLabel: 'Importance',
+        optionId: currentOptionId,
+        optionLabel: currentLabel,
+        categoryOptions: [
+          { id: IMPORTANCE_SIGNAL, label: 'Signal' },
+          { id: IMPORTANCE_NOISE, label: 'Noise' },
+          { id: IMPORTANCE_ALL, label: 'All' },
+        ] as unknown as ActiveFilter['categoryOptions'],
+        multiple: false,
+        isOptionActive: (optionId) => optionId === currentOptionId,
+        onRemove: () =>
+          setQueryFilters((prev) => ({
+            ...prev,
+            email_filters: { ...prev.email_filters, importance: undefined },
+          })),
+        onReplace: (newOptionId) =>
+          setQueryFilters((prev) => ({
+            ...prev,
+            email_filters: {
+              ...prev.email_filters,
+              importance:
+                newOptionId === IMPORTANCE_SIGNAL
+                  ? true
+                  : newOptionId === IMPORTANCE_NOISE
+                    ? false
+                    : undefined,
+            },
+          })),
+      });
     }
 
     return filters;

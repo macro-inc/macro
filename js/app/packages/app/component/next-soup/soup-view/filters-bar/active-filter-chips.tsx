@@ -44,6 +44,12 @@ export type ActiveFilter = {
    */
   onReplace?: (newOptionId: string) => void;
   /**
+   * Per-chip active-state predicate. When set, takes precedence over the shared
+   * `isOptionActive` for this chip's dropdown. Use when the filter state lives
+   * outside `soup.filters` (e.g. email importance in queryFilters).
+   */
+  isOptionActive?: (optionId: string) => boolean;
+  /**
    * When set, the chip opens a searchable multi-select combobox instead of the
    * simple replace dropdown. Use for list-valued filters like In/From.
    */
@@ -292,7 +298,10 @@ const FilterChip = (props: {
             <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
               <For each={props.filter.categoryOptions}>
                 {(option) => {
-                  const active = () => props.isOptionActive(option.id);
+                  const active = () =>
+                    props.filter.isOptionActive
+                      ? props.filter.isOptionActive(option.id)
+                      : props.isOptionActive(option.id);
                   const isSingleSelect = () =>
                     props.filter.multiple === false;
                   return (
