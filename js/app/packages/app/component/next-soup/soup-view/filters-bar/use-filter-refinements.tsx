@@ -202,6 +202,17 @@ export function useFilterRefinements() {
       });
     }
 
+    const labelForIds = (ids: string[]): string => {
+      const [first, ...rest] = ids;
+      const firstItem = quickAccess.getById(first);
+      const firstLabel =
+        firstItem && 'data' in firstItem && firstItem.data?.name
+          ? firstItem.data.name
+          : first;
+      if (rest.length === 0) return firstLabel;
+      return `${firstLabel} and ${rest.length} ${rest.length === 1 ? 'other' : 'others'}`;
+    };
+
     // Search operator filters: in: (channel_ids)
     const channelIds = (
       queryFilters().channel_filters?.channel_ids ?? []
@@ -214,14 +225,11 @@ export function useFilterRefinements() {
           channel_ids: ids.length > 0 ? ids : undefined,
         },
       }));
-    for (const channelId of channelIds) {
-      const item = quickAccess.getById(channelId);
-      const label =
-        item && 'data' in item && item.data?.name ? item.data.name : channelId;
+    if (channelIds.length > 0) {
       filters.push({
         categoryLabel: 'In',
-        optionId: channelId,
-        optionLabel: label,
+        optionId: `in:${channelIds.join(',')}`,
+        optionLabel: labelForIds(channelIds),
         searchableOptions: channelOptions,
         activeSearchableIds: () =>
           (queryFilters().channel_filters?.channel_ids ?? []).filter(
@@ -229,8 +237,7 @@ export function useFilterRefinements() {
           ),
         onSearchableChange: setChannelIds,
         searchPlaceholder: 'Search channels...',
-        onRemove: () =>
-          setChannelIds(channelIds.filter((id) => id !== channelId)),
+        onRemove: () => setChannelIds([]),
       });
     }
 
@@ -244,20 +251,17 @@ export function useFilterRefinements() {
           sender_ids: ids.length > 0 ? ids : undefined,
         },
       }));
-    for (const senderId of senderIds) {
-      const item = quickAccess.getById(senderId);
-      const label =
-        item && 'data' in item && item.data?.name ? item.data.name : senderId;
+    if (senderIds.length > 0) {
       filters.push({
         categoryLabel: 'From',
-        optionId: senderId,
-        optionLabel: label,
+        optionId: `from:${senderIds.join(',')}`,
+        optionLabel: labelForIds(senderIds),
         searchableOptions: senderOptions,
         activeSearchableIds: () =>
           queryFilters().channel_filters?.sender_ids ?? [],
         onSearchableChange: setSenderIds,
         searchPlaceholder: 'Search senders...',
-        onRemove: () => setSenderIds(senderIds.filter((id) => id !== senderId)),
+        onRemove: () => setSenderIds([]),
       });
     }
 
