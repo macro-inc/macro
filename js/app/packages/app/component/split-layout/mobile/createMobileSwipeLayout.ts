@@ -70,7 +70,8 @@ export function createMobileSwipeLayout(
   });
 
   function canGoBack() {
-    return bgSplitId() !== undefined;
+    const bgId = bgSplitId();
+    return bgId !== undefined && splitManager.getSplit(bgId) !== undefined;
   }
 
   function navigateForward(
