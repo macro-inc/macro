@@ -15,14 +15,7 @@ import {
 import type { UnifiedNotification } from '@notifications';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
-import {
-  createEffect,
-  type JSX,
-  onCleanup,
-  Show,
-  createSignal,
-  onMount,
-} from 'solid-js';
+import { createEffect, type JSX, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';
 import { UnreadIndicator } from '../components/UnreadIndicator';
@@ -68,33 +61,6 @@ function NotificationStackRow(props: {
     stack: props.stack,
   });
 
-  // When a pointerdown fires while the context menu is open, register a
-  // one-shot click blocker. This handles two cases:
-  // 1. Click-to-dismiss: pointerdown closes the menu, subsequent click
-  //    should not navigate
-  // 2. Menu item click: portal is removed during click processing,
-  //    retargeted click should not navigate (also handled by the
-  //    onClick stopPropagation wrapper inside the portal)
-  const [menuOpen, setMenuOpen] = createSignal(false);
-  const clickBlocker = (e: MouseEvent) => {
-    e.stopImmediatePropagation();
-    e.preventDefault();
-  };
-  const pointerdownHandler = () => {
-    if (!menuOpen()) return;
-    document.addEventListener('click', clickBlocker, true);
-    requestAnimationFrame(() => {
-      document.removeEventListener('click', clickBlocker, true);
-    });
-  };
-  onMount(() => {
-    document.addEventListener('pointerdown', pointerdownHandler, true);
-  });
-  onCleanup(() => {
-    document.removeEventListener('pointerdown', pointerdownHandler, true);
-    document.removeEventListener('click', clickBlocker, true);
-  });
-
   const handleClick = async (e: PointerEvent | MouseEvent | KeyboardEvent) => {
     const mostRecent = getMostRecentNotification(props.stack);
     const splitManager = globalSplitManager();
@@ -123,7 +89,7 @@ function NotificationStackRow(props: {
   };
 
   return (
-    <ContextMenu onOpenChange={setMenuOpen}>
+    <ContextMenu>
       <ContextMenu.Trigger class="size-full">
         <div
           class={cn(
