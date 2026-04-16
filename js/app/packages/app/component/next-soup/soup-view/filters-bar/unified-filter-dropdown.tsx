@@ -32,10 +32,8 @@ import { type FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
   addQuery,
   removeQuery,
-  type FilterData,
   type PropertyValue,
 } from '@app/component/next-soup/filters/filter-store';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
@@ -511,7 +509,8 @@ const SearchableFilterSubmenu = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, setFilters, assigneeFilter, setAssigneeFilter } = useSoupView();
+  const { soup, filters, setFilters, assigneeFilter, setAssigneeFilter } =
+    useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
   const contentId = panel.handle.content().id;
@@ -625,75 +624,79 @@ export const UnifiedFilterDropdown = () => {
 
   createEffect(() => {
     if (!isSearchView() || !isChannelsIndexActive()) return;
-    const cf = queryFilters().channel_filters;
     const sub: ChannelSubFilters = {};
-    if (cf?.channel_ids?.length) sub.channel_ids = cf.channel_ids;
-    if (cf?.sender_ids?.length) sub.sender_ids = cf.sender_ids;
+    const channelIds = filters().include.channelId;
+    const senderIds = filters().include.channelSenderId;
+    if (channelIds?.length) sub.channel_ids = channelIds;
+    if (senderIds?.length) sub.sender_ids = senderIds;
     cacheChannelSubFilters(contentId, sub);
   });
 
   createEffect(() => {
     if (!isSearchView() || !isEmailIndexActive()) return;
-    const ef = queryFilters().email_filters;
-    cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
+    const importance = filters().include.emailImportance?.[0];
+    cacheEmailSubFilters(contentId, { importance: importance ?? null });
   });
 
   const { channelOptions: inChannelOptions, senderOptions: fromSenderOptions } =
     useSearchFilterOptions();
 
   const activeChannelIds: Accessor<string[]> = createMemo(
-    () => queryFilters().channel_filters?.channel_ids ?? []
+    () => filters().include.channelId ?? []
   );
 
   const toggleChannelId = (id: string) => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
-      const current = queryFilters().channel_filters?.channel_ids ?? [];
+      const current = filters().include.channelId ?? [];
       const nextIds = current.includes(id)
         ? current.filter((cid) => cid !== id)
         : [...current, id];
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: {
-          ...prev.channel_filters,
-          channel_ids: nextIds.length > 0 ? nextIds : undefined,
-        },
-      }));
+      setFilters((d) => {
+        if (nextIds.length > 0) {
+          d.include.channelId = nextIds;
+        } else {
+          delete d.include.channelId;
+        }
+      });
     });
   };
 
   const activeSenderIds: Accessor<string[]> = createMemo(
-    () => queryFilters().channel_filters?.sender_ids ?? []
+    () => filters().include.channelSenderId ?? []
   );
 
   const toggleSenderId = (id: string) => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
-      const current = queryFilters().channel_filters?.sender_ids ?? [];
+      const current = filters().include.channelSenderId ?? [];
       const nextIds = current.includes(id)
         ? current.filter((sid) => sid !== id)
         : [...current, id];
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: {
-          ...prev.channel_filters,
-          sender_ids: nextIds.length > 0 ? nextIds : undefined,
-        },
-      }));
+      setFilters((d) => {
+        if (nextIds.length > 0) {
+          d.include.channelSenderId = nextIds;
+        } else {
+          delete d.include.channelSenderId;
+        }
+      });
     });
   };
 
   const setImportance = (val: boolean | undefined) => {
     batch(() => {
       if (!isEmailIndexActive()) handleIndexChange('email');
-      setQueryFilters((prev) => ({
-        ...prev,
-        email_filters: { ...prev.email_filters, importance: val },
-      }));
+      setFilters((d) => {
+        if (val !== undefined) {
+          d.include.emailImportance = [val];
+        } else {
+          delete d.include.emailImportance;
+        }
+      });
     });
   };
 
-  const importance = createMemo(() => queryFilters().email_filters?.importance);
+  const importance = createMemo(() => filters().include.emailImportance?.[0]);
 
   registerHotkey({
     hotkey: 'f',

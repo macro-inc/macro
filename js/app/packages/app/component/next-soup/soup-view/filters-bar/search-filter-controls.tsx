@@ -3,7 +3,6 @@ import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-ic
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
-import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
@@ -11,13 +10,14 @@ import {
   activeSoupViewCounts,
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { SoupBody } from '@queries/soup/items';
+import {
+  NIL,
+  defineQueryFilters,
+  applyFilterData,
+  type FilterData,
+} from '@app/component/next-soup/filters/filter-store';
 import { batch, createMemo, type JSX } from 'solid-js';
 import type { Option } from './filter-primitives';
-import type {
-  ChannelFilters,
-  EmailFilters,
-} from '@service-storage/generated/schemas';
 
 export type SearchableOption = {
   id: string;
@@ -71,11 +71,13 @@ export function useSearchFilterOptions() {
   return { channelOptions, senderOptions };
 }
 
-export type ChannelSubFilters = Pick<
-  ChannelFilters,
-  'channel_ids' | 'sender_ids'
->;
-export type EmailSubFilters = Pick<EmailFilters, 'importance'>;
+export type ChannelSubFilters = {
+  channel_ids?: string[];
+  sender_ids?: string[];
+};
+export type EmailSubFilters = {
+  importance?: boolean | null;
+};
 
 export function getCachedChannelSubFilters(
   contentId: string
@@ -133,8 +135,66 @@ export function cacheEmailSubFilters(
   }
 }
 
+type IndexOption = Option & { filterData: Partial<FilterData> };
+
+export const INDEX_OPTIONS: IndexOption[] = [
+  {
+    value: 'channels',
+    label: 'Channels',
+    icon: () => (
+      <EntityIcon targetType="channel" size="xs" theme="monochrome" />
+    ),
+    filterData: defineQueryFilters({
+      exclude: { channelId: [NIL] },
+    }),
+  },
+  {
+    value: 'document-or-file',
+    label: 'Documents',
+    icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
+    filterData: defineQueryFilters({
+      exclude: { subType: ['task'] },
+    }),
+  },
+  {
+    value: 'task',
+    label: 'Tasks',
+    icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
+    filterData: defineQueryFilters({
+      include: { subType: ['task'] },
+    }),
+  },
+  {
+    value: 'email',
+    label: 'Email',
+    icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
+    filterData: defineQueryFilters({
+      exclude: { threadId: [NIL] },
+      include: { emailImportance: [true] },
+    }),
+  },
+  {
+    value: 'folders',
+    label: 'Folders',
+    icon: () => (
+      <EntityIcon targetType="project" size="xs" theme="monochrome" />
+    ),
+    filterData: defineQueryFilters({
+      exclude: { folderId: [NIL] },
+    }),
+  },
+  {
+    value: 'agent',
+    label: 'Agents',
+    icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
+    filterData: defineQueryFilters({
+      exclude: { chatId: [NIL] },
+    }),
+  },
+];
+
 export function useSearchIndexController() {
-  const { soup, setQueryFilters } = useSoupView();
+  const { soup, setFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
 
@@ -148,9 +208,9 @@ export function useSearchIndexController() {
 
       if (newValue === 'all') {
         cacheChannelSubFilters(contentId, {});
-        setQueryFilters({
-          ...QUERY_FILTERS.default,
-          email_filters: { importance: true },
+        setFilters((d) => {
+          applyFilterData(d, {});
+          d.include.emailImportance = [true];
         });
         return;
       }
@@ -161,74 +221,36 @@ export function useSearchIndexController() {
 
       if (opt.value === 'channels') {
         const cached = getCachedChannelSubFilters(contentId);
-        setQueryFilters({
-          ...opt.queryFilters,
-          channel_filters: {
-            ...opt.queryFilters.channel_filters,
-            ...cached,
-          },
+        setFilters((d) => {
+          applyFilterData(d, opt.filterData);
+          if (cached.channel_ids?.length) {
+            d.include.channelId = cached.channel_ids;
+          }
+          if (cached.sender_ids?.length) {
+            d.include.channelSenderId = cached.sender_ids;
+          }
         });
       } else if (opt.value === 'email') {
         const cached = getCachedEmailSubFilters(contentId);
         const importance =
           'importance' in cached
             ? (cached.importance ?? undefined)
-            : opt.queryFilters.email_filters?.importance;
-        setQueryFilters({
-          ...opt.queryFilters,
-          email_filters: {
-            ...opt.queryFilters.email_filters,
-            importance,
-          },
+            : opt.filterData.include?.emailImportance?.[0];
+        setFilters((d) => {
+          applyFilterData(d, opt.filterData);
+          if (importance !== undefined) {
+            d.include.emailImportance = [importance];
+          } else {
+            delete d.include.emailImportance;
+          }
         });
       } else {
-        setQueryFilters({ ...opt.queryFilters });
+        setFilters((d) => {
+          applyFilterData(d, opt.filterData);
+        });
       }
     });
   };
 
   return { changeIndex };
 }
-
-export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
-  {
-    value: 'channels',
-    label: 'Channels',
-    icon: () => (
-      <EntityIcon targetType="channel" size="xs" theme="monochrome" />
-    ),
-    queryFilters: QUERY_FILTERS.channels,
-  },
-  {
-    value: 'document-or-file',
-    label: 'Documents',
-    icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.documentAndFile,
-  },
-  {
-    value: 'task',
-    label: 'Tasks',
-    icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.task,
-  },
-  {
-    value: 'email',
-    label: 'Email',
-    icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.email,
-  },
-  {
-    value: 'folders',
-    label: 'Folders',
-    icon: () => (
-      <EntityIcon targetType="project" size="xs" theme="monochrome" />
-    ),
-    queryFilters: QUERY_FILTERS.folders,
-  },
-  {
-    value: 'agent',
-    label: 'Agents',
-    icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.agent,
-  },
-];
