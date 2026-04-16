@@ -168,15 +168,30 @@ VALUES
 -- USER ACCESS PERMISSIONS
 ---------------------------------
 
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
 VALUES
-  -- user-1: owner on project-root (inherits to mid and deep)
-  (gen_random_uuid(), 'macro|user-1@test.com', 'aa000001-ffff-ffff-ffff-ffffffffffff', 'project', 'owner'),
+  -- user-1: owner on project-root
+  ('aa000001-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'owner', NULL),
+  -- user-1: inherited access to project-mid and project-deep
+  ('aa000002-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('aa000003-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  -- user-1: inherited access to all docs/chats in root project hierarchy
+  ('bb000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('bb000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('bb000003-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('bb000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('bb000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('bb000007-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('bb000008-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('cc000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
+  ('cc000003-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'macro|user-1@test.com', 'user', 'owner', 'aa000001-ffff-ffff-ffff-ffffffffffff'),
   -- user-1: direct access to standalone items
-  (gen_random_uuid(), 'macro|user-1@test.com', 'bb000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'owner'),
-  (gen_random_uuid(), 'macro|user-1@test.com', 'cc000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'owner'),
-  -- user-2: owner on isolated project
-  (gen_random_uuid(), 'macro|user-2@test.com', 'aa000004-ffff-ffff-ffff-ffffffffffff', 'project', 'owner');
+  ('bb000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', NULL),
+  ('cc000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'macro|user-1@test.com', 'user', 'owner', NULL),
+  -- user-2: owner on isolated project and its items
+  ('aa000004-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-2@test.com', 'user', 'owner', NULL),
+  ('bb000009-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-2@test.com', 'user', 'owner', 'aa000004-ffff-ffff-ffff-ffffffffffff'),
+  ('cc000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'macro|user-2@test.com', 'user', 'owner', 'aa000004-ffff-ffff-ffff-ffffffffffff');
 
 ---------------------------------
 -- USER HISTORY

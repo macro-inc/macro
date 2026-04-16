@@ -35,8 +35,6 @@ where
     }
 
     /// Get access level for optimized entity types (document, chat, project, thread).
-    ///
-    /// These use the UserItemAccess table for efficient lookups.
     async fn get_optimized_access(
         &self,
         entity_id: &str,
