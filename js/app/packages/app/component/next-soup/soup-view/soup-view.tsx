@@ -705,7 +705,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           version: PERSISTED_STATE_VERSION,
           activeTab: activeTab(),
           filters: [...soup.filters.activeIds()],
-          filterData: filters(),
+          filterData: { ...filters() },
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),
