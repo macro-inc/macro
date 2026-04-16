@@ -1,6 +1,6 @@
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
-import type { FilterData, PropertyFilter } from '../filter-store';
+import type { FilterData, PropertyValue } from '../filter-store';
 
 export const NO_ASSIGNEE = '__no_assignee__';
 
@@ -57,24 +57,14 @@ export function config<TId extends string>(opts: {
   };
 }
 
-export const propSelect = (
-  propertyId: string,
-  value: string,
-  negate = false
-): PropertyFilter => ({
+export const propSelect = (value: string, negate = false): PropertyValue => ({
   type: 'select',
-  propertyId,
   value,
   ...(negate && { negate }),
 });
 
-export const propEntity = (
-  propertyId: string,
-  value: string,
-  negate = false
-): PropertyFilter => ({
+export const propEntity = (value: string, negate = false): PropertyValue => ({
   type: 'entity',
-  propertyId,
   value,
   ...(negate && { negate }),
 });

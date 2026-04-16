@@ -39,7 +39,7 @@ const statusFilter = <TId extends string>(
   config({
     id,
     predicate,
-    query: { properties: [propSelect(SYSTEM_PROPERTY_IDS.STATUS, status)] },
+    query: { properties: [{ STATUS: [propSelect(status)] }] },
   });
 
 const priorityFilter = <TId extends string>(
@@ -50,7 +50,7 @@ const priorityFilter = <TId extends string>(
   config({
     id,
     predicate,
-    query: { properties: [propSelect(SYSTEM_PROPERTY_IDS.PRIORITY, priority)] },
+    query: { properties: [{ PRIORITY: [propSelect(priority)] }] },
   });
 
 export const taskNotStartedFilter = statusFilter(
@@ -89,16 +89,8 @@ export const activeTaskFilter = config({
   query: {
     include: { subType: ['task'] },
     properties: [
-      propSelect(
-        SYSTEM_PROPERTY_IDS.STATUS,
-        PROPERTY_OPTION_IDS.STATUS.COMPLETED,
-        true
-      ),
-      propSelect(
-        SYSTEM_PROPERTY_IDS.STATUS,
-        PROPERTY_OPTION_IDS.STATUS.CANCELED,
-        true
-      ),
+      { STATUS: [propSelect(PROPERTY_OPTION_IDS.STATUS.COMPLETED, true)] },
+      { STATUS: [propSelect(PROPERTY_OPTION_IDS.STATUS.CANCELED, true)] },
     ],
   },
 });
@@ -153,7 +145,7 @@ export const assignedToMeFilter = config({
   id: 'assigned-to',
   predicate: (e, ctx) => taskAssignedToUserPredicate(() => ctx.userId)(e),
   query: (ctx) => ({
-    properties: [propEntity(SYSTEM_PROPERTY_IDS.ASSIGNEES, ctx.userId ?? '')],
+    properties: [{ ASSIGNEES: [propEntity(ctx.userId ?? '')] }],
   }),
 });
 
@@ -172,9 +164,7 @@ export const assigneeFilter = config({
     if (userIds.length === 0) return isTask;
     return {
       ...isTask,
-      properties: [
-        userIds.map((id) => propEntity(SYSTEM_PROPERTY_IDS.ASSIGNEES, id)),
-      ],
+      properties: [{ ASSIGNEES: userIds.map((id) => propEntity(id)) }],
     };
   },
 });

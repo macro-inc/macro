@@ -5,10 +5,7 @@ import {
   type EmailView,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
-import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
+import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 
 export type SoupFiltersPreset = {
   /** Filter data for server query */
@@ -214,22 +211,24 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           filters: {
             include: { subType: ['task'] },
             properties: [
+              { ASSIGNEES: [{ type: 'entity', value: ctx.userId }] },
               {
-                type: 'entity',
-                propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-                value: ctx.userId,
+                STATUS: [
+                  {
+                    type: 'select',
+                    value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+                    negate: true,
+                  },
+                ],
               },
               {
-                type: 'select',
-                propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-                value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
-                negate: true,
-              },
-              {
-                type: 'select',
-                propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-                value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
-                negate: true,
+                STATUS: [
+                  {
+                    type: 'select',
+                    value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
+                    negate: true,
+                  },
+                ],
               },
             ],
           },

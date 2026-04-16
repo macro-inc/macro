@@ -183,17 +183,21 @@ const ProjectEntityList = (props: {
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
         soup={props.soup}
-        initialFilterAst={{
-          // Filter documents by project
-          df: ast.eq('pid', props.projectId),
-          // Filter chats by project
-          cf: ast.eq('ProjectId', props.projectId),
-          // Filter projects by project (current project only)
-          pf: ast.eq('ProjectId', props.projectId),
-          // Exclude channels
-          chanf: ast.eq('ChannelId', NIL_UUID),
-          // Filter emails by project
-          ef: ast.eq('ProjectId', props.projectId),
+        initialFilters={{
+          include: {
+            // Filter documents by project
+            projectId: [props.projectId],
+            // Filter chats by project
+            chatProjectId: [props.projectId],
+            // Filter projects by project (current project only)
+            folderId: [props.projectId],
+            // Filter emails by project
+            emailProjectId: [props.projectId],
+          },
+          exclude: {
+            // Exclude channels
+            channelId: [NIL_UUID],
+          },
         }}
       >
         <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />

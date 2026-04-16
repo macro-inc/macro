@@ -2,8 +2,7 @@ import {
   type PresetContext,
   getViewPreset,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/configs/';
-import type { FilterContext } from '@app/component/next-soup/filters/configs';
+import type { FilterID, FilterContext } from '@app/component/next-soup/filters';
 import {
   addQuery,
   applyFilterData,
@@ -195,32 +194,9 @@ export function useFilterRefinements() {
           batch(() => {
             setAssigneeFilter(assigneeFilter().filter((a) => a !== id));
             setFilters((d) => {
-              const nextProperties = [];
-
-              for (const prop of d.properties) {
-                if (Array.isArray(prop)) {
-                  const filtered = prop.filter(
-                    (p) =>
-                      p.propertyId !== SYSTEM_PROPERTY_IDS.ASSIGNEES ||
-                      p.value !== id
-                  );
-                  if (!filtered.length) continue;
-
-                  nextProperties.push(filtered);
-                  continue;
-                }
-
-                if (
-                  prop.propertyId === SYSTEM_PROPERTY_IDS.ASSIGNEES &&
-                  prop.value === id
-                ) {
-                  continue;
-                }
-
-                nextProperties.push(prop);
-              }
-
-              d.properties = nextProperties;
+              removeQuery(d, {
+                properties: [{ ASSIGNEES: [{ type: 'entity', value: id }] }],
+              });
             });
           });
         },

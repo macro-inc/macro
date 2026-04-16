@@ -1,5 +1,6 @@
 import { createStore, produce } from 'solid-js/store';
 import type { Accessor } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 
 type BackendAst =
   | { '&': [BackendAst, BackendAst] }
@@ -164,14 +165,18 @@ type FieldValueMap = {
   callChannelId: string;
 };
 
-export type PropertyFilter = {
+export type PropertyValue = {
   type: 'select' | 'entity';
-  propertyId: string;
   value: string;
   negate?: boolean;
 };
 
-type PropertyFilters = (PropertyFilter | PropertyFilter[])[]; // Outer AND, inner OR
+// Known system property names for type safety
+export type SystemPropertyName = keyof typeof SYSTEM_PROPERTY_IDS;
+export type PropertyId = SystemPropertyName | (string & {});
+
+// Properties: array of records (AND), values within each record are OR'd by property
+type PropertyFilters = Partial<Record<PropertyId, PropertyValue[]>>[];
 
 type FieldFilters = {
   [K in FieldName]?: FieldValueMap[K][];
@@ -186,6 +191,8 @@ export type FilterData = {
 };
 
 export type FilterSetter = (fn: (draft: FilterData) => void) => void;
+
+export type FilterDataInput = Partial<FilterData>;
 
 /** Resolve TargetFilter to an array of EntityTypes */
 function resolveTargets(filter: TargetFilter): EntityType[] {
@@ -287,49 +294,74 @@ function removeFieldValues(
   }
 }
 
-function removeProperties(
-  draft: FilterData,
-  queryProps: PropertyFilters
+type PropertyRecord = Partial<Record<PropertyId, PropertyValue[]>>;
+
+function addPropertyValues(
+  target: PropertyFilters,
+  source: PropertyFilters | undefined
 ): void {
-  const propsToRemove = queryProps.flatMap((p) => (Array.isArray(p) ? p : [p]));
-  const nextProperties: PropertyFilters = [];
+  if (!source?.length) return;
 
-  for (const prop of draft.properties) {
-    if (Array.isArray(prop)) {
-      const filtered = prop.filter(
-        (p) =>
-          !propsToRemove.some(
-            (qp) => qp.propertyId === p.propertyId && qp.value === p.value
-          )
-      );
+  for (const sourceRecord of source) {
+    for (const key of Object.keys(sourceRecord) as PropertyId[]) {
+      const values = sourceRecord[key];
+      if (!values?.length) continue;
 
-      if (filtered.length > 0) {
-        nextProperties.push(filtered);
+      // Find existing record with this property to merge into (OR semantics)
+      let existingRecord = target.find((r) => key in r);
+
+      if (existingRecord) {
+        const existing = existingRecord[key];
+        existingRecord[key] = existing ? [...existing, ...values] : [...values];
+      } else {
+        target.push({ [key]: [...values] });
       }
-
-      continue;
     }
+  }
+}
 
-    const shouldRemove = propsToRemove.some(
-      (qp) => qp.propertyId === prop.propertyId && qp.value === prop.value
-    );
+function removePropertyValues(
+  target: PropertyFilters,
+  source: PropertyFilters | undefined
+): void {
+  if (!source?.length) return;
 
-    if (!shouldRemove) {
-      nextProperties.push(prop);
+  for (const sourceRecord of source) {
+    for (const key of Object.keys(sourceRecord) as PropertyId[]) {
+      const values = sourceRecord[key];
+      if (!values?.length) continue;
+
+      for (const targetRecord of target) {
+        const existing = targetRecord[key];
+        if (!existing) continue;
+
+        const filtered = existing.filter(
+          (v) =>
+            !values.some((sv) => sv.value === v.value && sv.type === v.type)
+        );
+
+        if (filtered.length > 0) {
+          targetRecord[key] = filtered;
+        } else {
+          delete targetRecord[key];
+        }
+      }
     }
   }
 
-  draft.properties = nextProperties;
+  // Clean up empty records
+  for (let i = target.length - 1; i >= 0; i--) {
+    if (Object.keys(target[i]).length === 0) {
+      target.splice(i, 1);
+    }
+  }
 }
 
 /** Add a query's contributions to the draft (mutates draft) */
 export function addQuery(draft: FilterData, query: Partial<FilterData>): void {
   addFieldValues(draft.include, query.include);
   addFieldValues(draft.exclude, query.exclude);
-
-  if (query.properties?.length) {
-    draft.properties.push(...query.properties);
-  }
+  addPropertyValues(draft.properties, query.properties);
 
   if (query.emailView) {
     draft.emailView = query.emailView;
@@ -351,10 +383,7 @@ export function removeQuery(
 ): void {
   removeFieldValues(draft.include, query.include);
   removeFieldValues(draft.exclude, query.exclude);
-
-  if (query.properties?.length) {
-    removeProperties(draft, query.properties);
-  }
+  removePropertyValues(draft.properties, query.properties);
 
   if (query.emailView && draft.emailView === query.emailView) {
     draft.emailView = undefined;
@@ -387,11 +416,18 @@ export function createFilterStore(initial?: Partial<FilterData>) {
   return [filters, setFilters, () => compileToAst(data)] as const;
 }
 
-function propToAst(p: PropertyFilter): BackendAst {
+function resolvePropertyId(name: PropertyId): string {
+  if (name in SYSTEM_PROPERTY_IDS) {
+    return SYSTEM_PROPERTY_IDS[name as SystemPropertyName];
+  }
+  return name as string;
+}
+
+function propToAst(propertyId: string, p: PropertyValue): BackendAst {
   const leaf: BackendAst =
     p.type === 'select'
-      ? { l: { pd: p.propertyId, v: { so: p.value } } }
-      : { l: { pd: p.propertyId, v: { er: p.value } } };
+      ? { l: { pd: propertyId, v: { so: p.value } } }
+      : { l: { pd: propertyId, v: { er: p.value } } };
 
   return p.negate ? AST.not(leaf) : leaf;
 }
@@ -465,13 +501,22 @@ function compileToAst(data: FilterData): TargetAstMap {
     byTarget[config.target].push(AST.not(AST.fieldOr(config.field, values)));
   }
 
-  for (const item of data.properties) {
-    if (Array.isArray(item)) {
-      byTarget.propf.push(AST.or(item.map(propToAst)));
-      continue;
+  // Properties: array of records (AND), within each record values are OR'd by property
+  for (const record of data.properties) {
+    const recordAsts: BackendAst[] = [];
+
+    for (const name of Object.keys(record) as PropertyId[]) {
+      const values = record[name];
+      if (!values?.length) continue;
+
+      const propertyId = resolvePropertyId(name);
+      const groupAst = AST.or(values.map((v) => propToAst(propertyId, v)));
+      recordAsts.push(groupAst);
     }
 
-    byTarget.propf.push(propToAst(item));
+    if (recordAsts.length > 0) {
+      byTarget.propf.push(AST.and(recordAsts));
+    }
   }
 
   const result: TargetAstMap = {};
