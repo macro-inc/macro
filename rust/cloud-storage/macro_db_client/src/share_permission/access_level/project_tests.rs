@@ -7,17 +7,22 @@ use super::*;
 async fn test_highest_level_is_from_explicit_access_on_project(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: Get highest access for 'user-1' on 'p-child'.
+    // SCENARIO: Get highest access for 'user-1' on p-child (aaaaaaaa-aaaa-aaaa-aaaa-000000000003).
     // EXPLICIT ACCESS: view (direct on p-child), owner (inherited from p-grandparent). Max is 'owner'.
     // PUBLIC ACCESS: view (from p-parent), edit (from p-grandparent). Max is 'edit'.
     // EXPECTATION: The overall highest level should be 'owner' from the explicit grant on the grandparent.
 
-    let highest_level = get_highest_access_level_for_project(&pool, "p-child", "user-1").await?;
+    let highest_level = get_highest_access_level_for_project(
+        &pool,
+        "aaaaaaaa-aaaa-aaaa-aaaa-000000000003",
+        "user-1",
+    )
+    .await?;
 
     assert_eq!(
         highest_level,
         Some(AccessLevel::Owner),
-        "Expected highest level to be 'owner' from an inherited UserItemAccess record"
+        "Expected highest level to be 'owner' from an inherited entity_access record"
     );
 
     Ok(())
@@ -30,13 +35,17 @@ async fn test_highest_level_is_from_explicit_access_on_project(
 async fn test_highest_level_is_from_public_access_on_project(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: Get highest access for 'user-public-access-only' on 'p-child'.
+    // SCENARIO: Get highest access for 'user-public-access-only' on p-child.
     // This user has no explicit access grants.
     // PUBLIC ACCESS: view (from p-parent), edit (from p-grandparent). Max is 'edit'.
     // EXPECTATION: The overall highest level must be 'edit' from a public SharePermission.
 
-    let highest_level =
-        get_highest_access_level_for_project(&pool, "p-child", "user-public-access-only").await?;
+    let highest_level = get_highest_access_level_for_project(
+        &pool,
+        "aaaaaaaa-aaaa-aaaa-aaaa-000000000003",
+        "user-public-access-only",
+    )
+    .await?;
 
     assert_eq!(
         highest_level,
@@ -54,13 +63,18 @@ async fn test_highest_level_is_from_public_access_on_project(
 async fn test_user_scoping_is_correct_on_project(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: Get highest access for 'user-2' on 'p-child'.
+    // SCENARIO: Get highest access for 'user-2' on p-child.
     // EXPLICIT ACCESS: 'user-2' has 'comment' access inherited from p-parent.
     // PUBLIC ACCESS: view (from p-parent), edit (from p-grandparent). Max is 'edit'.
     // EXPECTATION: The overall highest level is 'edit' (from public), which is higher than
     // the user's explicit 'comment' grant.
 
-    let highest_level = get_highest_access_level_for_project(&pool, "p-child", "user-2").await?;
+    let highest_level = get_highest_access_level_for_project(
+        &pool,
+        "aaaaaaaa-aaaa-aaaa-aaaa-000000000003",
+        "user-2",
+    )
+    .await?;
 
     assert_eq!(
         highest_level,
@@ -78,12 +92,16 @@ async fn test_user_scoping_is_correct_on_project(
 async fn test_private_share_permissions_are_ignored_on_project(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: A private 'owner' SharePermission is attached directly to 'p-child'.
+    // SCENARIO: A private 'owner' SharePermission is attached directly to p-child.
     // Get access for a user who would otherwise only have public access.
     // EXPECTATION: The private permission must be ignored.
 
-    let highest_level =
-        get_highest_access_level_for_project(&pool, "p-child", "user-public-access-only").await?;
+    let highest_level = get_highest_access_level_for_project(
+        &pool,
+        "aaaaaaaa-aaaa-aaaa-aaaa-000000000003",
+        "user-public-access-only",
+    )
+    .await?;
 
     assert_ne!(
         highest_level,
@@ -106,11 +124,16 @@ async fn test_private_share_permissions_are_ignored_on_project(
 async fn test_no_permissions_returns_none_for_project(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    // SCENARIO: Get access for any user on 'p-isolated'.
+    // SCENARIO: Get access for any user on p-isolated.
     // This project has no permissions of any kind for user-1 and no public access.
     // EXPECTATION: The query should return an empty list, resulting in `None`.
 
-    let highest_level = get_highest_access_level_for_project(&pool, "p-isolated", "user-1").await?;
+    let highest_level = get_highest_access_level_for_project(
+        &pool,
+        "aaaaaaaa-aaaa-aaaa-aaaa-000000000004",
+        "user-1",
+    )
+    .await?;
 
     assert_eq!(
         highest_level, None,
