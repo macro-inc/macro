@@ -327,11 +327,11 @@ const FilterChip = (props: {
                         <span
                           class={cn(
                             'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
-                            active() ? 'border-accent' : 'border-edge'
+                            active() ? 'bg-accent border-accent' : 'border-edge'
                           )}
                         >
                           <Show when={active()}>
-                            <span class="size-2 rounded-full bg-accent" />
+                            <CheckIcon class="size-2.5 text-page" />
                           </Show>
                         </span>
                       </Show>

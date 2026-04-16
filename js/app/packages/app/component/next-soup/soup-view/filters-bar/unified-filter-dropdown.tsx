@@ -44,11 +44,11 @@ const TypeIndicator = (props: { active: boolean }) => (
   <span
     class={cn(
       'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
-      props.active ? 'border-accent' : 'border-edge'
+      props.active ? 'bg-accent border-accent' : 'border-edge'
     )}
   >
     <Show when={props.active}>
-      <span class="size-2 rounded-full bg-accent" />
+      <CheckIcon class="size-2.5 text-page" />
     </Show>
   </span>
 );

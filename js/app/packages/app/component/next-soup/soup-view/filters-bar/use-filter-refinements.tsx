@@ -297,8 +297,8 @@ export function useFilterRefinements() {
       });
     }
 
-    // Email importance (only when the email index is active)
-    if (soup.filters.isActive('email')) {
+    // Email importance (only when the email index is active in the search view)
+    if (currentView() === 'search' && soup.filters.isActive('email')) {
       const importance = queryFilters().email_filters?.importance;
       if (importance !== undefined) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
