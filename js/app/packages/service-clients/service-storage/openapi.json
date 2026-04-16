@@ -654,6 +654,59 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `DELETE /call/record/{call_id}`.",
+        "description": "Deletes a call record (and its participants/transcripts via cascade).\nAccess is validated via channel membership (MemberParticipantRole).",
+        "operationId": "delete_call_record",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Call record deleted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/call/webhook": {

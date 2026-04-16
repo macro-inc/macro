@@ -163,6 +163,13 @@ pub trait CallRepository: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Delete a row from `call_records` by id. Participants and transcript
+    /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
+    fn delete_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
@@ -282,6 +289,18 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<MemberParticipantRole>,
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
+
+    /// Delete a [`CallRecord`] the caller has channel-member access to.
+    ///
+    /// Authorization is carried in the receipt produced by
+    /// `CallAccessLevelExtractor`; the entity on the receipt must be
+    /// `EntityType::Call` and its `entity_id` must be the call's UUID.
+    /// Only `call_records` rows are affected — active calls in the `calls`
+    /// table are untouched. Idempotent.
+    fn delete_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.

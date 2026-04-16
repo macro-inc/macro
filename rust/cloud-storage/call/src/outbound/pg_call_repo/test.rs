@@ -619,8 +619,6 @@ async fn get_call_record_returns_none_for_unknown(pool: Pool<Postgres>) -> anyho
     Ok(())
 }
 
-// -- get_call_records_by_user ------------------------------------------------
-
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
@@ -647,6 +645,73 @@ async fn get_call_records_by_user_includes_channel_member_not_in_call(
         records
             .iter()
             .any(|r| r.call_id == CALL_ARCHIVED && !r.is_active)
+    );
+    Ok(())
+}
+
+// -- delete_call_record -------------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn delete_call_record_cascades(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Sanity check: the archived call and its children exist before delete.
+    let pre_participants: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_record_participants WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    let pre_transcripts: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_record_transcripts WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(pre_participants > 0);
+    assert!(pre_transcripts > 0);
+
+    repo.delete_call_record(&CALL_ARCHIVED).await?;
+
+    // Record row is gone.
+    let record = repo.get_call_record_by_call_id(&CALL_ARCHIVED).await?;
+    assert!(record.is_none());
+
+    // Cascade removed participants and transcripts.
+    let remaining_participants: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_record_participants WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    let remaining_transcripts: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_record_transcripts WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining_participants, 0);
+    assert_eq!(remaining_transcripts, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn delete_call_record_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // Non-existent id — should succeed without touching anything.
+    repo.delete_call_record(&Uuid::now_v7()).await?;
+
+    // Existing archived record must still be present.
+    assert!(
+        repo.get_call_record_by_call_id(&CALL_ARCHIVED)
+            .await?
+            .is_some()
     );
     Ok(())
 }

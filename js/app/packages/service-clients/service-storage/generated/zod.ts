@@ -908,6 +908,15 @@ export const getCallRecordResponse = zod
   );
 
 /**
+ * Deletes a call record (and its participants/transcripts via cascade).
+Access is validated via channel membership (MemberParticipantRole).
+ * @summary Handler for `DELETE /call/record/{call_id}`.
+ */
+export const deleteCallRecordParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+/**
  * Gets or creates a call for the channel. If a call already exists, joins it;
 otherwise creates a new one. Always returns a join token.
  * @summary Handler for `GET /call/{channel_id}`.
