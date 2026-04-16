@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_messages m\n        SET\n            is_starred = $1,\n            updated_at = NOW()\n        WHERE\n            m.id = ANY($2)\n            AND m.link_id = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "59eb39577b1b566ef0a95f74f75904a62689388c0b28b77a02946952e6aa8b36"
+}
