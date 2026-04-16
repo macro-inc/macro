@@ -4,8 +4,6 @@ import {
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
-import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
-import { UserIcon } from '@core/component/UserIcon';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -15,10 +13,13 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
-import { batch, createMemo, type JSX } from 'solid-js';
+import { batch, createMemo } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
 import { INDEX_OPTIONS } from './search-operator-autocomplete';
-import { useSearchIndexController } from './search-filter-controls';
+import {
+  useSearchFilterOptions,
+  useSearchIndexController,
+} from './search-filter-controls';
 import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
@@ -57,8 +58,7 @@ export function useFilterRefinements() {
   const contacts = useContacts();
   const currentUserId = useUserId();
   const quickAccess = useQuickAccess();
-  const channelList = quickAccess.useList('channel', 'dm');
-  const senderList = quickAccess.useList('person');
+  const { channelOptions, senderOptions } = useSearchFilterOptions();
   const { changeIndex } = useSearchIndexController();
 
   const getPresetContext = (): PresetContext => ({
@@ -206,18 +206,6 @@ export function useFilterRefinements() {
     const channelIds = (
       queryFilters().channel_filters?.channel_ids ?? []
     ).filter((id) => id !== NIL_UUID);
-    const channelOptionsAccessor = () =>
-      channelList()
-        .filter((ch) => ch.data.name)
-        .map((ch) => ({
-          id: ch.id,
-          label: ch.data.name,
-          icon: () => (
-            <div class="size-4">
-              <EntityIconWithAvatar entity={ch.data} />
-            </div>
-          ),
-        }));
     const setChannelIds = (ids: string[]) =>
       setQueryFilters((prev) => ({
         ...prev,
@@ -234,7 +222,7 @@ export function useFilterRefinements() {
         categoryLabel: 'In',
         optionId: channelId,
         optionLabel: label,
-        searchableOptions: channelOptionsAccessor,
+        searchableOptions: channelOptions,
         activeSearchableIds: () =>
           (queryFilters().channel_filters?.channel_ids ?? []).filter(
             (id) => id !== NIL_UUID
@@ -248,27 +236,6 @@ export function useFilterRefinements() {
 
     // Search operator filters: from: (sender_ids)
     const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
-    const senderOptionsAccessor = () => {
-      const uid = currentUserId();
-      let me:
-        | { id: string; label: string; icon?: () => JSX.Element }
-        | undefined;
-      const others: { id: string; label: string; icon?: () => JSX.Element }[] =
-        [];
-      for (const s of senderList()) {
-        const opt = {
-          id: s.id,
-          label:
-            s.id === uid ? `${s.data.name || 'Me'} (me)` : s.data.name || s.id,
-          icon: () => (
-            <UserIcon id={s.id} size="xs" suppressClick showTooltip={false} />
-          ),
-        };
-        if (s.id === uid) me = opt;
-        else others.push(opt);
-      }
-      return [...(me ? [me] : []), ...others];
-    };
     const setSenderIds = (ids: string[]) =>
       setQueryFilters((prev) => ({
         ...prev,
@@ -285,7 +252,7 @@ export function useFilterRefinements() {
         categoryLabel: 'From',
         optionId: senderId,
         optionLabel: label,
-        searchableOptions: senderOptionsAccessor,
+        searchableOptions: senderOptions,
         activeSearchableIds: () =>
           queryFilters().channel_filters?.sender_ids ?? [],
         onSearchableChange: setSenderIds,

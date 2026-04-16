@@ -1,4 +1,8 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
+import { UserIcon } from '@core/component/UserIcon';
+import { useQuickAccess } from '@core/context/quickAccess';
+import { useUserId } from '@core/context/user';
 import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -8,12 +12,64 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { SoupBody } from '@queries/soup/items';
-import { batch } from 'solid-js';
+import { batch, createMemo, type JSX } from 'solid-js';
 import type { Option } from './filter-primitives';
 import type {
   ChannelFilters,
   EmailFilters,
 } from '@service-storage/generated/schemas';
+
+export type SearchableOption = {
+  id: string;
+  label: string;
+  icon?: () => JSX.Element;
+};
+
+/**
+ * Shared option accessors for search view's In/From pickers. Used both by the
+ * Filter menu submenus and by the active-filter chips.
+ */
+export function useSearchFilterOptions() {
+  const { useList } = useQuickAccess();
+  const currentUserId = useUserId();
+  const channels = useList('channel', 'dm');
+  const senders = useList('person');
+
+  const channelOptions = createMemo((): SearchableOption[] =>
+    channels()
+      .filter((ch) => ch.data.name)
+      .map((ch) => ({
+        id: ch.id,
+        label: ch.data.name,
+        icon: () => (
+          <div class="size-4">
+            <EntityIconWithAvatar entity={ch.data} />
+          </div>
+        ),
+      }))
+  );
+
+  const senderOptions = createMemo((): SearchableOption[] => {
+    const uid = currentUserId();
+    let me: SearchableOption | undefined;
+    const others: SearchableOption[] = [];
+    for (const s of senders()) {
+      const opt: SearchableOption = {
+        id: s.id,
+        label:
+          s.id === uid ? `${s.data.name || 'Me'} (me)` : s.data.name || s.id,
+        icon: () => (
+          <UserIcon id={s.id} size="xs" suppressClick showTooltip={false} />
+        ),
+      };
+      if (s.id === uid) me = opt;
+      else others.push(opt);
+    }
+    return [...(me ? [me] : []), ...others];
+  });
+
+  return { channelOptions, senderOptions };
+}
 
 export type ChannelSubFilters = Pick<
   ChannelFilters,

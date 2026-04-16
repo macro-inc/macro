@@ -14,13 +14,8 @@ import XIcon from '@icon/regular/x.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import type { FilterOption } from './unified-filter-dropdown';
+import type { SearchableOption } from './search-filter-controls';
 import { Button } from '@ui/components/Button';
-
-export type SearchableChipOption = {
-  id: string;
-  label: string;
-  icon?: () => JSX.Element;
-};
 
 export type ActiveFilter = {
   categoryLabel: string;
@@ -53,7 +48,7 @@ export type ActiveFilter = {
    * When set, the chip opens a searchable multi-select combobox instead of the
    * simple replace dropdown. Use for list-valued filters like In/From.
    */
-  searchableOptions?: Accessor<SearchableChipOption[]>;
+  searchableOptions?: Accessor<SearchableOption[]>;
   /** Currently-active ids for the searchable chip, used to render selection state. */
   activeSearchableIds?: Accessor<string[]>;
   /** Called with the new full id list when the searchable selection changes. */
@@ -76,7 +71,7 @@ interface ActiveFilterChipsProps {
 }
 
 const SearchableChipItem = (itemProps: {
-  item: CollectionNode<SearchableChipOption>;
+  item: CollectionNode<SearchableOption>;
 }) => (
   <Combobox.Item
     item={itemProps.item}
@@ -122,7 +117,7 @@ const SearchableFilterChip = (props: {
     return allOptions().filter((opt) => opt.label.toLowerCase().includes(q));
   });
 
-  const handleChange = (selected: SearchableChipOption[]) => {
+  const handleChange = (selected: SearchableOption[]) => {
     props.filter.onSearchableChange?.(selected.map((o) => o.id));
   };
 
@@ -143,7 +138,7 @@ const SearchableFilterChip = (props: {
         props.chipClass
       )}
     >
-      <Combobox<SearchableChipOption>
+      <Combobox<SearchableOption>
         multiple
         options={filteredOptions()}
         value={activeOptions()}

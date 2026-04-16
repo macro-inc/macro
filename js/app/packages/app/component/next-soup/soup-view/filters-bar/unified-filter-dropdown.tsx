@@ -25,7 +25,6 @@ import { PropertyValueIcon } from '@core/component/Properties/component/property
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 
 import { useContacts } from '@queries/contacts/contacts';
-import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
 import type { FilterID } from '@app/component/next-soup/filters';
@@ -36,8 +35,10 @@ import {
   INDEX_OPTIONS,
   cacheChannelSubFilters,
   cacheEmailSubFilters,
+  useSearchFilterOptions,
   useSearchIndexController,
   type ChannelSubFilters,
+  type SearchableOption,
 } from './search-filter-controls';
 
 const TypeIndicator = (props: { active: boolean }) => (
@@ -55,13 +56,6 @@ const TypeIndicator = (props: { active: boolean }) => (
 
 export type FilterOption = {
   id: FilterID;
-  label: string;
-  icon?: () => JSX.Element;
-};
-
-/** Options whose ids are arbitrary strings (e.g. contact IDs), not FilterIDs. */
-type SearchableOption = {
-  id: string;
   label: string;
   icon?: () => JSX.Element;
 };
@@ -518,7 +512,6 @@ export const UnifiedFilterDropdown = () => {
   } = useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
-  const { useList } = useQuickAccess();
   const contentId = panel.handle.content().id;
 
   const currentView = createMemo((): ListView | undefined => {
@@ -611,20 +604,8 @@ export const UnifiedFilterDropdown = () => {
     cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
   });
 
-  const channelListItems = useList('channel', 'dm');
-  const senderListItems = useList('person');
-
-  const inChannelOptions = createMemo((): SearchableOption[] =>
-    channelListItems()
-      .filter((ch) => ch.data.name)
-      .map((ch) => ({
-        id: ch.id,
-        label: ch.data.name,
-        icon: () => (
-          <EntityIcon targetType={ch.data.channelType || 'channel'} size="xs" />
-        ),
-      }))
-  );
+  const { channelOptions: inChannelOptions, senderOptions: fromSenderOptions } =
+    useSearchFilterOptions();
 
   const activeChannelIds: Accessor<string[]> = createMemo(
     () => queryFilters().channel_filters?.channel_ids ?? []
@@ -646,25 +627,6 @@ export const UnifiedFilterDropdown = () => {
       }));
     });
   };
-
-  const fromSenderOptions = createMemo((): SearchableOption[] => {
-    const uid = userId();
-    let meOption: SearchableOption | undefined;
-    const others: SearchableOption[] = [];
-    for (const c of senderListItems()) {
-      const opt: SearchableOption = {
-        id: c.id,
-        label:
-          c.id === uid ? `${c.data.name || 'Me'} (me)` : c.data.name || c.id,
-        icon: () => (
-          <UserIcon id={c.id} size="xs" suppressClick showTooltip={false} />
-        ),
-      };
-      if (c.id === uid) meOption = opt;
-      else others.push(opt);
-    }
-    return [...(meOption ? [meOption] : []), ...others];
-  });
 
   const activeSenderIds: Accessor<string[]> = createMemo(
     () => queryFilters().channel_filters?.sender_ids ?? []
