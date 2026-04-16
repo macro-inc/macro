@@ -664,7 +664,6 @@ export function ComposeTask(props: ComposeTaskProps) {
           <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
         </div>
       </Show>
-
       <div class="w-full border-b border-edge-muted/50" />
       <div class="flex-shrink-0 flex justify-between items-center p-2 gap-2">
         <MiniToggleSwitch
