@@ -6,6 +6,7 @@ export * from './email';
 export * from './task';
 export * from './general';
 
+export type { FilterContext } from './base';
 export { ENTITY_TYPE_FILTERS } from './entity-type';
 export { TASK_STATUS_FILTERS, TASK_PRIORITY_FILTERS } from './task';
 import { ENTITY_TYPE_FILTERS } from './entity-type';

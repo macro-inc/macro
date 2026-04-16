@@ -14,6 +14,7 @@ export {
   type SetFiltersInput,
   type SetFiltersCallback,
   type CurrentFilterState,
+  type InitialFiltersInput,
 } from './create-filter-state';
 
 export {
