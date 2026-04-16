@@ -6,6 +6,7 @@ import type { WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 import { commsServiceClient } from '@service-comms/client';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
@@ -98,17 +99,17 @@ export function NewCallButton() {
         New Call
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay items-center justify-center text-ink transition-[max-height] duration-350 ease-out sm:transition-none portal-scope">
-          <Dialog.Content class="w-[512px] bg-dialog rounded-lg border-edge border-1 shadow-lg">
-            <div class="flex flex-row justify-between items-center p-4">
-              <Dialog.Title class="font-medium text-2xl text-ink-muted">
+        <DialogWrapper width="512px">
+          <div class="flex flex-col text-ink">
+            <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                <XIcon />
+              </Dialog.CloseButton>
+              <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                 New Call
               </Dialog.Title>
-              <Dialog.CloseButton class="text-ink-muted hover:bg-hover hover-transition-bg rounded-md p-1">
-                <XIcon class="w-5 h-5" />
-              </Dialog.CloseButton>
             </div>
-            <div class="flex flex-col p-4 pt-0 gap-4">
+            <div class="flex flex-col p-4 gap-4">
               <RecipientSelector<'user' | 'contact' | 'channel'>
                 options={destinationOptions}
                 selectedOptions={selectedOptions()}
@@ -120,7 +121,7 @@ export function NewCallButton() {
               />
               <div class="flex justify-end">
                 <Button
-                  variant="primary"
+                  variant="secondary"
                   size="sm"
                   disabled={isSubmitting()}
                   onClick={handleStartCall}
@@ -130,8 +131,8 @@ export function NewCallButton() {
                 </Button>
               </div>
             </div>
-          </Dialog.Content>
-        </Dialog.Overlay>
+          </div>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );
