@@ -7,8 +7,11 @@ import {
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockId } from '@core/block';
-import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import { useBlockAliasedName, useBlockId } from '@core/block';
+import {
+  ENABLE_MARKDOWN_COMMENTS,
+  ENABLE_TASK_DISCUSSION,
+} from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
@@ -22,6 +25,7 @@ import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
+  Show,
   createEffect,
   createMemo,
   createSignal,
@@ -32,6 +36,7 @@ import {
 import { FrontMatterProperties } from './FrontMatterProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { TaskDiscussion } from './TaskDiscussion';
 import { TitleEditor } from './TitleEditor';
 
 const NoteTargetWidth = 768;
@@ -70,6 +75,7 @@ export function Notebook() {
   const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
+  const isTask = useBlockAliasedName() === 'task';
   const md = mdStore.get;
 
   let notebookRef!: HTMLDivElement;
@@ -283,6 +289,9 @@ export function Notebook() {
           fallback={<div class="h-6 w-full" />}
         />
         <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
+        <Show when={ENABLE_TASK_DISCUSSION && isTask}>
+          <TaskDiscussion />
+        </Show>
       </div>
       <div
         class={commentPositioning().classes}

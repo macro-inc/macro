@@ -310,6 +310,11 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   false
 );
 
+export const ENABLE_TASK_DISCUSSION = resolveFeatureFlag(
+  'ENABLE_TASK_DISCUSSION',
+  true
+);
+
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
 const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
