@@ -11,7 +11,7 @@ import {
   onMount,
 } from 'solid-js';
 import ChannelIcon from '@macro-icons/wide/channel.svg?component-solid';
-import { UserIcon } from '@core/component/UserIcon';
+import { UserGroup } from '@core/component/UserGroup';
 import { useSenderName } from '@app/component/app-sidebar/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { compareDateDesc } from '@core/util/date';
@@ -23,6 +23,8 @@ import { isChannelNotification } from '@notifications/notification-helpers';
 import type { SidebarState } from '@app/component/app-sidebar/sidebar';
 import { cn } from '@ui/utils/classname';
 import { Button } from '@ui/components/Button';
+import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -90,6 +92,8 @@ function ChannelGroupItem(props: {
   isSlim?: boolean;
 }) {
   const [isVisible, setIsVisible] = createSignal(!props.animate);
+  const { channelsById } = useChannelsContext();
+  const currentUserId = useUserId();
 
   onMount(() => {
     if (props.animate) {
@@ -101,6 +105,23 @@ function ChannelGroupItem(props: {
 
   const senderName = useSenderName(props.group.latestSenderId);
   const count = () => props.group.notifications.length;
+
+  const channelData = createMemo(() => channelsById()[props.group.entityId]);
+
+  const isGroupOrDM = createMemo(() => {
+    const channel = channelData();
+    if (!channel) return false;
+    return channel.channel_type === 'directMessage' || channel.channel_type === 'private';
+  });
+
+  const otherParticipantIds = createMemo(() => {
+    const channel = channelData();
+    if (!channel?.participants) return [];
+    const userId = currentUserId();
+    return channel.participants
+      .filter((p) => p.user_id !== userId && !p.left_at)
+      .map((p) => p.user_id);
+  });
 
   const displayName = () => {
     if (props.group.isDM) {
@@ -167,18 +188,19 @@ function ChannelGroupItem(props: {
         navigateToLatestNotification(e.shiftKey);
       }}
     >
-      <div class="size-5 relative flex items-center justify-center flex-shrink-0">
+      <div class="relative flex items-center justify-center flex-shrink-0">
         <Show
-          when={props.group.isDM && props.group.latestSenderId}
+          when={isGroupOrDM() && otherParticipantIds().length > 0}
           fallback={
             <div class="text-ink-muted size-4">
               <ChannelIcon />
             </div>
           }
         >
-          <UserIcon
-            id={props.group.latestSenderId!}
-            size="fill"
+          <UserGroup
+            userIds={otherParticipantIds()}
+            size="xs"
+            maxUsers={3}
             suppressClick
             showTooltip={false}
           />
