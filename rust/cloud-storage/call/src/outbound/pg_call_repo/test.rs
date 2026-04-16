@@ -618,3 +618,35 @@ async fn get_call_record_returns_none_for_unknown(pool: Pool<Postgres>) -> anyho
     assert!(record.is_none());
     Ok(())
 }
+
+// -- get_call_records_by_user ------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_includes_channel_member_not_in_call(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // user-c is a member of CH1 (fixture) but is NOT in call_participants
+    // for CALL1 or call_record_participants for CALL_ARCHIVED. Visibility
+    // should now come from channel membership, so both calls should appear.
+    let records = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &None)
+        .await?;
+
+    assert_eq!(
+        records.len(),
+        2,
+        "expected active + archived call for channel member"
+    );
+    assert!(records.iter().any(|r| r.call_id == CALL1 && r.is_active));
+    assert!(
+        records
+            .iter()
+            .any(|r| r.call_id == CALL_ARCHIVED && !r.is_active)
+    );
+    Ok(())
+}
