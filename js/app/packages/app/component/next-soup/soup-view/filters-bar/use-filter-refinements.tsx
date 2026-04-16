@@ -259,9 +259,7 @@ export function useFilterRefinements() {
         const opt = {
           id: s.id,
           label:
-            s.id === uid
-              ? `${s.data.name || 'Me'} (me)`
-              : s.data.name || s.id,
+            s.id === uid ? `${s.data.name || 'Me'} (me)` : s.data.name || s.id,
           icon: () => (
             <UserIcon id={s.id} size="xs" suppressClick showTooltip={false} />
           ),
@@ -292,59 +290,43 @@ export function useFilterRefinements() {
           queryFilters().channel_filters?.sender_ids ?? [],
         onSearchableChange: setSenderIds,
         searchPlaceholder: 'Search senders...',
-        onRemove: () =>
-          setSenderIds(senderIds.filter((id) => id !== senderId)),
+        onRemove: () => setSenderIds(senderIds.filter((id) => id !== senderId)),
       });
     }
 
-    // Email importance (only when the email index is active in the search view)
+    // Email importance (only when the email index is active in the search view
+    // and the user has explicitly set a value — undefined means "All", no chip)
     if (currentView() === 'search' && soup.filters.isActive('email')) {
       const importance = queryFilters().email_filters?.importance;
-      const IMPORTANCE_SIGNAL = 'importance:signal';
-      const IMPORTANCE_NOISE = 'importance:noise';
-      const IMPORTANCE_ALL = 'importance:all';
-      const currentOptionId =
-        importance === true
-          ? IMPORTANCE_SIGNAL
-          : importance === false
-            ? IMPORTANCE_NOISE
-            : IMPORTANCE_ALL;
-      const currentLabel =
-        importance === true
-          ? 'Signal'
-          : importance === false
-            ? 'Noise'
-            : 'All';
-      filters.push({
-        categoryLabel: 'Importance',
-        optionId: currentOptionId,
-        optionLabel: currentLabel,
-        categoryOptions: [
-          { id: IMPORTANCE_SIGNAL, label: 'Signal' },
-          { id: IMPORTANCE_NOISE, label: 'Noise' },
-          { id: IMPORTANCE_ALL, label: 'All' },
-        ] as unknown as ActiveFilter['categoryOptions'],
-        multiple: false,
-        isOptionActive: (optionId) => optionId === currentOptionId,
-        onRemove: () =>
-          setQueryFilters((prev) => ({
-            ...prev,
-            email_filters: { ...prev.email_filters, importance: undefined },
-          })),
-        onReplace: (newOptionId) =>
-          setQueryFilters((prev) => ({
-            ...prev,
-            email_filters: {
-              ...prev.email_filters,
-              importance:
-                newOptionId === IMPORTANCE_SIGNAL
-                  ? true
-                  : newOptionId === IMPORTANCE_NOISE
-                    ? false
-                    : undefined,
-            },
-          })),
-      });
+      if (importance !== undefined) {
+        const IMPORTANCE_SIGNAL = 'importance:signal';
+        const IMPORTANCE_NOISE = 'importance:noise';
+        const currentOptionId = importance ? IMPORTANCE_SIGNAL : IMPORTANCE_NOISE;
+        filters.push({
+          categoryLabel: 'Importance',
+          optionId: currentOptionId,
+          optionLabel: importance ? 'Signal' : 'Noise',
+          categoryOptions: [
+            { id: IMPORTANCE_SIGNAL, label: 'Signal' },
+            { id: IMPORTANCE_NOISE, label: 'Noise' },
+          ] as unknown as ActiveFilter['categoryOptions'],
+          multiple: false,
+          isOptionActive: (optionId) => optionId === currentOptionId,
+          onRemove: () =>
+            setQueryFilters((prev) => ({
+              ...prev,
+              email_filters: { ...prev.email_filters, importance: undefined },
+            })),
+          onReplace: (newOptionId) =>
+            setQueryFilters((prev) => ({
+              ...prev,
+              email_filters: {
+                ...prev.email_filters,
+                importance: newOptionId === IMPORTANCE_SIGNAL,
+              },
+            })),
+        });
+      }
     }
 
     return filters;
