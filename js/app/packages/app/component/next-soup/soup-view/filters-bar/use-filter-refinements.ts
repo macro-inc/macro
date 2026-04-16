@@ -254,6 +254,23 @@ export function useFilterRefinements() {
       });
     }
 
+    // Email importance (only when the email index is active)
+    if (soup.filters.isActive('email')) {
+      const importance = queryFilters().email_filters?.importance;
+      if (importance !== undefined) {
+        filters.push({
+          categoryLabel: 'Importance',
+          optionId: importance ? 'importance:signal' : 'importance:noise',
+          optionLabel: importance ? 'Signal' : 'Noise',
+          onRemove: () =>
+            setQueryFilters((prev) => ({
+              ...prev,
+              email_filters: { ...prev.email_filters, importance: undefined },
+            })),
+        });
+      }
+    }
+
     return filters;
   });
 
