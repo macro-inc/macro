@@ -895,6 +895,68 @@
         }
       }
     },
+    "/mobile-welcome-email": {
+      "post": {
+        "tags": ["mobile_welcome_email"],
+        "summary": "Sends a mobile welcome email to the given address, if it hasn't already been sent\nand the email is not blocked.",
+        "operationId": "send_mobile_welcome_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMobileWelcomeEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oauth/passwordless/{code}": {
       "get": {
         "tags": ["oauth::passwordless_callback"],
@@ -3533,6 +3595,16 @@
           "recipient": {
             "type": "string",
             "description": "the recipient of the referral email"
+          }
+        }
+      },
+      "SendMobileWelcomeEmailRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email address to send the welcome email to"
           }
         }
       },

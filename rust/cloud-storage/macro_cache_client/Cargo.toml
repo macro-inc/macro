@@ -9,6 +9,7 @@ all = [
   "auth",
   "auth_rate_limit",
   "login_code_rate_limit",
+  "mobile_welcome_email_rate_limit",
   "notification_rate_limit",
   "verify_email_rate_limit",
 ]
@@ -16,6 +17,7 @@ auth = []
 auth_rate_limit = ["dep:email_validator"]
 default = ["all"]
 login_code_rate_limit = ["dep:email_validator"]
+mobile_welcome_email_rate_limit = []
 notification_rate_limit = ["dep:email_validator"]
 verify_email_rate_limit = ["dep:email_validator"]
 

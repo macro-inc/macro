@@ -31,7 +31,8 @@ use crate::api::user::stripe::{
     StripeSessionResponse,
 };
 use crate::api::{
-    email, health, jwt, link, login, logout, merge, oauth, oauth2, permissions, session, user,
+    email, health, jwt, link, login, logout, merge, mobile_welcome_email, oauth, oauth2,
+    permissions, session, user,
 };
 use model::authentication::login::response::SsoRequiredResponse;
 use model::authentication::{
@@ -129,6 +130,9 @@ use model::user::{
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType>,
                 referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType>,
 
+                /// /mobile-welcome-email
+                mobile_welcome_email::handler,
+
                 /// /merge
                 merge::create_merge_request::handler,
                 merge::verify_merge_request::handler,
@@ -187,6 +191,9 @@ use model::user::{
                         UserTeamInvitesResponse,
                         PatchTeamUserTierRequest,
                         TeamUserTier,
+
+                        // Mobile welcome email
+                        mobile_welcome_email::SendMobileWelcomeEmailRequest,
 
                         // Merge
                         CreateAccountMergeRequest,

@@ -41,6 +41,7 @@ import type {
   PutUserNameParams,
   ResendFusionauthVerifyUserEmailRequest,
   SendInviteBody,
+  SendMobileWelcomeEmailRequest,
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
@@ -1060,6 +1061,80 @@ export const verifyMergeRequest = async (
     status: res.status,
     headers: res.headers,
   } as verifyMergeRequestResponse;
+};
+
+/**
+ * @summary Sends a mobile welcome email to the given address, if it hasn't already been sent
+and the email is not blocked.
+ */
+export type sendMobileWelcomeEmailResponse200 = {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type sendMobileWelcomeEmailResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type sendMobileWelcomeEmailResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type sendMobileWelcomeEmailResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
+export type sendMobileWelcomeEmailResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sendMobileWelcomeEmailResponseSuccess = (
+  | sendMobileWelcomeEmailResponse200
+  | sendMobileWelcomeEmailResponse204
+) & {
+  headers: Headers;
+};
+export type sendMobileWelcomeEmailResponseError = (
+  | sendMobileWelcomeEmailResponse400
+  | sendMobileWelcomeEmailResponse429
+  | sendMobileWelcomeEmailResponse500
+) & {
+  headers: Headers;
+};
+
+export type sendMobileWelcomeEmailResponse =
+  | sendMobileWelcomeEmailResponseSuccess
+  | sendMobileWelcomeEmailResponseError;
+
+export const getSendMobileWelcomeEmailUrl = () => {
+  return `/mobile-welcome-email`;
+};
+
+export const sendMobileWelcomeEmail = async (
+  sendMobileWelcomeEmailRequest: SendMobileWelcomeEmailRequest,
+  options?: RequestInit
+): Promise<sendMobileWelcomeEmailResponse> => {
+  const res = await fetch(getSendMobileWelcomeEmailUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendMobileWelcomeEmailRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendMobileWelcomeEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendMobileWelcomeEmailResponse;
 };
 
 /**

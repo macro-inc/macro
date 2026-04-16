@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT DISTINCT cp.user_id\n        FROM comms_channel_participants cp\n        WHERE cp.channel_id = $1 AND cp.left_at IS NULL\n        ",
+  "query": "\n            SELECT user_id FROM user_mute_notification\n            WHERE user_id = ANY($1)\n            ",
   "describe": {
     "columns": [
       {
@@ -11,12 +11,12 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "TextArray"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "63ca13cc79c27b5267ebbf53491b657ca7671e1ab9d1a4691372693a9f9a4ff8"
+  "hash": "621186dcec072b603a5f3d7b9e987a1638589d539c60d9dc5c2ab0865ff062d6"
 }
