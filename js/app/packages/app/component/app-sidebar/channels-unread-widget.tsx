@@ -111,7 +111,10 @@ function ChannelGroupItem(props: {
   const isGroupOrDM = createMemo(() => {
     const channel = channelData();
     if (!channel) return false;
-    return channel.channel_type === 'directMessage' || channel.channel_type === 'private';
+    return (
+      channel.channel_type === 'directMessage' ||
+      channel.channel_type === 'private'
+    );
   });
 
   const otherParticipantIds = createMemo(() => {
