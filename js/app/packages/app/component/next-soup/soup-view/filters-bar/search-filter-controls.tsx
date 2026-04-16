@@ -116,11 +116,16 @@ export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
   },
 ];
 
-const INDEX_SELECT_OPTIONS: Option[] = INDEX_OPTIONS.map((o) => ({
-  value: o.value,
-  label: o.label,
-  icon: o.icon,
-}));
+const ALL_OPTION: Option = { value: 'all', label: 'All' };
+
+const INDEX_SELECT_OPTIONS: Option[] = [
+  ...INDEX_OPTIONS.map((o) => ({
+    value: o.value,
+    label: o.label,
+    icon: o.icon,
+  })),
+  ALL_OPTION,
+];
 
 export const SearchIndexFilter = () => {
   const { soup, queryFilters, setQueryFilters } = useSoupView();
@@ -142,8 +147,11 @@ export const SearchIndexFilter = () => {
     const found = INDEX_OPTIONS.find((opt) => soup.filters.isActive(opt.value));
     return found
       ? [{ value: found.value, label: found.label, icon: found.icon }]
-      : [];
+      : [ALL_OPTION];
   });
+
+  const hasSpecificIndex = () =>
+    activeIndex().some((o) => o.value !== ALL_OPTION.value);
 
   const isChannelsActive = () =>
     activeIndex().some((o) => o.value === 'channels');
@@ -173,8 +181,9 @@ export const SearchIndexFilter = () => {
         }
       }
 
-      if (selected.length > 0) {
-        const opt = INDEX_OPTIONS.find((o) => o.value === selected[0].value);
+      const first = selected[0];
+      if (first && first.value !== ALL_OPTION.value) {
+        const opt = INDEX_OPTIONS.find((o) => o.value === first.value);
         if (opt) {
           soup.filters.toggle({ or: [opt.value as FilterID] });
           if (opt.value === 'channels') {
@@ -215,13 +224,7 @@ export const SearchIndexFilter = () => {
     });
   };
 
-  const indexLabel = createMemo(() => {
-    const active = activeIndex();
-    const value = active.length > 0 ? active[0].label : 'All';
-    return `Type: ${value}`;
-  });
-
-  const hasActiveIndex = () => activeIndex().length > 0;
+  const indexLabel = createMemo(() => `Type: ${activeIndex()[0].label}`);
 
   const clearFilters = () => {
     cacheChannelSubFilters(contentId, {});
@@ -239,6 +242,8 @@ export const SearchIndexFilter = () => {
         open={open()}
         onOpenChange={setOpen}
         tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}
+        hideClear
+        accentActive={hasSpecificIndex()}
       />
       <Show when={isChannelsActive()}>
         <InChannelFilter />
@@ -247,7 +252,7 @@ export const SearchIndexFilter = () => {
       <Show when={isEmailActive()}>
         <EmailImportanceFilter />
       </Show>
-      <Show when={hasActiveIndex()}>
+      <Show when={hasSpecificIndex()}>
         <button
           type="button"
           class="flex items-center px-1 py-1 text-ink-muted rounded-xs hover:bg-ink/5 hover:text-ink"

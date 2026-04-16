@@ -25,6 +25,8 @@ interface FilterSelectProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   tooltip?: JSX.Element;
+  hideClear?: boolean;
+  accentActive?: boolean;
 }
 
 export const FilterSelect = (props: FilterSelectProps) => {
@@ -32,7 +34,9 @@ export const FilterSelect = (props: FilterSelectProps) => {
 
   const activeFilters = createMemo(() => props.active);
   const activeCount = createMemo(() => activeFilters().length);
-  const hasActiveFilters = createMemo(() => activeCount() > 0);
+  const hasActiveFilters = createMemo(() =>
+    props.accentActive !== undefined ? props.accentActive : activeCount() > 0
+  );
 
   const renderItem = (itemProps: { item: CollectionNode<Option> }) => (
     <KSelect.Item
@@ -138,16 +142,18 @@ export const FilterSelect = (props: FilterSelectProps) => {
       <KSelect.Portal>
         <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow min-w-[var(--kb-popper-anchor-width)] p-1">
           <KSelect.Listbox />
-          <div class="w-full pt-1 mt-1 flex items-center border-t border-t-edge-muted">
-            <Button
-              variant="ghost"
-              size="sm"
-              class="ml-auto rounded-xs w-full"
-              onClick={() => props.onChange([])}
-            >
-              Clear
-            </Button>
-          </div>
+          <Show when={!props.hideClear}>
+            <div class="w-full pt-1 mt-1 flex items-center border-t border-t-edge-muted">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="ml-auto rounded-xs w-full"
+                onClick={() => props.onChange([])}
+              >
+                Clear
+              </Button>
+            </div>
+          </Show>
         </KSelect.Content>
       </KSelect.Portal>
     </KSelect>
