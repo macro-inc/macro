@@ -12,9 +12,11 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { SoupBody } from '@queries/soup/items';
-import { batch, createEffect, createMemo, Show } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import type {
   ChannelFilters,
   EmailFilters,
@@ -124,6 +126,17 @@ export const SearchIndexFilter = () => {
   const { soup, queryFilters, setQueryFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
+  const [open, setOpen] = createSignal(false);
+
+  registerHotkey({
+    hotkey: 'f',
+    scopeId: panel.splitHotkeyScope,
+    description: 'Open filter menu',
+    keyDownHandler: () => {
+      setOpen(true);
+      return true;
+    },
+  });
 
   const activeIndex = createMemo((): Option[] => {
     const found = INDEX_OPTIONS.find((opt) => soup.filters.isActive(opt.value));
@@ -223,6 +236,9 @@ export const SearchIndexFilter = () => {
         active={activeIndex()}
         onChange={handleChange}
         multiple={false}
+        open={open()}
+        onOpenChange={setOpen}
+        tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}
       />
       <Show when={isChannelsActive()}>
         <InChannelFilter />
