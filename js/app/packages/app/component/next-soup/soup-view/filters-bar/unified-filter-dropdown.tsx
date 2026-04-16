@@ -31,6 +31,7 @@ import {
   mergeFilterData,
   applyFilterData,
   type FilterData,
+  type PropertyFilter,
 } from '@app/component/next-soup/filters/filter-store';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
@@ -518,13 +519,17 @@ export const UnifiedFilterDropdown = () => {
     soup.filters.toggle({ or: [optionId] });
 
     // Rebuild filter data from all active filters using their query definitions
-    const ctx: FilterContext = { userId: userId(), assignees: assigneeFilter() };
+    const ctx: FilterContext = {
+      userId: userId(),
+      assignees: assigneeFilter(),
+    };
     const sources: Partial<FilterData>[] = [];
 
     for (const id of soup.filters.activeIds()) {
       const filter = soup.filters.getFilter(id);
       if (!filter?.query) continue;
-      const query = typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
+      const query =
+        typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
       sources.push(query);
     }
 
@@ -569,11 +574,37 @@ export const UnifiedFilterDropdown = () => {
 
   const toggleAssignee = (id: string) => {
     const current = assigneeFilter();
-    if (current.includes(id)) {
-      setAssigneeFilter(current.filter((a) => a !== id));
-    } else {
-      setAssigneeFilter([...current, id]);
+    const updated = current.includes(id)
+      ? current.filter((a) => a !== id)
+      : [...current, id];
+    setAssigneeFilter(updated);
+
+    // Build assignee property filters
+    const assigneeProps: PropertyFilter[] = updated.map((assigneeId) => ({
+      type: 'entity',
+      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+      value: assigneeId,
+      entityType: 'TASK',
+    }));
+
+    // Rebuild filter data including assignees
+    const ctx: FilterContext = { userId: userId(), assignees: updated };
+    const sources: Partial<FilterData>[] = [];
+
+    for (const filterId of soup.filters.activeIds()) {
+      const filter = soup.filters.getFilter(filterId);
+      if (!filter?.query) continue;
+      const query =
+        typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
+      sources.push(query);
     }
+
+    // Add assignee filters (wrapped in array for OR logic)
+    if (assigneeProps.length > 0) {
+      sources.push({ properties: [assigneeProps] });
+    }
+
+    setFilters((d) => applyFilterData(d, mergeFilterData(...sources)));
   };
 
   const isTasksView = () => currentView() === 'tasks';
