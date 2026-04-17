@@ -69,10 +69,11 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   );
 
   // Track expanded/collapsed state from persisted preference
-  // Default to collapsed on mobile, expanded on desktop
+  // Tasks default to expanded on desktop; other documents default to collapsed
   const isExpanded = createMemo(() => {
     const preference = frontMatterPreference[blockId];
-    return preference === undefined ? !isMobile() : preference;
+    if (preference !== undefined) return preference;
+    return entityType === 'TASK' ? !isMobile() : false;
   });
 
   const toggleExpanded = () => {
