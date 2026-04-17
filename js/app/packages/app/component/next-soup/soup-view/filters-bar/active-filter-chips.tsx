@@ -54,6 +54,14 @@ export type ActiveFilter = {
   onSearchableChange?: (ids: string[]) => void;
   /** Placeholder for the searchable chip's search input. */
   searchPlaceholder?: string;
+  /**
+   * Optional controlled popup open state. When provided, the upstream can
+   * keep the chip mounted while the popup is still open even if the chip's
+   * active selections drop to zero (so toggling A off then B on in the same
+   * session doesn't close the menu).
+   */
+  isPopupOpen?: Accessor<boolean>;
+  setPopupOpen?: (v: boolean) => void;
 };
 
 interface ActiveFilterChipsProps {
@@ -103,6 +111,8 @@ const SearchableFilterChip = (props: {
         onChange={handleChange}
         placeholder={placeholder}
         placement="bottom-start"
+        open={props.filter.isPopupOpen}
+        onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
       >
         <Combobox.Trigger
           class={cn(

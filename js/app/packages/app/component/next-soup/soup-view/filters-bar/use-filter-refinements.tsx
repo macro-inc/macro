@@ -9,11 +9,10 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
-import { batch, createMemo } from 'solid-js';
+import { batch, createMemo, createSignal } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
 import { INDEX_OPTIONS } from './search-operator-autocomplete';
 import {
@@ -57,7 +56,6 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
-  const quickAccess = useQuickAccess();
   const { channelOptions, senderOptions } = useSearchFilterOptions();
   const { changeIndex } = useSearchIndexController();
 
@@ -133,13 +131,25 @@ export function useFilterRefinements() {
     return VIEW_FILTER_CATEGORIES[view as ListView] ?? [];
   });
 
-  const labelForIds = (ids: string[]): string => {
+  // Reactive id → label maps derived from the chip's option sources.
+  // Using quickAccess.getById here would read a plain Map that isn't a signal,
+  // so on page reload the chip label shows the raw uuid until the first
+  // rerender that happens to read live data.
+  const channelLabelMap = createMemo(() => {
+    const map = new Map<string, string>();
+    for (const opt of channelOptions()) map.set(opt.id, opt.label);
+    return map;
+  });
+  const senderLabelMap = createMemo(() => {
+    const map = new Map<string, string>();
+    for (const opt of senderOptions()) map.set(opt.id, opt.label);
+    return map;
+  });
+
+  const labelForIds = (ids: string[], labelMap: Map<string, string>): string => {
+    if (ids.length === 0) return '';
     const [first, ...rest] = ids;
-    const firstItem = quickAccess.getById(first);
-    const firstLabel =
-      firstItem && 'data' in firstItem && firstItem.data?.name
-        ? firstItem.data.name
-        : first;
+    const firstLabel = labelMap.get(first) ?? first;
     if (rest.length === 0) return firstLabel;
     return `${firstLabel} and ${rest.length} ${rest.length === 1 ? 'other' : 'others'}`;
   };
@@ -268,59 +278,74 @@ export function useFilterRefinements() {
     const channelIds = (
       queryFilters().channel_filters?.channel_ids ?? []
     ).filter((id) => id !== NIL_UUID);
-    if (channelIds.length > 0) {
+    // Keep the chip alive while its popup is still open, even if the user
+    // toggled every option off — they may be mid-way through swapping A→B
+    // and closing the menu on them would be jarring.
+    const inChipOpen = chipCache.get('In')?.isPopupOpen?.() ?? false;
+    if (channelIds.length > 0 || inChipOpen) {
       const key = 'In';
       seenKeys.add(key);
       filters.push(
-        getOrCreateChip(key, () => ({
-          categoryLabel: 'In',
-          optionId: () => {
-            const ids = (
-              queryFilters().channel_filters?.channel_ids ?? []
-            ).filter((id) => id !== NIL_UUID);
-            return `in:${ids.join(',')}`;
-          },
-          optionLabel: () => {
-            const ids = (
-              queryFilters().channel_filters?.channel_ids ?? []
-            ).filter((id) => id !== NIL_UUID);
-            return labelForIds(ids);
-          },
-          searchableOptions: channelOptions,
-          activeSearchableIds: () =>
-            (queryFilters().channel_filters?.channel_ids ?? []).filter(
-              (id) => id !== NIL_UUID
-            ),
-          onSearchableChange: setChannelIds,
-          searchPlaceholder: 'Search channels...',
-          onRemove: () => setChannelIds([]),
-        }))
+        getOrCreateChip(key, () => {
+          const [isPopupOpen, setPopupOpen] = createSignal(false);
+          return {
+            categoryLabel: 'In',
+            optionId: () => {
+              const ids = (
+                queryFilters().channel_filters?.channel_ids ?? []
+              ).filter((id) => id !== NIL_UUID);
+              return `in:${ids.join(',')}`;
+            },
+            optionLabel: () => {
+              const ids = (
+                queryFilters().channel_filters?.channel_ids ?? []
+              ).filter((id) => id !== NIL_UUID);
+              return labelForIds(ids, channelLabelMap());
+            },
+            searchableOptions: channelOptions,
+            activeSearchableIds: () =>
+              (queryFilters().channel_filters?.channel_ids ?? []).filter(
+                (id) => id !== NIL_UUID
+              ),
+            onSearchableChange: setChannelIds,
+            searchPlaceholder: 'Search channels...',
+            onRemove: () => setChannelIds([]),
+            isPopupOpen,
+            setPopupOpen,
+          };
+        })
       );
     }
 
     // Search operator filters: from: (sender_ids)
     const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
-    if (senderIds.length > 0) {
+    const fromChipOpen = chipCache.get('From')?.isPopupOpen?.() ?? false;
+    if (senderIds.length > 0 || fromChipOpen) {
       const key = 'From';
       seenKeys.add(key);
       filters.push(
-        getOrCreateChip(key, () => ({
-          categoryLabel: 'From',
-          optionId: () => {
-            const ids = queryFilters().channel_filters?.sender_ids ?? [];
-            return `from:${ids.join(',')}`;
-          },
-          optionLabel: () => {
-            const ids = queryFilters().channel_filters?.sender_ids ?? [];
-            return labelForIds(ids);
-          },
-          searchableOptions: senderOptions,
-          activeSearchableIds: () =>
-            queryFilters().channel_filters?.sender_ids ?? [],
-          onSearchableChange: setSenderIds,
-          searchPlaceholder: 'Search senders...',
-          onRemove: () => setSenderIds([]),
-        }))
+        getOrCreateChip(key, () => {
+          const [isPopupOpen, setPopupOpen] = createSignal(false);
+          return {
+            categoryLabel: 'From',
+            optionId: () => {
+              const ids = queryFilters().channel_filters?.sender_ids ?? [];
+              return `from:${ids.join(',')}`;
+            },
+            optionLabel: () => {
+              const ids = queryFilters().channel_filters?.sender_ids ?? [];
+              return labelForIds(ids, senderLabelMap());
+            },
+            searchableOptions: senderOptions,
+            activeSearchableIds: () =>
+              queryFilters().channel_filters?.sender_ids ?? [],
+            onSearchableChange: setSenderIds,
+            searchPlaceholder: 'Search senders...',
+            onRemove: () => setSenderIds([]),
+            isPopupOpen,
+            setPopupOpen,
+          };
+        })
       );
     }
 
