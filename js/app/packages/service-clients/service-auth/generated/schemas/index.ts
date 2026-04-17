@@ -39,6 +39,7 @@ export * from './passwordlessCallbackParams';
 export * from './passwordlessRequest';
 export * from './passwordlessRequestReferralCode';
 export * from './passwordRequest';
+export * from './patchSubscriptionTierRequest';
 export * from './patchTeamRequest';
 export * from './patchTeamRequestName';
 export * from './patchTeamUserTierRequest';

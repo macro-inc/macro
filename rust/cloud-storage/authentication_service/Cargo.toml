@@ -111,6 +111,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "search",
   "email",
 ] }
+strum = { workspace = true }
 teams = { path = "../teams" }
 thiserror = { workspace = true }
 time = { workspace = true }

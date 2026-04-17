@@ -27,8 +27,8 @@ use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
 use crate::api::user::stripe::{
-    CreateCheckoutSessionRequest, CreatePortalSessionRequest, StripeProductTier,
-    StripeSessionResponse,
+    CreateCheckoutSessionRequest, CreatePortalSessionRequest, PatchSubscriptionTierRequest,
+    StripeProductTier, StripeSessionResponse,
 };
 use crate::api::{
     email, health, jwt, link, login, logout, merge, mobile_welcome_email, oauth, oauth2,
@@ -100,6 +100,7 @@ use model::user::{
                 user::patch_tutorial::handler,
                 user::stripe::create_checkout_session,
                 user::stripe::create_portal_session,
+                user::stripe::patch_subscription_tier,
 
                 /// /session
                 session::session_login::handler,
@@ -172,6 +173,7 @@ use model::user::{
                         StripeProductTier,
                         CreateCheckoutSessionRequest,
                         CreatePortalSessionRequest,
+                        PatchSubscriptionTierRequest,
                         StripeSessionResponse,
 
                         // User onboarding
