@@ -1,13 +1,13 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { Hotkey } from '@core/component/Hotkey';
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
 
 type ShortcutItem = {
   keys: string[];
-  description: string;
+  description: JSX.Element;
 };
 
 type ShortcutSection = {
@@ -19,10 +19,17 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Core Shortcuts',
     items: [
-      { keys: ['c'], description: 'Open the create menu (new email, new doc, etc.)' },
+      { keys: ['c'], description: 'Open the create menu (new email, new task, etc.)' },
       { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu' },
-      { keys: ['g'], description: 'Go to a view (e.g., g then i for inbox)' },
-      { keys: ['/'], description: 'Go to search' },
+      {
+        keys: ['g'],
+        description: (
+          <>
+            Go to a view (for example, <Kbd shortcut="g" /> then <Kbd shortcut="i" /> for inbox)
+          </>
+        ),
+      },
+      { keys: ['/'], description: 'Go to search view' },
       { keys: [`${cmdOrCtrl}+f`], description: 'Search in current view' },
       { keys: [`${cmdOrCtrl}+j`], description: 'Focus AI chat' },
       { keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel' },
