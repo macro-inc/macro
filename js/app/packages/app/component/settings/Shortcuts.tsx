@@ -116,7 +116,7 @@ export function Shortcuts() {
         class="absolute inset-0 overflow-auto p-6 scrollbar-hidden"
       >
         <div class="max-w-2xl mx-auto">
-          <div class="mb-8">
+          <div class="mb-4">
             <h2 class="text-xl font-semibold text-ink mb-2">Keyboard Shortcuts</h2>
             <p class="text-ink-muted text-sm">
               Shortcuts without a {cmdOrCtrl}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
