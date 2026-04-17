@@ -88,7 +88,7 @@ pub async fn insert_thread_share_permissions(
     // insert entity_access row for owner
     entity_access_db_utils::insert_entity_access_row(
         &mut tx,
-        &macro_uuid::string_to_uuid(&thread_id).unwrap(),
+        &macro_uuid::string_to_uuid(thread_id).unwrap(),
         EntityType::EmailThread,
         owner_id.as_ref(),
         entity_access_db_utils::EntityAccessSourceType::User,
