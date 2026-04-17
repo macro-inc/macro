@@ -46,10 +46,13 @@ pub enum StripeOperationError {
 impl IntoResponse for StripeOperationError {
     fn into_response(self) -> Response {
         let status = match &self {
-            StripeOperationError::ParseId(_) => StatusCode::BAD_REQUEST,
+            // ParseId and StripeIdParse come from trusted server-side sources (JWT-populated
+            // user id, DB-stored Stripe customer id) — a parse failure is a server/auth
+            // misconfiguration, not bad client input. Map to 500 so metrics don't blame callers.
+            StripeOperationError::ParseId(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::DbErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::MissingStripeId => StatusCode::BAD_REQUEST,
-            StripeOperationError::StripeIdParse(_) => StatusCode::BAD_REQUEST,
+            StripeOperationError::StripeIdParse(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::StripeErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::PromoCodeNotFound => StatusCode::NOT_FOUND,
             StripeOperationError::UnexpectedStripeResponse => StatusCode::INTERNAL_SERVER_ERROR,

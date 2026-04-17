@@ -34,6 +34,7 @@ pub struct PatchSubscriptionTierRequest {
         (status = 200),
         (status = 400, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -86,16 +87,20 @@ pub async fn patch_subscription_tier(
 
     // Stripe idempotency: guarantees a retried call (e.g. our 200 got lost in flight) won't
     // double-apply the tier swap. Key is stable per logical operation; Stripe's own 24h TTL
-    // handles the "after some window, treat as new operation" case.
+    // handles the "after some window, treat as new operation" case. Uses an explicit stable
+    // string for the tier (rather than `Debug`) so that renaming an enum variant doesn't
+    // rotate every in-flight key and break dedup.
     let idempotency_key = format!(
-        "patch_subscription_tier:{user_id}:{old_tier:?}:{new_tier:?}:{}",
-        subscription.id
+        "patch_subscription_tier:{user_id}:{}:{}:{}",
+        tier_key_str(old_tier),
+        tier_key_str(new_tier),
+        subscription.id,
     );
     let idempotent_client = ctx
         .stripe_client
         .as_ref()
         .clone()
-        .with_strategy(stripe::RequestStrategy::Idempotent(idempotency_key));
+        .with_strategy(stripe::RequestStrategy::Idempotent(idempotency_key.clone()));
 
     if let Err(stripe_err) = swap_subscription_item(
         &idempotent_client,
@@ -105,14 +110,26 @@ pub async fn patch_subscription_tier(
     )
     .await
     {
+        // Include subscription id, prices, and idempotency key so on-call can reconcile:
+        // if Stripe actually applied the change server-side but returned a network error,
+        // we just rolled back RBAC and left it desynced. The idempotency key + subscription
+        // id uniquely identify the operation for manual inspection.
         match rollback_role_swap(roles_service, &user_id, &old_role, &new_role).await {
             Ok(()) => tracing::error!(
                 error = ?stripe_err,
+                subscription_id = %subscription.id,
+                old_price_id = old_price_id,
+                new_price_id = new_price_id,
+                idempotency_key = %idempotency_key,
                 "stripe subscription update failed, role swap rolled back",
             ),
             Err(rollback_err) => tracing::error!(
                 error = ?stripe_err,
                 rollback_error = ?rollback_err,
+                subscription_id = %subscription.id,
+                old_price_id = old_price_id,
+                new_price_id = new_price_id,
+                idempotency_key = %idempotency_key,
                 old_role = ?old_role,
                 new_role = ?new_role,
                 "stripe subscription update failed AND rollback failed — user state inconsistent",
@@ -130,6 +147,17 @@ fn tier_to_sub_role(tier: StripeProductTier) -> RoleId {
         StripeProductTier::Haiku => RoleId::SubHaiku,
         StripeProductTier::Sonnet => RoleId::SubSonnet,
         StripeProductTier::Opus => RoleId::SubOpus,
+    }
+}
+
+/// Stable string form of a tier for use in externally-visible keys (idempotency keys, etc.).
+/// Must remain stable even if enum variants are renamed — otherwise in-flight idempotency
+/// keys would rotate and dedup would break.
+fn tier_key_str(tier: StripeProductTier) -> &'static str {
+    match tier {
+        StripeProductTier::Haiku => "haiku",
+        StripeProductTier::Sonnet => "sonnet",
+        StripeProductTier::Opus => "opus",
     }
 }
 
@@ -202,12 +230,16 @@ async fn swap_user_role<S: UserRolesAndPermissionsService>(
     old_role: &RoleId,
     new_role: &RoleId,
 ) -> Result<(), UserRolesAndPermissionsError> {
+    // Upsert new role first, then remove old. If the remove fails, the user is left with
+    // both roles (transient multi-role state, caught by `find_current_sub_tier` on the
+    // next request) — strictly safer than removing first and potentially leaving the user
+    // with zero Sub roles if the upsert then fails.
     service
-        .dangerous_remove_roles_from_user(user_id, &one_role(old_role))
+        .dangerous_upsert_roles_for_user(user_id, one_role(new_role))
         .await?;
 
     service
-        .dangerous_upsert_roles_for_user(user_id, one_role(new_role))
+        .dangerous_remove_roles_from_user(user_id, &one_role(old_role))
         .await?;
 
     Ok(())
