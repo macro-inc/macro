@@ -40,16 +40,16 @@ export function registerSplitHotkeys(args: {
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'opt+escape',
-    condition: () => getSplitCount() > 1 || isNotUnifiedList(),
-    description: () => (getSplitCount() > 1 ? 'Close split' : 'Go home'),
+    condition: () => isNotUnifiedList() || getSplitCount() > 1,
+    description: () => (isNotUnifiedList() ? 'Go home' : 'Close split'),
     keyDownHandler: () => {
-      if (getSplitCount() > 1) {
-        closeSplit();
-      } else {
+      if (isNotUnifiedList()) {
         replaceSplit({
           content: { type: 'component', id: LIST_VIEW_ID.inbox },
           referredFrom: 'hotkey',
         });
+      } else if (getSplitCount() > 1) {
+        closeSplit();
       }
       return true;
     },
