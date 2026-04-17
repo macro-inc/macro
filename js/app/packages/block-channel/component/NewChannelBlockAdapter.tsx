@@ -218,7 +218,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             pendingJoinCall={pendingJoinCall}
             onHandled={() => setPendingJoinCall(false)}
           />
-          <div class="h-full flex flex-col">
+          <div class="h-full flex flex-col px-2">
             {/*
               Mounted above <Switch> so remote call audio keeps playing when
               the user switches from the Call tab to Messages / Attachments /
