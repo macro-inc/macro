@@ -455,6 +455,7 @@ function NotificationNotSupported() {
 function bundleUpdateAction(status: BundleUpdateStatus): { label: string; action: () => void } | null {
   switch (status.status) {
     case 'Idle':
+      return { label: 'Check for Update', action: () => invoke('check_for_update') };
     case 'Error':
       return { label: 'Retry', action: () => invoke('check_for_update') };
     case 'UpdateFound':

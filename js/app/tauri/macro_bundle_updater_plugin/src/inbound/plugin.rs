@@ -115,6 +115,13 @@ pub fn perform_update<R: Runtime>(
     tracing::info!("Setting bundle root to {bundle_dir:?}");
     *bundle_root.0.write().map_err(|e| e.to_string())? = Some(bundle_dir);
 
+    // Persist so subsequent restarts use the updated bundle
+    let cache_dir = app_handle
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?;
+    bundle_root.persist(&cache_dir).map_err(|e| e.to_string())?;
+
     // Navigate to the updated bundle, preserving the current hash route.
     if let Some(webview) = app_handle.webview_windows().values().next() {
         tracing::info!("Bundle update complete, navigating to updated bundle");

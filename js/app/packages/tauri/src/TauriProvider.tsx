@@ -57,10 +57,13 @@ function TauriProvider(props: { children: JSX.Element }) {
   onMount(() => {
     listenForHeartbeat();
     console.info('[bundle-update] registering listener');
-    const unlistenPromise = listen<BundleUpdateStatus>('bundle-update-status', (ev) => {
-      console.info('[bundle-update] received', JSON.stringify(ev.payload));
-      setBundleUpdateStatus(ev.payload);
-    });
+    const unlistenPromise = listen<BundleUpdateStatus>(
+      'bundle-update-status',
+      (ev) => {
+        console.info('[bundle-update] received', JSON.stringify(ev.payload));
+        setBundleUpdateStatus(ev.payload);
+      }
+    );
     // Fetch current status since events emitted before the listener registered are missed
     invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
       console.info('[bundle-update] initial status', JSON.stringify(status));
