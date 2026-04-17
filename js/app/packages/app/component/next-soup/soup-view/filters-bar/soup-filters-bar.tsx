@@ -30,6 +30,8 @@ export const SoupFiltersBar = () => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
+  const isNarrow = () => (panel.panelSize.width ?? Infinity) < 720;
+
   const togglePreview = () => {
     const currentPreview = soup.previewEntity();
     if (currentPreview) {
@@ -72,7 +74,7 @@ export const SoupFiltersBar = () => {
       <Match when={isComponentListView('search')}>
         <div class="w-full flex flex-col gap-2 p-2 border-b border-edge-muted/50">
           <SoupSearchbar autoFocus />
-          <div class="flex items-start gap-2">
+          <div class="flex items-center gap-2">
             <UnifiedFilterDropdown />
             <ActiveFilterChips
               filters={activeFiltersList()}
@@ -80,6 +82,7 @@ export const SoupFiltersBar = () => {
               onReplace={replaceFilter}
               onClearAll={resetToTabDefaults}
               isOptionActive={isOptionActive}
+              hideCategoryLabel={isNarrow()}
             />
             <div class="flex-1" />
             <Tooltip
@@ -101,7 +104,7 @@ export const SoupFiltersBar = () => {
       </Match>
       <Match when={true}>
         <Show when={!isMobile()}>
-          <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted/50 w-full">
+          <div class="flex items-center gap-2 px-2 py-1.5 border-b border-edge-muted/50 w-full">
             <UnifiedFilterDropdown />
             <ActiveFilterChips
               filters={activeFiltersList()}
@@ -109,6 +112,7 @@ export const SoupFiltersBar = () => {
               onReplace={replaceFilter}
               onClearAll={resetToTabDefaults}
               isOptionActive={isOptionActive}
+              hideCategoryLabel={isNarrow()}
             />
             <div class="flex-1" />
             <Tooltip
