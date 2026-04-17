@@ -11,8 +11,15 @@ import { Button } from '@ui/components/Button';
 
 export type ActiveFilter = {
   categoryLabel: string;
-  optionId: string;
-  optionLabel: string;
+  /**
+   * Accessor returning the current filter id. Wrapped as an accessor so that
+   * multi-select chips (In/From) can keep stable object identity across
+   * selection toggles — the id string changes but the chip component doesn't
+   * remount, preserving its internal state (open, search text).
+   */
+  optionId: Accessor<string>;
+  /** Accessor returning the current display label. See `optionId` for rationale. */
+  optionLabel: Accessor<string>;
   icon?: () => JSX.Element;
   /** Available options in this category for replacement */
   categoryOptions?: FilterOption[];
@@ -114,7 +121,7 @@ const SearchableFilterChip = (props: {
             <Show when={!props.hideCategoryLabel}>
               {props.filter.categoryLabel}:{' '}
             </Show>
-            {props.filter.optionLabel}
+            {props.filter.optionLabel()}
           </span>
         </Combobox.Trigger>
       </SearchableMultiSelect>
@@ -174,7 +181,7 @@ const FilterChip = (props: {
               <Show when={!props.hideCategoryLabel}>
                 {props.filter.categoryLabel}:{' '}
               </Show>
-              {props.filter.optionLabel}
+              {props.filter.optionLabel()}
             </span>
           </span>
         }
@@ -197,7 +204,7 @@ const FilterChip = (props: {
               <Show when={!props.hideCategoryLabel}>
                 {props.filter.categoryLabel}:{' '}
               </Show>
-              {props.filter.optionLabel}
+              {props.filter.optionLabel()}
             </span>
           </DropdownMenu.Trigger>
 
@@ -315,9 +322,9 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                   fallback={
                     <FilterChip
                       filter={filter}
-                      onRemove={() => props.onRemove(filter.optionId)}
+                      onRemove={() => props.onRemove(filter.optionId())}
                       onReplace={(newOptionId) =>
-                        props.onReplace(filter.optionId, newOptionId)
+                        props.onReplace(filter.optionId(), newOptionId)
                       }
                       isOptionActive={props.isOptionActive}
                       chipClass={props.chipClass}
@@ -331,7 +338,7 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                       if (filter.onRemove) {
                         filter.onRemove();
                       } else {
-                        props.onRemove(filter.optionId);
+                        props.onRemove(filter.optionId());
                       }
                     }}
                     chipClass={props.chipClass}
@@ -346,9 +353,9 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                   fallback={
                     <FilterChip
                       filter={filter}
-                      onRemove={() => props.onRemove(filter.optionId)}
+                      onRemove={() => props.onRemove(filter.optionId())}
                       onReplace={(newOptionId) =>
-                        props.onReplace(filter.optionId, newOptionId)
+                        props.onReplace(filter.optionId(), newOptionId)
                       }
                       isOptionActive={props.isOptionActive}
                       chipClass={props.chipClass}
@@ -362,7 +369,7 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                       if (filter.onRemove) {
                         filter.onRemove();
                       } else {
-                        props.onRemove(filter.optionId);
+                        props.onRemove(filter.optionId());
                       }
                     }}
                     chipClass={props.chipClass}

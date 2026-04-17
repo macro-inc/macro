@@ -133,6 +133,55 @@ export function useFilterRefinements() {
     return VIEW_FILTER_CATEGORIES[view as ListView] ?? [];
   });
 
+  const labelForIds = (ids: string[]): string => {
+    const [first, ...rest] = ids;
+    const firstItem = quickAccess.getById(first);
+    const firstLabel =
+      firstItem && 'data' in firstItem && firstItem.data?.name
+        ? firstItem.data.name
+        : first;
+    if (rest.length === 0) return firstLabel;
+    return `${firstLabel} and ${rest.length} ${rest.length === 1 ? 'other' : 'others'}`;
+  };
+
+  const setChannelIds = (ids: string[]) =>
+    setQueryFilters((prev) => ({
+      ...prev,
+      channel_filters: {
+        ...prev.channel_filters,
+        channel_ids: ids.length > 0 ? ids : undefined,
+      },
+    }));
+
+  const setSenderIds = (ids: string[]) =>
+    setQueryFilters((prev) => ({
+      ...prev,
+      channel_filters: {
+        ...prev.channel_filters,
+        sender_ids: ids.length > 0 ? ids : undefined,
+      },
+    }));
+
+  /**
+   * Cache of chip objects keyed by a stable id derived from the chip's category
+   * and static identity (e.g. "In", "Type|channels", "Assignee|<uuid>"). Reusing
+   * the same `ActiveFilter` object across memo runs keeps `<For>` from
+   * remounting the chip — its internal combobox state (open, search) survives
+   * selection toggles. Mutable state lives inside the accessor fields.
+   */
+  const chipCache = new Map<string, ActiveFilter>();
+  const getOrCreateChip = (
+    key: string,
+    build: () => ActiveFilter
+  ): ActiveFilter => {
+    let chip = chipCache.get(key);
+    if (!chip) {
+      chip = build();
+      chipCache.set(key, chip);
+    }
+    return chip;
+  };
+
   /**
    * Returns a list of active filters that can be displayed as removable chips.
    * Excludes filters that are set by tabs (like signal/noise).
@@ -145,6 +194,8 @@ export function useFilterRefinements() {
     ]);
 
     const filters: ActiveFilter[] = [];
+    const seenKeys = new Set<string>();
+
     for (const category of viewCategories()) {
       for (const option of category.options) {
         if (
@@ -154,13 +205,17 @@ export function useFilterRefinements() {
         ) {
           continue;
         }
-        filters.push({
-          categoryLabel: category.label,
-          optionId: option.id,
-          optionLabel: option.label,
-          icon: option.icon,
-          categoryOptions: category.options,
-        });
+        const key = `${category.label}|${option.id}`;
+        seenKeys.add(key);
+        filters.push(
+          getOrCreateChip(key, () => ({
+            categoryLabel: category.label,
+            optionId: () => option.id,
+            optionLabel: () => option.label,
+            icon: option.icon,
+            categoryOptions: category.options,
+          }))
+        );
       }
     }
 
@@ -177,92 +232,96 @@ export function useFilterRefinements() {
       ) {
         continue;
       }
-      filters.push({
-        categoryLabel: 'Type',
-        optionId: option.id,
-        optionLabel: option.label,
-        icon: option.icon,
-        categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
-        multiple: false,
-        onRemove: () => changeIndex('all'),
-        onReplace: (newOptionId) => changeIndex(newOptionId),
-      });
+      const key = `Type|${option.id}`;
+      seenKeys.add(key);
+      filters.push(
+        getOrCreateChip(key, () => ({
+          categoryLabel: 'Type',
+          optionId: () => option.id,
+          optionLabel: () => option.label,
+          icon: option.icon,
+          categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
+          multiple: false,
+          onRemove: () => changeIndex('all'),
+          onReplace: (newOptionId) => changeIndex(newOptionId),
+        }))
+      );
     }
 
     // Sub-filters: assignee
     const optionsMap = assigneeOptionsMap();
     for (const id of assigneeFilter()) {
-      const option = optionsMap.get(id);
-      filters.push({
-        categoryLabel: 'Assignee',
-        optionId: id,
-        optionLabel: option?.label ?? id,
-        onRemove: () =>
-          setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
-      });
+      const key = `Assignee|${id}`;
+      seenKeys.add(key);
+      filters.push(
+        getOrCreateChip(key, () => ({
+          categoryLabel: 'Assignee',
+          optionId: () => id,
+          optionLabel: () => assigneeOptionsMap().get(id)?.label ?? id,
+          onRemove: () =>
+            setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
+        }))
+      );
     }
-
-    const labelForIds = (ids: string[]): string => {
-      const [first, ...rest] = ids;
-      const firstItem = quickAccess.getById(first);
-      const firstLabel =
-        firstItem && 'data' in firstItem && firstItem.data?.name
-          ? firstItem.data.name
-          : first;
-      if (rest.length === 0) return firstLabel;
-      return `${firstLabel} and ${rest.length} ${rest.length === 1 ? 'other' : 'others'}`;
-    };
 
     // Search operator filters: in: (channel_ids)
     const channelIds = (
       queryFilters().channel_filters?.channel_ids ?? []
     ).filter((id) => id !== NIL_UUID);
-    const setChannelIds = (ids: string[]) =>
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: {
-          ...prev.channel_filters,
-          channel_ids: ids.length > 0 ? ids : undefined,
-        },
-      }));
     if (channelIds.length > 0) {
-      filters.push({
-        categoryLabel: 'In',
-        optionId: `in:${channelIds.join(',')}`,
-        optionLabel: labelForIds(channelIds),
-        searchableOptions: channelOptions,
-        activeSearchableIds: () =>
-          (queryFilters().channel_filters?.channel_ids ?? []).filter(
-            (id) => id !== NIL_UUID
-          ),
-        onSearchableChange: setChannelIds,
-        searchPlaceholder: 'Search channels...',
-        onRemove: () => setChannelIds([]),
-      });
+      const key = 'In';
+      seenKeys.add(key);
+      filters.push(
+        getOrCreateChip(key, () => ({
+          categoryLabel: 'In',
+          optionId: () => {
+            const ids = (
+              queryFilters().channel_filters?.channel_ids ?? []
+            ).filter((id) => id !== NIL_UUID);
+            return `in:${ids.join(',')}`;
+          },
+          optionLabel: () => {
+            const ids = (
+              queryFilters().channel_filters?.channel_ids ?? []
+            ).filter((id) => id !== NIL_UUID);
+            return labelForIds(ids);
+          },
+          searchableOptions: channelOptions,
+          activeSearchableIds: () =>
+            (queryFilters().channel_filters?.channel_ids ?? []).filter(
+              (id) => id !== NIL_UUID
+            ),
+          onSearchableChange: setChannelIds,
+          searchPlaceholder: 'Search channels...',
+          onRemove: () => setChannelIds([]),
+        }))
+      );
     }
 
     // Search operator filters: from: (sender_ids)
     const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
-    const setSenderIds = (ids: string[]) =>
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: {
-          ...prev.channel_filters,
-          sender_ids: ids.length > 0 ? ids : undefined,
-        },
-      }));
     if (senderIds.length > 0) {
-      filters.push({
-        categoryLabel: 'From',
-        optionId: `from:${senderIds.join(',')}`,
-        optionLabel: labelForIds(senderIds),
-        searchableOptions: senderOptions,
-        activeSearchableIds: () =>
-          queryFilters().channel_filters?.sender_ids ?? [],
-        onSearchableChange: setSenderIds,
-        searchPlaceholder: 'Search senders...',
-        onRemove: () => setSenderIds([]),
-      });
+      const key = 'From';
+      seenKeys.add(key);
+      filters.push(
+        getOrCreateChip(key, () => ({
+          categoryLabel: 'From',
+          optionId: () => {
+            const ids = queryFilters().channel_filters?.sender_ids ?? [];
+            return `from:${ids.join(',')}`;
+          },
+          optionLabel: () => {
+            const ids = queryFilters().channel_filters?.sender_ids ?? [];
+            return labelForIds(ids);
+          },
+          searchableOptions: senderOptions,
+          activeSearchableIds: () =>
+            queryFilters().channel_filters?.sender_ids ?? [],
+          onSearchableChange: setSenderIds,
+          searchPlaceholder: 'Search senders...',
+          onRemove: () => setSenderIds([]),
+        }))
+      );
     }
 
     // Email importance (only when the email index is active in the search view
@@ -272,34 +331,52 @@ export function useFilterRefinements() {
       if (importance !== undefined) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
         const IMPORTANCE_NOISE = 'importance:noise';
-        const currentOptionId = importance
-          ? IMPORTANCE_SIGNAL
-          : IMPORTANCE_NOISE;
-        filters.push({
-          categoryLabel: 'Importance',
-          optionId: currentOptionId,
-          optionLabel: importance ? 'Signal' : 'Noise',
-          categoryOptions: [
-            { id: IMPORTANCE_SIGNAL, label: 'Signal' },
-            { id: IMPORTANCE_NOISE, label: 'Noise' },
-          ] as unknown as ActiveFilter['categoryOptions'],
-          multiple: false,
-          isOptionActive: (optionId) => optionId === currentOptionId,
-          onRemove: () =>
-            setQueryFilters((prev) => ({
-              ...prev,
-              email_filters: { ...prev.email_filters, importance: undefined },
-            })),
-          onReplace: (newOptionId) =>
-            setQueryFilters((prev) => ({
-              ...prev,
-              email_filters: {
-                ...prev.email_filters,
-                importance: newOptionId === IMPORTANCE_SIGNAL,
-              },
-            })),
-        });
+        const key = 'Importance';
+        seenKeys.add(key);
+        filters.push(
+          getOrCreateChip(key, () => ({
+            categoryLabel: 'Importance',
+            optionId: () =>
+              queryFilters().email_filters?.importance
+                ? IMPORTANCE_SIGNAL
+                : IMPORTANCE_NOISE,
+            optionLabel: () =>
+              queryFilters().email_filters?.importance ? 'Signal' : 'Noise',
+            categoryOptions: [
+              { id: IMPORTANCE_SIGNAL, label: 'Signal' },
+              { id: IMPORTANCE_NOISE, label: 'Noise' },
+            ] as unknown as ActiveFilter['categoryOptions'],
+            multiple: false,
+            isOptionActive: (optionId) =>
+              optionId ===
+              (queryFilters().email_filters?.importance
+                ? IMPORTANCE_SIGNAL
+                : IMPORTANCE_NOISE),
+            onRemove: () =>
+              setQueryFilters((prev) => ({
+                ...prev,
+                email_filters: {
+                  ...prev.email_filters,
+                  importance: undefined,
+                },
+              })),
+            onReplace: (newOptionId) =>
+              setQueryFilters((prev) => ({
+                ...prev,
+                email_filters: {
+                  ...prev.email_filters,
+                  importance: newOptionId === IMPORTANCE_SIGNAL,
+                },
+              })),
+          }))
+        );
       }
+    }
+
+    // Evict chips whose keys are no longer present so a fresh chip (with
+    // reset internal state) gets built next time that filter reappears.
+    for (const key of chipCache.keys()) {
+      if (!seenKeys.has(key)) chipCache.delete(key);
     }
 
     return filters;
