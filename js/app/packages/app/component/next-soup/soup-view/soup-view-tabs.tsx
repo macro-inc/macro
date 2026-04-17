@@ -75,7 +75,7 @@ const useCurrentListView = () => {
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const { setFilters, setActivePreset } = useSoupView();
+  const { setFilters, setActiveTab } = useSoupView();
   const user = useUserContext();
 
   const getPresetContext = (): PresetContext => ({
@@ -88,7 +88,7 @@ export const useApplyPreset = () => {
     if (!preset) return false;
 
     batch(() => {
-      setActivePreset({ view, tab: tabId });
+      setActiveTab(tabId);
       setFilters((d) => {
         d.include = preset.filters.include ?? {};
         d.exclude = preset.filters.exclude ?? {};
@@ -121,13 +121,13 @@ export const SoupViewTabs = () => {
 
 const ViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
-  const { activePreset } = useSoupView();
+  const { activeTab } = useSoupView();
   const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
     <Tabs
       list={list()}
-      value={activePreset()?.tab}
+      value={activeTab()}
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
     />
@@ -138,7 +138,7 @@ const ViewTabs = (props: { view: TabbedListView }) => {
 export const CollapsedSoupViewTabs = () => {
   const listView = useCurrentListView();
   const { applyTabPreset } = useApplyPreset();
-  const { activePreset } = useSoupView();
+  const { activeTab } = useSoupView();
 
   const list = createMemo(() => {
     const view = listView();
@@ -147,7 +147,7 @@ export const CollapsedSoupViewTabs = () => {
   });
 
   const activeLabel = createMemo(() => {
-    const tab = activePreset()?.tab;
+    const tab = activeTab();
     return list().find((item) => item.value === tab)?.label ?? list()[0]?.label;
   });
 
@@ -164,7 +164,7 @@ export const CollapsedSoupViewTabs = () => {
               <DropdownMenu.Item
                 class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                 classList={{
-                  'font-semibold': activePreset()?.tab === item.value,
+                  'font-semibold': activeTab() === item.value,
                 }}
                 onSelect={() => {
                   const view = listView();
@@ -203,13 +203,13 @@ export const MobileSoupViewTabs = () => {
 
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
-  const { activePreset } = useSoupView();
+  const { activeTab } = useSoupView();
   const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
     <Tabs
       list={list()}
-      value={activePreset()?.tab}
+      value={activeTab()}
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
       indicatorPosition="top"

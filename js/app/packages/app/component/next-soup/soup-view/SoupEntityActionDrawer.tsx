@@ -8,7 +8,7 @@ import { useSoupView } from './soup-view-context';
 
 export function SoupEntityActionDrawer() {
   const drawerState = useSoupEntityActionDrawer();
-  const { activePreset } = useSoupView();
+  const { activeTab } = useSoupView();
   const { buildActionGroups } = createSoupEntityActions();
 
   if (!drawerState) {
@@ -20,7 +20,7 @@ export function SoupEntityActionDrawer() {
     const e = drawerState.entity();
     const s = drawerState.soup();
     if (!e || !s) return [];
-    return buildActionGroups([e], s, activePreset()?.tab);
+    return buildActionGroups([e], s, activeTab());
   };
 
   return (

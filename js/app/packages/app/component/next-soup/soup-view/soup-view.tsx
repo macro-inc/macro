@@ -386,8 +386,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     featuredIds,
     isSearchServiceLoading,
     isLocalSearchSettling,
-    activePreset,
-    setActivePreset,
+    activeTab,
+    setActiveTab,
     assigneeFilter,
     setAssigneeFilter,
   } = useSoupView();
@@ -495,7 +495,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     previewState: () => !!soup.previewEntity(),
     getSplitCount,
     currentView,
-    activeTab: () => activePreset()?.tab,
+    activeTab,
     applyTabPreset,
   });
 
@@ -706,10 +706,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
               initialPersistedState.activeTab ??
               VIEW_TAB_PRESETS[contentId].default;
             if (tab) {
-              setActivePreset({
-                view: contentId,
-                tab,
-              });
+              setActiveTab(tab);
             }
           }
         });
@@ -722,6 +719,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
       if (props.initialClientFilters) {
         soup.filters.set(props.initialClientFilters);
       }
+      // Set default tab for list views when no persisted state exists
+      if (isListViewID(contentId)) {
+        const defaultTab = VIEW_TAB_PRESETS[contentId].default;
+        if (defaultTab) {
+          setActiveTab(defaultTab);
+        }
+      }
     }
   });
 
@@ -730,7 +734,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       () =>
         ({
           version: PERSISTED_STATE_VERSION,
-          activeTab: activePreset()?.tab,
+          activeTab: activeTab(),
           filters: {
             and: [...soup.filters.andFilters().map((f) => f.id)],
             or: [...soup.filters.orFilters().map((f) => f.id)],

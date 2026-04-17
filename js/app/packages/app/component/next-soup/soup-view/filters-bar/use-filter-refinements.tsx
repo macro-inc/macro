@@ -1,6 +1,7 @@
 import {
   type PresetContext,
   getViewPreset,
+  VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import {
@@ -57,7 +58,7 @@ export function useFilterRefinements() {
     setFilters,
     assigneeFilter,
     setAssigneeFilter,
-    activePreset,
+    activeTab,
   } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
@@ -81,9 +82,11 @@ export function useFilterRefinements() {
   });
 
   const currentPreset = createMemo(() => {
-    const preset = activePreset();
-    if (!preset) return undefined;
-    return getViewPreset(preset.view, preset.tab, getPresetContext());
+    const view = currentView();
+    if (!view) return undefined;
+    const tab = activeTab() ?? VIEW_TAB_PRESETS[view]?.default;
+    if (!tab) return undefined;
+    return getViewPreset(view, tab, getPresetContext());
   });
 
   const hasActiveRefinements = createMemo(() => {

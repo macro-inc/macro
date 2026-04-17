@@ -12,11 +12,11 @@ interface SoupEntityActionsMenuProps {
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
-  const { activePreset } = useSoupView();
+  const { activeTab } = useSoupView();
   const { buildActionGroups } = createSoupEntityActions();
 
   const groups = () =>
-    buildActionGroups(props.entities, props.soup, activePreset()?.tab);
+    buildActionGroups(props.entities, props.soup, activeTab());
 
   const handleAction = async (onClick: () => void | Promise<void>) => {
     await onClick();
