@@ -105,7 +105,10 @@ export function CallBlockAdapter() {
                     </Show>
                   }
                 >
-                  <CallTranscript transcript={data().transcript} />
+                  <CallTranscript
+                    transcript={data().transcript}
+                    channelId={data().channelId}
+                  />
                 </Show>
               </>
             )}
