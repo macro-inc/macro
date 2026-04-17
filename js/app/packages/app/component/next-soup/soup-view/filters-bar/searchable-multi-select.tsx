@@ -91,22 +91,21 @@ const VirtualizedListbox = (props: {
 };
 
 /**
- * Precompute lowercased labels so substring filtering on each keystroke
- * doesn't call toLowerCase() for every option every time.
+ * Tracks whether any option matches the search query. Used to toggle the
+ * "no results" message. Precomputes lowercased labels so substring matching
+ * on each keystroke isn't O(n) toLowerCase calls.
  */
-const useFilteredOptions = (
+const useHasMatches = (
   options: Accessor<SearchableOption[]>,
   searchQuery: Accessor<string>
 ) => {
   const lowered = createMemo(() =>
-    options().map((opt) => [opt, opt.label.toLowerCase()] as const)
+    options().map((opt) => opt.label.toLowerCase())
   );
   return createMemo(() => {
     const q = searchQuery().trim().toLowerCase();
-    if (!q) return options();
-    return lowered()
-      .filter(([, label]) => label.includes(q))
-      .map(([opt]) => opt);
+    if (!q) return options().length > 0;
+    return lowered().some((label) => label.includes(q));
   });
 };
 
@@ -132,7 +131,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   };
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
-  const filteredOptions = useFilteredOptions(props.options, searchQuery);
+  const hasMatches = useHasMatches(props.options, searchQuery);
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
@@ -149,7 +148,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       selectionBehavior="toggle"
       closeOnSelection={false}
       open={isOpen()}
-      options={filteredOptions()}
+      options={props.options()}
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={setSearchQuery}
@@ -183,7 +182,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
           </div>
           <div class="p-1">
             <Show
-              when={filteredOptions().length > 0}
+              when={hasMatches()}
               fallback={
                 <div class="py-3 px-2 text-center text-xs text-ink-muted">
                   No options match "{searchQuery()}"
@@ -191,7 +190,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
               }
             >
               <VirtualizedListbox
-                options={filteredOptions()}
+                options={props.options()}
                 class={props.listboxClass}
               />
             </Show>
@@ -225,7 +224,7 @@ export const SearchableMultiSelectInline = (
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
-  const filteredOptions = useFilteredOptions(props.options, searchQuery);
+  const hasMatches = useHasMatches(props.options, searchQuery);
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
@@ -273,7 +272,7 @@ export const SearchableMultiSelectInline = (
       selectionBehavior="toggle"
       closeOnSelection={false}
       open
-      options={filteredOptions()}
+      options={props.options()}
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={setSearchQuery}
@@ -294,7 +293,7 @@ export const SearchableMultiSelectInline = (
       </div>
       <div class="p-1">
         <Show
-          when={filteredOptions().length > 0}
+          when={hasMatches()}
           fallback={
             <div class="py-3 px-2 text-center text-xs text-ink-muted">
               No options match "{searchQuery()}"
@@ -302,7 +301,7 @@ export const SearchableMultiSelectInline = (
           }
         >
           <VirtualizedListbox
-            options={filteredOptions()}
+            options={props.options()}
             class={props.listboxClass}
           />
         </Show>
