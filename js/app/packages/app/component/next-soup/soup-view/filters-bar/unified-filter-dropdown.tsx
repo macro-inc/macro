@@ -355,10 +355,13 @@ const SearchableFilterSubmenu = (props: {
         onPointerEnter={(e) => {
           // Kobalte's "grace polygon" keeps an open sub alive when the
           // pointer crosses toward its content. For sibling In/From triggers,
-          // that means moving between them leaves the prior sub stuck open.
-          // Force-open ourselves on pointer-enter so the shared signal
-          // closes the sibling.
-          if (e.pointerType === 'mouse' && !isOpen()) setIsOpen(true);
+          // that means moving between them leaves the prior sub stuck open
+          // and the prior trigger stuck with data-highlighted. Force focus
+          // + open so Kobalte's parent selection manager updates to this
+          // trigger and the shared signal closes the sibling.
+          if (e.pointerType !== 'mouse') return;
+          e.currentTarget.focus({ preventScroll: true });
+          if (!isOpen()) setIsOpen(true);
         }}
       >
         <span class="text-ink">{props.label}</span>
