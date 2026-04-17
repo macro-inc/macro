@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use aws_sdk_s3::{self, presigning::PresigningConfig, primitives::ByteStream};
+use aws_sdk_s3::{self, presigning::PresigningConfig};
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -41,41 +41,6 @@ impl S3Client {
             .send()
             .await
             .context("failed to delete object")?;
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub async fn get_object_bytes(&self, key: &str) -> Result<Vec<u8>> {
-        let response = self
-            .inner
-            .get_object()
-            .bucket(self.storage_bucket.clone())
-            .key(key)
-            .send()
-            .await
-            .context("failed to get object")?;
-
-        let bytes = response
-            .body
-            .collect()
-            .await
-            .context("failed to read object body")?
-            .into_bytes();
-
-        Ok(bytes.to_vec())
-    }
-
-    #[tracing::instrument(skip(self, bytes), fields(bytes_len = bytes.len()))]
-    pub async fn put_object(&self, key: &str, bytes: Vec<u8>, content_type: &str) -> Result<()> {
-        self.inner
-            .put_object()
-            .bucket(self.storage_bucket.clone())
-            .key(key)
-            .content_type(content_type)
-            .body(ByteStream::from(bytes))
-            .send()
-            .await
-            .context("failed to put object")?;
         Ok(())
     }
 

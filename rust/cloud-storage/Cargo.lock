@@ -10585,7 +10585,6 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
- "image",
  "macro_auth",
  "macro_aws_config",
  "macro_cors",
