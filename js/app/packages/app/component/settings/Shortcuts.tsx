@@ -47,7 +47,7 @@ const shortcutSections: ShortcutSection[] = [
         keys: ['x'],
         description: (
           <>
-            Select items (then <Kbd shortcut={`${cmdOrCtrl}+K`} /> to bring up actions)
+            Select items (then <Kbd shortcut={`${cmdOrCtrl}+k`} /> to bring up actions)
           </>
         ),
       },
