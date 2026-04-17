@@ -37,6 +37,10 @@ pub enum StripeOperationError {
     InconsistentSubscriptionRoles,
     #[error("Another subscription update is already in progress for this user")]
     SubscriptionUpdateInProgress,
+    #[error("User is a member of a team; tier is managed by the team owner")]
+    UserInTeam,
+    #[error("Teams service error")]
+    TeamsErr(#[from] teams::domain::model::TeamError),
     #[error("Subscription is already on the requested tier")]
     TierUnchanged,
     #[error("Roles and permissions error")]
@@ -63,6 +67,8 @@ impl IntoResponse for StripeOperationError {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             StripeOperationError::SubscriptionUpdateInProgress => StatusCode::CONFLICT,
+            StripeOperationError::UserInTeam => StatusCode::FORBIDDEN,
+            StripeOperationError::TeamsErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::TierUnchanged => StatusCode::BAD_REQUEST,
             StripeOperationError::RolesErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

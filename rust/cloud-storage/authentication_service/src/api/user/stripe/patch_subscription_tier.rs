@@ -8,6 +8,7 @@ use roles_and_permissions::domain::{
 };
 use serde::Deserialize;
 use strum::IntoEnumIterator;
+use teams::domain::team_repo::TeamService;
 use utoipa::ToSchema;
 
 use super::{StripeOperationError, StripeProductTier};
@@ -33,6 +34,7 @@ pub struct PatchSubscriptionTierRequest {
     responses(
         (status = 200),
         (status = 400, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 409, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
@@ -45,6 +47,13 @@ pub async fn patch_subscription_tier(
     Json(req): Json<PatchSubscriptionTierRequest>,
 ) -> Result<(), StripeOperationError> {
     let user_id = MacroUserIdStr::parse_from_str(&user_context.user_id)?;
+
+    // Team members can't manage their own tier — the team owner's tier change flow
+    // (`PATCH /team/{id}/tier`) owns billing for the whole team. Checked before taking the
+    // lock so we don't pin a connection for a user who can't use this endpoint anyway.
+    if !ctx.teams_service.get_user_teams(&user_id).await?.is_empty() {
+        return Err(StripeOperationError::UserInTeam);
+    }
 
     // Serialize concurrent subscription mutations for this user (double-clicks, racing tabs,
     // user + webhook). Lock is released when `txn` is committed or dropped at end of handler.
@@ -142,6 +151,7 @@ pub async fn patch_subscription_tier(
     Ok(())
 }
 
+/// Maps a subscription tier to the RBAC role a user holds while subscribed at that tier.
 fn tier_to_sub_role(tier: StripeProductTier) -> RoleId {
     match tier {
         StripeProductTier::Haiku => RoleId::SubHaiku,
@@ -161,6 +171,7 @@ fn tier_key_str(tier: StripeProductTier) -> &'static str {
     }
 }
 
+/// Returns the Stripe price ID configured for the given tier.
 fn price_id_for_tier(price_ids: &StripePriceIds, tier: StripeProductTier) -> &str {
     match tier {
         StripeProductTier::Haiku => price_ids.stripe_price_id_haiku.as_ref(),
@@ -169,6 +180,10 @@ fn price_id_for_tier(price_ids: &StripePriceIds, tier: StripeProductTier) -> &st
     }
 }
 
+/// Identifies the user's current subscription tier by scanning their RBAC role set.
+/// Refuses to guess if the user somehow holds more than one Sub\* role — a drifted state that
+/// would otherwise let us pick arbitrarily and silently leave the other role behind.
+#[tracing::instrument(skip(roles), err)]
 fn find_current_sub_tier(
     roles: &HashSet<RoleId>,
 ) -> Result<StripeProductTier, StripeOperationError> {
@@ -189,6 +204,10 @@ fn find_current_sub_tier(
     }
 }
 
+/// Fetches the customer's single active Stripe subscription. Solo users are expected to have
+/// exactly one; this endpoint is blocked for team members earlier in the handler, so a customer
+/// with zero active subs here is genuinely "nothing to patch" and surfaces as 404.
+#[tracing::instrument(skip(stripe_client), err, fields(customer_id = %customer_id))]
 async fn fetch_active_subscription(
     stripe_client: &stripe::Client,
     customer_id: stripe::CustomerId,
@@ -206,6 +225,9 @@ async fn fetch_active_subscription(
         .ok_or(StripeOperationError::NoActiveSubscription)
 }
 
+/// Finds the subscription line item whose price matches `price_id` and returns its id.
+/// Returning `UnexpectedStripeResponse` here would indicate Stripe is in a state we don't model
+/// (e.g. the user's role points at a tier their subscription no longer contains).
 fn find_subscription_item_id(
     subscription: &stripe::Subscription,
     price_id: &str,
@@ -224,16 +246,19 @@ fn find_subscription_item_id(
         .ok_or(StripeOperationError::UnexpectedStripeResponse)
 }
 
+/// Swaps a user's subscription tier role: upserts `new_role`, then removes `old_role`.
+///
+/// Ordering matters: upsert-then-remove means a partial failure leaves the user with *both*
+/// roles (transient multi-role state, caught by `find_current_sub_tier` on the next request),
+/// whereas remove-then-upsert could leave them with *zero* Sub roles and locked out of their
+/// plan.
+#[tracing::instrument(skip(service), err, fields(user_id = %user_id, old_role = ?old_role, new_role = ?new_role))]
 async fn swap_user_role<S: UserRolesAndPermissionsService>(
     service: &S,
     user_id: &MacroUserIdStr<'_>,
     old_role: &RoleId,
     new_role: &RoleId,
 ) -> Result<(), UserRolesAndPermissionsError> {
-    // Upsert new role first, then remove old. If the remove fails, the user is left with
-    // both roles (transient multi-role state, caught by `find_current_sub_tier` on the
-    // next request) — strictly safer than removing first and potentially leaving the user
-    // with zero Sub roles if the upsert then fails.
     service
         .dangerous_upsert_roles_for_user(user_id, one_role(new_role))
         .await?;
@@ -251,6 +276,17 @@ fn one_role(role: &RoleId) -> non_empty::NonEmpty<&[RoleId]> {
         .expect("slice::from_ref always yields a non-empty slice")
 }
 
+/// Swaps the subscription's line item from `old_item_id` to a new item at `new_price_id`.
+///
+/// Uses delete-old + add-new (quantity 1) in a single `Subscription::update` call rather than
+/// mutating the existing item's price, matching the pattern used by the teams tier-swap code
+/// path. `AlwaysInvoice` proration bills the pro-rated difference immediately so the customer
+/// isn't charged the full new rate on their next cycle.
+#[tracing::instrument(
+    skip(stripe_client),
+    err,
+    fields(subscription_id = %subscription_id, old_item_id = old_item_id, new_price_id = new_price_id),
+)]
 async fn swap_subscription_item(
     stripe_client: &stripe::Client,
     subscription_id: &stripe::SubscriptionId,
@@ -285,6 +321,7 @@ async fn swap_subscription_item(
 /// On failure the caller is responsible for logging — combining the rollback error with the
 /// originating Stripe error in a single structured log line gives alerting a complete picture
 /// of the inconsistent state.
+#[tracing::instrument(skip(service), err, fields(user_id = %user_id, old_role = ?old_role, new_role = ?new_role))]
 async fn rollback_role_swap<S: UserRolesAndPermissionsService>(
     service: &S,
     user_id: &MacroUserIdStr<'_>,
