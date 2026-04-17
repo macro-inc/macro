@@ -39,9 +39,23 @@ import {
   useNotificationSettings,
 } from '@notifications';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
 
 // NOTE: solid directives
 false && fileSelector;
+
+function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
+  switch (status.status) {
+    case 'Idle': return 'Idle';
+    case 'CheckingForUpdate': return 'Checking for update...';
+    case 'UpdateFound': return `Update available: v${status.data.version}`;
+    case 'NoUpdateNeeded': return 'Up to date';
+    case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
+    case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
+    case 'Completed': return 'Update ready';
+    case 'Error': return 'An error occurred when checking for updates';
+  }
+}
 
 function useUserName() {
   const fetchUserName = async () => {
@@ -220,6 +234,7 @@ export function Account() {
             />
           </Show>
         </div>
+        <BundleUpdateRow />
         <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
           <Show
             when={!emailActive()}
@@ -433,5 +448,19 @@ function NotificationNotSupported() {
       <div class="text-sm">Notifications</div>
       <span class="text-sm text-ink-muted">Not supported on this device</span>
     </div>
+  );
+}
+
+function BundleUpdateRow() {
+  const tauri = useTauri();
+  return (
+    <Show when={tauri}>
+      {(ctx) => (
+        <TabContentRow
+          text="App Update"
+          subtext={formatBundleUpdateStatus(ctx().bundleUpdateStatus())}
+        />
+      )}
+    </Show>
   );
 }
