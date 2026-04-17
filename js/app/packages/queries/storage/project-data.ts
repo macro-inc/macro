@@ -18,12 +18,19 @@ async function fetchProjectData(projectId: string): Promise<Project> {
   return result[1].projectMetadata;
 }
 
-export function useProjectDataQuery(projectId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: entityKeys.projectData(projectId()).queryKey,
-    queryFn: () => fetchProjectData(projectId()),
-    staleTime: STALE_TIME,
-    gcTime: GC_TIME,
-    enabled: !!projectId(),
-  }));
+export function useProjectDataQuery(
+  projectId: Accessor<string | undefined | null>
+) {
+  return useQuery(() => {
+    const id = projectId();
+    return {
+      queryKey: id
+        ? entityKeys.projectData(id).queryKey
+        : entityKeys.projectData._def,
+      queryFn: () => fetchProjectData(id!),
+      staleTime: STALE_TIME,
+      gcTime: GC_TIME,
+      enabled: !!id,
+    };
+  });
 }

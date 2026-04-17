@@ -81,28 +81,22 @@ function ProjectDetails(props: { projectId: string }) {
 function ChatDetails(props: { chatId: string }) {
   const query = useChatDataQuery(() => props.chatId);
   const chat = createMemo(() => query.data);
-  const projectName = useProjectNameLookup(() => chat()?.projectId);
+  const projectQuery = useProjectDataQuery(
+    () => chat()?.projectId ?? undefined
+  );
 
   return (
     <DetailsGrid
       owner={() => chat()?.userId}
       folder={() => {
         const id = chat()?.projectId;
-        const name = projectName();
+        const name = projectQuery.data?.name;
         return id && name ? { id, name } : undefined;
       }}
       createdAt={() => chat()?.createdAt}
       updatedAt={() => chat()?.updatedAt}
     />
   );
-}
-
-function useProjectNameLookup(projectId: () => string | undefined | null) {
-  const query = useProjectDataQuery(() => projectId() ?? '');
-  return () => {
-    if (!projectId()) return undefined;
-    return query.data?.name;
-  };
 }
 
 function DetailsGrid(props: {
