@@ -43,7 +43,7 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
       { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
       { keys: ['e'], description: 'Mark done' },
-      { keys: ['x'], description: `Select items (then ${IS_MAC ? '⌘' : 'Ctrl'}+K to bring up actions)` },
+      { keys: ['x'], description: `Select items (then ${cmdOrCtrl}+K to bring up actions)` },
       { keys: ['f'], description: 'Open filter menu' },
       { keys: ['h', 'arrowleft'], description: 'Collapse item' },
       { keys: ['l', 'arrowright'], description: 'Expand item' },
@@ -57,7 +57,7 @@ const shortcutSections: ShortcutSection[] = [
     items: [
       { keys: ['\\'], description: 'Create a split' },
       { keys: ['escape'], description: 'Return to list view, or close split if in list view' },
-      { keys: ['cmd+escape'], description: 'Close the split' },
+      { keys: [`${cmdOrCtrl}+escape`], description: 'Close the split' },
       { keys: ['shift+escape'], description: 'Spotlight split' },
       { keys: ['shift+h', 'shift+arrowleft'], description: 'Focus split to the left' },
       { keys: ['shift+l', 'shift+arrowright'], description: 'Focus split to the right' },
