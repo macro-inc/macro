@@ -54,9 +54,7 @@ function SoupChatInputInner() {
     attachHotkeys(containerRef);
     containerRef.addEventListener('focusin', () => setChatHasFocus(true));
     containerRef.addEventListener('focusout', () => {
-      queueMicrotask(() =>
-        setChatHasFocus(containerRef.contains(document.activeElement))
-      );
+      setChatHasFocus(false);
     });
   });
 
