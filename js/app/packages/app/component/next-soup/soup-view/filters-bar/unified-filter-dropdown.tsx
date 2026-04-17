@@ -337,8 +337,15 @@ const SearchableFilterSubmenu = (props: {
   activeIds: Accessor<string[]>;
   onChange: (ids: string[]) => void;
   placeholder?: string;
+  open?: Accessor<boolean>;
+  onOpenChange?: (v: boolean) => void;
 }) => {
-  const [isOpen, setIsOpen] = createSignal(false);
+  const [internalOpen, setInternalOpen] = createSignal(false);
+  const isOpen = () => props.open?.() ?? internalOpen();
+  const setIsOpen = (v: boolean) => {
+    if (props.onOpenChange) props.onOpenChange(v);
+    else setInternalOpen(v);
+  };
   let inputRef: HTMLInputElement | undefined;
 
   return (
@@ -524,6 +531,10 @@ export const UnifiedFilterDropdown = () => {
 
   const importance = createMemo(() => queryFilters().email_filters?.importance);
 
+  const [openChannelSub, setOpenChannelSub] = createSignal<
+    'in' | 'from' | null
+  >(null);
+
   registerHotkey({
     hotkey: 'f',
     scopeId: panel.splitHotkeyScope,
@@ -697,6 +708,10 @@ export const UnifiedFilterDropdown = () => {
                                       activeIds={activeChannelIds}
                                       onChange={setChannelIds}
                                       placeholder="Search channels..."
+                                      open={() => openChannelSub() === 'in'}
+                                      onOpenChange={(v) =>
+                                        setOpenChannelSub(v ? 'in' : null)
+                                      }
                                     />
                                     <SearchableFilterSubmenu
                                       label="From"
@@ -704,6 +719,10 @@ export const UnifiedFilterDropdown = () => {
                                       activeIds={activeSenderIds}
                                       onChange={setSenderIds}
                                       placeholder="Search senders..."
+                                      open={() => openChannelSub() === 'from'}
+                                      onOpenChange={(v) =>
+                                        setOpenChannelSub(v ? 'from' : null)
+                                      }
                                     />
                                   </Show>
                                   <Show when={option.value === 'email'}>
