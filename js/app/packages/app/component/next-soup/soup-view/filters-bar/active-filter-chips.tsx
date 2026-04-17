@@ -395,7 +395,7 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                   variant="ghost"
                   onClick={() => props.onClearAll()}
                 >
-                  Clear all
+                  Clear
                 </Button>
               </span>
             </Show>
