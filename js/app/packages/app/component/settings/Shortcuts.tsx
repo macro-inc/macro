@@ -19,13 +19,13 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Core Shortcuts',
     items: [
-      { keys: ['c'], description: 'Open the create menu (new email, new task, etc.)' },
+      { keys: ['c'], description: 'Open the create menu' },
       { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu' },
       {
         keys: ['g'],
         description: (
           <>
-            Go to a view (for example, <Kbd shortcut="g" /> then <Kbd shortcut="i" /> for inbox)
+            Go to a view (e.g. <Kbd shortcut="g" /> then <Kbd shortcut="i" /> for inbox)
           </>
         ),
       },
@@ -119,7 +119,7 @@ export function Shortcuts() {
           <div class="mb-8">
             <h2 class="text-xl font-semibold text-ink mb-2">Keyboard Shortcuts</h2>
             <p class="text-ink-muted text-sm">
-              Shortcuts without a {IS_MAC ? 'cmd' : 'ctrl'}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
+              Shortcuts without a {cmdOrCtrl}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
             </p>
           </div>
 
