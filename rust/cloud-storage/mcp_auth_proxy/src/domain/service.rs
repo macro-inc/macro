@@ -334,7 +334,15 @@ fn is_allowed_redirect_uri(uri: &str) -> bool {
         return false;
     };
 
-    matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
+    if parsed.scheme() == "https" {
+        return true;
+    }
+
+    if parsed.scheme() == "http" {
+        return matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    }
+
+    false
 }
 
 /// Errors returned when starting authorization.
@@ -346,8 +354,8 @@ pub enum StartAuthorizationError {
     /// Only S256 PKCE is supported.
     #[error("unsupported code_challenge_method")]
     UnsupportedCodeChallengeMethod,
-    /// Only loopback redirect URIs are allowed.
-    #[error("redirect_uri must be a loopback address")]
+    /// Only https or loopback http redirect URIs are allowed.
+    #[error("redirect_uri must be https or a loopback address")]
     InvalidRedirectUri,
     /// Inflight auth state could not be persisted.
     #[error("failed to persist inflight auth state")]

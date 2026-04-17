@@ -1,13 +1,17 @@
 //! Axum router for the MCP OAuth broker.
 
+use std::time::Duration;
+
 use axum::{
     Router,
     extract::{Query, State},
+    http::{HeaderName, Method, header},
     middleware as axum_mw,
     response::{IntoResponse, Json, Redirect, Response},
     routing,
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::domain::{
     models::{AuthorizeRequest, CallbackRequest, TokenRequest},
@@ -59,7 +63,7 @@ async fn authorize<I: InflightAuthStore + 'static>(
             .into_response(),
         Err(StartAuthorizationError::InvalidRedirectUri) => (
             axum::http::StatusCode::BAD_REQUEST,
-            "redirect_uri must be a loopback address",
+            "redirect_uri must be https or a loopback address",
         )
             .into_response(),
         Err(StartAuthorizationError::InflightStore(error)) => {
@@ -235,5 +239,29 @@ where
                 super::middleware::validate_bearer,
             ));
 
-    oauth_routes.merge(mcp_route)
+    oauth_routes.merge(mcp_route).layer(mcp_cors_layer())
+}
+
+/// CORS layer for the MCP router.
+///
+/// Applied outside the bearer middleware so OPTIONS preflights short-circuit
+/// to 204 (never hitting auth) and 401 challenges still carry CORS headers —
+/// both required for browser clients like claude.ai to complete the OAuth
+/// dance over the MCP streamable HTTP transport.
+fn mcp_cors_layer() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::mirror_request())
+        .allow_credentials(true)
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            HeaderName::from_static("mcp-protocol-version"),
+            HeaderName::from_static("mcp-session-id"),
+        ])
+        .expose_headers([
+            HeaderName::from_static("mcp-session-id"),
+            header::WWW_AUTHENTICATE,
+        ])
+        .max_age(Duration::from_secs(3600))
 }

@@ -6359,6 +6359,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.17",
  "tower 0.5.2",
+ "tower-http",
  "tracing",
  "url",
  "urlencoding",
