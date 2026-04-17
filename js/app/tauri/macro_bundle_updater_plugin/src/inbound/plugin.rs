@@ -131,6 +131,15 @@ pub fn check_for_update(service: tauri::State<'_, Mutex<Service>>) -> Result<(),
     service.start().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn get_bundle_update_status(
+    service: tauri::State<'_, Mutex<Service>>,
+) -> Result<BundleUpdateEvent, String> {
+    let service = service.lock().unwrap();
+    let status = service.status().borrow();
+    Ok(BundleUpdateEvent::new(&status))
+}
+
 impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
     fn name(&self) -> &'static str {
         "macro-bundle-updater"

@@ -12,6 +12,7 @@ import {
   useContext,
 } from 'solid-js';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { listenForHeartbeat } from './heartbeat';
 import { useTauriNavigationEffect } from './navigation';
@@ -55,9 +56,15 @@ function TauriProvider(props: { children: JSX.Element }) {
 
   onMount(() => {
     listenForHeartbeat();
+    console.info('[bundle-update] registering listener');
     const unlistenPromise = listen<BundleUpdateStatus>('bundle-update-status', (ev) => {
-      console.info('[bundle-update]', ev.payload);
+      console.info('[bundle-update] received', JSON.stringify(ev.payload));
       setBundleUpdateStatus(ev.payload);
+    });
+    // Fetch current status since events emitted before the listener registered are missed
+    invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
+      console.info('[bundle-update] initial status', JSON.stringify(status));
+      setBundleUpdateStatus(status);
     });
     onCleanup(() => {
       unlistenPromise.then((unlisten) => unlisten());

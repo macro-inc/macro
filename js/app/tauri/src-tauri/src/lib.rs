@@ -211,9 +211,8 @@ pub fn run() {
             > = std::sync::OnceLock::new();
 
             move |ctx, request, responder| {
-                let h = handler.get_or_init(|| {
-                    tauri_protocol::get(ctx.app_handle().clone(), &window_origin)
-                });
+                let h = handler
+                    .get_or_init(|| tauri_protocol::get(ctx.app_handle().clone(), &window_origin));
                 h(ctx.webview_label(), request, responder);
             }
         })
@@ -226,7 +225,8 @@ pub fn run() {
             heartbeat_response,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
-            macro_bundle_updater_plugin::inbound::plugin::check_for_update
+            macro_bundle_updater_plugin::inbound::plugin::check_for_update,
+            macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status
         ])
         .setup(|app| {
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
@@ -269,8 +269,7 @@ fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handl
     tracing::debug!("checking cookies for {url}");
 
     if let Some(cookie) = s.inner().cookies_jar.as_ref().cookies(&url) {
-        tracing::info!("inserting cookie value for {url}");
-        tracing::debug!("{cookie:?}");
+        tracing::trace!("inserting cookie value for {url}, {cookie:?}");
         headers.insert(COOKIE, cookie);
     }
 }
@@ -289,7 +288,7 @@ impl AppChain for tauri::App {
 fn attach_deep_link_handler(app: &mut tauri::App) {
     fn inner_handler(ev: OpenUrlEvent, handle: &AppHandle) -> Result<(), Report> {
         let urls = ev.urls();
-        tracing::info!("received open url event {urls:?}");
+        tracing::trace!("received open url event {urls:?}");
         let url = urls
             .into_iter()
             .next()
@@ -317,7 +316,7 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
         // we send a navigate event instead of calling navigate directly
         // because navigate performs a full browser navigation
 
-        tracing::info!("{payload:?}");
+        tracing::trace!("{payload:?}");
         Ok(handle.emit("navigate", payload)?)
     }
 
