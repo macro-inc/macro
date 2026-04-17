@@ -67,8 +67,8 @@ pub async fn get_user_accessible_items(
         item_id: r.item_id,
         item_type: r.item_type,
     })
-        .fetch_all(db)
-        .await?;
+    .fetch_all(db)
+    .await?;
 
     Ok(results)
 }

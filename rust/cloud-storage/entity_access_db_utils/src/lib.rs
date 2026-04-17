@@ -5,13 +5,14 @@
 #[cfg(test)]
 mod test;
 
+use macro_user_id::user_id::MacroUserIdStr;
 pub use model_entity::EntityType;
 pub use models_entity_access_management::EntityAccessSourceType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
-use sqlx::{Postgres, QueryBuilder, Transaction};
+use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
 
 /// Inserts a row into the entity access table
 /// *NOTE*: The transaction does not get committed automatically
@@ -36,6 +37,45 @@ pub async fn insert_entity_access_row(
         access_level as _,
     )
     .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
+
+/// Bulk upserts entity access for users
+#[tracing::instrument(skip(executor), err)]
+pub async fn upsert_user_entity_access_bulk<'e, E>(
+    executor: E,
+    user_ids: &[MacroUserIdStr<'_>],
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    access_level: AccessLevel,
+) -> anyhow::Result<()>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    if user_ids.is_empty() {
+        return Ok(());
+    }
+
+    let macro_ids: Vec<String> = user_ids.iter().map(|s| s.to_string()).collect();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT $1, $2, u.user_id, 'user', $3
+        FROM UNNEST($4::text[]) as u(user_id)
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        AND access_level != 'owner' -- this prevents us from overriding the owner user
+        DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        access_level as _,
+        macro_ids.as_slice(),
+    )
+    .execute(executor)
     .await?;
 
     Ok(())

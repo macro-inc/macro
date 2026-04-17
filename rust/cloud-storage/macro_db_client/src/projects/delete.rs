@@ -139,10 +139,10 @@ pub async fn delete_project(db: Pool<Postgres>, project_id: &str) -> anyhow::Res
         .await?;
     }
 
-    crate::item_access::delete::delete_user_item_access_by_item(
+    crate::item_access::delete::delete_user_entity_access_by_item(
         &mut transaction,
-        project_id,
-        "project",
+        &macro_uuid::string_to_uuid(project_id).unwrap(),
+        EntityType::Project,
     )
     .await?;
 

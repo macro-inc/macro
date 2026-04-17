@@ -252,8 +252,8 @@ pub async fn get_user_item_access_for_thread(
 #[cfg(test)]
 mod tests {
     use crate::item_access::get::{
-        get_user_item_access_for_chat, get_user_item_access_for_document,
-        get_user_item_access_for_project, get_user_item_access_for_thread, EntityAccessRecord,
+        EntityAccessRecord, get_user_item_access_for_chat, get_user_item_access_for_document,
+        get_user_item_access_for_project, get_user_item_access_for_thread,
     };
     use models_permissions::share_permission::access_level::AccessLevel;
     use std::collections::HashSet;
@@ -402,12 +402,9 @@ mod tests {
         // 2. Inherited access from 'p-parent'.
         // 3. Inherited access from 'p-grandparent'.
 
-        let permissions = get_user_item_access_for_chat(
-            &pool,
-            "c0000000-0000-0000-0000-00000000c11d",
-            "user-1",
-        )
-        .await?;
+        let permissions =
+            get_user_item_access_for_chat(&pool, "c0000000-0000-0000-0000-00000000c11d", "user-1")
+                .await?;
 
         assert_eq!(
             permissions.len(),
@@ -451,12 +448,9 @@ mod tests {
         // SCENARIO: Get permissions for 'user-1' on the standalone chat, which has no project parent.
         // EXPECTATION: Should return exactly 1 record for the direct permission.
 
-        let permissions = get_user_item_access_for_chat(
-            &pool,
-            "c0000000-0000-0000-0000-000000057a1d",
-            "user-1",
-        )
-        .await?;
+        let permissions =
+            get_user_item_access_for_chat(&pool, "c0000000-0000-0000-0000-000000057a1d", "user-1")
+                .await?;
 
         assert_eq!(
             permissions.len(),
@@ -477,12 +471,9 @@ mod tests {
         // SCENARIO: Get permissions for 'user-2' on the nested chat.
         // EXPECTATION: Should return only the single permission granted to 'user-2', not any of user-1's permissions.
 
-        let permissions = get_user_item_access_for_chat(
-            &pool,
-            "c0000000-0000-0000-0000-00000000c11d",
-            "user-2",
-        )
-        .await?;
+        let permissions =
+            get_user_item_access_for_chat(&pool, "c0000000-0000-0000-0000-00000000c11d", "user-2")
+                .await?;
 
         assert_eq!(
             permissions.len(),
@@ -505,12 +496,9 @@ mod tests {
         // We'll use 'user-2' and ask for the standalone chat, which only 'user-1' has access to.
         // EXPECTATION: Should return an empty vector.
 
-        let permissions = get_user_item_access_for_chat(
-            &pool,
-            "c0000000-0000-0000-0000-000000057a1d",
-            "user-2",
-        )
-        .await?;
+        let permissions =
+            get_user_item_access_for_chat(&pool, "c0000000-0000-0000-0000-000000057a1d", "user-2")
+                .await?;
         assert!(
             permissions.is_empty(),
             "Expected no permissions to be returned"
