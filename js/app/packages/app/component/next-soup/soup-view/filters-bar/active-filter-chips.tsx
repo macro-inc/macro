@@ -1,20 +1,12 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Combobox } from '@kobalte/core/combobox';
-import type { CollectionNode } from '@kobalte/core';
 import { cn } from '@ui/utils/classname';
-import {
-  type Accessor,
-  createMemo,
-  createSignal,
-  For,
-  type JSX,
-  Show,
-} from 'solid-js';
+import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import XIcon from '@icon/regular/x.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import type { FilterOption } from './unified-filter-dropdown';
 import type { SearchableOption } from './search-filter-controls';
+import { SearchableMultiSelect } from './searchable-multi-select';
 import { Button } from '@ui/components/Button';
 
 export type ActiveFilter = {
@@ -70,93 +62,24 @@ interface ActiveFilterChipsProps {
   hideCategoryLabel?: boolean;
 }
 
-const SearchableChipItem = (itemProps: {
-  item: CollectionNode<SearchableOption>;
-}) => (
-  <Combobox.Item
-    item={itemProps.item}
-    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xs text-left text-xs data-[highlighted]:bg-ink/5 group"
-  >
-    <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge group-data-[selected]:bg-accent group-data-[selected]:border-accent">
-      <Combobox.ItemIndicator>
-        <CheckIcon class="size-2.5 text-page" />
-      </Combobox.ItemIndicator>
-    </span>
-    <Show when={itemProps.item.rawValue.icon}>
-      {(icon) => (
-        <span class="size-4 flex items-center justify-center shrink-0">
-          {icon()()}
-        </span>
-      )}
-    </Show>
-    <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink">
-      {itemProps.item.rawValue.label}
-    </Combobox.ItemLabel>
-  </Combobox.Item>
-);
-
-// Persist open/search state across chip remounts — the active-filters array
-// recomputes with new object references on every selection toggle, which makes
-// <For> destroy and re-mount the chip, losing its internal open state.
-const chipPersistentState = new Map<
-  string,
-  {
-    isOpen: Accessor<boolean>;
-    setIsOpen: (v: boolean) => void;
-    searchQuery: Accessor<string>;
-    setSearchQuery: (v: string) => void;
-  }
->();
-
-const getChipState = (key: string) => {
-  let entry = chipPersistentState.get(key);
-  if (!entry) {
-    const [isOpen, setIsOpen] = createSignal(false);
-    const [searchQuery, setSearchQuery] = createSignal('');
-    entry = { isOpen, setIsOpen, searchQuery, setSearchQuery };
-    chipPersistentState.set(key, entry);
-  }
-  return entry;
-};
-
 const SearchableFilterChip = (props: {
   filter: ActiveFilter;
   onRemove: () => void;
   chipClass?: string;
   hideCategoryLabel?: boolean;
 }) => {
-  const state = () => getChipState(props.filter.categoryLabel);
-  const searchQuery = () => state().searchQuery();
-  const setSearchQuery = (v: string) => state().setSearchQuery(v);
-  const isOpen = () => state().isOpen();
-  const setIsOpen = (v: boolean) => state().setIsOpen(v);
+  const options: Accessor<SearchableOption[]> = () =>
+    props.filter.searchableOptions?.() ?? [];
+  const activeIds: Accessor<string[]> = () =>
+    props.filter.activeSearchableIds?.() ?? [];
 
-  const allOptions = () => props.filter.searchableOptions?.() ?? [];
-  const activeIds = () => props.filter.activeSearchableIds?.() ?? [];
-
-  const activeOptions = createMemo(() => {
-    const set = new Set(activeIds());
-    return allOptions().filter((opt) => set.has(opt.id));
-  });
-
-  const filteredOptions = createMemo(() => {
-    const q = searchQuery().toLowerCase().trim();
-    if (!q) return allOptions();
-    return allOptions().filter((opt) => opt.label.toLowerCase().includes(q));
-  });
-
-  const handleChange = (selected: SearchableOption[]) => {
-    props.filter.onSearchableChange?.(selected.map((o) => o.id));
+  const handleChange = (ids: string[]) => {
+    props.filter.onSearchableChange?.(ids);
   };
 
-  const onInputChange = (value: string) => {
-    setSearchQuery(value);
-  };
-
-  const onOpenChange = (open: boolean) => {
-    setIsOpen(open);
-    if (!open) setSearchQuery('');
-  };
+  const placeholder =
+    props.filter.searchPlaceholder ??
+    `Search ${props.filter.categoryLabel.toLowerCase()}...`;
 
   return (
     <div
@@ -167,75 +90,34 @@ const SearchableFilterChip = (props: {
         props.chipClass
       )}
     >
-      <Combobox<SearchableOption>
-        multiple
-        selectionBehavior="toggle"
-        closeOnSelection={false}
-        open={isOpen()}
-        options={filteredOptions()}
-        value={activeOptions()}
+      <SearchableMultiSelect
+        options={options}
+        activeIds={activeIds}
         onChange={handleChange}
-        onInputChange={onInputChange}
-        onOpenChange={onOpenChange}
-        optionValue="id"
-        optionTextValue="label"
-        optionLabel="label"
-        allowsEmptyCollection
+        placeholder={placeholder}
         placement="bottom-start"
-        gutter={4}
-        itemComponent={SearchableChipItem}
       >
-        <Combobox.Control class="flex">
-          <Combobox.Trigger
-            class={cn(
-              'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
-              'hover:text-ink hover:bg-edge-muted'
+        <Combobox.Trigger
+          class={cn(
+            'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
+            'hover:text-ink hover:bg-edge-muted'
+          )}
+        >
+          <Show when={props.filter.icon}>
+            {(icon) => (
+              <span class="size-3 flex items-center justify-center shrink-0">
+                {icon()()}
+              </span>
             )}
-          >
-            <Show when={props.filter.icon}>
-              {(icon) => (
-                <span class="size-3 flex items-center justify-center shrink-0">
-                  {icon()()}
-                </span>
-              )}
+          </Show>
+          <span class="font-medium">
+            <Show when={!props.hideCategoryLabel}>
+              {props.filter.categoryLabel}:{' '}
             </Show>
-            <span class="font-medium">
-              <Show when={!props.hideCategoryLabel}>
-                {props.filter.categoryLabel}:{' '}
-              </Show>
-              {props.filter.optionLabel}
-            </span>
-          </Combobox.Trigger>
-          <Combobox.Input class="sr-only" />
-        </Combobox.Control>
-
-        <Combobox.Portal>
-          <Combobox.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-md w-[260px] max-w-[90vw] overflow-hidden">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
-              <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-              <Combobox.Input
-                class="flex-1 min-w-0 text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
-                placeholder={
-                  props.filter.searchPlaceholder ??
-                  `Search ${props.filter.categoryLabel.toLowerCase()}...`
-                }
-              />
-            </div>
-            <div class="p-1">
-              <Show
-                when={filteredOptions().length > 0}
-                fallback={
-                  <div class="py-3 px-2 text-center text-xs text-ink-muted">
-                    No options match "{searchQuery()}"
-                  </div>
-                }
-              >
-                <Combobox.Listbox class="max-h-[240px] overflow-y-auto" />
-              </Show>
-            </div>
-          </Combobox.Content>
-        </Combobox.Portal>
-      </Combobox>
+            {props.filter.optionLabel}
+          </span>
+        </Combobox.Trigger>
+      </SearchableMultiSelect>
 
       <button
         type="button"

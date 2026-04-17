@@ -18,8 +18,8 @@ import {
 import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
 import CaretRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
+import { SearchableMultiSelectInline } from './searchable-multi-select';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
@@ -335,86 +335,14 @@ const SearchableFilterSubmenu = (props: {
   label: string;
   options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
-  onToggle: (id: string) => void;
+  onChange: (ids: string[]) => void;
   placeholder?: string;
-  multiple?: boolean;
 }) => {
-  const [search, setSearch] = createSignal('');
-  const [highlightedIndex, setHighlightedIndex] = createSignal(0);
+  const [isOpen, setIsOpen] = createSignal(false);
   let inputRef: HTMLInputElement | undefined;
 
-  const filteredOptions = createMemo(() => {
-    const query = search().toLowerCase();
-    if (!query) return props.options();
-    return props.options().filter((o) => o.label.toLowerCase().includes(query));
-  });
-
-  const isActive = (id: string) => props.activeIds().includes(id);
-
-  const [isOpen, setIsOpen] = createSignal(false);
-
-  const handleOpenChange = (open: boolean) => {
-    setIsOpen(open);
-    if (!open) return;
-    setSearch('');
-    setHighlightedIndex(0);
-    // Double rAF to run after Kobalte finishes its own focus management
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        inputRef?.focus();
-      });
-    });
-  };
-
-  const handleSubContentFocusOut = (e: FocusEvent) => {
-    const subContentEl = e.currentTarget as HTMLElement;
-    // If focus leaves SubContent while sub is still open (e.g. Kobalte focusing
-    // the SubTrigger on hover), refocus the input
-    if (isOpen() && !subContentEl.contains(e.relatedTarget as Node)) {
-      requestAnimationFrame(() => {
-        if (isOpen()) inputRef?.focus();
-      });
-    }
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const options = filteredOptions();
-    const maxIndex = options.length - 1;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setHighlightedIndex((i) => Math.min(i + 1, maxIndex));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setHighlightedIndex((i) => Math.max(i - 1, 0));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        const option = options[highlightedIndex()];
-        if (option) {
-          props.onToggle(option.id);
-        }
-        break;
-      case 'ArrowLeft':
-        if (search() === '') {
-          e.preventDefault();
-          setIsOpen(false);
-        }
-        break;
-      default:
-        // Stop propagation for other keys to prevent Kobalte typeahead
-        e.stopPropagation();
-    }
-  };
-
   return (
-    <DropdownMenu.Sub
-      gutter={4}
-      open={isOpen()}
-      onOpenChange={handleOpenChange}
-    >
+    <DropdownMenu.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
       <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
@@ -422,78 +350,26 @@ const SearchableFilterSubmenu = (props: {
 
       <DropdownMenu.Portal>
         <DropdownMenu.SubContent
-          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[200px] max-w-[500px] p-1"
-          onFocusOut={handleSubContentFocusOut}
+          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden"
+          onFocusIn={(e) => {
+            // Kobalte focuses SubContent itself on open; redirect to the
+            // search input so it gets focus deterministically.
+            if (e.target === e.currentTarget && inputRef) {
+              inputRef.focus();
+            }
+          }}
         >
-          {/* Search input */}
-          <div class="flex items-center gap-2 px-2 py-2 border-b border-edge-muted mb-2">
-            <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={search()}
-              onInput={(e) => {
-                setSearch(e.currentTarget.value);
-                setHighlightedIndex(0);
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={props.placeholder ?? 'Search...'}
-              class="flex-1 bg-transparent text-xs outline-none placeholder:text-ink-muted"
-            />
-          </div>
-
-          {/* Options list */}
-          <div class="max-h-48 overflow-y-auto">
-            <For each={filteredOptions()}>
-              {(option, index) => {
-                const active = () => isActive(option.id);
-                const highlighted = () => highlightedIndex() === index();
-                return (
-                  <button
-                    type="button"
-                    class={cn(
-                      'w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors',
-                      highlighted() ? 'bg-hover' : 'hover:bg-hover'
-                    )}
-                    onClick={() => props.onToggle(option.id)}
-                    onMouseEnter={() => setHighlightedIndex(index())}
-                  >
-                    <span
-                      class={cn(
-                        'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                        active() ? 'bg-accent border-accent' : 'border-edge'
-                      )}
-                    >
-                      <Show when={active()}>
-                        <CheckIcon class="size-2.5 text-page" />
-                      </Show>
-                    </span>
-
-                    <Show when={option.icon}>
-                      {(icon) => (
-                        <span class="size-4 flex items-center justify-center shrink-0">
-                          {icon()()}
-                        </span>
-                      )}
-                    </Show>
-
-                    <span
-                      class={cn(
-                        'flex-1 truncate',
-                        active() ? 'text-ink' : 'text-ink-muted'
-                      )}
-                    >
-                      {option.label}
-                    </span>
-                  </button>
-                );
-              }}
-            </For>
-
-            <Show when={filteredOptions().length === 0}>
-              <div class="px-3 py-2 text-xs text-ink-muted">No results</div>
-            </Show>
-          </div>
+          <SearchableMultiSelectInline
+            options={props.options}
+            activeIds={props.activeIds}
+            onChange={props.onChange}
+            placeholder={props.placeholder}
+            isOpen={isOpen}
+            inputRef={(el) => {
+              inputRef = el;
+            }}
+            onRequestClose={() => setIsOpen(false)}
+          />
         </DropdownMenu.SubContent>
       </DropdownMenu.Portal>
     </DropdownMenu.Sub>
@@ -571,13 +447,8 @@ export const UnifiedFilterDropdown = () => {
     ];
   });
 
-  const toggleAssignee = (id: string) => {
-    const current = assigneeFilter();
-    if (current.includes(id)) {
-      setAssigneeFilter(current.filter((a) => a !== id));
-    } else {
-      setAssigneeFilter([...current, id]);
-    }
+  const setAssigneeIds = (ids: string[]) => {
+    setAssigneeFilter(ids);
   };
 
   const isTasksView = () => currentView() === 'tasks';
@@ -611,18 +482,14 @@ export const UnifiedFilterDropdown = () => {
     () => queryFilters().channel_filters?.channel_ids ?? []
   );
 
-  const toggleChannelId = (id: string) => {
+  const setChannelIds = (ids: string[]) => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
-      const current = queryFilters().channel_filters?.channel_ids ?? [];
-      const nextIds = current.includes(id)
-        ? current.filter((cid) => cid !== id)
-        : [...current, id];
       setQueryFilters((prev) => ({
         ...prev,
         channel_filters: {
           ...prev.channel_filters,
-          channel_ids: nextIds.length > 0 ? nextIds : undefined,
+          channel_ids: ids.length > 0 ? ids : undefined,
         },
       }));
     });
@@ -632,18 +499,14 @@ export const UnifiedFilterDropdown = () => {
     () => queryFilters().channel_filters?.sender_ids ?? []
   );
 
-  const toggleSenderId = (id: string) => {
+  const setSenderIds = (ids: string[]) => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
-      const current = queryFilters().channel_filters?.sender_ids ?? [];
-      const nextIds = current.includes(id)
-        ? current.filter((sid) => sid !== id)
-        : [...current, id];
       setQueryFilters((prev) => ({
         ...prev,
         channel_filters: {
           ...prev.channel_filters,
-          sender_ids: nextIds.length > 0 ? nextIds : undefined,
+          sender_ids: ids.length > 0 ? ids : undefined,
         },
       }));
     });
@@ -758,9 +621,8 @@ export const UnifiedFilterDropdown = () => {
                       label="Assignee"
                       options={assigneeOptions}
                       activeIds={assigneeFilter}
-                      onToggle={toggleAssignee}
+                      onChange={setAssigneeIds}
                       placeholder="Search assignees..."
-                      multiple
                     />
                   </Show>
 
@@ -833,17 +695,15 @@ export const UnifiedFilterDropdown = () => {
                                       label="In"
                                       options={inChannelOptions}
                                       activeIds={activeChannelIds}
-                                      onToggle={toggleChannelId}
+                                      onChange={setChannelIds}
                                       placeholder="Search channels..."
-                                      multiple
                                     />
                                     <SearchableFilterSubmenu
                                       label="From"
                                       options={fromSenderOptions}
                                       activeIds={activeSenderIds}
-                                      onToggle={toggleSenderId}
+                                      onChange={setSenderIds}
                                       placeholder="Search senders..."
-                                      multiple
                                     />
                                   </Show>
                                   <Show when={option.value === 'email'}>
