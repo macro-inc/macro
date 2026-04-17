@@ -1,7 +1,7 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { Hotkey } from '@core/component/Hotkey';
-import { createSignal, For, type JSX } from 'solid-js';
+import { createSignal, For, Index, type JSX } from 'solid-js';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
 
@@ -76,20 +76,27 @@ const shortcutSections: ShortcutSection[] = [
 function Kbd(props: { shortcut: string; class?: string }) {
   return (
     <span
-      class={`inline-flex items-center font-mono text-xs px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent uppercase ${props.class ?? ''}`}
+      class={`inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm border border-edge-muted bg-ink/4 text-ink-muted  uppercase ${props.class ?? ''}`}
     >
       <Hotkey shortcut={props.shortcut} class="flex gap-[2px]" lowercase />
     </span>
   );
 }
 
-function ShortcutRow(props: { item: ShortcutItem }) {
+function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
   return (
-    <div class="flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-panel-secondary/50 transition-colors">
+    <div class="flex items-center gap-2 py-1.5 rounded-md hover:bg-panel-secondary/50 transition-colors">
       <div class="shrink-0 flex items-center gap-1 uppercase">
-        <For each={props.item.keys}>
-          {(key) => <Kbd shortcut={key} />}
-        </For>
+        <Index each={props.item.keys}>
+          {(key, index) => (
+            <>
+              <Kbd shortcut={key()} />
+              {props.spacer && index < props.item.keys.length - 1 && (
+                <span class="text-ink-muted text-xs lowercase px-1">{props.spacer}</span>
+              )}
+            </>
+          )}
+        </Index>
       </div>
       <span class="text-ink-muted text-sm">{props.item.description}</span>
     </div>
@@ -99,13 +106,12 @@ function ShortcutRow(props: { item: ShortcutItem }) {
 function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   return (
     <div class="mb-3">
-      <h3 class="text-accent font-medium text-lg mb-2 px-3 flex items-center gap-2">
-        {/*<span class="w-1.5 h-1.5 rounded-full bg-accent" />*/}
+      <h3 class="font-medium text-lg mb-2 flex items-center gap-2">
         {props.section.title}
       </h3>
       <div class="flex flex-col">
         <For each={props.section.items}>
-          {(item) => <ShortcutRow item={item} />}
+          {(item) => <ShortcutRow item={item} spacer="or" />}
         </For>
       </div>
     </div>
