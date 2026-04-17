@@ -171,7 +171,6 @@ export function ComposeTool(props: ComposeToolProps) {
     bcc: toEmailRecipients(props.initialData.bcc ?? []),
   });
   const [subject, setSubject] = createSignal(props.initialData.subject ?? '');
-  const [body, setBody] = createSignal(props.initialData.body ?? '');
   const [isSending, setIsSending] = createSignal(false);
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [validationErrors, setValidationErrors] = createSignal<
@@ -180,19 +179,18 @@ export function ComposeTool(props: ComposeToolProps) {
   let toolFinalized = false;
   let lastPersistedSnapshot = createSendEmailSnapshot(props.initialData);
 
-  function collectArgs(bodyHtml: string): SendEmail {
+  function collectArgs(): SendEmail {
     return {
       to: fromEmailRecipients(recipients().to),
       cc: fromEmailRecipients(recipients().cc),
       bcc: fromEmailRecipients(recipients().bcc),
       subject: subject(),
-      body: null,
-      bodyHtml,
+      body: prepareEmailBody(editor())?.bodyHtml ?? '',
       replyingToId: props.initialData.replyingToId,
     };
   }
 
-  function validate(bodyHtml: string | undefined): boolean {
+  function validate(): boolean {
     const errors: ComposeValidationError[] = [];
 
     if (recipients().to.length === 0) {
@@ -202,7 +200,7 @@ export function ComposeTool(props: ComposeToolProps) {
       });
     }
 
-    if (!bodyHtml && !body().trim()) {
+    if (!prepareEmailBody(editor())?.bodyText.trim()) {
       errors.push({ type: 'no_message', message: 'Write a message' });
     }
 
@@ -220,8 +218,7 @@ export function ComposeTool(props: ComposeToolProps) {
   async function flushUpdate() {
     if (toolFinalized) return;
 
-    const prepared = prepareEmailBody(editor());
-    const args = collectArgs(prepared?.bodyHtml ?? '');
+    const args = collectArgs();
     const nextSnapshot = createSendEmailSnapshot(args);
 
     if (sameSendEmailSnapshot(nextSnapshot, lastPersistedSnapshot)) {
@@ -260,11 +257,10 @@ export function ComposeTool(props: ComposeToolProps) {
   async function handleSend() {
     if (ownerGateDisabled()) return;
 
-    const prepared = prepareEmailBody(editor());
-    if (!validate(prepared?.bodyHtml)) return;
+    if (!validate()) return;
 
     setIsSending(true);
-    const args = collectArgs(prepared?.bodyHtml ?? '');
+    const args = collectArgs();
 
     const result = await cognitionApiServiceClient.callTool<'SendEmail'>({
       chat_id: props.chatId,
@@ -322,8 +318,7 @@ export function ComposeTool(props: ComposeToolProps) {
       setSubject(value);
       scheduleUpdate();
     },
-    onContentChange: (content) => {
-      setBody(content);
+    onContentChange: () => {
       scheduleUpdate();
     },
     onAddAttachments: (_: DraftFormAttachment[]) => {},

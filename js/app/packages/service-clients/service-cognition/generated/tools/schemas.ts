@@ -637,8 +637,7 @@ export const SendEmail = z
         })
         .strict()
     ),
-    body: z.union([z.string(), z.null()]).default(null),
-    bodyHtml: z.string(),
+    body: z.string(),
     cc: z.array(
       z
         .object({

@@ -39,18 +39,17 @@ impl From<EmailRecipient> for ContactInfo {
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "SendEmail",
-    description = "Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. The body must be plain text only — do not use HTML, Markdown, or any formatting syntax (no **bold**, *italics*, headings, etc.). Just write natural prose with line breaks."
+    description = "Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct SendEmail {
     /// The subject line of the email.
     pub subject: String,
-    /// The plain text body of the email. Used to populate the draft editor.
-    #[serde(default)]
-    pub body: Option<String>,
-    /// The base64url-encoded HTML body of the email. Used as the actual email
-    /// body when sending.
-    pub body_html: String,
+    /// The body of the email. Written as Markdown by the AI and rendered in
+    /// the draft composer. At send time the frontend replaces this with the
+    /// base64url-encoded HTML produced by the composer, which is what gets
+    /// sent to recipients.
+    pub body: String,
     /// The primary recipients (To field).
     pub to: Vec<EmailRecipient>,
     /// Carbon copy recipients (optional).
@@ -117,7 +116,7 @@ where
             cc: self.cc.iter().cloned().map(ContactInfo::from).collect(),
             bcc: self.bcc.iter().cloned().map(ContactInfo::from).collect(),
             body_text: None,
-            body_html: Some(self.body_html.clone()),
+            body_html: Some(self.body.clone()),
             body_macro: None,
             headers_json: None,
             send_time: None,
