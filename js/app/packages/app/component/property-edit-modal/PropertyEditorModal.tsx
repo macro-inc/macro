@@ -50,7 +50,7 @@ import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
 import {
   useListKeyBindings,
   type ListNavActions,
-} from './hooks/useListKeyBindings';
+} from '@core/util/useListKeyBindings';
 import {
   getEntityName,
   getEntityType,

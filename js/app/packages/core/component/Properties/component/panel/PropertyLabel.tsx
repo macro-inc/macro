@@ -1,5 +1,6 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
 import UnpinIcon from '@icon/regular/push-pin-slash.svg';
@@ -115,15 +116,18 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 isHovered() ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              <DeprecatedIconButton
-                icon={isPinned() ? UnpinIcon : PinIcon}
-                theme="clear"
-                size="xs"
-                tooltip={{
-                  label: isPinned() ? 'Unpin property' : 'Pin property',
-                }}
+              <Button
+                variant="ghost"
+                class="p-1"
+                tooltip={isPinned() ? 'Unpin property' : 'Pin property'}
                 onClick={handlePinClick}
-              />
+              >
+                {isPinned() ? (
+                  <UnpinIcon class="size-3" />
+                ) : (
+                  <PinIcon class="size-3" />
+                )}
+              </Button>
             </div>
           </Show>
 
@@ -133,14 +137,14 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 isHovered() ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              <DeprecatedIconButton
-                icon={DeleteIcon}
-                theme="clear"
-                size="xs"
-                class="!text-failure hover:!bg-failure/15"
-                tooltip={{ label: 'Remove property' }}
+              <Button
+                variant="ghost"
+                class="p-1 !text-failure hover:!bg-failure/15"
+                tooltip="Remove property"
                 onClick={handleDeleteClick}
-              />
+              >
+                <DeleteIcon class="size-3" />
+              </Button>
             </div>
           </Show>
         </Show>
@@ -151,46 +155,46 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         onOpenChange={setDeleteConfirmVisible}
       >
         <Dialog.Portal>
-          <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-overlay" />
-          <div class="fixed inset-0 z-modal-content flex items-center justify-center p-4">
-            <Dialog.Content class="bg-dialog border-3 border-edge shadow-xl max-w-md w-full">
-              <div class="flex items-center justify-between p-4">
-                <Dialog.Title class="text-lg font-semibold text-ink">
+          <DialogWrapper>
+            <div class="flex flex-col overflow-hidden bracket-never text-sm">
+              <div class="flex items-center justify-between gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+                <Dialog.Title class="pl-2 text-sm font-medium">
                   Delete Property
                 </Dialog.Title>
-                <DeprecatedIconButton
-                  icon={XIcon}
-                  theme="clear"
-                  size="sm"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={handleDeleteCancel}
                   disabled={deleteMutation.isPending}
-                />
+                >
+                  <XIcon />
+                </Button>
               </div>
-              <div class="px-4 pb-4">
-                <Dialog.Description class="text-sm text-ink-muted mb-4">
+              <div class="p-4">
+                <Dialog.Description class="text-sm text-ink-muted">
                   Are you sure you want to remove property "
                   {props.property.displayName}"
                   {documentName ? ` from "${documentName}"` : ''}?
                 </Dialog.Description>
-                <div class="flex justify-end gap-2">
-                  <button
-                    onClick={handleDeleteCancel}
-                    disabled={deleteMutation.isPending}
-                    class="px-3 py-1.5 text-sm border text-ink-muted hover:text-ink border-edge hover:bg-hover"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteConfirm}
-                    disabled={deleteMutation.isPending}
-                    class="px-3 py-1.5 text-sm border bg-failure/90 hover:bg-failure/80 text-ink disabled:opacity-50"
-                  >
-                    {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-                  </button>
-                </div>
               </div>
-            </Dialog.Content>
-          </div>
+              <div class="flex items-center justify-end gap-2 px-2 py-1.5 border-t border-edge-muted shrink-0">
+                <Button
+                  variant="ghost"
+                  onClick={handleDeleteCancel}
+                  disabled={deleteMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteConfirm}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                </Button>
+              </div>
+            </div>
+          </DialogWrapper>
         </Dialog.Portal>
       </Dialog>
     </>
