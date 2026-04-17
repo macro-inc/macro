@@ -13,9 +13,8 @@ export function Layout(props: JSX.HTMLAttributes<HTMLDivElement>) {
       <div
         class="grid min-w-0 items-start gap-x-2"
         style={{
-          'grid-template-columns': 'var(--user-icon-width) minmax(0, 1fr) auto',
-          'grid-template-areas':
-            '"icon header actions" "icon content actions" "icon footer actions"',
+          'grid-template-columns': 'var(--user-icon-width) minmax(0, 1fr)',
+          'grid-template-areas': '"icon header" "icon content" "icon footer"',
         }}
       >
         <div class="contents">{local.children}</div>

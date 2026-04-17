@@ -9,6 +9,7 @@ import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-co
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
 import { longPressHighlight } from '@core/directive/longPressHighlight';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 type ChannelMessageProps = {
   channelId: string;
@@ -79,9 +80,16 @@ function GroupedMeta(props: { messageEditor?: MessageEditor }) {
 
   return (
     <Show when={!isEditingMessage(props.messageEditor, message().id)}>
-      <div class="flex items-center gap-2 shrink-0">
+      <div
+        class={cn(
+          'absolute right-1 -top-9 z-10',
+          'items-center gap-2 shrink-0 bg-panel p-1',
+          'hidden group-hover/message:flex',
+          isTouchDevice() && 'hidden'
+        )}
+      >
         <Message.EditedIndicator />
-        <Message.Timestamp compact />
+        <Message.Timestamp compact format="time" />
       </div>
     </Show>
   );
@@ -99,7 +107,10 @@ function RegularMessageLayout(props: {
       <Message.Slot placement="header" class="flex items-center gap-1 min-w-0">
         <Message.SenderName />
         <Message.EditedIndicator />
-        <Message.Timestamp class="ml-auto" />
+        {/* On message hover, timestamp floats above actions. */}
+        <div class='grow-1 shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1'>
+          <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
+        </div>
       </Message.Slot>
       <Message.Slot placement="content" class="ph-no-capture">
         <MessageContentSlot
@@ -113,9 +124,7 @@ function RegularMessageLayout(props: {
       >
         <MessageFooter messageEditor={props.messageEditor} />
       </Message.Slot>
-      <Message.Slot placement="actions">
-        <MessageActionsSlot messageEditor={props.messageEditor} />
-      </Message.Slot>
+      <MessageActionsSlot messageEditor={props.messageEditor} />
     </Message.Layout>
   );
 }
@@ -131,12 +140,10 @@ function GroupedMessageLayout(props: {
       </Message.Slot>
       <Message.Slot placement="content">
         <div class={cn('ph-no-capture flex gap-3 min-w-0 items-start')}>
-          <div class="flex-1 min-w-0">
-            <MessageContentSlot
-              channelId={props.channelId}
-              messageEditor={props.messageEditor}
-            />
-          </div>
+          <MessageContentSlot
+            channelId={props.channelId}
+            messageEditor={props.messageEditor}
+          />
           <GroupedMeta messageEditor={props.messageEditor} />
         </div>
       </Message.Slot>
@@ -146,9 +153,7 @@ function GroupedMessageLayout(props: {
       >
         <MessageFooter messageEditor={props.messageEditor} />
       </Message.Slot>
-      <Message.Slot placement="actions">
-        <MessageActionsSlot messageEditor={props.messageEditor} />
-      </Message.Slot>
+      <MessageActionsSlot messageEditor={props.messageEditor} />
     </Message.Layout>
   );
 }
