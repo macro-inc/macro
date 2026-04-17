@@ -350,7 +350,17 @@ const SearchableFilterSubmenu = (props: {
 
   return (
     <DropdownMenu.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
-      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
+      <DropdownMenu.SubTrigger
+        class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
+        onPointerEnter={(e) => {
+          // Kobalte's "grace polygon" keeps an open sub alive when the
+          // pointer crosses toward its content. For sibling In/From triggers,
+          // that means moving between them leaves the prior sub stuck open.
+          // Force-open ourselves on pointer-enter so the shared signal
+          // closes the sibling.
+          if (e.pointerType === 'mouse' && !isOpen()) setIsOpen(true);
+        }}
+      >
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </DropdownMenu.SubTrigger>
