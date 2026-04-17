@@ -146,7 +146,10 @@ export function useFilterRefinements() {
     return map;
   });
 
-  const labelForIds = (ids: string[], labelMap: Map<string, string>): string => {
+  const labelForIds = (
+    ids: string[],
+    labelMap: Map<string, string>
+  ): string => {
     if (ids.length === 0) return '';
     const [first, ...rest] = ids;
     const firstLabel = labelMap.get(first) ?? first;
@@ -259,7 +262,7 @@ export function useFilterRefinements() {
     }
 
     // Sub-filters: assignee
-    const optionsMap = assigneeOptionsMap();
+    const _optionsMap = assigneeOptionsMap();
     for (const id of assigneeFilter()) {
       const key = `Assignee|${id}`;
       seenKeys.add(key);
