@@ -28,6 +28,8 @@ const shortcutSections: ShortcutSection[] = [
     items: [
       { keys: ['j', 'arrowdown'], description: 'Move down' },
       { keys: ['k', 'arrowup'], description: 'Move up' },
+      { keys: ['h', 'arrowleft'], description: 'Collapse (or navigate to parent)' },
+      { keys: ['l', 'arrowright'], description: 'Expand (or navigate to child)' },
       { keys: ['e'], description: 'Mark done' },
       { keys: ['x'], description: `Select items (then ${IS_MAC ? '⌘' : 'Ctrl'}+K to bring up actions)` },
       { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
