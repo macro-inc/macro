@@ -14,8 +14,83 @@ import {
   useSearchSoupQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
+import type { EntityFilters } from '@service-search/generated/models';
 import type { UnifiedSearchRequest } from '@service-search/generated/models';
 import { type Accessor, createMemo, createSignal, on } from 'solid-js';
+
+function filterDataToQueryFilters(data: FilterData): EntityFilters {
+  const filters: EntityFilters = {};
+  const { include } = data;
+
+  // Document filters
+  if (
+    include.documentId?.length ||
+    include.fileType?.length ||
+    include.subType?.length ||
+    include.projectId?.length ||
+    include.documentOwnerId?.length
+  ) {
+    filters.document_filters = {
+      document_ids: include.documentId,
+      file_types: include.fileType,
+      sub_types: include.subType,
+      project_ids: include.projectId,
+      owners: include.documentOwnerId,
+    };
+  }
+
+  // Email filters
+  if (include.threadId?.length || include.sender?.length || include.shared) {
+    filters.email_filters = {
+      email_thread_ids: include.threadId,
+      senders: include.sender,
+      shared: include.shared?.[0],
+    };
+  }
+
+  // Channel filters
+  if (
+    include.channelId?.length ||
+    include.channelType?.length ||
+    include.channelSenderId?.length
+  ) {
+    filters.channel_filters = {
+      channel_ids: include.channelId,
+      channel_types: include.channelType,
+      sender_ids: include.channelSenderId,
+    };
+  }
+
+  // Chat filters
+  if (
+    include.chatId?.length ||
+    include.chatOwnerId?.length ||
+    include.chatProjectId?.length
+  ) {
+    filters.chat_filters = {
+      chat_ids: include.chatId,
+      owners: include.chatOwnerId,
+      project_ids: include.chatProjectId,
+    };
+  }
+
+  // Project/folder filters
+  if (include.folderId?.length || include.folderOwnerId?.length) {
+    filters.project_filters = {
+      project_ids: include.folderId,
+      owners: include.folderOwnerId,
+    };
+  }
+
+  // Call filters
+  if (include.callChannelId?.length) {
+    filters.call_filters = {
+      channel_ids: include.callChannelId,
+    };
+  }
+
+  return filters;
+}
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -72,31 +147,22 @@ export const createSearchState = ({
           ? searchMentions?.()
           : undefined;
 
-      // Search service uses legacy filter format - we pass minimal filters here
-      // since entity filtering is done via AST on the soup items query
-      const filters =
-        mentionIds && mentionIds.length > 0
-          ? {
-              channel_filters: {
-                mentions: mentionIds.map((id) => `user:${id}`),
-              },
-            }
-          : {};
+      // Translate FilterData to legacy EntityFilters format for search service
+      const baseFilters = filterDataToQueryFilters(filters());
+
+      // Merge mention filters into channel_filters if present
+      if (mentionIds && mentionIds.length > 0) {
+        baseFilters.channel_filters = {
+          ...baseFilters.channel_filters,
+          mentions: mentionIds,
+        };
+      }
 
       return {
         search_on: 'name_content',
         match_type: 'partial',
         query,
-        filters:
-          mentionIds && mentionIds.length > 0
-            ? {
-                ...filters,
-                channel_filters: {
-                  ...filters.channel_filters,
-                  mentions: mentionIds,
-                },
-              }
-            : filters,
+        filters: baseFilters,
       };
     }
   );
