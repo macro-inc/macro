@@ -3592,6 +3592,11 @@ export type patchSubscriptionTierResponse404 = {
   status: 404;
 };
 
+export type patchSubscriptionTierResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type patchSubscriptionTierResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -3604,6 +3609,7 @@ export type patchSubscriptionTierResponseSuccess =
 export type patchSubscriptionTierResponseError = (
   | patchSubscriptionTierResponse400
   | patchSubscriptionTierResponse404
+  | patchSubscriptionTierResponse409
   | patchSubscriptionTierResponse500
 ) & {
   headers: Headers;
