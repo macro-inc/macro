@@ -36,17 +36,8 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
       { keys: ['space'], description: 'Preview an item in the side panel' },
       { keys: ['enter'], description: 'Open an item fullscreen' },
+      { keys: ['f'], description: 'Open filter menu' },
       { keys: [`${cmdOrCtrl}+f`], description: 'Search (uses current filters)' },
-    ],
-  },
-  {
-    title: 'Filtering the List',
-    items: [
-      { keys: ['d'], description: 'Filter to docs' },
-      { keys: ['l'], description: 'Filter to email' },
-      { keys: ['p'], description: 'Filter to people (direct messages)' },
-      { keys: ['m'], description: 'Filter to teams' },
-      { keys: ['f'], description: 'Filter to files' },
     ],
   },
   {
