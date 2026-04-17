@@ -92,7 +92,7 @@ function ShortcutRow(props: { item: ShortcutItem }) {
 
 function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   return (
-    <div class="mb-6">
+    <div class="mb-3">
       <h3 class="text-accent font-medium text-lg mb-2 px-3 flex items-center gap-2">
         {/*<span class="w-1.5 h-1.5 rounded-full bg-accent" />*/}
         {props.section.title}
