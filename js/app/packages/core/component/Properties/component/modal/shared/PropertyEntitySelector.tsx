@@ -344,7 +344,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (!props.config.isMultiSelect && props.onClose) {
       props.onClose();
     } else if (props.config.isMultiSelect && searchInputRef) {
-      // Keep input focused when multiselect is enabled
+      setInputValue('');
+      setSearchTerm('');
       setTimeout(() => searchInputRef.focus(), 0);
     }
   };
@@ -362,6 +363,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (!props.config.isMultiSelect && props.onClose) {
       props.onClose();
     } else if (props.config.isMultiSelect && searchInputRef) {
+      setInputValue('');
+      setSearchTerm('');
       setTimeout(() => searchInputRef.focus(), 0);
     }
   };
