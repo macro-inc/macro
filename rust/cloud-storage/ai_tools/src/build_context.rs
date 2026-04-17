@@ -213,6 +213,9 @@ pub async fn build_tool_service_context_from_env(
         s3_upload_adapter,
         NoOpTaskProperties,
         NoOpConnectionService,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
     );
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
