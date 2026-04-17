@@ -77,6 +77,14 @@ const internalAuthKeyArn = aws.secretsmanager
   .getSecretVersionOutput({ secretId: INTERNAL_AUTH_KEY_NAME })
   .apply((secret) => secret.arn);
 
+// Name of the Secrets Manager entry that holds the sync service auth key.
+// The env var passes this NAME; the container fetches the current value at
+// runtime via the secrets manager client.
+const SYNC_SERVICE_AUTH_KEY = config.require('sync_service_auth_key');
+const syncServiceAuthKeyArn = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
+  .apply((secret) => secret.arn);
+
 const MACRO_API_TOKENS = getMacroApiToken();
 const { notificationIngressQueueArn, notificationIngressQueueName } =
   getMacroNotify();
@@ -171,6 +179,7 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
     cloudfrontPrivateKeySecretArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
     internalAuthKeyArn,
+    syncServiceAuthKeyArn,
   ],
   queueArns: [notificationIngressQueueArn, emailScheduledQueueArn],
   bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
@@ -244,6 +253,10 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
     {
       name: 'SYNC_SERVICE_URL',
       value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
+    },
+    {
+      name: 'SYNC_SERVICE_AUTH_KEY',
+      value: SYNC_SERVICE_AUTH_KEY,
     },
     {
       name: 'LEXICAL_SERVICE_URL',
