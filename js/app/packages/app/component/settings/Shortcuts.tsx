@@ -40,7 +40,6 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['space'], description: 'Preview an item in the side panel' },
       { keys: ['click', 'enter'], description: 'Open item in current split' },
       { keys: ['shift+click', 'shift+enter'], description: 'Open item in a new split' },
-      { keys: ['shift+escape'], description: 'Open item fullscreen' },
       { keys: ['f'], description: 'Open filter menu' },
     ],
   },
@@ -48,8 +47,9 @@ const shortcutSections: ShortcutSection[] = [
     title: 'Splits & Navigation',
     items: [
       { keys: ['\\'], description: 'Create a split' },
-      { keys: ['escape'], description: 'Return to the list, or close split if already on list' },
+      { keys: ['escape'], description: 'Return to list view, or close split if in list view' },
       { keys: ['cmd+escape'], description: 'Close the split' },
+      { keys: ['shift+escape'], description: 'Open split in fullscreen mode' },
       { keys: ['shift+h', 'shift+arrowleft'], description: 'Focus split to the left' },
       { keys: ['shift+l', 'shift+arrowright'], description: 'Focus split to the right' },
     ],
