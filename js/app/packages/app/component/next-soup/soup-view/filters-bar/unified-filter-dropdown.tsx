@@ -688,6 +688,14 @@ export const UnifiedFilterDropdown = () => {
                                 onPointerDown={() =>
                                   handleIndexChange(option.value)
                                 }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleIndexChange(option.value);
+                                    setOpen(false);
+                                  }
+                                }}
                               >
                                 <TypeIndicator active={active()} />
                                 <Show when={option.icon}>
