@@ -39,7 +39,7 @@ export function registerSplitHotkeys(args: {
   } = args;
   registerHotkey({
     scopeId: splitHotkeyScope,
-    hotkey: 'cmd+escape',
+    hotkey: 'opt+escape',
     condition: () => getSplitCount() > 1 || isNotUnifiedList(),
     description: () => (getSplitCount() > 1 ? 'Close split' : 'Go home'),
     keyDownHandler: () => {
