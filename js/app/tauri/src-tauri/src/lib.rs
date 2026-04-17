@@ -225,7 +225,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             heartbeat_response,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
-            macro_bundle_updater_plugin::inbound::plugin::perform_update
+            macro_bundle_updater_plugin::inbound::plugin::perform_update,
+            macro_bundle_updater_plugin::inbound::plugin::check_for_update
         ])
         .setup(|app| {
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
