@@ -63,7 +63,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     entityType,
-    true
+    false
   );
 
   // Track expanded/collapsed state from persisted preference
@@ -103,7 +103,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     onCleanup(unregister);
   });
 
-  // Filter properties to show metadata, default pinned, and user-pinned properties
+  // Filter properties to show default pinned and user-pinned properties
   const filteredPinnedProperties = createMemo(() => {
     const allProps = properties();
     const pinnedIds = pinnedPropertyIds();
@@ -111,7 +111,6 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
 
     return allProps.filter(
       (prop) =>
-        (prop.isMetadata && !(prop.displayName === 'Document Name')) ||
         defaultPinnedIds.includes(prop.propertyDefinitionId) ||
         pinnedIds.includes(prop.propertyId)
     );

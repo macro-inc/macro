@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useBlockId, useBlockName } from '@core/block';
+import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import { NotificationsDrawer } from '@core/component/NotificationsModal';
 import { ReferencesDrawer } from '@core/component/ReferencesModal';
 import {
@@ -40,6 +41,7 @@ export function ModalsProvider(props: ParentProps) {
       <ReferencesDrawer documentId={blockId} documentName={name()} />
       <HistoryDrawer documentId={blockId} />
       <MarkdownPropertiesDrawer documentId={blockId} />
+      <DetailsDrawer documentId={blockId} />
       <ShareBlockModal />
     </ShareDialogContext.Provider>
   );

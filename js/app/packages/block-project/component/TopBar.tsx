@@ -21,6 +21,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useBlockId } from '@core/block';
+import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   ShareTrigger,
   useShareDialogContext,
@@ -34,6 +35,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import IconShared from '@macro-icons/wide/share.svg';
+import Info from '@icon/regular/info.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
@@ -57,6 +59,7 @@ export function TopBar() {
   );
 
   const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   function handleCopyLink() {
@@ -70,9 +73,18 @@ export function TopBar() {
   }
 
   const ops = createMemo<FileOperation[]>(() => [
+    ...(!isSpecialProject
+      ? [
+          {
+            label: 'Details',
+            icon: Info,
+            action: detailsControl.toggle,
+          },
+        ]
+      : []),
     ...(isOwner() && !isSpecialProject
       ? [
-          { op: 'rename' as const },
+          { op: 'rename' as const, divideAbove: true },
           { op: 'moveToProject' as const },
           { op: 'delete' as const, divideAbove: true },
         ]

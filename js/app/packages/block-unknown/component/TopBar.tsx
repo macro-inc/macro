@@ -10,6 +10,7 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
+import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import {
   ReferencesButton,
@@ -26,6 +27,7 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
+import Info from '@icon/regular/info.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
@@ -40,6 +42,7 @@ export function TopBar() {
   const getBlob = useGetFileBlob();
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const downloadDocument = createCallback(async () => {
@@ -53,7 +56,12 @@ export function TopBar() {
   });
 
   const ops: FileOperation[] = [
-    { op: 'rename' },
+    {
+      label: 'Details',
+      icon: Info,
+      action: detailsControl.toggle,
+    },
+    { op: 'rename', divideAbove: true },
     { op: 'copy' },
     { op: 'moveToProject' },
     {

@@ -27,7 +27,7 @@ export function PropertiesView(props: PropertiesPanelProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     props.entityType,
-    true // includeMetadata
+    false
   );
 
   const saveMutation = useSaveEntityPropertyMutation();

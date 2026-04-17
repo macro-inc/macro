@@ -1,5 +1,6 @@
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
+import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import { ReferencesDrawer } from '@core/component/ReferencesModal';
 import {
   ShareBlockModal,
@@ -26,6 +27,7 @@ export function ModalsProvider(props: ParentProps) {
         documentName={name()}
         entityType="chat"
       />
+      <DetailsDrawer chatId={blockId} />
       <ShareBlockModal />
     </ShareDialogContext.Provider>
   );
