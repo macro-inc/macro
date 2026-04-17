@@ -24,10 +24,12 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['g'], description: 'Go to a view (e.g., g then i for inbox)' },
       { keys: ['/'], description: 'Go to search' },
       { keys: [`${cmdOrCtrl}+f`], description: 'Search in current view' },
+      { keys: [`${cmdOrCtrl}+j`], description: 'Focus AI chat' },
+      { keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel' },
     ],
   },
   {
-    title: 'List Navigation',
+    title: 'Unified List',
     items: [
       { keys: ['j', 'arrowdown'], description: 'Move down' },
       { keys: ['k', 'arrowup'], description: 'Move up' },
@@ -37,14 +39,14 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['x'], description: `Select items (then ${IS_MAC ? '⌘' : 'Ctrl'}+K to bring up actions)` },
       { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
       { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
-      { keys: ['space'], description: 'Preview an item in the side panel' },
+      { keys: ['space'], description: 'Preview item in the side panel' },
       { keys: ['click', 'enter'], description: 'Open item in current split' },
       { keys: ['shift+click', 'shift+enter'], description: 'Open item in a new split' },
       { keys: ['f'], description: 'Open filter menu' },
     ],
   },
   {
-    title: 'Splits & Navigation',
+    title: 'Splits',
     items: [
       { keys: ['\\'], description: 'Create a split' },
       { keys: ['escape'], description: 'Return to list view, or close split if in list view' },
@@ -52,13 +54,6 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['shift+escape'], description: 'Open split in fullscreen mode' },
       { keys: ['shift+h', 'shift+arrowleft'], description: 'Focus split to the left' },
       { keys: ['shift+l', 'shift+arrowright'], description: 'Focus split to the right' },
-    ],
-  },
-  {
-    title: 'Miscellaneous',
-    items: [
-      { keys: [`${cmdOrCtrl}+j`], description: 'Focus AI chat' },
-      { keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel' },
       { keys: [`opt+[`], description: 'Go back in current split' },
       { keys: [`opt+]`], description: 'Go forward in current split' },
     ],
