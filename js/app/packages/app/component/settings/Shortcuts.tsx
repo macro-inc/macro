@@ -43,7 +43,14 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
       { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
       { keys: ['e'], description: 'Mark done' },
-      { keys: ['x'], description: `Select items (then ${cmdOrCtrl}+K to bring up actions)` },
+      {
+        keys: ['x'],
+        description: (
+          <>
+            Select items (then <Kbd shortcut={`${cmdOrCtrl}+K`} /> to bring up actions)
+          </>
+        ),
+      },
       { keys: ['f'], description: 'Open filter menu' },
       { keys: ['h', 'arrowleft'], description: 'Collapse item' },
       { keys: ['l', 'arrowright'], description: 'Expand item' },
@@ -69,7 +76,7 @@ const shortcutSections: ShortcutSection[] = [
 function Kbd(props: { shortcut: string; class?: string }) {
   return (
     <span
-      class={`inline-flex items-center font-mono text-xs px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent ${props.class ?? ''}`}
+      class={`inline-flex items-center font-mono text-xs px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent uppercase ${props.class ?? ''}`}
     >
       <Hotkey shortcut={props.shortcut} class="flex gap-[2px]" lowercase />
     </span>
