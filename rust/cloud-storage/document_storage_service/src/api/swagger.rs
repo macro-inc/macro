@@ -26,7 +26,7 @@ use crate::{
             self,
             recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
         },
-        saved_views, user_document_view_location,
+        saved_views, threads, user_document_view_location,
     },
     model::{
         request::{
@@ -223,6 +223,9 @@ use utoipa::OpenApi;
         projects::revert_delete_project::handler,
 
         entity::get_entity_permission::handler,
+
+        // threads
+        threads::edit_thread::edit_thread_handler,
 
         // /recents
         recents::recently_deleted::handler,

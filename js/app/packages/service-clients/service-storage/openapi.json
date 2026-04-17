@@ -4814,6 +4814,66 @@
         }
       }
     },
+    "/threads/{thread_id}": {
+      "patch": {
+        "tags": ["threads"],
+        "summary": "Edits the share permissions of a thread.",
+        "operationId": "edit_thread_v2",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "thread ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchThreadRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user_document_view_location/{document_id}": {
       "get": {
         "tags": [
@@ -8959,6 +9019,26 @@
               {
                 "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
                 "description": "The share permissions for the project."
+              }
+            ]
+          }
+        }
+      },
+      "PatchThreadRequestV2": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The new project that the thread will belong to."
+          },
+          "sharePermission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
+                "description": "The share permissions for the thread."
               }
             ]
           }
