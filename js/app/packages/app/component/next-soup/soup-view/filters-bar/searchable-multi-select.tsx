@@ -9,9 +9,13 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import CheckIcon from '@icon/regular/check.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import type { SearchableOption } from './search-filter-controls';
+
+const ITEM_HEIGHT = 36;
+const LISTBOX_CLASS = 'max-h-[240px] overflow-y-auto';
 
 export type SearchableMultiSelectProps = {
   options: Accessor<SearchableOption[]>;
@@ -58,6 +62,65 @@ const SearchableMultiSelectItem = (itemProps: {
   </Combobox.Item>
 );
 
+const VirtualizedListbox = (props: {
+  options: SearchableOption[];
+  class?: string;
+}) => {
+  let handle: VirtualizerHandle | undefined;
+  return (
+    <Combobox.Listbox<SearchableOption>
+      scrollToItem={(key) => {
+        const idx = props.options.findIndex((o) => o.id === key);
+        if (idx !== -1) handle?.scrollToIndex(idx, { align: 'nearest' });
+      }}
+      class={cn(LISTBOX_CLASS, props.class)}
+    >
+      {(items) => (
+        <Virtualizer
+          ref={(h) => {
+            handle = h;
+          }}
+          data={[...items()]}
+          itemSize={ITEM_HEIGHT}
+        >
+          {(item) => <SearchableMultiSelectItem item={item} />}
+        </Virtualizer>
+      )}
+    </Combobox.Listbox>
+  );
+};
+
+/**
+ * Precompute lowercased labels so substring filtering on each keystroke
+ * doesn't call toLowerCase() for every option every time.
+ */
+const useFilteredOptions = (
+  options: Accessor<SearchableOption[]>,
+  searchQuery: Accessor<string>
+) => {
+  const lowered = createMemo(() =>
+    options().map((opt) => [opt, opt.label.toLowerCase()] as const)
+  );
+  return createMemo(() => {
+    const q = searchQuery().trim().toLowerCase();
+    if (!q) return options();
+    return lowered()
+      .filter(([, label]) => label.includes(q))
+      .map(([opt]) => opt);
+  });
+};
+
+const useActiveOptions = (
+  options: Accessor<SearchableOption[]>,
+  activeIds: Accessor<string[]>
+) =>
+  createMemo(() => {
+    const ids = activeIds();
+    if (ids.length === 0) return [];
+    const set = new Set(ids);
+    return options().filter((opt) => set.has(opt.id));
+  });
+
 export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const [internalOpen, setInternalOpen] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
@@ -68,16 +131,8 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
     else setInternalOpen(v);
   };
 
-  const activeOptions = createMemo(() => {
-    const set = new Set(props.activeIds());
-    return props.options().filter((opt) => set.has(opt.id));
-  });
-
-  const filteredOptions = createMemo(() => {
-    const q = searchQuery().toLowerCase().trim();
-    if (!q) return props.options();
-    return props.options().filter((opt) => opt.label.toLowerCase().includes(q));
-  });
+  const activeOptions = useActiveOptions(props.options, props.activeIds);
+  const filteredOptions = useFilteredOptions(props.options, searchQuery);
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
@@ -103,9 +158,9 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       optionTextValue="label"
       optionLabel="label"
       allowsEmptyCollection
+      virtualized
       placement={props.placement ?? 'bottom-start'}
       gutter={props.gutter ?? 4}
-      itemComponent={SearchableMultiSelectItem}
     >
       <Combobox.Control class="flex">
         {props.children}
@@ -135,8 +190,9 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                 </div>
               }
             >
-              <Combobox.Listbox
-                class={cn('max-h-[240px] overflow-y-auto', props.listboxClass)}
+              <VirtualizedListbox
+                options={filteredOptions()}
+                class={props.listboxClass}
               />
             </Show>
           </div>
@@ -168,16 +224,8 @@ export const SearchableMultiSelectInline = (
 ) => {
   const [searchQuery, setSearchQuery] = createSignal('');
 
-  const activeOptions = createMemo(() => {
-    const set = new Set(props.activeIds());
-    return props.options().filter((opt) => set.has(opt.id));
-  });
-
-  const filteredOptions = createMemo(() => {
-    const q = searchQuery().toLowerCase().trim();
-    if (!q) return props.options();
-    return props.options().filter((opt) => opt.label.toLowerCase().includes(q));
-  });
+  const activeOptions = useActiveOptions(props.options, props.activeIds);
+  const filteredOptions = useFilteredOptions(props.options, searchQuery);
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
@@ -233,7 +281,7 @@ export const SearchableMultiSelectInline = (
       optionTextValue="label"
       optionLabel="label"
       allowsEmptyCollection
-      itemComponent={SearchableMultiSelectItem}
+      virtualized
     >
       <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
         <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
@@ -253,8 +301,9 @@ export const SearchableMultiSelectInline = (
             </div>
           }
         >
-          <Combobox.Listbox
-            class={cn('max-h-[240px] overflow-y-auto', props.listboxClass)}
+          <VirtualizedListbox
+            options={filteredOptions()}
+            class={props.listboxClass}
           />
         </Show>
       </div>
