@@ -8178,6 +8178,7 @@ export const createProjectHandlerBody = zod.object({
   name: zod.string().describe('The name of the project.'),
   projectParentId: zod
     .string()
+    .uuid()
     .nullish()
     .describe('The project that the new project will belong to.'),
 });
@@ -9896,67 +9897,6 @@ export const editProjectV2Body = zod.object({
 });
 
 export const editProjectV2Response = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
-
-/**
- * @summary Edits the share permissions of a thread.
- */
-export const editThreadV2Params = zod.object({
-  thread_id: zod.string().describe('thread ID'),
-});
-
-export const editThreadV2Body = zod.object({
-  projectId: zod
-    .string()
-    .nullish()
-    .describe('The new project that the thread will belong to.'),
-  sharePermission: zod
-    .union([
-      zod.null(),
-      zod.object({
-        channelSharePermissions: zod
-          .array(
-            zod.object({
-              accessLevel: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum(['view', 'comment', 'edit', 'owner'])
-                    .describe(
-                      'Ordered from least to most access top -> bottom'
-                    ),
-                ])
-                .optional(),
-              channelId: zod.string().describe('The channel id'),
-              operation: zod.enum(['add', 'remove', 'replace']),
-            })
-          )
-          .nullish()
-          .describe(
-            'Any channel share permissions to be created/updated/removed'
-          ),
-        isPublic: zod
-          .boolean()
-          .nullish()
-          .describe('If the item is publicly accessible'),
-        publicAccessLevel: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['view', 'comment', 'edit', 'owner'])
-              .describe('Ordered from least to most access top -> bottom'),
-          ])
-          .optional(),
-      }),
-    ])
-    .optional(),
-});
-
-export const editThreadV2Response = zod.object({
   data: zod.object({
     success: zod.boolean().describe('Indicates if the request was successful'),
   }),

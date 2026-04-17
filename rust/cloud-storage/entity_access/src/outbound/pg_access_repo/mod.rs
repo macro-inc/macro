@@ -150,8 +150,8 @@ impl AccessRepository for PgAccessRepository {
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         queries::get_entity_users(&self.pool, entity_id, entity_type)
-                .await
-                .map_err(|_| AccessError::Internal)
+            .await
+            .map_err(|_| AccessError::Internal)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -160,8 +160,8 @@ impl AccessRepository for PgAccessRepository {
         channel_id: &Uuid,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         queries::channel_users::get_channel_users(&self.pool, channel_id)
-                .await
-                .map_err(|_| AccessError::Internal)
+            .await
+            .map_err(|_| AccessError::Internal)
     }
 
     #[tracing::instrument(err, skip(self))]
