@@ -211,7 +211,7 @@ export const useSoupNavigationHotkeys = (
   registerHotkey({
     hotkey: ['h', 'arrowleft'],
     scopeId,
-    description: 'Navigate to parent context',
+    description: 'Collapse item',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
     keyDownHandler: () => {
       const toggle = getCollapsibleToggle();
@@ -220,6 +220,37 @@ export const useSoupNavigationHotkeys = (
         return true;
       }
 
+      return false;
+    },
+    registrationType: 'add',
+    handlerPriority: 4,
+    hide: true,
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkey: ['l', 'arrowright'],
+    scopeId,
+    description: 'Expand item',
+    hotkeyToken: TOKENS.unifiedList.navigation.child,
+    keyDownHandler: () => {
+      const toggle = getCollapsibleToggle();
+      if (toggle?.dataset.collapsibleState === 'collapsed') {
+        toggle.click();
+        return true;
+      }
+
+      return false;
+    },
+    registrationType: 'add',
+    handlerPriority: 4,
+    hide: true,
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkey: ['shift+h', 'shift+arrowleft'],
+    scopeId,
+    description: 'Exit preview panel',
+    keyDownHandler: () => {
       if (!previewPanel) return false;
 
       previewPanel.onFocusOut();
@@ -232,19 +263,11 @@ export const useSoupNavigationHotkeys = (
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: ['l', 'arrowright'],
+    hotkey: ['shift+l', 'shift+arrowright'],
     scopeId,
-    description: 'Navigate to child context',
-    hotkeyToken: TOKENS.unifiedList.navigation.child,
+    description: 'Enter preview panel',
     keyDownHandler: () => {
-      const toggle = getCollapsibleToggle();
-      if (toggle?.dataset.collapsibleState === 'collapsed') {
-        toggle.click();
-        return true;
-      }
-
       const previewPanelContent = options.previewPanelRef();
-      // If there is no preview or the preview already contains focus, skip
       if (
         !previewPanelContent ||
         previewPanelContent.contains(document.activeElement)
@@ -255,7 +278,6 @@ export const useSoupNavigationHotkeys = (
         'div[data-soup-view]'
       );
 
-      // If it doesn't contain soup, skip
       if (!previewPanelSoup || !(previewPanelSoup instanceof HTMLElement))
         return false;
 
