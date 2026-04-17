@@ -40,7 +40,7 @@ export interface PropertiesContextValue {
   documentName?: string;
   properties: () => Property[];
   onRefresh: () => void;
-  onPropertyAdded: () => void;
+  onPropertyAdded: (addedDefinitionIds?: string[]) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
@@ -79,7 +79,7 @@ export interface PropertiesProviderProps extends ParentProps {
   documentName?: string;
   properties: () => Property[];
   onRefresh: () => void;
-  onPropertyAdded: () => void;
+  onPropertyAdded: (addedDefinitionIds?: string[]) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;

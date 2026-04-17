@@ -12,6 +12,7 @@ import { getDefaultPinnedProperties } from '@core/component/Properties/constants
 import {
   PropertiesProvider,
   type PropertySaveHandler,
+  usePropertiesContext,
 } from '@core/component/Properties/context/PropertiesContext';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import type {
@@ -22,6 +23,7 @@ import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
+import Plus from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -116,7 +118,20 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     );
   });
 
-  const handlePropertyAdded = async () => {
+  // Track properties added via the selector so we can pin them as soon as
+  // the refetched property list includes them.
+  const [pendingPinDefIds, setPendingPinDefIds] = createSignal<Set<string>>(
+    new Set()
+  );
+
+  const handlePropertyAdded = async (addedDefinitionIds?: string[]) => {
+    if (addedDefinitionIds && addedDefinitionIds.length > 0) {
+      setPendingPinDefIds((prev) => {
+        const next = new Set(prev);
+        for (const id of addedDefinitionIds) next.add(id);
+        return next;
+      });
+    }
     refetch();
   };
 
@@ -137,6 +152,25 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
       editor.dispatchCommand(REMOVE_PINNED_PROPERTY_COMMAND, propertyId);
     }
   };
+
+  // Once a just-added property shows up in the refetched list, pin it and
+  // drop it from the pending set.
+  createEffect(() => {
+    const pending = pendingPinDefIds();
+    if (pending.size === 0) return;
+    const current = properties();
+    const remaining = new Set(pending);
+    for (const defId of pending) {
+      const instance = current.find((p) => p.propertyDefinitionId === defId);
+      if (instance) {
+        handlePropertyPinned(instance.propertyId);
+        remaining.delete(defId);
+      }
+    }
+    if (remaining.size !== pending.size) {
+      setPendingPinDefIds(remaining);
+    }
+  });
 
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const containerSize = createElementSize(containerRef);
@@ -215,12 +249,19 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                   <div class="text-failure-ink text-center py-4">{error()}</div>
                 </Show>
 
-                <PanelContainer
-                  properties={filteredPinnedProperties}
-                  isLoading={isLoading}
-                  error={error}
-                  emptyMessage="No properties pinned yet"
-                />
+                <Show when={filteredPinnedProperties().length > 0}>
+                  <PanelContainer
+                    properties={filteredPinnedProperties}
+                    isLoading={isLoading}
+                    error={error}
+                  />
+                </Show>
+
+                <Show when={props.canEdit}>
+                  <div class="pt-2">
+                    <AddPinnedPropertyButton />
+                  </div>
+                </Show>
 
                 <div class="pt-4 pb-2">
                   <button
@@ -240,5 +281,18 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
         </div>
       </Suspense>
     </Show>
+  );
+}
+
+function AddPinnedPropertyButton() {
+  const { openPropertySelector } = usePropertiesContext();
+  return (
+    <button
+      class="flex items-center gap-1 opacity-75 hover:opacity-50 transition-opacity"
+      onClick={openPropertySelector}
+    >
+      <Plus class="w-3 h-3 mr-2" />
+      <span class="text-ink-muted">Add property</span>
+    </button>
   );
 }
