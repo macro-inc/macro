@@ -418,10 +418,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const [soupViewRef, setSoupViewRef] = createSignal<HTMLElement | undefined>();
 
-  const [previewPanelRef, setPreviewPanelRef] = createSignal<
-    HTMLElement | undefined
-  >();
-
   const focusFirstEntity = () => {
     const next = soup.navigate.toFirst();
 
@@ -485,7 +481,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
-    previewPanelRef,
   });
 
   // Register entity action hotkeys
@@ -1008,7 +1003,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
           }
         >
           <PreviewPanel
-            ref={setPreviewPanelRef}
             selectedEntity={soup.focus.item()}
             orchestrator={orchestrator}
             splitPanelContext={panel}
