@@ -1,0 +1,59 @@
+[package]
+name = "scheduled_action"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "service"
+path = "src/bins/service.rs"
+
+[[bin]]
+name = "scheduled_action_openapi"
+path = "src/bins/openapi.rs"
+
+[features]
+default = []
+local_auth = ["macro_middleware/local_auth"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+macro_env_var = { path = "../macro_env_var" }
+sqlx = { workspace = true }
+macro_user_id = { path = "../macro_user_id"}
+cron = { version = "0.16.0" }
+anyhow = { workspace = true }
+macro_uuid = { path = "../macro_uuid"}
+chrono = { workspace = true}
+chrono-tz = { version = "0.10.4", features = ["serde"] }
+ai = { path = "../ai" }
+tokio = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true }
+model_user = { path = "../model_user", features = ["axum"] }
+ai_tools = { path = "../ai_tools" }
+ai_toolset = { path = "../ai_toolset" }
+aws-sdk-sqs = { workspace = true }
+chat = { path = "../chat" }
+connection_gateway_client = { path = "../connection_gateway_client" }
+macro_db_client = { path = "../macro_db_client" }
+memory = { path = "../memory" }
+model = { path = "../model" }
+model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
+notification = { path = "../notification" }
+utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { workspace = true }
+
+macro_aws_config = { path = "../macro_aws_config" }
+macro_cors = { path = "../macro_cors" }
+macro_auth = { path = "../macro_auth" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+] }
+secretsmanager_client = { path = "../secretsmanager_client" }
+aws-sdk-secretsmanager = { workspace = true }

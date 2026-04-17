@@ -10,7 +10,6 @@ import {
   on,
   onMount,
 } from 'solid-js';
-import ChannelIcon from '@macro-icons/wide/channel.svg?component-solid';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSenderName } from '@app/component/app-sidebar/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -48,6 +47,36 @@ interface ChannelGroup {
   isDM: boolean;
   notifications: UnifiedNotification[];
   latestSenderId: string | null;
+}
+
+function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
+  const result = new Map<string, string>();
+  const firstLetterCount = new Map<string, number>();
+
+  for (const group of groups) {
+    if (group.isDM || !group.channelName) continue;
+    const first = group.channelName[0]?.toUpperCase() ?? '';
+    firstLetterCount.set(first, (firstLetterCount.get(first) ?? 0) + 1);
+  }
+
+  for (const group of groups) {
+    if (group.isDM || !group.channelName) continue;
+    const name = group.channelName;
+    const first = name[0]?.toUpperCase() ?? '';
+    const needsTwo = (firstLetterCount.get(first) ?? 0) > 1 && name.length > 1;
+    const letters = needsTwo ? first + name[1].toUpperCase() : first;
+    result.set(group.entityId, letters);
+  }
+
+  return result;
+}
+
+function ChannelLetterIcon(props: { letters: string }) {
+  return (
+    <div class="size-full rounded-sm border border-ink/40 text-ink-muted flex items-center justify-center">
+      <span class="text-[10px] leading-none">{props.letters}</span>
+    </div>
+  );
 }
 
 function groupByChannel(
@@ -88,6 +117,7 @@ function ChannelGroupItem(props: {
   group: ChannelGroup;
   animate?: boolean;
   isSlim?: boolean;
+  channelLetters?: string;
 }) {
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
@@ -101,6 +131,9 @@ function ChannelGroupItem(props: {
 
   const senderName = useSenderName(props.group.latestSenderId);
   const count = () => props.group.notifications.length;
+
+  const isDM = () => props.group.isDM;
+  const senderId = () => props.group.latestSenderId;
 
   const displayName = () => {
     if (props.group.isDM) {
@@ -167,17 +200,13 @@ function ChannelGroupItem(props: {
         navigateToLatestNotification(e.shiftKey);
       }}
     >
-      <div class="size-5 relative flex items-center justify-center flex-shrink-0">
+      <div class="relative flex items-center justify-center flex-shrink-0 size-5">
         <Show
-          when={props.group.isDM && props.group.latestSenderId}
-          fallback={
-            <div class="text-ink-muted size-4">
-              <ChannelIcon />
-            </div>
-          }
+          when={isDM() && senderId()}
+          fallback={<ChannelLetterIcon letters={props.channelLetters ?? '?'} />}
         >
           <UserIcon
-            id={props.group.latestSenderId!}
+            id={senderId()!}
             size="fill"
             suppressClick
             showTooltip={false}
@@ -279,6 +308,10 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
       .filter((g): g is ChannelGroup => g != null);
   });
 
+  const channelLettersMap = createMemo(() =>
+    computeChannelLetters(channelGroups())
+  );
+
   const isSlim = () => props.sidebarState === 'slim';
   const SLIM_MAX = 4;
   const slimVisible = () => channelGroups().slice(0, SLIM_MAX);
@@ -292,7 +325,12 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
           <section class="w-full py-2 px-2 flex flex-col items-center">
             <For each={slimVisible()}>
               {(group) => (
-                <ChannelGroupItem group={group} animate={false} isSlim />
+                <ChannelGroupItem
+                  group={group}
+                  animate={false}
+                  isSlim
+                  channelLetters={channelLettersMap().get(group.entityId)}
+                />
               )}
             </For>
             <Show when={slimOverflow() > 0}>
@@ -310,7 +348,13 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
 
           <div class="flex-1">
             <For each={channelGroups()}>
-              {(group) => <ChannelGroupItem group={group} animate={false} />}
+              {(group) => (
+                <ChannelGroupItem
+                  group={group}
+                  animate={false}
+                  channelLetters={channelLettersMap().get(group.entityId)}
+                />
+              )}
             </For>
           </div>
         </section>

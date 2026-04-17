@@ -146,7 +146,7 @@ export function DraggableBlockMenu(props: {
     <Show when={props.active}>
       <ScopedPortal scope="block">
         <div
-          class="draggable-block-menu fixed z-10 flex items-center justify-center cursor-grab rounded transition-opacity duration-100"
+          class="draggable-block-menu fixed z-1 flex items-center justify-center cursor-grab rounded transition-opacity duration-100"
           classList={{
             'opacity-0 pointer-events-none': !handlePosition(),
             'opacity-100': !!handlePosition(),

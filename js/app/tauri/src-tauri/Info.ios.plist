@@ -13,5 +13,16 @@
 		<string>INSendMessageIntent</string>
 		<string>NSUserActivityTypeBrowsingWeb</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>macro</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>macro</string>
+		</dict>
+	</array>
 </dict>
 </plist>

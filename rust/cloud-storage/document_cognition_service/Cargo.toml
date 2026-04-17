@@ -138,5 +138,6 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+ai_tools = { path = "../ai_tools", features = ["test-support"] }
 macro_auth = { path = "../macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

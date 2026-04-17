@@ -11,6 +11,7 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
+import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   ReferencesButton,
   REFERENCES_DRAWER_ID,
@@ -21,6 +22,7 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import Info from '@icon/regular/info.svg';
 import Notepad from '@icon/regular/notepad.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
@@ -36,10 +38,16 @@ export function TopBar() {
   const openInstructions = useOpenInstructionsMd();
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const ops: FileOperation[] = [
-    { op: 'rename' },
+    {
+      label: 'Details',
+      icon: Info,
+      action: detailsControl.toggle,
+    },
+    { op: 'rename', divideAbove: true },
     { op: 'copy' },
     { op: 'moveToProject' },
     { op: 'delete', divideAbove: true },

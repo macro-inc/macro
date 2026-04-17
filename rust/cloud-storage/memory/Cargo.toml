@@ -20,33 +20,11 @@ sqlx = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
-aws-sdk-sqs = { workspace = true }
-call = { path = "../call", default-features = false, features = ["ports"] }
 model_user = { path = "../model_user", features = ["axum"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
-
-# For building ToolServiceContext
-comms = { path = "../comms" }
-documents = { path = "../documents" }
-email = { path = "../email" }
-entity_access = { path = "../entity_access" }
-frecency = { path = "../frecency" }
-lexical_client = { path = "../lexical_client" }
-scribe = { path = "../scribe" }
-search_service_client = { path = "../search_service_client" }
-email_service_client = { path = "../email_service_client" }
-document_storage_service_client = { path = "../document_storage_service_client" }
-static_file_service_client = { path = "../static_file_service_client" }
-sync_service_client = { path = "../sync_service_client" }
-readonly_pool = { path = "../readonly_pool" }
-soup = { path = "../soup", features = ["all"] }
-properties = { path = "../properties" }
-macro_aws_config = { path = "../macro_aws_config" }
-sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
-
 
 macro_db_migrator = { path = "../macro_db_migrator" }

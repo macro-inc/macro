@@ -750,7 +750,15 @@ export function createSplitLayout(
     const s = () => findSplitById(id);
     const currentSplit = s();
     if (!currentSplit) return;
-    const content = () => s()!.content;
+    // s() can return undefined if this split is removed from state.splits before
+    // all reactive consumers have stopped reading it. lastKnownContent prevents
+    // this error and ensures consumers see the most recent content, not the initial one.
+    let lastKnownContent: SplitContent = currentSplit.content;
+    const content = () => {
+      const current = s()?.content;
+      if (current !== undefined) lastKnownContent = current;
+      return lastKnownContent;
+    };
 
     return {
       id: currentSplit.id,

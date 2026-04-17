@@ -177,7 +177,7 @@ export function ChannelInput(props: ChannelInputProps) {
                 config={markdownEditor}
                 placeholder={inputState.view().placeholder}
                 initialValue={inputState.view().value}
-                autofocus={props.autofocus ?? !isMobile()}
+                autofocus={!isMobile() && (props.autofocus ?? true)}
                 class="text-sm"
               />
             </Input.Editor>

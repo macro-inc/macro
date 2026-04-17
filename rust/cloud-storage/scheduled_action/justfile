@@ -1,0 +1,13 @@
+
+build:
+  cargo build
+
+check:
+  cargo clippy
+
+run:
+    #!/usr/bin/env bash
+    set -a
+    source .env
+    set +a
+    cargo run --bin service --features local_auth

@@ -77,35 +77,33 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     );
 
   const handleAddProperties = async () => {
-    const selected = selectedPropertyIds();
-    if (selected.size === 0) return;
+    const selected = Array.from(selectedPropertyIds());
+    if (selected.length === 0) return;
 
     setIsAdding(true);
 
     try {
-      const addPromises = Array.from(selected).map(
-        async (propertyDefinitionId) => {
-          try {
-            await addMutation.mutateAsync({
-              entityId: blockId,
-              entityType,
-              propertyDefinitionId,
-            });
-            return true;
-          } catch {
-            // Error toast is shown by mutation's onError callback
-            return false;
-          }
+      const addPromises = selected.map(async (propertyDefinitionId) => {
+        try {
+          await addMutation.mutateAsync({
+            entityId: blockId,
+            entityType,
+            propertyDefinitionId,
+          });
+          return propertyDefinitionId;
+        } catch {
+          // Error toast is shown by mutation's onError callback
+          return undefined;
         }
-      );
+      });
 
       const results = await Promise.all(addPromises);
-      const allSucceeded = results.every(Boolean);
+      const succeeded = results.filter((id): id is string => !!id);
 
       props.onClose();
 
-      if (allSucceeded) {
-        onPropertyAdded();
+      if (succeeded.length > 0) {
+        onPropertyAdded(succeeded);
       }
     } finally {
       setIsAdding(false);

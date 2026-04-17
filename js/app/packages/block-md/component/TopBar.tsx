@@ -48,6 +48,7 @@ import ShowComments from '@icon/regular/chat-circle-dots.svg';
 import HideComments from '@icon/regular/chat-circle-slash.svg';
 import Download from '@icon/regular/download.svg';
 import GitBranch from '@icon/regular/git-branch.svg';
+import Info from '@icon/regular/info.svg';
 import Bell from '@icon/regular/bell.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
@@ -59,6 +60,7 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
+import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { createEffect, For, on, Show, type JSX } from 'solid-js';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
@@ -85,6 +87,7 @@ export function TopBar() {
   const notificationsControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
   const isTask = blockAliasedName === 'task';
@@ -122,7 +125,12 @@ export function TopBar() {
   }
 
   const ops: FileOperation[] = [
-    { op: 'copy' },
+    {
+      label: 'Details',
+      icon: Info,
+      action: detailsControl.toggle,
+    },
+    { op: 'copy', divideAbove: true },
     { op: 'rename' },
     { op: 'moveToProject' },
     ...(isTask

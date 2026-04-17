@@ -1,31 +1,16 @@
 use axum::extract::FromRef;
-use comms::{
-    domain::service::ChannelServiceImpl,
-    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
-};
 use connection::domain::ports::ConnectionService;
-use documents::{
-    domain::ports::TaskPropertiesPort,
-    inbound::toolset::DocumentToolContext,
-    outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
-};
+use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToolContext};
 use email::{
-    domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
-    inbound::toolset::EmailToolContext,
-    outbound::EmailPgRepo,
+    domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
-use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_user_id::user_id::MacroUserIdStr;
 use properties::inbound::toolset::PropertiesToolContext;
 use scribe::{
     ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
     email::EmailClient, static_file::StaticFileClient,
 };
-use soup::{
-    domain::service::SoupImpl, inbound::toolset::SoupToolContext,
-    outbound::pg_soup_repo::PgSoupRepo,
-};
+use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
 
 pub use ai_toolset::RequestContext;
@@ -34,7 +19,9 @@ pub type ToolScribe =
     ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
 
 /// Type alias for the frecency service implementation
-pub type ToolFrecencyService = FrecencyQueryServiceImpl<FrecencyPgStorage>;
+pub type ToolFrecencyService = frecency::domain::services::FrecencyQueryServiceImpl<
+    frecency::outbound::postgres::FrecencyPgStorage,
+>;
 
 /// Type alias for the email service implementation
 pub type ToolEmailService =
@@ -44,7 +31,11 @@ pub type ToolEmailService =
 pub type ToolUserEmailService = EmailServiceImpl<EmailPgRepo, ToolFrecencyService, sqs_client::SQS>;
 
 /// Type alias for the comms/channels service implementation
-pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
+pub type ToolCommsService = comms::domain::service::ChannelServiceImpl<
+    comms::outbound::postgres::comms_repo::PgCommsRepo,
+    comms::outbound::postgres::user_repo::PgUserRepo,
+    frecency::outbound::postgres::FrecencyPgStorage,
+>;
 
 /// No-op task properties service (not needed for AI tools)
 #[derive(Clone)]
@@ -99,14 +90,16 @@ impl ConnectionService for NoOpConnectionService {
 
 /// Type alias for the document service implementation used by AI tools
 pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
-    PgDocumentRepo,
-    S3UploadUrlAdapter,
+    documents::outbound::pg_document_repo::PgDocumentRepo,
+    documents::outbound::s3_upload_url::S3UploadUrlAdapter,
     NoOpTaskProperties,
     NoOpConnectionService,
 >;
 
 /// Type alias for the entity access service implementation
-pub type ToolEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
+pub type ToolEntityAccessService = entity_access::domain::service::EntityAccessServiceImpl<
+    entity_access::outbound::PgAccessRepository,
+>;
 
 /// Type alias for the document tool context
 pub type ToolDocumentToolContext =
@@ -114,9 +107,9 @@ pub type ToolDocumentToolContext =
 
 /// Type alias for the soup service implementation
 pub type ToolSoupService = SoupImpl<
-    PgSoupRepo,
+    soup::outbound::pg_soup_repo::PgSoupRepo,
     ToolFrecencyService,
-    ReadonlyEmailPreviewAdapter<ToolEmailService>,
+    email::domain::ports::ReadonlyEmailPreviewAdapter<ToolEmailService>,
     ToolCommsService,
     call::domain::ports::NoOpCallRecordQueryService,
 >;
@@ -153,6 +146,14 @@ pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService
 /// Type alias for the email tool context
 pub type ToolEmailToolContext = EmailToolContext<ToolUserEmailService>;
 
+#[derive(Clone, Default)]
+pub struct NoOpScheduleContext;
+
+#[cfg(any(test, feature = "test-support"))]
+pub fn no_op_schedule_context() -> NoOpScheduleContext {
+    NoOpScheduleContext
+}
+
 /// The full service context containing all API clients.
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
@@ -165,6 +166,7 @@ pub struct ToolServiceContext {
     pub document_tool_context: ToolDocumentToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
+    pub schedule_tool_context: NoOpScheduleContext,
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {

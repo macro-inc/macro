@@ -1,4 +1,5 @@
 import { useBlockId } from '@core/block';
+import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import { DocumentPropertiesDrawer } from '@core/component/DocumentPropertiesModal';
 import { ReferencesDrawer } from '@core/component/ReferencesModal';
 import {
@@ -23,6 +24,7 @@ export function ModalsProvider(props: ParentProps) {
       {props.children}
       <ReferencesDrawer documentId={documentId} documentName={fileName()} />
       <DocumentPropertiesDrawer blockType="pdf" />
+      <DetailsDrawer documentId={documentId} />
       <ShareBlockModal name={fileName()} />
     </ShareDialogContext.Provider>
   );

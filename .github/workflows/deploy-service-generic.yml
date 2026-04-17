@@ -7,6 +7,7 @@ on:
         required: true
         description: Select the service to deploy
         options:
+          - agent-schedule-service
           - authentication-service
           - bulk-upload
           - connection-gateway

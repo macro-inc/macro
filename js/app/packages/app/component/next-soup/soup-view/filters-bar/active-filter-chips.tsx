@@ -95,13 +95,41 @@ const SearchableChipItem = (itemProps: {
   </Combobox.Item>
 );
 
+// Persist open/search state across chip remounts — the active-filters array
+// recomputes with new object references on every selection toggle, which makes
+// <For> destroy and re-mount the chip, losing its internal open state.
+const chipPersistentState = new Map<
+  string,
+  {
+    isOpen: Accessor<boolean>;
+    setIsOpen: (v: boolean) => void;
+    searchQuery: Accessor<string>;
+    setSearchQuery: (v: string) => void;
+  }
+>();
+
+const getChipState = (key: string) => {
+  let entry = chipPersistentState.get(key);
+  if (!entry) {
+    const [isOpen, setIsOpen] = createSignal(false);
+    const [searchQuery, setSearchQuery] = createSignal('');
+    entry = { isOpen, setIsOpen, searchQuery, setSearchQuery };
+    chipPersistentState.set(key, entry);
+  }
+  return entry;
+};
+
 const SearchableFilterChip = (props: {
   filter: ActiveFilter;
   onRemove: () => void;
   chipClass?: string;
   hideCategoryLabel?: boolean;
 }) => {
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const state = () => getChipState(props.filter.categoryLabel);
+  const searchQuery = () => state().searchQuery();
+  const setSearchQuery = (v: string) => state().setSearchQuery(v);
+  const isOpen = () => state().isOpen();
+  const setIsOpen = (v: boolean) => state().setIsOpen(v);
 
   const allOptions = () => props.filter.searchableOptions?.() ?? [];
   const activeIds = () => props.filter.activeSearchableIds?.() ?? [];
@@ -126,6 +154,7 @@ const SearchableFilterChip = (props: {
   };
 
   const onOpenChange = (open: boolean) => {
+    setIsOpen(open);
     if (!open) setSearchQuery('');
   };
 
@@ -140,6 +169,9 @@ const SearchableFilterChip = (props: {
     >
       <Combobox<SearchableOption>
         multiple
+        selectionBehavior="toggle"
+        closeOnSelection={false}
+        open={isOpen()}
         options={filteredOptions()}
         value={activeOptions()}
         onChange={handleChange}
