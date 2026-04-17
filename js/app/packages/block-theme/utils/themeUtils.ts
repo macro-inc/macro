@@ -140,6 +140,11 @@ export function deleteTheme(id: string): void{
   setCurrentThemeId('');
 }
 
+/** Returns true when the current theme has a dark background (ink lightness > panel lightness). */
+export function isThemeDark(): boolean {
+  return themeReactive.c0.l[0]() > themeReactive.b0.l[0]();
+}
+
 /** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */
 export function ensureMinimalThemeContrast() {
   const spec = themes().find((t) => t.id === currentThemeId())?.tokens;

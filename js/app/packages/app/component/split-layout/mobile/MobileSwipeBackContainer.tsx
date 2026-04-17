@@ -168,10 +168,17 @@ export function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
       <Show when={slotAData()}>
         {(a) => (
           <div
-            class={cn('absolute inset-0', {
-              'z-10 shadow-xl': mobileSwipeLayout.fgIsSlotA(),
-              'z-0 pointer-events-none': !mobileSwipeLayout.fgIsSlotA(),
-            })}
+            class={cn(
+              'absolute inset-0',
+              {
+                'z-10 shadow-xl': mobileSwipeLayout.fgIsSlotA(),
+                'z-0 pointer-events-none': !mobileSwipeLayout.fgIsSlotA(),
+              },
+              !mobileSwipeLayout.fgIsSlotA() &&
+                !isDragging() &&
+                !isAnimatingOut &&
+                'hidden'
+            )}
             style={mobileSwipeLayout.fgIsSlotA() ? fgStyle() : bgStyle()}
           >
             {/*
@@ -199,10 +206,17 @@ export function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
       <Show when={slotBData()}>
         {(b) => (
           <div
-            class={cn('absolute inset-0', {
-              'z-10 shadow-xl': !mobileSwipeLayout.fgIsSlotA(),
-              'z-0 pointer-events-none': mobileSwipeLayout.fgIsSlotA(),
-            })}
+            class={cn(
+              'absolute inset-0',
+              {
+                'z-1 shadow-xl': !mobileSwipeLayout.fgIsSlotA(),
+                '-z-1 pointer-events-none': mobileSwipeLayout.fgIsSlotA(),
+              },
+              mobileSwipeLayout.fgIsSlotA() &&
+                !isDragging() &&
+                !isAnimatingOut() &&
+                'hidden'
+            )}
             style={!mobileSwipeLayout.fgIsSlotA() ? fgStyle() : bgStyle()}
           >
             <Show when={b().split.content.id} keyed>
