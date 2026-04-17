@@ -419,7 +419,7 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
     .await
     .unwrap();
 
-    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.len(), 2); // 1 owner and 1 team
 
     // Owner row should still be 'owner' (not downgraded)
     let owner_row = rows
@@ -431,15 +431,9 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
     // Teammates should have 'comment' access
     let t1 = rows
         .iter()
-        .find(|r| r.source_id == "macro|teammate1@user.com")
+        .find(|r| r.source_id == "a0000000-0000-0000-0000-000000000001")
         .unwrap();
     assert_eq!(t1.access_level, Some("comment".to_string()));
-
-    let t2 = rows
-        .iter()
-        .find(|r| r.source_id == "macro|teammate2@user.com")
-        .unwrap();
-    assert_eq!(t2.access_level, Some("comment".to_string()));
 }
 
 #[sqlx::test(
@@ -509,68 +503,7 @@ async fn test_share_with_team_idempotent(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    assert_eq!(count, 3); // owner + 2 teammates, no duplicates
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
-)]
-async fn test_share_with_team_preserves_channel_granted_access(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
-
-    let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
-    let channel_id = uuid::Uuid::now_v7();
-
-    // Give teammate1 access via a channel before team sharing
-    sqlx::query!(
-        r#"
-        INSERT INTO entity_access
-            (entity_id, entity_type, source_id, source_type, access_level)
-        VALUES ($1, 'document', $2, 'channel', 'edit')
-        "#,
-        doc_uuid,
-        channel_id.to_string(),
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    repo.share_with_team(
-        "macro|user@user.com",
-        "d0000000-0000-0000-0000-000000000001",
-    )
-    .await
-    .unwrap();
-
-    // teammate1 should have both: channel-sourced edit + user-sourced comment
-    let rows = sqlx::query!(
-        r#"
-        SELECT access_level::text as "access_level", source_type::text as "source_type"
-        FROM entity_access
-        WHERE entity_id = $1 AND entity_type = 'document'
-          AND source_id IN ($2, 'macro|teammate1@user.com')
-        ORDER BY source_type
-        "#,
-        doc_uuid,
-        channel_id.to_string(),
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-
-    // Should have channel-sourced edit row + user-sourced comment row
-    assert_eq!(rows.len(), 2);
-    let channel_row = rows
-        .iter()
-        .find(|r| r.source_type.as_deref() == Some("channel"))
-        .unwrap();
-    assert_eq!(channel_row.access_level, Some("edit".to_string()));
-    let user_row = rows
-        .iter()
-        .find(|r| r.source_type.as_deref() == Some("user"))
-        .unwrap();
-    assert_eq!(user_row.access_level, Some("comment".to_string()));
+    assert_eq!(count, 2); // owner + 1 team, no duplicates
 }
 
 #[sqlx::test(
@@ -651,7 +584,7 @@ async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
     .unwrap();
 
     // Owner keeps their original owner row (no duplicate), teammates get comment
-    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.len(), 2);
 
     let owner = rows
         .iter()
@@ -661,15 +594,9 @@ async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
 
     let t1 = rows
         .iter()
-        .find(|r| r.source_id == "macro|teammate1@user.com")
+        .find(|r| r.source_id == "a0000000-0000-0000-0000-000000000001")
         .unwrap();
     assert_eq!(t1.access_level, Some("comment".to_string()));
-
-    let t2 = rows
-        .iter()
-        .find(|r| r.source_id == "macro|teammate2@user.com")
-        .unwrap();
-    assert_eq!(t2.access_level, Some("comment".to_string()));
 }
 
 #[sqlx::test(
