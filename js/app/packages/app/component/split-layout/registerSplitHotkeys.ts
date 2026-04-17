@@ -37,7 +37,6 @@ export function registerSplitHotkeys(args: {
     isNotUnifiedList,
     replaceSplit,
   } = args;
-  const splitManager = globalSplitManager();
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'cmd+escape',
@@ -65,6 +64,7 @@ export function registerSplitHotkeys(args: {
     hotkeyToken: TOKENS.window.spotlight.toggle,
     description: () => `Maximize ${splitName()}`,
     condition: () => {
+      const splitManager = globalSplitManager();
       if (!splitManager) return false;
       return canSpotlight(splitManager);
     },
