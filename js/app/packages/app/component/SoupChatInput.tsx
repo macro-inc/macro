@@ -22,7 +22,7 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { createSignal, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
@@ -52,9 +52,13 @@ function SoupChatInputInner() {
 
   onMount(() => {
     attachHotkeys(containerRef);
-    containerRef.addEventListener('focusin', () => setChatHasFocus(true));
-    containerRef.addEventListener('focusout', () => {
-      setChatHasFocus(false);
+    const focusIn = () => setChatHasFocus(true);
+    const focusOut = () => setChatHasFocus(false);
+    containerRef.addEventListener('focusin', focusIn);
+    containerRef.addEventListener('focusout', focusOut);
+    onCleanup(() => {
+      containerRef.removeEventListener('focusin', focusIn);
+      containerRef.removeEventListener('focusout', focusOut);
     });
   });
 
