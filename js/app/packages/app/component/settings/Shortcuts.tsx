@@ -22,10 +22,12 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['c'], description: 'Open the create menu (new email, new doc, etc.)' },
       { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu' },
       { keys: ['g'], description: 'Go to a view (e.g., g then i for inbox)' },
+      { keys: ['/'], description: 'Go to search' },
+      { keys: [`${cmdOrCtrl}+f`], description: 'Search in current view' },
     ],
   },
   {
-    title: 'Unified List Navigation',
+    title: 'List Navigation',
     items: [
       { keys: ['j', 'arrowdown'], description: 'Move down' },
       { keys: ['k', 'arrowup'], description: 'Move up' },
@@ -36,10 +38,10 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
       { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
       { keys: ['space'], description: 'Preview an item in the side panel' },
-      { keys: ['enter'], description: 'Open an item fullscreen' },
-      { keys: ['shift+enter'], description: 'Open an item in a new split' },
+      { keys: ['click', 'enter'], description: 'Open item in current split' },
+      { keys: ['shift+click', 'shift+enter'], description: 'Open item in a new split' },
+      { keys: ['shift+escape'], description: 'Open item fullscreen' },
       { keys: ['f'], description: 'Open filter menu' },
-      { keys: [`${cmdOrCtrl}+f`], description: 'Search (uses current filters)' },
     ],
   },
   {
