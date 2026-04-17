@@ -22,7 +22,7 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { onMount, Show } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
@@ -47,10 +47,17 @@ function SoupChatInputInner() {
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
-  const metaHeld = () => pressedKeys().has('cmd');
+  const [chatHasFocus, setChatHasFocus] = createSignal(false);
+  const metaHeld = () => chatHasFocus() && pressedKeys().has('cmd');
 
   onMount(() => {
     attachHotkeys(containerRef);
+    containerRef.addEventListener('focusin', () => setChatHasFocus(true));
+    containerRef.addEventListener('focusout', () => {
+      queueMicrotask(() =>
+        setChatHasFocus(containerRef.contains(document.activeElement))
+      );
+    });
   });
 
   // cmd+j - Focus AI chat
