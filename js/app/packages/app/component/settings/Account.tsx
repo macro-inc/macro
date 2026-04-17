@@ -40,6 +40,7 @@ import {
 } from '@notifications';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
+import { invoke } from '@tauri-apps/api/core';
 
 // NOTE: solid directives
 false && fileSelector;
@@ -451,16 +452,42 @@ function NotificationNotSupported() {
   );
 }
 
+function bundleUpdateAction(status: BundleUpdateStatus): { label: string; action: () => void } | null {
+  switch (status.status) {
+    case 'Error':
+      return { label: 'Retry', action: () => invoke('check_for_update') };
+    case 'UpdateFound':
+      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }) };
+    case 'Completed':
+      return { label: 'Update', action: () => invoke('perform_update') };
+    default:
+      return null;
+  }
+}
+
 function BundleUpdateRow() {
   const tauri = useTauri();
   return (
     <Show when={tauri}>
-      {(ctx) => (
-        <TabContentRow
-          text="App Update"
-          subtext={formatBundleUpdateStatus(ctx().bundleUpdateStatus())}
-        />
-      )}
+      {(ctx) => {
+        const status = () => ctx().bundleUpdateStatus();
+        const action = () => bundleUpdateAction(status());
+        return (
+          <div class="flex items-center justify-between mb-[18px]">
+            <TabContentRow
+              text="App Update"
+              subtext={formatBundleUpdateStatus(status())}
+            />
+            <Show when={action()}>
+              {(a) => (
+                <Button variant="accent" size="sm" onClick={a().action}>
+                  {a().label}
+                </Button>
+              )}
+            </Show>
+          </div>
+        );
+      }}
     </Show>
   );
 }
