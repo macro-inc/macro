@@ -1,3 +1,4 @@
+import { SegmentedControl as KSegmentedControl } from '@kobalte/core/segmented-control';
 import { cn } from '@ui/utils/classname';
 import { For, type JSX } from 'solid-js';
 
@@ -12,79 +13,54 @@ type SegmentedControlProps<T extends string | number | boolean> = {
   options: Array<SegmentedControlOption<T>>;
   onChange: (value: T) => void;
   class?: string;
-  /** Size variant */
   size?: 'sm' | 'md';
-  /** Optional aria-label for the control group */
   'aria-label'?: string;
 };
 
-/**
- * SegmentedControl component - a set of mutually exclusive options styled as connected buttons.
- * Uses the same visual pattern as the Settings tabs.
- *
- * @example
- * <SegmentedControl
- *   value={isMultiSelect()}
- *   onChange={setIsMultiSelect}
- *   options={[
- *     { value: false, label: 'Single Select' },
- *     { value: true, label: 'Multi Select' }
- *   ]}
- * />
- */
+const serialize = (v: string | number | boolean): string => String(v);
+
 export const SegmentedControl = <T extends string | number | boolean>(
   props: SegmentedControlProps<T>
 ): JSX.Element => {
   const size = () => props.size ?? 'md';
 
-  const containerClass = () =>
-    cn(
-      'border border-edge-muted rounded-xs inline-flex overflow-hidden',
-      props.class
-    );
-
-  const buttonClass = (isSelected: boolean, isDisabled: boolean) =>
-    cn(
-      'relative flex items-center justify-center border-r border-edge-muted last:border-r-0 font-medium',
-      size() === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm',
-      isDisabled && 'opacity-50 cursor-not-allowed',
-      !isDisabled && [
-        isSelected
-          ? 'text-ink bg-ink/10'
-          : 'text-ink-muted hover:text-ink hover:bg-ink/15',
-        isSelected && 'hover:bg-ink/20',
-      ]
-    );
+  const handleChange = (serialized: string) => {
+    const match = props.options.find((o) => serialize(o.value) === serialized);
+    if (match && !match.disabled) {
+      props.onChange(match.value);
+    }
+  };
 
   return (
-    <div
-      class={containerClass()}
-      role="radiogroup"
+    <KSegmentedControl
+      value={serialize(props.value)}
+      onChange={handleChange}
       aria-label={props['aria-label']}
+      class={cn(
+        'border border-edge-muted rounded-xs inline-flex overflow-hidden',
+        props.class
+      )}
     >
       <For each={props.options}>
-        {(option) => {
-          const isSelected = () => option.value === props.value;
-          const isDisabled = () => option.disabled ?? false;
-
-          return (
-            <button
-              type="button"
-              role="radio"
-              aria-checked={isSelected()}
-              disabled={isDisabled()}
-              onClick={() => {
-                if (!isDisabled()) {
-                  props.onChange(option.value);
-                }
-              }}
-              class={buttonClass(isSelected(), isDisabled())}
-            >
+        {(option) => (
+          <KSegmentedControl.Item
+            value={serialize(option.value)}
+            disabled={option.disabled}
+            class={cn(
+              'relative flex items-center justify-center border-r border-edge-muted last:border-r-0 font-medium',
+              size() === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm',
+              option.disabled
+                ? 'opacity-50'
+                : 'text-ink-muted hover:text-ink hover:bg-ink/15 data-[checked]:text-ink data-[checked]:bg-ink/10 data-[checked]:hover:bg-ink/20'
+            )}
+          >
+            <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
+            <KSegmentedControl.ItemLabel>
               {option.label}
-            </button>
-          );
-        }}
+            </KSegmentedControl.ItemLabel>
+          </KSegmentedControl.Item>
+        )}
       </For>
-    </div>
+    </KSegmentedControl>
   );
 };
