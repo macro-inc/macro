@@ -166,10 +166,14 @@ export function clearStaleRestoredChannelData(channelId: string) {
   const cached = queryClient.getQueryData<ChannelMessagesData>(defaultKey);
   if (!cached?.pages.length) return;
 
-  // First page (index 0) is the newest page in the infinite query.
-  // A genuine latest-messages fetch never has previous_cursor on its
-  // first page because there are no newer messages.
-  if (cached.pages[0].previous_cursor) {
+  // Check both the page cursor AND pageParams[0]. After fetchPreviousPage,
+  // pageParams[0] contains { previous_cursor } even if pages[0].previous_cursor
+  // might be different. A fresh load should have pageParams[0] = null.
+  const pageParams = cached.pageParams;
+  const hasStalePageParams = pageParams?.[0] != null;
+  const hasStalePageCursor = !!cached.pages[0].previous_cursor;
+
+  if (hasStalePageParams || hasStalePageCursor) {
     queryClient.removeQueries({ queryKey: defaultKey });
   }
 }
