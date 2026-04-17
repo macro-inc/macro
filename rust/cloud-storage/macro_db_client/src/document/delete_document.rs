@@ -123,10 +123,13 @@ pub async fn delete_document_bulk_tsx(
     .execute(transaction.as_mut())
     .await?;
 
-    crate::item_access::delete::delete_user_item_access_bulk(
+    crate::item_access::delete::delete_user_entity_access_bulk(
         transaction,
-        &document_ids,
-        "document",
+        &document_ids
+            .iter()
+            .filter_map(|p| macro_uuid::string_to_uuid(p).ok())
+            .collect::<Vec<uuid::Uuid>>(),
+        EntityType::Document,
     )
     .await?;
 

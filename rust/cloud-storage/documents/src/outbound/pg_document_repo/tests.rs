@@ -18,7 +18,10 @@ async fn test_get_document_metadata(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool);
 
     // Document exists
-    let metadata = repo.get_document_metadata("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    let metadata = repo
+        .get_document_metadata("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
     assert_eq!(metadata.document_id, "d0000000-0000-0000-0000-000000000001");
     assert_eq!(metadata.document_name, "test_document_name");
     assert_eq!(metadata.owner.as_ref(), "macro|user@user.com");
@@ -37,7 +40,10 @@ async fn test_get_document_metadata(pool: Pool<Postgres>) {
 async fn test_get_basic_document(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool);
 
-    let basic = repo.get_basic_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    let basic = repo
+        .get_basic_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
     assert_eq!(basic.document_id, "d0000000-0000-0000-0000-000000000001");
     assert_eq!(basic.document_name, "test_document_name");
     assert_eq!(basic.owner.as_ref(), "macro|user@user.com");
@@ -55,7 +61,9 @@ async fn test_get_basic_document(pool: Pool<Postgres>) {
 async fn test_soft_delete_document(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
-    repo.soft_delete_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    repo.soft_delete_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
 
     // Verify deleted_at is set
     let row = sqlx::query!(
@@ -89,7 +97,10 @@ async fn test_get_latest_document_version_id(pool: Pool<Postgres>) {
 async fn test_get_document_version_id(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool);
 
-    let (version_id, _uploaded) = repo.get_document_version_id("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    let (version_id, _uploaded) = repo
+        .get_document_version_id("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
     assert_eq!(version_id, 1);
 }
 
@@ -102,7 +113,10 @@ async fn test_get_user_view_location(pool: Pool<Postgres>) {
 
     // No view location exists
     let location = repo
-        .get_user_view_location("macro|user@user.com", "d0000000-0000-0000-0000-000000000001")
+        .get_user_view_location(
+            "macro|user@user.com",
+            "d0000000-0000-0000-0000-000000000001",
+        )
         .await
         .unwrap();
     assert!(location.is_none());
@@ -125,7 +139,10 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let doc = repo.get_basic_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    let doc = repo
+        .get_basic_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
     assert_eq!(doc.document_name, "new-name");
 }
 
@@ -146,7 +163,10 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let doc = repo.get_basic_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    let doc = repo
+        .get_basic_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
     assert_eq!(doc.file_type, Some("rs".to_string()));
 }
 
@@ -167,7 +187,10 @@ async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let doc = repo.get_basic_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    let doc = repo
+        .get_basic_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
     assert_eq!(doc.file_type, None);
 }
 
@@ -188,8 +211,14 @@ async fn test_edit_document_project(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let doc = repo.get_basic_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
-    assert_eq!(doc.project_id, Some("d0000000-0000-0000-0000-100000000001".to_string()));
+    let doc = repo
+        .get_basic_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
+    assert_eq!(
+        doc.project_id,
+        Some("d0000000-0000-0000-0000-100000000001".to_string())
+    );
 }
 
 #[sqlx::test(
@@ -210,8 +239,14 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let doc = repo.get_basic_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
-    assert_eq!(doc.project_id, Some("d0000000-0000-0000-0000-100000000001".to_string()));
+    let doc = repo
+        .get_basic_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
+    assert_eq!(
+        doc.project_id,
+        Some("d0000000-0000-0000-0000-100000000001".to_string())
+    );
 
     // Then remove it by passing empty string
     repo.edit_document(EditDocumentRepoArgs {
@@ -224,7 +259,10 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let doc = repo.get_basic_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    let doc = repo
+        .get_basic_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
     assert_eq!(doc.project_id, None);
 }
 
@@ -325,9 +363,15 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let doc = repo.get_basic_document("d0000000-0000-0000-0000-000000000001").await.unwrap();
+    let doc = repo
+        .get_basic_document("d0000000-0000-0000-0000-000000000001")
+        .await
+        .unwrap();
     assert_eq!(doc.document_name, "renamed");
-    assert_eq!(doc.project_id, Some("d0000000-0000-0000-0000-100000000001".to_string()));
+    assert_eq!(
+        doc.project_id,
+        Some("d0000000-0000-0000-0000-100000000001".to_string())
+    );
 
     let result = sqlx::query!(
         r#"
@@ -353,9 +397,12 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
 async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
-    repo.share_with_team("macro|user@user.com", "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    repo.share_with_team(
+        "macro|user@user.com",
+        "d0000000-0000-0000-0000-000000000001",
+    )
+    .await
+    .unwrap();
 
     // All 3 team members should have access rows
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
@@ -404,9 +451,12 @@ async fn test_share_with_team_no_op_when_user_not_on_team(pool: Pool<Postgres>) 
 
     // teammate1 is on a team, but let's use a user that isn't on any team
     // We'll use a non-existent user id to simulate no team membership
-    repo.share_with_team("macro|no-team@user.com", "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    repo.share_with_team(
+        "macro|no-team@user.com",
+        "d0000000-0000-0000-0000-000000000001",
+    )
+    .await
+    .unwrap();
 
     // Only the pre-existing owner row should exist
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
@@ -433,12 +483,18 @@ async fn test_share_with_team_idempotent(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
     // Call twice — second call should be a no-op
-    repo.share_with_team("macro|user@user.com", "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
-    repo.share_with_team("macro|user@user.com", "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    repo.share_with_team(
+        "macro|user@user.com",
+        "d0000000-0000-0000-0000-000000000001",
+    )
+    .await
+    .unwrap();
+    repo.share_with_team(
+        "macro|user@user.com",
+        "d0000000-0000-0000-0000-000000000001",
+    )
+    .await
+    .unwrap();
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let count = sqlx::query_scalar!(
@@ -480,9 +536,12 @@ async fn test_share_with_team_preserves_channel_granted_access(pool: Pool<Postgr
     .await
     .unwrap();
 
-    repo.share_with_team("macro|user@user.com", "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    repo.share_with_team(
+        "macro|user@user.com",
+        "d0000000-0000-0000-0000-000000000001",
+    )
+    .await
+    .unwrap();
 
     // teammate1 should have both: channel-sourced edit + user-sourced comment
     let rows = sqlx::query!(
@@ -536,9 +595,12 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
     .await
     .unwrap();
 
-    repo.share_with_team("macro|user@user.com", "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    repo.share_with_team(
+        "macro|user@user.com",
+        "d0000000-0000-0000-0000-000000000001",
+    )
+    .await
+    .unwrap();
 
     // teammate1 should still have just their original edit row, not a second comment row
     let rows = sqlx::query!(
@@ -567,9 +629,12 @@ async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
 
     // A teammate (not the owner) triggers the share — should still find the
     // same team and share with all members including the owner.
-    repo.share_with_team("macro|teammate1@user.com", "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    repo.share_with_team(
+        "macro|teammate1@user.com",
+        "d0000000-0000-0000-0000-000000000001",
+    )
+    .await
+    .unwrap();
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let rows = sqlx::query!(

@@ -6,7 +6,7 @@ use sqlx::{Pool, Postgres};
 
 /// Given a list of shareable items, returns the subset that are accessible to the user,
 /// querying entity_access with the user's source IDs (user ID, team memberships, channel participations).
-#[tracing::instrument(skip(db, items))]
+#[tracing::instrument(skip(db, items), err)]
 #[cfg_attr(
     not(test),
     cached(

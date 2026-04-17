@@ -8,7 +8,7 @@ version = "0.1.0"
 all = ["auth", "cloud_storage", "tracking", "user_permissions"]
 auth = ["dep:decode_jwt", "dep:macro_auth", "dep:url"]
 cloud_storage = [
-  "dep:macro_share_permissions",
+  "dep:entity_access_db_utils",
   "dep:macro_user_id",
   "dep:model_user",
   "dep:permission",
@@ -25,13 +25,13 @@ anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 axum-extra = { workspace = true }
 decode_jwt = { path = "../decode_jwt", optional = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 http-body-util = { workspace = true }
 ip_extractor = { path = "../ip_extractor", optional = true }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_db_client = { path = "../macro_db_client", optional = true }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
-macro_share_permissions = { path = "../macro_share_permissions", optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }

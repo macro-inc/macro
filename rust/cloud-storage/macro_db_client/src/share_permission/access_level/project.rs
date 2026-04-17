@@ -116,8 +116,8 @@ pub async fn get_highest_access_level_for_project(
         project_id,
         user_id
     )
-        .fetch_all(db)
-        .await?;
+    .fetch_all(db)
+    .await?;
 
     let highest_level = all_level_strings
         .iter()

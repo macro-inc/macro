@@ -13,13 +13,7 @@ inbound = [
   "entity_access/inbound",
   "ports",
 ]
-outbound = [
-  "dep:entity_access_db_utils",
-  "dep:macro_share_permissions",
-  "dep:macro_uuid",
-  "dep:sqlx",
-  "ports",
-]
+outbound = ["dep:entity_access_db_utils", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = []
 
 [dependencies]
@@ -53,7 +47,6 @@ roles_and_permissions = { path = "../roles_and_permissions", optional = true, de
 utoipa = { workspace = true }
 
 # Outbound (database adapters)
-macro_share_permissions = { path = "../macro_share_permissions", optional = true }
 sqlx = { workspace = true, optional = true }
 
 macro_uuid = { path = "../macro_uuid", optional = true }

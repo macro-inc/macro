@@ -9,12 +9,9 @@ async fn test_highest_level_is_from_explicit_access(
     // PUBLIC ACCESS: view (parent), edit (grandparent). Max is 'edit'.
     // EXPECTATION: The overall highest level should be 'owner' from the explicit grant.
 
-    let highest_level = get_highest_access_level_for_chat(
-        &pool,
-        "cccccccc-cccc-cccc-cccc-000000000001",
-        "user-1",
-    )
-    .await?;
+    let highest_level =
+        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000001", "user-1")
+            .await?;
 
     assert_eq!(
         highest_level,
@@ -47,12 +44,9 @@ async fn test_user_scoping_is_correct(pool: sqlx::Pool<sqlx::Postgres>) -> anyho
     // PUBLIC ACCESS: view (parent), edit (grandparent). Max is 'edit'.
     // EXPECTATION: The overall highest level is 'edit' (from public), not 'owner' (from user-1's grant).
 
-    let highest_level = get_highest_access_level_for_chat(
-        &pool,
-        "cccccccc-cccc-cccc-cccc-000000000001",
-        "user-2",
-    )
-    .await?;
+    let highest_level =
+        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000001", "user-2")
+            .await?;
 
     assert_eq!(
         highest_level,
@@ -68,12 +62,9 @@ async fn test_simple_uia_case(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Resul
     // SCENARIO: User has edit entity_access on private chat
     // EXPECTATION: The user should have edit access to chat
 
-    let highest_level = get_highest_access_level_for_chat(
-        &pool,
-        "cccccccc-cccc-cccc-cccc-000000000002",
-        "user-3",
-    )
-    .await?;
+    let highest_level =
+        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000002", "user-3")
+            .await?;
 
     assert_eq!(
         highest_level,
@@ -90,12 +81,9 @@ async fn test_no_permissions_returns_none(pool: sqlx::Pool<sqlx::Postgres>) -> a
     // This chat has no project, no entity_access, and no SharePermission records.
     // EXPECTATION: The query should return an empty list, resulting in `None`.
 
-    let highest_level = get_highest_access_level_for_chat(
-        &pool,
-        "cccccccc-cccc-cccc-cccc-000000000003",
-        "user-1",
-    )
-    .await?;
+    let highest_level =
+        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000003", "user-1")
+            .await?;
 
     assert_eq!(
         highest_level, None,
@@ -129,12 +117,9 @@ async fn test_batch_multiple_chats_different_access_levels(
 
     // d-standalone: Check what user-1 actually has (test shows Comment access)
     // We'll verify consistency with individual function rather than hardcode expectation
-    let individual_access = get_highest_access_level_for_chat(
-        &pool,
-        "cccccccc-cccc-cccc-cccc-000000000002",
-        "user-1",
-    )
-    .await?;
+    let individual_access =
+        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000002", "user-1")
+            .await?;
     assert_eq!(
         access_levels.get("cccccccc-cccc-cccc-cccc-000000000002"),
         Some(&individual_access),
@@ -249,18 +234,12 @@ async fn test_batch_consistency_with_single_function(
     let batch_results = get_highest_access_level_for_chats(&pool, &chat_ids, user_id).await?;
 
     // Get results from individual function calls
-    let individual_d_child = get_highest_access_level_for_chat(
-        &pool,
-        "cccccccc-cccc-cccc-cccc-000000000001",
-        user_id,
-    )
-    .await?;
-    let individual_d_standalone = get_highest_access_level_for_chat(
-        &pool,
-        "cccccccc-cccc-cccc-cccc-000000000002",
-        user_id,
-    )
-    .await?;
+    let individual_d_child =
+        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000001", user_id)
+            .await?;
+    let individual_d_standalone =
+        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000002", user_id)
+            .await?;
 
     // Compare results
     assert_eq!(

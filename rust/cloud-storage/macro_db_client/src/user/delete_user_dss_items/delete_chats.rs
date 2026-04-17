@@ -1,3 +1,5 @@
+use model_entity::EntityType;
+
 /// Deletes all chats for a user
 /// Does not commit the transaction
 #[tracing::instrument(skip(transaction))]
@@ -52,8 +54,15 @@ pub async fn delete_user_chats(
     .execute(transaction.as_mut())
     .await?;
 
-    crate::item_access::delete::delete_user_item_access_bulk(transaction, &user_chats, "chat")
-        .await?;
+    crate::item_access::delete::delete_user_entity_access_bulk(
+        transaction,
+        &user_chats
+            .iter()
+            .filter_map(|p| macro_uuid::string_to_uuid(p).ok())
+            .collect::<Vec<uuid::Uuid>>(),
+        EntityType::Chat,
+    )
+    .await?;
 
     // Delete chats
     sqlx::query!(
