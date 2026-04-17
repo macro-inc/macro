@@ -8,7 +8,6 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import { useChatDataQuery } from '@queries/cognition/chat-data';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useProjectDataQuery } from '@queries/storage/project-data';
-import { useProjectsQuery } from '@queries/storage/projects';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
 
@@ -99,11 +98,10 @@ function ChatDetails(props: { chatId: string }) {
 }
 
 function useProjectNameLookup(projectId: () => string | undefined | null) {
-  const projectsQuery = useProjectsQuery();
+  const query = useProjectDataQuery(() => projectId() ?? '');
   return () => {
-    const id = projectId();
-    if (!id) return undefined;
-    return projectsQuery.data?.find((p) => p.id === id)?.name;
+    if (!projectId()) return undefined;
+    return query.data?.name;
   };
 }
 
