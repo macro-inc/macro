@@ -17,7 +17,7 @@ type ShortcutSection = {
 
 const shortcutSections: ShortcutSection[] = [
   {
-    title: 'Core Shortcuts',
+    title: 'Core',
     items: [
       { keys: ['c'], description: 'Open the create menu' },
       { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu' },
