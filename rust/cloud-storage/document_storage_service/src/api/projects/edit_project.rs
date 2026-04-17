@@ -201,11 +201,11 @@ async fn edit_project_v2(
             project_context
                 .parent_id
                 .as_ref()
-                .map(|p| macro_uuid::string_to_uuid(&p).unwrap())
+                .map(|p| macro_uuid::string_to_uuid(p).unwrap())
                 .as_ref(),
             req.project_parent_id
                 .as_ref()
-                .map(|p| macro_uuid::string_to_uuid(&p).unwrap())
+                .map(|p| macro_uuid::string_to_uuid(p).unwrap())
                 .as_ref(),
         )
         .await

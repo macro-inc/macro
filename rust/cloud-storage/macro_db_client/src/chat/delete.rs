@@ -162,7 +162,7 @@ pub async fn delete_chat(db: &sqlx::Pool<sqlx::Postgres>, chat_id: &str) -> anyh
 
     crate::item_access::delete::delete_user_entity_access_by_item(
         &mut transaction,
-        &macro_uuid::string_to_uuid(&chat_id).unwrap(),
+        &macro_uuid::string_to_uuid(chat_id).unwrap(),
         EntityType::Chat,
     )
     .await?;
