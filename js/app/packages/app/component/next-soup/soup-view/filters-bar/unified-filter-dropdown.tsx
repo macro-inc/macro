@@ -384,7 +384,6 @@ const SearchableFilterSubmenu = (props: {
             activeIds={props.activeIds}
             onChange={props.onChange}
             placeholder={props.placeholder}
-            isOpen={isOpen}
             inputRef={(el) => {
               inputRef = el;
             }}
@@ -466,10 +465,6 @@ export const UnifiedFilterDropdown = () => {
       ...otherContactOptions,
     ];
   });
-
-  const setAssigneeIds = (ids: string[]) => {
-    setAssigneeFilter(ids);
-  };
 
   const isTasksView = () => currentView() === 'tasks';
   const isSearchView = () => currentView() === 'search';
@@ -645,7 +640,7 @@ export const UnifiedFilterDropdown = () => {
                       label="Assignee"
                       options={assigneeOptions}
                       activeIds={assigneeFilter}
-                      onChange={setAssigneeIds}
+                      onChange={setAssigneeFilter}
                       placeholder="Search assignees..."
                     />
                   </Show>

@@ -3,7 +3,6 @@ import type { CollectionNode } from '@kobalte/core';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
-  createEffect,
   createMemo,
   createSignal,
   type JSX,
@@ -185,7 +184,9 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
               when={hasMatches()}
               fallback={
                 <div class="py-3 px-2 text-center text-xs text-ink-muted">
-                  No options match "{searchQuery()}"
+                  {searchQuery().trim()
+                    ? `No options match "${searchQuery()}"`
+                    : 'No options available'}
                 </div>
               }
             >
@@ -209,7 +210,6 @@ export type SearchableMultiSelectInlineProps = {
   inputRef?: (el: HTMLInputElement) => void;
   onRequestClose?: () => void;
   listboxClass?: string;
-  isOpen?: Accessor<boolean>;
 };
 
 /**
@@ -229,10 +229,6 @@ export const SearchableMultiSelectInline = (
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
   };
-
-  createEffect(() => {
-    if (props.isOpen && !props.isOpen()) setSearchQuery('');
-  });
 
   const handleInputKeyDown = (e: KeyboardEvent) => {
     switch (e.key) {
