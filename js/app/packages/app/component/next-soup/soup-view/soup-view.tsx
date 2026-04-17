@@ -23,7 +23,6 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -408,7 +407,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     assigneeFilter,
     setAssigneeFilter,
   } = useSoupView();
-  const { getSplitCount } = useSplitLayout();
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -505,7 +503,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     splitHandle: panel.handle,
     virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
-    getSplitCount,
     currentView,
     activeTab,
     applyTabPreset,
