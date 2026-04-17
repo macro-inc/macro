@@ -189,14 +189,17 @@ export const SearchableMultiSelectInline = (
 
   const handleInputKeyDown = (e: KeyboardEvent) => {
     switch (e.key) {
-      case 'ArrowLeft':
-        if (searchQuery() === '') {
-          // Let parent (e.g. DropdownMenu.SubContent) handle close
+      case 'ArrowLeft': {
+        const input = e.currentTarget as HTMLInputElement;
+        // At the start of the input (no caret movement possible), collapse
+        // back to the parent menu. Otherwise let the input move the caret.
+        if (input.selectionStart === 0 && input.selectionEnd === 0) {
           props.onRequestClose?.();
           return;
         }
         e.stopPropagation();
         return;
+      }
       case 'Escape':
         // Let parent close
         return;
