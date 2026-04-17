@@ -2,6 +2,7 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
   config,
+  getAiToolsInfra,
   getMacroApiToken,
   getMacroNotify,
   stack,
@@ -68,43 +69,18 @@ const PERPLEXITY_API_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-// Name of the Secrets Manager entry that holds the internal auth key. The
-// env var passes this NAME; the container fetches the current value at
-// runtime via the secrets manager client. The task role's read permission
-// is granted below via `internalAuthKeyArn` in `secretKeyArns`.
-const INTERNAL_AUTH_KEY_NAME = config.require('internal_auth_key');
-const internalAuthKeyArn = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: INTERNAL_AUTH_KEY_NAME })
-  .apply((secret) => secret.arn);
-
-const SYNC_SERVICE_AUTH_KEY = config.require('sync_service_auth_key');
-const syncServiceAuthKeyArn = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
-
 const MACRO_API_TOKENS = getMacroApiToken();
 const { notificationIngressQueueArn, notificationIngressQueueName } =
   getMacroNotify();
+
+// ── AI tools infra ───────────────────────────────────────────────────────────
+
+const aiTools = getAiToolsInfra();
 
 // ── Stack references ─────────────────────────────────────────────────────────
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
-});
-
-const cloudStorageServiceStack = new pulumi.StackReference(
-  'cloud-storage-service',
-  {
-    name: `macro-inc/cloud-storage-service/${stack}`,
-  }
-);
-
-const linksharingStack = new pulumi.StackReference('linksharing-stack', {
-  name: `macro-inc/link-sharing/${stack}`,
-});
-
-const emailServiceStack = new pulumi.StackReference('email-service-stack', {
-  name: `macro-inc/email-service/${stack}`,
 });
 
 const cloudStorageClusterArn = cloudStorageStack
@@ -113,49 +89,6 @@ const cloudStorageClusterArn = cloudStorageStack
 
 const cloudStorageClusterName = cloudStorageStack
   .getOutput('cloudStorageClusterName')
-  .apply((value) => value as string);
-
-const documentStorageBucketId = cloudStorageStack
-  .getOutput('documentStorageBucketId')
-  .apply((value) => value as string);
-
-const documentStorageBucketArn = cloudStorageStack
-  .getOutput('documentStorageBucketArn')
-  .apply((value) => value as string);
-
-const docxUploadBucketName = cloudStorageServiceStack
-  .getOutput('docxUploadBucketName')
-  .apply((value) => value as string);
-
-const docxUploadBucketArn = cloudStorageServiceStack
-  .getOutput('docxUploadBucketArn')
-  .apply((value) => value as string);
-
-const documentStorageServiceUrl = cloudStorageServiceStack
-  .getOutput('cloudStorageServiceUrl')
-  .apply((value) => value as string);
-
-const cloudfrontDistributionUrl = linksharingStack
-  .getOutput('cloudfrontDistributionUrl')
-  .apply((value) => value as string);
-
-const cloudfrontSignerPublicKeyId = linksharingStack
-  .getOutput('cloudfrontDistributionPublicKeyId')
-  .apply((value) => value as string);
-
-const CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME = `linksharing-private-key-${stack}`;
-const cloudfrontPrivateKeySecretArn = aws.secretsmanager
-  .getSecretOutput({
-    name: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
-  })
-  .apply((secret) => secret.arn);
-
-const emailScheduledQueueArn = emailServiceStack
-  .getOutput('scheduledQueueArn')
-  .apply((value) => value as string);
-
-const emailScheduledQueueName = emailServiceStack
-  .getOutput('scheduledQueueName')
   .apply((value) => value as string);
 
 // ── Service ──────────────────────────────────────────────────────────────────
@@ -173,14 +106,13 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
   cloudStorageClusterName,
   secretKeyArns: [
     jwtSecretKeyArn,
-    cloudfrontPrivateKeySecretArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
-    internalAuthKeyArn,
-    syncServiceAuthKeyArn,
+    ...aiTools.secretArns,
   ],
-  queueArns: [notificationIngressQueueArn, emailScheduledQueueArn],
-  bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
+  queueArns: [notificationIngressQueueArn, ...aiTools.queueArns],
+  bucketArns: [...aiTools.bucketArns],
   containerEnvVars: [
+    ...aiTools.envVars,
     // Core
     {
       name: 'DATABASE_URL',
@@ -224,69 +156,12 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
       name: 'NOTIFICATION_QUEUE',
       value: pulumi.interpolate`${notificationIngressQueueName}`,
     },
-    {
-      name: 'EMAIL_SCHEDULED_QUEUE',
-      value: pulumi.interpolate`${emailScheduledQueueName}`,
-    },
-    // Tool context: internal service URLs
-    {
-      name: 'INTERNAL_API_SECRET_KEY',
-      value: INTERNAL_AUTH_KEY_NAME,
-    },
+    // Service URLs not covered by ai_tools
     {
       name: 'CONNECTION_GATEWAY_URL',
       value: `https://connection-gateway${
         stack === 'prod' ? '' : `-${stack}`
       }.macro.com`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: pulumi.interpolate`${documentStorageServiceUrl}`,
-    },
-    {
-      name: 'SEARCH_SERVICE_URL',
-      value: pulumi.interpolate`${documentStorageServiceUrl}`,
-    },
-    {
-      name: 'SYNC_SERVICE_URL',
-      value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
-    },
-    {
-      name: 'SYNC_SERVICE_AUTH_KEY',
-      value: SYNC_SERVICE_AUTH_KEY,
-    },
-    {
-      name: 'LEXICAL_SERVICE_URL',
-      value: `https://lexical-service-${stack}.macroverse.workers.dev`,
-    },
-    {
-      name: 'EMAIL_SERVICE_URL',
-      value: `https://email-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
-    },
-    {
-      name: 'STATIC_FILE_SERVICE_URL',
-      value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
-    },
-    // Tool context: storage
-    {
-      name: 'DOCUMENT_STORAGE_BUCKET',
-      value: pulumi.interpolate`${documentStorageBucketId}`,
-    },
-    {
-      name: 'DOCX_DOCUMENT_UPLOAD_BUCKET',
-      value: pulumi.interpolate`${docxUploadBucketName}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
-      value: pulumi.interpolate`${cloudfrontDistributionUrl}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
-      value: pulumi.interpolate`${cloudfrontSignerPublicKeyId}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
-      value: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
     },
     // AI model API keys
     {
@@ -322,3 +197,4 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
 });
 
 export const agentScheduleServiceUrl = pulumi.interpolate`${service.domain}`;
+export const agentScheduleServiceRoleArn = service.role.arn;
