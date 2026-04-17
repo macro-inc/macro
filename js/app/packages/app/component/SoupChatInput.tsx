@@ -53,12 +53,12 @@ function SoupChatInputInner() {
     attachHotkeys(containerRef);
   });
 
-  // cmd+j - Focus the soup chat input
+  // cmd+j - Focus AI chat
   registerHotkey({
     hotkey: 'cmd+j',
     scopeId: splitPanelContext.splitHotkeyScope,
     hotkeyToken: TOKENS.chat.input.focus,
-    description: 'Focus chat input',
+    description: 'Focus AI chat',
     keyDownHandler: () => {
       editor.controls.focus();
       return true;

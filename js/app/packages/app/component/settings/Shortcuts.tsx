@@ -21,6 +21,7 @@ const shortcutSections: ShortcutSection[] = [
     items: [
       { keys: ['c'], description: 'Open the create menu (new email, new doc, etc.)' },
       { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu' },
+      { keys: ['g'], description: 'Go to a view (e.g., g then i for inbox)' },
     ],
   },
   {
@@ -36,6 +37,7 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
       { keys: ['space'], description: 'Preview an item in the side panel' },
       { keys: ['enter'], description: 'Open an item fullscreen' },
+      { keys: ['shift+enter'], description: 'Open an item in a new split' },
       { keys: ['f'], description: 'Open filter menu' },
       { keys: [`${cmdOrCtrl}+f`], description: 'Search (uses current filters)' },
     ],
@@ -53,8 +55,7 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Miscellaneous',
     items: [
-      { keys: [`${cmdOrCtrl}+j`], description: 'Open popover AI chat' },
-      { keys: [`${cmdOrCtrl}+/`], description: 'Open sidebar AI chat' },
+      { keys: [`${cmdOrCtrl}+j`], description: 'Focus AI chat' },
       { keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel' },
       { keys: [`opt+[`], description: 'Go back in current split' },
       { keys: [`opt+]`], description: 'Go forward in current split' },
