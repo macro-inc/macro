@@ -342,10 +342,6 @@ const SearchableFilterSubmenu = (props: {
   const [search, setSearch] = createSignal('');
   const [highlightedIndex, setHighlightedIndex] = createSignal(0);
   let inputRef: HTMLInputElement | undefined;
-  let listRef: HTMLDivElement | undefined;
-  // Briefly ignore mouseenter after keyboard nav so scroll-induced hover
-  // doesn't yank the highlight back
-  let ignoreMouseUntil = 0;
 
   const filteredOptions = createMemo(() => {
     const query = search().toLowerCase();
@@ -381,13 +377,6 @@ const SearchableFilterSubmenu = (props: {
     }
   };
 
-  createEffect(() => {
-    const idx = highlightedIndex();
-    if (!listRef) return;
-    const item = listRef.children[idx] as HTMLElement | undefined;
-    item?.scrollIntoView({ block: 'nearest' });
-  });
-
   const handleKeyDown = (e: KeyboardEvent) => {
     const options = filteredOptions();
     const maxIndex = options.length - 1;
@@ -395,19 +384,14 @@ const SearchableFilterSubmenu = (props: {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        e.stopPropagation();
-        ignoreMouseUntil = Date.now() + 200;
         setHighlightedIndex((i) => Math.min(i + 1, maxIndex));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        e.stopPropagation();
-        ignoreMouseUntil = Date.now() + 200;
         setHighlightedIndex((i) => Math.max(i - 1, 0));
         break;
       case 'Enter':
         e.preventDefault();
-        e.stopPropagation();
         const option = options[highlightedIndex()];
         if (option) {
           props.onToggle(option.id);
@@ -416,7 +400,6 @@ const SearchableFilterSubmenu = (props: {
       case 'ArrowLeft':
         if (search() === '') {
           e.preventDefault();
-          e.stopPropagation();
           setIsOpen(false);
         }
         break;
@@ -460,7 +443,7 @@ const SearchableFilterSubmenu = (props: {
           </div>
 
           {/* Options list */}
-          <div ref={listRef} class="max-h-48 overflow-y-auto">
+          <div class="max-h-48 overflow-y-auto">
             <For each={filteredOptions()}>
               {(option, index) => {
                 const active = () => isActive(option.id);
@@ -473,10 +456,7 @@ const SearchableFilterSubmenu = (props: {
                       highlighted() ? 'bg-hover' : 'hover:bg-hover'
                     )}
                     onClick={() => props.onToggle(option.id)}
-                    onMouseEnter={() => {
-                      if (Date.now() < ignoreMouseUntil) return;
-                      setHighlightedIndex(index());
-                    }}
+                    onMouseEnter={() => setHighlightedIndex(index())}
                   >
                     <span
                       class={cn(
