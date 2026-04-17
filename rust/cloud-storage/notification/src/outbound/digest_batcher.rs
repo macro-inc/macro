@@ -172,14 +172,19 @@ impl DigestBatcher for RedisDigestBatcher {
 
         let user_id = MacroUserIdStr::try_from(user_id_str)?;
 
-        let notifications = items
+        let notifications: Vec<_> = items
             .into_iter()
             .filter_map(|s| {
                 serde_json::from_str::<UserNotificationRow<serde_json::Value>>(&s)
+                    .inspect_err(|e| tracing::error!(error=?e, json=%s, "failed to deserialize digest notification"))
                     .ok()
                     .map(|n| n.into_tagged())
             })
             .collect();
+
+        if notifications.is_empty() {
+            return Ok(ClaimResult::Empty);
+        }
 
         Ok(ClaimResult::Ready(DigestBatch {
             user_id,

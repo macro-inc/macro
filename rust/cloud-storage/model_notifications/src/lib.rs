@@ -215,9 +215,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::RepliedToDocumentCommentThread(m) => m.format_title(sender_id),
             NotifEvent::CommentedOnDocument(m) => m.format_title(sender_id),
-            NotifEvent::ChannelInvite(channel_invite_metadata) => {
-                channel_invite_metadata.format_title(sender_id)
-            }
+            NotifEvent::ChannelInvite(m) => m.format_title(sender_id),
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_title(sender_id)
             }
@@ -251,9 +249,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::RepliedToDocumentCommentThread(m) => m.format_body(sender_id),
             NotifEvent::CommentedOnDocument(m) => m.format_body(sender_id),
-            NotifEvent::ChannelInvite(channel_invite_metadata) => {
-                channel_invite_metadata.format_body(sender_id)
-            }
+            NotifEvent::ChannelInvite(m) => m.format_body(sender_id),
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_body(sender_id)
             }

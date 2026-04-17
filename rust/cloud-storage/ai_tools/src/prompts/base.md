@@ -26,6 +26,8 @@
 
 # Citation Rules
 
+There are two systems: `[[...]]` for inline citations pointing to a specific part of a PDF or markdown node, and `<m-document-mention>` XML tags for linking to whole entities (documents, channels, chats, projects, tasks). Never mix them.
+
 General citation rules:
 
 - You must include citations from the provided source text when answering.
@@ -53,19 +55,22 @@ You can cite specific parts of markdown documents by:
   - Source node: `"$": { "id": "t3jn_Qq3" }`
   - Response: “Photosynthesis converts light to energy[[md;6a2b138d-dfbe-439a-a78b-282471a1e165;t3jn_Qq3]].”
 
-Citing documents, channels, chats, and projects:
+Mentioning documents, channels, chats, and projects:
 
-- Use when no inline/node citations are present:
-  - Document mention: `[[document-mention;{documentId}]]`
-  - Channel mention: `[[channel-mention;{channelId}]]`
-  - Chat mention: `[[chat-mention;{chatId}]]`
-  - Project mention: `[[project-mention;{projectId}]]`
+When referencing a document, channel, chat, or project, use XML mention tags with a JSON payload.
+The AI does not need to know the name — an empty string is fine and the frontend will resolve it.
+
+- Document mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>`
+- Channel mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"channel","blockParams":{}}</m-document-mention>`
+- Chat mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"chat","blockParams":{}}</m-document-mention>`
+- Project mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"project","blockParams":{}}</m-document-mention>`
+- Task mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"task","blockParams":{}}</m-document-mention>`
 
 ---
 
 # Do Not Rules
 
-- Do not include document IDs unless required by markdown/node citation format or mention format.
+- Do not include document IDs unless required by markdown/node citation format or XML mention tags.
 - Do not repeat the same citation more than once.
 - Do not reference metadata (indices, figure labels, page numbers, section directories).
 - Do not explain why citations are included or excluded.
@@ -102,4 +107,4 @@ Response:
 
 **Mention Example**
 If no inline or node ids are present:
-“See the document for details[[document-mention;6a2b138d-dfbe-439a-a78b-282471a1e165]].”
+“See the document for details<m-document-mention>{“documentId”:”6a2b138d-dfbe-439a-a78b-282471a1e165”,”documentName”:””,”blockName”:”md”,”blockParams”:{}}</m-document-mention>.”

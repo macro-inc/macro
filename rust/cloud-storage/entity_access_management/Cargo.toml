@@ -1,0 +1,37 @@
+[package]
+edition = "2024"
+name = "entity_access_management"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["outbound", "ports"]
+outbound = ["dep:sqlx", "ports"]
+ports = ["dep:tokio"]
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# Domain models (always included)
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+models_permissions = { path = "../models_permissions" }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Database
+sqlx = { workspace = true, optional = true }
+
+[dev-dependencies]
+cool_asserts = "2"
+macro_db_migrator = { path = "../macro_db_migrator" }
+mockall = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

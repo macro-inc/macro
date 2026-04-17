@@ -37,6 +37,7 @@ comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client", optional = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 doppleganger = { workspace = true }
+entity_access = { path = "../entity_access" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
@@ -80,6 +81,10 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
+
+[dev-dependencies]
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
 
 [package.metadata.cargo-machete]
 ignored = ["connection_gateway"]

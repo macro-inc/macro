@@ -17,7 +17,7 @@ export type SearchSoupQueryArgs = {
 };
 
 interface SearchQueryOptions {
-  enabled: boolean;
+  enabled?: boolean;
 }
 
 /** Search service won't accept text less than 3 characters */

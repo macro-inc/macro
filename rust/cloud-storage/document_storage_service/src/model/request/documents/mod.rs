@@ -1,4 +1,3 @@
-pub mod copy;
 pub mod get_user_documents;
 pub mod location;
 pub mod preview;

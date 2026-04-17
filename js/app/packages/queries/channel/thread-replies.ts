@@ -32,6 +32,7 @@ export function threadRepliesQueryOptions(
       );
     },
     staleTime: Infinity,
+    placeholderData: (prev: ApiThreadReply[]) => prev,
   };
 }
 

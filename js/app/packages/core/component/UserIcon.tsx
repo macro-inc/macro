@@ -143,14 +143,15 @@ export function UserIcon(props: UserIconProps) {
         placement="left"
         class={sizeClasses().container}
         unstyled
-        tooltip={
+        tooltip={(close) => (
           <UserTooltip
             displayName={displayName()() || ''}
             email={email()}
             id={props.id}
             isDeleted={props.isDeleted}
+            onClose={close}
           />
-        }
+        )}
       >
         {icon()}
       </Tooltip>

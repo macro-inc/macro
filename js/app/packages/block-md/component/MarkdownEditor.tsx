@@ -32,6 +32,7 @@ import TableActionMenu, {
   tableCellNodeKeySignal,
 } from '@core/component/LexicalMarkdown/component/menu/TableActionMenu';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
+import { DraggableBlockMenu } from '@core/component/LexicalMarkdown/component/misc/DraggableBlockMenu';
 import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import {
@@ -45,11 +46,13 @@ import {
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   CLOSE_INLINE_SEARCH_COMMAND,
+  createDraggableBlockStore,
   createDragInsertStore,
   createWordcountStatsStore,
   DefaultShortcuts,
   diffPlugin,
   documentMetadataPlugin,
+  draggableBlockPlugin,
   dragInsertPlugin,
   filePastePlugin,
   generatePlugin,
@@ -291,6 +294,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   // store for the drag insert pluign.
   const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
+
+  // store for the draggable block (drag-to-rearrange) plugin.
+  const [draggableBlockStore, setDraggableBlockStore] =
+    createDraggableBlockStore();
 
   // set up the solid-dnd stuff
   const droppable = createDroppable(editor._config.namespace, {
@@ -665,11 +672,17 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     setMdStore('selection', lexicalWrapper.selection);
     editor.setRootElement(el);
 
-    // Register this plugin once we have the ref.
+    // Register plugins that require the container ref.
     plugins.use(
       dragInsertPlugin({
         setState: setDragInsertStore,
         dragListenerRef: editorContainerRef,
+      })
+    );
+    plugins.use(
+      draggableBlockPlugin({
+        setState: setDraggableBlockStore,
+        anchorElem: editorContainerRef,
       })
     );
 
@@ -978,6 +991,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
         <DragInsertIndicator
           state={dragInsertStore}
+          active={canEdit() ?? false}
+        />
+
+        <DraggableBlockMenu
+          state={draggableBlockStore}
+          setState={setDraggableBlockStore}
           active={canEdit() ?? false}
         />
 

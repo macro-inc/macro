@@ -2,6 +2,7 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
+import { cn } from '@ui/utils/classname';
 import ImageIcon from '@icon/regular/image-broken.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -264,13 +265,13 @@ export function MarkdownImage(props: ImageDecoratorProps) {
     <Dialog open={viewerOpen()} onOpenChange={setViewerOpen}>
       <div
         ref={containerRef}
-        class="relative max-w-full my-4 grid place-items-center"
-        classList={{
-          'bracket-offset-4 bracket': isSelectedAsNode(),
-          'media-error min-h-44': state() === 'error',
+        class={cn(
+          'relative max-w-full my-4 grid place-items-center',
+          isSelectedAsNode() && 'bracket-offset-4 ring-3 ring-edge-muted',
+          state() === 'error' && 'media-error min-h-44',
           // If there are no constrained dimensions, center the image
-          'mx-auto': !props.constrainedWidth && !props.constrainedHeight,
-        }}
+          !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
+        )}
         style={{
           'max-width': `${effectiveDims()[0] ? effectiveDims()[0] * scale() : 640}px`,
           'aspect-ratio':
@@ -312,13 +313,13 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         </Show>
         <img
           crossorigin="anonymous"
-          class="h-full object-contain"
+          class={cn(
+            'h-full object-contain',
+            (state() === 'loading' || state() === 'error') && 'invisible'
+          )}
           draggable={true}
           onDragStart={(e) => {
             e.dataTransfer?.setData('application/x-macro-internal', '1');
-          }}
-          classList={{
-            invisible: state() === 'loading' || state() === 'error',
           }}
           ref={imageRef}
           src={imageUrl()}

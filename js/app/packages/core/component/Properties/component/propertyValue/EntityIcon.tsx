@@ -3,10 +3,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../../hooks';
 import type { Property } from '../../types';
-import {
-  PropertyValueDeleteButton,
-  PropertyValueEditButton,
-} from './ValueComponents';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 
 type EntityValueDisplayProps = ParentProps<{
   property: Property;
@@ -52,6 +49,12 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
     </Show>
   );
 
+  const handleClick = (e: MouseEvent) => {
+    if (!props.canEdit || !props.onEdit) return;
+    e.stopPropagation();
+    props.onEdit(containerRef);
+  };
+
   return (
     <div
       ref={containerRef}
@@ -59,28 +62,30 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div class="px-2 py-0.5 border border-edge-muted hover:bg-hover bg-transparent text-ink inline-flex items-center w-full">
+      <div
+        class="px-2 py-0.5 border border-edge-muted hover:bg-hover bg-transparent text-ink inline-flex items-center w-full"
+        onClick={handleClick}
+        role={props.canEdit && props.onEdit ? 'button' : undefined}
+        tabIndex={props.canEdit && props.onEdit ? 0 : undefined}
+      >
         <span class="truncate flex-1">{innerContent}</span>
         <Show
           when={
-            props.canEdit &&
-            isHovered() &&
-            !props.isSaving &&
-            (props.onRemove || props.onEdit)
+            props.canEdit && isHovered() && !props.isSaving && props.onRemove
           }
         >
-          <div class="absolute right-1 inset-y-0 flex items-center gap-1">
-            <Show when={props.onEdit}>
-              <PropertyValueEditButton
-                onClick={() => props.onEdit!(containerRef)}
-                disabled={props.isSaving}
-              />
-            </Show>
+          <div
+            class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-gradient-to-r from-transparent to-hover to-40%"
+            onClick={(e: MouseEvent) => e.stopPropagation()}
+          >
             <Show when={props.onRemove}>
-              <PropertyValueDeleteButton
-                onClick={props.onRemove!}
+              <button
+                onClick={() => props.onRemove!()}
                 disabled={props.isSaving}
-              />
+                class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink"
+              >
+                <DeleteIcon class="size-3" />
+              </button>
             </Show>
           </div>
         </Show>

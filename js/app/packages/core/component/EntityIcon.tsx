@@ -21,7 +21,9 @@ import FileMd from '@icon/duotone/file-md-duotone.svg';
 import FilePdf from '@icon/duotone/file-pdf-duotone.svg';
 import FileVideo from '@icon/duotone/file-video-duotone.svg';
 import FileImage from '@icon/duotone/image-duotone.svg';
+import PhoneCall from '@icon/duotone/phone-call-duotone.svg';
 import Canvas from '@icon/duotone/pencil-circle-duotone.svg';
+import Robot from '@icon/duotone/robot-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
 import Users from '@icon/duotone/users-duotone.svg';
 import Folder from '@icon/fill/folder-simple-fill.svg';
@@ -84,6 +86,12 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
+  call: {
+    icon: PhoneCall,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Call',
+  },
   canvas: {
     icon: Canvas,
     foreground: 'text-canvas',
@@ -240,6 +248,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-task-bg',
     prettyName: 'Task',
   },
+  automation: {
+    icon: Robot,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Automation',
+  },
 };
 
 // this will match fall-through cases like code files which match multiple extensions
@@ -268,6 +282,7 @@ function validateEntity(entity: string): EntityWithValidIcon {
 }
 
 export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
+  call: PhoneCall,
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
@@ -294,6 +309,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   emailRead: WideEmail,
   emailInvite: WideCalendar,
   task: WideTask,
+  automation: Robot,
 };
 
 export const ICON_SIZES = {

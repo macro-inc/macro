@@ -47,7 +47,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -239,16 +239,22 @@ async fn main() -> anyhow::Result<()> {
     ));
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::new(&aws_config),
-        queue_url: config.vars.notification_queue.as_ref().to_string(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.notification_queue.as_ref().to_string(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
     });
     tracing::trace!("initialized notification ingress service");
 
-    let permission_checker = PermissionServiceImpl::new(db.clone());
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+    );
+
+    let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
     let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
@@ -272,12 +278,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Create the CommsRouterState for comms_service routes
     let comms_state = CommsRouterState::new(channel_service_for_comms);
-
-    let entity_access_service = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
-        ),
-    );
 
     let s3 = Arc::new(S3::new(
         s3_client,
@@ -368,29 +368,44 @@ async fn main() -> anyhow::Result<()> {
     let call_connection_service =
         ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
     let call_repo = PgCallRepo::new(db.clone());
-    let mut call_service_builder = CallServiceImpl::new(
-        call_repo,
-        livekit_rtc_client,
-        call_connection_service,
-        config.vars.livekit_server_url.as_ref(),
-    );
-    if let Some(secret) = internal_call_secret {
-        call_service_builder = call_service_builder.with_internal_call_secret(secret);
-    }
-    if let (Some(bucket), Some(region), Some(access_key), Some(secret)) = (
+    let egress_config = match (
         config::CallRecordingS3Bucket::new(),
         config::CallRecordingS3Region::new(),
         config::CallRecordingS3AccessKey::new(),
         config::CallRecordingS3Secret::new(),
     ) {
-        tracing::info!(bucket = bucket.as_ref(), "call recording enabled");
-        call_service_builder =
-            call_service_builder.with_egress(call::domain::models::EgressS3Config {
+        (Some(bucket), Some(region), Some(access_key), Some(secret)) => {
+            tracing::info!(bucket = bucket.as_ref(), "call recording enabled");
+            Some(call::domain::models::EgressS3Config {
                 bucket: bucket.as_ref().to_string(),
                 region: region.as_ref().to_string(),
                 access_key: access_key.as_ref().to_string(),
                 secret: secret.as_ref().to_string(),
-            });
+            })
+        }
+        _ => None,
+    };
+    let recording_storage = match &egress_config {
+        Some(config) => Some(
+            call::outbound::s3_recording_storage::S3RecordingStorage::new(config.bucket.clone())
+                .await,
+        ),
+        None => None,
+    };
+    let mut call_service_builder = CallServiceImpl::new(
+        call_repo,
+        livekit_rtc_client,
+        call_connection_service,
+        (*entity_access_service).clone(),
+        (*notification_ingress_service).clone(),
+        recording_storage,
+        config.vars.livekit_server_url.as_ref(),
+    );
+    if let Some(secret) = internal_call_secret {
+        call_service_builder = call_service_builder.with_internal_call_secret(secret);
+    }
+    if let Some(config) = egress_config {
+        call_service_builder = call_service_builder.with_egress(config);
     }
 
     let call_service = Arc::new(call_service_builder);
@@ -407,6 +422,10 @@ async fn main() -> anyhow::Result<()> {
         config.queue_wait_time_seconds,
     );
 
+    let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        PgCallRepo::new(readonly_db.clone()),
+    );
+
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
@@ -414,11 +433,13 @@ async fn main() -> anyhow::Result<()> {
                 frecency_service,
                 readonly_email_service,
                 channel_service_for_soup,
+                call_record_query_service,
             ),
             email_service,
         ),
         github_sync_service: Arc::new(github_sync_service_impl),
         db: db.clone(),
+        readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),

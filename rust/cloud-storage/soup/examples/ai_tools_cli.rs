@@ -70,6 +70,7 @@ async fn main() {
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service.clone()),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     );
 
     // Create the soup tool context

@@ -187,7 +187,7 @@ export function SplitFileMenu(props: {
             {(op, i) => (
               <>
                 <Show when={op.divideAbove && i() >= 1}>
-                  <div class="my-1 h-[1px] bg-edge" />
+                  <div class="my-1 h-[1px] bg-edge-muted/50" />
                 </Show>
                 <MenuItem text={op.label} onClick={op.action} icon={op.icon} />
               </>

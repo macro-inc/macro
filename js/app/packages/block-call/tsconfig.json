@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "verbatimModuleSyntax": true,
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "composite": true
+  }
+}

@@ -87,6 +87,30 @@ async fn it_writes_session_code_to_db() {
     );
 }
 
+#[tokio::test]
+async fn update_url_replaces_existing_token_and_preserves_other_params() {
+    let url: Url = "https://example.com?token=old_token&other=param"
+        .parse()
+        .unwrap();
+    let code = SessionCode("new_code".to_string());
+    let mut dummy = DummyCb::default();
+
+    let result = update_url_with_session_code(url, Some(&code), async |x| dummy.cb(x).await)
+        .await
+        .unwrap();
+
+    let pairs: Vec<(String, String)> = result
+        .query_pairs()
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+
+    let token_pairs: Vec<_> = pairs.iter().filter(|(k, _)| k == "token").collect();
+    assert_eq!(token_pairs.len(), 1, "should have exactly one token param");
+    assert_eq!(token_pairs[0].1, "new_code");
+    assert!(pairs.iter().any(|(k, v)| k == "other" && v == "param"));
+    assert_eq!(dummy.called, 1);
+}
+
 #[test]
 fn html_redirect_works() {
     let res = html_redirect_inner(&"https://example.com".parse().unwrap()).into_string();

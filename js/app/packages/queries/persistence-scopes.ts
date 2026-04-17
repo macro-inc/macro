@@ -4,7 +4,6 @@ import { createPersistenceKey, type PersistScope } from './persistence';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
 
 const persistedChannelQueryPrefixes = [
-  channelKeys.withID._def,
   channelKeys.mentions._def,
   channelKeys.activity.queryKey,
   channelKeys.listChannels.queryKey,

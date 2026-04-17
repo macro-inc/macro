@@ -1,0 +1,19 @@
+[
+  "AI/mcp/tools/index",
+  "AI/mcp/tools/bash-code-execution",
+  "AI/mcp/tools/content-search",
+  "AI/mcp/tools/create-document",
+  "AI/mcp/tools/get-entity-properties",
+  "AI/mcp/tools/get-thread",
+  "AI/mcp/tools/list-entities",
+  "AI/mcp/tools/name-search",
+  "AI/mcp/tools/read-content",
+  "AI/mcp/tools/read-metadata",
+  "AI/mcp/tools/read-thread",
+  "AI/mcp/tools/send-email",
+  "AI/mcp/tools/set-entity-property",
+  "AI/mcp/tools/text-editor-code-execution",
+  "AI/mcp/tools/update-thread-labels",
+  "AI/mcp/tools/web-fetch",
+  "AI/mcp/tools/web-search"
+]

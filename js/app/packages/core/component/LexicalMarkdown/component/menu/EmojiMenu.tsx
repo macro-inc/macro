@@ -71,6 +71,9 @@ export function EmojiItem(props: {
 export function EmojiMenu(props: EmojiMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [escapeSpaceState, setEscapeSpaceState] = createSignal<
+    'start' | 'single' | 'double' | null
+  >('start');
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
     number | undefined
@@ -105,6 +108,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
     if (props.menu.isOpen()) {
       setMountSelection(document.getSelection());
       setSelectedIndex(0);
+      setEscapeSpaceState('start');
     } else {
       setMountSelection(null);
     }
@@ -187,6 +191,24 @@ export function EmojiMenu(props: EmojiMenuProps) {
       }
     },
     onClose: closeMenu,
+    onSpace: () => {
+      switch (escapeSpaceState()) {
+        case 'double':
+        case 'start':
+          closeMenu();
+          return true;
+        case 'single':
+          setEscapeSpaceState('double');
+          return false;
+        case null:
+          setEscapeSpaceState('single');
+          return false;
+      }
+      return false;
+    },
+    onOtherKey: () => {
+      setEscapeSpaceState(null);
+    },
   });
 
   const focusOut = () => {

@@ -5,11 +5,16 @@
 use std::fmt::Debug;
 use std::future::Future;
 
+use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use item_filters::ast::{LiteralTree, call::CallLiteral};
+
 use super::models::{
-    Call, CallError, CallParticipant, CallTokenResponse, CallWebhookEvent, EgressS3Config,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallTokenResponse,
+    CallWebhookEvent, EgressS3Config, GetCallRecordsRequest, LeaveCallResponse,
+    TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -20,16 +25,22 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Create a new call record, or return `None` if one already exists for
     /// this channel (unique-constraint conflict).
-    fn create_call(
+    fn create_call<'a>(
         &self,
         call_id: &Uuid,
         channel_id: &Uuid,
         room_name: &str,
-        created_by: &str,
+        created_by: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Get an active call by channel ID.
     fn get_call_by_channel_id(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
+
+    /// Check whether an active call exists for a channel. Queries `calls` table only.
+    fn get_active_call_by_channel(
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
@@ -41,17 +52,17 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Add a participant to a call.
-    fn add_participant(
+    fn add_participant<'a>(
         &self,
         call_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallParticipant, Self::Err>> + Send;
 
     /// Remove a participant from a call.
-    fn remove_participant(
+    fn remove_participant<'a>(
         &self,
         call_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Get all active participants for a call.
@@ -88,11 +99,11 @@ pub trait CallRepository: Send + Sync + 'static {
     /// Returns the new `call_records` id.
     fn archive_call(&self, call_id: &Uuid) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
 
-    /// Set the recording URL on an archived call record.
-    fn set_recording_url(
+    /// Set the recording key on an archived call record.
+    fn set_recording_key(
         &self,
         call_record_id: &Uuid,
-        recording_url: &str,
+        recording_key: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Find a call record by its egress ID (for webhook handling).
@@ -101,14 +112,14 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
-    /// Set the recording URL on an active call (by egress ID).
+    /// Set the recording key on an active call (by egress ID).
     ///
     /// Used when `egress_ended` arrives before the call is archived.
     /// Returns `true` if a matching active call was found and updated.
-    fn set_active_call_recording_url(
+    fn set_active_call_recording_key(
         &self,
         egress_id: &str,
-        recording_url: &str,
+        recording_key: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Insert a transcript segment for an active call.
@@ -117,6 +128,89 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         segment: &TranscriptSegmentRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get the profile picture URL for a user by their `MacroUserIdStr`.
+    fn get_user_profile_picture<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Fetch a full [`CallRecord`] by call id. Looks in both the active
+    /// `calls` table and the archived `call_records` table; returns `None`
+    /// if neither has a matching row. The returned record includes the
+    /// call's participants and transcript segments.
+    fn get_call_record_by_call_id(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallRecord>, Self::Err>> + Send;
+
+    /// Fetch the most recent call records where the given user was a
+    /// participant, spanning both active (`calls` + `call_participants`)
+    /// and archived (`call_records` + `call_record_participants`) tables.
+    /// Transcript data is intentionally omitted. Results are ordered by
+    /// start time descending and capped at `limit`.
+    /// An optional filter tree can narrow results (e.g. by channel_id).
+    fn get_call_records_by_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        limit: u32,
+        filter: &LiteralTree<CallLiteral>,
+    ) -> impl Future<Output = Result<Vec<CallRecord>, Self::Err>> + Send;
+
+    /// Resolve the display name for a single channel.
+    fn resolve_channel_name<'a>(
+        &self,
+        channel_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Delete a row from `call_records` by id. Participants and transcript
+    /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
+    /// Returns the deleted row's `recording_key` (if any) so the caller can
+    /// clean up the associated recording object in storage.
+    fn delete_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+}
+
+/// Storage port for generating presigned recording URLs.
+pub trait RecordingStorage: Send + Sync + 'static {
+    /// Generate a presigned GET URL for a recording key.
+    ///
+    /// The key is in `UUID/TIMESTAMP.ext` format. Implementations must
+    /// prepend the appropriate prefix (e.g. `calls/`) when constructing
+    /// the full object key.
+    fn presign_recording_url(
+        &self,
+        recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Delete the recording object identified by `recording_key`.
+    ///
+    /// Implementations must apply the same prefix as
+    /// [`presign_recording_url`](Self::presign_recording_url). Should be
+    /// idempotent — succeed if the key no longer exists.
+    fn delete_recording(
+        &self,
+        recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+impl<T: RecordingStorage> RecordingStorage for Option<T> {
+    async fn presign_recording_url(&self, recording_key: &str) -> anyhow::Result<String> {
+        match self {
+            Some(inner) => inner.presign_recording_url(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
+    async fn delete_recording(&self, recording_key: &str) -> anyhow::Result<()> {
+        match self {
+            Some(inner) => inner.delete_recording(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -129,17 +223,17 @@ pub trait CallRtcClient: Send + Sync + 'static {
     fn delete_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Generate an access token for a participant to join a room.
-    fn generate_token(
+    fn generate_token<'a>(
         &self,
         room_name: &str,
-        participant_identity: &str,
+        participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Remove a participant from a room.
-    fn remove_participant(
+    fn remove_participant<'a>(
         &self,
         room_name: &str,
-        participant_identity: &str,
+        participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Start a room composite egress (recording). Returns the egress ID.
@@ -169,19 +263,26 @@ pub trait CallService: Send + Sync + 'static {
     /// Validate an internal call token (e.g. from the `x-macro-internal-call` header).
     fn validate_internal_call(&self, token: &str) -> bool;
 
+    /// Check if an active call exists for a channel.
+    /// Returns the call info if active, or `None` if no call exists.
+    fn check_active_call(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallActiveResponse>, CallError>> + Send;
+
     /// Get or create a call in a channel. If a call already exists, joins it;
     /// otherwise creates a new one. Always returns a join token.
     fn get_or_create_call(
         &self,
         channel_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
 
     /// Leave or end a call. Removes the user; if last participant, also deletes the room and call.
-    fn leave_or_end_call(
+    fn leave_or_end_call<'a>(
         &self,
         channel_id: &Uuid,
-        user_id: &str,
+        user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
 
     /// Validate and process a raw webhook event from the RTC provider.
@@ -197,4 +298,54 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: &Uuid,
         segment: TranscriptSegmentRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Fetch the [`CallRecord`] for a call the caller has channel-member access to.
+    ///
+    /// Authorization is carried in the receipt produced by
+    /// `CallAccessLevelExtractor`; the entity on the receipt must be
+    /// `EntityType::Call` and its `entity_id` must be the call's UUID.
+    fn get_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
+
+    /// Delete a [`CallRecord`] the caller has channel-member access to.
+    ///
+    /// Authorization is carried in the receipt produced by
+    /// `CallAccessLevelExtractor`; the entity on the receipt must be
+    /// `EntityType::Call` and its `entity_id` must be the call's UUID.
+    /// Only `call_records` rows are affected — active calls in the `calls`
+    /// table are untouched. Idempotent.
+    fn delete_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+}
+
+/// Lightweight read-only port for querying call records in Soup.
+///
+/// This trait is intentionally separate from [`CallService`] — Soup only
+/// needs a read-only list of recent call records, not the full call
+/// management API.
+pub trait CallRecordQueryService: Send + Sync + 'static {
+    /// Fetch the most recent call records the user participated in,
+    /// ordered by `started_at` descending. Transcript data is excluded.
+    fn get_user_call_records(
+        &self,
+        req: GetCallRecordsRequest,
+    ) -> impl Future<Output = Result<Vec<CallRecord>, CallError>> + Send;
+}
+
+/// No-op implementation of [`CallRecordQueryService`] for services
+/// that do not have call infrastructure.
+pub struct NoOpCallRecordQueryService;
+
+impl CallRecordQueryService for NoOpCallRecordQueryService {
+    /// Always returns an empty list.
+    async fn get_user_call_records(
+        &self,
+        _req: GetCallRecordsRequest,
+    ) -> Result<Vec<CallRecord>, CallError> {
+        Ok(Vec::new())
+    }
 }

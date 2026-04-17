@@ -1,11 +1,12 @@
+use crate::api::context::DcsEntityAccessService;
 use axum::extract::{Extension, Path, State};
 use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use macro_db_client::chat_history::get_chat_history;
-use macro_middleware::cloud_storage::ensure_access::chat::ChatAccessLevelExtractor;
 use model::chat::ChatHistory;
 use model::user::UserContext;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
@@ -24,9 +25,9 @@ use sqlx::PgPool;
         (status = 500, body = String, description = "Internal server error")
     )
 )]
-#[tracing::instrument(skip(db, user_context), fields(chat_id = %chat_id, user_id = %user_context.user_id))]
+#[tracing::instrument(skip(db, user_context, _access), fields(chat_id = %chat_id, user_id = %user_context.user_id))]
 pub async fn get_chat_history_handler(
-    _access: ChatAccessLevelExtractor<ViewAccessLevel>,
+    _access: ChatAccessLevelExtractor<ViewAccessLevel, DcsEntityAccessService>,
     Extension(user_context): Extension<UserContext>,
     State(db): State<PgPool>,
     Path(chat_id): Path<String>,

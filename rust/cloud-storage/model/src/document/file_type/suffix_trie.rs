@@ -31,7 +31,7 @@ impl ReversedSuffixTrie {
         let mut node = &self.root;
 
         for ch in filename.chars().rev() {
-            match node.children.get(&ch) {
+            match node.children.get(&ch.to_ascii_lowercase()) {
                 Some(next_node) => {
                     node = next_node;
                     if node.is_terminal {
@@ -51,7 +51,7 @@ impl ReversedSuffixTrie {
         let mut last_match_index = None;
 
         for (i, ch) in filename.chars().rev().enumerate() {
-            if let Some(next_node) = node.children.get(&ch) {
+            if let Some(next_node) = node.children.get(&ch.to_ascii_lowercase()) {
                 node = next_node;
                 if node.is_terminal {
                     last_match_index = Some(i);

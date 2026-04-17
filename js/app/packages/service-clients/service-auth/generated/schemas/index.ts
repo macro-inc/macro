@@ -7,10 +7,13 @@
 
 export * from './aBGroup';
 export * from './appleLoginRequest';
+export * from './checkoutSessionMetadata';
+export * from './checkoutSessionMetadataFbc';
+export * from './checkoutSessionMetadataFbp';
+export * from './checkoutSessionMetadataGaClientId';
 export * from './createAccountMergeRequest';
 export * from './createCheckoutSessionRequest';
 export * from './createCheckoutSessionRequestDiscount';
-export * from './createCheckoutSessionRequestGaClientId';
 export * from './createInProgressLinkResponse';
 export * from './createPortalSessionRequest';
 export * from './createTeamRequest';
@@ -53,6 +56,8 @@ export * from './putUserNameQueryParamsFirstName';
 export * from './putUserNameQueryParamsLastName';
 export * from './resendFusionauthVerifyUserEmailRequest';
 export * from './sendInviteBody';
+export * from './sendMobileWelcomeEmailRequest';
+export * from './sendMobileWelcomeEmailResponse';
 export * from './ssoLoginParams';
 export * from './ssoRequiredResponse';
 export * from './stripeProductTier';

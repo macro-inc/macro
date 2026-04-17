@@ -1,3 +1,4 @@
+pub mod call_record;
 pub mod chat;
 pub mod comms;
 pub mod document;

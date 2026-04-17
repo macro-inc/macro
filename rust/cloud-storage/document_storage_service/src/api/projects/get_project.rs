@@ -1,16 +1,19 @@
 use crate::api::context::ApiContext;
 
+use crate::api::context::EntityAccessService;
 use axum::Json;
 use axum::extract::State;
 use axum::response::Response;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
-use macro_middleware::cloud_storage::ensure_access::project::ProjectAccessLevelExtractor;
+use entity_access::domain::models::EntityPermission;
+use entity_access::inbound::axum_extractors::ProjectAccessLevelExtractor;
 use model::project::response::{
     GetProjectContentResponse, GetProjectResponse, GetProjectResponseData,
 };
 use model::response::{ErrorResponse, GenericErrorResponse, GenericResponse};
 use model::user::UserContext;
 use model::user::axum_extractor::MacroUserExtractor;
+use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use sqlx::PgPool;
 
@@ -34,13 +37,18 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, id), fields(user_id=?user_context.macro_user_id, project_id=?id))]
+#[tracing::instrument(skip(db, user_context, id, access), fields(user_id=?user_context.macro_user_id, project_id=?id))]
 pub async fn get_project_content_handler(
-    ProjectAccessLevelExtractor { access_level, .. }: ProjectAccessLevelExtractor<ViewAccessLevel>,
+    access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
     user_context: MacroUserExtractor,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
+    let access_level = match access.entity_access_receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => *access_level,
+        _ => AccessLevel::View,
+    };
+
     let content = macro_db_client::projects::get_project::get_project_content_v2(
         &db,
         id.as_str(),
@@ -76,9 +84,9 @@ pub async fn get_project_content_handler(
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, id), fields(user_id=?user_context.user_id, project_id=?id))]
+#[tracing::instrument(skip(ctx, user_context, id, access), fields(user_id=?user_context.user_id, project_id=?id))]
 pub async fn get_project_handler(
-    ProjectAccessLevelExtractor { access_level, .. }: ProjectAccessLevelExtractor<ViewAccessLevel>,
+    access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Path(Params { id }): Path<Params>,
@@ -97,9 +105,14 @@ pub async fn get_project_handler(
                     .into_response()
             })?;
 
+    let user_access_level = match access.entity_access_receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => *access_level,
+        _ => AccessLevel::View,
+    };
+
     let response_data = GetProjectResponseData {
         project_metadata,
-        user_access_level: access_level,
+        user_access_level,
     };
 
     Ok(GenericResponse::builder()

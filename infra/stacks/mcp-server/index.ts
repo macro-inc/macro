@@ -60,6 +60,12 @@ const googleClientSecretArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GOOGLE_CLIENT_SECRET })
   .apply((secret) => secret.arn);
 
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const INTERNAL_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require('internal_auth_key'),
@@ -280,6 +286,10 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
     {
       name: 'GOOGLE_CLIENT_SECRET_KEY',
       value: GOOGLE_CLIENT_SECRET,
+    },
+    {
+      name: 'REDIS_URL',
+      value: pulumi.interpolate`redis://${MACRO_CACHE}`,
     },
     {
       name: 'MACRO_API_TOKEN_ISSUER',

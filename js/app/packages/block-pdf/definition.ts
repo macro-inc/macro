@@ -47,7 +47,7 @@ export const definition = defineBlock({
 
       const buffer = await blob.arrayBuffer();
       const data = new Uint8Array(buffer);
-      const task = getDocument({ data });
+      const task = getDocument({ data, isEvalSupported: false });
       const documentProxy = await task.promise;
 
       return ok({

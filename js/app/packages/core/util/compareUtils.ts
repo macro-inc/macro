@@ -6,7 +6,12 @@ export function setEquals<T>(a: Set<T>, b: Set<T>): boolean {
   return true;
 }
 
-export function arrayEquals<T extends ArrayLike<any>>(a: T, b: T): boolean {
+export function arrayEquals<T>(a: readonly T[], b: readonly T[]): boolean;
+export function arrayEquals<T>(a: ArrayLike<T>, b: ArrayLike<T>): boolean;
+export function arrayEquals(
+  a: ArrayLike<unknown>,
+  b: ArrayLike<unknown>
+): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) return false;

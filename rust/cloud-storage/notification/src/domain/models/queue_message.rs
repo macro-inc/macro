@@ -113,6 +113,7 @@ impl<'a> EmailNotification<'a> {
 
 /// the value of the inner payload inside [ConnGatewayNotification]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ConnGatewayInnerNotif<T> {
     /// The notification ID.
     pub notification_id: uuid::Uuid,
@@ -127,11 +128,11 @@ pub struct ConnGatewayInnerNotif<T> {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created.
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
-    pub updated_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
     /// When the notification was deleted.
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
@@ -140,8 +141,18 @@ pub struct ConnGatewayInnerNotif<T> {
     pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
+/// Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.
+///
+/// Used for OpenAPI schema generation — serializes identically to
+/// `ConnGatewayInnerNotif<serde_json::Value>`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ConnGatewayNotificationPayload(pub ConnGatewayInnerNotif<serde_json::Value>);
+
 /// Connection gateway (WebSocket) notification payload.
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub(crate) struct ConnGatewayNotification<'a, T> {
     /// The notification payload to send.
     pub(crate) notif: ConnGatewayInnerNotif<T>,
@@ -158,9 +169,9 @@ impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
                 entity: req.req.notification_entity.clone().into_owned(),
                 sent: true,
                 done: false,
-                created_at: None,
+                created_at: Utc::now(),
                 viewed_at: None,
-                updated_at: None,
+                updated_at: Utc::now(),
                 deleted_at: None,
                 notification_metadata: req.req.notification.clone(),
                 sender_id: req.req.sender_id.as_ref().map(|x| x.clone().into_owned()),
@@ -225,6 +236,49 @@ pub(crate) enum NotificationChannel<'a, T, U> {
     ConnGateway(ConnGatewayNotification<'a, T>),
 }
 
+impl<'a, T, U> NotificationChannel<'a, T, U> {
+    fn with_timestamps(self, created_at: DateTime<Utc>, updated_at: DateTime<Utc>) -> Self {
+        match self {
+            NotificationChannel::Ios(apnstargets) => NotificationChannel::Ios(apnstargets),
+            NotificationChannel::Email(email_notification) => {
+                NotificationChannel::Email(email_notification)
+            }
+            NotificationChannel::ConnGateway(ConnGatewayNotification {
+                notif:
+                    ConnGatewayInnerNotif {
+                        notification_id,
+                        notification_event_type,
+                        entity,
+                        sent,
+                        done,
+                        created_at: _,
+                        viewed_at,
+                        updated_at: _,
+                        deleted_at,
+                        notification_metadata,
+                        sender_id,
+                    },
+                recipients,
+            }) => NotificationChannel::ConnGateway(ConnGatewayNotification {
+                notif: ConnGatewayInnerNotif {
+                    notification_id,
+                    notification_event_type,
+                    entity,
+                    sent,
+                    done,
+                    created_at,
+                    viewed_at,
+                    updated_at,
+                    deleted_at,
+                    notification_metadata,
+                    sender_id,
+                },
+                recipients,
+            }),
+        }
+    }
+}
+
 /// Message published to SQS after DB persistence.
 /// Contains everything needed for delivery.
 ///
@@ -258,6 +312,21 @@ impl<'a, T, U> QueueMessage<'a, T, U> {
         Self {
             message_type: typename.as_ref().to_string(),
             content: NotificationChannel::Ios(Box::new(content)),
+        }
+    }
+
+    pub(crate) fn with_timestamps(
+        self,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+    ) -> Self {
+        let QueueMessage {
+            message_type,
+            content,
+        } = self;
+        QueueMessage {
+            message_type,
+            content: content.with_timestamps(created_at, updated_at),
         }
     }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use chrono::Utc;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -18,9 +19,9 @@ fn make_row(
         entity: EntityType::Document.with_entity_string("entity-1".to_string()),
         sent: true,
         done: false,
-        created_at: None,
+        created_at: Utc::now(),
         viewed_at: None,
-        updated_at: None,
+        updated_at: Utc::now(),
         deleted_at: None,
         notification_metadata: metadata,
         sender_id: Some(
@@ -286,9 +287,9 @@ fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identic
         entity: entity.clone(),
         sent: true,
         done: false,
-        created_at: Some(created_at),
+        created_at,
         viewed_at: None,
-        updated_at: None,
+        updated_at: created_at,
         deleted_at: None,
         notification_metadata: NotifEvent::ChannelMention(notif_metadata.clone()),
         sender_id: Some(
@@ -305,9 +306,9 @@ fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identic
         entity,
         sent: true,
         done: false,
-        created_at: Some(created_at),
+        created_at,
         viewed_at: None,
-        updated_at: None,
+        updated_at: created_at,
         deleted_at: None,
         notification_metadata: TaggedContent::new(notif_metadata),
         sender_id: Some(

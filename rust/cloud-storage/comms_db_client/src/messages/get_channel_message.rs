@@ -1,3 +1,4 @@
+use crate::model::SimpleMention;
 use model::comms::{ChannelMessage, ChannelType, GetChannelMessageResponse};
 use uuid::Uuid;
 
@@ -36,7 +37,13 @@ pub async fn get_channel_message_by_id(
         "#,
         &message_id.to_string(),
     )
-    .map(|row| format!("{}:{}", row.entity_type, row.entity_id))
+    .map(|row| {
+        SimpleMention {
+            entity_type: row.entity_type,
+            entity_id: row.entity_id,
+        }
+        .to_string()
+    })
     .fetch_all(db)
     .await?;
 

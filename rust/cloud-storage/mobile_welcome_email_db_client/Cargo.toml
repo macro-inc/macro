@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "mobile_welcome_email_db_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

@@ -1,13 +1,13 @@
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
 
-/// This will return 0 if there are no messages in the channel
-/// This will return 1 if there is at least 1 message in the channel
+#[cfg(test)]
+mod test;
+
+/// Returns the total number of messages (including soft-deleted) in the
+/// given channel.
 #[tracing::instrument(skip(executor))]
-pub async fn check_if_channel_has_messages<'e, E>(
-    executor: E,
-    channel_id: &Uuid,
-) -> anyhow::Result<i64>
+pub async fn get_channel_message_count<'e, E>(executor: E, channel_id: &Uuid) -> anyhow::Result<i64>
 where
     E: Executor<'e, Database = Postgres>,
 {
@@ -15,7 +15,6 @@ where
         r#"
         SELECT COUNT(id) as count FROM comms_messages
         WHERE channel_id = $1
-        LIMIT 1
         "#,
         channel_id
     )

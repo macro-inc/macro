@@ -72,6 +72,31 @@ export const SoupFiltersBar = () => {
       <Match when={isComponentListView('search')}>
         <div class="w-full flex flex-col gap-2 p-2 border-b border-edge-muted/50">
           <SoupSearchbar autoFocus />
+          <div class="flex items-start gap-2">
+            <UnifiedFilterDropdown />
+            <ActiveFilterChips
+              filters={activeFiltersList()}
+              onRemove={removeFilter}
+              onReplace={replaceFilter}
+              onClearAll={resetToTabDefaults}
+              isOptionActive={isOptionActive}
+            />
+            <div class="flex-1" />
+            <Tooltip
+              tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
+            >
+              <Button
+                variant={soup.previewEntity() ? 'primary' : 'ghost'}
+                size="sm"
+                class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
+                onClick={togglePreview}
+                onMouseEnter={() => setPreviewBtnHovering(true)}
+                onMouseLeave={() => setPreviewBtnHovering(false)}
+              >
+                <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
+              </Button>
+            </Tooltip>
+          </div>
         </div>
       </Match>
       <Match when={true}>

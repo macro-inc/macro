@@ -173,6 +173,19 @@
   },
   "components": {
     "schemas": {
+      "CallFilters": {
+        "type": "object",
+        "description": "Filters for call records.",
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs to filter calls by. Empty to include all calls."
+          }
+        }
+      },
       "ChannelFilters": {
         "type": "object",
         "description": "The channel message filters used to filter down what channel messages you search over.",
@@ -1224,6 +1237,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "call_filters": {
+            "$ref": "#/components/schemas/CallFilters",
+            "description": "the bundled [CallFilters]"
+          },
           "channel_filters": {
             "$ref": "#/components/schemas/ChannelFilters",
             "description": "the bundled [ChannelFilters]"

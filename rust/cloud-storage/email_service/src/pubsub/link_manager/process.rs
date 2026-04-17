@@ -4,7 +4,7 @@ use crate::util::gmail::auth::{
 };
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
-use models_email::email::service::pubsub::LinkManagerMessage;
+use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 use models_email::service::cache::TokenCacheKey;
 use models_email::service::link::{Link, UserProvider};
 use sqs_client::search::SearchQueueMessage;
@@ -32,7 +32,10 @@ pub async fn process_message(
             .await?;
             handle_refresh(&ctx, &link, &gmail_access_token).await?;
         }
-        LinkManagerMessage::DeleteLink { link_id } => {
+        LinkManagerMessage::DeleteLink {
+            link_id,
+            deletion_reason,
+        } => {
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
@@ -43,7 +46,7 @@ pub async fn process_message(
             )
             .await
             .ok();
-            handle_delete(&ctx, &link, gmail_access_token.as_deref()).await?;
+            handle_delete(&ctx, &link, gmail_access_token.as_deref(), &deletion_reason).await?;
         }
         LinkManagerMessage::DeleteUser { fusionauth_user_id } => {
             handle_delete_all_user_links(&ctx, &fusionauth_user_id).await?;
@@ -133,7 +136,14 @@ async fn handle_delete_all_user_links(
                 .await
                 .ok();
 
-        if let Err(e) = handle_delete(ctx, link, gmail_access_token.as_deref()).await {
+        if let Err(e) = handle_delete(
+            ctx,
+            link,
+            gmail_access_token.as_deref(),
+            &DeletionReason::UserDeleted,
+        )
+        .await
+        {
             tracing::error!(error=?e, link_id=?link.id, "Failed to delete link during user cleanup");
         }
     }
@@ -147,6 +157,7 @@ async fn handle_delete(
     ctx: &LinkManagerContext,
     link: &Link,
     gmail_access_token: Option<&str>,
+    deletion_reason: &DeletionReason,
 ) -> anyhow::Result<()> {
     tracing::info!("Deleting link");
     // set sync status to false so any future inbox updates get ignored
@@ -214,6 +225,17 @@ async fn handle_delete(
     email_db_client::links::delete::delete_link_by_id(&ctx.db, link.id)
         .await
         .context("Failed to delete link in background task")?;
+
+    // Mark the link as deleted in history table for tracking (best-effort)
+    if let Err(e) = email_db_client::links_history::update::set_deleted_at(
+        &ctx.db,
+        link.id,
+        deletion_reason.as_str(),
+    )
+    .await
+    {
+        tracing::error!(error=?e, link_id=?link.id, "Failed to set deleted_at on email link history");
+    }
 
     tracing::info!("Successfully deleted link");
 

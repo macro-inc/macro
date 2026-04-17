@@ -41,6 +41,7 @@ export function SplitContainer(
   const [ref, setRef] = createSignal<HTMLDivElement>();
   createEffect(
     on([ref], () => {
+      if (isMobile()) return;
       ref()?.focus();
     })
   );
@@ -87,10 +88,9 @@ export function SplitContainer(
           classList={{
             'fixed inset-[4rem] z-modal-overlay isolate opacity-50':
               panel.handle.isSpotLight(),
-            'opacity-100':
-              panel.handle.isActive() || panel.handle.isSpotLight(),
+            'opacity-100': panel.isPanelActive() || panel.handle.isSpotLight(),
             'size-full': !panel.handle.isSpotLight(),
-            'opacity-85': !panel.handle.isActive(),
+            'opacity-85': !panel.isPanelActive() && !isMobile(),
           }}
           ref={(ref) => {
             setRef(ref);
@@ -104,7 +104,7 @@ export function SplitContainer(
         >
           <MaybeClippedPanel
             active={
-              panel.handle.isActive() &&
+              panel.isPanelActive() &&
               multipleSplits() &&
               !panel.handle.isSpotLight()
             }

@@ -1,0 +1,14 @@
+{
+  "name": "@macro/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "mint dev",
+    "lint": "mint broken-links",
+    "generate:tools": "bun ./scripts/generate-mcp-tool-pages.ts",
+    "prepare": "bun run generate:tools"
+  },
+  "devDependencies": {
+    "mint": "^4.2.63"
+  }
+}

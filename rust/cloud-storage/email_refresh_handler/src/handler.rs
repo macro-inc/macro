@@ -6,7 +6,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_env::Environment;
-use models_email::email::service::pubsub::LinkManagerMessage;
+use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 use sqlx::types::uuid;
 use sqlx::{Pool, Postgres, Type};
 
@@ -82,49 +82,67 @@ async fn send_refresh_messages(ctx: &context::Context) -> Result<(), Error> {
     Ok(())
 }
 
-/// delete inactive links from our database
+/// delete unused and inactive links from our database
 async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
-    let inactive_links = fetch_inactive_link_ids(
-        &ctx.db,
-        ctx.config.delete_unused_after_days as i32,
-        ctx.config.delete_inactive_after_days as i32,
-    )
-    .await
-    .unwrap_or_else(|e| {
-        tracing::error!(error=?e, "Error fetching inactive links for deletion");
-        Vec::new()
-    });
+    let unused_links = fetch_unused_link_ids(&ctx.db, ctx.config.delete_unused_after_days as i32)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!(error=?e, "Error fetching unused links for deletion");
+            Vec::new()
+        });
 
-    if !inactive_links.is_empty() {
-        tracing::info!(
-            "Sending delete notifications for {} inactive links",
-            inactive_links.len()
-        );
+    let inactive_links =
+        fetch_inactive_link_ids(&ctx.db, ctx.config.delete_inactive_after_days as i32)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(error=?e, "Error fetching inactive links for deletion");
+                Vec::new()
+            });
 
-        for link_id in inactive_links {
-            let notif = LinkManagerMessage::DeleteLink { link_id };
-            ctx.sqs_client
-                .enqueue_link_manager_notification(notif)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, link_id=%link_id, "Error enqueueing delete notification for inactive link");
-                })
-                .ok();
-        }
+    tracing::info!(
+        "Sending delete notifications for {} unused and {} inactive links",
+        unused_links.len(),
+        inactive_links.len()
+    );
+
+    for link_id in unused_links {
+        let notif = LinkManagerMessage::DeleteLink {
+            link_id,
+            deletion_reason: DeletionReason::Unused,
+        };
+        ctx.sqs_client
+            .enqueue_link_manager_notification(notif)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, link_id=%link_id, "Error enqueueing delete notification for unused link");
+            })
+            .ok();
+    }
+
+    for link_id in inactive_links {
+        let notif = LinkManagerMessage::DeleteLink {
+            link_id,
+            deletion_reason: DeletionReason::Inactive,
+        };
+        ctx.sqs_client
+            .enqueue_link_manager_notification(notif)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, link_id=%link_id, "Error enqueueing delete notification for inactive link");
+            })
+            .ok();
     }
 
     Ok(())
 }
 
-/// Fetch link IDs that should be deleted due to inactivity
-pub async fn fetch_inactive_link_ids(
+/// Fetch link IDs that were created > X days ago and have never viewed a thread
+pub async fn fetch_unused_link_ids(
     pool: &Pool<Postgres>,
     delete_unused_after_days: i32,
-    delete_inactive_after_days: i32,
 ) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
     sqlx::query_scalar!(
         r#"
-            -- Condition A: Created > X days ago and has NO history - hasn't viewed a thread
             SELECT
                 l.id AS "link_id!"
             FROM
@@ -138,10 +156,20 @@ pub async fn fetch_inactive_link_ids(
                 l.id
             HAVING
                 COUNT(h.link_id) = 0
+            "#,
+        delete_unused_after_days
+    )
+    .fetch_all(pool)
+    .await
+}
 
-            UNION
-
-            -- Condition B: Has history rows, but latest thread viewed was > Y days ago
+/// Fetch link IDs where the latest thread viewed was > Y days ago
+pub async fn fetch_inactive_link_ids(
+    pool: &Pool<Postgres>,
+    delete_inactive_after_days: i32,
+) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
             SELECT
                 l.id AS "link_id!"
             FROM
@@ -153,9 +181,8 @@ pub async fn fetch_inactive_link_ids(
             GROUP BY
                 l.id
             HAVING
-                MAX(h.updated_at) < NOW() - (make_interval(days => $2))
+                MAX(h.updated_at) < NOW() - (make_interval(days => $1))
             "#,
-        delete_unused_after_days,
         delete_inactive_after_days
     )
     .fetch_all(pool)

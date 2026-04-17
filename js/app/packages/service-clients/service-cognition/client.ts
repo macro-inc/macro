@@ -27,6 +27,8 @@ import type { GetChatsForAttachmentResponse } from './generated/schemas/getChats
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
+import type { StopChatStreamRequest } from './generated/schemas/stopChatStreamRequest';
+import type { StopChatStreamResponse } from './generated/schemas/stopChatStreamResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type * as toolTypes from './generated/tools/tool.ts';
 
@@ -308,6 +310,18 @@ export const cognitionApiServiceClient = {
   async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
     return mapOk(
       await dcsFetch<SendChatMessageResponse>(`/stream/chat/message`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
+  /** Stops an in-flight AI chat stream. The streaming task persists whatever
+   * the user has already seen and emits StreamEnd. */
+  async stopChatStream(args: StopChatStreamRequest) {
+    return mapOk(
+      await dcsFetch<StopChatStreamResponse>(`/stream/chat/message/stop`, {
         method: 'POST',
         body: JSON.stringify(args),
       }),

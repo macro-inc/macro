@@ -125,6 +125,40 @@ fn test_resolve_direct_message_channel_name_for_other() {
 }
 
 #[test]
+fn test_resolve_direct_message_channel_name_whitespace_only_display_name() {
+    let channel = Channel {
+        id: ChannelId(Default::default()),
+        name: None,
+        channel_type: ChannelType::DirectMessage,
+        org_id: None,
+        team_id: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        owner_id: MacroUserIdStr::parse_from_str("macro|test@test.com").unwrap(),
+    };
+
+    let participants = make_participants(&channel.id.0);
+
+    let mut name_lookup = NameLookup::new();
+    name_lookup.insert(
+        MacroUserIdStr::parse_from_str("macro|user2@macro.com").unwrap(),
+        " ".to_string(),
+    );
+
+    assert_eq!(
+        resolve_direct_message_channel_name(
+            channel.name.as_deref(),
+            &participants,
+            &channel.id.0,
+            MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap(),
+            &name_lookup
+        )
+        .as_deref(),
+        Ok("user2")
+    );
+}
+
+#[test]
 fn test_resolve_organization_and_public_channel_name() {
     let organization_channel = Channel {
         id: ChannelId(Default::default()),

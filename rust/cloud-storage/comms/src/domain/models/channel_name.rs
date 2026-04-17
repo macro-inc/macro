@@ -43,7 +43,9 @@ pub fn resolve_private_channel_name(
     participants: &[ChannelParticipant],
     name_lookup: &NameLookup,
 ) -> ChannelName {
-    if let Some(name) = &channel_name {
+    if let Some(name) = &channel_name
+        && !name.trim().is_empty()
+    {
         return name.to_string();
     }
 
@@ -88,7 +90,7 @@ pub fn resolve_direct_message_channel_name(
 
 fn id_to_display_name(id: MacroUserIdStr<'_>, name_lookup: &NameLookup) -> String {
     match name_lookup.get(&id) {
-        Some(name) => name.clone(),
-        None => id.email_part().local_part().to_string(),
+        Some(name) if !name.trim().is_empty() => name.clone(),
+        _ => id.email_part().local_part().to_string(),
     }
 }

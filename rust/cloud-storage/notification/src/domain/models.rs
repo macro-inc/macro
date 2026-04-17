@@ -56,11 +56,11 @@ pub struct UserNotificationRow<T> {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created.
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
-    pub updated_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
     /// When the notification was deleted.
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
@@ -152,6 +152,7 @@ impl<T> UserNotificationRow<T> {
 /// newtype wrapper for the the typename of a Notification
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub(crate) struct NotificationTypeName(Cow<'static, str>);
 
 impl NotificationTypeName {
@@ -168,6 +169,7 @@ impl AsRef<str> for NotificationTypeName {
 
 /// A notification metadata value tagged with the notification event type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct TaggedContent<T> {
     pub(crate) tag: NotificationTypeName,
     pub(crate) content: T,
@@ -238,7 +240,7 @@ impl<T> Identify for UserNotificationRow<T> {
 impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
     fn sort_on(sort: CreatedAt) -> impl FnMut(&Self) -> CursorVal<CreatedAt> {
         move |v| {
-            let last_val = v.created_at.unwrap_or(DateTime::UNIX_EPOCH);
+            let last_val = v.created_at;
             CursorVal {
                 sort_type: sort,
                 last_val,
@@ -273,6 +275,23 @@ pub trait NotificationExtEmail: Notification {
     fn rate_limit_config() -> RateLimitConfig;
     /// The actual key for the rate limit bucket.
     fn rate_limit_key(&self) -> RateLimitKey;
+}
+
+/// Extension trait for notifications that have a user-facing title and body.
+///
+/// Used for formatting push notification alerts (APNS) and notification previews.
+pub trait NotificationTitle {
+    /// Format the notification into a user-facing title.
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report>;
+
+    /// Format the notification into a user-facing body.
+    fn format_body(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report>;
 }
 
 /// Extension trait for notifications that can be delivered via iOS push (APNS).

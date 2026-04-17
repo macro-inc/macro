@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT DISTINCT\n        ea.entity_id,\n        ea.entity_type\n    FROM entity_access ea\n    WHERE ea.source_id = ANY($1)\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f9f132f209b5a22522df5c6b9ae936efa63645abc9b36965f9e8daead43b7adc"
+}

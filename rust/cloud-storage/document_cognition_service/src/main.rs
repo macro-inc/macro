@@ -24,12 +24,11 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
+use readonly_pool::ReadOnlyPool;
 use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
-use soup::domain::service::SoupImpl;
-use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
@@ -121,7 +120,6 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized search service client");
-
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await
@@ -143,30 +141,6 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     tracing::info!("initialized static file service client");
-
-    // Build soup service
-    let frecency_storage = FrecencyPgStorage::new(db.clone());
-    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
-        frecency_service.clone(),
-        email::domain::ports::NoOpEnqueuer,
-        0,
-    );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
-        frecency_storage,
-    );
-    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
-    let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
-        frecency_service,
-        ReadonlyEmailPreviewAdapter(email_service),
-        channels_service,
-    ));
-
-    tracing::info!("initialized soup service");
 
     // Initialize Redis client for stream service
     let redis_client = Arc::new(
@@ -193,17 +167,43 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized connection repo");
 
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::new(&aws_config),
-        queue_url: config.notification_queue.clone(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.notification_queue.clone(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
 
     tracing::info!("initialized notification ingress service");
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
+    )));
 
-    // Build document tool context for AI tools
+    let frecency_storage = FrecencyPgStorage::new(db.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        0,
+    );
+    let channels_service = ChannelServiceImpl::new(
+        PgCommsRepo::new(ReadOnlyPool(db.clone())),
+        PgUserRepo::new(db.clone()),
+        frecency_storage,
+    );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
+    let soup_service = Arc::new(soup::domain::service::SoupImpl::new(
+        soup::outbound::pg_soup_repo::PgSoupRepo::new(ReadOnlyPool(db.clone())),
+        frecency_service,
+        ReadonlyEmailPreviewAdapter(email_service),
+        channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
+    ));
+
+    tracing::info!("initialized soup service");
+
     let s3_client = macro_aws_config::s3_client().await;
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
@@ -234,11 +234,10 @@ async fn main() -> anyhow::Result<()> {
         NoOpTaskProperties,
         NoOpConnectionService,
     );
-    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
-        entity_access_service,
+        (*entity_access_service).clone(),
         lexical_client_for_tools,
     );
 
@@ -265,10 +264,12 @@ async fn main() -> anyhow::Result<()> {
     );
     let search_service_client = Arc::new(search_service_client);
 
-    // Build properties tool context for AI tools
     let properties_service = properties::PropertiesServiceImpl::new(
         properties::PropertiesPgRepo::new(db.clone()),
-        Some(properties::PermissionServiceImpl::new(db.clone())),
+        Some(properties::PermissionServiceImpl::new(
+            db.clone(),
+            entity_access_service.clone(),
+        )),
         Some(NoOpNotificationService),
     );
     let properties_tool_context =
@@ -276,7 +277,6 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized properties tool context");
 
-    // Build email tool context for AI tools
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(EmailServiceImpl::new(
             EmailPgRepo::new(db.clone()),
@@ -292,7 +292,6 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized email tool context");
 
-    // Build shared tool context and toolset
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -302,6 +301,7 @@ async fn main() -> anyhow::Result<()> {
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
+        schedule_tool_context: ai_tools::NoOpScheduleContext,
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
@@ -341,6 +341,10 @@ async fn main() -> anyhow::Result<()> {
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,
+        entity_access_service,
+        ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
+            redis_client.clone(),
+        ),
     })
     .await
     .context("failed to setup and serve api")?;

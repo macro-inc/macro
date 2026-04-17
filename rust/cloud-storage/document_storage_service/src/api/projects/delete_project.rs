@@ -1,12 +1,13 @@
 use crate::api::{context::ApiContext, util::count_occurrences};
 
+use crate::api::context::EntityAccessService;
 use axum::{
     Extension,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::cloud_storage::ensure_access::project::ProjectAccessLevelExtractor;
+use entity_access::inbound::axum_extractors::ProjectAccessLevelExtractor;
 use model::{
     project::BasicProject,
     response::{
@@ -51,9 +52,9 @@ pub type ProjectDeleteResponse = TypedSuccessResponse<ProjectDeleteResponseData>
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, id), fields(user_id=?user_context.user_id, project_id=?id))]
+#[tracing::instrument(skip(ctx, user_context, id, _access), fields(user_id=?user_context.user_id, project_id=?id))]
 pub async fn delete_project_handler(
-    access: ProjectAccessLevelExtractor<OwnerAccessLevel>,
+    _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Path(Params { id }): Path<Params>,
@@ -114,9 +115,9 @@ pub async fn delete_project_handler(
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context, _access), fields(user_id=?user_context.user_id))]
 pub async fn permanently_delete_project_handler(
-    access: ProjectAccessLevelExtractor<OwnerAccessLevel>,
+    _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Path(Params { id }): Path<Params>,

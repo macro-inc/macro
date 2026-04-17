@@ -243,6 +243,11 @@ export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(
   true
 );
 
+export const ENABLE_DOCUMENT_MENTION_NOTIFICATIONS = resolveFeatureFlag(
+  'ENABLE_DOCUMENT_MENTION_NOTIFICATIONS',
+  DEV_MODE_ENV
+);
+
 // Auto expand stand-alone mentions to richer previews in channels
 export const ENABLE_STATIC_DOCUMENT_CARDS = resolveFeatureFlag(
   'ENABLE_STATIC_DOCUMENT_CARDS',
@@ -278,6 +283,11 @@ export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = resolveFeatureFlag(
 export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   'ENABLE_FEATURED_SEARCH_RESULTS',
   true
+);
+
+export const ENABLE_SEARCH_QUERY_OPERATORS = resolveFeatureFlag(
+  'ENABLE_SEARCH_QUERY_OPERATORS',
+  false
 );
 
 const ENABLE_NEW_CHANNELS_OVERRIDE = true;

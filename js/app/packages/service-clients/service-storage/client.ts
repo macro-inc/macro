@@ -9,7 +9,10 @@ import { modificationDataReplacer } from '@block-pdf/util/buildModificationData'
 import type { BlockAlias, BlockName } from '@core/block';
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { SERVER_HOSTS } from '@core/constant/servers';
+import {
+  SERVER_HOSTS,
+  SYNC_PERMISSION_TOKEN_DSS_HOST,
+} from '@core/constant/servers';
 import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
@@ -123,7 +126,8 @@ export type ItemType =
   | CloudStorageItemType
   | 'channel'
   | 'email'
-  | 'channel_message';
+  | 'channel_message'
+  | 'automation';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
@@ -152,6 +156,8 @@ export function blockNameToItemType(
       return 'project';
     case 'email':
       return 'email';
+    case 'automation':
+      return 'automation';
     default:
       return DEFAULT_ITEM_TYPE;
   }
@@ -223,9 +229,11 @@ export const storageServiceClient = {
   },
 
   permissionsTokens: {
+    // Uses SYNC_PERMISSION_TOKEN_DSS_HOST instead of dssFetch so that tokens are
+    // always signed by the DSS whose JWT secret matches the sync service's secret.
     async createPermissionToken(args) {
-      return await dssFetch<GetDocumentPermissionsTokenResponse>(
-        `/documents/permissions_token/${args.document_id}`,
+      return await fetchWithToken<GetDocumentPermissionsTokenResponse>(
+        `${SYNC_PERMISSION_TOKEN_DSS_HOST}/documents/permissions_token/${args.document_id}`,
         {
           method: 'POST',
         }

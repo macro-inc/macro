@@ -356,7 +356,8 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
             SoupItem::Chat(_)
             | SoupItem::Project(_)
             | SoupItem::EmailThread(_)
-            | SoupItem::Channel(_) => None,
+            | SoupItem::Channel(_)
+            | SoupItem::CallRecord(_) => None,
         })
         .expect("The document should exist");
     let expected_doc_id = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(); // doc-in-A
@@ -5306,6 +5307,66 @@ async fn test_dyn_filter_is_email_attachment_false(db: PgPool) -> anyhow::Result
     assert!(
         !doc_ids.is_empty(),
         "Should still return non-email-attachment documents"
+    );
+
+    Ok(())
+}
+
+// Test filtering documents by NOT sub_type = task (excludes tasks, includes non-tasks with NULL sub_type)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Construct an AST with NOT(sub_type = task) via JSON deserialization
+    // This tests the fix for NULL handling: NOT (dt.sub_type IS NOT NULL AND dt.sub_type = 'task')
+    // Which correctly expands to: dt.sub_type IS NULL OR dt.sub_type != 'task'
+    let filters: EntityFilterAst = serde_json::from_value(serde_json::json!({
+        "df": {
+            "!": {
+                "l": { "dst": "task" }
+            }
+        }
+    }))?;
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let mut task_doc_count = 0;
+    let mut non_task_doc_count = 0;
+
+    for item in &items {
+        if let SoupItem::Document(doc) = item {
+            if doc.sub_type.is_some() {
+                task_doc_count += 1;
+            } else {
+                non_task_doc_count += 1;
+            }
+        }
+    }
+
+    // The NOT filter should exclude all task documents
+    assert_eq!(
+        task_doc_count, 0,
+        "Should get 0 task documents with NOT task filter"
+    );
+    // Should return non-task documents (those with NULL sub_type)
+    assert!(
+        non_task_doc_count > 0,
+        "Should get non-task documents (NULL sub_type) with NOT task filter"
     );
 
     Ok(())

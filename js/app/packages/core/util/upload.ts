@@ -19,7 +19,10 @@ import {
 } from '@core/constant/allBlocks';
 import { heicConversionService } from '@core/heic/service';
 import { createStaticFile } from '@core/util/create';
-import { filenameWithoutExtension } from '@service-storage/util/filename';
+import {
+  fileExtension,
+  filenameWithoutExtension,
+} from '@service-storage/util/filename';
 import {
   type UploadFileOptions as DssUploadFileOptions,
   type UploadSuccess as DssUploadSuccessResult,
@@ -207,18 +210,20 @@ export const DEFAULT_DESTINATION_RULESET: DestinationRuleset = 'dss';
 // Shared ruleset for chat input -> images/videos are static for inline display, everything else to DSS
 export const chatRuleset: DestinationRuleset = (file: File) => {
   const fileType = blockAcceptedMimetypeToFileExtension[file.type];
+  const ext = fileExtension(file.name);
 
   // Images go to static for inline display
   if (
     file.type.startsWith('image/') ||
     file.type.startsWith('video/') ||
     blockAcceptsFileExtension('image', fileType) ||
-    blockAcceptsFileExtension('video', fileType)
+    blockAcceptsFileExtension('video', fileType) ||
+    (ext && blockAcceptsFileExtension('image', ext)) ||
+    (ext && blockAcceptsFileExtension('video', ext))
   ) {
     return 'static';
   }
 
-  // Everything else goes to DSS for document features
   return 'dss';
 };
 

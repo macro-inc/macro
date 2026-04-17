@@ -1,68 +1,30 @@
 import { toast } from '@core/component/Toast/Toast';
-import {
-  type EntityData,
-  isCurrentUserAssigned,
-  isTaskClosed,
-  isTaskEntity,
-  type TaskEntityWithProperties,
-} from '@entity';
+import { type EntityData, isTaskEntity } from '@entity';
 import {
   markNotificationsForEntityAsDone,
   type NotificationSource,
 } from '@notifications';
-import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
-import type { PropertiesEntityType } from '@service-properties/client';
 import type { SoupState } from '../create-soup-state';
 import { archiveEmail } from '@app/component/next-soup/utils';
 
 type MakeMarkDoneOptions = {
-  userId: () => string | undefined;
+  userId?: () => string | undefined;
   notificationSource: () => NotificationSource;
 };
 
-const getPropertiesEntityType = (
-  entity: EntityData
-): PropertiesEntityType | undefined => {
-  if (isTaskEntity(entity)) return 'TASK';
-  if (entity.type === 'email') return 'THREAD';
-  if (entity.type === 'document') return 'DOCUMENT';
-  if (entity.type === 'project') return 'PROJECT';
-  return undefined;
-};
-
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
-  const { userId, notificationSource } = options;
-
-  const setPropertyStatusCompleteMutation =
-    useSetPropertyStatusCompleteMutation();
+  const { notificationSource } = options;
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'channel_message') return false;
     if (
       entity.type === 'email' ||
       entity.type === 'channel' ||
-      entity.type === 'chat'
+      entity.type === 'chat' ||
+      entity.type === 'document' ||
+      entity.type === 'project' ||
+      isTaskEntity(entity)
     ) {
-      return true;
-    }
-
-    if (isTaskEntity(entity)) {
-      const currentUserId = userId();
-      if (
-        !isCurrentUserAssigned(
-          entity as TaskEntityWithProperties,
-          currentUserId
-        )
-      ) {
-        return false;
-      }
-      if (isTaskClosed(entity as TaskEntityWithProperties)) {
-        return false;
-      }
-      return true;
-    }
-
-    if (entity.type === 'document' || entity.type === 'project') {
       return true;
     }
 
@@ -81,14 +43,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       }
 
       markNotificationsForEntityAsDone(source, entity);
-
-      const entityType = getPropertiesEntityType(entity);
-      if (entityType) {
-        setPropertyStatusCompleteMutation.mutate({
-          entityType,
-          entityId: entity.id,
-        });
-      }
     }
 
     toast.success(
@@ -118,13 +72,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     await execute(entities);
 
     soup.selection.clear();
-    const shouldNavigate =
-      soup.filters.isActive('signal') || soup.filters.isActive('noise');
 
-    // marking email as done removes it in any view, so we should update selection.
-    const willBeRemoved = entities.some((e) => e.type === 'email');
-
-    if (nextEntity && (shouldNavigate || willBeRemoved)) {
+    if (nextEntity) {
       soup.focus.set(nextEntity.id);
       onNavigate?.(nextEntity);
     }

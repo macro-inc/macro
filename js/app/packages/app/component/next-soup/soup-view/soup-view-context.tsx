@@ -68,6 +68,10 @@ interface SoupViewContextValues {
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
+  searchPaused: Accessor<boolean>;
+  setSearchPaused: Setter<boolean>;
+  searchMentions: Accessor<string[]>;
+  setSearchMentions: Setter<string[]>;
   featuredIds: Accessor<string[]>;
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
@@ -100,6 +104,11 @@ interface SoupViewContextProviderProps {
   soup?: SoupState;
   queryFilters?: SoupBody;
   disableLocalSearch?: boolean;
+  /**
+   * Additional client-side entities to merge into the soup item stream.
+   * Visibility is still controlled by the active client filters.
+   */
+  additionalEntities?: Accessor<EntityData[]>;
 }
 
 type ApiSortMethod = NonNullable<SoupParams['sort_method']>;
@@ -134,6 +143,8 @@ export const SoupViewContextProvider: FlowComponent<
   const [internalQueryFilters, setInternalQueryFilters] =
     createSignal<SoupBody>({ ...(props.queryFilters ?? {}) });
 
+  const [searchPaused, setSearchPaused] = createSignal(false);
+  const [searchMentions, setSearchMentions] = createSignal<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
   const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
 
@@ -162,6 +173,8 @@ export const SoupViewContextProvider: FlowComponent<
     soup,
     queryFilters,
     disableLocalSearch: props.disableLocalSearch,
+    searchPaused,
+    searchMentions,
   });
 
   const notificationSource = useGlobalNotificationSource();
@@ -242,9 +255,15 @@ export const SoupViewContextProvider: FlowComponent<
       if (!searching) {
         const data = itemsQuery.data;
         if (!data) return prev;
-        return data.map((e) =>
+        const base = data.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
+        const extras = props.additionalEntities?.() ?? [];
+        if (extras.length === 0) return base;
+        const extraEntities = extras.map((e) =>
+          isWithNotification(e) ? e : attachNotifications(e)
+        ) as SoupEntity[];
+        return [...extraEntities, ...base];
       }
 
       const local = search.localFuzzyResults();
@@ -367,6 +386,10 @@ export const SoupViewContextProvider: FlowComponent<
     rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
+    searchPaused,
+    setSearchPaused,
+    searchMentions,
+    setSearchMentions,
     featuredIds: search.featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,

@@ -1,17 +1,24 @@
+use std::{ops::Deref, sync::LazyLock};
+
 use crate::domain::models::TranscriptSegmentRequest;
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use chrono::Utc;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
-const USER_A: &str = "macro|user-a@test.com";
-const USER_B: &str = "macro|user-b@test.com";
-const USER_C: &str = "macro|user-c@test.com";
+const CALL_ARCHIVED: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca2ed);
+static USER_A: LazyLock<MacroUserIdStr<'static>> =
+    LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
+static USER_B: LazyLock<MacroUserIdStr<'static>> =
+    LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-b@test.com").unwrap());
+static USER_C: LazyLock<MacroUserIdStr<'static>> =
+    LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-c@test.com").unwrap());
 
 fn repo(pool: Pool<Postgres>) -> PgCallRepo {
     PgCallRepo::new(pool)
@@ -27,14 +34,14 @@ async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let id = Uuid::now_v7();
     let call = repo
-        .create_call(&id, &CH2, "room-ch2", USER_B)
+        .create_call(&id, &CH2, "room-ch2", USER_B.deref().copied())
         .await?
         .expect("should create new call");
 
     assert_eq!(call.id, id);
     assert_eq!(call.channel_id, CH2);
     assert_eq!(call.room_name, "room-ch2");
-    assert_eq!(call.created_by, USER_B);
+    assert_eq!(call.created_by, USER_B.as_ref());
     Ok(())
 }
 
@@ -46,7 +53,7 @@ async fn create_call_returns_none_on_duplicate_channel(pool: Pool<Postgres>) -> 
     let repo = repo(pool);
     // CH1 already has an active call from the fixture.
     let result = repo
-        .create_call(&Uuid::now_v7(), &CH1, "room-dup", USER_A)
+        .create_call(&Uuid::now_v7(), &CH1, "room-dup", USER_A.deref().copied())
         .await?;
 
     assert!(result.is_none(), "should return None on conflict");
@@ -120,13 +127,15 @@ async fn add_and_check_participant(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
 
     // user-c is not in the call yet.
-    assert!(!repo.is_participant(&CALL1, USER_C).await?);
+    assert!(!repo.is_participant(&CALL1, &USER_C.as_ref()).await?);
 
-    let participant = repo.add_participant(&CALL1, USER_C).await?;
+    let participant = repo
+        .add_participant(&CALL1, USER_C.deref().copied())
+        .await?;
     assert_eq!(participant.call_id, CALL1);
-    assert_eq!(participant.user_id, USER_C);
+    assert_eq!(participant.user_id, USER_C.as_ref());
 
-    assert!(repo.is_participant(&CALL1, USER_C).await?);
+    assert!(repo.is_participant(&CALL1, &USER_C.as_ref()).await?);
     Ok(())
 }
 
@@ -137,9 +146,10 @@ async fn add_and_check_participant(pool: Pool<Postgres>) -> anyhow::Result<()> {
 async fn remove_participant_removes_from_db(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
 
-    assert!(repo.is_participant(&CALL1, USER_B).await?);
-    repo.remove_participant(&CALL1, USER_B).await?;
-    assert!(!repo.is_participant(&CALL1, USER_B).await?);
+    assert!(repo.is_participant(&CALL1, &USER_B.as_ref()).await?);
+    repo.remove_participant(&CALL1, USER_B.deref().copied())
+        .await?;
+    assert!(!repo.is_participant(&CALL1, &USER_B.as_ref()).await?);
     Ok(())
 }
 
@@ -155,8 +165,8 @@ async fn get_participants_returns_all(pool: Pool<Postgres>) -> anyhow::Result<()
 
     assert_eq!(participants.len(), 2);
     let user_ids: Vec<&str> = participants.iter().map(|p| p.user_id.as_str()).collect();
-    assert!(user_ids.contains(&USER_A));
-    assert!(user_ids.contains(&USER_B));
+    assert!(user_ids.contains(&USER_A.as_ref()));
+    assert!(user_ids.contains(&USER_B.as_ref()));
     Ok(())
 }
 
@@ -171,7 +181,8 @@ async fn get_participant_count_correct(pool: Pool<Postgres>) -> anyhow::Result<(
 
     assert_eq!(repo.get_participant_count(&CALL1).await?, 2);
 
-    repo.remove_participant(&CALL1, USER_B).await?;
+    repo.remove_participant(&CALL1, USER_B.deref().copied())
+        .await?;
     assert_eq!(repo.get_participant_count(&CALL1).await?, 1);
     Ok(())
 }
@@ -223,7 +234,7 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     .await?;
 
     assert_eq!(record.channel_id, CH1);
-    assert_eq!(record.created_by, USER_A);
+    assert_eq!(record.created_by, USER_A.as_ref());
     assert!(record.duration_ms >= 0);
     assert!(record.ended_at >= record.started_at);
 
@@ -258,8 +269,10 @@ async fn archive_call_preserves_soft_deleted_participants(
     let repo = repo(pool.clone());
 
     // Soft-delete both participants (simulates leave_or_end_call flow).
-    repo.remove_participant(&CALL1, USER_A).await?;
-    repo.remove_participant(&CALL1, USER_B).await?;
+    repo.remove_participant(&CALL1, USER_A.deref().copied())
+        .await?;
+    repo.remove_participant(&CALL1, USER_B.deref().copied())
+        .await?;
 
     // Active count should be 0 but rows still exist.
     assert_eq!(repo.get_participant_count(&CALL1).await?, 0);
@@ -282,8 +295,8 @@ async fn archive_call_preserves_soft_deleted_participants(
 
     assert_eq!(rows.len(), 2);
     let user_ids: Vec<&str> = rows.iter().map(|r| r.user_id.as_str()).collect();
-    assert!(user_ids.contains(&USER_A));
-    assert!(user_ids.contains(&USER_B));
+    assert!(user_ids.contains(&USER_A.as_ref()));
+    assert!(user_ids.contains(&USER_B.as_ref()));
     // Both should have left_at set since they were soft-deleted.
     assert!(rows.iter().all(|r| r.left_at.is_some()));
 
@@ -327,13 +340,13 @@ async fn archive_call_preserves_id_and_share_permission(
     Ok(())
 }
 
-// -- set_active_call_recording_url --------------------------------------------
+// -- set_active_call_recording_key --------------------------------------------
 
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn set_active_call_recording_url_updates_matching_call(
+async fn set_active_call_recording_key_updates_matching_call(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
@@ -343,23 +356,29 @@ async fn set_active_call_recording_url_updates_matching_call(
 
     // Should update and return true.
     let updated = repo
-        .set_active_call_recording_url("egress-123", "s3://bucket/recording.mp4")
+        .set_active_call_recording_key(
+            "egress-123",
+            "0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4",
+        )
         .await?;
     assert!(updated);
 
-    // Verify the URL is on the active call.
+    // Verify the key is on the active call.
     let call = repo.get_call_by_channel_id(&CH1).await?.unwrap();
     assert_eq!(call.egress_id.as_deref(), Some("egress-123"));
 
-    // Now archive and verify recording_url carries forward.
+    // Now archive and verify recording_key carries forward.
     let record_id = repo.archive_call(&CALL1).await?;
-    let url = sqlx::query_scalar!(
-        r#"SELECT recording_url FROM call_records WHERE id = $1"#,
+    let key = sqlx::query_scalar!(
+        r#"SELECT recording_key FROM call_records WHERE id = $1"#,
         record_id,
     )
     .fetch_one(&pool)
     .await?;
-    assert_eq!(url.as_deref(), Some("s3://bucket/recording.mp4"));
+    assert_eq!(
+        key.as_deref(),
+        Some("0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4")
+    );
 
     Ok(())
 }
@@ -368,13 +387,16 @@ async fn set_active_call_recording_url_updates_matching_call(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn set_active_call_recording_url_returns_false_when_no_match(
+async fn set_active_call_recording_key_returns_false_when_no_match(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
 
     let updated = repo
-        .set_active_call_recording_url("nonexistent-egress", "s3://bucket/recording.mp4")
+        .set_active_call_recording_key(
+            "nonexistent-egress",
+            "0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4",
+        )
         .await?;
     assert!(!updated);
 
@@ -474,7 +496,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
 
     assert_eq!(transcripts.len(), 1);
     assert_eq!(transcripts[0].content, "test transcript");
-    assert_eq!(transcripts[0].speaker_id, USER_A);
+    assert_eq!(transcripts[0].speaker_id, USER_A.as_ref());
     assert_eq!(transcripts[0].sequence_num, 1);
 
     // Ephemeral transcripts should be gone (cascaded).
@@ -486,5 +508,210 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     .await?;
     assert_eq!(ephemeral, 0);
 
+    Ok(())
+}
+
+// -- get_call_record_by_call_id ----------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let now = Utc::now();
+
+    // Ingest two transcript segments into the active call.
+    repo.create_transcript_segment(
+        &CALL1,
+        &TranscriptSegmentRequest {
+            segment_id: "seg-live-1".to_string(),
+            speaker_id: USER_A.to_string(),
+            content: "hello there".to_string(),
+            started_at: now,
+            ended_at: Some(now),
+            is_final: true,
+        },
+    )
+    .await?;
+    repo.create_transcript_segment(
+        &CALL1,
+        &TranscriptSegmentRequest {
+            segment_id: "seg-live-2".to_string(),
+            speaker_id: USER_B.to_string(),
+            content: "general kenobi".to_string(),
+            started_at: now,
+            ended_at: Some(now),
+            is_final: true,
+        },
+    )
+    .await?;
+
+    let record = repo
+        .get_call_record_by_call_id(&CALL1)
+        .await?
+        .expect("active call should be found");
+
+    assert_eq!(record.call_id, CALL1);
+    assert_eq!(record.channel_id, CH1);
+    assert!(record.is_active);
+    assert!(record.ended_at.is_none());
+    assert!(record.duration_ms.is_none());
+
+    // Participants from fixture.
+    let user_ids: Vec<&str> = record
+        .participants
+        .iter()
+        .map(|p| p.user_id.as_str())
+        .collect();
+    assert_eq!(user_ids, vec![USER_A.as_ref(), USER_B.as_ref()]);
+
+    // Transcripts ordered by sequence_num.
+    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript[0].sequence_num, 1);
+    assert_eq!(record.transcript[0].content, "hello there");
+    assert_eq!(
+        record.transcript[0].segment_id.as_deref(),
+        Some("seg-live-1")
+    );
+    assert_eq!(record.transcript[1].sequence_num, 2);
+    assert_eq!(record.transcript[1].content, "general kenobi");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should be found");
+
+    assert_eq!(record.call_id, CALL_ARCHIVED);
+    assert_eq!(record.channel_id, CH1);
+    assert!(!record.is_active);
+    assert!(record.ended_at.is_some());
+    assert_eq!(record.duration_ms, Some(300_000));
+    assert_eq!(record.egress_id.as_deref(), Some("egress-arch-1"));
+
+    // Participants from archived fixture (both have left_at).
+    assert_eq!(record.participants.len(), 2);
+    assert!(record.participants.iter().all(|p| p.left_at.is_some()));
+
+    // Transcripts ordered by sequence_num.
+    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(record.transcript[1].content, "archived reply");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_returns_none_for_unknown(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo.get_call_record_by_call_id(&Uuid::now_v7()).await?;
+    assert!(record.is_none());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_includes_channel_member_not_in_call(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // user-c is a member of CH1 (fixture) but is NOT in call_participants
+    // for CALL1 or call_record_participants for CALL_ARCHIVED. Visibility
+    // should now come from channel membership, so both calls should appear.
+    let records = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &None)
+        .await?;
+
+    assert_eq!(
+        records.len(),
+        2,
+        "expected active + archived call for channel member"
+    );
+    assert!(records.iter().any(|r| r.call_id == CALL1 && r.is_active));
+    assert!(
+        records
+            .iter()
+            .any(|r| r.call_id == CALL_ARCHIVED && !r.is_active)
+    );
+    Ok(())
+}
+
+// -- delete_call_record -------------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn delete_call_record_cascades(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Sanity check: the archived call and its children exist before delete.
+    let pre_participants: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_record_participants WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    let pre_transcripts: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_record_transcripts WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(pre_participants > 0);
+    assert!(pre_transcripts > 0);
+
+    repo.delete_call_record(&CALL_ARCHIVED).await?;
+
+    // Record row is gone.
+    let record = repo.get_call_record_by_call_id(&CALL_ARCHIVED).await?;
+    assert!(record.is_none());
+
+    // Cascade removed participants and transcripts.
+    let remaining_participants: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_record_participants WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    let remaining_transcripts: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM call_record_transcripts WHERE call_record_id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining_participants, 0);
+    assert_eq!(remaining_transcripts, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn delete_call_record_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // Non-existent id — should succeed without touching anything.
+    repo.delete_call_record(&Uuid::now_v7()).await?;
+
+    // Existing archived record must still be present.
+    assert!(
+        repo.get_call_record_by_call_id(&CALL_ARCHIVED)
+            .await?
+            .is_some()
+    );
     Ok(())
 }

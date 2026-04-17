@@ -3,13 +3,21 @@ import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import { useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
-import { createBulkMoveToProjectDssEntityMutation } from '@macro-entity';
-import type { EntityData } from '@entity';
 import {
-  BulkEditEntityModalActionFooter,
-  BulkEditEntityModalTitle,
-} from './BulkEditEntityModal';
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onMount,
+  Show,
+  untrack,
+} from 'solid-js';
+import { createBulkMoveToProjectDssEntityMutation } from '@macro-entity';
+import { type EntityData, InlineEntity } from '@entity';
+import { Dialog } from '@kobalte/core/dialog';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
+import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 
 type ProjectWithDepth = Project & { depth?: number; path?: string };
 
@@ -38,7 +46,7 @@ export const BulkMoveToProjectView = (props: {
   onMount(() => {
     attachHotkeys(rootScopeId);
     registerHotkey({
-      hotkey: ['arrowdown'],
+      hotkey: ['arrowdown', 'ctrl+j'],
       scopeId: moveToProjectHotkeyScopeId,
       description: 'Down',
       keyDownHandler: () => {
@@ -67,7 +75,7 @@ export const BulkMoveToProjectView = (props: {
       runWithInputFocused: true,
     });
     registerHotkey({
-      hotkey: ['arrowup'],
+      hotkey: ['arrowup', 'ctrl+k'],
       scopeId: moveToProjectHotkeyScopeId,
       description: 'Up',
       keyDownHandler: () => {
@@ -241,6 +249,7 @@ export const BulkMoveToProjectView = (props: {
 
   const updateFlattenedProjects = () => {
     const query = searchQuery().toLowerCase();
+    let newItems: ProjectWithDepth[];
 
     if (query) {
       // Search mode: filter projects that match the query
@@ -256,6 +265,7 @@ export const BulkMoveToProjectView = (props: {
           })
         );
       setFlattenedProjects({ items: searchResults });
+      newItems = searchResults;
     } else {
       // Tree mode: flatten the hierarchy respecting expanded state
       const result: ProjectWithDepth[] = [];
@@ -280,22 +290,23 @@ export const BulkMoveToProjectView = (props: {
 
       processItems(tree.rootItems);
       setFlattenedProjects({ items: result });
+      newItems = result;
     }
 
-    // Reset focus when items change
-    const items = flattenedProjects().items;
-    if (items.length > 0 && focusedIndex() === -1) {
+    // Reset focus when items change — use newItems directly to avoid re-tracking
+    const fi = untrack(focusedIndex);
+    if (newItems.length > 0 && fi === -1) {
       setFocusedIndex(0);
-      setSelectedProject(items[0]);
-    } else if (focusedIndex() >= items.length) {
-      const newIndex = Math.max(0, items.length - 1);
+      setSelectedProject(newItems[0]);
+    } else if (fi >= newItems.length) {
+      const newIndex = Math.max(0, newItems.length - 1);
       setFocusedIndex(newIndex);
-      setSelectedProject(items[newIndex] || null);
+      setSelectedProject(newItems[newIndex] || null);
     }
   };
 
   // Update flattened projects when dependencies change
-  createMemo(() => {
+  createEffect(() => {
     updateFlattenedProjects();
   });
 
@@ -309,23 +320,10 @@ export const BulkMoveToProjectView = (props: {
   };
 
   // Keep focused index in sync with current selection
-  createMemo(() => {
+  createEffect(() => {
     const index = currentIndex();
-    if (index !== -1 && index !== focusedIndex()) {
+    if (index !== -1 && index !== untrack(focusedIndex)) {
       setFocusedIndex(index);
-    }
-  });
-
-  const currentFocus = () => {
-    const index = focusedIndex();
-    return index >= 0 && index < items().length ? items()[index] : null;
-  };
-
-  // Auto-select focused item
-  createMemo(() => {
-    const focused = currentFocus();
-    if (focused && focused.id !== currentSelected()?.id) {
-      setSelectedProject(focused);
     }
   });
 
@@ -363,81 +361,152 @@ export const BulkMoveToProjectView = (props: {
 
   return (
     <div ref={rootScopeId}>
-      <BulkEditEntityModalTitle
-        title={`Move ${entityCount()} ${entityText()} to folder`}
-      />
-      <div class="mb-4">
-        <input
-          type="text"
-          placeholder="Search folders..."
-          value={searchQuery()}
-          onInput={(e) => setSearchQuery(e.target.value)}
-          class="w-full px-3 py-2 border border-edge bg-menu text-ink focus:outline-none focus:border-accent"
-        />
+      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+        <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+          <CloseIcon />
+        </Dialog.CloseButton>
+        <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+          Move {entityCount()} {entityText()} to folder
+        </Dialog.Title>
       </div>
-      <div class="h-64 overflow-auto border border-edge" ref={listRef}>
-        <For each={items()}>
-          {(project, index) => {
-            const isSelected = () => currentSelected()?.id === project.id;
-            const isFocused = () => focusedIndex() === index();
-            const isExpanded = () => expandedProjects()[project.id];
-            const hasChildren = () => {
-              const tree = projectTree();
-              return (
-                tree.itemMap[project.id]?.children &&
-                tree.itemMap[project.id].children!.length > 0
-              );
-            };
 
-            return (
+      <div class="p-2 border-b border-edge-muted">
+        <div class="flex items-center gap-2">
+          <For each={props.entities.slice(0, 2)}>
+            {(entity) => (
               <div
-                class={`flex items-center px-2 py-1 cursor-pointer hover:bg-accent/10 ${
-                  isFocused() ? 'focused bg-accent/20' : ''
-                } ${isSelected() ? 'bg-accent/10' : ''}`}
-                style={{
-                  'padding-left': `${(project.depth || 0) * 16 + 8}px`,
-                }}
-                onClick={() => {
-                  setSelectedProject(project);
-                  setFocusedIndex(index());
-                  scrollToKeepGap({
-                    container: listRef,
-                    target: listRef.querySelector('.focused') as HTMLElement,
-                    align: 'top',
-                  });
-                }}
+                class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
+                  'max-w-[50%]': props.entities.length === 2,
+                })}
               >
-                <div
-                  class={`mr-2 w-4 h-4 flex items-center justify-center text-xs ${
-                    hasChildren() ? 'cursor-pointer' : 'opacity-20'
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (hasChildren()) {
-                      toggleExpanded(project.id);
-                    }
-                  }}
-                >
-                  {hasChildren() ? (isExpanded() ? '▼' : '▶') : ''}
-                </div>
-                <div class="mr-2">{<EntityIcon targetType="project" />}</div>
-                <div class="flex-1 text-sm truncate">{project.name}</div>
-                <Show when={searchQuery()}>
-                  <div class="text-xs text-ink-placeholder ml-2 truncate max-w-48">
-                    {getProjectPath(project.id)}
-                  </div>
-                </Show>
+                <InlineEntity entity={entity} />
               </div>
-            );
-          }}
-        </For>
+            )}
+          </For>
+          <Show when={props.entities.length > 2}>
+            <div class="text-muted-foreground text-xs px-2 py-1">
+              +{props.entities.length - 2} more
+            </div>
+          </Show>
+        </div>
       </div>
-      <BulkEditEntityModalActionFooter
-        onCancel={props.onCancel}
-        onConfirm={finishEditing}
-        confirmText="Move"
-        isDisabled={!selectedProject()}
-      />
+
+      <div class="p-3 flex flex-col gap-3">
+        <div class="border border-edge-muted rounded-sm overflow-hidden">
+          <input
+            ref={(el) => {
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => el.focus())
+              );
+            }}
+            type="text"
+            placeholder="Search folders..."
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              const isDown =
+                e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j');
+              const isUp = e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k');
+              if (isDown || isUp) {
+                e.preventDefault();
+                const itms = items();
+                if (itms.length === 0) return;
+                const fi = focusedIndex();
+                const nextIndex = isDown
+                  ? Math.min(fi + 1, itms.length - 1)
+                  : Math.max(fi - 1, 0);
+                setFocusedIndex(nextIndex);
+                setSelectedProject(itms[nextIndex]);
+                scrollToKeepGap({
+                  container: listRef,
+                  target: listRef.querySelector('.focused') as HTMLElement,
+                  align: isDown ? 'bottom' : 'top',
+                });
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                finishEditing();
+              }
+            }}
+            class="w-full px-3 py-2 text-sm bg-menu text-ink focus:outline-none border-b border-edge-muted"
+          />
+          <div class="h-64 overflow-auto" ref={listRef}>
+            <For each={items()}>
+              {(project, index) => {
+                const isSelected = () => currentSelected()?.id === project.id;
+                const isFocused = () => focusedIndex() === index();
+                const isExpanded = () => expandedProjects()[project.id];
+                const hasChildren = () => {
+                  const tree = projectTree();
+                  return (
+                    tree.itemMap[project.id]?.children &&
+                    tree.itemMap[project.id].children!.length > 0
+                  );
+                };
+
+                return (
+                  <div
+                    class={`flex items-center px-2 py-1 cursor-pointer hover:bg-accent/10 ${
+                      isFocused() ? 'focused bg-accent/20' : ''
+                    } ${isSelected() ? 'bg-accent/10' : ''}`}
+                    style={{
+                      'padding-left': `${(project.depth || 0) * 16 + 8}px`,
+                    }}
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setFocusedIndex(index());
+                      scrollToKeepGap({
+                        container: listRef,
+                        target: listRef.querySelector(
+                          '.focused'
+                        ) as HTMLElement,
+                        align: 'top',
+                      });
+                    }}
+                  >
+                    <div
+                      class={`mr-2 w-4 h-4 flex items-center justify-center text-xs ${
+                        hasChildren() ? 'cursor-pointer' : 'opacity-20'
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasChildren()) {
+                          toggleExpanded(project.id);
+                        }
+                      }}
+                    >
+                      {hasChildren() ? (isExpanded() ? '▼' : '▶') : ''}
+                    </div>
+                    <div class="mr-2">
+                      {<EntityIcon targetType="project" />}
+                    </div>
+                    <div class="flex-1 text-sm truncate">{project.name}</div>
+                    <Show when={searchQuery()}>
+                      <div class="text-xs text-ink-placeholder ml-2 truncate max-w-48">
+                        {getProjectPath(project.id)}
+                      </div>
+                    </Show>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <Button variant="ghost" class="rounded-xs" onClick={props.onCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            class="rounded-xs"
+            onClick={finishEditing}
+            disabled={!selectedProject()}
+          >
+            Move
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

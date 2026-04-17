@@ -1,15 +1,16 @@
-import type { Notification } from '../types/notification';
-import type { NotificationStack } from '@notifications';
 import type { NotificationType } from '@core/types';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
+import type { NotificationStack } from '@notifications';
+import type { Notification } from '../types/notification';
 import {
-  getUniqueSenderIds,
   getActionVerb,
   getTypeNoun,
+  getTypePreposition,
+  getUniqueSenderIds,
 } from './notification-description-helpers';
 
 // Re-export helpers for backward compatibility and testing
-export { getUniqueSenderIds, getActionVerb, getTypeNoun };
+export { getActionVerb, getTypeNoun, getTypePreposition, getUniqueSenderIds };
 
 interface NotificationDescriptionProps {
   notification?: Notification;
@@ -101,10 +102,10 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
       if (senderId) {
         const senderCount = senderIds().length;
         if (senderCount === 2) {
-          return `${count()} ${getTypeNoun(type, count())} from ${primarySenderFirstName()} and ${secondarySenderFirstName()}`;
+          return `${count()} ${getTypeNoun(type, count())} ${getTypePreposition(type)} ${primarySenderFirstName()} and ${secondarySenderFirstName()}`;
         }
         // Three or more senders: "13 messages from Peter and 5 others"
-        return `${count()} ${getTypeNoun(type, count())} from ${primarySenderFirstName()} and ${additionalSenderCount()} ${additionalSenderCount() === 1 ? 'other' : 'others'}`;
+        return `${count()} ${getTypeNoun(type, count())} ${getTypePreposition(type)} ${primarySenderFirstName()} and ${additionalSenderCount()} ${additionalSenderCount() === 1 ? 'other' : 'others'}`;
       }
       return `${count()} ${getTypeNoun(type, count())}`;
     }

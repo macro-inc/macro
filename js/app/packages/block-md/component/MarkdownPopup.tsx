@@ -423,7 +423,7 @@ export function MarkdownPopup(props: {
           </Show>
           <Button
             size="sm"
-            class="px-2 text-xs rounded-xs py-1.5"
+            class="px-2 text-xs rounded-xs py-1.25"
             variant="ghost"
             onClick={async () => {
               const location = editor.read(() =>

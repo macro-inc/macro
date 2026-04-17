@@ -277,6 +277,22 @@ impl IsEmpty for EmailFilters {
     }
 }
 
+/// Filters for call records.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct CallFilters {
+    /// Channel IDs to filter calls by. Empty to include all calls.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channel_ids: Vec<String>,
+}
+
+impl IsEmpty for CallFilters {
+    fn is_empty(&self) -> bool {
+        let CallFilters { channel_ids } = self;
+        channel_ids.is_empty()
+    }
+}
+
 /// The channel message filters used to filter down what channel messages you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -419,6 +435,9 @@ pub struct EntityFilters {
     /// the bundled [ChannelFilters]
     #[serde(default)]
     pub channel_filters: ChannelFilters,
+    /// the bundled [CallFilters]
+    #[serde(default)]
+    pub call_filters: CallFilters,
     /// the bundled [EmailFilters]
     #[serde(default)]
     pub email_filters: EmailFilters,
@@ -434,15 +453,16 @@ impl IsEmpty for EntityFilters {
             document_filters,
             chat_filters,
             channel_filters,
+            call_filters,
             email_filters,
             property_filters,
         } = self;
         project_filters.is_empty()
             && document_filters.is_empty()
             && chat_filters.is_empty()
-            && chat_filters.is_empty()
-            && email_filters.is_empty()
             && channel_filters.is_empty()
+            && call_filters.is_empty()
+            && email_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
     }
 }

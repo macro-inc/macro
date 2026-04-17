@@ -249,6 +249,7 @@ function notificationsMutationSuccessCallback<T>(
 ) {
   queryClient.invalidateQueries({
     queryKey: notificationKeys.user._def,
+    refetchType: 'none',
   });
 }
 
@@ -401,7 +402,7 @@ function notificationEntityTypeToSoupTag(
     .with('channel', () => 'channel' as const)
     .with('project', () => 'project' as const)
     .with('email_thread', () => 'emailThread' as const)
-    .with(P.union('user', 'team'), () => null)
+    .with(P.union('user', 'team', 'call'), () => null)
     .exhaustive();
 }
 

@@ -44,6 +44,16 @@ const OPEN_TAG: &str = "<macro_em>";
 const CLOSE_TAG: &str = "</macro_em>";
 const CHARS_BEFORE_HIGHLIGHT: usize = 200;
 
+/// Merges adjacent highlight spans separated only by `@` into a single span.
+/// The `plain` highlighter wraps each matched token individually, so a hit on
+/// `hutch@macro.com` comes back as
+/// `<macro_em>hutch</macro_em>@<macro_em>macro.com</macro_em>`. Merging across
+/// `@` renders it as `<macro_em>hutch@macro.com</macro_em>`, which reads as
+/// one email address.
+pub(crate) fn merge_highlights_across_at(fragment: &str) -> String {
+    fragment.replace(&format!("{CLOSE_TAG}@{OPEN_TAG}"), "@")
+}
+
 fn normalize_highlight_fragment(fragment: &str) -> String {
     let stripped: String = fragment
         .chars()
@@ -73,8 +83,8 @@ fn normalize_highlight_fragment(fragment: &str) -> String {
         })
         .collect();
 
-    let trimmed = normalized.trim();
-    window_around_highlight(trimmed, MAX_VISIBLE_FRAGMENT_CHARS)
+    let merged = merge_highlights_across_at(normalized.trim());
+    window_around_highlight(&merged, MAX_VISIBLE_FRAGMENT_CHARS)
 }
 
 /// Returns a window of `max_chars` visible characters around the first
@@ -278,15 +288,25 @@ pub(crate) fn parse_highlight_hit(
             .map(|v| v.iter().map(|f| normalize_highlight_fragment(f)).collect())
             .unwrap_or_default(),
         sender: highlight
-            .get("sender")
+            .get("sender_name")
+            .or_else(|| highlight.get("sender"))
             .and_then(|v| v.first())
             .map(|v| v.to_string()),
         recipients: highlight
-            .get("recipients")
+            .get("recipient_names")
+            .or_else(|| highlight.get("recipients"))
             .map(|v| v.to_vec())
             .unwrap_or_default(),
-        cc: highlight.get("cc").map(|v| v.to_vec()).unwrap_or_default(),
-        bcc: highlight.get("bcc").map(|v| v.to_vec()).unwrap_or_default(),
+        cc: highlight
+            .get("cc_names")
+            .or_else(|| highlight.get("cc"))
+            .map(|v| v.to_vec())
+            .unwrap_or_default(),
+        bcc: highlight
+            .get("bcc_names")
+            .or_else(|| highlight.get("bcc"))
+            .map(|v| v.to_vec())
+            .unwrap_or_default(),
     }
 }
 

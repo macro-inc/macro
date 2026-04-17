@@ -5,8 +5,12 @@ export type AppEvents = {
   onboarding_start: Record<string, unknown>;
   onboarding_step: Record<string, unknown>; // payload -
   onboarding_completed: Record<string, unknown>;
+  login_from_onboarding: Record<string, unknown>;
+  mobile_web_welcome_viewed: Record<string, unknown>;
+  mobile_web_signup_sent_viewed: Record<string, unknown>;
 
   subscription_start: Record<string, unknown>;
+  subscription_cancel: Record<string, unknown>;
   subscription_success: Record<string, unknown>;
 
   sidebar_click: Record<string, unknown>;
@@ -56,6 +60,8 @@ export type AppEvents = {
   ai_message_sent: Record<string, unknown>;
   ai_attachment_add: Record<string, unknown>;
 
+  email_authorized: Record<string, unknown>;
+  email_unauthorized: Record<string, unknown>;
   email_message_sent: Record<string, unknown>;
 
   channel_message_sent: Record<string, unknown>;

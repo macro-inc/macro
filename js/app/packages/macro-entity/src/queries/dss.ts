@@ -3,9 +3,14 @@ import {
   deleteItem,
   moveToFolder,
 } from '@core/component/FileList/itemOperations';
+import { throwOnErr } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 import { useMutation } from '@tanstack/solid-query';
 import type { EntityData } from '@entity';
+import { callServiceClient } from '@service-call/client';
+import { scheduledActionClient } from '@service-scheduled-action/client';
+import { scheduledActionKeys } from '@queries/agent-schedule/keys';
+import type { ItemType } from '@service-storage/client';
 import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import {
@@ -17,26 +22,59 @@ import {
 } from '@queries/soup/cache';
 
 export function createBulkDeleteDssItemsMutation() {
-  const isUnsupportedEntity = (entity: EntityData) => {
+  const isDeletable = (entity: EntityData) => {
     const type = entity.type;
-    return type !== 'chat' && type !== 'document' && type !== 'project';
+    return (
+      type === 'chat' ||
+      type === 'document' ||
+      type === 'project' ||
+      type === 'call' ||
+      type === 'automation'
+    );
   };
   return useMutation(() => ({
     mutationFn: async (entities: EntityData[]) => {
-      if (entities.some(isUnsupportedEntity)) {
-        throw new Error(`Unsupported entity types`);
-      }
-
-      return await Promise.all(
-        entities
-          .filter((e) => e.type !== 'channel_message')
-          .map((e) => {
-            return deleteItem({ id: e.id, itemType: e.type });
-          })
+      const deletable = entities.filter(isDeletable);
+      const results = await Promise.all(
+        deletable.map((e) => {
+          if (e.type === 'call') {
+            return throwOnErr(() =>
+              callServiceClient.deleteCallRecord(e.id)
+            ).then(() => true);
+          }
+          if (e.type === 'automation') {
+            return throwOnErr(() =>
+              scheduledActionClient.deleteSchedule({ scheduleId: e.id })
+            ).then(() => true);
+          }
+          return deleteItem({ id: e.id, itemType: e.type as ItemType });
+        })
       );
+      if (deletable.some((e) => e.type === 'call')) {
+        queryClient.invalidateQueries({ queryKey: ['call'] });
+      }
+      if (deletable.some((e) => e.type === 'automation')) {
+        const deletedIds = new Set(
+          deletable.filter((e) => e.type === 'automation').map((e) => e.id)
+        );
+        queryClient.setQueryData(
+          scheduledActionKeys.list.queryKey,
+          (current: unknown) => {
+            if (!Array.isArray(current)) return current;
+            return current.filter(
+              (item: { id?: string }) => !item.id || !deletedIds.has(item.id)
+            );
+          }
+        );
+        queryClient.invalidateQueries({
+          queryKey: scheduledActionKeys.list.queryKey,
+        });
+      }
+      return results;
     },
     onMutate: async (entities: EntityData[]) => {
-      const ids = new Set(entities.map((e) => e.id));
+      const deletable = entities.filter(isDeletable);
+      const ids = new Set(deletable.map((e) => e.id));
       const soupSnapshot = removeSoupEntities(ids);
       const searchSnapshot = removeSearchEntities(ids);
       return { soupSnapshot, searchSnapshot };

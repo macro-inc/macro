@@ -18,7 +18,11 @@ const RECENTLY_VIEWED_GC_TIME = 10 * 60 * 1000; // 10 minutes
 
 const recentlyViewedArgs: SoupItemsQueryArgs = {
   params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
-  body: {},
+  body: {
+    call_filters: {
+      channel_ids: ['00000000-0000-0000-0000-000000000000'],
+    },
+  },
 };
 
 const recentlyViewedQueryKey = soupKeys.items(recentlyViewedArgs).queryKey;
@@ -37,12 +41,15 @@ export function useRecentlyViewedSoupQuery() {
             },
           })
       );
-      return page.items.map((item) => ({
-        id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
-        viewedAt:
-          (item.tag === 'channel' ? item.data.viewed_at : item.data.viewedAt) ??
-          undefined,
-      }));
+      return page.items
+        .filter((item) => item.tag !== 'callRecord')
+        .map((item) => ({
+          id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
+          viewedAt:
+            (item.tag === 'channel'
+              ? item.data.viewed_at
+              : item.data.viewedAt) ?? undefined,
+        }));
     },
     staleTime: RECENTLY_VIEWED_STALE_TIME,
     gcTime: RECENTLY_VIEWED_GC_TIME,

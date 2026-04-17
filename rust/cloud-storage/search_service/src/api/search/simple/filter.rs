@@ -1,6 +1,7 @@
 //! This module is responsible for defining a trait to convert item_filters into a UnifiedSearchArgsVariant
 //! This is used in simple_unified.rs
 
+use comms_db_client::model::SimpleMention;
 use opensearch_client::search::unified::{
     UnifiedChannelMessageSearchArgs, UnifiedChatSearchArgs, UnifiedDocumentSearchArgs,
     UnifiedEmailSearchArgs,
@@ -81,7 +82,17 @@ impl FilterVariantToSearchArgs for item_filters::ChannelFilters {
                     .map(|c| c.to_string())
                     .collect(),
                 thread_ids: self.thread_ids.clone(),
-                mentions: self.mentions.clone(),
+                mentions: self
+                    .mentions
+                    .iter()
+                    .map(|m| {
+                        SimpleMention {
+                            entity_type: "user".to_string(),
+                            entity_id: m.clone(),
+                        }
+                        .to_string()
+                    })
+                    .collect(),
                 sender_ids: self.sender_ids.clone(),
                 ..Default::default()
             })

@@ -634,11 +634,11 @@ export function ShareModal(props: ShareModalProps) {
       open={props.isSharePermOpen}
     >
       <Dialog.Portal>
-        <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4 pointer-events-none" />
-        <div class="z-modal fixed inset-0 flex flex-col items-center justify-center py-8">
+        <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+        <div class="z-modal fixed inset-0">
           <Dialog.Content
-            class="max-w-[calc(100vw-16px)] max-h-[calc(100vh-64px)] overflow-y-auto scrollbar-hidden mx-auto portal-scope flex flex-col gap-2"
-            style={{ width: '533px' }}
+            class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope flex flex-col gap-2 [&>*]:max-h-[75vh]"
+            style={{ width: '800px' }}
           >
             {/* Card 1: Share form — gradient border */}
             <ClippedPanel active cornerRadius="4px">
@@ -850,7 +850,7 @@ export function ShareModal(props: ShareModalProps) {
                       <Button
                         variant="secondary"
                         size="sm"
-                        class="flex items-center gap-1 rounded-xs px-2"
+                        class="flex items-center gap-1 rounded-xs px-2 py-1"
                         onClick={copyPublicLink}
                       >
                         <WideCopy class="size-4" />
@@ -1099,7 +1099,7 @@ export function ShareOptions(props: {
       <DropdownMenu.Trigger disabled={props.disabled}>
         <Button
           disabled={props.disabled}
-          class={`min-w-[67px] h-[22px] py-2 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
+          class={`min-w-[67px] py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
           variant="secondary"
         >
           {currentValueText()}

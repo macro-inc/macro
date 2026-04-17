@@ -9,6 +9,7 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
 import NotificationRoute from '@notifications/components/NotificationRoute';
+import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/compose/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
@@ -124,11 +125,13 @@ registerComponent(
       userId: user.userId(),
       email: user.email(),
     });
+    const automationEntities = useAutomationEntities();
     return (
       <SoupView
         viewName="Agents"
         queryFilters={preset.queryFilters}
         initialClientFilters={preset.clientFilters}
+        additionalEntities={automationEntities}
       />
     );
   })
@@ -203,6 +206,21 @@ registerComponent(
 );
 
 registerComponent(
+  'calls',
+  withAuth(() => {
+    usePageViewTracking('calls');
+    const preset = getDefaultListViewPreset('calls');
+    return (
+      <SoupView
+        viewName="Calls"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
   'folders',
   withAuth(() => {
     usePageViewTracking('folders');
@@ -252,7 +270,13 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
-  return <ComposeTask initialContent={params?.initialContent} />;
+  return (
+    <ComposeTask
+      initialContent={params?.initialContent}
+      initialTitle={params?.initialTitle}
+      initialAssigneeId={params?.initialAssigneeId}
+    />
+  );
 });
 registerComponent(
   'import-linear',

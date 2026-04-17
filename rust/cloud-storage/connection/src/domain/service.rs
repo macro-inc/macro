@@ -3,9 +3,10 @@
 use std::sync::Arc;
 
 use entity_access::domain::ports::EntityAccessService;
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-
-use entity_access::domain::models::EntityType;
+use macro_user_id::{
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 
 use crate::domain::{
     models::{ConnectionError, InvalidationEvent},
@@ -82,45 +83,19 @@ impl<E: EntityAccessService, Cgw: ConnectionGateway> ConnectionService
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn send_channel_message(
+    async fn send_channel_message<'a>(
         &self,
-        channel_id: &str,
+        users: &[MacroUserIdStr<'a>],
         message_type: &str,
         message: serde_json::Value,
-        triggered_by: entity_access::domain::models::EntityAccessAuth,
     ) -> Result<(), ConnectionError> {
-        let users = self
-            .entity_access_service
-            .get_users_by_entity(channel_id, EntityType::Channel)
-            .await
-            .map_err(|e| ConnectionError::Internal(e.into()))?;
-
-        let users = match &triggered_by {
-            entity_access::domain::models::EntityAccessAuth::Authenticated(macro_user_id_str) => {
-                users
-                    .into_iter()
-                    .filter_map(|p| {
-                        if p.as_ref() != macro_user_id_str.as_ref() {
-                            Some(p.0)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<MacroUserId<Lowercase<'_>>>>()
-            }
-            entity_access::domain::models::EntityAccessAuth::Unauthenticated
-            | entity_access::domain::models::EntityAccessAuth::Internal => {
-                users.into_iter().map(|s| s.0.to_owned()).collect()
-            }
-        };
-
         if users.is_empty() {
             tracing::trace!("no users to send channel message to");
             return Ok(());
         }
 
         self.connection_gateway
-            .batch_send_message(&users, message_type, message)
+            .batch_send_message(users, message_type, message)
             .await
             .map_err(|e| ConnectionError::Internal(e.into()))?;
 

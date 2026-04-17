@@ -281,7 +281,10 @@ function AssistantMessageParts(props: {
   });
 
   const parts = createMemo(() => {
-    return props.parts.filter((part) => part.type !== 'toolCallResponseJson');
+    return props.parts.filter(
+      (part) =>
+        part.type !== 'toolCallResponseJson' && part.type !== 'toolCallErr'
+    );
   });
 
   const keyedParts = createMemo(() => {
@@ -336,20 +339,6 @@ function AssistantMessageParts(props: {
                       },
                     }}
                   />
-                );
-              })()}
-            </Match>
-            <Match when={type() === 'toolCallErr'}>
-              {(() => {
-                const toolError = () =>
-                  currentPart() as Extract<
-                    AssistantMessagePart,
-                    { type: 'toolCallErr' }
-                  >;
-                return (
-                  <div class="px-2 py-1 text-sm text-ink-muted">
-                    Tool `{toolError().name}` failed: {toolError().description}
-                  </div>
                 );
               })()}
             </Match>

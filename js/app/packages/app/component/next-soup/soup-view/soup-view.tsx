@@ -17,9 +17,12 @@ import {
   SoupViewContextProvider,
   useSoupView,
 } from '@app/component/next-soup/soup-view/soup-view-context';
+import {
+  soupViewCacheKey,
+  activeSoupViewCounts,
+} from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -72,7 +75,7 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useHotkeyDOMScope, registerHotkey } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
@@ -92,6 +95,7 @@ import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-vi
 import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { SettingsButton } from '@app/component/settings/SettingsButton';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { SoupViewMobileCreateButton } from '@app/component/next-soup/soup-view/soup-view-mobile-create-button';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -107,6 +111,7 @@ import {
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import { QUERY_FILTERS } from '../filters/query-filters';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -168,11 +173,7 @@ type PersistedSoupViewState = {
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 1;
-
-// Tracks how many SoupViewList instances are mounted per contentId.
-// Used to detect duplicate splits showing the same view.
-const activeSoupViewCounts = new Map<string, number>();
+const PERSISTED_STATE_VERSION = 2;
 
 const listStateCache = new Map<
   string,
@@ -189,6 +190,13 @@ interface SoupViewProps {
   initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
   queryFilters?: SoupItemsQueryFilters;
   disableLocalSearch?: boolean;
+  /**
+   * Client-side entities to merge into the soup results. Useful for entity
+   * types (e.g. automation) that don't come back from the soup API.
+   * Visibility is controlled by the active client filter set — use a tab
+   * preset whose `clientFilters` include a predicate that matches them.
+   */
+  additionalEntities?: Accessor<EntityData[]>;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -209,7 +217,25 @@ export const SoupView = (props: SoupViewProps) => {
     return component() === listView;
   };
 
+  const activeListView = createMemo<ListView | undefined>(() => {
+    const id = component();
+    return id && isListViewID(id) ? id : undefined;
+  });
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
+  const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
+
+  registerHotkey({
+    hotkey: 'cmd+f',
+    scopeId: panel.splitHotkeyScope,
+    registrationType: 'add',
+    description: 'Search',
+    keyDownHandler: () => {
+      if (narrowSearchExpanded() || !searchIsCollapsed()) return false;
+      setNarrowSearchExpanded(true);
+      return true;
+    },
+  });
 
   const isMailView = createMemo(() => {
     const content = panel.handle.content();
@@ -231,13 +257,16 @@ export const SoupView = (props: SoupViewProps) => {
       value={{
         ...panel,
         halfSplitState: () =>
-          soup.previewEntity() ? { side: 'left', percentage: 30 } : undefined,
+          soup.previewEntity() && soup.focus.item()
+            ? { side: 'left', percentage: 30 }
+            : undefined,
       }}
     >
       <SoupViewContextProvider
         soup={soup}
         queryFilters={props.queryFilters}
         disableLocalSearch={props.disableLocalSearch}
+        additionalEntities={props.additionalEntities}
       >
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">
@@ -258,8 +287,8 @@ export const SoupView = (props: SoupViewProps) => {
                     <CollapsibleHeaderItem
                       id="tabs"
                       priority={1}
-                      expanded={<SoupViewTabs />}
-                      collapsed={<CollapsedSoupViewTabs />}
+                      expanded={() => <SoupViewTabs />}
+                      collapsed={() => <CollapsedSoupViewTabs />}
                       containerClass="h-full"
                     />
                   </Show>
@@ -290,14 +319,15 @@ export const SoupView = (props: SoupViewProps) => {
                   id="search"
                   priority={0}
                   onCollapsedChange={(isCollapsed) => {
+                    setSearchIsCollapsed(isCollapsed);
                     if (!isCollapsed) setNarrowSearchExpanded(false);
                   }}
-                  expanded={
+                  expanded={() => (
                     <div class="w-52">
                       <SoupSearchbar variant="secondary" />
                     </div>
-                  }
-                  collapsed={
+                  )}
+                  collapsed={() => (
                     <Show when={!narrowSearchExpanded()}>
                       <Tooltip
                         tooltip={
@@ -313,7 +343,7 @@ export const SoupView = (props: SoupViewProps) => {
                         </Button>
                       </Tooltip>
                     </Show>
-                  }
+                  )}
                 />
               </Show>
             </SplitHeaderRight>
@@ -335,6 +365,9 @@ export const SoupView = (props: SoupViewProps) => {
                 />
               </SoupViewFileDropzone>
             </Suspense>
+            <Show when={isMobile()}>
+              <SoupViewMobileCreateButton activeView={activeListView} />
+            </Show>
           </div>
           <Show when={isMobile()}>
             <MobileSoupViewTabs />
@@ -374,7 +407,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     assigneeFilter,
     setAssigneeFilter,
   } = useSoupView();
-  const { getSplitCount } = useSplitLayout();
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -383,10 +415,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     createSignal<VirtualizerHandle>();
 
   const [soupViewRef, setSoupViewRef] = createSignal<HTMLElement | undefined>();
-
-  const [previewPanelRef, setPreviewPanelRef] = createSignal<
-    HTMLElement | undefined
-  >();
 
   const focusFirstEntity = () => {
     const next = soup.navigate.toFirst();
@@ -451,7 +479,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
-    previewPanelRef,
   });
 
   // Register entity action hotkeys
@@ -476,7 +503,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     splitHandle: panel.handle,
     virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
-    getSplitCount,
     currentView,
     activeTab,
     applyTabPreset,
@@ -646,7 +672,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const [persistedState, setPersistedState] = makePersisted(
     createSignal<PersistedSoupViewState>(),
-    { name: `macro:soup-view:${contentId}` }
+    { name: soupViewCacheKey(contentId) }
   );
 
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
@@ -675,7 +701,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
               ? (props.initialClientFilters ?? { and: [], or: [] })
               : (initialPersistedState.filters ?? { and: [], or: [] })
           );
-          setQueryFilters(initialPersistedState.queryFilters ?? {});
+          setQueryFilters(
+            isStale
+              ? QUERY_FILTERS.default
+              : (initialPersistedState.queryFilters ?? QUERY_FILTERS.default)
+          );
           setActiveTab(initialPersistedState.activeTab);
         });
       }
@@ -963,9 +993,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
             onClear={soup.selection.clear}
           />
         </Show>
-        <Show when={soup.previewEntity() || panel.previewState[0]()}>
+        <Show
+          when={
+            (soup.previewEntity() || panel.previewState[0]()) &&
+            !!soup.focus.item()
+          }
+        >
           <PreviewPanel
-            ref={setPreviewPanelRef}
             selectedEntity={soup.focus.item()}
             orchestrator={orchestrator}
             splitPanelContext={panel}

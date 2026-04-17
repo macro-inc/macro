@@ -1,9 +1,11 @@
 import type { ListItemNode } from '@lexical/list';
+import { $isDateMentionNode, $isUserMentionNode } from '@lexical-core';
 import {
   parseContactMentions,
   parseDocumentMentions,
   parseGroupMentions,
 } from '@lexical-core/utils/parsers';
+import { $isElementNode, type LexicalNode } from 'lexical';
 import { $elementNodeToMarkdown } from '../../utils';
 import type { ParsedCheckbox } from './types';
 import { isValid } from 'date-fns';
@@ -75,6 +77,27 @@ export function extractTitleFromMarkdown(markdownText: string): string {
 }
 
 /**
+ * Get plain text title from a ListItemNode, collecting text from all children
+ * except user/date mentions (which become task properties instead).
+ */
+function $extractTitleFromNode(node: ListItemNode): string {
+  return $collectTextContent(node).trim().replace(/\s+/g, ' ');
+}
+
+function $collectTextContent(node: LexicalNode): string {
+  if ($isUserMentionNode(node) || $isDateMentionNode(node)) {
+    return '';
+  }
+  if ($isElementNode(node)) {
+    return node
+      .getChildren()
+      .map((child) => $collectTextContent(child))
+      .join('');
+  }
+  return node.getTextContent();
+}
+
+/**
  * Parse a ListItemNode checkbox into structured data for task creation.
  * Must be called within Lexical update context (not read) because
  * $elementNodeToMarkdown requires update context.
@@ -84,7 +107,7 @@ export function $parseCheckboxNode(node: ListItemNode): ParsedCheckbox {
 
   return {
     nodeKey: node.getKey(),
-    title: extractTitleFromMarkdown(rawMarkdown),
+    title: $extractTitleFromNode(node),
     rawMarkdown,
     assigneeUserIds: extractUserMentions(rawMarkdown),
     dueDate: extractDateMention(rawMarkdown),

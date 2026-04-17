@@ -20,7 +20,7 @@ export function EmailUserTooltip(props: EmailUserTooltipProps) {
       placement="bottom"
       unstyled
       spanMode
-      tooltip={
+      tooltip={(close) => (
         <UserTooltip
           displayName={props.recipient?.name ?? props.recipient?.email ?? ''}
           email={props.recipient?.email ?? undefined}
@@ -29,8 +29,9 @@ export function EmailUserTooltip(props: EmailUserTooltipProps) {
               ? emailToMacroId(props.recipient.email)
               : undefined
           }
+          onClose={close}
         />
-      }
+      )}
     >
       {props.children}
     </Tooltip>

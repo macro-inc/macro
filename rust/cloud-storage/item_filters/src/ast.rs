@@ -2,9 +2,10 @@
 //! This is used to construct a strictly typed ast for the input filters, allowing consumers to have a logical represenation of the required operations
 
 use crate::{
-    ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
-    PropertyFilter,
+    CallFilters, ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters,
+    ProjectFilters, PropertyFilter,
     ast::{
+        call::CallLiteral,
         channel::{ChannelLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         email::EmailLiteral,
@@ -19,6 +20,8 @@ use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
 
+/// contains the ast literal value for calls
+pub mod call;
 /// contains the ast literal value for channels
 pub mod channel;
 /// contains the ast literal value for chat
@@ -101,6 +104,10 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "chanf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub channel_filter: LiteralTree<ChannelLiteral>,
+    /// the filters that should be applied to the call entity
+    #[serde(default, rename = "callf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub call_filter: LiteralTree<CallLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -122,6 +129,7 @@ impl EntityFilterAst {
             email_filter: EmailFilters::expand_ast(entity_filter.email_filters)?.map(Arc::new),
             channel_filter: ChannelFilters::expand_ast(entity_filter.channel_filters)?
                 .map(Arc::new),
+            call_filter: CallFilters::expand_ast(entity_filter.call_filters)?.map(Arc::new),
             properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
                 .map(Arc::new),
         }))
@@ -136,6 +144,7 @@ impl EntityFilterAst {
             chat_filter: None,
             email_filter: None,
             channel_filter: None,
+            call_filter: None,
             properties_filter: None,
         }
     }
@@ -149,6 +158,7 @@ impl IsEmpty for EntityFilterAst {
             chat_filter,
             email_filter,
             channel_filter,
+            call_filter,
             properties_filter,
         } = self;
         document_filter.is_none()
@@ -156,6 +166,7 @@ impl IsEmpty for EntityFilterAst {
             && chat_filter.is_none()
             && email_filter.is_none()
             && channel_filter.is_none()
+            && call_filter.is_none()
             && properties_filter.is_none()
     }
 }

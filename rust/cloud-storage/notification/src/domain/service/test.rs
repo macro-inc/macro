@@ -24,6 +24,7 @@ use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
     NotificationReaderService, PlatformArnConfig,
 };
+use chrono::Utc;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -212,9 +213,9 @@ impl NotificationRepository for MockRepository {
                 entity: entity.clone(),
                 sent: false,
                 done: false,
-                created_at: None,
+                created_at: Utc::now(),
                 viewed_at: None,
-                updated_at: None,
+                updated_at: Utc::now(),
                 deleted_at: None,
                 notification_metadata: notification_metadata.clone(),
                 sender_id: sender_id.clone(),
@@ -1287,9 +1288,9 @@ fn create_mock_notif<T: Notification>(meta: T) -> ConnGatewayInnerNotif<T> {
         entity: EntityType::Document.with_entity_str("testing"),
         sent: false,
         done: false,
-        created_at: None,
+        created_at: Utc::now(),
         viewed_at: None,
-        updated_at: None,
+        updated_at: Utc::now(),
         deleted_at: None,
         notification_metadata: TaggedContent::new(meta),
         sender_id: None,
@@ -1820,9 +1821,9 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
         entity: EntityType::Document.with_entity_str("doc-1"),
         sent: false,
         done: false,
-        created_at: None,
+        created_at: Utc::now(),
         viewed_at: None,
-        updated_at: None,
+        updated_at: Utc::now(),
         deleted_at: None,
         notification_metadata: serde_json::to_value(TestNotification {
             message: "hello from digest".to_string(),
@@ -2253,9 +2254,9 @@ async fn test_poll_email_digests_skips_publish_when_user_disabled_type() {
         entity: EntityType::Document.with_entity_str("doc-1"),
         sent: false,
         done: false,
-        created_at: None,
+        created_at: Utc::now(),
         viewed_at: None,
-        updated_at: None,
+        updated_at: Utc::now(),
         deleted_at: None,
         notification_metadata: serde_json::to_value(TestNotification {
             message: "hello from digest".to_string(),
@@ -2314,9 +2315,9 @@ async fn test_poll_email_digests_publishes_when_user_has_not_disabled_type() {
         entity: EntityType::Document.with_entity_str("doc-1"),
         sent: false,
         done: false,
-        created_at: None,
+        created_at: Utc::now(),
         viewed_at: None,
-        updated_at: None,
+        updated_at: Utc::now(),
         deleted_at: None,
         notification_metadata: serde_json::to_value(TestNotification {
             message: "hello from digest".to_string(),

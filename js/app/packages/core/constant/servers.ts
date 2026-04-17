@@ -12,6 +12,7 @@ const serverHostLocal: Servers = {
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
   'image-proxy-service': 'http://localhost:8097',
+  'scheduled-action': 'http://localhost:8098',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -35,6 +36,7 @@ const serverHostRemote = {
   contacts: `https://contacts${devServerSuffix}.macro.com`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
+  'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -60,9 +62,8 @@ function selectLocalServers(): Servers {
       throw new Error(`unknown server name ${name}`);
     return true;
   }
-  const servers = selectedLocalServers
-    .split(',')
-    .reduce((acc: Servers, entry: string) => {
+  const servers = selectedLocalServers.split(',').reduce(
+    (acc: Servers, entry: string) => {
       // Support "service-name:port" to override the default local port
       const [name, portOverride] = entry.split(':') as [
         string,
@@ -78,7 +79,9 @@ function selectLocalServers(): Servers {
       }
       console.log(`Using local server ${name}: ${acc[name]}`);
       return acc;
-    }, serverHostRemote);
+    },
+    { ...serverHostRemote }
+  );
   return servers;
 }
 
@@ -112,6 +115,16 @@ function selectSyncServiceHost():
 }
 
 export const SYNC_SERVICE_HOSTS = selectSyncServiceHost();
+
+/**
+ * The DSS host to use for sync-service permission tokens.
+ * When the sync service is remote, permission tokens must come from the remote DSS
+ * because they need to be signed with the matching JWT secret.
+ */
+export const SYNC_PERMISSION_TOKEN_DSS_HOST =
+  SYNC_SERVICE_HOSTS === syncServiceHostRemote
+    ? serverHostRemote['document-storage-service']
+    : SERVER_HOSTS['document-storage-service'];
 
 /** Creates endpoint URL for accessing a static file by its ID */
 export function staticFileIdEndpoint(id: string): string {

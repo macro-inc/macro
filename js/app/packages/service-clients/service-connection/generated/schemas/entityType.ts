@@ -19,4 +19,5 @@ export const EntityType = {
   project: 'project',
   email_thread: 'email_thread',
   team: 'team',
+  call: 'call',
 } as const;

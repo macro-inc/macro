@@ -156,6 +156,11 @@ export function signalFilter(entity: EntityData): boolean {
       return true;
     case 'channel_message':
       return true;
+    case 'call':
+      return true;
+    case 'automation':
+      // Automations only show in the Agents > Scheduled tab, not Inbox.
+      return false;
   }
 }
 

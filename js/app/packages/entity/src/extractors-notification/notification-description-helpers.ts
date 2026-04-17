@@ -23,7 +23,7 @@ export function getUniqueSenderIds(notifications: Notification[]): string[] {
 export function getActionVerb(type: NotificationType): string {
   return match(type)
     .with('channel_mention', () => 'mentioned you')
-    .with('document_mention', () => 'mentioned you')
+    .with('document_mention', () => 'shared with you')
     .with('mentioned_in_document_comment', () => 'mentioned you')
     .with('replied_to_document_comment_thread', () => 'replied')
     .with('commented_on_document', () => 'commented')
@@ -47,7 +47,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('channel_message_send', () => (count === 1 ? 'message' : 'messages'))
     .with('ai_response', () => (count === 1 ? 'response' : 'responses'))
     .with('channel_mention', () => (count === 1 ? 'mention' : 'mentions'))
-    .with('document_mention', () => (count === 1 ? 'mention' : 'mentions'))
+    .with('document_mention', () =>
+      count === 1 ? 'document shared' : 'documents shared'
+    )
     .with('mentioned_in_document_comment', () =>
       count === 1 ? 'mention' : 'mentions'
     )
@@ -60,4 +62,10 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))
     .with('task_assigned', () => (count === 1 ? 'task' : 'tasks'))
     .exhaustive();
+}
+
+export function getTypePreposition(type: NotificationType): string {
+  return match(type)
+    .with('document_mention', () => 'by')
+    .otherwise(() => 'from');
 }

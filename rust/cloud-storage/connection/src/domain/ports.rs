@@ -2,10 +2,12 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 
 use crate::domain::models::{ConnectionError, InvalidationEvent};
-use entity_access::domain::models::EntityAccessAuth;
 
 /// Repository for handling github oauth related actions.
 pub trait ConnectionGateway: Send + Sync + 'static {
@@ -22,7 +24,7 @@ pub trait ConnectionGateway: Send + Sync + 'static {
     /// Sends an arbitrary message to a list of users.
     fn batch_send_message<'a>(
         &self,
-        users: &[MacroUserId<Lowercase<'a>>],
+        users: &[MacroUserIdStr<'a>],
         message_type: &str,
         message: serde_json::Value,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -36,15 +38,11 @@ pub trait ConnectionService: Send + Sync + 'static {
         invalidation_event: InvalidationEvent<'a, T>,
     ) -> impl Future<Output = Result<(), ConnectionError>> + Send;
 
-    /// Sends an arbitrary message to all users in a channel.
-    ///
-    /// Resolves channel members internally, filters out the triggering user,
-    /// and sends via the connection gateway.
-    fn send_channel_message(
+    /// Sends an arbitrary message to the given list of users via the connection gateway.
+    fn send_channel_message<'a>(
         &self,
-        channel_id: &str,
+        users: &[MacroUserIdStr<'a>],
         message_type: &str,
         message: serde_json::Value,
-        triggered_by: EntityAccessAuth,
     ) -> impl Future<Output = Result<(), ConnectionError>> + Send;
 }

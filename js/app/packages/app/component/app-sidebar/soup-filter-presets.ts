@@ -117,6 +117,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         queryFilters: QUERY_FILTERS.agent,
         clientFilters: { and: ['agent', 'shared-agent'] },
       }),
+      automations: () => ({
+        // Server returns nothing useful here — automations are merged
+        // into the soup client-side via `additionalEntities`.
+        queryFilters: QUERY_FILTERS.agent,
+        clientFilters: { and: ['automation'] },
+      }),
     },
   },
   mail: {
@@ -291,6 +297,15 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
+  calls: {
+    default: 'all',
+    tabs: {
+      all: () => ({
+        queryFilters: QUERY_FILTERS.calls,
+        clientFilters: { and: ['calls'] },
+      }),
+    },
+  },
   folders: {
     default: 'owned',
     tabs: {
@@ -298,23 +313,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           queryFilters: {
-            channel_filters: { channel_ids: EXCLUDE },
-            chat_filters: { chat_ids: EXCLUDE },
-            email_filters: { recipients: EXCLUDE },
-            document_filters: { document_ids: EXCLUDE },
+            ...QUERY_FILTERS.folders,
             project_filters: { owners: [ctx.userId] },
           },
           clientFilters: { and: ['folders'] },
         };
       },
       all: () => ({
-        queryFilters: {
-          channel_filters: { channel_ids: EXCLUDE },
-          chat_filters: { chat_ids: EXCLUDE },
-          email_filters: { recipients: EXCLUDE },
-          document_filters: { document_ids: EXCLUDE },
-          project_filters: {},
-        },
+        queryFilters: QUERY_FILTERS.folders,
         clientFilters: { and: ['folders'] },
       }),
     },
@@ -325,6 +331,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         queryFilters: {
           ...QUERY_FILTERS.default,
+          email_filters: { importance: true },
         },
         clientFilters: { and: [], or: [] },
       }),

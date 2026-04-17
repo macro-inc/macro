@@ -87,7 +87,7 @@ export class McpServer extends pulumi.ComponentResource {
         dockerfile: 'Dockerfile',
         platform,
         buildArgs: {
-          SERVICE_NAME: 'mcp_server',
+          SERVICE_NAME: 'mcp_service',
         },
         tags: this.tags,
       },
@@ -303,15 +303,6 @@ export class McpServer extends pulumi.ComponentResource {
       },
       { parent: this }
     );
-
-    // NOTE: DatadogServiceEntity requires DD_API_KEY/DD_APP_KEY env vars.
-    // Uncomment once deploying via CI where those secrets are available.
-    // new DatadogServiceEntity('mcp-server', {
-    //   serviceName: 'mcp-server',
-    //   owner: 'ehayes',
-    //   githubUrl: 'https://github.com/macro-inc/macro-api',
-    //   githubPath: 'cloud-storage/document-cognition-service/src/bin/mcp_server.rs',
-    // });
   }
 
   initializeSecurityGroups({

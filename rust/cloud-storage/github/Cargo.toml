@@ -33,7 +33,8 @@ entity_access = { path = "../entity_access", default-features = false, features 
 hex = { workspace = true }
 hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
-macro_env = { path = "../macro_env", features = ["frontend_url"] }
+macro_env = { path = "../macro_env" }
+macro_service_urls = { path = "../macro_service_urls" }
 regex = { workspace = true }
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true }

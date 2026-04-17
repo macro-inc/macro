@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { type Accessor, Show } from 'solid-js';
 import { Modals } from './component/modal/Modals';
 import { AddPropertyButton } from './component/panel/AddPropertyButton';
 import { PanelContainer } from './component/panel/PanelContainer';
@@ -27,7 +27,7 @@ export function PropertiesView(props: PropertiesPanelProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     props.entityType,
-    true // includeMetadata
+    false
   );
 
   const saveMutation = useSaveEntityPropertyMutation();
@@ -101,7 +101,6 @@ function PropertiesViewContent(props: {
   canEdit: boolean;
 }) {
   const { openPropertySelector } = usePropertiesContext();
-  const hasProperties = createMemo(() => props.properties().length > 0);
 
   return (
     <div class={CONTAINER_CLASSES}>
@@ -123,7 +122,7 @@ function PropertiesViewContent(props: {
         error={props.error}
       />
 
-      <Show when={props.canEdit && hasProperties()}>
+      <Show when={props.canEdit}>
         <div class="flex-shrink-0 p-4">
           <AddPropertyButton onClick={openPropertySelector} />
         </div>

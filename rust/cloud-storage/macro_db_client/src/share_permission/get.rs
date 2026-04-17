@@ -377,8 +377,8 @@ pub async fn get_macro_id_from_thread_id(
     Ok(macro_id)
 }
 
-/// COPIED FROM COMMS_DB_CLIENT and is needed in the `get_users_access_level_v2`
-/// in macro_middleware
+/// COPIED FROM COMMS_DB_CLIENT
+/// Check which of the given channels the user is a participant of.
 pub async fn check_channels_for_user(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,

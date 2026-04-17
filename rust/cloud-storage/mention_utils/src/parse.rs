@@ -1,3 +1,4 @@
+use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::BorrowedUserIdStr;
 use nom::{
     Finish, IResult, Parser,
@@ -256,6 +257,42 @@ pub trait XmlFormatter: Sized {
             acc
         });
         ReformattedXmlText(s, PhantomData)
+    }
+}
+
+/// xml formatter which converts xml tags to their plain text representation
+pub struct PlainTextFormatter;
+
+impl XmlFormatter for PlainTextFormatter {
+    fn format_plain_text(s: &str, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{s}")
+    }
+
+    fn format_link(link: &ParsedLink<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", link.text)
+    }
+
+    fn format_doc(doc: &ParsedDocumentMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", doc.document_name)
+    }
+
+    fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", user.user_id.0.email_part().email_str())
+    }
+
+    fn format_contact(
+        contact: &ParsedContactMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", contact.name)
+    }
+
+    fn format_date(date: &ParsedDateMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", date.display_format)
+    }
+
+    fn format_group(group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "@{}", group.group_alias)
     }
 }
 

@@ -6,7 +6,10 @@
  */
 import type { CopyDocumentQueryParamsVersionId } from './copyDocumentQueryParamsVersionId';
 
+/**
+ * Query parameters for the copy document endpoint.
+ */
 export interface CopyDocumentQueryParams {
-  /** The version id of the document to copy. Defaults to copying the latest version of the document. */
+  /** The DB version id of the document to copy. Defaults to latest. */
   version_id?: CopyDocumentQueryParamsVersionId;
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, createSignal } from 'solid-js';
 import { addDays } from 'date-fns';
 import {
@@ -531,9 +531,18 @@ describe('parseTime', () => {
 describe('useDateSearch with time', () => {
   const baseDate = new Date('2024-06-15T10:00:00');
 
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-06-15T14:00:00'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('should bump standalone time to tomorrow if already past today', () => {
     createRoot((dispose) => {
-      // Use a time that's guaranteed to be in the past (1am - test won't run at 1am)
+      // 1am is in the past relative to the frozen 2pm clock
       const [query] = createSignal('1am');
       const options = useDateSearch({ query, baseDate });
 
@@ -543,12 +552,8 @@ describe('useDateSearch with time', () => {
       const timeOption = result.find((opt) => opt.id.startsWith('time-'));
       expect(timeOption).toBeTruthy();
 
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      // 1am is almost certainly in the past, so it should be tomorrow
-      expect(timeOption?.date.getDate()).toBe(tomorrow.getDate());
+      // Should be tomorrow (June 16) at 1am since 1am today is past
+      expect(timeOption?.date.getDate()).toBe(16);
       expect(timeOption?.date.getHours()).toBe(1);
       expect(timeOption?.date.getMinutes()).toBe(0);
 

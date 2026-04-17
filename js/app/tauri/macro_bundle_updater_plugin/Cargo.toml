@@ -1,0 +1,21 @@
+[package]
+edition.workspace = true
+name = "macro_bundle_updater_plugin"
+version = "0.1.0"
+
+[dependencies]
+rootcause = { workspace = true }
+futures = { version = "0.3" }
+digest = "0.10"
+reqwest = { workspace = true, features = ["json", "stream"] }
+sha2 = "0.10"
+semver = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1"
+strum = { version = "0.27", features = ["derive"] }
+tauri = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "sync"] }
+tracing = { workspace = true }
+url = { workspace = true }
+zip = "6"

@@ -7,6 +7,7 @@ export * from './custom-delete';
 export * from './diff';
 export * from './document-metadata';
 export * from './drag-insert';
+export * from './draggable-block';
 export * from './element-event';
 export * from './emojis';
 export * from './file-paste';

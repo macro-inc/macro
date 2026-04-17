@@ -1,5 +1,5 @@
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { FormatRibbon } from '@block-channel/component/DeprecatedChannelInput/FormatRibbon';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';

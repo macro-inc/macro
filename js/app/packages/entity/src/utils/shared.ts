@@ -5,6 +5,7 @@ export function useIsShared(entity: EntityData) {
   const { userId } = useUserContext();
   return () => {
     if (entity.type === 'channel') return false;
+    if (entity.type === 'call') return false;
     if (entity.ownerId === userId()) return false;
     return true;
   };

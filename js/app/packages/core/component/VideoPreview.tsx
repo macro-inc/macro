@@ -38,6 +38,11 @@ export function VideoPreview(props: VideoPreviewProps) {
         src={staticFileIdEndpoint(props.id)}
         width={props.width ?? undefined}
         height={props.height ?? undefined}
+        onLoadedMetadata={(e) => {
+          // iOS Safari doesn't paint the first frame with preload="metadata".
+          // Seeking to a tiny positive time forces it to decode and display the frame.
+          e.currentTarget.currentTime = 0.001;
+        }}
       />
     </div>
   );

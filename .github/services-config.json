@@ -1,5 +1,11 @@
 {
   "services": {
+    "agent-schedule-service": {
+      "source_paths": [
+        "rust/cloud-storage/scheduled_action/**"
+      ],
+      "stack_path": "infra/stacks/agent-schedule-service/**"
+    },
     "authentication-service": {
       "source_paths": [
         "rust/cloud-storage/authentication_service/**",

@@ -21,7 +21,6 @@ export function useSplitLayout() {
       return;
     }
 
-    // On mobile, never open in new split
     const preferNewSplit = isMobile() ? false : options?.preferNewSplit;
 
     return splitManager.openWithSplit(content, {
@@ -96,7 +95,7 @@ export function useSplitLayout() {
     if (!splitManager) {
       return 0;
     }
-    return splitManager.splits().length;
+    return splitManager.getVisibleSplitCount();
   }
 
   return {

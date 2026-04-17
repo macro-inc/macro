@@ -32,6 +32,18 @@ fn test_build_simple_query_string_mixed_single_and_multi_word() {
 }
 
 #[test]
+fn test_build_simple_query_string_email_term_uses_phrase() {
+    let result = build_simple_query_string(&["hutch@macro.com".to_string()]);
+    assert_eq!(result, "\"hutch@macro.com\"");
+}
+
+#[test]
+fn test_build_simple_query_string_email_term_mixed_with_word() {
+    let result = build_simple_query_string(&["hutch@macro.com".to_string(), "review".to_string()]);
+    assert_eq!(result, "\"hutch@macro.com\" + (review | review@*)");
+}
+
+#[test]
 fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<()> {
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["hello".to_string(), "test".to_string()],
@@ -50,6 +62,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         match_type: "partial".to_string(),
         collapse: true,
         ids_only: false,
+        subject_only: false,
     }
     .into();
 
@@ -137,11 +150,10 @@ fn test_build_bool_query() -> anyhow::Result<()> {
             ],
             "must": [
                 {
-                    "bool": {
-                        "minimum_should_match": 1,
-                        "should": [
-                            {"match_phrase": {"content": "test"}}
-                        ]
+                    "simple_query_string": {
+                        "default_operator": "AND",
+                        "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
+                        "query": "(test | test@*)"
                     }
                 }
             ]

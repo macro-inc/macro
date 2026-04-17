@@ -101,8 +101,8 @@ where
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {
-                        entity_id: call_info.channel_id.to_string(),
-                        entity_type: EntityType::Channel,
+                        entity_id: call_id,
+                        entity_type: EntityType::Call,
                     },
                     auth: EntityAccessAuth::Internal,
                     entity_permission: EntityPermission::ChannelRole {
@@ -140,8 +140,8 @@ where
         Ok(Self {
             entity_access_receipt: EntityAccessReceipt {
                 entity: Entity {
-                    entity_id: channel_id_str,
-                    entity_type: EntityType::Channel,
+                    entity_id: call_id,
+                    entity_type: EntityType::Call,
                 },
                 auth: EntityAccessAuth::Authenticated(macro_user_id),
                 entity_permission: permission,

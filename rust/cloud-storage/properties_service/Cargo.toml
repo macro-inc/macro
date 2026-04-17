@@ -20,7 +20,10 @@ macro_aws_config = { path = "../macro_aws_config" }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
 email_db_client = { path = "../email_db_client" }
+entity_access = { path = "../entity_access" }
 http-body-util = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
 macro_auth = { path = "../macro_auth" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }

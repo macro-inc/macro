@@ -58,7 +58,7 @@ document_sub_type = { path = "../document_sub_type" }
 documents_hex = { path = "../documents", package = "documents" }
 dynamodb_client = { path = "../dynamodb_client" }
 email = { path = "../email", features = ["outbound", "ports"] }
-entity_access = { path = "../entity_access", features = ["schema"] }
+entity_access = { path = "../entity_access", features = ["schema", "inbound"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 github = { path = "../github", default-features = false, features = [

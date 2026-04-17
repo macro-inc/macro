@@ -86,6 +86,9 @@ use crate::{
                         model_notifications::NotifEvent,
                         user_notification::ApiUserNotification,
                         user_notification::GetAllUserNotificationsResponse,
+
+                        // WebSocket notification payload
+                        notification_crate::domain::models::queue_message::ConnGatewayNotificationPayload,
                         notification_crate::inbound::http::BulkGetByEventItemIdsRequest,
                         notification_crate::inbound::http::preferences::GetNotificationTypePreferencesResponse,
                 ),

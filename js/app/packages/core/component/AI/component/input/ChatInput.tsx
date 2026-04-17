@@ -142,19 +142,39 @@ export function ChatInput(props: ChatInputComponentProps) {
     </div>
   );
 
+  const StopButton = () => (
+    <DeprecatedIconButton
+      icon={Stop}
+      theme="base"
+      size="sm"
+      iconSize={14}
+      tooltip={{ label: 'Stop generating', shortcut: 'ctrl+c' }}
+      onClick={() => props.onStop?.()}
+    />
+  );
+
   const RightControls = () => (
     <Switch>
       <Match when={!isTouchDevice()}>
-        <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
-          {props.extraRightControls?.()}
-          <Tooltip tooltip="Enter to send" placement="top">
-            <div class="flex items-center">
-              <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
-                <Hotkey shortcut="Enter" />
-              </div>
+        <Show
+          when={generating() && props.onStop}
+          fallback={
+            <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
+              {props.extraRightControls?.()}
+              <Tooltip tooltip="Enter to send" placement="top">
+                <div class="flex items-center">
+                  <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
+                    <Hotkey shortcut="Enter" />
+                  </div>
+                </div>
+              </Tooltip>
             </div>
-          </Tooltip>
-        </div>
+          }
+        >
+          <div class="flex flex-row items-center gap-1 shrink-0">
+            <StopButton />
+          </div>
+        </Show>
       </Match>
       <Match when={isTouchDevice()}>
         <div class="flex flex-row gap-1 items-center shrink-0">
@@ -168,14 +188,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             </Button>
           </Show>
           <Show when={generating()}>
-            <Button
-              onClick={() => (props.onStop ? props.onStop() : [])}
-              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
-            >
-              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                <Stop class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-              </div>
-            </Button>
+            <StopButton />
           </Show>
         </div>
       </Match>

@@ -15,18 +15,10 @@ vi.mock('../../client', () => ({
   },
 }));
 
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  ENABLE_NEW_CHANNELS: () => true,
-}));
-
 import type { ChannelMessagesData } from '../channel-messages';
 import { getChannelMessagesQueryKey } from '../channel-messages';
-import { channelKeys, ChannelNonceKeys } from '../keys';
-import { registerNonce } from '../../nonce';
 import { handleCommsAttachment, handleCommsReaction } from '../sync';
 import { getThreadRepliesQueryKey } from '../thread-replies';
-import type { GetChannelResponse } from '../types';
 
 function createPaginatedMessage(
   id: string,
@@ -100,27 +92,6 @@ function createChannelMessagesData(
   };
 }
 
-function createMockChannelResponse(
-  overrides: Partial<GetChannelResponse> = {}
-): GetChannelResponse {
-  return {
-    channel: {
-      id: 'channel-1',
-      name: 'Test Channel',
-      owner_id: 'user-1',
-      created_at: '2024-01-01T00:00:00.000Z',
-      updated_at: '2024-01-01T00:00:00.000Z',
-      channel_type: 'direct_message',
-    },
-    messages: [],
-    reactions: {},
-    attachments: [],
-    participants: [],
-    access: 'Participant',
-    ...overrides,
-  } as GetChannelResponse;
-}
-
 describe('channel sync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -156,47 +127,6 @@ describe('channel sync', () => {
     );
     expect(cached?.pages[0].items[0].attachments).toEqual([
       expect.objectContaining({ id: 'att-1', message_id: 'msg-1' }),
-    ]);
-  });
-
-  it('reconciles local optimistic attachments with authoritative websocket payloads', () => {
-    testQueryClient.setQueryData(
-      getChannelMessagesQueryKey('channel-1'),
-      createChannelMessagesData([
-        [
-          createPaginatedMessage('real-msg-1', '2024-01-03T00:00:00.000Z', {
-            attachments: [createAttachment('optimistic-att', 'real-msg-1')],
-          }),
-        ],
-      ])
-    );
-    testQueryClient.setQueryData(
-      channelKeys.withID('channel-1').queryKey,
-      createMockChannelResponse({
-        attachments: [createAttachment('optimistic-att', 'real-msg-1')],
-      })
-    );
-    registerNonce(ChannelNonceKeys.ATTACHMENT, 'local-attachment');
-
-    handleCommsAttachment({
-      channel_id: 'channel-1',
-      message_id: 'real-msg-1',
-      nonce: 'local-attachment',
-      attachments: [createAttachment('server-att', 'real-msg-1')],
-    });
-
-    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
-      getChannelMessagesQueryKey('channel-1')
-    );
-    expect(cached?.pages[0].items[0].attachments).toEqual([
-      expect.objectContaining({ id: 'server-att' }),
-    ]);
-
-    const legacy = testQueryClient.getQueryData<GetChannelResponse>(
-      channelKeys.withID('channel-1').queryKey
-    );
-    expect(legacy?.attachments).toEqual([
-      expect.objectContaining({ id: 'server-att' }),
     ]);
   });
 

@@ -5,6 +5,41 @@ import {
 } from '@app/lib/analytics/providers';
 import { PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
+import { getPlatform } from '@core/util/platform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
+
+/**
+ * Resolves the user's device context for analytics enrichment.
+ *
+ * `getPlatform()` reads the build-time `VITE_PLATFORM` env var:
+ *   - Tauri iOS/Android builds → 'ios' | 'android' → 'mobile-app'
+ *   - Tauri desktop build → 'desktop' → 'desktop-app'
+ *   - Web build → 'web' (used by both desktop and mobile browsers)
+ *
+ * Desktop and mobile browsers share the same web build, so we use
+ * `isTouchDevice()` (checks `pointer: coarse` media query) to distinguish
+ * a phone/tablet browser ('mobile-web') from a desktop browser ('desktop-web').
+ */
+const DEVICE_PROPERTY = 'macro_device' as const;
+const ENVIRONMENT_PROPERTY = 'macro_environment' as const;
+
+function getEnvironment(): 'dev' | 'prod' | 'unknown' {
+  if (PROD_MODE_ENV) return 'prod';
+  if (DEV_MODE_ENV) return 'dev';
+  return 'unknown';
+}
+
+function getDeviceType():
+  | 'desktop-app'
+  | 'desktop-web'
+  | 'mobile-web'
+  | 'mobile-app' {
+  const platform = getPlatform();
+  if (platform === 'ios' || platform === 'android') return 'mobile-app';
+  if (platform === 'desktop') return 'desktop-app';
+  return isTouchDevice() ? 'mobile-web' : 'desktop-web';
+}
 
 export type AnalyticsProvider = 'ga' | 'meta-pixel' | 'posthog';
 
@@ -73,16 +108,22 @@ export const createAnalytics = () => {
   ) => {
     if (disabled) return;
 
+    const enriched = {
+      ...data,
+      [DEVICE_PROPERTY]: getDeviceType(),
+      [ENVIRONMENT_PROPERTY]: getEnvironment(),
+    };
+
     try {
       match(provider)
         .with('ga', () => {
-          gtag('event', event, data);
+          gtag('event', event, enriched);
         })
         .with('meta-pixel', () => {
-          fbq('track', event, data ?? {});
+          fbq('track', event, enriched);
         })
         .with('posthog', () => {
-          posthog.capture(event, data);
+          posthog.capture(event, enriched);
         })
         .exhaustive();
     } catch (e) {
@@ -95,8 +136,6 @@ export const createAnalytics = () => {
     data?: Record<string, unknown>,
     providersToSendTo: AnalyticsProvider[] = DEFAULT_ANALYTICS_PROVIDERS
   ) => {
-    if (disabled) return;
-
     for (const provider of providersToSendTo) {
       sendEvent(provider, event, data);
     }
@@ -140,19 +179,27 @@ export const createAnalytics = () => {
 
     const pagePath = opts?.path ?? window.location.pathname;
     const pageLocation = opts?.location ?? window.location.href;
+    const deviceType = getDeviceType();
+    const environment = getEnvironment();
 
     try {
       gtag('event', 'page_view', {
+        [DEVICE_PROPERTY]: deviceType,
+        [ENVIRONMENT_PROPERTY]: environment,
         page_title: pageTitle,
         page_location: pageLocation,
         page_path: pagePath,
       });
 
       fbq('track', 'PageView', {
+        [DEVICE_PROPERTY]: deviceType,
+        [ENVIRONMENT_PROPERTY]: environment,
         content_name: pageTitle,
       });
 
       posthog.capture('$pageview', {
+        [DEVICE_PROPERTY]: deviceType,
+        [ENVIRONMENT_PROPERTY]: environment,
         $current_url: pageLocation,
         $pathname: pagePath,
         $title: pageTitle,

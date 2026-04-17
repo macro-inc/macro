@@ -4,6 +4,7 @@ pub mod contacts;
 pub mod histories;
 pub mod labels;
 pub mod links;
+pub mod links_history;
 pub mod messages;
 pub mod parse;
 pub mod settings;

@@ -17,6 +17,7 @@ import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
   InitGithubLinkResponse,
   PatchUserTutorialRequest,
+  SendMobileWelcomeEmailResponse,
   UserQuota,
 } from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
@@ -421,7 +422,11 @@ export const authServiceClient = {
     successUrl: string;
     cancelUrl: string;
     discount?: string | null;
-    gaClientId?: string | null;
+    metadata?: {
+      gaClientId?: string | null;
+      fbp?: string | null;
+      fbc?: string | null;
+    };
     tier?: string;
   }) {
     return mapOk(
@@ -431,7 +436,7 @@ export const authServiceClient = {
           successUrl: args.successUrl,
           cancelUrl: args.cancelUrl,
           discount: args.discount ?? undefined,
-          gaClientId: args.gaClientId ?? undefined,
+          metadata: args.metadata,
           tier: args.tier ?? undefined,
         }),
       }),
@@ -477,6 +482,32 @@ export const authServiceClient = {
         method: 'DELETE',
       }),
       (_result) => {}
+    );
+  },
+
+  async sendMobileWelcomeEmail(email: string) {
+    return safeFetch<
+      SendMobileWelcomeEmailResponse,
+      'RATE_LIMITED' | 'INVALID_EMAIL'
+    >(
+      `${authHost}/mobile-welcome-email`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+        credentials: 'include',
+      },
+      async (response) => {
+        if (response.status === 429) {
+          return { code: 'RATE_LIMITED', message: 'Rate limit exceeded' };
+        }
+        if (response.status === 400) {
+          return { code: 'INVALID_EMAIL', message: 'Invalid email address' };
+        }
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+      }
     );
   },
 };

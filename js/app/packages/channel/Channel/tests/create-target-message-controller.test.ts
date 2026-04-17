@@ -21,9 +21,13 @@ function createController(
     messageKeys: string[];
     scrollToId: (messageId: string) => boolean;
     withNavigation: boolean;
+    didInitialScroll: boolean;
   }>
 ) {
   const [messageKeys, setMessageKeys] = createSignal(input?.messageKeys ?? []);
+  const [didInitialScroll, setDidInitialScroll] = createSignal(
+    input?.didInitialScroll ?? false
+  );
 
   const scrollToId =
     input?.scrollToId ??
@@ -50,11 +54,13 @@ function createController(
             markUserIntent: () => {},
           }
         : undefined,
+    didInitialScroll,
   });
 
   return {
     controller,
     setMessageKeys,
+    setDidInitialScroll,
   };
 }
 

@@ -15,6 +15,7 @@ import {
   hasNoPriority,
   hasAssignees,
   isUnassigned,
+  callsFilter,
   channelsFilter,
   filesAndFolderFilter,
   activeAgentFilter,
@@ -36,6 +37,7 @@ import {
   notDoneFilter,
   peopleFilter,
   projectFilter,
+  automationFilter,
   taskFilter,
   teamsFilter,
   unreadFilter,
@@ -67,6 +69,12 @@ export const ENTITY_TYPE_FILTER_CONFIGS = [
     id: 'agent',
     label: 'Agents',
     predicate: agentFilter,
+    group: 'entity-type',
+  },
+  {
+    id: 'automation',
+    label: 'Scheduled',
+    predicate: automationFilter,
     group: 'entity-type',
   },
   {
@@ -324,6 +332,11 @@ export const createSoupFilters = (
       id: 'channels',
       label: 'Channels',
       predicate: channelsFilter,
+    },
+    {
+      id: 'calls',
+      label: 'Calls',
+      predicate: callsFilter,
     },
     {
       id: 'file-folder',

@@ -48,12 +48,11 @@ impl ConnectionService for NoOpConnectionService {
         Ok(())
     }
 
-    async fn send_channel_message(
+    async fn send_channel_message<'a>(
         &self,
-        _channel_id: &str,
+        _users: &[MacroUserIdStr<'a>],
         _message_type: &str,
         _message: serde_json::Value,
-        _triggered_by: connection::domain::models::EntityAccessAuth,
     ) -> Result<(), connection::domain::models::ConnectionError> {
         Ok(())
     }
@@ -78,6 +77,14 @@ impl TaskPropertiesPort for NoOpTaskProperties {
         _entity_id: &str,
         _property_definition_id: uuid::Uuid,
         _value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn copy_task_properties(
+        &self,
+        _from_task_id: &str,
+        _to_task_id: &str,
     ) -> anyhow::Result<()> {
         Ok(())
     }

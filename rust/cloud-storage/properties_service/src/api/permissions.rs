@@ -1,4 +1,7 @@
 use axum::http::StatusCode;
+use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType as ModelEntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::{EntityReference, EntityType};
 use properties::PropertiesService;
@@ -84,6 +87,19 @@ pub async fn check_entity_edit_permission(
     }
 }
 
+/// Map `models_properties::EntityType` to `model_entity::EntityType`.
+fn map_entity_type(entity_type: EntityType) -> Option<ModelEntityType> {
+    match entity_type {
+        EntityType::Document => Some(ModelEntityType::Document),
+        EntityType::Chat => Some(ModelEntityType::Chat),
+        EntityType::Project => Some(ModelEntityType::Project),
+        EntityType::Thread => Some(ModelEntityType::EmailThread),
+        EntityType::Channel => Some(ModelEntityType::Channel),
+        EntityType::Task => Some(ModelEntityType::Document), // tasks use document permissions
+        EntityType::Company | EntityType::User => None,
+    }
+}
+
 /// Internal: Gets the user's access level for an entity.
 ///
 /// NOTE: Makes a separate DB query (+ HTTP call for channels). Not worth inlining into
@@ -94,34 +110,28 @@ async fn get_access_level(
     user_id: &str,
     entity_ref: &EntityReference,
 ) -> Result<Option<AccessLevel>, PermissionError> {
-    let item_type = match entity_ref.entity_type {
-        EntityType::Document => "document",
-        EntityType::Chat => "chat",
-        EntityType::Project => "project",
-        EntityType::Thread => "thread",
-        EntityType::Channel => "channel",
-        EntityType::Task => "document",
-        EntityType::Company | EntityType::User => {
+    let model_entity_type = match map_entity_type(entity_ref.entity_type) {
+        Some(t) => t,
+        None => {
             tracing::warn!("property operations not supported for this entity type");
             return Err(PermissionError::UnsupportedEntityType);
         }
     };
 
-    let access_level = macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2(
-        &context.db,
-        user_id,
-        &entity_ref.entity_id,
-        item_type,
-    )
-    .await
-    .map_err(|(status_code, message)| {
-        tracing::error!(
-            status_code = ?status_code,
-            message = %message,
-            "failed to get user access level"
-        );
-        PermissionError::InternalError(message)
-    })?;
+    let parsed_user_id = MacroUserIdStr::parse_from_str(user_id);
+    let user_id_ref = parsed_user_id.as_ref().ok().map(std::ops::Deref::deref);
+
+    let access_level = context
+        .entity_access_service
+        .get_access_level(user_id_ref, &entity_ref.entity_id, model_entity_type)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                error = %e,
+                "failed to get user access level"
+            );
+            PermissionError::InternalError(e.to_string())
+        })?;
 
     // Fallback for threads: check ownership via link_id if no permission records exist.
     // This handles owned threads where EmailThreadPermission/UserItemAccess were never created.

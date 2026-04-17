@@ -5,6 +5,7 @@ import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
+import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
 const BASE_ITEM_SIZE: number = 64;
 const BASE_BUFFER_SIZE: number = BASE_ITEM_SIZE;
@@ -70,7 +71,6 @@ type ThreadListProps = {
 };
 
 const NEAR_TOP_THRESHOLD = 800;
-const NEAR_BOTTOM_THRESHOLD = 50;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
@@ -109,6 +109,17 @@ export function ThreadList(props: ThreadListProps) {
 
   const scrollIntent = createScrollIntentTracker();
 
+  let initialScrollStarted = false;
+  let initialScrollRetried = false;
+  let initialScrollTarget: ThreadListScrollTarget =
+    DEFAULT_INITIAL_SCROLL_TARGET;
+
+  const resetInitialScroll = () => {
+    initialScrollStarted = false;
+    initialScrollRetried = false;
+    initialScrollTarget = DEFAULT_INITIAL_SCROLL_TARGET;
+  };
+
   const resolveTargetIndex = (target: ThreadListScrollTarget): number => {
     const keys = props.keys();
     const maxIndex = keys.length - 1;
@@ -138,6 +149,30 @@ export function ThreadList(props: ThreadListProps) {
     return true;
   };
 
+  const getDistanceFromBottom = (handle: VirtualizerHandle): number =>
+    handle.scrollSize - handle.viewportSize - handle.scrollOffset;
+
+  const isScrollPositionCorrect = (
+    handle: VirtualizerHandle,
+    target: ThreadListScrollTarget
+  ): boolean => {
+    switch (target.tag) {
+      case 'bottom':
+        return getDistanceFromBottom(handle) <= NEAR_BOTTOM_THRESHOLD;
+      case 'top':
+        return handle.scrollOffset <= NEAR_BOTTOM_THRESHOLD;
+      case 'id':
+      case 'index': {
+        const targetIndex = resolveTargetIndex(target);
+        if (targetIndex < 0) return true; // target gone, nothing to verify
+        const currentIndex = handle.findItemIndex(handle.scrollOffset);
+        // Consider correct if the target is within a reasonable range of
+        // the current viewport (within ±5 items accounts for alignment).
+        return Math.abs(currentIndex - targetIndex) <= 5;
+      }
+    }
+  };
+
   const getCurrentIndex = (handle: VirtualizerHandle): number => {
     const itemCount = props.keys().length;
     if (!itemCount) return -1;
@@ -150,8 +185,7 @@ export function ThreadList(props: ThreadListProps) {
   ) => {
     if (!props.onScrollStateChange) return;
     const distanceFromTop = handle.scrollOffset;
-    const distanceFromBottom =
-      handle.scrollSize - handle.viewportSize - handle.scrollOffset;
+    const distanceFromBottom = getDistanceFromBottom(handle);
     props.onScrollStateChange({
       didInitialScroll: didInitialScroll(),
       isNearBottom: distanceFromBottom <= NEAR_BOTTOM_THRESHOLD,
@@ -160,6 +194,12 @@ export function ThreadList(props: ThreadListProps) {
       distanceFromBottom,
       viewportSize: handle.viewportSize,
     });
+  };
+
+  /** Mark the initial scroll as complete and broadcast the scroll state. */
+  const completeInitialScroll = (handle: VirtualizerHandle) => {
+    setDidInitialScroll(true);
+    emitScrollState(handle, false);
   };
 
   const createNavigation = (
@@ -207,11 +247,91 @@ export function ThreadList(props: ThreadListProps) {
   });
 
   function scrollOnMount(handle: VirtualizerHandle) {
+    if (initialScrollStarted) return;
+    initialScrollStarted = true;
+
     const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
-    scrollToTarget(handle, target);
-    setDidInitialScroll(true);
-    emitScrollState(handle, false);
+    initialScrollTarget = target;
+
+    console.debug('ThreadList: scrollOnMount', {
+      target,
+      itemCount: props.keys().length,
+      scrollOffset: handle.scrollOffset,
+      scrollSize: handle.scrollSize,
+      viewportSize: handle.viewportSize,
+    });
+
+    const didScroll = scrollToTarget(handle, target);
+
+    if (!didScroll) {
+      // Empty list or target not found — nothing to verify.
+      console.debug(
+        'ThreadList: target not resolvable, completing immediately'
+      );
+      completeInitialScroll(handle);
+      return;
+    }
+
+    // If no actual scrolling was needed (content fits in viewport),
+    // onScrollEnd will never fire. Use a RAF to detect this case and
+    // finalize immediately.
+    requestAnimationFrame(() => {
+      if (didInitialScroll()) return;
+      if (isScrollPositionCorrect(handle, target)) {
+        console.debug(
+          'ThreadList: position already correct (RAF fallback), completing'
+        );
+        completeInitialScroll(handle);
+      }
+    });
   }
+
+  const handleScrollEnd = () => {
+    if (didInitialScroll()) return;
+
+    const handle = virtualHandle();
+    if (!handle) return;
+
+    if (isScrollPositionCorrect(handle, initialScrollTarget)) {
+      console.debug('ThreadList: onScrollEnd confirmed position, completing', {
+        scrollOffset: handle.scrollOffset,
+        distanceFromBottom: getDistanceFromBottom(handle),
+      });
+      completeInitialScroll(handle);
+      return;
+    }
+
+    if (!initialScrollRetried) {
+      initialScrollRetried = true;
+      console.debug('ThreadList: initial scroll missed target, retrying', {
+        target: initialScrollTarget,
+        scrollOffset: handle.scrollOffset,
+        scrollSize: handle.scrollSize,
+        viewportSize: handle.viewportSize,
+        distanceFromBottom: getDistanceFromBottom(handle),
+      });
+      requestAnimationFrame(() => {
+        const retryScrolled = scrollToTarget(handle, initialScrollTarget);
+        if (!retryScrolled) {
+          // Target disappeared between mount and retry — finalize now since
+          // no scroll events will fire to trigger another onScrollEnd.
+          completeInitialScroll(handle);
+        }
+      });
+      return;
+    }
+    console.warn(
+      'ThreadList: initial scroll did not reach target after retry',
+      {
+        target: initialScrollTarget,
+        scrollOffset: handle.scrollOffset,
+        scrollSize: handle.scrollSize,
+        viewportSize: handle.viewportSize,
+        distanceFromBottom: getDistanceFromBottom(handle),
+      }
+    );
+    completeInitialScroll(handle);
+  };
 
   const handleScroll = () => {
     const handle = virtualHandle();
@@ -223,8 +343,7 @@ export function ThreadList(props: ThreadListProps) {
     }
 
     const distanceFromTop = handle.scrollOffset;
-    const distanceFromBottom =
-      handle.scrollSize - handle.viewportSize - handle.scrollOffset;
+    const distanceFromBottom = getDistanceFromBottom(handle);
 
     const nearTop = distanceFromTop <= NEAR_TOP_THRESHOLD;
     const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
@@ -296,6 +415,7 @@ export function ThreadList(props: ThreadListProps) {
           if (props.onNavigationReady) {
             props.onNavigationReady(createNavigation(ref));
           }
+          resetInitialScroll();
           scrollOnMount(ref);
         }}
         scrollRef={scrollRef}
@@ -303,6 +423,7 @@ export function ThreadList(props: ThreadListProps) {
         bufferSize={BASE_BUFFER_SIZE}
         data={props.keys()}
         onScroll={handleScroll}
+        onScrollEnd={handleScrollEnd}
         shift={props.shift?.() ?? false}
       >
         {(key) => props.children({ id: key })}

@@ -6,7 +6,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
@@ -193,10 +193,10 @@ async fn main() -> anyhow::Result<()> {
         })
         .context("failed to connect to redis")?;
 
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::new(&aws_config),
-        queue_url: config.notification_queue.clone(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.notification_queue.clone(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
     });

@@ -39,14 +39,27 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
+import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
+import { fetchBinary } from '@service-storage/util/fetchBinary';
+import { isErr } from '@core/util/maybeResult';
 import type { Component, JSX } from 'solid-js';
-import { createMemo, For, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
@@ -268,12 +281,48 @@ function UserInfo(props: { userId: string }) {
 /**
  * Popup preview component for document references
  */
-function ImageCoverStrip(props: { documentId: string; class?: string }) {
+function ImageCoverStrip(props: {
+  documentId: string;
+  fileType?: string;
+  class?: string;
+}) {
   const query = useBinaryDocumentQuery(() => props.documentId);
 
   // Captured once at mount: true means the spinner was shown and we should fade in.
   // Reading .isLoading (not .data) avoids triggering Suspense here.
   const shouldFadeIn = query.isLoading;
+
+  // SVGs served from presigned URLs may not carry the correct Content-Type header
+  // (especially for older uploads), which causes <img> to show a broken image.
+  // Fetching as a blob and creating an object URL with an explicit MIME type
+  // bypasses this, matching the approach used by the full image viewer.
+  const [svgObjectUrl, setSvgObjectUrl] = createSignal<string | undefined>();
+  createEffect(() => {
+    const presignedUrl = query.data;
+    if (!presignedUrl || props.fileType !== 'svg') return;
+
+    const controller = new AbortController();
+    let objectUrl: string | undefined;
+    fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
+      (result) => {
+        if (controller.signal.aborted || isErr(result)) return;
+        const [, blob] = result;
+        objectUrl = URL.createObjectURL(
+          new Blob([blob], { type: 'image/svg+xml' })
+        );
+        setSvgObjectUrl(objectUrl);
+      }
+    );
+
+    onCleanup(() => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setSvgObjectUrl(undefined);
+    });
+  });
+
+  const displayUrl = () =>
+    props.fileType === 'svg' ? svgObjectUrl() : query.data;
 
   return (
     <div
@@ -286,7 +335,7 @@ function ImageCoverStrip(props: { documentId: string; class?: string }) {
           </div>
         }
       >
-        <Show when={query.data}>
+        <Show when={displayUrl()}>
           {(url) => (
             <img
               src={url()}
@@ -509,12 +558,12 @@ export function PopupPreview(props: {
       });
     }
 
-    if (props.documentInfo.type !== 'channel') return;
+    if (!isBlockNameWithLocation(props.documentInfo.type)) return;
 
     const orchestrator = splitManager.getOrchestrator();
     const handle = await orchestrator.getBlockHandle(
       props.documentInfo.id,
-      'channel'
+      props.documentInfo.type
     );
 
     await handle?.goToLocationFromParams(props.documentInfo.params);
@@ -704,6 +753,7 @@ export function PopupPreview(props: {
                   <Show when={props.documentInfo.type === 'image'}>
                     <ImageCoverStrip
                       documentId={accessibleItem().id}
+                      fileType={accessibleItem().fileType}
                       class="shrink-0 h-32"
                     />
                   </Show>

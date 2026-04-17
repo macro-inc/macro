@@ -895,6 +895,65 @@
         }
       }
     },
+    "/mobile-welcome-email": {
+      "post": {
+        "tags": ["mobile_welcome_email"],
+        "summary": "Sends a mobile welcome email to the given address, if it hasn't already been sent\nand the email is not blocked.",
+        "operationId": "send_mobile_welcome_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMobileWelcomeEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendMobileWelcomeEmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oauth/passwordless/{code}": {
       "get": {
         "tags": ["oauth::passwordless_callback"],
@@ -3061,6 +3120,24 @@
           }
         }
       },
+      "CheckoutSessionMetadata": {
+        "type": "object",
+        "description": "Tracking metadata for conversion attribution",
+        "properties": {
+          "fbc": {
+            "type": ["string", "null"],
+            "description": "Meta (Facebook) click ID from _fbc cookie"
+          },
+          "fbp": {
+            "type": ["string", "null"],
+            "description": "Meta (Facebook) browser ID from _fbp cookie"
+          },
+          "gaClientId": {
+            "type": ["string", "null"],
+            "description": "Google Analytics client ID for conversion tracking"
+          }
+        }
+      },
       "CreateAccountMergeRequest": {
         "type": "object",
         "required": ["email"],
@@ -3084,9 +3161,9 @@
             "type": ["string", "null"],
             "description": "Optional discount/promo code to apply"
           },
-          "gaClientId": {
-            "type": ["string", "null"],
-            "description": "Google Analytics client ID for conversion tracking"
+          "metadata": {
+            "$ref": "#/components/schemas/CheckoutSessionMetadata",
+            "description": "Tracking metadata for conversion attribution"
           },
           "successUrl": {
             "type": "string",
@@ -3515,6 +3592,26 @@
           "recipient": {
             "type": "string",
             "description": "the recipient of the referral email"
+          }
+        }
+      },
+      "SendMobileWelcomeEmailRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email address to send the welcome email to"
+          }
+        }
+      },
+      "SendMobileWelcomeEmailResponse": {
+        "type": "object",
+        "required": ["sent"],
+        "properties": {
+          "sent": {
+            "type": "boolean",
+            "description": "Whether the email was sent (false if it was already sent previously)"
           }
         }
       },

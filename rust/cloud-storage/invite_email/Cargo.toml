@@ -9,7 +9,9 @@ version = "0.1.0"
 askama = { workspace = true }
 macro_env = { path = "../macro_env" }
 macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
 notification = { path = "../notification" }
+rootcause = { workspace = true }
 serde = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 utoipa = { workspace = true }

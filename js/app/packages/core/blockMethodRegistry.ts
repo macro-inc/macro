@@ -18,6 +18,7 @@ type EmptySpec = {};
 type AssertSpec<T> = T extends BlockMethodSpec ? T : EmptySpec;
 
 export interface BlockMethodRegistry {
+  call: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
   channel: EmptySpec;
   write: EmptySpec;
@@ -36,6 +37,7 @@ export interface BlockMethodRegistry {
   color: EmptySpec;
   component: EmptySpec;
   task: EmptySpec;
+  automation: EmptySpec;
 }
 
 // Type helper to get the method spec for a block name

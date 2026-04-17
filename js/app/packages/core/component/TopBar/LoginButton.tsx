@@ -28,7 +28,7 @@ export function LoginButton() {
         variant="accent"
         size="sm"
         class="rounded-xs"
-        onClick={() => navigate(`/signup${window.location.search}`)}
+        onClick={() => navigate(`/welcome${window.location.search}`)}
       >
         Sign Up
       </Button>

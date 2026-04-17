@@ -202,9 +202,12 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     trimWhitespace(editor, { trailing: true });
   }
 
+  const [rootConnected, setRootConnected] = createSignal(false);
+
   const onConnect = (el: HTMLDivElement) => {
     editor.setRootElement(el);
     el.addEventListener('blur', onBlur);
+    setRootConnected(true);
     onCleanup(() => {
       cleanup();
       el.removeEventListener('blur', onBlur);
@@ -258,18 +261,9 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     )
   );
 
-  // Autofocus the title if it is empty.
+  // Autofocus the title if it is empty and we didn't navigate here via J/K.
   createEffect(() => {
-    if (dataReady()) {
-      if (untrack(mdDocumentName) === '') {
-        editor.focus();
-      }
-    }
-  });
-
-  // Auto-focus on mount if enabled and title is empty.
-  createEffect(() => {
-    if (props.autoFocusOnMount && dataReady()) {
+    if (props.autoFocusOnMount && rootConnected() && dataReady()) {
       if (untrack(mdDocumentName) === '') {
         editor.focus();
       }

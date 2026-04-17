@@ -9,10 +9,11 @@ export const EXCLUDE: string[] = [NIL_UUID];
 
 // Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
+  call_filters: { channel_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
   chat_filters: { chat_ids: EXCLUDE },
   document_filters: { document_ids: EXCLUDE },
-  email_filters: { recipients: EXCLUDE },
+  email_filters: { email_thread_ids: EXCLUDE },
   project_filters: { project_ids: EXCLUDE },
 };
 
@@ -64,6 +65,11 @@ export function filterSoupItemByRequestBody(
       ({ data }) =>
         !isIdFilteredOut(body.email_filters?.email_thread_ids, data.id)
     )
+    .with(
+      { tag: 'callRecord' },
+      ({ data }) =>
+        !isIdFilteredOut(body.call_filters?.channel_ids, data.channelId)
+    )
     .exhaustive();
 }
 
@@ -76,7 +82,7 @@ export const QUERY_FILTERS = {
   document: {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
     document_filters: { file_types: ['md', 'canvas'] },
   },
@@ -84,7 +90,7 @@ export const QUERY_FILTERS = {
   task: {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
     document_filters: { sub_types: ['task'] },
   },
@@ -94,13 +100,13 @@ export const QUERY_FILTERS = {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
-    email_filters: {},
+    email_filters: { importance: true },
   },
 
   people: {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
     channel_filters: { channel_types: [ChannelTypeEnum.DirectMessage] },
   },
@@ -108,7 +114,7 @@ export const QUERY_FILTERS = {
   teams: {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
     channel_filters: {
       channel_types: [
@@ -122,7 +128,7 @@ export const QUERY_FILTERS = {
   agent: {
     channel_filters: { channel_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
     chat_filters: {},
   },
@@ -130,14 +136,16 @@ export const QUERY_FILTERS = {
   file: {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
     document_filters: { file_types: getFileAssociations() },
   },
 
   documentAndFile: {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
     document_filters: {
       file_types: ['md', 'canvas', 'docx', ...getFileAssociations()],
     },
@@ -146,9 +154,26 @@ export const QUERY_FILTERS = {
   channels: {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
     channel_filters: {},
+  },
+
+  calls: {
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    channel_filters: { channel_ids: EXCLUDE },
+    call_filters: {},
+  },
+
+  folders: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    email_filters: { email_thread_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    project_filters: {},
   },
 
   default: {},

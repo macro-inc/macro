@@ -3,10 +3,10 @@ import { createSignal, For, Show } from 'solid-js';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import { formatPropertyValue, getSelectValues } from '../../utils';
 import { PropertyValueIcon } from './PropertyValueIcon';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import {
   AddPropertyValueButton,
   EmptyValue,
-  PropertyValueDeleteButton,
   stubSaveHandler,
   type PropertyValueProps,
 } from './ValueComponents';
@@ -81,11 +81,14 @@ export const SelectValue: Component<PropertyValueProps> = (props) => {
                 <span class="block truncate">{formatted}</span>
               </div>
               <Show when={!isReadOnly() && isHovered() && !isSaving()}>
-                <div class="absolute right-1 inset-y-0 flex items-center">
-                  <PropertyValueDeleteButton
+                <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-gradient-to-r from-transparent to-hover to-40%">
+                  <button
                     onClick={() => handleRemoveValue(value)}
                     disabled={isSaving()}
-                  />
+                    class="size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink"
+                  >
+                    <DeleteIcon class="size-3" />
+                  </button>
                 </div>
               </Show>
             </div>

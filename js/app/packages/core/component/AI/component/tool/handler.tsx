@@ -19,11 +19,12 @@ import { readThreadHandler } from './ReadThread';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { sendEmailHandler } from './SendEmail';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
-import type {
-  RenderContext,
-  ToolHandler,
-  ToolHandlerMap,
-  ToolRenderContext,
+import {
+  ToolErrorContext,
+  type RenderContext,
+  type ToolHandler,
+  type ToolHandlerMap,
+  type ToolRenderContext,
 } from './ToolRenderer';
 import { updateThreadLabelsHandler } from './UpdateThreadLabels';
 import { webFetchHandler } from './WebFetch';
@@ -105,14 +106,18 @@ export function RenderTool(props: ToolProps) {
   };
 
   return (
-    <Dynamic
-      component={handler.render}
-      {...context}
-      response={response()}
-      renderContext={{
-        isStreaming: props.renderContext.renderContext.isStreaming,
-      }}
-    />
+    <ToolErrorContext.Provider
+      value={() => (props.isComplete && !response() ? 'failed' : undefined)}
+    >
+      <Dynamic
+        component={handler.render}
+        {...context}
+        response={response()}
+        renderContext={{
+          isStreaming: props.renderContext.renderContext.isStreaming,
+        }}
+      />
+    </ToolErrorContext.Provider>
   );
 }
 

@@ -1,3 +1,2 @@
-/rust/ @macro-inc/rust
-/js/ @macro-inc/web
+/rust/cloud-storage/macro_db_client/migrations/ @macro-inc/infra
 /infra/ @macro-inc/infra

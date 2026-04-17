@@ -5,6 +5,7 @@ use crate::domain::{
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
+use call::domain::{models::GetCallRecordsRequest, ports::CallRecordQueryService};
 use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
 use cowlike::CowLike;
 use doppleganger::Mirror;
@@ -23,6 +24,7 @@ use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod, SortOn,
 };
 use models_soup::{
+    call_record::SoupCallRecord,
     comms::SoupChannel,
     email_thread::{
         SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview,
@@ -38,7 +40,7 @@ use uuid::Uuid;
 mod tests;
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
-pub struct SoupImpl<T, U, V, C> {
+pub struct SoupImpl<T, U, V, C, K> {
     /// the interface for interacting with the db
     soup_storage: T,
     /// the interface for interacting with frecency
@@ -47,22 +49,32 @@ pub struct SoupImpl<T, U, V, C> {
     email_service: V,
     /// the interface for interacting with comms
     comms_service: C,
+    /// the interface for interacting with call records
+    call_record_service: K,
 }
 
-impl<T, U, V, C> SoupImpl<T, U, V, C>
+impl<T, U, V, C, K> SoupImpl<T, U, V, C, K>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
     V: EmailPreviewServiceReadOnly,
     C: ChannelsService,
+    K: CallRecordQueryService,
 {
-    pub fn new(soup_storage: T, frecency: U, email_service: V, comms_service: C) -> Self {
+    pub fn new(
+        soup_storage: T,
+        frecency: U,
+        email_service: V,
+        comms_service: C,
+        call_record_service: K,
+    ) -> Self {
         SoupImpl {
             soup_storage,
             frecency,
             email_service,
             comms_service,
+            call_record_service,
         }
     }
 
@@ -342,15 +354,42 @@ where
                 })?,
         ))
     }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn handle_call_request(
+        &self,
+        req: Option<GetCallRecordsRequest>,
+    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+        let Some(req) = req else {
+            return Ok(Either::Left(None.into_iter()));
+        };
+
+        Ok(Either::Right(
+            self.call_record_service
+                .get_user_call_records(req)
+                .await
+                .map_err(|_| SoupErr::CallErr)
+                .map(|records| {
+                    records.into_iter().map(|record| {
+                        let soup_record = SoupCallRecord::from(record);
+                        FrecencySoupItem {
+                            item: SoupItem::CallRecord(soup_record),
+                            frecency_score: None,
+                        }
+                    })
+                })?,
+        ))
+    }
 }
 
-impl<T, U, V, C> SoupService for SoupImpl<T, U, V, C>
+impl<T, U, V, C, K> SoupService for SoupImpl<T, U, V, C, K>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
     V: EmailPreviewServiceReadOnly,
     C: ChannelsService,
+    K: CallRecordQueryService,
 {
     #[tracing::instrument(err, skip(self, req))]
     async fn get_user_soup<R>(&self, req: SoupRequest<R>) -> Result<SoupOutput<R>, SoupErr>
@@ -364,6 +403,7 @@ where
 
         let email_request = req.build_email_request();
         let comms_request = req.build_comms_request();
+        let call_request = req.build_call_request();
 
         match req.cursor {
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
@@ -382,12 +422,15 @@ where
 
                 let comms_soup_fut = self.handle_comms_request(comms_request);
 
-                let (main_soup, email_soup, comms_soup) =
-                    tokio::join!(main_soup_fut, email_soup_fut, comms_soup_fut);
+                let call_soup_fut = self.handle_call_request(call_request);
+
+                let (main_soup, email_soup, comms_soup, call_soup) =
+                    tokio::join!(main_soup_fut, email_soup_fut, comms_soup_fut, call_soup_fut);
 
                 let page = main_soup?
                     .chain(email_soup?)
                     .chain(comms_soup?)
+                    .chain(call_soup?)
                     .paginate_on(limit.into(), sort_method)
                     .filter_on(entity_filter.clone())
                     .sort_desc()

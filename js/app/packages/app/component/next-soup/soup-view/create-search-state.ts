@@ -6,6 +6,7 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
+import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { isChannelEntity, type EntityData } from '@entity';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
@@ -28,12 +29,16 @@ interface CreateSearchStateArgs {
   soup: SoupState;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   disableLocalSearch?: boolean;
+  searchPaused?: Accessor<boolean>;
+  searchMentions?: Accessor<string[]>;
 }
 
 export const createSearchState = ({
   soup,
   queryFilters,
   disableLocalSearch,
+  searchPaused,
+  searchMentions,
 }: CreateSearchStateArgs) => {
   const [searchText, setSearchText] = createSignal('');
 
@@ -60,12 +65,29 @@ export const createSearchState = ({
   );
 
   const searchUnifiedNameContentRequest = createMemo(
-    (): UnifiedSearchRequest => ({
-      search_on: 'name_content',
-      match_type: 'partial',
-      query: debouncedSearchForService(),
-      filters: queryFilters(),
-    })
+    (): UnifiedSearchRequest => {
+      const filters = queryFilters();
+      const query = debouncedSearchForService();
+      const mentionIds =
+        isSearchServiceDebounceSettled() && !isSearchServiceDisabled()
+          ? searchMentions?.()
+          : undefined;
+      return {
+        search_on: 'name_content',
+        match_type: 'partial',
+        query,
+        filters:
+          mentionIds && mentionIds.length > 0
+            ? {
+                ...filters,
+                channel_filters: {
+                  ...filters.channel_filters,
+                  mentions: mentionIds,
+                },
+              }
+            : filters,
+      };
+    }
   );
 
   const searchQuery = useSearchSoupQuery(
@@ -78,7 +100,10 @@ export const createSearchState = ({
       },
     }),
     () => ({
-      enabled: !isSearchServiceDisabled() && isSearchServiceDebounceSettled(),
+      enabled:
+        !isSearchServiceDisabled() &&
+        isSearchServiceDebounceSettled() &&
+        !searchPaused?.(),
     })
   );
 
@@ -115,8 +140,15 @@ export const createSearchState = ({
     return filterToResultMap;
   });
 
+  // we will hide local results if there are channel filters because we only want message results
+  const hasChannelQueryFilters = () => {
+    const cf = queryFilters().channel_filters;
+    return !!(cf?.channel_ids?.length || cf?.sender_ids?.length);
+  };
+
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
+    if (hasChannelQueryFilters()) return [];
     const activeFilters = getValidSearchFilters(soup.filters.active());
     const results =
       activeFilters.length === 0
@@ -138,10 +170,11 @@ export const createSearchState = ({
     return searchQuery.data ?? [];
   });
 
-  const featuredIds = createMemo(() => {
-    const ids = filteredLocalFuzzyResults().map((r) => r.id);
-    return ids;
-  });
+  const featuredIds = createMemo<string[]>(
+    () => filteredLocalFuzzyResults().map((r) => r.id),
+    [],
+    { equals: arrayEquals }
+  );
 
   const isLocalSearchSettling = createMemo(
     () => isSearching() && trimmedSearchText() !== debouncedSearchForLocal()

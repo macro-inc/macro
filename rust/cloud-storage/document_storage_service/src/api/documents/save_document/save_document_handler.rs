@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::api::context::EntityAccessService;
 use crate::{
     api::{context::ApiContext, documents::utils},
     model::{
@@ -13,9 +14,8 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_middleware::cloud_storage::ensure_access::{
-    document::DocumentAccessExtractor, project::ProjectBodyAccessLevelExtractor,
-};
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use model::document::response::DocumentResponseMetadata;
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt},
@@ -48,14 +48,18 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, document_context, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context, document_context, _access, project), fields(user_id=?user_context.user_id))]
 pub async fn save_document_handler(
-    _access: DocumentAccessExtractor<EditAccessLevel>,
+    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
-    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, SaveDocumentRequest>,
+    project: ProjectBodyAccessLevelExtractor<
+        EditAccessLevel,
+        SaveDocumentRequest,
+        EntityAccessService,
+    >,
 ) -> impl IntoResponse {
     let req = project.into_inner();
 

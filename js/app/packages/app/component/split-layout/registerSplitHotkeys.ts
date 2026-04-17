@@ -2,10 +2,9 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { fireMacroJump } from '../MacroJump';
-import type { ReferredFrom, SplitContent } from './layoutManager';
+import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
 import { canSpotlight } from './utils/canSpotlight';
-import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 export function registerSplitHotkeys(args: {
   splitHotkeyScope: string;
@@ -16,10 +15,7 @@ export function registerSplitHotkeys(args: {
   goBack: () => void;
   canGoForward: () => boolean;
   goForward: () => void;
-  replaceSplit: (options: {
-    content: SplitContent;
-    referredFrom?: ReferredFrom;
-  }) => void;
+  goHome: () => void;
   splitName: () => string;
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
@@ -35,22 +31,18 @@ export function registerSplitHotkeys(args: {
     splitName,
     getSplitCount,
     isNotUnifiedList,
-    replaceSplit,
+    goHome,
   } = args;
-  const splitManager = globalSplitManager();
   registerHotkey({
     scopeId: splitHotkeyScope,
-    hotkey: 'cmd+escape',
-    condition: () => getSplitCount() > 1 || isNotUnifiedList(),
-    description: () => (getSplitCount() > 1 ? 'Close split' : 'Go home'),
+    hotkey: 'opt+escape',
+    condition: () => isNotUnifiedList() || getSplitCount() > 1,
+    description: () => (isNotUnifiedList() ? 'Go home' : 'Close split'),
     keyDownHandler: () => {
-      if (getSplitCount() > 1) {
+      if (isNotUnifiedList()) {
+        goHome();
+      } else if (getSplitCount() > 1) {
         closeSplit();
-      } else {
-        replaceSplit({
-          content: { type: 'component', id: LIST_VIEW_ID.inbox },
-          referredFrom: 'hotkey',
-        });
       }
       return true;
     },
@@ -65,6 +57,7 @@ export function registerSplitHotkeys(args: {
     hotkeyToken: TOKENS.window.spotlight.toggle,
     description: () => `Maximize ${splitName()}`,
     condition: () => {
+      const splitManager = globalSplitManager();
       if (!splitManager) return false;
       return canSpotlight(splitManager);
     },
@@ -117,7 +110,7 @@ export function registerSplitHotkeys(args: {
 
   registerHotkey({
     hotkeyToken: TOKENS.window.focusSplitRight,
-    hotkey: ['l', 'arrowright'],
+    hotkey: ['shift+l', 'shift+arrowright'],
     scopeId: splitHotkeyScope,
     description: 'Focus split right',
     condition: () => getSplitCount() > 1,
@@ -130,7 +123,7 @@ export function registerSplitHotkeys(args: {
 
   registerHotkey({
     hotkeyToken: TOKENS.window.focusSplitLeft,
-    hotkey: ['h', 'arrowleft'],
+    hotkey: ['shift+h', 'shift+arrowleft'],
     scopeId: splitHotkeyScope,
     description: 'Focus split left',
     condition: () => getSplitCount() > 1,

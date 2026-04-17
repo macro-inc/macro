@@ -4,12 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ChannelInviteMetadataAllOf } from './channelInviteMetadataAllOf';
-import type { CommonChannelMetadata } from './commonChannelMetadata';
+import type { ChannelInviteMetadataSenderProfilePictureUrl } from './channelInviteMetadataSenderProfilePictureUrl';
 
 /**
- * Metadata for when a user is invited to a channel
+ * Metadata for when a user is invited to a channel.
  */
-export type ChannelInviteMetadata = CommonChannelMetadata &
-  ChannelInviteMetadataAllOf;
+export interface ChannelInviteMetadata {
+  /** The name of the channel */
+  channelName?: string;
+  /** The user who sent the invitation */
+  invitedBy: string;
+  /** The sender's profile picture URL, if available. */
+  senderProfilePictureUrl?: ChannelInviteMetadataSenderProfilePictureUrl;
+}

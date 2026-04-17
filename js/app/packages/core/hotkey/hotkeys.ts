@@ -125,6 +125,7 @@ export function registerHotkey(
     icon,
     tags,
     shouldReturnFocusOnClose,
+    proxiedHotkey,
   } = args;
 
   const noopDisposer: RegisterHotkeyReturn = {
@@ -227,6 +228,7 @@ export function registerHotkey(
     icon,
     tags,
     shouldReturnFocusOnClose,
+    proxiedHotkey,
   };
 
   // Check for existing hotkeys in the scope and warn if overriding

@@ -152,5 +152,11 @@ export class HeicConversionService {
   }
 }
 
-// Export a singleton instance for convenience
-export const heicConversionService = HeicConversionService.getInstance();
+// Lazy proxy: defer worker instantiation until first method call.
+// On iOS WKWebView, eagerly creating ES module workers via the tauri:// scheme
+// at module-load deadlocks the WebContent process.
+export const heicConversionService = new Proxy({} as HeicConversionService, {
+  get(_target, prop, receiver) {
+    return Reflect.get(HeicConversionService.getInstance(), prop, receiver);
+  },
+});

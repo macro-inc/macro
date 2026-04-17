@@ -1,6 +1,11 @@
 //! Permission service implementation for properties.
 
+use std::sync::Arc;
+
+use entity_access::domain::models::AccessError;
+use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType as ModelEntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::EntityType;
 use sqlx::{Pool, Postgres};
@@ -10,17 +15,34 @@ use crate::domain::ports::PermissionService;
 use email_db_client::threads::get::get_macro_id_from_thread_id;
 
 /// Permission service implementation using database.
-pub struct PermissionServiceImpl {
+pub struct PermissionServiceImpl<Svc> {
     db: Pool<Postgres>,
+    entity_access_service: Arc<Svc>,
 }
 
-impl PermissionServiceImpl {
-    pub fn new(db: Pool<Postgres>) -> Self {
-        Self { db }
+impl<Svc: EntityAccessService> PermissionServiceImpl<Svc> {
+    pub fn new(db: Pool<Postgres>, entity_access_service: Arc<Svc>) -> Self {
+        Self {
+            db,
+            entity_access_service,
+        }
     }
 }
 
-impl PermissionService for PermissionServiceImpl {
+/// Map `models_properties::EntityType` to `model_entity::EntityType`.
+fn map_entity_type(entity_type: EntityType) -> Option<ModelEntityType> {
+    match entity_type {
+        EntityType::Document => Some(ModelEntityType::Document),
+        EntityType::Chat => Some(ModelEntityType::Chat),
+        EntityType::Project => Some(ModelEntityType::Project),
+        EntityType::Thread => Some(ModelEntityType::EmailThread),
+        EntityType::Channel => Some(ModelEntityType::Channel),
+        EntityType::Task => Some(ModelEntityType::Document), // tasks use document permissions
+        EntityType::Company | EntityType::User => None,
+    }
+}
+
+impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> {
     type Err = anyhow::Error;
 
     #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type), err)]
@@ -30,31 +52,27 @@ impl PermissionService for PermissionServiceImpl {
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<(), Self::Err> {
-        let item_type = match entity_type {
-            EntityType::Document => "document",
-            EntityType::Chat => "chat",
-            EntityType::Project => "project",
-            EntityType::Thread => "thread",
-            EntityType::Channel => "channel",
-            EntityType::Task => "document",
-            EntityType::Company | EntityType::User => {
+        let model_entity_type = match map_entity_type(entity_type) {
+            Some(t) => t,
+            None => {
                 tracing::warn!("property operations not supported for this entity type");
                 anyhow::bail!("Unsupported entity type");
             }
         };
 
-        let access_level =
-            macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2(
-                &self.db, user_id, entity_id, item_type,
-            )
+        let parsed_user_id = MacroUserIdStr::parse_from_str(user_id);
+        let user_id_ref = parsed_user_id.as_ref().ok().map(std::ops::Deref::deref);
+
+        let access_level = self
+            .entity_access_service
+            .get_access_level(user_id_ref, entity_id, model_entity_type)
             .await
-            .map_err(|(status_code, message)| {
+            .map_err(|e: AccessError| {
                 tracing::error!(
-                    status_code = ?status_code,
-                    message = %message,
+                    error = %e,
                     "failed to get user access level"
                 );
-                anyhow::anyhow!("Failed to get user access level: {}", message)
+                anyhow::anyhow!("Failed to get user access level: {}", e)
             })?;
 
         // Fallback for threads: check ownership via link_id if no permission records exist.

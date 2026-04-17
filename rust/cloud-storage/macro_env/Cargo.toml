@@ -5,7 +5,6 @@ publish = false
 version = "0.1.0"
 
 [features]
-frontend_url = ["dep:url"]
 strum = ["dep:strum"]
 
 [dependencies]
@@ -14,4 +13,3 @@ serde = { workspace = true }
 strum = { workspace = true, features = ["derive"], optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-url = { workspace = true, optional = true }

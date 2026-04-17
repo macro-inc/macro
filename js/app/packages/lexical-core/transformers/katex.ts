@@ -50,8 +50,10 @@ export const I_EQUATION_NODE: TextMatchTransformer = {
 export const E_INLINE_EQUATION_NODE: TextMatchTransformer = {
   dependencies: [EquationNode],
   type: 'text-match',
-  regExp: /(?<!\$)\$[^\n$]*?(?:[a-zA-Z\\=+\-*/^][^\n$]*?)\$(?!\$|\d)/,
-  importRegExp: /(?<!\$)\$[^\n$]*?(?:[a-zA-Z\\=+\-*/^][^\n$]*?)\$(?!\$|\d)/,
+  regExp:
+    /(?<!\$)\$(?!\s)[^\n$]*?(?:[a-zA-Z\\=+\-*/^][^\n$]*?)(?<!\s)\$(?!\$|\d)/,
+  importRegExp:
+    /(?<!\$)\$(?!\s)[^\n$]*?(?:[a-zA-Z\\=+\-*/^][^\n$]*?)(?<!\s)\$(?!\$|\d)/,
   export: (node) => {
     if (!$isEquationNode(node)) {
       return null;

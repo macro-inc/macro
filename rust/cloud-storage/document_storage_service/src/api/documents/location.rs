@@ -1,5 +1,6 @@
 use crate::api::context::ApiContext;
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use crate::api::context::EntityAccessService;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use rayon::prelude::*;
 use std::{
@@ -50,7 +51,7 @@ static DOCUMENT_DOES_NOT_EXIST: &str = "document does not exist in s3";
 )]
 #[tracing::instrument(skip(state, user_context, document_context, _access_level), fields(user_id=?user_context.user_id))]
 pub async fn get_location_handler(
-    _access_level: DocumentAccessExtractor<ViewAccessLevel>,
+    _access_level: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,

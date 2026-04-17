@@ -25,10 +25,10 @@ export const createAppViteConfig = ({
     const ENV_MODE = process.env.MODE ?? mode;
     const NO_MINIFY = process.env.NO_MINIFY === 'true';
     const isLegacyTauriBuild = process.env.VITE_TAURI === 'true';
-    const isTauriPlatform = platform !== 'web' || isLegacyTauriBuild;
+    const _isTauriPlatform = platform !== 'web' || isLegacyTauriBuild;
 
     return {
-      base: command === 'serve' || isTauriPlatform ? '/' : '/app',
+      base: command === 'serve' ? '/' : '/app',
       assetsInclude: ['**/*.glb'],
       css: {
         preprocessorMaxWorkers: true,
@@ -137,7 +137,6 @@ export const createAppViteConfig = ({
         hmr: {
           protocol: 'ws',
           host: process.env.TAURI_DEV_HOST || 'localhost',
-          port: Number(process.env.PORT || 3000),
         },
         cors: true,
         watch: {

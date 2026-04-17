@@ -2,7 +2,7 @@ import type { JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
 export function ChannelInputContainer(props: {
-  ref: (el: HTMLDivElement) => void;
+  ref?: (el: HTMLDivElement) => void;
   children: JSX.Element;
   isHidden?: boolean;
 }) {

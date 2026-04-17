@@ -1,7 +1,13 @@
 import type { Entity, EntityType } from '@core/types';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
+import { isMatching, P } from 'ts-pattern';
+import { CHANNEL_EVENT_TYPES } from './notification-source';
 import type { NotificationSource } from './notification-source';
 import { type UnifiedNotification, compositeEntity } from './types';
+
+export const isChannelNotification = isMatching({
+  notification_metadata: { tag: P.union(...CHANNEL_EVENT_TYPES) },
+});
 
 /**
  * Returns a reactive accessor to all notifications for a given entity
@@ -48,7 +54,13 @@ export function notificationIsOfEntityType(
  * @returns boolean
  */
 export function notificationIsRead(notification: UnifiedNotification): boolean {
-  return !!notification.viewed_at || notification.done;
+  if (notification.viewed_at || notification.done) return true;
+  if (
+    notification.entity_type === 'channel' &&
+    !isChannelNotification(notification)
+  )
+    return true;
+  return false;
 }
 
 /**

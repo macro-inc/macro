@@ -174,7 +174,7 @@ pub(crate) async fn populate_properties(
             SoupItem::Project(x) => properties_map.remove(&x.id.to_string()),
             SoupItem::EmailThread(x) => properties_map.remove(&x.thread.id.to_string()),
             SoupItem::Chat(x) => properties_map.remove(&x.id.to_string()),
-            SoupItem::Channel(_) => None,
+            SoupItem::Channel(_) | SoupItem::CallRecord(_) => None,
         };
         if let Some(props) = props {
             let soup_props: Vec<SoupProperty> = props.into_iter().map(SoupProperty::from).collect();
@@ -183,7 +183,7 @@ pub(crate) async fn populate_properties(
                 SoupItem::Project(x) => x.properties = soup_props,
                 SoupItem::EmailThread(x) => x.properties = soup_props,
                 SoupItem::Chat(x) => x.properties = soup_props,
-                SoupItem::Channel(_) => {}
+                SoupItem::Channel(_) | SoupItem::CallRecord(_) => {}
             }
         }
     }

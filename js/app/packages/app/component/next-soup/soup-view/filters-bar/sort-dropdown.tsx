@@ -8,6 +8,7 @@ import type {
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 
 export interface SortDropdownProps {
   /** Current sort value */
@@ -32,15 +33,17 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <DropdownMenu.Trigger
-        as={Button}
-        variant="secondary"
-        size="sm"
-        class="whitespace-nowrap rounded-xs [&_svg]:size-4"
-      >
-        <SortIcon />
-        <ChevronDownIcon class="size-4" />
-      </DropdownMenu.Trigger>
+      <Tooltip tooltip={<LabelAndHotKey label="Sort" shortcut="S" />}>
+        <DropdownMenu.Trigger
+          as={Button}
+          variant="secondary"
+          size="sm"
+          class="whitespace-nowrap rounded-xs [&_svg]:size-4"
+        >
+          <SortIcon />
+          <ChevronDownIcon class="size-4" />
+        </DropdownMenu.Trigger>
+      </Tooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm min-w-[140px] p-1">
           <For each={options()}>

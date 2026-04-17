@@ -10,7 +10,14 @@ import {
   isScopeInActiveBranch,
   runCommand,
 } from '@core/hotkey/utils';
-import { isSearchEntity } from '@entity';
+import {
+  isSearchEntity,
+  isWithNotification,
+  filterNotDoneNotifications,
+  filterValidNotifications,
+} from '@entity';
+import { openSingleStackNotification } from '@notifications';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { onCleanup, type Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
@@ -27,7 +34,6 @@ type UseSoupViewHotkeysOptions = {
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
   previewState: Accessor<boolean>;
-  getSplitCount: () => number;
   currentView: Accessor<ListView | undefined>;
   activeTab: Accessor<string | undefined>;
   applyTabPreset: (view: ListView, tabId: string) => void;
@@ -40,7 +46,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     splitHandle,
     virtualizerHandle,
     previewState,
-    getSplitCount,
     currentView,
     activeTab,
     applyTabPreset,
@@ -50,12 +55,10 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
 
-  // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
+  // escape - Multi-purpose: Clear selection / Close spotlight
   const clearMultiCondition = () =>
     soup.selection.count() > 0 && splitIsUnifiedList();
   const closeSpotlightCondition = () => splitHandle.isSpotLight();
-  const goHomeCondition = () => !splitIsUnifiedList();
-  const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
 
   const escapeDescription = () => {
     if (clearMultiCondition()) {
@@ -63,12 +66,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     }
     if (closeSpotlightCondition()) {
       return 'Close spotlight';
-    }
-    if (closeSplitCondition()) {
-      return 'Close split';
-    }
-    if (goHomeCondition()) {
-      return 'Go home';
     }
     return '';
   };
@@ -124,6 +121,20 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hide: true,
   }).withGroup(group);
 
+  const tryOpenChannelNotification = (newSplit: boolean): boolean => {
+    const entity = soup.focus.item();
+    if (!entity) return false;
+    if (entity.type !== 'channel' || !isWithNotification(entity)) return false;
+    const validNotifs = filterNotDoneNotifications(
+      filterValidNotifications(entity.notifications?.() ?? [])
+    );
+    const splitManager = globalSplitManager();
+    return (
+      !!splitManager &&
+      openSingleStackNotification(validNotifs, splitManager, newSplit)
+    );
+  };
+
   // enter - Open entity in split
   registerHotkey({
     hotkey: ['enter'],
@@ -132,6 +143,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: 'Open',
     hide: true,
     keyDownHandler: () => {
+      if (tryOpenChannelNotification(false)) return true;
+
       const entity = soup.focus.item();
       if (!entity) return false;
 
@@ -254,16 +267,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     runWithInputFocused: true,
   }).withGroup(group);
 
-  // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
+  // escape - Multi-purpose: Clear selection / Close spotlight
   registerHotkey({
     hotkey: ['escape'],
     scopeId,
     description: escapeDescription,
-    condition: () =>
-      clearMultiCondition() ||
-      closeSpotlightCondition() ||
-      closeSplitCondition() ||
-      goHomeCondition(),
+    condition: () => clearMultiCondition() || closeSpotlightCondition(),
     keyDownHandler: () => {
       if (clearMultiCondition()) {
         const length = soup.selection.count();
@@ -272,14 +281,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       }
       if (closeSpotlightCondition()) {
         splitHandle.toggleSpotlight();
-        return true;
-      }
-      if (closeSplitCondition()) {
-        splitHandle.close();
-        return true;
-      }
-      if (goHomeCondition()) {
-        splitHandle.goBack();
         return true;
       }
       return false;
@@ -293,6 +294,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: 'Open in new split',
     condition: () => soup.focus.id() !== undefined,
     keyDownHandler: () => {
+      if (tryOpenChannelNotification(true)) return true;
+
       const entity = soup.focus.item();
       if (!entity) return false;
       openEntityInSplitFromUnifiedList(entity, {

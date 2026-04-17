@@ -55,7 +55,10 @@ pub async fn disable_handler(
     tracing::info!(user_id = %user_context.user_id, "Disable called");
 
     // Enqueue the delete operation to handle cleanup asynchronously
-    let message = LinkManagerMessage::DeleteLink { link_id: link.id };
+    let message = LinkManagerMessage::DeleteLink {
+        link_id: link.id,
+        deletion_reason: models_email::email::service::pubsub::DeletionReason::ManuallyDisabled,
+    };
 
     ctx.sqs_client
         .enqueue_link_manager_notification(message)

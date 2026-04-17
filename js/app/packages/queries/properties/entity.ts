@@ -46,6 +46,7 @@ export function useEntityPropertiesQuery(
         queryKey: propertiesKeys.entity({
           entityType: type,
           entityId: id,
+          includeMetadata,
         }).queryKey,
         queryFn: async () => {
           const data = await throwOnErr(
@@ -155,14 +156,15 @@ export function useSaveEntityPropertyMutation(
       vars: SaveEntityPropertyParams
     ): Promise<SaveEntityPropertyContext> => {
       const current = getSoupEntityById(vars.entityId);
-      if (!current || current.tag === 'channel') return;
+      if (!current || current.tag === 'channel' || current.tag === 'callRecord')
+        return;
 
       const soupValue = apiValuesToSoupPropertyValue(vars.apiValues);
       if (current.data.properties) {
         return optimisticUpdateSoupEntity({
           tag: current.tag,
           data: {
-            id: current.data.id,
+            ...current.data,
             properties: current.data.properties.map((prop) =>
               prop.definition.id === vars.property.propertyDefinitionId
                 ? { ...prop, value: soupValue }
@@ -402,11 +404,16 @@ export function useSetPropertyStatusCompleteMutation(
       const current = getSoupEntityById(vars.entityId);
 
       let soupTxn: SoupTransaction | undefined;
-      if (current && current.tag !== 'channel' && current.data.properties) {
+      if (
+        current &&
+        current.tag !== 'channel' &&
+        current.tag !== 'callRecord' &&
+        current.data.properties
+      ) {
         soupTxn = optimisticUpdateSoupEntity({
           tag: current.tag,
           data: {
-            id: current.data.id,
+            ...current.data,
             properties: updateStatusPropertyToCompleted(
               current.data.properties
             ),

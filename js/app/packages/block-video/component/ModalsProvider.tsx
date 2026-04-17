@@ -1,4 +1,5 @@
 import { useBlockId } from '@core/block';
+import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import { ReferencesDrawer } from '@core/component/ReferencesModal';
 import {
   ShareBlockModal,
@@ -21,6 +22,7 @@ export function ModalsProvider(props: ParentProps) {
     >
       {props.children}
       <ReferencesDrawer documentId={blockId} documentName={fileName()} />
+      <DetailsDrawer documentId={blockId} />
       <ShareBlockModal />
     </ShareDialogContext.Provider>
   );

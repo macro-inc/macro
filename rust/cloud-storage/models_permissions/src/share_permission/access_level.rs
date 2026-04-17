@@ -28,13 +28,13 @@ pub enum AccessLevel {
     Owner,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ViewAccessLevel;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommentAccessLevel;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EditAccessLevel;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OwnerAccessLevel;
 
 #[cfg(test)]

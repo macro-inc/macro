@@ -4,6 +4,7 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CallFilters } from './callFilters';
 import type { ChannelFilters } from './channelFilters';
 import type { ChatFilters } from './chatFilters';
 import type { DocumentFilters } from './documentFilters';
@@ -15,6 +16,8 @@ import type { PropertyFilter } from './propertyFilter';
  * a bundle of all of the filters for each entity type
  */
 export interface EntityFilters {
+  /** the bundled [CallFilters] */
+  call_filters?: CallFilters;
   /** the bundled [ChannelFilters] */
   channel_filters?: ChannelFilters;
   /** the bundled [ChatFilters] */

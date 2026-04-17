@@ -1,6 +1,13 @@
 import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
-import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
@@ -46,6 +53,8 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
 
 interface SidebarItem {
   id: ListView;
@@ -126,6 +135,7 @@ type AppSidebarProps = {
 };
 
 type SidebarHotkeyDeps = {
+  links: SidebarItem[];
   hotkeyVisible: () => boolean;
   setHotkeyVisible: (visible: boolean) => void;
   resetHotkeysState: VoidFunction;
@@ -135,6 +145,7 @@ type SidebarHotkeyDeps = {
 };
 
 export const registerSidebarHotkeys = ({
+  links,
   isSlim,
   onOpenChange,
   openWithSplit,
@@ -163,7 +174,7 @@ export const registerSidebarHotkeys = ({
   });
 
   const registeredGoToKeys = new Set<ValidHotkey>([
-    ...SIDEBAR_LINKS.map((link) => link.hotkey),
+    ...links.map((link) => link.hotkey),
   ]);
 
   // When the go to command scope is active, we want to prevent
@@ -219,13 +230,37 @@ export const registerSidebarHotkeys = ({
   });
 
   // Register navigation shortcuts in the global GO_TO command scope
-  for (const link of SIDEBAR_LINKS) {
+  for (const link of links) {
     const openSidebarView = (e?: KeyboardEvent) => {
       e?.preventDefault();
       if (hotkeyVisible()) {
         resetHotkeysState();
         debounceResetHotkeysState.clear();
       }
+
+      if (link.id === 'search' && !e?.shiftKey) {
+        const activeSplit = globalSplitManager()?.activeSplit();
+        const content = activeSplit?.content();
+        if (
+          activeSplit &&
+          content?.type === 'component' &&
+          content.id === 'search'
+        ) {
+          const splitEl = document.querySelector(
+            `[data-split-id="${activeSplit.id}"]`
+          );
+          const searchContainer =
+            splitEl?.querySelector<HTMLElement>('[data-soup-search]');
+          if (searchContainer) {
+            const editable =
+              searchContainer.querySelector<HTMLElement>('[contenteditable]') ??
+              searchContainer;
+            editable.focus();
+            return true;
+          }
+        }
+      }
+
       openWithSplit(
         {
           type: 'component',
@@ -314,12 +349,30 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
   );
 };
 
+const CALLS_LINK: SidebarItem = {
+  id: 'calls',
+  label: 'Calls',
+  href: LIST_VIEW_PATHS.calls,
+  icon: PhoneCallIcon,
+  hotkey: 'l',
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
+
+  const visibleLinks = createMemo(() => {
+    if (!ENABLE_CALLS()) return SIDEBAR_LINKS;
+    const idx = SIDEBAR_LINKS.findIndex((l) => l.id === 'channels');
+    return [
+      ...SIDEBAR_LINKS.slice(0, idx + 1),
+      CALLS_LINK,
+      ...SIDEBAR_LINKS.slice(idx + 1),
+    ];
+  });
 
   const resetHotkeysState = () => {
     setHotkeyVisible(false);
@@ -369,6 +422,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   registerSidebarHotkeys({
+    links: visibleLinks(),
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,
@@ -435,7 +489,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
       <nav>
         <ul class="w-full h-full px-2 flex flex-col gap-1">
-          <For each={SIDEBAR_LINKS}>
+          <For each={visibleLinks()}>
             {(link) => (
               <li class="flex items-center justify-center">
                 <SidebarLink
@@ -453,11 +507,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-ink/5 my-[8px]" />
       </div>
 
-      <Show when={isExpanded()}>
-        <div class="block max-h-[clamp(10%,60%,20rem)]">
-          <ChannelsUnreadWidget />
-        </div>
-      </Show>
+      <div class="block max-h-[clamp(10%,60%,20rem)]">
+        <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
+      </div>
 
       <div class="px-2 mt-auto w-full">
         <hr class="border-edge-muted mb-[8px]" />

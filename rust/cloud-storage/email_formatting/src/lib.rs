@@ -4,12 +4,13 @@ use hmac::Hmac;
 use macro_env::Environment;
 use macro_service_urls::EnvExtMacroServiceUrls;
 use macro_user_id::cowlike::CowLike;
-use model_notifications::{NotifEvent, NotificationTitle};
+use model_notifications::NotifEvent;
 use notification::domain::models::{
-    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, UserNotificationRow,
-    email_notification_digest::ports::DigestBatch, queue_message::EmailContent, signing::SignedUrl,
+    Notification, NotificationExtEmail, NotificationTitle, RateLimitConfig, RateLimitKey,
+    UserNotificationRow, email_notification_digest::ports::DigestBatch,
+    queue_message::EmailContent, signing::SignedUrl,
 };
-use rootcause::Report;
+use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::time::Duration;
@@ -40,7 +41,7 @@ impl NotifPreview {
             .format_title(v.sender_id.as_ref().map(CowLike::copied))?;
         let body = v.notification_metadata.format_body(v.sender_id)?;
         Ok(NotifPreview {
-            created_at: v.created_at.unwrap_or(Utc::now()),
+            created_at: v.created_at,
             title,
             body,
         })
@@ -70,7 +71,7 @@ impl EmailDigestNotification {
         let input_len = notifications.len();
 
         fn log_err<E: std::fmt::Debug>(e: &E) {
-            tracing::warn!("{e:?}");
+            tracing::error!("{e:?}");
         }
 
         let notifs: Vec<_> = notifications
@@ -83,6 +84,9 @@ impl EmailDigestNotification {
             .collect();
 
         let preview_len = notifs.len();
+        if preview_len == 0 {
+            return Err(report!("Batch with 0 notifications"));
+        }
         let num_truncated = input_len - preview_len;
 
         let mut unsubscribe_url = env.notification_service();

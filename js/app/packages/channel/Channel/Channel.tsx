@@ -8,6 +8,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   onMount,
   Show,
   type Accessor,
@@ -40,8 +41,10 @@ import {
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { createChannelMessageActions } from './create-channel-message-actions';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useChannelName, useChannelActivity } from '@core/context/channels';
+import { buildMentionMarkdownString, markdownToPlainText } from '@lexical-core';
 import { createActivityTracker } from '@channel/activity-tracker';
-import { useChannelActivity } from '@core/context/channels';
 import {
   invalidateChannelsActivity,
   useUpdateChannelsActivityMutation,
@@ -58,8 +61,10 @@ import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
+import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import {
+  clearStaleRestoredChannelData,
   createTargetMessageController,
   type TargetMessageController,
 } from './create-target-message-controller';
@@ -80,6 +85,8 @@ export type ChannelProps = {
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
   onHandleReady?: (handle: ChannelHandle) => void;
+  /** Whether to auto-focus the channel input on mount. Defaults to `!isMobile()`. */
+  autofocus?: boolean;
 };
 
 export type ChannelHandle = {
@@ -103,12 +110,19 @@ export function Channel(props: ChannelProps) {
   const [messageListElement, setMessageListElement] =
     createSignal<HTMLDivElement>();
 
+  // When opening without a target, clear stale data that was previously
+  // restored from a load-around session so the query fetches from the bottom.
+  if (!props.targetMessageId) {
+    clearStaleRestoredChannelData(props.channelId);
+  }
+
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
     initialTargetMessageReplyId: props.targetMessageReplyId,
-    messageKeys: () => messageIndex.keys(),
+    messageKeys: () => messageIndex.keys,
     navigation: threadListNavigation,
+    didInitialScroll: () => threadListScrollState()?.didInitialScroll ?? false,
   });
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
@@ -123,8 +137,8 @@ export function Channel(props: ChannelProps) {
     () => messagesQuery.data as ChannelMessagesData | undefined
   );
 
-  const messages = createMemo(() => messageIndex.items());
-  const messageById = () => messageIndex.byId();
+  const messages = createMemo(() => [...messageIndex.items]);
+  const messageById = () => messageIndex.byId;
 
   const participants = useChannelParticipants(() => props.channelId);
 
@@ -136,22 +150,28 @@ export function Channel(props: ChannelProps) {
     },
   });
 
-  onMount(() => {
+  const markAsViewed = () => {
     updateActivityMutation.mutate({
       channelId: props.channelId,
       activityType: 'view',
     });
+  };
+
+  onMount(() => {
+    markAsViewed();
+  });
+
+  onCleanup(() => {
+    markAsViewed();
   });
 
   useBeforeLeave(() => {
-    updateActivityMutation.mutate({
-      channelId: props.channelId,
-      activityType: 'view',
-    });
+    markAsViewed();
   });
 
   const threadManager = createThreadManager();
   const [isChannelInputHidden, setIsChannelInputHidden] = createSignal(false);
+  const [channelInputEl, setChannelInputEl] = createSignal<HTMLDivElement>();
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
     channelId: () => props.channelId,
@@ -185,6 +205,9 @@ export function Channel(props: ChannelProps) {
     attachmentTracker,
   });
 
+  const channelName = useChannelName(props.channelId);
+  const { popoverSplit } = useSplitLayout();
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
@@ -199,10 +222,34 @@ export function Channel(props: ChannelProps) {
     onEdit: ({ message }) => {
       messageEditor.start(message);
     },
+    onCreateTask: (ctx) => {
+      const plainText = markdownToPlainText(ctx.message.content).trim();
+      const title =
+        plainText.length > 70 ? `${plainText.slice(0, 70)}...` : plainText;
+      popoverSplit({
+        type: 'component',
+        id: 'task-compose',
+        params: {
+          initialTitle: title,
+          initialContent: buildMentionMarkdownString({
+            type: 'document',
+            documentId: props.channelId,
+            documentName: channelName() ?? '',
+            blockName: 'channel',
+            blockParams: {
+              channel_message_id: ctx.message.id,
+              ...(ctx.message.thread_id && {
+                channel_thread_id: ctx.message.thread_id,
+              }),
+            },
+          }),
+        },
+      });
+    },
   });
 
   const selection = createMessageSelection({
-    keys: () => messageIndex.keys(),
+    keys: () => messageIndex.keys,
   });
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
@@ -226,6 +273,12 @@ export function Channel(props: ChannelProps) {
 
   // On Mobile when a thread reply input is focused, we want to hide the main Channel input
   createInlineInputKeyboardHandler(messageListElement, setIsChannelInputHidden);
+  // On Native iOS app, when the main channel input is focused, scroll to bottom if already near bottom
+  createMainInputKeyboardHandler(
+    channelInputEl,
+    threadListNavigation,
+    messageListElement
+  );
 
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
@@ -270,25 +323,25 @@ export function Channel(props: ChannelProps) {
       <StaticMarkdownContext>
         <MaybeMessageActionDrawerManager>
           <ChannelDropZone dragState={dragState}>
-            <Show when={messages().length > 0}>
-              <div
-                class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
-                ref={(element) => {
-                  setMessageListElement(element);
-                  attachMessageListRef(element);
-                }}
-                tabIndex={-1}
-                data-channel-message-list
-                data-channel-nav="keyboard"
-                onMouseMove={(e) => {
-                  const el = e.currentTarget;
-                  if (el.dataset.channelNav !== 'mouse') {
-                    el.dataset.channelNav = 'mouse';
-                  }
-                }}
-              >
+            <div
+              class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
+              ref={(element) => {
+                setMessageListElement(element);
+                attachMessageListRef(element);
+              }}
+              tabIndex={-1}
+              data-channel-message-list
+              data-channel-nav="keyboard"
+              onMouseMove={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.channelNav !== 'mouse') {
+                  el.dataset.channelNav = 'mouse';
+                }
+              }}
+            >
+              <Show when={messages().length > 0}>
                 <ThreadList
-                  keys={() => messageIndex.keys()}
+                  keys={() => messageIndex.keys}
                   initialScrollTarget={threadListInitialScrollTarget()}
                   shift={shift}
                   prepend={threadPaginator.isPrepending}
@@ -301,7 +354,7 @@ export function Channel(props: ChannelProps) {
                     const message = () => messageById().get(item.id);
                     const state = threadManager.getOrCreateThreadState(item.id);
                     const isNewestThread = () =>
-                      item.id === messageIndex.keys().at(-1);
+                      item.id === messageIndex.keys.at(-1);
 
                     return (
                       <Show when={message()}>
@@ -349,14 +402,18 @@ export function Channel(props: ChannelProps) {
                   navigation={threadListNavigation}
                   scrollState={threadListScrollState}
                 />
-              </div>
-            </Show>
+              </Show>
+            </div>
             <DebugSuspense name="Channel.input">
               <ChannelInputContainer
-                ref={attachInputRef}
+                ref={(el) => {
+                  attachInputRef(el);
+                  setChannelInputEl(el);
+                }}
                 isHidden={isChannelInputHidden()}
               >
                 <ChannelInput
+                  autofocus={props.autofocus}
                   input={{
                     mode: 'channel',
                     id: `channel-input-${props.channelId}`,

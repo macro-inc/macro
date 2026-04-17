@@ -68,9 +68,7 @@ export const EntityValue: Component<PropertyValueProps> = (props) => {
             specificMessageId={entityRef.specific_message_id}
             canEdit={!isReadOnly()}
             onRemove={() => handleRemoveEntity(entityRef)}
-            onEdit={
-              !props.property.isMultiSelect ? handleEditEntity : undefined
-            }
+            onEdit={handleEditEntity}
             isSaving={isSaving()}
           />
         )}

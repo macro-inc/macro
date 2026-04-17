@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO mobile_welcome_email (email)\n            VALUES ($1)\n            ON CONFLICT (email) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7eaa606441665fa4dca3077c6b3c02e8c4a0d136a40149829b96dff878897108"
+}

@@ -28,6 +28,7 @@ import { CommandMenu } from './command';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
+import { AutomationComposer } from '@block-automation/component';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
@@ -213,6 +214,7 @@ function LayoutInner(props: RouteSectionProps) {
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
+          <AutomationComposer />
         </Show>
       </Suspense>
     </div>

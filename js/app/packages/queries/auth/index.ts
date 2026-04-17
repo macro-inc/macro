@@ -24,6 +24,7 @@ export {
   useCompleteOnboardingMutation,
   useSetGroupMutation,
 } from './mutations';
+export { useSendMobileWelcomeEmail } from './mobile-welcome-email';
 export {
   useUserQuotaQuery,
   invalidateUserQuota,

@@ -6,6 +6,6 @@
  */
 
 /**
- * The version id of the document to copy. Defaults to copying the latest version of the document.
+ * The DB version id of the document to copy. Defaults to latest.
  */
 export type CopyDocumentQueryParamsVersionId = number | null;

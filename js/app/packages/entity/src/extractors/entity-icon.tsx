@@ -11,6 +11,7 @@ import { match } from 'ts-pattern';
 import { PulsingStar } from '../components/PulsingStar';
 import type { ChannelEntity, EntityData } from '../types/entity';
 import {
+  isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
   isTaskEntity,
@@ -20,9 +21,16 @@ interface EntityIconProps {
   entity: EntityData;
   streamState?: StreamEvent;
   class?: string;
+  suppressClick?: boolean;
+  showTooltip?: boolean;
 }
 
-function DirectMessageIcon(props: { entity: ChannelEntity; class?: string }) {
+function DirectMessageIcon(props: {
+  entity: ChannelEntity;
+  class?: string;
+  suppressClick?: boolean;
+  showTooltip?: boolean;
+}) {
   const userId = useUserId();
   const participantId = () => {
     const participants = props.entity.participantIds ?? [];
@@ -47,6 +55,8 @@ function DirectMessageIcon(props: { entity: ChannelEntity; class?: string }) {
             isDeleted={false}
             size="fill"
             class={props.class}
+            suppressClick={props.suppressClick}
+            showTooltip={props.showTooltip}
           />
         )}
       </Show>
@@ -68,6 +78,8 @@ export function EntityIcon(props: EntityIconProps) {
       .with({ type: 'email' }, ({ isRead, hasIcsAttachment }) =>
         hasIcsAttachment ? 'emailInvite' : isRead ? 'emailRead' : 'email'
       )
+      .when(isCallEntity, () => 'call')
+      .with({ type: 'automation' }, () => 'automation')
       .otherwise(() => 'default');
   };
 
@@ -95,6 +107,8 @@ export function EntityIcon(props: EntityIconProps) {
         <DirectMessageIcon
           entity={props.entity as ChannelEntity}
           class={props.class}
+          suppressClick={props.suppressClick}
+          showTooltip={props.showTooltip}
         />
       </Match>
       <Match when={isChatEntity()}>

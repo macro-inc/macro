@@ -1,19 +1,14 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ok } from '@core/util/maybeResult';
-import { fetchAndCacheChannel } from '@queries/channel/channel';
-import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
-import { ChannelBlockSwitch } from './component/ChannelBlockSwitch';
+import { NewChannelBlockAdapter } from './component/NewChannelBlockAdapter';
 
 export const definition = defineBlock({
   name: 'channel',
   description: '',
-  component: ChannelBlockSwitch,
+  component: NewChannelBlockAdapter,
   liveTrackingEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
-      if (!ENABLE_NEW_CHANNELS()) {
-        await fetchAndCacheChannel(source.id);
-      }
       return ok({ id: source.id });
     }
     return LoadErrors.MISSING;

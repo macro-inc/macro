@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT\n                uia.\"item_id\",\n                uia.\"item_type\",\n                uia.\"granted_from_channel_id\",\n                uia.access_level AS \"access_level: AccessLevel\",\n                uia.\"created_at\",\n                p.\"userId\" as project_owner -- project owner\n            FROM \"UserItemAccess\" uia\n            JOIN \"Project\" p ON p.id = uia.item_id\n            WHERE item_type = 'project'\n            ORDER BY created_at ASC\n            LIMIT $1\n            OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "granted_from_channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "access_level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 5,
+        "name": "project_owner",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "762b1612135674574c474aa8adf106bc49809d375f7ca448a116b43e7ebe1665"
+}

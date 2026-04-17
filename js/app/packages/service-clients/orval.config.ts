@@ -82,8 +82,9 @@ export default defineConfig({
 
   notificationService: {
     output: {
-      client: 'fetch',
-      target: './service-notification/generated/client.ts',
+      client: 'zod',
+      mode: 'split',
+      target: './service-notification/generated/zod.ts',
       schemas: './service-notification/generated/schemas',
       override: {
         useDates: false,
@@ -122,6 +123,19 @@ export default defineConfig({
     },
     input: {
       target: './service-properties/openapi.json',
+    },
+  },
+  scheduledActionService: {
+    output: {
+      client: 'fetch',
+      target: './service-scheduled-action/generated/client.ts',
+      schemas: './service-scheduled-action/generated/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-scheduled-action/openapi.json',
     },
   },
   searchService: {

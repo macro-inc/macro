@@ -51,7 +51,7 @@ pub fn entity_filters_from_include(
         filters.chat_filters.chat_ids = exclude.clone();
     }
     if !include.contains(&UnifiedSearchIndex::Emails) {
-        filters.email_filters.recipients = exclude.clone();
+        filters.email_filters.email_thread_ids = exclude.clone();
     }
     if !include.contains(&UnifiedSearchIndex::Channels) {
         filters.channel_filters.channel_ids = exclude.clone();
@@ -152,12 +152,13 @@ impl From<EntityFilters> for SearchEntityFilters {
 
         let should_include_documents = !contains_nil_uuid(&document_filters.document_ids);
         let should_include_chats = !contains_nil_uuid(&chat_filters.chat_ids);
-        let should_include_emails = !contains_nil_uuid(&email_filters.recipients);
+        let should_include_emails = !contains_nil_uuid(&email_filters.email_thread_ids);
         let should_include_channels = !contains_nil_uuid(&channel_filters.channel_ids);
         let should_include_projects = !contains_nil_uuid(&project_filters.project_ids);
 
         strip_nil_uuids(&mut document_filters.document_ids);
         strip_nil_uuids(&mut chat_filters.chat_ids);
+        strip_nil_uuids(&mut email_filters.email_thread_ids);
         strip_nil_uuids(&mut email_filters.recipients);
         strip_nil_uuids(&mut channel_filters.channel_ids);
         strip_nil_uuids(&mut project_filters.project_ids);

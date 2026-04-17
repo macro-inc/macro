@@ -1,11 +1,15 @@
-use crate::{api::context::ApiContext, model::request::pins::AddPinRequest};
+use crate::{
+    api::context::{ApiContext, EntityAccessService},
+    model::request::pins::AddPinRequest,
+};
 use axum::{
     Extension,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_middleware::cloud_storage::ensure_access::pin::PinAccessLevelExtractor;
+
+use entity_access::inbound::axum_extractors::PinAccessLevelExtractor;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
@@ -41,7 +45,7 @@ pub async fn add_pin_handler(
     Path(Params { pinned_item_id }): Path<Params>,
     PinAccessLevelExtractor {
         pin_type, inner, ..
-    }: PinAccessLevelExtractor<ViewAccessLevel, AddPinRequest>,
+    }: PinAccessLevelExtractor<ViewAccessLevel, EntityAccessService, AddPinRequest>,
 ) -> impl IntoResponse {
     match macro_db_client::pins::upsert_pin(
         ctx.db.clone(),

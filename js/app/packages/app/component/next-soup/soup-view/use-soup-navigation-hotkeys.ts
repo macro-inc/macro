@@ -2,7 +2,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { onCleanup, type Accessor } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
@@ -18,7 +17,6 @@ type UseSoupNavigationHotkeysOptions = {
   soup: SoupState;
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
-  previewPanelRef: Accessor<HTMLElement | undefined>;
 };
 
 export const useSoupNavigationHotkeys = (
@@ -196,8 +194,6 @@ export const useSoupNavigationHotkeys = (
     hide: true,
   }).withGroup(group);
 
-  const previewPanel = useMaybePreviewPanel();
-
   const getCollapsibleToggle = () => {
     const focusedId = soup.focus.id();
     if (!focusedId) return undefined;
@@ -211,7 +207,7 @@ export const useSoupNavigationHotkeys = (
   registerHotkey({
     hotkey: ['h', 'arrowleft'],
     scopeId,
-    description: 'Navigate to parent context',
+    description: 'Collapse item',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
     keyDownHandler: () => {
       const toggle = getCollapsibleToggle();
@@ -220,11 +216,7 @@ export const useSoupNavigationHotkeys = (
         return true;
       }
 
-      if (!previewPanel) return false;
-
-      previewPanel.onFocusOut();
-
-      return true;
+      return false;
     },
     registrationType: 'add',
     handlerPriority: 4,
@@ -234,7 +226,7 @@ export const useSoupNavigationHotkeys = (
   registerHotkey({
     hotkey: ['l', 'arrowright'],
     scopeId,
-    description: 'Navigate to child context',
+    description: 'Expand item',
     hotkeyToken: TOKENS.unifiedList.navigation.child,
     keyDownHandler: () => {
       const toggle = getCollapsibleToggle();
@@ -243,24 +235,7 @@ export const useSoupNavigationHotkeys = (
         return true;
       }
 
-      const previewPanelContent = options.previewPanelRef();
-      // If there is no preview or the preview already contains focus, skip
-      if (
-        !previewPanelContent ||
-        previewPanelContent.contains(document.activeElement)
-      )
-        return false;
-
-      const previewPanelSoup = previewPanelContent?.querySelector(
-        'div[data-soup-view]'
-      );
-
-      // If it doesn't contain soup, skip
-      if (!previewPanelSoup || !(previewPanelSoup instanceof HTMLElement))
-        return false;
-
-      previewPanelSoup.focus();
-      return true;
+      return false;
     },
     registrationType: 'add',
     handlerPriority: 4,

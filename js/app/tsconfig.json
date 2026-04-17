@@ -108,6 +108,9 @@
       "@service-unfurl/*": [
         "./packages/service-clients/service-unfurl/*"
       ],
+      "@service-scheduled-action/*": [
+        "./packages/service-clients/service-scheduled-action/*"
+      ],
       "@service-email/*": [
         "./packages/service-clients/service-email/*"
       ],
@@ -123,8 +126,14 @@
       "@block-code/*": [
         "./packages/block-code/*"
       ],
+      "@block-call/*": [
+        "./packages/block-call/*"
+      ],
       "@block-channel/*": [
         "./packages/block-channel/*"
+      ],
+      "@block-automation/*": [
+        "./packages/block-automation/*"
       ],
       "@channel/*": [
         "./packages/channel/*"

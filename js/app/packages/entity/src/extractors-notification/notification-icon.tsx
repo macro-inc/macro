@@ -7,6 +7,7 @@ import type { NotificationType } from '@core/types';
 import ChatIcon from '@icon/regular/chat.svg';
 import ArrowBendUpLeftIcon from '@icon/regular/arrow-bend-up-left.svg';
 import AtIcon from '@icon/regular/at.svg';
+import FilesIcon from '@icon/regular/files.svg';
 import EnvelopeIcon from '@icon/regular/envelope.svg';
 import UserPlusIcon from '@icon/regular/user-plus.svg';
 import CheckIcon from '@icon/regular/check.svg';
@@ -26,7 +27,7 @@ function getNotificationIcon(
 ): (props: { class?: string }) => JSX.Element {
   return match(type)
     .with('channel_mention', () => AtIcon)
-    .with('document_mention', () => AtIcon)
+    .with('document_mention', () => FilesIcon)
     .with('mentioned_in_document_comment', () => AtIcon)
     .with('replied_to_document_comment_thread', () => ArrowBendUpLeftIcon)
     .with('commented_on_document', () => ChatIcon)

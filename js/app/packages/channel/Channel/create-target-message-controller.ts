@@ -13,6 +13,15 @@ type CreateTargetMessageControllerOptions = {
   initialTargetMessageReplyId?: string | undefined;
   messageKeys: Accessor<string[]>;
   navigation: Accessor<ThreadListNavigation | undefined>;
+  /**
+   * Whether the ThreadList has completed its initial scroll.
+   *
+   * The controller defers pending scroll execution until this returns `true`
+   * so that a `goToMessage` call that fires while the initial scroll is still
+   * in progress does not get overridden by the initial-scroll retry logic
+   * inside ThreadList.
+   */
+  didInitialScroll: Accessor<boolean>;
 };
 
 export type TargetMessageController = ReturnType<
@@ -83,10 +92,20 @@ export function createTargetMessageController(
         options.navigation,
         () => targetMessageData['pendingScrollTargetId'],
         options.messageKeys,
+        options.didInitialScroll,
       ],
-      ([navigation, pendingTargetId]) => {
+      ([navigation, pendingTargetId, , didInitialScroll]) => {
         if (!navigation || !pendingTargetId) return;
         if (!hasMessageLoaded(pendingTargetId)) return;
+
+        // Defer the scroll until the ThreadList has completed its initial
+        // scroll. This prevents a goToMessage call from being overridden by
+        // the initial-scroll retry logic in ThreadList's handleScrollEnd,
+        // which validates position against the *original* scroll target.
+        // The pending target stays queued; once didInitialScroll flips to
+        // true the effect re-fires and executes the scroll.
+        if (!didInitialScroll) return;
+
         if (!navigation.scrollToId(pendingTargetId)) return;
 
         const restoredDefaultPagination =
@@ -129,5 +148,28 @@ export function restoreDefaultChannelPaginationAfterTargetLoad(
   if (!aroundData) return false;
 
   queryClient.setQueryData(defaultKey, aroundData);
+  // Remove the around-query variant so it doesn't linger in cache across
+  // component mounts.
+  queryClient.removeQueries({ queryKey: aroundKey });
   return true;
+}
+
+/**
+ * When opening a channel without a target, the default query may still hold
+ * stale data that was restored from a previous load-around session. A normal
+ * latest-messages load never has `previous_cursor` on its first page (there
+ * are no newer messages). If we detect that cursor, the data is stale and
+ * centered on an old target — remove it so the query fetches from the bottom.
+ */
+export function clearStaleRestoredChannelData(channelId: string) {
+  const defaultKey = getChannelMessagesQueryKey(channelId, null);
+  const cached = queryClient.getQueryData<ChannelMessagesData>(defaultKey);
+  if (!cached?.pages.length) return;
+
+  // First page (index 0) is the newest page in the infinite query.
+  // A genuine latest-messages fetch never has previous_cursor on its
+  // first page because there are no newer messages.
+  if (cached.pages[0].previous_cursor) {
+    queryClient.removeQueries({ queryKey: defaultKey });
+  }
 }

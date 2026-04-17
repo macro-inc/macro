@@ -1,8 +1,16 @@
-import type { Component } from 'solid-js';
+import { type Component, createContext, useContext } from 'solid-js';
 import type {
   NamedTool,
   ToolName,
 } from '@service-cognition/generated/tools/tool';
+
+export const ToolErrorContext = createContext<
+  (() => string | undefined) | undefined
+>();
+export const useToolError = () => {
+  const accessor = useContext(ToolErrorContext);
+  return accessor?.();
+};
 
 export type RenderContext = {
   renderContext: {

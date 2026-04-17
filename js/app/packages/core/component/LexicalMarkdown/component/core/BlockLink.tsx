@@ -13,10 +13,13 @@ export const blockNamesWithLocations = [
   'md',
   'email',
   'chat',
+  'task',
 ] as const;
 export type BlockNameWithLocations = (typeof blockNamesWithLocations)[number];
 
-function isBlockNameWithLocation(name: string): name is BlockNameWithLocations {
+export function isBlockNameWithLocation(
+  name: string
+): name is BlockNameWithLocations {
   return blockNamesWithLocations.includes(name as BlockNameWithLocations);
 }
 

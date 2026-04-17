@@ -75,6 +75,20 @@ where
 #[serde(try_from = "String", into = "String")]
 pub struct MacroUserIdStr<'a>(pub MacroUserId<Lowercase<'a>>);
 
+#[cfg(feature = "schema")]
+impl<'a> utoipa::ToSchema for MacroUserIdStr<'a> {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("MacroUserIdStr")
+    }
+}
+
+#[cfg(feature = "schema")]
+impl<'a> utoipa::PartialSchema for MacroUserIdStr<'a> {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        String::schema()
+    }
+}
+
 impl<'a> std::fmt::Debug for MacroUserIdStr<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.as_ref())
@@ -199,9 +213,14 @@ where
 {
     /// return the [EmailParts] contained within self
     pub fn email_part<'a>(&'a self) -> Email<ArcCowStr<'a>> {
-        let id_str = self.user_id.as_ref();
-        let email_str = &id_str[self.email_part_offset..];
+        let email_str = self.email_str();
         self.email_part.map(|_| ArcCowStr::Borrowed(email_str))
+    }
+
+    /// return the email as a string slice
+    pub fn email_str(&self) -> &str {
+        let id_str = self.user_id.as_ref();
+        &id_str[self.email_part_offset..]
     }
 }
 

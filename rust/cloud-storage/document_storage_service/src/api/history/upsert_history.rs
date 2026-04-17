@@ -1,7 +1,9 @@
 use crate::api::context::ApiContext;
+use crate::api::context::EntityAccessService;
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
-use macro_middleware::cloud_storage::ensure_access::history::HistoryAccessExtractor;
+use entity_access::domain::models::EntityPermission;
+use entity_access::inbound::axum_extractors::HistoryAccessExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
@@ -31,13 +33,18 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context, history_access), fields(user_id=?user_context.user_id))]
 pub async fn upsert_history_handler(
-    HistoryAccessExtractor { access_level, .. }: HistoryAccessExtractor<ViewAccessLevel>,
+    history_access: HistoryAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Path(Params { item_type, item_id }): Path<Params>,
 ) -> impl IntoResponse {
+    let access_level = match history_access.entity_access_receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => *access_level,
+        _ => AccessLevel::View,
+    };
+
     // we only upsert history for threads that were shared with the user
     if item_type == "thread" && access_level == AccessLevel::Owner {
         return GenericResponse::builder()

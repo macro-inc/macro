@@ -246,6 +246,19 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         Ok(must_array)
     }
+
+    /// Builds a query targeting the title field (TITLE_KEY)
+    pub fn build_title_term_query<'a>(&'a self) -> Result<QueryType<'a>> {
+        if self.terms.is_empty() {
+            return Err(OpensearchClientError::NoTermsProvided);
+        }
+
+        let query_key = QueryKey::from_match_type(&self.match_type)?;
+        let terms: Cow<'_, [&str]> =
+            Cow::Owned(self.terms.iter().map(|t| t.as_str()).collect::<Vec<&str>>());
+
+        Ok(generate_terms_must_query(query_key, T::TITLE_KEY, terms))
+    }
 }
 
 #[cfg(test)]

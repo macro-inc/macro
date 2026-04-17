@@ -1,3 +1,4 @@
+use crate::api::context::EntityAccessService;
 use crate::model::response::user_views::UserViewsResponse;
 use axum::{
     Extension, Json,
@@ -5,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::{document::DocumentBasic, response::GenericErrorResponse, user::UserContext};
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
@@ -34,7 +35,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(db, user_context, document_id, _access), fields(user_id=?user_context.user_id, document_id=?document_context.document_id, original_document_id=?document_id))]
 pub async fn get_document_views_handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { document_id }): Path<Params>,
     State(db): State<PgPool>,
     user_context: Extension<UserContext>,

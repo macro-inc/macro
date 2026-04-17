@@ -1,3 +1,4 @@
+use crate::call_record::SoupCallRecord;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::project::SoupProject;
@@ -18,6 +19,7 @@ pub enum SoupItem {
     Project(SoupProject),
     EmailThread(SoupEnrichedEmailThreadPreview),
     Channel(SoupChannel),
+    CallRecord(SoupCallRecord),
 }
 
 impl SoupItem {
@@ -39,6 +41,9 @@ impl SoupItem {
             SoupItem::Channel(channel) => {
                 EntityType::Channel.with_entity_string(channel.channel.channel.id.0.to_string())
             }
+            SoupItem::CallRecord(record) => {
+                EntityType::Call.with_entity_string(record.call_id.to_string())
+            }
         }
     }
 
@@ -49,6 +54,7 @@ impl SoupItem {
             SoupItem::Project(soup_project) => soup_project.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
+            SoupItem::CallRecord(record) => record.ended_at.unwrap_or(record.started_at),
         }
     }
 }
@@ -106,6 +112,8 @@ impl SoupItem {
             (SoupItem::Channel(soup_channel), SimpleSortMethod::ViewedUpdated) => soup_channel
                 .viewed_at
                 .unwrap_or(soup_channel.channel.channel.updated_at),
+            (SoupItem::CallRecord(record), SimpleSortMethod::CreatedAt) => record.started_at,
+            (SoupItem::CallRecord(record), _) => record.ended_at.unwrap_or(record.started_at),
         }
     }
 }
@@ -120,6 +128,7 @@ impl Identify for SoupItem {
             SoupItem::Project(soup_project) => soup_project.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
+            SoupItem::CallRecord(record) => record.call_id,
         }
     }
 }
@@ -160,6 +169,7 @@ impl SoupItem {
                 PropertiesEntityType::Chat,
             )),
             SoupItem::Channel(_) => None,
+            SoupItem::CallRecord(_) => None,
         }
     }
 }

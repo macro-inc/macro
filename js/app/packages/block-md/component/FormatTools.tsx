@@ -449,17 +449,16 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     const [menuOpen, setMenuOpen] = createSignal(false);
     return (
       <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
-        <DropdownMenu.Trigger>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="rounded-xs"
-            tooltip={'Text Styles'}
-            disabled={buttonIsDisabled()}
-            tabIndex={-1}
-          >
-            <TextAA />
-          </Button>
+        <DropdownMenu.Trigger
+          as={Button}
+          variant="ghost"
+          size="icon-sm"
+          class="rounded-xs"
+          tooltip={'Text Styles'}
+          disabled={buttonIsDisabled()}
+          tabIndex={-1}
+        >
+          <TextAA />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenuContent
@@ -514,17 +513,16 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     const [menuOpen, setMenuOpen] = createSignal(false);
     return (
       <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
-        <DropdownMenu.Trigger>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="rounded-xs"
-            tooltip="Text Styles"
-            disabled={props.buttonIsDisabled()}
-            tabIndex={-1}
-          >
-            <TextAA />
-          </Button>
+        <DropdownMenu.Trigger
+          as={Button}
+          variant="ghost"
+          size="icon-sm"
+          class="rounded-xs"
+          tooltip="Text Styles"
+          disabled={props.buttonIsDisabled()}
+          tabIndex={-1}
+        >
+          <TextAA />
         </DropdownMenu.Trigger>
         <Show when={!props.buttonIsDisabled()}>
           <DropdownMenu.Portal>
@@ -566,17 +564,16 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     buttonIsDisabled: Accessor<boolean>;
   }) => (
     <DropdownMenu>
-      <DropdownMenu.Trigger>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="rounded-xs"
-          tooltip={props.label ?? 'More Formats'}
-          disabled={buttonIsDisabled()}
-          tabIndex={-1}
-        >
-          <Dynamic component={props.icon ?? ThreeDots} />
-        </Button>
+      <DropdownMenu.Trigger
+        as={Button}
+        variant="ghost"
+        size="icon-sm"
+        class="rounded-xs"
+        tooltip={props.label ?? 'More Formats'}
+        disabled={buttonIsDisabled()}
+        tabIndex={-1}
+      >
+        <Dynamic component={props.icon ?? ThreeDots} />
       </DropdownMenu.Trigger>
       <Show when={!buttonIsDisabled()}>
         <DropdownMenu.Portal>
@@ -613,17 +610,16 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     buttonIsDisabled: Accessor<boolean>;
   }) => (
     <DropdownMenu>
-      <DropdownMenu.Trigger>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="rounded-xs"
-          tooltip={props.label ?? 'More Formats'}
-          disabled={buttonIsDisabled()}
-          tabIndex={-1}
-        >
-          <Dynamic component={props.icon ?? ThreeDots} />
-        </Button>
+      <DropdownMenu.Trigger
+        as={Button}
+        variant="ghost"
+        size="icon-sm"
+        class="rounded-xs"
+        tooltip={props.label ?? 'More Formats'}
+        disabled={buttonIsDisabled()}
+        tabIndex={-1}
+      >
+        <Dynamic component={props.icon ?? ThreeDots} />
       </DropdownMenu.Trigger>
       <Show when={!buttonIsDisabled()}>
         <DropdownMenu.Portal>
@@ -665,7 +661,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
 
   if (props.withinPopup) {
     return (
-      <div class="flex h-full gap-1">
+      <div class="flex h-full gap-1 items-center">
         <Show when={canEdit()}>
           <ElementFormatButton
             format="paragraph"
@@ -901,17 +897,16 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               open={moreOptionsOpen()}
               onOpenChange={setMoreOptionsOpen}
             >
-              <DropdownMenu.Trigger>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="rounded-xs"
-                  tooltip="More"
-                  disabled={buttonIsDisabled()}
-                  tabIndex={-1}
-                >
-                  <PlusSquare />
-                </Button>
+              <DropdownMenu.Trigger
+                as={Button}
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-xs"
+                tooltip="More"
+                disabled={buttonIsDisabled()}
+                tabIndex={-1}
+              >
+                <PlusSquare />
               </DropdownMenu.Trigger>
               <Show when={!buttonIsDisabled()}>
                 <DropdownMenu.Portal>

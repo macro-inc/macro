@@ -61,13 +61,14 @@ function ParticipantWithTooltip(props: {
     <Tooltip
       unstyled
       spanMode
-      tooltip={
+      tooltip={(close) => (
         <UserTooltip
           displayName={tooltipName()}
           email={props.participant.email}
           id={macroId()}
+          onClose={close}
         />
-      }
+      )}
     >
       <Show
         when={props.highlighted}

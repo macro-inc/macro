@@ -65,6 +65,23 @@ impl PresignedUploadUrlPort for S3UploadUrlAdapter {
         )
         .await
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn copy_object(&self, source_key: &str, destination_key: &str) -> anyhow::Result<()> {
+        if macro_aws_config::is_local_aws() {
+            return Ok(());
+        }
+
+        self.client
+            .copy_object()
+            .bucket(&self.document_storage_bucket)
+            .copy_source(format!("{}/{}", self.document_storage_bucket, source_key))
+            .key(destination_key)
+            .send()
+            .await?;
+
+        Ok(())
+    }
 }
 
 async fn put_presigned_url(

@@ -15,11 +15,12 @@ use github::{
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_service_urls::EnvExtMacroServiceUrls;
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
 };
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use notification::{
     domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
 };
@@ -176,10 +177,10 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to get multiplexed redis connection")?;
 
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
-        queue_url: config.notification_queue.clone(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        config.notification_queue.clone(),
+    );
     let notification_ingress_service = SqsNotificationIngress {
         queue: ingress_queue,
     };
@@ -311,8 +312,7 @@ async fn main() -> anyhow::Result<()> {
             teams_service: Arc::new(teams_service_impl),
             referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
-                bundle_fetcher: DefaultBundleFetcher::default(),
-                environment: config.environment,
+                bundle_fetcher: DefaultBundleFetcher::new(config.environment.app()),
                 platform_data: PlatformData {
                     ios_development_team_id: IOS_DEVELOPMENT_TEAM_ID.to_string(),
                     ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),

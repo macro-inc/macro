@@ -51,6 +51,14 @@ export interface HotkeyCommand {
    * @default true
    */
   shouldReturnFocusOnClose?: boolean;
+  /**
+   * If true, the keyDownHandler will NOT run in response to keyboard events
+   * (letting the real handler, e.g. Lexical, process the key). The handler
+   * WILL still run when the command is invoked from the command menu (where
+   * there is no KeyboardEvent). This allows a hotkey to appear in the command
+   * palette with its shortcut while another system owns the actual keystroke.
+   */
+  proxiedHotkey?: boolean;
 }
 
 export interface HotkeyRegistrationOptions {
@@ -160,6 +168,15 @@ export interface HotkeyRegistrationOptions {
    * @default true
    */
   shouldReturnFocusOnClose?: boolean;
+
+  /**
+   * If true, the keyDownHandler will NOT run in response to keyboard events
+   * (letting the real handler, e.g. Lexical, process the key). The handler
+   * WILL still run when the command is invoked from the command menu (where
+   * there is no KeyboardEvent). This allows a hotkey to appear in the command
+   * palette with its shortcut while another system owns the actual keystroke.
+   */
+  proxiedHotkey?: boolean;
 }
 
 export type HotkeyGroup = {

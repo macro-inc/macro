@@ -594,6 +594,121 @@
         }
       }
     },
+    "/call/record/{call_id}": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/record/{call_id}`.",
+        "description": "Returns the full [`CallRecord`] (metadata + participants + transcript)\nfor a call identified by its own id. Covers both active and archived calls.\nAccess is validated via channel membership (MemberParticipantRole).",
+        "operationId": "get_call_record",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallRecord"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `DELETE /call/record/{call_id}`.",
+        "description": "Deletes a call record (and its participants/transcripts via cascade).\nAccess is validated via channel membership (MemberParticipantRole).",
+        "operationId": "delete_call_record",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Call record deleted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/webhook": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -710,6 +825,61 @@
           },
           "404": {
             "description": "No active call",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/{channel_id}/active": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/{channel_id}/active`.",
+        "description": "Returns 200 with call info if an active call exists, or 204 No Content if not.",
+        "operationId": "check_active_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallActiveResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No active call"
+          },
+          "401": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1999,8 +2169,9 @@
     "/documents/{document_id}/copy": {
       "post": {
         "tags": ["document"],
-        "summary": "Handles copying a given document. This is the similar to\ncreate_document_handler where you provide the branched_from_id,\nbranched_from_version_id and document_family_id in the request body. Except\nthis will not require you to re-upload the document when it's made saving\ntime and resources.",
-        "operationId": "copy_document_handler",
+        "summary": "Handler for `POST /documents/{document_id}/copy`.",
+        "description": "Copies an existing document, creating a new document with the same content.\nDoes not require re-uploading the document file.",
+        "operationId": "copy_document",
         "parameters": [
           {
             "name": "document_id",
@@ -2038,7 +2209,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetDocumentResponse"
+                  "$ref": "#/components/schemas/CopyDocumentResponse"
                 }
               }
             }
@@ -2048,7 +2219,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2058,17 +2229,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2078,7 +2239,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2088,7 +2249,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -5701,6 +5862,179 @@
           }
         }
       },
+      "CallActiveResponse": {
+        "type": "object",
+        "description": "Response indicating whether an active call exists for a channel.",
+        "required": ["callId", "channelId", "createdBy", "createdAt"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          }
+        }
+      },
+      "CallFilters": {
+        "type": "object",
+        "description": "Filters for call records.",
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs to filter calls by. Empty to include all calls."
+          }
+        }
+      },
+      "CallRecord": {
+        "type": "object",
+        "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
+        "required": [
+          "callId",
+          "channelId",
+          "roomName",
+          "createdBy",
+          "startedAt",
+          "isActive",
+          "participants",
+          "transcript"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "durationMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Call duration in milliseconds (None if still active)."
+          },
+          "egressId": {
+            "type": ["string", "null"],
+            "description": "Recording egress ID, if any."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the call is currently active (from `calls` table)."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordParticipant"
+            },
+            "description": "Participants (both active and historic)."
+          },
+          "recordingUrl": {
+            "type": ["string", "null"],
+            "description": "Presigned URL for the call recording, if available."
+          },
+          "roomName": {
+            "type": "string",
+            "description": "The RTC room name."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started (created_at for active, started_at for archived)."
+          },
+          "transcript": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordTranscriptSegment"
+            },
+            "description": "Transcript segments ordered by `sequence_num`."
+          }
+        }
+      },
+      "CallRecordParticipant": {
+        "type": "object",
+        "description": "A participant as returned in a [`CallRecord`] (historic — includes `left_at`).",
+        "required": ["userId", "joinedAt"],
+        "properties": {
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the user left (None if still in an active call)."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The user id."
+          }
+        }
+      },
+      "CallRecordTranscriptSegment": {
+        "type": "object",
+        "description": "A transcript segment as returned in a [`CallRecord`].",
+        "required": ["speakerId", "content", "startedAt", "sequenceNum"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The transcribed text content."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the speaker stopped (if known)."
+          },
+          "segmentId": {
+            "type": ["string", "null"],
+            "description": "LiveKit segment ID (nullable for archived records)."
+          },
+          "sequenceNum": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Ordering within the call."
+          },
+          "speakerId": {
+            "type": "string",
+            "description": "The speaker's user ID."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the speaker started this segment."
+          }
+        }
+      },
       "CallTokenResponse": {
         "type": "object",
         "description": "Response returned when creating or joining a call.",
@@ -6085,21 +6419,23 @@
       },
       "CopyDocumentQueryParams": {
         "type": "object",
+        "description": "Query parameters for the copy document endpoint.",
         "properties": {
           "version_id": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "The version id of the document to copy. Defaults to copying the latest version of the document."
+            "description": "The DB version id of the document to copy. Defaults to latest."
           }
         }
       },
       "CopyDocumentRequest": {
         "type": "object",
+        "description": "Request body for copying a document.",
         "required": ["documentName"],
         "properties": {
           "documentName": {
             "type": "string",
-            "description": "The name of the document without extension."
+            "description": "The name of the new document (without extension)."
           },
           "versionId": {
             "oneOf": [
@@ -6107,9 +6443,25 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/SyncServiceVersionID"
+                "$ref": "#/components/schemas/SyncServiceVersionID",
+                "description": "Optional sync service version ID for MD documents."
               }
             ]
+          }
+        }
+      },
+      "CopyDocumentResponse": {
+        "type": "object",
+        "description": "Response wrapper for the copy document endpoint.",
+        "required": ["error", "data"],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DocumentResponse",
+            "description": "The copied document data."
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred."
           }
         }
       },
@@ -7296,6 +7648,9 @@
         "type": "object",
         "description": "Describes a bundle of filters that should be applied across different entity types",
         "properties": {
+          "callf": {
+            "description": "the filters that should be applied to the call entity"
+          },
           "cf": {
             "description": "the filters that should be applied to the chat entity"
           },
@@ -7320,6 +7675,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "call_filters": {
+            "$ref": "#/components/schemas/CallFilters",
+            "description": "the bundled [CallFilters]"
+          },
           "channel_filters": {
             "$ref": "#/components/schemas/ChannelFilters",
             "description": "the bundled [ChannelFilters]"
@@ -10114,6 +10473,85 @@
           }
         }
       },
+      "SoupCallRecord": {
+        "type": "object",
+        "description": "A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.",
+        "required": [
+          "callId",
+          "channelId",
+          "createdBy",
+          "startedAt",
+          "isActive",
+          "participants"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "durationMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Call duration in milliseconds (None if still active)."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the call is currently active."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupCallRecordParticipant"
+            },
+            "description": "Participants in the call."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started."
+          }
+        }
+      },
+      "SoupCallRecordParticipant": {
+        "type": "object",
+        "description": "A participant in a call record, as displayed in Soup.",
+        "required": ["userId", "joinedAt"],
+        "properties": {
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the user left (None if still in an active call)."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The user id."
+          }
+        }
+      },
       "SoupChannel": {
         "allOf": [
           {
@@ -10514,6 +10952,19 @@
               "tag": {
                 "type": "string",
                 "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCallRecord"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["callRecord"]
               }
             }
           }

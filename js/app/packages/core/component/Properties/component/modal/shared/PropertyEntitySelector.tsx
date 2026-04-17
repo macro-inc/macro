@@ -344,7 +344,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (!props.config.isMultiSelect && props.onClose) {
       props.onClose();
     } else if (props.config.isMultiSelect && searchInputRef) {
-      // Keep input focused when multiselect is enabled
+      setInputValue('');
+      setSearchTerm('');
       setTimeout(() => searchInputRef.focus(), 0);
     }
   };
@@ -362,6 +363,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (!props.config.isMultiSelect && props.onClose) {
       props.onClose();
     } else if (props.config.isMultiSelect && searchInputRef) {
+      setInputValue('');
+      setSearchTerm('');
       setTimeout(() => searchInputRef.focus(), 0);
     }
   };
@@ -375,11 +378,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     setSelectedIndex(0);
   });
 
-  // Scroll VList to selected index (offset by pinned count)
+  // Scroll VList to selected index only during keyboard navigation
   createEffect(() => {
     const index = selectedIndex();
     const pCount = pinnedCount();
-    if (index >= pCount && virtualizerHandle) {
+    if (keyboardMode() && index >= pCount && virtualizerHandle) {
       virtualizerHandle.scrollToIndex(index - pCount, { align: 'nearest' });
     }
   });

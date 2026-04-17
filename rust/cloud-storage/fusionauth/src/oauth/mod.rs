@@ -1,9 +1,23 @@
+use serde::Serialize;
 use std::borrow::Cow;
 
 use crate::{
     FusionAuthClient, Result, UnauthedClient,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
+
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "snake_case")]
+struct RefreshTokenGrantCompleteRequest<'a> {
+    /// The client id
+    pub client_id: Cow<'a, str>,
+    /// The client secret
+    pub client_secret: Cow<'a, str>,
+    /// The refresh token
+    pub refresh_token: Cow<'a, str>,
+    /// The grant type (should always be refresh_token)
+    pub grant_type: Cow<'a, str>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -38,7 +52,7 @@ struct AuthorizationCodeGrantCompleteResponse<'a> {
 async fn complete(
     client: &UnauthedClient,
     base_url: &str,
-    request: AuthorizationCodeGrantCompleteRequest<'_>,
+    request: impl Serialize,
 ) -> Result<(String, String)> {
     let body = serde_urlencoded::to_string(&request).map_err(|e| {
         FusionAuthClientError::Generic(GenericErrorResponse {
@@ -108,6 +122,25 @@ impl FusionAuthClient {
                 code: Cow::Borrowed(code),
                 redirect_uri: Cow::Borrowed(&self.oauth_redirect_uri),
                 grant_type: Cow::Borrowed("authorization_code"),
+            },
+        )
+        .await
+    }
+
+    /// complete the OAuth2 Refresh token grant flow.
+    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    pub async fn complete_refresh_token_grant(
+        &self,
+        refresh_token: &str,
+    ) -> Result<(String, String)> {
+        complete(
+            &self.unauth_client,
+            &self.fusion_auth_base_url,
+            RefreshTokenGrantCompleteRequest {
+                client_id: Cow::Borrowed(&self.client_id),
+                client_secret: Cow::Borrowed(&self.client_secret),
+                refresh_token: Cow::Borrowed(refresh_token),
+                grant_type: Cow::Borrowed("refresh_token"),
             },
         )
         .await

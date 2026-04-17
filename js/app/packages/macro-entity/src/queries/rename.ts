@@ -1,11 +1,8 @@
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import {
-  optimisticUpdateChannelName,
-  rollbackUpdateChannelName,
-  type UpdateChannelNameContext,
-} from '@queries/channel/channel';
+import { channelKeys } from '@queries/channel/keys';
+import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
 import { setPreviewName } from '@queries/preview';
 import {
@@ -15,6 +12,7 @@ import {
 } from '@queries/soup/cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { ChannelTypeEnum } from '@service-comms/client';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models';
 import type { ItemType } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 
@@ -30,14 +28,10 @@ type EntityRenameOperationResult = {
   success: boolean;
 };
 
-// Maps channel ID to its update context, which lets us rollback the updated at timestamp as well as name
-type ChannelRenameContexts = Map<string, UpdateChannelNameContext | undefined>;
-
 // Keyed by entity ID so rollback indices stay aligned even when flatMap filters out types
 type SoupTransactionMap = Map<string, SoupTransaction>;
 
 type RenameRollbackContext = {
-  channels: ChannelRenameContexts;
   soupTransactions: SoupTransactionMap;
 };
 
@@ -65,8 +59,9 @@ type RenameOnMutateResult = {
 
 const getEntityRenameData = (
   operation: EntityRenameOperation
-): EntityRenameData => {
+): EntityRenameData | null => {
   const { entity, newName } = operation;
+  if (entity.type === 'call') return null;
   return {
     id: entity.id,
     itemType: entity.type,
@@ -77,6 +72,7 @@ const getEntityRenameData = (
 
 const performEntityRename = async (operation: EntityRenameOperation) => {
   const data = getEntityRenameData(operation);
+  if (!data) return { success: false };
   const success = await renameItem(data);
   return { success };
 };
@@ -114,7 +110,11 @@ const renameDssSetData = (
           frecency_score: score,
         })
       );
-    } else if (itemType !== 'email' && itemType !== 'channel_message') {
+    } else if (
+      itemType !== 'email' &&
+      itemType !== 'channel_message' &&
+      itemType !== 'automation'
+    ) {
       txns.set(
         id,
         optimisticUpdateSoupEntity({
@@ -128,24 +128,23 @@ const renameDssSetData = (
   return txns;
 };
 
-const renameChannelSetData = (
-  entities: EntityRenameOptimisticInfo[]
-): ChannelRenameContexts => {
-  const contexts: ChannelRenameContexts = new Map();
+const renameChannelSetData = (entities: EntityRenameOptimisticInfo[]): void => {
+  const channelUpdates = entities.filter(
+    ({ itemType }) => itemType === 'channel'
+  );
+  if (channelUpdates.length === 0) return;
 
-  entities.forEach(({ id, itemType, newName }) => {
-    if (itemType === 'channel') {
-      const context = optimisticUpdateChannelName({
-        channelId: id,
-        name: newName,
+  queryClient.setQueryData<ApiChannelWithLatest[]>(
+    channelKeys.listChannels.queryKey,
+    (prev) => {
+      if (!prev) return prev;
+      return prev.map((channel) => {
+        const update = channelUpdates.find(({ id }) => id === channel.id);
+        if (!update) return channel;
+        return { ...channel, name: update.newName };
       });
-      if (context) {
-        contexts.set(id, context);
-      }
     }
-  });
-
-  return contexts;
+  );
 };
 
 const renamePreviewSetData = (entities: EntityRenameOptimisticInfo[]) => {
@@ -169,10 +168,10 @@ function performOptimisticRenameUpdates(
 ): RenameRollbackContext {
   renamePreviewSetData(entities);
   renameHistorySetData(entities);
+  renameChannelSetData(entities);
   const soupTransactions = renameDssSetData(entities);
-  const channels = renameChannelSetData(entities);
 
-  return { channels, soupTransactions };
+  return { soupTransactions };
 }
 
 function rollbackOptimisticRenameUpdates({
@@ -183,19 +182,15 @@ function rollbackOptimisticRenameUpdates({
     txn.rollback();
   }
 
-  updates.forEach(({ id, oldName, itemType }) => {
-    renameHistorySetData([{ id, itemType, newName: oldName }]);
-    renamePreviewSetData([{ id, itemType, newName: oldName }]);
+  const rollbackEntities = updates.map(({ id, oldName, itemType }) => ({
+    id,
+    itemType,
+    newName: oldName,
+  }));
 
-    if (itemType === 'channel') {
-      const context = contexts.channels.get(id);
-      if (context) {
-        rollbackUpdateChannelName(id, context);
-      } else {
-        console.error(`No rollback context provided for channel item ${id}`);
-      }
-    }
-  });
+  renameHistorySetData(rollbackEntities);
+  renamePreviewSetData(rollbackEntities);
+  renameChannelSetData(rollbackEntities);
 }
 
 const bulkRenameMutationFn = async (
@@ -212,7 +207,9 @@ const bulkRenameMutationFn = async (
 const bulkRenameOnMutate = (
   params: BulkRenameDssEntityMutationVariables
 ): RenameOnMutateResult => {
-  const updates = params.map(getEntityRenameData);
+  const updates = params
+    .map(getEntityRenameData)
+    .filter((d): d is EntityRenameData => d !== null);
   const contexts = performOptimisticRenameUpdates(updates);
   return { contexts, updates };
 };
@@ -243,7 +240,6 @@ const bulkRenameOnSettled = (
 
   // Rollback only the failed items by entity ID
   const failedUpdates: EntityRenameData[] = [];
-  const failedChannelContexts: ChannelRenameContexts = new Map();
   const failedSoupTransactions: SoupTransactionMap = new Map();
 
   data.forEach((result, index) => {
@@ -253,12 +249,6 @@ const bulkRenameOnSettled = (
         failedUpdates.push(update);
         const txn = onMutateResult.contexts.soupTransactions.get(update.id);
         if (txn) failedSoupTransactions.set(update.id, txn);
-        if (update.itemType === 'channel') {
-          const context = onMutateResult.contexts.channels.get(update.id);
-          if (context !== undefined) {
-            failedChannelContexts.set(update.id, context);
-          }
-        }
       }
     }
   });
@@ -267,7 +257,6 @@ const bulkRenameOnSettled = (
   if (failedUpdates.length > 0) {
     rollbackOptimisticRenameUpdates({
       contexts: {
-        channels: failedChannelContexts,
         soupTransactions: failedSoupTransactions,
       },
       updates: failedUpdates,

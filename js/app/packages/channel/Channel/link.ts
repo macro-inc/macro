@@ -6,6 +6,7 @@
 export const URL_PARAMS = {
   thread: 'channel_thread_id',
   message: 'channel_message_id',
+  joinCall: 'join_call',
 };
 
 export function getChannelParams(
@@ -20,4 +21,9 @@ export function getChannelParams(
   }
 
   return params;
+}
+
+/** True when a `join_call` param value means "please join the call". */
+export function isJoinCallRequested(value: unknown): boolean {
+  return value === 'true' || value === true;
 }

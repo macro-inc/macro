@@ -7,6 +7,9 @@ use crate::api::{
     stream::chat_message::{
         self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
     },
+    stream::stop::{
+        self as stream_stop, StopChatStreamError, StopChatStreamRequest, StopChatStreamResponse,
+    },
 };
 use crate::model::{
     response::{
@@ -72,6 +75,7 @@ use utoipa::OpenApi;
             chat_history::get_chat_history_handler,
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
             chat_message::send_chat_message,
+            stream_stop::stop_chat_stream,
             memory_api::get_memory_handler
         ),
         components(
@@ -145,6 +149,9 @@ use utoipa::OpenApi;
                 HttpSendChatMessageRequest,
                 SendChatMessageResponse,
                 ChatMessageError,
+                StopChatStreamRequest,
+                StopChatStreamResponse,
+                StopChatStreamError,
                 StreamError,
                 ToolSet,
 

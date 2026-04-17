@@ -48,6 +48,7 @@ pub enum ItemType {
     Project,
     Email,
     Channel,
+    CallRecord,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -63,6 +64,8 @@ pub enum EntityItem {
     Email { id: Uuid, subject: Option<String> },
     #[serde(rename_all = "camelCase")]
     Channel { id: Uuid, name: Option<String> },
+    #[serde(rename_all = "camelCase")]
+    CallRecord { id: Uuid, created_by: String },
 }
 
 impl EntityItem {
@@ -73,6 +76,7 @@ impl EntityItem {
             EntityItem::Project { .. } => ItemType::Project,
             EntityItem::Email { .. } => ItemType::Email,
             EntityItem::Channel { .. } => ItemType::Channel,
+            EntityItem::CallRecord { .. } => ItemType::CallRecord,
         }
     }
 }
@@ -99,6 +103,10 @@ impl From<SoupItem> for EntityItem {
             SoupItem::Channel(channel) => EntityItem::Channel {
                 id: channel.channel.channel.id.0,
                 name: channel.channel.channel.name.clone(),
+            },
+            SoupItem::CallRecord(record) => EntityItem::CallRecord {
+                id: record.call_id,
+                created_by: record.created_by,
             },
         }
     }
@@ -220,6 +228,7 @@ pub(super) fn build_summary(
     let mut projects = 0;
     let mut emails = 0;
     let mut channels = 0;
+    let mut call_records = 0;
 
     for item in items {
         match item {
@@ -228,6 +237,7 @@ pub(super) fn build_summary(
             EntityItem::Project { .. } => projects += 1,
             EntityItem::Email { .. } => emails += 1,
             EntityItem::Channel { .. } => channels += 1,
+            EntityItem::CallRecord { .. } => call_records += 1,
         }
     }
 
@@ -260,6 +270,12 @@ pub(super) fn build_summary(
         parts.push(format!(
             "{channels} channel{}",
             if channels == 1 { "" } else { "s" }
+        ));
+    }
+    if call_records > 0 {
+        parts.push(format!(
+            "{call_records} call record{}",
+            if call_records == 1 { "" } else { "s" }
         ));
     }
 

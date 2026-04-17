@@ -122,7 +122,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
     use notification::domain::service::SqsNotificationIngress;
-    use notification::outbound::queue::SqsIngressQueue;
+    use notification::outbound::queue::SqsQueue;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
@@ -204,12 +204,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     ));
 
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::from_conf(sqs_config),
-        queue_url: "test-notification-ingress-queue".to_string(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::from_conf(sqs_config),
+        "test-notification-ingress-queue".to_string(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
@@ -240,13 +241,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_tools::NoOpTaskProperties,
         ai_tools::NoOpConnectionService,
     );
-    let entity_access_service = entity_access::domain::service::EntityAccessServiceImpl::new(
-        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        ),
     );
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
         document_service,
-        entity_access_service,
+        (*entity_access_service).clone(),
         test_lexical_client,
     );
 
@@ -256,7 +259,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     // Build properties tool context
     let properties_service = properties::PropertiesServiceImpl::new(
         properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(pool.clone())),
+        Some(properties::PermissionServiceImpl::new(
+            pool.clone(),
+            entity_access_service.clone(),
+        )),
         Some(ai_tools::NoOpNotificationService),
     );
     let properties_tool_context =
@@ -272,11 +278,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
-        Arc::new(
-            entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool.clone()),
-            ),
-        ),
+        entity_access_service.clone(),
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {
@@ -288,6 +290,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
+        schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
@@ -324,6 +327,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,
+        entity_access_service,
+        ai_stream_registry: crate::service::ai_stream_registry::AiStreamRegistry::new(Arc::new(
+            redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
+        )),
     };
     Arc::new(api_context)
 }

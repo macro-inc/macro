@@ -10,6 +10,7 @@
 #[cfg(test)]
 mod tests;
 
+mod copy_document;
 mod create_document;
 mod create_task;
 mod delete_document;
@@ -37,6 +38,7 @@ use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 
 // Re-export handlers and utoipa path types for external use (swagger, internal routes)
+pub use copy_document::*;
 pub use create_document::*;
 pub use create_task::*;
 pub use delete_document::*;
@@ -126,6 +128,10 @@ where
         .route(
             "/{document_id}/short_id",
             axum::routing::get(get_short_id_handler::<T, Svc>),
+        )
+        .route(
+            "/{document_id}/copy",
+            axum::routing::post(copy_document_handler::<T, Svc>),
         )
         .layer(middleware::from_fn_with_state(
             state.clone(),

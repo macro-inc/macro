@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-  "ai",
+    "ai",
   "ai_format",
   "ai_tools",
   "ai_toolset",
@@ -10,6 +10,7 @@ members = [
   "anthropic",
   "authentication_service",
   "authentication_service_client",
+  "backfill_entity_access",
   "call",
   "channels",
   "chat",
@@ -23,8 +24,8 @@ members = [
   "contacts_service",
   "convert_service",
   "cowlike",
-  "decode_jwt",
   "dataloss_prevention_handler",
+  "decode_jwt",
   "delete_chat_handler",
   "deleted_item_poller",
   "document_cognition_service",
@@ -36,7 +37,6 @@ members = [
   "documents",
   "docx_unzip_handler",
   "dynamodb_client",
-  "email_contact_search",
   "email_db_client",
   "email_refresh_handler",
   "email_scheduled_handler",
@@ -47,6 +47,7 @@ members = [
   "email_utils",
   "email_validator",
   "entity_access",
+  "entity_access_management",
   "frecency",
   "fusionauth",
   "github",
@@ -71,6 +72,8 @@ members = [
   "macro_sha_count_client",
   "macro_share_permissions",
   "macro_uuid",
+  "mcp_auth_proxy",
+  "mcp_service",
   "memory",
   "mention_utils",
   "model",
@@ -87,6 +90,7 @@ members = [
   "models_sfs",
   "models_soup",
   "models_team",
+  "mobile_welcome_email_db_client",
   "name_search",
   "non_empty",
   "notification",
@@ -111,6 +115,7 @@ members = [
   "s3_client",
   "s3_key",
   "scribe",
+  "scheduled_action",
   "search_processing_service",
   "search_service",
   "search_service_client",
@@ -134,6 +139,7 @@ members = [
   "user_link_cleanup_handler",
   "user_quota",
   "worker_trigger",
+  "tools/native_app_server",
 ]
 
 [workspace.dependencies]
@@ -177,9 +183,9 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
   "rust_crypto",
 ] }
 lambda_runtime = "0.13.0"
+lazy_static = "1.5.0"
 livekit-api = "0.4.16"
 livekit-protocol = "0.7.2"
-lazy_static = "1.5.0"
 log = "0.4.26"
 mockall = "0.13"
 nom = "8"
@@ -199,6 +205,7 @@ reqwest = { version = "0.12.12", features = ["hickory-dns", "json"] }
 reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }
 rootcause = "0.11"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
+semver = { version = "1", features = ["serde"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
 serde_json = { version = "1.0.132" }

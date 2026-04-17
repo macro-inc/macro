@@ -77,7 +77,7 @@ create_local_buckets:
   aws --endpoint-url=http://localhost:4566 s3 mb s3://bulk-upload-staging || true
   # Apply CORS configuration to all buckets
   for bucket in macro-email-attachments doc-storage docx-upload static-file-storage bulk-upload-staging; do \
-    aws --endpoint-url=http://localhost:4566 s3api put-bucket-cors --bucket $bucket --cors-configuration '{"CORSRules":[{"AllowedOrigins":["http://localhost:3000"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3600}]}' || true; \
+    aws --endpoint-url=http://localhost:4566 s3api put-bucket-cors --bucket $bucket --cors-configuration '{"CORSRules":[{"AllowedOrigins":["http://localhost:3000","http://localhost:3001","http://localhost:3002","http://localhost:3003","http://localhost:3004","http://localhost:3005","http://localhost:3006","http://localhost:3007","http://localhost:3008","http://localhost:3009"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3600}]}' || true; \
   done
   @echo "S3 buckets created"
 

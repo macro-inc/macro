@@ -2,6 +2,7 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
+import { cn } from '@ui/utils/classname';
 import VideoIcon from '@icon/regular/file-video.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -251,11 +252,11 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
     <Dialog open={viewerOpen()} onOpenChange={setViewerOpen}>
       <div
         ref={containerRef}
-        class="relative max-w-full my-4 grid place-items-center mx-auto"
-        classList={{
-          'bracket-offset-4 bracket': isSelectedAsNode(),
-          'media-error min-h-44': state() === 'error',
-        }}
+        class={cn(
+          'relative max-w-full my-4 grid place-items-center mx-auto',
+          isSelectedAsNode() && 'bracket-offset-4 ring-3 ring-edge-muted',
+          state() === 'error' && 'media-error min-h-44'
+        )}
         style={{
           'max-height': `${videoDims() ? videoDims()[1] * scale() : 640}px`,
           'aspect-ratio':
@@ -297,11 +298,11 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         </Show>
         <video
           crossorigin="anonymous"
-          class="h-full object-contain"
+          class={cn(
+            'h-full object-contain',
+            (state() === 'loading' || state() === 'error') && 'invisible'
+          )}
           draggable={true}
-          classList={{
-            invisible: state() === 'loading' || state() === 'error',
-          }}
           ref={videoRef}
           src={videoUrl()}
           controls={state() === 'ok'}

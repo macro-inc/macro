@@ -24,7 +24,7 @@ function VideoViewerContent(props: {
   indexLabel?: Accessor<string>;
 }) {
   const navButtonClass =
-    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-colors';
+    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <div
@@ -36,7 +36,7 @@ function VideoViewerContent(props: {
         'padding-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
-      <Dialog.Content class="relative flex h-full w-full items-center justify-center bg-panel">
+      <Dialog.Content class="flex items-center justify-center bg-panel">
         <LightboxToolbar isVisible={true}>
           <Dialog.CloseButton>
             <DeprecatedIconButton
@@ -58,26 +58,25 @@ function VideoViewerContent(props: {
           </div>
         </Show>
 
-        <Show when={props.onPrevious}>
-          <button
-            class={cn(navButtonClass, 'left-4')}
-            style={{ 'z-index': stackingContext.zModal + 1 }}
-            onClick={props.onPrevious}
-            aria-label="Previous media"
-          >
-            <ChevronLeftIcon class="h-5 w-5 text-ink" />
-          </button>
-        </Show>
-        <Show when={props.onNext}>
-          <button
-            class={cn(navButtonClass, 'right-4')}
-            style={{ 'z-index': stackingContext.zModal + 1 }}
-            onClick={props.onNext}
-            aria-label="Next media"
-          >
-            <ChevronRightIcon class="h-5 w-5 text-ink" />
-          </button>
-        </Show>
+        <button
+          class={cn(navButtonClass, 'left-4')}
+          style={{ 'z-index': stackingContext.zModal + 1 }}
+          onClick={props.onPrevious}
+          disabled={!props.onPrevious}
+          aria-label="Previous media"
+        >
+          <ChevronLeftIcon class="h-5 w-5 text-ink" />
+        </button>
+
+        <button
+          class={cn(navButtonClass, 'right-4')}
+          style={{ 'z-index': stackingContext.zModal + 1 }}
+          onClick={props.onNext}
+          disabled={!props.onNext}
+          aria-label="Next media"
+        >
+          <ChevronRightIcon class="h-5 w-5 text-ink" />
+        </button>
 
         <div class="flex h-full w-full items-center justify-center">
           <video

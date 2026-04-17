@@ -1,10 +1,11 @@
 use crate::api::context::ApiContext;
+use crate::api::context::EntityAccessService;
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
+use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use model::{
     project::{Project, request::CreateProjectRequest, response::CreateProjectResponse},
     response::{GenericErrorResponse, GenericResponse},
@@ -31,7 +32,11 @@ use unicode_segmentation::UnicodeSegmentation;
 pub async fn create_project_handler(
     State(ctx): State<ApiContext>,
     user_context: MacroUserExtractor,
-    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateProjectRequest>,
+    project: ProjectBodyAccessLevelExtractor<
+        EditAccessLevel,
+        CreateProjectRequest,
+        EntityAccessService,
+    >,
 ) -> Result<Response, Response> {
     let req = project.into_inner();
 

@@ -161,6 +161,10 @@ function BasePathComponent() {
     invalidateUserInfo();
   }
 
+  if (searchParams.subscriptionCancel === 'true') {
+    analytics.track('subscription_cancel', { tier: searchParams.tier });
+  }
+
   if (searchParams.upgrade === 'true') {
     sessionStorage.setItem('showUpgradeModal', 'true');
   }
@@ -189,7 +193,7 @@ function BasePathComponent() {
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
         <Navigate
-          href={`${isNativeMobilePlatform() ? '/login' : '/signup'}${window.location.search}`}
+          href={`${isNativeMobilePlatform() ? '/welcome' : '/welcome'}${window.location.search}`}
         />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
@@ -235,6 +239,10 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/channels',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/calls',
     component: LAYOUT_ROUTE.component,
   },
   {

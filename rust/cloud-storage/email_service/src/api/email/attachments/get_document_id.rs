@@ -7,7 +7,10 @@ use email_service::util::gmail::auth::fetch_gmail_access_token_from_link;
 use email_service::util::upload_attachment::{
     UploadAttachmentContext, UploadAttachmentError, upload_attachment,
 };
+use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
+use model_entity::EntityType;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link::Link;
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
@@ -149,15 +152,17 @@ async fn verify_access_and_get_owner(
     }
 
     // Verify shared access to the thread
-    macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2(
-        &ctx.db,
-        link.macro_id.as_ref(),
-        thread_id.to_string().as_ref(),
-        "thread",
-    )
-    .await
-    .map_err(|(_, msg)| GetAttachmentDocumentIdError::DatabaseError(anyhow::anyhow!(msg)))?
-    .ok_or(GetAttachmentDocumentIdError::AccessDenied)?;
+    let user_id = MacroUserIdStr::parse_from_str(link.macro_id.as_ref())
+        .map_err(|e| GetAttachmentDocumentIdError::DatabaseError(anyhow::anyhow!(e)))?;
+    ctx.entity_access_service
+        .get_access_level(
+            Some(&user_id),
+            &thread_id.to_string(),
+            EntityType::EmailThread,
+        )
+        .await
+        .map_err(|e| GetAttachmentDocumentIdError::DatabaseError(anyhow::anyhow!(e)))?
+        .ok_or(GetAttachmentDocumentIdError::AccessDenied)?;
 
     // Fetch owner's link and access token
     let owner_link = email_db_client::links::get::fetch_link_by_id(&ctx.db, owner_link_id)
