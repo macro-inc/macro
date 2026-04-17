@@ -1,12 +1,8 @@
+use entity_access_db_utils::AccessLevel;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Share a document with all members of the given user's team.
-///
-/// Finds team members via the `team_user` join table, then bulk-inserts
-/// `entity_access` rows with `comment` access and `source_type = 'user'`.
-/// Skips users who already have a direct user-sourced access row so existing
-/// permissions (e.g. the owner's `owner` row) are never downgraded.
 #[tracing::instrument(err, skip(pool))]
 pub async fn share_with_team(
     pool: &PgPool,
@@ -30,46 +26,18 @@ pub async fn share_with_team(
         return Ok(());
     };
 
-    // Find all users on the same team.
-    let team_members: Vec<String> = sqlx::query_scalar!(
-        r#"
-        SELECT user_id
-        FROM team_user
-        WHERE team_id = $1
-        "#,
-        team_id,
-    )
-    .fetch_all(pool)
-    .await?;
-
-    if team_members.is_empty() {
-        return Ok(());
-    }
-
     let document_uuid = macro_uuid::string_to_uuid(document_id)
         .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
 
-    // Insert comment access for team members who don't already have access.
     sqlx::query!(
         r#"
-        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-        SELECT
-            $1::uuid,
-            'document',
-            u.user_id,
-            'user',
-            'comment'
-        FROM UNNEST($2::text[]) AS u(user_id)
-        WHERE NOT EXISTS (
-            SELECT 1 FROM entity_access ea
-            WHERE ea.source_id = u.user_id
-              AND ea.entity_id = $1::uuid
-              AND ea.entity_type = 'document'
-              AND ea.source_type = 'user'
-        )
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'document', $2, 'team', $3)
+            ON CONFLICT DO NOTHING
         "#,
-        document_uuid,
-        &team_members,
+        &document_uuid,
+        &team_id.to_string(),
+        AccessLevel::Comment as _,
     )
     .execute(pool)
     .await?;
