@@ -14,7 +14,6 @@ import {
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { listenForHeartbeat } from './heartbeat';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 
@@ -55,7 +54,6 @@ function TauriProvider(props: { children: JSX.Element }) {
   };
 
   onMount(() => {
-    listenForHeartbeat();
     console.info('[bundle-update] registering listener');
     const unlistenPromise = listen<BundleUpdateStatus>(
       'bundle-update-status',

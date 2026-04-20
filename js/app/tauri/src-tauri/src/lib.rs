@@ -6,12 +6,8 @@ use reqwest::cookie::CookieStore;
 use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
-#[cfg(target_os = "ios")]
-use std::sync::OnceLock;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
-use tauri::{AppHandle, Emitter};
 use tauri::{Manager, Runtime};
 
 mod tauri_protocol;
@@ -20,70 +16,9 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
-struct HeartbeatState {
-    alive: AtomicBool,
-    /// Incremented on each resume event so stale check threads are ignored
-    generation: AtomicU64,
-}
-
-#[tauri::command]
-fn heartbeat_response(state: tauri::State<'_, HeartbeatState>) {
-    state.alive.store(true, Ordering::SeqCst);
-}
-
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
-
-#[cfg(target_os = "ios")]
-static GLOBAL_APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
-
-/// Send a heartbeat ping to the JS layer and check for a response after 1 second.
-/// If no response is received, reload the webview (the content process is likely dead).
-#[cfg(target_os = "ios")]
-fn send_heartbeat(handle: &AppHandle) {
-    tracing::info!("app resumed, sending heartbeat ping");
-
-    let state = handle.state::<HeartbeatState>();
-    let current_gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    state.alive.store(false, Ordering::SeqCst);
-
-    let _ = handle.emit("heartbeat_ping", ());
-
-    let handle = handle.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        let state = handle.state::<HeartbeatState>();
-
-        if state.generation.load(Ordering::SeqCst) != current_gen {
-            tracing::debug!("heartbeat: stale generation {current_gen}, skipping");
-            return;
-        }
-
-        if !state.alive.load(Ordering::SeqCst) {
-            tracing::warn!(
-                "heartbeat: no response from JS — content process likely dead, reloading webview"
-            );
-            if let Some(webview) = handle.webview_windows().values().next() {
-                let _ = webview.reload();
-            }
-        } else {
-            tracing::info!("heartbeat: JS responded, content process alive");
-        }
-    });
-}
-
-/// Called from native Objective-C when the iOS app resumes from background.
-/// See `main.mm` for the notification observer.
-#[cfg(target_os = "ios")]
-#[unsafe(no_mangle)]
-extern "C" fn on_app_resumed() {
-    let Some(handle) = GLOBAL_APP_HANDLE.get() else {
-        tracing::warn!("on_app_resumed: app handle not yet initialized");
-        return;
-    };
-    send_heartbeat(handle);
-}
 
 /// domains which the tauri webview can render.
 /// This should be as restrictive as possible.
@@ -249,12 +184,7 @@ pub fn run() {
             }
         })
         .manage(BundleRoot(RwLock::new(None)))
-        .manage(HeartbeatState {
-            alive: AtomicBool::new(true),
-            generation: AtomicU64::new(0),
-        })
         .invoke_handler(tauri::generate_handler![
-            heartbeat_response,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
@@ -285,11 +215,6 @@ pub fn run() {
             }
 
             app.chain(attach_deep_link_handler);
-
-            #[cfg(target_os = "ios")]
-            {
-                let _ = GLOBAL_APP_HANDLE.set(app.handle().clone());
-            }
 
             Ok(())
         })
