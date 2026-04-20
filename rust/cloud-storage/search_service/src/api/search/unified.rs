@@ -58,7 +58,7 @@ pub async fn handler(
         chat,
         document,
         email,
-        ..
+        project,
     } = {
         let _span = tracing::info_span!("split_search_response_by_type").entered();
         results.into_iter().split_search_response()
@@ -68,31 +68,38 @@ pub async fn handler(
         enriched_document_results,
         enriched_chat_results,
         enriched_channel_results,
+        enriched_project_results,
         enriched_email_results,
     ) = tokio::try_join!(
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             document,
-            models_opensearch::OpenSearchEntityType::Documents
+            models_opensearch::SearchEntityType::Documents
         ),
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             chat,
-            models_opensearch::OpenSearchEntityType::Chats
+            models_opensearch::SearchEntityType::Chats
         ),
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             channel_message,
-            models_opensearch::OpenSearchEntityType::Channels
+            models_opensearch::SearchEntityType::Channels
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            project,
+            models_opensearch::SearchEntityType::Projects
         ),
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             email,
-            models_opensearch::OpenSearchEntityType::Emails
+            models_opensearch::SearchEntityType::Emails
         ),
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
@@ -105,6 +112,7 @@ pub async fn handler(
         results.extend(enriched_document_results);
         results.extend(enriched_chat_results);
         results.extend(enriched_channel_results);
+        results.extend(enriched_project_results);
         results.extend(enriched_email_results);
 
         sort_unified_search_results(results)

@@ -11,6 +11,7 @@ use models_search::{
         DocumentMetadata, DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata,
     },
     email::{EmailSearchResponseItem, EmailSearchResponseItemWithMetadata},
+    project::{ProjectMetadata, ProjectSearchResponseItem, ProjectSearchResponseItemWithMetadata},
 };
 use sqlx::types::Uuid;
 
@@ -20,6 +21,7 @@ fn test_sort_unified_search_results() {
     let doc_id = Uuid::new_v4();
     let chat_id = Uuid::new_v4();
     let email_id = Uuid::new_v4();
+    let project_id = Uuid::new_v4();
     let doc2_id = Uuid::new_v4();
 
     // Create items with different updated_at timestamps
@@ -85,6 +87,24 @@ fn test_sort_unified_search_results() {
                 participants: vec![],
             },
         }),
+        // Project with updated_at = 2000 (second newest)
+        UnifiedSearchResponseItem::Project(ProjectSearchResponseItemWithMetadata {
+            metadata: Some(ProjectMetadata {
+                created_at: DateTime::from_timestamp(1900, 0).unwrap(),
+                updated_at: DateTime::from_timestamp(2000, 0).unwrap(),
+                viewed_at: None,
+                parent_project_id: None,
+                deleted_at: None,
+            }),
+            extra: ProjectSearchResponseItem {
+                id: project_id,
+                name: "Recent Project".to_string(),
+                owner_id: "owner1".to_string(),
+                updated_at: DateTime::from_timestamp(2000, 0).unwrap(),
+                created_at: DateTime::from_timestamp(1900, 0).unwrap(),
+                project_search_results: vec![],
+            },
+        }),
         // Another Document with updated_at = 2500 (second)
         UnifiedSearchResponseItem::Document(DocumentSearchResponseItemWithMetadata {
             properties: None,
@@ -110,10 +130,11 @@ fn test_sort_unified_search_results() {
 
     // Expected order after sorting by updated_at descending (newest first)
     let expected_ids: Vec<Uuid> = vec![
-        chat_id,  // 3000 - newest
-        doc2_id,  // 2500
-        email_id, // 1500
-        doc_id,   // 1000 - oldest
+        chat_id,    // 3000 - newest
+        doc2_id,    // 2500
+        project_id, // 2000
+        email_id,   // 1500
+        doc_id,     // 1000 - oldest
     ];
 
     let results = sort_unified_search_results(results);

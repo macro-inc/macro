@@ -189,6 +189,7 @@ pub struct SplitUnifiedSearchResponseValues {
     pub chat: Vec<SearchHit>,
     pub document: Vec<SearchHit>,
     pub email: Vec<SearchHit>,
+    pub project: Vec<SearchHit>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
@@ -200,9 +201,9 @@ where
     T: Iterator<Item = SearchHit>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email) = self.into_iter().fold(
-            (vec![], vec![], vec![], vec![]),
-            |(mut channel_message, mut chat, mut document, mut email), item| {
+        let (channel_message, chat, document, email, project) = self.into_iter().fold(
+            (vec![], vec![], vec![], vec![], vec![]),
+            |(mut channel_message, mut chat, mut document, mut email, mut project), item| {
                 match item.entity_type {
                     SearchEntityType::Channels => {
                         channel_message.push(item);
@@ -216,9 +217,11 @@ where
                     SearchEntityType::Emails => {
                         email.push(item);
                     }
-                    _ => {}
+                    SearchEntityType::Projects => {
+                        project.push(item);
+                    }
                 }
-                (channel_message, chat, document, email)
+                (channel_message, chat, document, email, project)
             },
         );
 
@@ -227,6 +230,7 @@ where
             chat,
             document,
             email,
+            project,
         }
     }
 }
