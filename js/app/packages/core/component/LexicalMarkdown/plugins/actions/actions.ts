@@ -30,6 +30,7 @@ import {
   EquationNode,
   HorizontalRuleNode,
   ImageNode,
+  VideoNode,
 } from '@lexical-core';
 import { ListNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
@@ -203,7 +204,7 @@ export const ACTIONS: Action[] = [
         editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'all');
       });
     },
-    dependencies: [ImageNode],
+    dependencies: [ImageNode, VideoNode],
   },
   {
     id: 'video',
@@ -216,6 +217,7 @@ export const ACTIONS: Action[] = [
         editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'all');
       });
     },
+    dependencies: [ImageNode, VideoNode],
   },
   {
     id: 'link',
