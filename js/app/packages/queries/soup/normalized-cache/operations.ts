@@ -375,7 +375,6 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'chat' }, (r) => r.chat_id)
     .with({ type: 'channel' }, (r) => r.channel_id)
     .with({ type: 'email' }, (r) => r.thread_id)
-    .with({ type: 'project' }, (r) => r.id)
     .exhaustive();
 }
 

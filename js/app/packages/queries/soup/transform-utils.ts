@@ -28,7 +28,6 @@ import type {
   EmailSearchResult,
   ChatMessageSearchResult,
   ChannelSearchResult,
-  ProjectSearchResult,
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
 import type {
@@ -41,8 +40,7 @@ type InnerSearchResult =
   | DocumentSearchResult
   | EmailSearchResult
   | ChatMessageSearchResult
-  | ChannelSearchResult
-  | ProjectSearchResult;
+  | ChannelSearchResult;
 
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
@@ -306,26 +304,6 @@ export const useSearchResponseItemMapper = () => {
               search,
             };
           });
-      }
-
-      case 'project': {
-        if (!result.metadata || result.metadata.deleted_at) return [];
-        const search = getSearchData({
-          results: result.project_search_results,
-        });
-
-        return [
-          {
-            type: 'project',
-            id: result.id,
-            name: result.name,
-            ownerId: result.owner_id,
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            projectId: result.metadata?.parent_project_id ?? undefined,
-            search,
-          },
-        ];
       }
     }
   };
