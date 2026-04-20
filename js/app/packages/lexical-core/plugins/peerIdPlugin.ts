@@ -21,6 +21,9 @@ import { $isSerializedNode } from '../utils';
 
 /**
  * An update tag that signifies this update only included updates to the local status of nodes.
+ * Contract: updates carrying this tag MUST NOT mutate node content — collab providers skip
+ * syncing them entirely, so any content change would be silently dropped on other peers.
+ * Local ownership is per-peer by design and resolved independently on each client.
  */
 export const LOCAL_STATUS_TAG = 'local-status';
 
@@ -167,6 +170,8 @@ function registerPeerIdPlugin(editor: LexicalEditor, props: PeerIdProps) {
               }
             }
           },
+          // discrete: flush sync in the mutation listener so local resolves
+          // before downstream listeners read
           { discrete: true }
         );
       }
