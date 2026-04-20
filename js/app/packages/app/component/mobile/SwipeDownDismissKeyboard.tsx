@@ -3,7 +3,7 @@ import {
   virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
 import { isPlatform } from '@core/util/platform';
-import { onCleanup, onMount, Show } from 'solid-js';
+import { onCleanup, onMount } from 'solid-js';
 
 const SWIPE_DOWN_THRESHOLD = 5; // px of downward movement to register as a swipe down
 const ZONE_HEIGHT = 20; // px above keyboard that activates blur
