@@ -110,3 +110,21 @@ impl From<OpenSearchEntityType> for SearchIndex {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn index_name_matches_search_index() {
+        for variant in [
+            OpenSearchEntityType::Channels,
+            OpenSearchEntityType::Chats,
+            OpenSearchEntityType::Documents,
+            OpenSearchEntityType::Emails,
+        ] {
+            let from_index: SearchIndex = variant.clone().into();
+            assert_eq!(variant.index_name(), from_index.as_ref());
+        }
+    }
+}
