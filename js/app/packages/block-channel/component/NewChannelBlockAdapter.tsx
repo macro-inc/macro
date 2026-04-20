@@ -32,12 +32,11 @@ import {
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import {
-  CallAudioSink,
-  CallProvider,
   ChannelCallAutoJoin,
   ChannelCallButton,
   ChannelCallTab,
   useCall,
+  useCallContextOptional,
 } from '@channel/Call';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
@@ -129,8 +128,12 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     (isJoinCallRequested(props[CHANNEL_URL_PARAMS.joinCall]) ||
       isJoinCallRequested(searchParams[CHANNEL_URL_PARAMS.joinCall]));
 
+  const callCtx = useCallContextOptional();
+  const hasActiveCallHere =
+    callCtx?.isInCall() && callCtx.activeChannelId() === channelId;
+
   const [activeTab, setActiveTab] = createSignal<ChannelTabId>(
-    wantsJoinCall ? 'call' : DEFAULT_CHANNEL_TAB
+    wantsJoinCall || hasActiveCallHere ? 'call' : DEFAULT_CHANNEL_TAB
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
@@ -211,46 +214,38 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <CallProvider>
-        <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
-          <ChannelCallAutoJoin
-            channelId={channelId}
-            pendingJoinCall={pendingJoinCall}
-            onHandled={() => setPendingJoinCall(false)}
-          />
-          <div class="h-full flex flex-col px-2">
-            {/*
-              Mounted above <Switch> so remote call audio keeps playing when
-              the user switches from the Call tab to Messages / Attachments /
-              Participants. See CallAudioSink for details.
-            */}
-            <CallAudioSink />
-            <Switch>
-              <Match when={activeTab() === 'messages'}>
-                <NewChannel
-                  channelId={channelId}
-                  onHandleReady={onChannelReady}
-                  autofocus={!isPreview}
-                  {...convertTargetMessage(initialTargetMessageParams())}
-                />
-              </Match>
-              <Match when={activeTab() === 'attachments'}>
-                <ChannelAttachmentsTab channelId={channelId} />
-              </Match>
-              <Match when={activeTab() === 'participants'}>
-                <ChannelParticipantsTab channelId={channelId} />
-              </Match>
-              <Match when={activeTab() === 'call'}>
-                <ChannelCallTab
-                  channelId={channelId}
-                  pendingJoin={pendingJoinCall}
-                />
-              </Match>
-            </Switch>
-            <NewTop channelId={channelId} />
-          </div>
-        </ChannelTabProvider>
-      </CallProvider>
+      <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
+        <ChannelCallAutoJoin
+          channelId={channelId}
+          pendingJoinCall={pendingJoinCall}
+          onHandled={() => setPendingJoinCall(false)}
+        />
+        <div class="h-full flex flex-col px-2">
+          <Switch>
+            <Match when={activeTab() === 'messages'}>
+              <NewChannel
+                channelId={channelId}
+                onHandleReady={onChannelReady}
+                autofocus={!isPreview}
+                {...convertTargetMessage(initialTargetMessageParams())}
+              />
+            </Match>
+            <Match when={activeTab() === 'attachments'}>
+              <ChannelAttachmentsTab channelId={channelId} />
+            </Match>
+            <Match when={activeTab() === 'participants'}>
+              <ChannelParticipantsTab channelId={channelId} />
+            </Match>
+            <Match when={activeTab() === 'call'}>
+              <ChannelCallTab
+                channelId={channelId}
+                pendingJoin={pendingJoinCall}
+              />
+            </Match>
+          </Switch>
+          <NewTop channelId={channelId} />
+        </div>
+      </ChannelTabProvider>
     </EntityPermissionsGate>
   );
 }

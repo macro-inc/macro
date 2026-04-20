@@ -55,6 +55,7 @@ import {
 } from '@app/component/app-sidebar/invite-modal';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
+import { useCallContextOptional } from '@channel/Call/CallContext';
 
 interface SidebarItem {
   id: ListView;
@@ -142,6 +143,7 @@ type SidebarHotkeyDeps = {
   isSlim: () => boolean;
   onOpenChange: (open: boolean) => void;
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
+  callCtx?: ReturnType<typeof useCallContextOptional>;
 };
 
 export const registerSidebarHotkeys = ({
@@ -152,6 +154,7 @@ export const registerSidebarHotkeys = ({
   hotkeyVisible,
   setHotkeyVisible,
   resetHotkeysState,
+  callCtx,
 }: SidebarHotkeyDeps) => {
   const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
   const debounceSetHotkeyVisible = debounce(() => setHotkeyVisible(true), 200);
@@ -261,17 +264,16 @@ export const registerSidebarHotkeys = ({
         }
       }
 
-      openWithSplit(
-        {
-          type: 'component',
-          id: link.id,
-        },
-        {
-          preferNewSplit: e?.shiftKey,
-          mergeHistory: false,
-          allowDuplicate: true,
-        }
-      );
+      const resolvedContent =
+        link.id === 'calls' && callCtx?.isInCall() && callCtx.activeChannelId()
+          ? ({ type: 'channel', id: callCtx.activeChannelId()! } as const)
+          : ({ type: 'component', id: link.id } as const);
+
+      openWithSplit(resolvedContent, {
+        preferNewSplit: e?.shiftKey,
+        mergeHistory: false,
+        allowDuplicate: true,
+      });
       return true;
     };
 
@@ -361,6 +363,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
+  const callCtx = useCallContextOptional();
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
@@ -429,6 +432,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     isSlim,
     onOpenChange: props.onOpenChange,
     openWithSplit: layout.openWithSplit,
+    callCtx,
   });
 
   return (
@@ -564,6 +568,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
+  const callCtx = useCallContextOptional();
 
   const location = useLocation();
 
@@ -580,11 +585,15 @@ const SidebarLink = (props: SidebarLinkProps) => {
     return activeContent?.id === props.id;
   };
 
-  const content = () =>
-    ({
-      type: 'component',
-      id: props.id,
-    }) as const;
+  const content = () => {
+    if (props.id === 'calls') {
+      const channelId = callCtx?.activeChannelId();
+      if (callCtx?.isInCall() && channelId) {
+        return { type: 'channel' as const, id: channelId };
+      }
+    }
+    return { type: 'component' as const, id: props.id };
+  };
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? true;
@@ -662,13 +671,22 @@ const SidebarLink = (props: SidebarLinkProps) => {
           }}
         >
           <Show when={props.icon}>
-            <div class="shrink-0 [&_svg]:size-4">
+            <div class="flex shrink-0 [&_svg]:size-4">
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+              
             </div>
           </Show>
-          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-            {props.label}
-          </span>
+
+          <div class="flex items-center gap-1">
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+              {props.label}            
+            </span>
+
+            <Show when={props.id === 'calls' && callCtx?.isInCall()}>
+              <span class="size-1.5 rounded-full bg-task animate-pulse" />
+            </Show>
+          </div>
+          
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">

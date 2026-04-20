@@ -35,6 +35,13 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
       room.off(RoomEvent.Disconnected, handleDisconnect);
   }
 
+  // If the call is already active for this channel (e.g. the user navigated
+  // away and came back), eagerly attach the disconnect listener so onLeave
+  // fires when the call ends.
+  if (callCtx.isInCall() && callCtx.activeChannelId() === channelId()) {
+    attachDisconnectListener();
+  }
+
   onCleanup(() => cleanupDisconnectListener?.());
 
   async function joinCall() {

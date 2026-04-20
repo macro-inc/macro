@@ -90,6 +90,7 @@ import {
   useAnalytics,
 } from '@app/component/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { CallProvider } from '@channel/Call/CallContext';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -437,30 +438,32 @@ export function Root() {
                 <UserInfoSideEffects />
                 <ConfiguredGlobalAppStateProvider>
                   <ChannelsContextProvider>
-                    <QuickAccessProvider>
-                      <SearchProvider>
-                        <ChatAttachmentsInit />
-                        <ReactiveFavicon />
-                        <Title>{tabTitle()}</Title>
-                        <MacroJump />
-                        <Visor />
-                        <Suspense>
-                          <IsomorphicRouter
-                            transformUrl={transformShortIdInUrlPathname}
-                            root={Layout}
-                            rootPreload={rootPreload}
-                            base={ROUTER_BASE}
-                          >
-                            {{
-                              path: '/',
-                              component: TauriRouteListener,
-                              children: ROUTES,
-                            }}
-                          </IsomorphicRouter>
-                        </Suspense>
-                        <ToastRegion />
-                      </SearchProvider>
-                    </QuickAccessProvider>
+                    <CallProvider>   
+                      <QuickAccessProvider>
+                        <SearchProvider>
+                          <ChatAttachmentsInit />
+                          <ReactiveFavicon />
+                          <Title>{tabTitle()}</Title>
+                          <MacroJump />
+                          <Visor />
+                          <Suspense>
+                            <IsomorphicRouter
+                              transformUrl={transformShortIdInUrlPathname}
+                              root={Layout}
+                              rootPreload={rootPreload}
+                              base={ROUTER_BASE}
+                            >
+                              {{
+                                path: '/',
+                                component: TauriRouteListener,
+                                children: ROUTES,
+                              }}
+                            </IsomorphicRouter>
+                          </Suspense>
+                          <ToastRegion />
+                        </SearchProvider>
+                      </QuickAccessProvider>
+                    </CallProvider>
                   </ChannelsContextProvider>
                 </ConfiguredGlobalAppStateProvider>
               </UserContextProvider>
