@@ -1,6 +1,9 @@
 import { isOk } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
-import { authServiceClient } from '@service-auth/client';
+import {
+  authServiceClient,
+  type PatchSubscriptionTierErrorCode,
+} from '@service-auth/client';
 import type { StripeProductTier } from '@service-auth/generated/schemas/stripeProductTier';
 
 /**
@@ -85,13 +88,33 @@ export const stripeServiceClient = {
     return result[1];
   },
   /**
-   * Changes the current user's subscription tier. Returns the raw MaybeResult so callers
-   * can switch on the error code (see `PatchSubscriptionTierErrorCode`) to pick a UX-
-   * appropriate toast. Callers should invalidate the user info query after success.
+   * Changes the current user's subscription tier. Returns a narrow discriminated union so
+   * callers get a type-checked error `code` without drilling into the MaybeResult tuple
+   * shape (`result[0]?.[0]?.code`), which would silently fall through to the default case
+   * if the shape ever changes. Callers should invalidate the user info query on success.
    */
-  updateSubscriptionTier: async (tier: StripeProductTier) => {
-    return authServiceClient.patchSubscriptionTier({ newTier: tier });
+  updateSubscriptionTier: async (
+    tier: StripeProductTier
+  ): Promise<UpdateSubscriptionTierResult> => {
+    const result = await authServiceClient.patchSubscriptionTier({
+      newTier: tier,
+    });
+    if (isOk(result)) return { ok: true };
+    const code = result[0]?.code;
+    switch (code) {
+      case 'TIER_UNCHANGED':
+      case 'USER_IN_TEAM':
+      case 'NO_SUBSCRIPTION':
+      case 'UPDATE_IN_PROGRESS':
+        return { ok: false, code };
+      default:
+        return { ok: false, code: 'UNKNOWN' };
+    }
   },
 };
+
+export type UpdateSubscriptionTierResult =
+  | { ok: true }
+  | { ok: false; code: PatchSubscriptionTierErrorCode | 'UNKNOWN' };
 
 registerClient('stripe', stripeServiceClient);

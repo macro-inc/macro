@@ -2,7 +2,6 @@ import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { usePermissions } from '@core/context/user';
-import { isOk } from '@core/util/maybeResult';
 import IconX from '@icon/regular/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
@@ -37,11 +36,17 @@ const PaywallComponent = (props: PaywallComponent) => {
   });
 
   const [selectedTier, setSelectedTier] = createSignal<PlanTier>('sonnet');
-  // Once the user's current tier is known (permissions load async), highlight it so
-  // the UI opens on the card they're actually on.
+  // Seed `selectedTier` from `currentTier` once, the first time permissions resolve.
+  // Re-syncing on every `currentTier` change would clobber the user's active selection
+  // if permissions later refetch (post-update invalidation, multi-tab, etc.).
+  let seededFromCurrentTier = false;
   createEffect(() => {
+    if (seededFromCurrentTier) return;
     const tier = currentTier();
-    if (tier) setSelectedTier(tier);
+    if (tier) {
+      setSelectedTier(tier);
+      seededFromCurrentTier = true;
+    }
   });
 
   const [updating, setUpdating] = createSignal(false);
@@ -89,15 +94,13 @@ const PaywallComponent = (props: PaywallComponent) => {
     setUpdating(true);
     try {
       const result = await stripeServiceClient.updateSubscriptionTier(next);
-      if (!isOk(result)) {
+      if (!result.ok) {
         // Messages mirror the backend's StripeOperationError `Display` impls, adapted
-        // to second-person for UI. Switch on the semantic code, not the body text.
-        const code = result[0]?.[0]?.code;
-        switch (code) {
+        // to second-person for UI. Switch on `result.code` — TS enforces exhaustiveness
+        // against `PatchSubscriptionTierErrorCode | 'UNKNOWN'`.
+        switch (result.code) {
           case 'USER_IN_TEAM':
-            toast.failure(
-              "Contact your team owner to update."
-            );
+            toast.failure('Contact your team owner to update.');
             break;
           case 'UPDATE_IN_PROGRESS':
             toast.failure(
@@ -110,8 +113,9 @@ const PaywallComponent = (props: PaywallComponent) => {
           case 'TIER_UNCHANGED':
             toast.failure('Subscription is already on the requested tier.');
             break;
-          default:
+          case 'UNKNOWN':
             toast.failure('Failed to update subscription.');
+            break;
         }
         return;
       }
