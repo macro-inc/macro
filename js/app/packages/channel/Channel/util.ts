@@ -41,4 +41,3 @@ export function isNewMessage(
     ctx.userId !== message.sender_id
   );
 }
-
