@@ -7,7 +7,7 @@ import {
 import {
   ActionCategory,
   type Action,
-} from '@core/component/LexicalMarkdown/plugins/actions/actions';
+} from '@core/component/LexicalMarkdown/plugins/actions/types';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';

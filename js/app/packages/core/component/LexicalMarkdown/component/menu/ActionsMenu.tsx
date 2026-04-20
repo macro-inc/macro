@@ -22,7 +22,8 @@ import {
   CLOSE_ACTION_SEARCH_COMMAND,
   REMOVE_ACTION_SEARCH_COMMAND,
 } from '../../plugins';
-import { ACTIONS, type Action } from '../../plugins/actions/actions';
+import { ACTIONS } from '../../plugins/actions/actions';
+import type { Action } from '../../plugins/actions/types';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';

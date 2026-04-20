@@ -1,7 +1,7 @@
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { PluginManager, SelectionData } from '../plugins';
-import type { Action } from '../plugins/actions/actions';
+import type { Action } from '../plugins/actions/types';
 import { buildHandleFromConfig } from './buildHandleFromConfig';
 import type {
   ActionsOptions,

@@ -11,7 +11,7 @@ import type {
   PluginManager,
   SelectionData,
 } from '../plugins';
-import type { Action } from '../plugins/actions/actions';
+import type { Action } from '../plugins/actions/types';
 import type { createMenuOperations } from '../shared/inlineMenu';
 import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 
