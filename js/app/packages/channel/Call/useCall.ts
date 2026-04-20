@@ -52,37 +52,32 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
 
     try {
       const [tokenResponse] = await Promise.all([
-        joinMutation.mutateAsync(id), 
+        joinMutation.mutateAsync(id),
         new Promise((resolve) => setTimeout(resolve, 300)),
       ]);
 
       await callCtx.connect(tokenResponse);
-      
+
       attachDisconnectListener();
     } catch (e) {
       callCtx.rollbackOptimisticJoin();
+      callCtx.setJoinError(
+        'Unable to join the call. Please check your connection.'
+      );
+
+      if (joinMutation.isSuccess) {
+        try {
+          await leaveMutation.mutateAsync(id);
+        } catch (leaveErr) {
+          console.error(
+            'Failed to roll back join after connect failure',
+            leaveErr
+          );
+        }
+      }
+
       throw e;
     }
-
-    attachDisconnectListener();
-    
-    // const tokenResponse = await joinMutation.mutateAsync(id);
-    // try {
-    //   await callCtx.connect(tokenResponse);
-    // } catch (e) {
-    //   // Roll back the backend join so it doesn't think we're in the call
-    //   try {
-    //     await leaveMutation.mutateAsync(id);
-    //   } catch (leaveErr) {
-    //     console.error(
-    //       'Failed to roll back join after connect failure',
-    //       leaveErr
-    //     );
-    //   }
-    //   throw e;
-    // }
-    // attachDisconnectListener();
-    // options?.onJoin?.();
   }
 
   async function leaveCall() {
@@ -107,6 +102,7 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     isInCall: callCtx.isInCall,
     isInThisChannel: () =>
       callCtx.isInCall() && callCtx.activeChannelId() === channelId(),
+    joinError: callCtx.joinError,
     callCtx,
   };
 }

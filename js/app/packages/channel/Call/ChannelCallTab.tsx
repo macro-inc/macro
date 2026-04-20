@@ -1,4 +1,6 @@
 import { type Accessor, Show } from 'solid-js';
+import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
+import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { useCall } from './useCall';
 import { CallOverlay } from './CallOverlay';
 
@@ -12,18 +14,45 @@ export function ChannelCallTab(props: {
    */
   pendingJoin?: Accessor<boolean>;
 }) {
-  const call = useCall(() => props.channelId);
+  const { setActiveTab } = useChannelTab();
+  // Match ChannelCallButton / ChannelCallAutoJoin so leaving from the
+  // overlay (or disconnect) switches back to Messages — not only when
+  // the join was initiated from the header button.
+  const call = useCall(() => props.channelId, {
+    onJoin: () => setActiveTab('call'),
+    onLeave: () => setActiveTab(DEFAULT_CHANNEL_TAB),
+  });
+
+  const handleRetry = async () => {
+    try {
+      await call.joinCall();
+    } catch {
+      // joinError is set inside useCall
+    }
+  };
 
   return (
     <Show
       when={call.isInThisChannel()}
       fallback={
-        // This fallback now only shows for the brief moment before
-        // beginOptimisticJoin fires (e.g. deep-link auto-join where
-        // pendingJoin is set but joinCall hasn't been called yet)
-        <Show when={props.pendingJoin?.()}>
-          <div class="flex size-full items-center justify-center text-ink-muted">
-            Joining call...
+        <Show
+          when={call.joinError()}
+          fallback={
+            <Show when={props.pendingJoin?.()}>
+              <div class="flex size-full items-center justify-center text-ink-muted">
+                Joining call...
+              </div>
+            </Show>
+          }
+        >
+          <div class="flex size-full flex-col items-center justify-center gap-3 text-ink-muted">
+            <p>{call.joinError()}</p>
+            <button
+              onClick={handleRetry}
+              class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors"
+            >
+              Try again
+            </button>
           </div>
         </Show>
       }

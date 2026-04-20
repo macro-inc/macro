@@ -51,6 +51,7 @@ type CallStoreState = {
   activeVideoInputDeviceId: string | null;
   isNoiseSuppressed: boolean;
   optimisticJoinChannelId: string | null;
+  joinError: string | null;
 };
 
 const initialState: CallStoreState = {
@@ -70,6 +71,7 @@ const initialState: CallStoreState = {
   activeVideoInputDeviceId: null,
   isNoiseSuppressed: false,
   optimisticJoinChannelId: null,
+  joinError: null,
 };
 
 export type CallState = {
@@ -133,6 +135,10 @@ export type CallState = {
   rollbackOptimisticJoin: () => void;
   /** Whether we're in the optimistic join window */
   isConnecting: () => boolean;
+  /** Error message from a failed join attempt */
+  joinError: () => string | null;
+  /** Set the join error message */
+  setJoinError: (error: string | null) => void;
 };
 
 const CallContext = createContext<CallState>();
@@ -544,11 +550,16 @@ function createCallState() {
   // --- optimistic join ---
 
   function beginOptimisticJoin(channelId: string) {
+    setStore('joinError', null);
     setStore('optimisticJoinChannelId', channelId);
   }
 
   function rollbackOptimisticJoin() {
     setStore('optimisticJoinChannelId', null);
+  }
+
+  function setJoinError(error: string | null) {
+    setStore('joinError', error);
   }
 
   // --- cleanup ---
@@ -618,6 +629,8 @@ function createCallState() {
     toggleNoiseSuppression,
     beginOptimisticJoin,
     rollbackOptimisticJoin,
+    joinError: () => store.joinError,
+    setJoinError,
   };
 
   return state;
