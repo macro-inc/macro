@@ -1770,6 +1770,7 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_user_id",
+ "macro_uuid",
  "mockall",
  "model-entity",
  "model-error-response",

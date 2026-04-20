@@ -139,6 +139,16 @@ pub struct TranscriptSegmentRequest {
     pub is_final: bool,
 }
 
+/// Edit call request
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EditCallRecordRequest {
+    /// Updated share permissions.
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+}
+
 /// A transcript segment as returned in a [`CallRecord`].
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
