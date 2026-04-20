@@ -47,11 +47,10 @@ export function getThreadId(group: NotificationStack): string {
  * Stacking rules:
  * - Replies, thread-mentions (channel_mention with threadId), and the root send
  *   for a thread all group into a single thread stack.
- * - Root-level new message notifications are grouped into a singlestack.
+ * - Root-level new message notifications are grouped into a single stack.
  * - Root mentions (channel_mention without threadId) each form their own stack.
  * - Any send/reply whose messageId matches a mention's messageId is shadowed
  *   (the mention is more informative).
-
  */
 export function stackNotifications(
   notifications: UnifiedNotification[]
@@ -67,7 +66,7 @@ export function stackNotifications(
   const rootMentions = allMentions.filter((n) =>
     match(n.notification_metadata)
       .with({ tag: 'channel_mention' }, (m) => !m.content.threadId)
-      .otherwise(() => true)
+      .otherwise(() => false)
   );
   const threadMentions = allMentions.filter((n) =>
     match(n.notification_metadata)
@@ -155,7 +154,7 @@ export function stackNotifications(
         { tag: 'channel_mention' },
         (m) => !activeThreadIds.has(m.content.messageId)
       )
-      .otherwise(() => true)
+      .otherwise(() => false)
   );
 
   const docMentions = notifications.filter(byTag('document_mention'));
