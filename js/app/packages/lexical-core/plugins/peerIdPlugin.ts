@@ -154,18 +154,21 @@ function registerPeerIdPlugin(editor: LexicalEditor, props: PeerIdProps) {
         if (mutation === 'created') createdNodes.push(nodeKey);
       }
       if (createdNodes.length > 0) {
-        editor.update(() => {
-          $addUpdateTag(LOCAL_STATUS_TAG);
-          for (const key of createdNodes) {
-            const node = $getNodeByKey(key);
-            if (!node) continue;
-            const nodePeerId = $getPeerId(node);
-            const nodeLocalState = $getLocal(node);
-            if (nodePeerId !== null && nodeLocalState === null) {
-              $setLocal(node, nodePeerId === props.peerId());
+        editor.update(
+          () => {
+            $addUpdateTag(LOCAL_STATUS_TAG);
+            for (const key of createdNodes) {
+              const node = $getNodeByKey(key);
+              if (!node) continue;
+              const nodePeerId = $getPeerId(node);
+              const nodeLocalState = $getLocal(node);
+              if (nodePeerId !== null && nodeLocalState === null) {
+                $setLocal(node, nodePeerId === props.peerId());
+              }
             }
-          }
-        });
+          },
+          { discrete: true }
+        );
       }
     };
   };
