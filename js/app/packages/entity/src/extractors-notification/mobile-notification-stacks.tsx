@@ -18,6 +18,7 @@ import { UnreadIndicator } from '../components/UnreadIndicator';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
+import { useMutationUndoContext } from '@queries/undo';
 import { cn } from '@ui/utils/classname';
 import { NotificationContent } from './notification-content';
 import { NotificationTimestamp } from './notification-timestamp';
@@ -90,6 +91,7 @@ function MobileStackRow(props: {
 }) {
   const ctx = useContext(EntityRowContext);
   const notificationSource = useGlobalNotificationSource();
+  const undoCtx = useMutationUndoContext();
   const stackEntityId = () => getMostRecentNotification(props.stack).id;
   const unread = () => isNotificationUnread(props.stack);
 
@@ -98,6 +100,8 @@ function MobileStackRow(props: {
 
     const notifications = getAllNotificationsFromGroup(props.stack);
     const handle = markNotificationsDone(notifications.map((n) => n.id));
+
+    undoCtx.pushUndo({ undo: handle.undo, label: 'Mark Done' });
 
     const toastId = toast.success(
       'Marked as done',
@@ -108,7 +112,9 @@ function MobileStackRow(props: {
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId != null) toast.dismiss(toastId);
-            handle.undo().catch(() => toast.failure('Failed to undo'));
+            undoCtx.undo({
+              onError: () => toast.failure('Failed to undo'),
+            });
           },
         },
       ],

@@ -2,6 +2,7 @@ import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-cl
 import { toast } from '@core/component/Toast/Toast';
 import { type EntityData, isTaskEntity } from '@entity';
 import type { NotificationSource } from '@notifications';
+import { useMutationUndoContext } from '@queries/undo';
 import type { SoupState } from '../create-soup-state';
 import { markEntitiesDone } from '@app/component/next-soup/utils';
 
@@ -12,6 +13,7 @@ type MakeMarkDoneOptions = {
 
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
+  const undoCtx = useMutationUndoContext();
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'channel_message') return false;
@@ -35,6 +37,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       notificationSource: notificationSource(),
     });
 
+    undoCtx.pushUndo({ undo: handle.undo, label: 'Mark Done' });
+
     const toastId = toast.success(
       entities.length > 1
         ? `Marked ${entities.length} items as done`
@@ -46,7 +50,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId != null) toast.dismiss(toastId);
-            handle.undo().catch(() => toast.failure('Failed to undo'));
+            undoCtx.undo({
+              onError: () => toast.failure('Failed to undo'),
+            });
           },
         },
       ],

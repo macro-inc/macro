@@ -6,6 +6,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/regular/check.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { useMutationUndoContext } from '@queries/undo';
 import {
   getChannelNotificationParams,
   getMostRecentNotification,
@@ -56,6 +57,7 @@ function NotificationStackRow(props: {
   content?: JSX.Element;
 }) {
   const notificationSource = useGlobalNotificationSource();
+  const undoCtx = useMutationUndoContext();
   const unread = () => isNotificationUnread(props.stack);
 
   const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
@@ -77,6 +79,8 @@ function NotificationStackRow(props: {
     e?.stopPropagation();
     const handle = markStackAsDone();
 
+    undoCtx.pushUndo({ undo: handle.undo, label: 'Mark Done' });
+
     const toastId = toast.success(
       'Marked as done',
       undefined,
@@ -86,7 +90,9 @@ function NotificationStackRow(props: {
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId != null) toast.dismiss(toastId);
-            handle.undo().catch(() => toast.failure('Failed to undo'));
+            undoCtx.undo({
+              onError: () => toast.failure('Failed to undo'),
+            });
           },
         },
       ],
