@@ -4,9 +4,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/regular/check.svg';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { useMutationUndoContext } from '@queries/undo';
 import {
   getChannelNotificationParams,
   getMostRecentNotification,
@@ -57,7 +55,6 @@ function NotificationStackRow(props: {
   content?: JSX.Element;
 }) {
   const notificationSource = useGlobalNotificationSource();
-  const undoCtx = useMutationUndoContext();
   const unread = () => isNotificationUnread(props.stack);
 
   const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
@@ -77,31 +74,7 @@ function NotificationStackRow(props: {
 
   const handleMarkAsDone = (e?: PointerEvent | MouseEvent) => {
     e?.stopPropagation();
-    const handle = markStackAsDone();
-
-    undoCtx.pushUndo({ undo: handle.undo, label: 'Mark Done' });
-
-    const toastId = toast.success(
-      'Marked as done',
-      undefined,
-      [
-        {
-          label: 'Undo',
-          icon: ArrowCounterClockwise,
-          onClick: () => {
-            if (toastId != null) toast.dismiss(toastId);
-            undoCtx.undo({
-              onError: () => toast.failure('Failed to undo'),
-            });
-          },
-        },
-      ],
-      10_000
-    );
-
-    handle.done.catch(() => {
-      toast.failure('Failed to mark as done');
-    });
+    markStackAsDone();
   };
 
   const handleMarkAsRead = async () => {

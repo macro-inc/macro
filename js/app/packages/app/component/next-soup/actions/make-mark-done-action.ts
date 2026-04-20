@@ -2,18 +2,68 @@ import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-cl
 import { toast } from '@core/component/Toast/Toast';
 import { type EntityData, isTaskEntity } from '@entity';
 import type { NotificationSource } from '@notifications';
-import { useMutationUndoContext } from '@queries/undo';
+import { useMutationUndoContext, useUndoableMutation } from '@queries/undo';
+import {
+  type MarkDoneHandle,
+  markEntitiesDone,
+} from '@app/component/next-soup/utils';
 import type { SoupState } from '../create-soup-state';
-import { markEntitiesDone } from '@app/component/next-soup/utils';
 
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
   notificationSource: () => NotificationSource;
 };
 
+type MarkDoneVariables = { entities: EntityData[] };
+type MarkDoneContext = { handle: MarkDoneHandle };
+
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
   const undoCtx = useMutationUndoContext();
+
+  const mutation = useUndoableMutation<
+    void,
+    Error,
+    MarkDoneVariables,
+    MarkDoneContext
+  >(() => ({
+    // onMutate does the optimistic work and starts the API calls via the
+    // handle. mutationFn is a no-op so the mutation resolves immediately and
+    // onSuccess fires (pushing the undo entry) before the user can react.
+    mutationFn: async () => {},
+    onMutate: (variables) => {
+      const handle = markEntitiesDone({
+        entities: variables.entities,
+        notificationSource: notificationSource(),
+      });
+      handle.done.catch(() => toast.failure('Failed to mark as done'));
+      return { handle };
+    },
+    onSuccess: (_data, variables) => {
+      const count = variables.entities.length;
+      const toastId = toast.success(
+        count > 1 ? `Marked ${count} items as done` : 'Marked as done',
+        undefined,
+        [
+          {
+            label: 'Undo',
+            icon: ArrowCounterClockwise,
+            onClick: () => {
+              if (toastId != null) toast.dismiss(toastId);
+              undoCtx.undo({
+                onError: () => toast.failure('Failed to undo'),
+              });
+            },
+          },
+        ],
+        10_000
+      );
+    },
+    undoFn: async (_variables, context) => {
+      await context?.handle.undo();
+    },
+    undoLabel: 'Mark Done',
+  }));
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'channel_message') return false;
@@ -32,36 +82,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   };
 
   const execute = async (entities: EntityData[]) => {
-    const handle = markEntitiesDone({
-      entities,
-      notificationSource: notificationSource(),
-    });
-
-    undoCtx.pushUndo({ undo: handle.undo, label: 'Mark Done' });
-
-    const toastId = toast.success(
-      entities.length > 1
-        ? `Marked ${entities.length} items as done`
-        : 'Marked as done',
-      undefined,
-      [
-        {
-          label: 'Undo',
-          icon: ArrowCounterClockwise,
-          onClick: () => {
-            if (toastId != null) toast.dismiss(toastId);
-            undoCtx.undo({
-              onError: () => toast.failure('Failed to undo'),
-            });
-          },
-        },
-      ],
-      10_000
-    );
-
-    handle.done.catch(() => {
-      toast.failure('Failed to mark as done');
-    });
+    await mutation.mutateAsync({ entities });
   };
 
   const executeWithSoup = async (

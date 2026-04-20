@@ -3,11 +3,8 @@ import { reconcile, createStore } from 'solid-js/store';
 import {
   type NotificationStack,
   getMostRecentNotification,
-  getAllNotificationsFromGroup,
-  markNotificationsDone,
   openNotification,
 } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { WithNotification } from '../types/notification';
 import { isChannelEntity, type EntityData } from '../types/entity';
@@ -17,9 +14,8 @@ import { Entity } from '../entity';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { toast } from '@core/component/Toast/Toast';
-import { useMutationUndoContext } from '@queries/undo';
 import { cn } from '@ui/utils/classname';
+import { useNotificationStackActions } from './notification-actions';
 import { NotificationContent } from './notification-content';
 import { NotificationTimestamp } from './notification-timestamp';
 
@@ -91,39 +87,15 @@ function MobileStackRow(props: {
 }) {
   const ctx = useContext(EntityRowContext);
   const notificationSource = useGlobalNotificationSource();
-  const undoCtx = useMutationUndoContext();
+  const { markStackAsDone } = useNotificationStackActions({
+    stack: props.stack,
+  });
   const stackEntityId = () => getMostRecentNotification(props.stack).id;
   const unread = () => isNotificationUnread(props.stack);
 
   const handleSwipeLeft = async () => {
     await ctx?.collapseEntity(stackEntityId());
-
-    const notifications = getAllNotificationsFromGroup(props.stack);
-    const handle = markNotificationsDone(notifications.map((n) => n.id));
-
-    undoCtx.pushUndo({ undo: handle.undo, label: 'Mark Done' });
-
-    const toastId = toast.success(
-      'Marked as done',
-      undefined,
-      [
-        {
-          label: 'Undo',
-          icon: ArrowCounterClockwise,
-          onClick: () => {
-            if (toastId != null) toast.dismiss(toastId);
-            undoCtx.undo({
-              onError: () => toast.failure('Failed to undo'),
-            });
-          },
-        },
-      ],
-      10_000
-    );
-
-    handle.done.catch(() => {
-      toast.failure('Failed to mark as done');
-    });
+    markStackAsDone();
   };
 
   const handleClick = async (e: MouseEvent) => {
