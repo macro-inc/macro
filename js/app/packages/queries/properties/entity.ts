@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
-import {  useMutation, useQuery } from '@tanstack/solid-query';
+import { useMutation, useQuery } from '@tanstack/solid-query';
 import { batch, type Accessor } from 'solid-js';
 import {
   entityPropertyFromApi,
