@@ -20,6 +20,7 @@ import type {
   PropertyApiValues,
 } from '@core/component/Properties/types';
 import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
+import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
@@ -106,17 +107,42 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     onCleanup(unregister);
   });
 
-  // Filter properties to show default pinned and user-pinned properties
+  // Mock createdBy as a prop for display in tasks.
+  const docMetadataQuery = useDocumentMetadataQuery(() => blockId);
+  const createdByProperty = createMemo<Property | null>(() => {
+    if (entityType !== 'TASK') return null;
+    const ownerId = docMetadataQuery.data?.owner;
+    if (!ownerId) return null;
+    const now = new Date();
+    return {
+      propertyId: `${blockId}-created-by`,
+      propertyDefinitionId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+      displayName: 'Created By',
+      isMultiSelect: false,
+      isMetadata: true,
+      owner: { scope: 'system' },
+      specificEntityType: 'USER',
+      createdAt: now,
+      updatedAt: now,
+      valueType: 'ENTITY',
+      value: [{ entity_id: ownerId, entity_type: 'USER' }],
+    };
+  });
+
   const filteredPinnedProperties = createMemo(() => {
     const allProps = properties();
     const pinnedIds = pinnedPropertyIds();
     const defaultPinnedIds = getDefaultPinnedProperties(blockName);
 
-    return allProps.filter(
+    const pinned = allProps.filter(
       (prop) =>
-        defaultPinnedIds.includes(prop.propertyDefinitionId) ||
-        pinnedIds.includes(prop.propertyId)
+        !prop.isMetadata &&
+        (defaultPinnedIds.includes(prop.propertyDefinitionId) ||
+          pinnedIds.includes(prop.propertyId))
     );
+
+    const createdBy = createdByProperty();
+    return createdBy ? [createdBy, ...pinned] : pinned;
   });
 
   // Track properties added via the selector so we can pin them as soon as
