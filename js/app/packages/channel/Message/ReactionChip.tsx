@@ -101,6 +101,7 @@ export function ReactionChip(props: ReactionChipProps) {
             )}
             disabled={!props.interactive}
             onClick={(event) => {
+              event.stopPropagation();
               props.onClick?.(event);
             }}
           >

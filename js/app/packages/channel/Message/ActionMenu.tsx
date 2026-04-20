@@ -112,7 +112,10 @@ export function ActionMenu(props: ActionMenuProps) {
         class={props.class}
         persistentVisible={emojiMenuOpen() || !!selection?.isSelected}
       >
-        <div class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets -space-x-1">
+        <div
+          class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets -space-x-1"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Show when={hasReactAction()}>
             <For each={QUICK_REACTION_EMOJIS}>
               {(emoji) => (
