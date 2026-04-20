@@ -1,6 +1,7 @@
 import { isOk } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
 import { authServiceClient } from '@service-auth/client';
+import type { StripeProductTier } from '@service-auth/generated/schemas/stripeProductTier';
 
 /**
  * Gets Meta _fbp (browser ID) and _fbc (click ID) values from cookies set by the Meta Pixel.
@@ -82,6 +83,14 @@ export const stripeServiceClient = {
     }
 
     return result[1];
+  },
+  /**
+   * Changes the current user's subscription tier. Returns the raw MaybeResult so callers
+   * can switch on the error code (see `PatchSubscriptionTierErrorCode`) to pick a UX-
+   * appropriate toast. Callers should invalidate the user info query after success.
+   */
+  updateSubscriptionTier: async (tier: StripeProductTier) => {
+    return authServiceClient.patchSubscriptionTier({ newTier: tier });
   },
 };
 

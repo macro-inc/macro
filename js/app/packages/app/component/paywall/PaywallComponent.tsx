@@ -1,8 +1,12 @@
 import { useHasPaidAccess } from '@core/auth';
+import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
+import { usePermissions } from '@core/context/user';
+import { isOk } from '@core/util/maybeResult';
 import IconX from '@icon/regular/x.svg';
+import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { useAnalytics } from '@app/component/analytics-context';
 import { PLANS, type PlanTier } from './plans';
 
@@ -17,9 +21,30 @@ interface PaywallComponent {
 
 const PaywallComponent = (props: PaywallComponent) => {
   const analytics = useAnalytics();
+  const permissions = usePermissions();
+  const hasPaid = useHasPaidAccess();
+
+  // Tier a paying user is currently subscribed to, derived from RBAC permissions
+  // (sub_opus grants write:opus; sub_sonnet grants write:sonnet + write:haiku;
+  // sub_haiku grants write:haiku — so check highest-to-lowest).
+  const currentTier = createMemo((): PlanTier | undefined => {
+    if (!hasPaid()) return undefined;
+    const perms = permissions();
+    if (perms.includes('write:opus')) return 'opus';
+    if (perms.includes('write:sonnet')) return 'sonnet';
+    if (perms.includes('write:haiku')) return 'haiku';
+    return undefined;
+  });
 
   const [selectedTier, setSelectedTier] = createSignal<PlanTier>('sonnet');
-  const hasPaid = useHasPaidAccess();
+  // Once the user's current tier is known (permissions load async), highlight it so
+  // the UI opens on the card they're actually on.
+  createEffect(() => {
+    const tier = currentTier();
+    if (tier) setSelectedTier(tier);
+  });
+
+  const [updating, setUpdating] = createSignal(false);
 
   const handleCheckout = async (tier: PlanTier) => {
     try {
@@ -57,6 +82,49 @@ const PaywallComponent = (props: PaywallComponent) => {
     handleCheckout(selectedTier());
   };
 
+  const handleUpdateTier = async () => {
+    const next = selectedTier();
+    const prev = currentTier();
+    if (!prev || next === prev) return;
+    setUpdating(true);
+    try {
+      const result = await stripeServiceClient.updateSubscriptionTier(next);
+      if (!isOk(result)) {
+        // Messages mirror the backend's StripeOperationError `Display` impls, adapted
+        // to second-person for UI. Switch on the semantic code, not the body text.
+        const code = result[0]?.[0]?.code;
+        switch (code) {
+          case 'USER_IN_TEAM':
+            toast.failure(
+              "Contact your team owner to update."
+            );
+            break;
+          case 'UPDATE_IN_PROGRESS':
+            toast.failure(
+              'Another subscription update is already in progress. Please try again in a moment.'
+            );
+            break;
+          case 'NO_SUBSCRIPTION':
+            toast.failure("You don't have an active subscription to update.");
+            break;
+          case 'TIER_UNCHANGED':
+            toast.failure('Subscription is already on the requested tier.');
+            break;
+          default:
+            toast.failure('Failed to update subscription.');
+        }
+        return;
+      }
+      analytics.track('subscription_tier_updated', { from: prev, to: next });
+      // Refetches permissions so `currentTier` reflects the new tier and this button
+      // auto-hides (selectedTier === currentTier).
+      await invalidateUserInfo();
+      toast.success('Subscription updated!');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   return (
     <div class="space-y-6 sm:space-y-8 w-full">
       <div class="relative w-full text-center">
@@ -89,7 +157,6 @@ const PaywallComponent = (props: PaywallComponent) => {
           <For each={PLANS}>
             {(plan) => (
               <button
-                inert={hasPaid()}
                 onClick={() => setSelectedTier(plan.tier)}
                 class="p-4 sm:p-5 border flex flex-col transition-all relative text-left"
                 classList={{
@@ -129,18 +196,31 @@ const PaywallComponent = (props: PaywallComponent) => {
       </div>
 
       <div class="mx-auto mt-8 max-w-2xl text-center">
-        <button
-          onClick={handleContinue}
-          class={`w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent ${
-            hasPaid()
-              ? 'bg-active text-ink border-edge hover:bg-hover hover:border-edge'
-              : 'bg-accent text-page hover:bg-accent-ink'
-          }`}
+        <Show
+          when={hasPaid() && currentTier() && selectedTier() !== currentTier()}
+          fallback={
+            <button
+              onClick={handleContinue}
+              class={`w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent ${
+                hasPaid()
+                  ? 'bg-active text-ink border-edge hover:bg-hover hover:border-edge'
+                  : 'bg-accent text-page hover:bg-accent-ink'
+              }`}
+            >
+              <Show when={!hasPaid()} fallback={'Manage Subscription'}>
+                Get {PLANS.find((p) => p.tier === selectedTier())?.name}
+              </Show>
+            </button>
+          }
         >
-          <Show when={!hasPaid()} fallback={'Manage Subscription'}>
-            Get {PLANS.find((p) => p.tier === selectedTier())?.name}
-          </Show>
-        </button>
+          <button
+            onClick={handleUpdateTier}
+            disabled={updating()}
+            class="w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent bg-accent text-page hover:bg-accent-ink disabled:opacity-60"
+          >
+            {updating() ? 'Updating…' : 'Update Subscription'}
+          </button>
+        </Show>
         <Show when={!hasPaid() && props.handleGuest}>
           <button
             onClick={() => props.handleGuest?.()}
