@@ -1,62 +1,59 @@
-import { Dialog } from '@kobalte/core/dialog';
-import { createMemo } from 'solid-js';
-import { useNotificationSettings } from '../notification-settings';
+import Bell from '@icon/regular/bell.svg';
+import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated } from '@queries/auth';
+import { createEffect } from 'solid-js';
+import { useNotificationSettings } from '../notification-settings';
 
 export const BrowserNotificationModal = () => {
   const settings = useNotificationSettings();
-
   const isAuthenticated = useIsAuthenticated();
 
   if (!settings.isSupported) return null;
 
-  const shouldShow = createMemo(
-    () => !import.meta.env.DEV && settings.shouldPrompt() && isAuthenticated()
-  );
+  let shown = false;
 
-  const handleEnable = async () => {
-    try {
-      await settings.toggle(true);
-    } catch (error) {
-      console.error('Failed to enable notifications:', error);
-    }
-  };
+  createEffect(() => {
+    if (shown) return;
+    if (import.meta.env.DEV) return;
+    if (!settings.shouldPrompt()) return;
+    if (!isAuthenticated()) return;
 
-  return (
-    <Dialog open={shouldShow()} modal={true}>
-      <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay" />
-        <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">
-          <Dialog.Content class="flex items-center justify-center">
-            <div class="pointer-events-auto max-w-[min(36rem,calc(100%-1rem))] bg-menu border border-edge w-lg h-fit p-2">
-              <div class="w-full my-1">
-                <h2 class="text-xl mb-3">Enable Browser Notifications</h2>
+    shown = true;
 
-                <div class="mb-4">
-                  <p class="text-ink-muted text-sm">
-                    Get notified about new messages, mentions, comments, and
-                    emails.
-                  </p>
-                </div>
-                <div class="flex justify-end mt-2 tex-sm pt-2 gap-2">
-                  <button
-                    class="py-1 px-3 font-mono text-sm"
-                    onClick={settings.dismissPrompt}
-                  >
-                    Not Now
-                  </button>
-                  <button
-                    class="uppercase py-1 px-3 font-mono text-sm bg-accent text-menu"
-                    onClick={handleEnable}
-                  >
-                    Enable
-                  </button>
-                </div>
-              </div>
-            </div>
-          </Dialog.Content>
-        </div>
-      </Dialog.Portal>
-    </Dialog>
-  );
+    const toastId = toast.custom(
+      {
+        title: 'Enable Browser Notifications',
+        icon: Bell,
+        color: 'var(--color-accent)',
+        content: () => (
+          <div class="text-xs text-ink-extra-muted">
+            Get notified about new messages, mentions, comments, and emails.
+          </div>
+        ),
+        actions: [
+          {
+            label: 'Hide',
+            onClick: () => {
+              settings.dismissPrompt();
+              toast.dismiss(toastId);
+            },
+          },
+          {
+            label: 'Enable',
+            onClick: async () => {
+              try {
+                await settings.toggle(true);
+              } catch (error) {
+                console.error('Failed to enable notifications:', error);
+              }
+              toast.dismiss(toastId);
+            },
+          },
+        ],
+      },
+      { persistent: true }
+    );
+  });
+
+  return null;
 };
