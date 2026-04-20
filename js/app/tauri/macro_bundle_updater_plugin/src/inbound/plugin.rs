@@ -90,7 +90,7 @@ pub fn grant_bundle_update(
 }
 
 #[tauri::command]
-#[tracing::instrument(err, skip(service, bundle_root))]
+#[tracing::instrument(err, skip(service, bundle_root, app_handle))]
 pub fn perform_update<R: Runtime>(
     service: tauri::State<'_, Mutex<Service>>,
     bundle_root: tauri::State<'_, crate::BundleRoot>,
