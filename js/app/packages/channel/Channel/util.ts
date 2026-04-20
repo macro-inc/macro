@@ -42,8 +42,3 @@ export function isNewMessage(
   );
 }
 
-export function resetKeyboardModality(listElement: HTMLElement) {
-  if (listElement && listElement.dataset.channelNav !== 'keyboard') {
-    listElement.dataset.channelNav = 'keyboard';
-  }
-}

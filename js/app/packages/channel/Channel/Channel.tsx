@@ -72,7 +72,6 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
-import { resetKeyboardModality } from './util';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -252,6 +251,14 @@ export function Channel(props: ChannelProps) {
     keys: () => messageIndex.keys,
   });
 
+  const selectMessage = (messageId: string) => {
+    selection.select(messageId);
+  };
+
+  const clearSelection = () => {
+    selection.clear();
+  };
+
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
       selection,
@@ -304,8 +311,7 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    const el = messageListElement();
-    if (el) resetKeyboardModality(el);
+    selectMessage(messageId);
     targetMessageController.goToMessage(messageId, replyId);
   };
 
@@ -331,13 +337,6 @@ export function Channel(props: ChannelProps) {
               }}
               tabIndex={-1}
               data-channel-message-list
-              data-channel-nav="keyboard"
-              onMouseMove={(e) => {
-                const el = e.currentTarget;
-                if (el.dataset.channelNav !== 'mouse') {
-                  el.dataset.channelNav = 'mouse';
-                }
-              }}
             >
               <Show when={messages().length > 0}>
                 <ThreadList
@@ -365,17 +364,12 @@ export function Channel(props: ChannelProps) {
                             isNewestThread={isNewestThread()}
                             getMessageActions={getMessageActions}
                             targetReplyId={targetMessageController.pendingTargetReplyId()}
-                            highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
                             onTargetReplyScrolled={(replyId) => {
                               targetMessageController.completePendingReplyScroll(
                                 m().id,
                                 replyId
                               );
                             }}
-                            highlighted={
-                              m().id ===
-                              targetMessageController.highlightedMessageId()
-                            }
                             isExpanded={state.isExpanded}
                             setIsExpanded={state.setIsExpanded}
                             isReplying={state.isReplying}
@@ -391,6 +385,8 @@ export function Channel(props: ChannelProps) {
                             }}
                             isNewMessage={activityTracker.isNewMessage}
                             selectedMessageId={selection.selectedId}
+                            onSelectMessage={selectMessage}
+                            onClearSelection={clearSelection}
                             messageListScopeId={messageListScopeId}
                           />
                         )}
