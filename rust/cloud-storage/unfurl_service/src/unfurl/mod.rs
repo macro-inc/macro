@@ -329,7 +329,7 @@ pub async fn fetch_links_async(
                 }
             }
         })
-        .buffer_unordered(BULK_CONCURRENCY)
+        .buffered(BULK_CONCURRENCY)
         .collect()
         .await
 }
