@@ -275,6 +275,7 @@ registerComponent('task-compose', (params) => {
       initialContent={params?.initialContent}
       initialTitle={params?.initialTitle}
       initialAssigneeId={params?.initialAssigneeId}
+      onSuccess={params?.onSuccess}
     />
   );
 });

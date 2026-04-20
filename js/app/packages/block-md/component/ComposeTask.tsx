@@ -154,6 +154,12 @@ function extractPropertyValue(
  * @returns
  */
 
+export type ComposeTaskSuccess = {
+  documentId: string;
+  title: string;
+  content: string;
+};
+
 export interface ComposeTaskProps {
   onCreateTask?: (title: string, content: string) => void;
   onClose?: () => void;
@@ -161,6 +167,11 @@ export interface ComposeTaskProps {
   initialContent?: string;
   placeholder?: string;
   initialAssigneeId?: string;
+  /**
+   * When provided, replaces the default success behavior (auto-copy link +
+   * toast) so the caller can handle the created task however it needs.
+   */
+  onSuccess?: (result: ComposeTaskSuccess) => void;
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -451,7 +462,11 @@ export function ComposeTask(props: ComposeTaskProps) {
         return;
       }
 
-      showTaskCreatedToast(documentId, taskTitle, taskContent);
+      if (props.onSuccess) {
+        props.onSuccess({ documentId, title: taskTitle, content: taskContent });
+      } else {
+        showTaskCreatedToast(documentId, taskTitle, taskContent);
+      }
       props.onCreateTask?.(taskTitle, taskContent);
       return;
     }
@@ -472,7 +487,11 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     // Success: clear draft and notify
     clearTaskComposerDraft();
-    showTaskCreatedToast(documentId, taskTitle, taskContent);
+    if (props.onSuccess) {
+      props.onSuccess({ documentId, title: taskTitle, content: taskContent });
+    } else {
+      showTaskCreatedToast(documentId, taskTitle, taskContent);
+    }
     props.onCreateTask?.(taskTitle, taskContent);
 
     if (createMore()) {

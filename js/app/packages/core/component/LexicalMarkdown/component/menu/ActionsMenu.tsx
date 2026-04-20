@@ -19,6 +19,7 @@ import { Dynamic } from 'solid-js/web';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import {
+  autoRegister,
   CLOSE_ACTION_SEARCH_COMMAND,
   REMOVE_ACTION_SEARCH_COMMAND,
 } from '../../plugins';
@@ -56,9 +57,20 @@ export function ActionsMenuItem(props: {
         e.preventDefault();
         e.stopPropagation();
         props.editor.dispatchCommand(REMOVE_ACTION_SEARCH_COMMAND, undefined);
-        const action = props.action.action;
+        const { action, dependencies } = props.action;
         if (action) {
-          action(props.editor);
+          if (dependencies !== undefined) {
+            if (props.editor.hasNodes(dependencies)) {
+              action(props.editor);
+            } else {
+              console.error(
+                'Dispatched Action with missing dependencies:',
+                props.action
+              );
+            }
+          } else {
+            action(props.editor);
+          }
         }
         props.setOpen(false);
       }}
@@ -92,11 +104,15 @@ export function ActionMenu(props: {
   const { isOpen, setIsOpen } = props.menu;
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+
   let menuRef!: HTMLDivElement;
+
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
+
   const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
     number | undefined
   >(undefined);
+
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
     if (h === undefined) return undefined;
@@ -120,10 +136,18 @@ export function ActionMenu(props: {
   };
 
   const [, setEditorParent] = createSignal<HTMLElement>();
-  const cleanupRootListener = props.editor.registerRootListener(() => {
-    setEditorParent(props.editor.getRootElement()?.parentElement ?? undefined);
+  autoRegister(() =>
+    props.editor.registerRootListener(() => {
+      setEditorParent(
+        props.editor.getRootElement()?.parentElement ?? undefined
+      );
+    })
+  );
+
+  const validActions = ACTIONS.filter(({ dependencies }) => {
+    if (dependencies === undefined || dependencies.length === 0) return true;
+    return props.editor.hasNodes(dependencies);
   });
-  onCleanup(cleanupRootListener);
 
   createEffect(() => {
     setSelectedIndex(0);
@@ -131,7 +155,7 @@ export function ActionMenu(props: {
   });
 
   const filteredItems = createMemo(() => {
-    return fuzzyFilter(searchTerm(), ACTIONS, (item) =>
+    return fuzzyFilter(searchTerm(), validActions, (item) =>
       [item.name, ...item.keywords].join(' ')
     ).slice(0, maxItems());
   });

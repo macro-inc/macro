@@ -1,3 +1,4 @@
+import CheckSquare from '@icon/regular/check-square.svg';
 import CodeBlock from '@icon/regular/code-block.svg';
 import VideoIcon from '@icon/regular/file-video.svg';
 import MathIcon from '@icon/regular/function.svg';
@@ -13,14 +14,27 @@ import TextH1 from '@icon/regular/text-h-one.svg';
 import TextH3 from '@icon/regular/text-h-three.svg';
 import TextH2 from '@icon/regular/text-h-two.svg';
 import TextT from '@icon/regular/text-t.svg';
-import { INSERT_TABLE_COMMAND } from '@lexical/table';
-import type { LexicalEditor } from 'lexical';
+import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
+import type { KlassConstructor, LexicalEditor, LexicalNode } from 'lexical';
 import type { Component } from 'solid-js';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
 import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
 import { TRY_INSERT_LINK_COMMAND } from '../links';
 import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
+import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
 import { NODE_TRANSFORM } from '../node-transform';
+import { HeadingNode, QuoteNode } from '@lexical/rich-text';
+import {
+  CustomCodeNode,
+  DocumentMentionNode,
+  EquationNode,
+  HorizontalRuleNode,
+  ImageNode,
+} from '@lexical-core';
+import { ListNode } from '@lexical/list';
+import { LinkNode } from '@lexical/link';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
 
 export type ActionIcon = string;
 
@@ -32,9 +46,10 @@ export type Action = {
   category: string;
   action: (editor: LexicalEditor) => void;
   shortcut?: string;
+  dependencies?: Array<KlassConstructor<typeof LexicalNode>>;
 };
 
-// TODO (seamus): Actaully oragnize the items based on category.
+// TODO (seamus): Actually organize the items based on category.
 export enum ActionCategory {
   BASIC = 'Basic',
   FORMAT = 'Formatting',
@@ -64,6 +79,7 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'heading1');
     },
+    dependencies: [HeadingNode],
   },
   {
     id: 'heading2',
@@ -75,6 +91,7 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'heading2');
     },
+    dependencies: [HeadingNode],
   },
   {
     id: 'heading3',
@@ -86,6 +103,7 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'heading3');
     },
+    dependencies: [HeadingNode],
   },
   {
     id: 'quote',
@@ -97,6 +115,7 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'quote');
     },
+    dependencies: [QuoteNode],
   },
   {
     id: 'code',
@@ -108,6 +127,7 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'code');
     },
+    dependencies: [CustomCodeNode],
   },
   {
     id: 'list-bullet',
@@ -119,6 +139,7 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'list-bullet');
     },
+    dependencies: [ListNode],
   },
   {
     id: 'list-number',
@@ -130,6 +151,7 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'list-number');
     },
+    dependencies: [ListNode],
   },
   {
     id: 'list-check',
@@ -141,6 +163,34 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'list-check');
     },
+    dependencies: [ListNode],
+  },
+  {
+    id: 'task',
+    name: 'Task',
+    keywords: ['task', 'todo', 'create'],
+    category: ActionCategory.ELEMENT,
+    icon: CheckSquare,
+    action: (editor: LexicalEditor) => {
+      const splitManager = globalSplitManager();
+      if (!splitManager) return;
+      splitManager.createPopoverSplit({
+        content: {
+          type: 'component',
+          id: 'task-compose',
+          params: {
+            onSuccess: (result: ComposeTaskSuccess) => {
+              editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+                documentId: result.documentId,
+                documentName: result.title,
+                blockName: 'task',
+              });
+            },
+          },
+        },
+      });
+    },
+    dependencies: [DocumentMentionNode],
   },
   {
     id: 'image',
@@ -153,6 +203,7 @@ export const ACTIONS: Action[] = [
         editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'all');
       });
     },
+    dependencies: [ImageNode],
   },
   {
     id: 'video',
@@ -177,6 +228,7 @@ export const ACTIONS: Action[] = [
         editor.dispatchCommand(TRY_INSERT_LINK_COMMAND, undefined);
       });
     },
+    dependencies: [LinkNode],
   },
   {
     id: 'latex',
@@ -189,6 +241,7 @@ export const ACTIONS: Action[] = [
         editor.dispatchCommand(TRY_INSERT_EQUATION_COMMAND, undefined);
       });
     },
+    dependencies: [EquationNode],
   },
   {
     id: 'table',
@@ -205,6 +258,7 @@ export const ACTIONS: Action[] = [
         });
       });
     },
+    dependencies: [TableNode],
   },
   {
     id: 'hr',
@@ -216,5 +270,6 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
     },
+    dependencies: [HorizontalRuleNode],
   },
 ];

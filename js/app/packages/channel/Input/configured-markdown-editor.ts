@@ -49,6 +49,7 @@ export function createConfiguredChannelMarkdownEditor(
 
   editor
     .withEmojis()
+    .withActions()
     .withLinks({ floatingMenu: true })
     .withHistory({ timeGap: 400 })
     .withCode()
