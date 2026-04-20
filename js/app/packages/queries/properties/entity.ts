@@ -16,7 +16,7 @@ import {
   type PropertiesEntityType,
   propertiesServiceClient,
 } from '../../service-clients/service-properties/client';
-import { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
+import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
