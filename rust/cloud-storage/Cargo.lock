@@ -653,6 +653,7 @@ dependencies = [
  "sha1",
  "sqlx",
  "sqs_client",
+ "strum",
  "teams",
  "thiserror 2.0.17",
  "time",

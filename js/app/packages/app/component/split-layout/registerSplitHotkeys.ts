@@ -35,7 +35,7 @@ export function registerSplitHotkeys(args: {
   } = args;
   registerHotkey({
     scopeId: splitHotkeyScope,
-    hotkey: 'opt+escape',
+    hotkey: ['cmd+escape', 'opt+escape'],
     condition: () => isNotUnifiedList() || getSplitCount() > 1,
     description: () => (isNotUnifiedList() ? 'Go home' : 'Close split'),
     keyDownHandler: () => {

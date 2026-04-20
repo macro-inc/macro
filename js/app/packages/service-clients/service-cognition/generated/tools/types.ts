@@ -1150,7 +1150,7 @@ export interface ReadResponse {
  */
 
 /**
- * Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. The body must be plain text only — do not use HTML, Markdown, or any formatting syntax (no **bold**, *italics*, headings, etc.). Just write natural prose with line breaks.
+ * Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {
   /**
@@ -1167,7 +1167,10 @@ export interface SendEmail {
     name: string | null;
   }[];
   /**
-   * The plain text body of the email.
+   * The body of the email. Written as Markdown by the AI and rendered in
+   * the draft composer. At send time the frontend replaces this with the
+   * base64url-encoded HTML produced by the composer, which is what gets
+   * sent to recipients.
    */
   body: string;
   /**

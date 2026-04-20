@@ -29,6 +29,7 @@ import type {
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordRequest,
+  PatchSubscriptionTierRequest,
   PatchTeamRequest,
   PatchTeamUserTierRequest,
   PatchUserGroupRequest,
@@ -3450,22 +3451,22 @@ export type createCheckoutSessionResponse200 = {
 };
 
 export type createCheckoutSessionResponse400 = {
-  data: string;
+  data: ErrorResponse;
   status: 400;
 };
 
 export type createCheckoutSessionResponse404 = {
-  data: string;
+  data: ErrorResponse;
   status: 404;
 };
 
 export type createCheckoutSessionResponse409 = {
-  data: string;
+  data: ErrorResponse;
   status: 409;
 };
 
 export type createCheckoutSessionResponse500 = {
-  data: string;
+  data: ErrorResponse;
   status: 500;
 };
 
@@ -3522,12 +3523,12 @@ export type createPortalSessionResponse200 = {
 };
 
 export type createPortalSessionResponse400 = {
-  data: string;
+  data: ErrorResponse;
   status: 400;
 };
 
 export type createPortalSessionResponse500 = {
-  data: string;
+  data: ErrorResponse;
   status: 500;
 };
 
@@ -3571,6 +3572,84 @@ export const createPortalSession = async (
     status: res.status,
     headers: res.headers,
   } as createPortalSessionResponse;
+};
+
+/**
+ * @summary Updates the user's subscription tier, swapping both their RBAC role and Stripe subscription line item.
+ */
+export type patchSubscriptionTierResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type patchSubscriptionTierResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type patchSubscriptionTierResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type patchSubscriptionTierResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type patchSubscriptionTierResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type patchSubscriptionTierResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchSubscriptionTierResponseSuccess =
+  patchSubscriptionTierResponse200 & {
+    headers: Headers;
+  };
+export type patchSubscriptionTierResponseError = (
+  | patchSubscriptionTierResponse400
+  | patchSubscriptionTierResponse403
+  | patchSubscriptionTierResponse404
+  | patchSubscriptionTierResponse409
+  | patchSubscriptionTierResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchSubscriptionTierResponse =
+  | patchSubscriptionTierResponseSuccess
+  | patchSubscriptionTierResponseError;
+
+export const getPatchSubscriptionTierUrl = () => {
+  return `/user/stripe/subscription`;
+};
+
+export const patchSubscriptionTier = async (
+  patchSubscriptionTierRequest: PatchSubscriptionTierRequest,
+  options?: RequestInit
+): Promise<patchSubscriptionTierResponse> => {
+  const res = await fetch(getPatchSubscriptionTierUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchSubscriptionTierRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchSubscriptionTierResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchSubscriptionTierResponse;
 };
 
 /**

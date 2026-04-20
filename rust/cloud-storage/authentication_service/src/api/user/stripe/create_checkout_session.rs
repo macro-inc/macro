@@ -1,62 +1,11 @@
-use axum::{
-    Extension, Json,
-    extract::State,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
-use serde::{Deserialize, Serialize};
-use stripe::{ParseIdError, StripeError};
-use thiserror::Error;
+use axum::{Extension, Json, extract::State};
+use serde::Deserialize;
 use utoipa::ToSchema;
 
+use super::{StripeOperationError, StripeProductTier, StripeSessionResponse};
 use crate::api::context::ApiContext;
+use model::response::ErrorResponse;
 use model::user::UserContext;
-
-// Shared error type for Stripe operations
-#[derive(Debug, Error)]
-pub enum StripeOperationError {
-    #[error("Failed to parse user id")]
-    ParseId(#[from] macro_user_id::error::ParseErr),
-    #[error("Internal server error")]
-    DbErr(#[from] sqlx::Error),
-    #[error("User does not have a stripe id")]
-    MissingStripeId,
-    #[error("Invalid stripe id")]
-    StripeIdParse(#[from] ParseIdError),
-    #[error("Internal stripe error")]
-    StripeErr(#[from] StripeError),
-    #[error("Invalid promo code")]
-    PromoCodeNotFound,
-    #[error("Internal server error")]
-    UnexpectedStripeResponse,
-    #[error("User already has an active subscription")]
-    AlreadySubscribed,
-}
-
-impl IntoResponse for StripeOperationError {
-    fn into_response(self) -> Response {
-        let status = match &self {
-            StripeOperationError::ParseId(_) => StatusCode::BAD_REQUEST,
-            StripeOperationError::DbErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            StripeOperationError::MissingStripeId => StatusCode::BAD_REQUEST,
-            StripeOperationError::StripeIdParse(_) => StatusCode::BAD_REQUEST,
-            StripeOperationError::StripeErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            StripeOperationError::PromoCodeNotFound => StatusCode::NOT_FOUND,
-            StripeOperationError::UnexpectedStripeResponse => StatusCode::INTERNAL_SERVER_ERROR,
-            StripeOperationError::AlreadySubscribed => StatusCode::CONFLICT,
-        };
-        (status, self.to_string()).into_response()
-    }
-}
-
-#[derive(Debug, Deserialize, Default, ToSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum StripeProductTier {
-    #[default]
-    Haiku,
-    Sonnet,
-    Opus,
-}
 
 /// Tracking metadata for conversion attribution
 #[derive(Debug, Default, Deserialize, ToSchema)]
@@ -88,22 +37,6 @@ pub struct CreateCheckoutSessionRequest {
     pub tier: StripeProductTier,
 }
 
-/// Response containing the Stripe session URL
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct StripeSessionResponse {
-    /// The URL to redirect the user to
-    pub url: String,
-}
-
-/// Request body for creating a Stripe portal session
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CreatePortalSessionRequest {
-    /// The URL to redirect to after leaving the portal
-    pub return_url: String,
-}
-
 /// Creates a Stripe checkout session for the user to subscribe.
 #[utoipa::path(
     post,
@@ -112,10 +45,10 @@ pub struct CreatePortalSessionRequest {
     request_body = CreateCheckoutSessionRequest,
     responses(
         (status = 200, body = StripeSessionResponse),
-        (status = 400, body = String),
-        (status = 404, body = String),
-        (status = 409, body = String),
-        (status = 500, body = String),
+        (status = 400, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, user_context), err, fields(user_id = %user_context.user_id))]
@@ -230,52 +163,9 @@ pub async fn create_checkout_session(
         .url
         .ok_or(StripeOperationError::UnexpectedStripeResponse)?;
 
-    let url = url::Url::parse(&url).map_err(|_| StripeOperationError::UnexpectedStripeResponse)?;
+    // Validate but return the exact URL Stripe gave us — session URLs are signed/opaque
+    // and `Url::parse(...).to_string()` can normalize in ways that break the signature.
+    url::Url::parse(&url).map_err(|_| StripeOperationError::UnexpectedStripeResponse)?;
 
-    Ok(Json(StripeSessionResponse {
-        url: url.to_string(),
-    }))
-}
-
-/// Creates a Stripe billing portal session.
-#[utoipa::path(
-    post,
-    path = "/user/stripe/portal",
-    operation_id = "create_portal_session",
-    request_body = CreatePortalSessionRequest,
-    responses(
-        (status = 200, body = StripeSessionResponse),
-        (status = 400, body = String),
-        (status = 500, body = String),
-    )
-)]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id = %user_context.user_id))]
-pub async fn create_portal_session(
-    State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
-    Json(req): Json<CreatePortalSessionRequest>,
-) -> Result<Json<StripeSessionResponse>, StripeOperationError> {
-    let user_id =
-        macro_user_id::user_id::MacroUserId::parse_from_str(&user_context.user_id)?.lowercase();
-
-    // Get the stripe customer ID from the database
-    let stripe_customer_id =
-        macro_db_client::user::get::get_stripe_customer_id_by_user_id(&ctx.db, &user_id)
-            .await?
-            .ok_or(StripeOperationError::MissingStripeId)?;
-
-    let customer_id: stripe::CustomerId = stripe_customer_id.parse()?;
-
-    // Create the billing portal session
-    let mut params = stripe::CreateBillingPortalSession::new(customer_id);
-    params.return_url = Some(req.return_url.as_str());
-
-    let session = stripe::BillingPortalSession::create(&ctx.stripe_client, params).await?;
-
-    let url = url::Url::parse(&session.url)
-        .map_err(|_| StripeOperationError::UnexpectedStripeResponse)?;
-
-    Ok(Json(StripeSessionResponse {
-        url: url.to_string(),
-    }))
+    Ok(Json(StripeSessionResponse { url }))
 }
