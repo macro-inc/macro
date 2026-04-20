@@ -1,4 +1,3 @@
-use models_opensearch::OpenSearchEntityType;
 use opensearch_client::OpensearchClient;
 use sqs_client::search::email::{EmailLinkMessage, EmailMessage};
 
@@ -19,13 +18,6 @@ pub async fn process_remove_messages_by_link_id(
 ) -> anyhow::Result<()> {
     opensearch_client
         .delete_email_messages_by_link_id(remove_link_message.link_id.as_str())
-        .await?;
-
-    opensearch_client
-        .delete_entities_for_user_by_entity_type(
-            remove_link_message.macro_user_id.as_str(),
-            &OpenSearchEntityType::Emails,
-        )
         .await?;
 
     Ok(())

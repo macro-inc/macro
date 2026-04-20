@@ -16,8 +16,6 @@ pub enum SearchIndex {
     /// The email index
     #[strum(serialize = "emails_alias")]
     Emails,
-    /// The name index
-    Names,
 }
 
 /// All searchable entity types across the system.
