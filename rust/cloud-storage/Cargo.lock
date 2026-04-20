@@ -588,6 +588,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "attachment"
+version = "0.1.0"
+dependencies = [
+ "ai",
+ "anyhow",
+ "futures",
+ "macro_user_id",
+ "non_empty",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
@@ -1908,11 +1920,13 @@ dependencies = [
  "ai",
  "ai_toolset",
  "anyhow",
+ "attachment",
  "axum",
  "chrono",
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
+ "futures",
  "http-body-util",
  "macro_db_migrator",
  "macro_user_id",
@@ -1922,6 +1936,7 @@ dependencies = [
  "model_user",
  "models_entity_access_management",
  "models_permissions",
+ "non_empty",
  "roles_and_permissions",
  "serde",
  "serde_json",
@@ -2073,11 +2088,14 @@ name = "comms"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "attachment",
  "axum",
  "chrono",
  "doppleganger",
+ "entity_access",
  "filter_ast",
  "frecency",
+ "futures",
  "item_filters",
  "macro_db_migrator",
  "macro_user_id",
@@ -2085,6 +2103,7 @@ dependencies = [
  "model_user",
  "models_comms",
  "models_pagination",
+ "non_empty",
  "readonly_pool",
  "recursion",
  "rootcause",
@@ -3312,6 +3331,7 @@ dependencies = [
  "ai",
  "anyhow",
  "async-trait",
+ "attachment",
  "aws-sdk-s3",
  "axum",
  "axum-extra",
@@ -3340,6 +3360,7 @@ dependencies = [
  "model_user",
  "models_permissions",
  "models_properties",
+ "non_empty",
  "reqwest",
  "s3_key",
  "schemars",
@@ -3606,6 +3627,7 @@ dependencies = [
  "ai",
  "anyhow",
  "async-trait",
+ "attachment",
  "authentication_service_client",
  "axum",
  "axum-extra",
@@ -3627,6 +3649,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_pagination",
+ "non_empty",
  "recursion",
  "redis",
  "schemars",

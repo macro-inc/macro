@@ -41,14 +41,22 @@ impl Base64Image {
         Self::make_compressed_base64_webp(bytes)
     }
 
-    pub(crate) fn dangerously_try_from_string(s: String) -> Result<Self, anyhow::Error> {
-        let prefix = s.split_once(";").ok_or(anyhow!("Unexpected format"))?.0;
-        let image = prefix
-            .split_once("/")
-            .ok_or(anyhow!("Unexpected format"))?
-            .1;
-        let format = ImageFormat::try_from(image)?;
-        Ok(Self { data: s, format })
+    pub(crate) fn try_from_string(s: &str) -> Result<Self, anyhow::Error> {
+        if s.starts_with("data:") {
+            let prefix = s.split_once(";").ok_or(anyhow!("Unexpected format"))?.0;
+            let image = prefix
+                .split_once("/")
+                .ok_or(anyhow!("Unexpected format"))?
+                .1;
+            let format = ImageFormat::try_from(image)?;
+
+            Ok(Self {
+                data: s.to_owned(),
+                format,
+            })
+        } else {
+            Err(anyhow::anyhow!("not a base64 encoded image"))
+        }
     }
 }
 
