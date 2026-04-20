@@ -435,7 +435,7 @@ where
 pub struct ApiEntityFilterAst {
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
-    pub document_filter: LiteralTree<either::Either<DocumentLiteral, CompoundDocumentLiteral>>,
+    pub document_filter: LiteralTree<ApiDocumentLiteral>,
     /// the filters that should be applied to the project entity
     #[serde(default, rename = "pf")]
     pub project_filter: LiteralTree<ProjectLiteral>,
@@ -454,6 +454,13 @@ pub struct ApiEntityFilterAst {
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum ApiDocumentLiteral {
+    Plain(DocumentLiteral),
+    FileAssoc(CompoundDocumentLiteral),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -481,8 +488,10 @@ impl ApiEntityFilterAst {
                     ExprFrame::And(a, b) => Ok(Expr::and(a, b)),
                     ExprFrame::Or(a, b) => Ok(Expr::or(a, b)),
                     ExprFrame::Not(a) => Ok(Expr::is_not(a)),
-                    ExprFrame::Literal(either::Either::Left(doc_lit)) => Ok(Expr::val(doc_lit)),
-                    ExprFrame::Literal(either::Either::Right(compound)) => match compound {
+                    ExprFrame::Literal(ApiDocumentLiteral::Plain(doc_lit)) => {
+                        Ok(Expr::val(doc_lit))
+                    }
+                    ExprFrame::Literal(ApiDocumentLiteral::FileAssoc(compound)) => match compound {
                         CompoundDocumentLiteral::FileAssoc(s) => {
                             let (_, file_types) =
                                 item_filters::ast::document::parse_to_file_types(&s)?;
