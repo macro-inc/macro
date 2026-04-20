@@ -104,9 +104,7 @@ function optimisticUpdateSoupEntityProperty(
     data: {
       ...current.data,
       properties: current.data.properties.map((prop) =>
-        prop.definition.id === propertyDefinitionId
-          ? { ...prop, value }
-          : prop
+        prop.definition.id === propertyDefinitionId ? { ...prop, value } : prop
       ),
     },
     frecency_score: current.frecency_score,
