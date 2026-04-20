@@ -602,7 +602,7 @@ mod tests {
             ChatCompletionRequestToolMessage {
                 tool_call_id: tool_call_id.clone(),
                 content: ChatCompletionRequestToolMessageContent::Text(
-                    json!({"type": "error", "description": "Tool execution failed"}).to_string(),
+                    "Tool execution failed".into(),
                 ),
             },
         )];
@@ -625,6 +625,7 @@ mod tests {
                 assert_eq!(id, &tool_call_id);
                 assert_eq!(description, "Tool execution failed");
             } else {
+                eprintln!("{:#?}", parts[0]);
                 panic!("Expected tool error part");
             }
         } else {
