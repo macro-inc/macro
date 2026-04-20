@@ -189,26 +189,22 @@ function alert(message: string, subtext?: string, duration?: number) {
 
 // ─── Shared actions row ──────────────────────────────────────────────────────
 
-function ActionsRow(props: { actions: ToastAction[] }) {
+function ActionButtons(props: { actions: ToastAction[] }) {
   return (
-    <div class="flex flex-row flex-wrap justify-end gap-2 mt-2">
-      <For each={props.actions}>
-        {(action) => (
-          <Button
-            onClick={action.onClick}
-            variant="secondary"
-            class="flex items-center gap-1.5 rounded py-1.5 px-3 text-sm font-semibold"
-          >
-            <Show when={action.icon}>
-              {(icon) => (
-                <Dynamic component={icon()} class="size-3.5 shrink-0" />
-              )}
-            </Show>
-            {action.label}
-          </Button>
-        )}
-      </For>
-    </div>
+    <For each={props.actions}>
+      {(action) => (
+        <Button
+          onClick={action.onClick}
+          variant="secondary"
+          class="flex items-center gap-1.5 rounded py-1 px-2 text-sm font-semibold shrink-0"
+        >
+          <Show when={action.icon}>
+            {(icon) => <Dynamic component={icon()} class="size-3.5 shrink-0" />}
+          </Show>
+          {action.label}
+        </Button>
+      )}
+    </For>
   );
 }
 
@@ -335,6 +331,9 @@ function ToastContent(props: {
                   <Toast.Title class="font-semibold text-ink grow shrink truncate">
                     {customConfig().title}
                   </Toast.Title>
+                  <Show when={customConfig().actions?.length}>
+                    <ActionButtons actions={customConfig().actions!} />
+                  </Show>
                   <Toast.CloseButton>
                     <Button variant="ghost" size="icon-sm" class="rounded-xs">
                       <XIcon />
@@ -343,9 +342,6 @@ function ToastContent(props: {
                 </div>
                 <Show when={customConfig().content}>
                   <div class="my-2 ml-7">{customConfig().content?.()}</div>
-                </Show>
-                <Show when={customConfig().actions?.length}>
-                  <ActionsRow actions={customConfig().actions!} />
                 </Show>
               </>
             )}
@@ -373,6 +369,9 @@ function ToastContent(props: {
                   <Toast.Title class="font-semibold text-ink grow shrink truncate">
                     {props.message}
                   </Toast.Title>
+                  <Show when={props.actions?.length}>
+                    <ActionButtons actions={props.actions!} />
+                  </Show>
                   <Toast.CloseButton>
                     <Button variant="ghost" size="icon-sm" class="rounded-xs">
                       <XIcon />
@@ -383,9 +382,6 @@ function ToastContent(props: {
                   <Toast.Description class="text-sm text-ink-extra-muted ml-7">
                     {props.subtext}
                   </Toast.Description>
-                </Show>
-                <Show when={props.actions?.length}>
-                  <ActionsRow actions={props.actions!} />
                 </Show>
               </>
             )}
