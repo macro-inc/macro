@@ -17,8 +17,10 @@ import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
+  isChannelPreviewItem,
   type AccessiblePreviewItem,
 } from '@queries/preview';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { matches } from '@core/util/match';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import Minimize from '@icon/regular/arrows-in.svg';
@@ -68,6 +70,7 @@ import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink } from '../core/BlockLink';
+import { ChannelMessageThreadCard } from './ChannelMessageThreadCard';
 
 false && floatWithElement;
 
@@ -95,10 +98,27 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const { item, ItemEntityIcon } = useItemPreviewData(() => ({
-    id: props.documentId,
-    type: previewType(),
-  }));
+  const { item, ItemEntityIcon } = useItemPreviewData(() => {
+    const type = previewType();
+    const base = { id: props.documentId, type };
+    if (type === 'channel' && props.blockParams?.[CHANNEL_PARAMS.message]) {
+      return {
+        ...base,
+        type: 'channel' as const,
+        messageId: props.blockParams[CHANNEL_PARAMS.message],
+      };
+    }
+    return base;
+  });
+
+  const channelMessageInfo = createMemo(() => {
+    const messageId = props.blockParams?.[CHANNEL_PARAMS.message];
+    if (!messageId) return undefined;
+    const i = item();
+    if (!isChannelPreviewItem(i)) return undefined;
+    if (!i.messageContext) return undefined;
+    return { messageId, message: i.messageContext };
+  });
 
   const [hasLoadedPreview, setHasLoadedPreview] = createSignal(false);
 
@@ -425,7 +445,16 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
           {(item) => (
             <>
               <DocumentInfo item={item()} blockName={props.blockName} />
-              <Show when={isPreviewable()}>
+              <Show when={channelMessageInfo()}>
+                {(info) => (
+                  <ChannelMessageThreadCard
+                    channelId={props.documentId}
+                    messageId={info().messageId}
+                    message={info().message}
+                  />
+                )}
+              </Show>
+              <Show when={!channelMessageInfo() && isPreviewable()}>
                 <div class="relative grow overflow-y-scroll">
                   <Show when={previewComponent()}>
                     <Dynamic component={previewComponent()} />
