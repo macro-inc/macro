@@ -4,9 +4,7 @@
 mod test;
 
 use connection::domain::ports::ConnectionService;
-use entity_access::domain::models::{
-    AccessLevel, EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
-};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
