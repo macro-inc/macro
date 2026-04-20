@@ -13,7 +13,7 @@ import type { BlockName } from '@core/block';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import UploadIcon from '@icon/regular/upload-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { createMemo, For, Show} from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { Button } from '@ui/components/Button';
 import { NewCallButton } from './NewCallButton';
 
