@@ -52,7 +52,6 @@ export function createConfiguredChannelMarkdownEditor(
     .withLinks({ floatingMenu: true })
     .withHistory({ timeGap: 400 })
     .withCode()
-    .withActions()
     .withRestoreFocus()
     .withSelectionData()
     .use(
