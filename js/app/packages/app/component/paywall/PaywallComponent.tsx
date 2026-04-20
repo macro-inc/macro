@@ -10,6 +10,14 @@ import { match } from 'ts-pattern';
 import { useAnalytics } from '@app/component/analytics-context';
 import { PLANS, PLAN_FEATURES, type PaidPlanTier } from './plans';
 
+// Paid-only plans for the billing paywall — Stripe has no product for the
+// 'free' tier, so it must be excluded here. Filtered once at module scope so
+// the component doesn't re-filter on every render.
+const PAID_PLANS = PLANS.filter(
+  (p): p is Extract<(typeof PLANS)[number], { tier: PaidPlanTier }> =>
+    p.tier !== 'free'
+);
+
 interface PaywallComponent {
   cb: () => Promise<void> | void;
   handleGuest?: () => void;
@@ -51,11 +59,12 @@ const PaywallComponent = (props: PaywallComponent) => {
   const handleCheckout = async (tier: PaidPlanTier) => {
     try {
       await props.cb();
-      const url = await stripeServiceClient.createCheckoutSession(
-        props.customType ? props.customType : (props.errorKey ?? undefined),
-        undefined,
-        tier
-      );
+      const url = await stripeServiceClient.createCheckoutSession({
+        type: props.customType
+          ? props.customType
+          : (props.errorKey ?? undefined),
+        tier,
+      });
       analytics.track('subscription_start', {
         type: tier,
         customType: props.customType,
@@ -154,14 +163,7 @@ const PaywallComponent = (props: PaywallComponent) => {
 
       <div class="mx-auto mt-6 w-full max-w-2xl">
         <div class="gap-3 sm:gap-4 grid grid-cols-1 sm:grid-cols-3">
-          <For
-            each={PLANS.filter(
-              (
-                p
-              ): p is Extract<(typeof PLANS)[number], { tier: PaidPlanTier }> =>
-                p.tier !== 'free'
-            )}
-          >
+          <For each={PAID_PLANS}>
             {(plan) => (
               <button
                 onClick={() => setUserSelectedTier(plan.tier)}

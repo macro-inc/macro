@@ -44,12 +44,15 @@ export const stripeServiceClient = {
    * @returns The URL of the checkout session
    */
   createCheckoutSession: async (
-    type: string = '',
-    discount?: string,
-    tier?: string,
-    /** Override the default success URL. Useful for flows (e.g. onboarding) that want the user returned to a specific page. */
-    successUrl?: string
+    args: {
+      type?: string;
+      discount?: string;
+      tier?: string;
+      /** Override the default success URL. Useful for flows (e.g. onboarding) that want the user returned to a specific page. */
+      successUrl?: string;
+    } = {}
   ) => {
+    const { type = '', discount, tier, successUrl } = args;
     const gaClientId = await getGaClientId();
     const { fbp, fbc } = getMetaIds();
 

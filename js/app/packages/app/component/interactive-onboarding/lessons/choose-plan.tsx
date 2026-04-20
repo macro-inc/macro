@@ -34,13 +34,15 @@ function ChoosePlanDemo(props: LessonContentProps) {
       // `subscriptionSuccess` triggers the `completeOnParam` hook on this lesson, which
       // pre-marks choose-plan complete in the state machine — the user lands on launch.
       const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
-      const url = await stripeServiceClient.createCheckoutSession(
-        '',
-        undefined,
+      const url = await stripeServiceClient.createCheckoutSession({
         tier,
-        successUrl
-      );
+        successUrl,
+      });
       analytics.track('subscription_start', { type: tier });
+      // Fire the lesson's completion analytics before leaving so the paid path
+      // has parity with the free branch. `advance()` also bumps the state machine,
+      // but we're redirecting immediately — on return, `completeOnParam` takes over.
+      props.advance();
       window.location.href = url;
     } catch (error) {
       console.error('Checkout error:', error);

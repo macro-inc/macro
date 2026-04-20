@@ -17,10 +17,11 @@ export function PlanGrid(props: PlanGridProps) {
       <table class="w-full min-w-[640px] text-sm border-separate border-spacing-0 table-fixed">
         <thead>
           <tr>
-            <th class="px-4 py-4 w-40" />
+            <th class="px-4 py-4 w-40" aria-hidden="true" />
             <For each={PLANS}>
               {(plan) => (
                 <th
+                  scope="col"
                   class="px-4 py-4 text-left align-top"
                   classList={{
                     'bg-accent/5 border-t border-l border-r border-accent':
@@ -47,9 +48,12 @@ export function PlanGrid(props: PlanGridProps) {
           <For each={PLAN_FEATURES}>
             {(feature) => (
               <tr>
-                <td class="px-4 py-3 text-ink/60 border-t border-edge-muted">
+                <th
+                  scope="row"
+                  class="px-4 py-3 text-left font-normal text-ink/60 border-t border-edge-muted"
+                >
                   {feature.label}
-                </td>
+                </th>
                 <For each={PLANS}>
                   {(plan) => (
                     <td

@@ -5,7 +5,6 @@ import {
   onMount,
   onCleanup,
   createSignal,
-  createEffect,
 } from 'solid-js';
 import MacroIcon from '@macro-icons/macro-logo.svg';
 import { Dynamic } from 'solid-js/web';
@@ -97,17 +96,26 @@ export function MockAppChrome(props: MockAppChromeProps) {
     return match?.label ?? 'All Items';
   };
 
+  // Tracks which highlight ids have been activated at least once so the glow
+  // turns off permanently after the user interacts with that specific target.
+  // Stored as a Set of ids so the component supports `highlightId` changing
+  // between sidebar items — not just latching a single boolean.
+  const [activatedHighlights, setActivatedHighlights] = createSignal<
+    ReadonlySet<SandboxSidebarFilter>
+  >(new Set());
+
   const setFilter = (filter: SandboxSidebarFilter) => {
     setSidebarFilter(filter);
+    if (filter !== null && filter === props.highlightId) {
+      setActivatedHighlights((prev) => {
+        if (prev.has(filter)) return prev;
+        const next = new Set(prev);
+        next.add(filter);
+        return next;
+      });
+    }
     props.onFilterChange?.(filter);
   };
-
-  const [highlightActivated, setHighlightActivated] = createSignal(false);
-  createEffect(() => {
-    if (props.highlightId && sidebarFilter() === props.highlightId) {
-      setHighlightActivated(true);
-    }
-  });
 
   const [commandActivated, setCommandActivated] = createSignal(false);
   const isCommandHighlighted = () =>
@@ -207,7 +215,17 @@ export function MockAppChrome(props: MockAppChromeProps) {
             {(link) => {
               const isActive = () => sidebarFilter() === link.id;
               const isHighlighted = () =>
-                props.highlightId === link.id && !highlightActivated();
+                props.highlightId === link.id &&
+                !activatedHighlights().has(link.id);
+              const stateClass = () => {
+                if (isActive()) {
+                  return 'opacity-100 bg-ink/10 text-ink hover:bg-ink/10';
+                }
+                if (isHighlighted()) {
+                  return 'opacity-100 text-ink hover:bg-ink/10 sidebar-glow';
+                }
+                return 'text-ink opacity-50 hover:opacity-80 hover:bg-ink/10';
+              };
               return (
                 <Tooltip
                   tooltip={
@@ -230,11 +248,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
                     type="button"
                     class={cn(
                       'size-6 rounded-xs p-1 transition-colors cursor-default',
-                      isActive()
-                        ? 'opacity-100 bg-ink/10 text-ink hover:bg-ink/10'
-                        : isHighlighted()
-                          ? 'opacity-100 text-ink hover:bg-ink/10 sidebar-glow'
-                          : 'text-ink opacity-50 hover:opacity-80 hover:bg-ink/10'
+                      stateClass()
                     )}
                     onClick={(e) => {
                       e.preventDefault();
