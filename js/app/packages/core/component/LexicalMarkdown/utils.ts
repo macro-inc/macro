@@ -1324,7 +1324,7 @@ export function pendingEditorState(
 
 /**
  * Calls `editor.focus()` on the editor instance with `SKIP_SCROLL_INTO_VIEW_TAG`
- * to prvent focus scrolling
+ * to prevent focus scrolling
  */
 export function focusEditorWithoutScroll(editor: LexicalEditor): void {
   editor.update(
