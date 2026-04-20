@@ -158,6 +158,7 @@ export function ChannelInput(props: ChannelInputProps) {
     restoreSnapshot: (snapshot) => {
       markdownEditor.controls.setMarkdown(snapshot.value);
       attachmentTracker.setAttachments(snapshot.attachments);
+      mentionsTracker.setMentions(snapshot.mentions);
       markdownEditor.controls.focus();
     },
   });

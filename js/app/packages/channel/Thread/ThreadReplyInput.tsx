@@ -1,9 +1,9 @@
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import { onCleanup, type Accessor, type Setter } from 'solid-js';
+import { createSignal, onCleanup, type Accessor, type Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
-import type { InputSnapshot } from '../Input';
+import type { InputHandle, InputSnapshot } from '../Input';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { buildPostMessageRequest } from '../Input/message-payload';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
@@ -46,6 +46,8 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
     tracker,
   });
 
+  const [replyInputHandle, setReplyInputHandle] = createSignal<InputHandle>();
+
   return (
     <div
       class="relative pt-2"
@@ -76,6 +78,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 threadId: props.messageId,
               })}
               markdownNamespace={`thread-reply-input-${props.messageId}-markdown`}
+              onReady={setReplyInputHandle}
               onChange={(snapshot) => void props.setReplyInputState(snapshot)}
               onStartTyping={() =>
                 typingMutation.mutate({
@@ -111,17 +114,19 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                     }),
                   },
                   {
+                    onSuccess: () => {
+                      props.setReplyInputState(undefined);
+                      props.setIsReplying(false);
+                    },
                     onError: () => {
+                      const handle = replyInputHandle();
+                      if (!handle) return;
                       const current = props.replyInputState();
                       if (current && hasSendableInputContent(current)) return;
-                      props.setReplyInputState(snapshot);
-                      props.setIsReplying(true);
+                      handle.restoreSnapshot(snapshot);
                     },
                   }
                 );
-
-                props.setReplyInputState(undefined);
-                props.setIsReplying(false);
               }}
             />
           </div>

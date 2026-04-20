@@ -362,12 +362,7 @@ export function useSendMessageMutation(
 
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: async (vars: SendMessageParams): Promise<IdResponse> => {
-      // TEMP: dev-only flag to simulate message send failure — REVERT BEFORE COMMIT
-      if (import.meta.env.VITE_SIMULATE_MESSAGE_ERROR === 'true') {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        throw new Error('simulated message send error');
-      }
+    mutationFn: async (vars: SendMessageParams) => {
       // Use optimisticId as nonce - allows server to echo it back for correlation
       return await throwOnErr(
         async () =>
