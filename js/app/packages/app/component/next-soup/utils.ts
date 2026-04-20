@@ -672,10 +672,17 @@ export function markEntitiesDone(args: {
       rollback();
       throw err;
     } finally {
+      // Cache is already consistent via the optimistic update (or rollback on
+      // failure). Skip refetches — invalidating the infinite notification
+      // query would otherwise re-fetch every cached page.
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.all.email,
+          refetchType: 'none',
+        }),
         queryClient.invalidateQueries({
           queryKey: notificationKeys.user._def,
+          refetchType: 'none',
         }),
         ...emailIds.map((id) => invalidateSoupEntity(id)),
       ]);

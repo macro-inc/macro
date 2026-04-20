@@ -261,8 +261,12 @@ export function markNotificationsDone(
       rollback();
       throw err;
     } finally {
+      // Cache is already consistent via the optimistic update (or rollback on
+      // failure). Avoid refetchType default — it would re-fetch every page of
+      // the infinite query.
       await queryClient.invalidateQueries({
         queryKey: notificationKeys.user._def,
+        refetchType: 'none',
       });
     }
   })();
