@@ -57,5 +57,5 @@ export function SwipeDownDismissKeyboard() {
     });
   });
 
-  return;
+  return null;
 }
