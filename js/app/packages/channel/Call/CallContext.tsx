@@ -50,6 +50,7 @@ type CallStoreState = {
   activeAudioOutputDeviceId: string | null;
   activeVideoInputDeviceId: string | null;
   isNoiseSuppressed: boolean;
+  optimisticJoinChannelId: string | null;
 };
 
 const initialState: CallStoreState = {
@@ -68,6 +69,7 @@ const initialState: CallStoreState = {
   activeAudioOutputDeviceId: null,
   activeVideoInputDeviceId: null,
   isNoiseSuppressed: false,
+  optimisticJoinChannelId: null,
 };
 
 export type CallState = {
@@ -125,6 +127,12 @@ export type CallState = {
   isNoiseSuppressed: () => boolean;
   /** Toggle Krisp noise suppression on/off */
   toggleNoiseSuppression: () => Promise<void>;
+  /** Begin an optimistic join to a channel */
+  beginOptimisticJoin: (channelId: string) => void;
+  /** Rollback an optimistic join to a channel */
+  rollbackOptimisticJoin: () => void;
+  /** Whether we're in the optimistic join window */
+  isConnecting: () => boolean;
 };
 
 const CallContext = createContext<CallState>();
@@ -411,6 +419,8 @@ function createCallState() {
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
+// Real connection established — optimistic flag no longer needed
+      setStore('optimisticJoinChannelId', null);
     } catch (e) {
       console.error('failed to connect to LiveKit room', e);
       destroyRoom();
@@ -531,6 +541,16 @@ function createCallState() {
     }
   }
 
+  // --- optimistic join ---
+
+  function beginOptimisticJoin(channelId: string) {
+    setStore('optimisticJoinChannelId', channelId);
+  }
+
+  function rollbackOptimisticJoin() {
+    setStore('optimisticJoinChannelId', null);
+  }
+
   // --- cleanup ---
 
   const handleBeforeUnload = () => {
@@ -560,8 +580,8 @@ function createCallState() {
     // readonly state
     room,
     connectionState: () => store.connectionState,
-    isInCall: () => store.connectionState === ConnectionState.Connected,
-    activeChannelId: () => store.activeChannelId,
+    isInCall: () => store.connectionState === ConnectionState.Connected || store.optimisticJoinChannelId !== null,
+    activeChannelId: () => store.activeChannelId ?? store.optimisticJoinChannelId,
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
@@ -583,6 +603,7 @@ function createCallState() {
     activeAudioInputDeviceId: () => store.activeAudioInputDeviceId,
     activeAudioOutputDeviceId: () => store.activeAudioOutputDeviceId,
     activeVideoInputDeviceId: () => store.activeVideoInputDeviceId,
+    isConnecting: () => store.optimisticJoinChannelId !== null,
 
     // mutations
     connect,
@@ -595,6 +616,8 @@ function createCallState() {
     switchVideoInput,
     isNoiseSuppressed: () => store.isNoiseSuppressed,
     toggleNoiseSuppression,
+    beginOptimisticJoin,
+    rollbackOptimisticJoin,
   };
 
   return state;

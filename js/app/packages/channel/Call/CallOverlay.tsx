@@ -62,11 +62,13 @@ const ControlButton: Component<{
   active?: boolean;
   danger?: boolean;
   children?: JSX.Element;
+  disabled?: boolean;
 }> = (props) => {
   const [isPending, setIsPending] = createSignal(false);
+  const isDisabled = () => isPending() || props.disabled;
 
   const handleClick = async () => {
-    if (isPending()) return;
+    if (isDisabled()) return;
     setIsPending(true);
     try {
       await props.onClick();
@@ -80,16 +82,16 @@ const ControlButton: Component<{
   return (
     <button
       onClick={handleClick}
-      disabled={isPending()}
+      disabled={isDisabled()}
       class="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
       classList={{
-        'opacity-50 cursor-not-allowed': isPending(),
+        'opacity-50 cursor-not-allowed': isDisabled(),
         'bg-failure text-panel hover:bg-failure/80':
-          props.danger && !isPending(),
+          props.danger && !isDisabled(),
         'bg-surface-2 text-ink hover:bg-surface-3':
-          !props.danger && !props.active && !isPending(),
+          !props.danger && !props.active && !isDisabled(),
         'bg-accent-2 text-panel hover:bg-accent-3':
-          !props.danger && props.active && !isPending(),
+          !props.danger && props.active && !isDisabled(),
       }}
     >
       {props.children}
@@ -106,11 +108,13 @@ function ControlButtonWithDropdown(props: {
   active?: boolean;
   children?: JSX.Element;
   dropdownContent: JSX.Element;
+  disabled?: boolean;
 }) {
   const [isPending, setIsPending] = createSignal(false);
+  const isDisabled = () => isPending() || props.disabled;
 
   const handleClick = async () => {
-    if (isPending()) return;
+    if (isDisabled()) return;
     setIsPending(true);
     try {
       await props.onClick();
@@ -125,14 +129,14 @@ function ControlButtonWithDropdown(props: {
     <div class="relative flex items-center">
       <button
         onClick={handleClick}
-        disabled={isPending()}
+        disabled={isDisabled()}
         class="w-10 h-10 rounded-l-full flex items-center justify-center transition-colors"
         classList={{
-          'opacity-50 cursor-not-allowed': isPending(),
+          'opacity-50 cursor-not-allowed': isDisabled(),
           'bg-surface-2 text-ink hover:bg-surface-3':
-            !props.active && !isPending(),
+            !props.active && !isDisabled(),
           'bg-accent-2 text-panel hover:bg-accent-3':
-            props.active && !isPending(),
+            props.active && !isDisabled(),
         }}
       >
         {props.children}
@@ -142,9 +146,10 @@ function ControlButtonWithDropdown(props: {
           class="h-10 w-5 rounded-r-full flex items-center justify-center transition-colors border-l"
           classList={{
             'bg-surface-2 text-ink hover:bg-surface-3 border-surface-3':
-              !props.active,
+              !props.active && !isDisabled(),
             'bg-accent-2 text-panel hover:bg-accent-3 border-accent-3':
-              props.active,
+              props.active && !isDisabled(),
+            'opacity-50 pointer-events-none': isDisabled(),
           }}
         >
           <CaretDown class="w-3 h-3" />
@@ -209,6 +214,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 
 export function CallOverlay(props: { onLeave: () => void }) {
   const callCtx = useCallContext();
+  const isConnecting = () => callCtx.isConnecting();
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
@@ -278,10 +284,11 @@ export function CallOverlay(props: { onLeave: () => void }) {
           class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
           classList={{
             'ring-2 ring-accent-2': isLocalSpeaking(),
+            'animate-pulse': isConnecting(),
           }}
         >
           <Show
-            when={!callCtx.isVideoMuted()}
+            when={!isConnecting() && !callCtx.isVideoMuted()}
             fallback={
               <div class="flex items-center justify-center w-full h-full p-4">
                 <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
@@ -292,9 +299,19 @@ export function CallOverlay(props: { onLeave: () => void }) {
           >
             <TrackView track={localVideoTrack()} mirror />
           </Show>
-          <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs">
-            You
-          </div>
+
+          <Show
+            when={isConnecting()}
+            fallback={
+              <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs">
+                You
+              </div>
+            }
+          >
+            <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink-muted text-xs">
+              Connecting...
+            </div>
+          </Show>
         </div>
 
         <For each={participants()}>
@@ -307,6 +324,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
         <ControlButtonWithDropdown
           onClick={() => callCtx.toggleAudio()}
           active={!callCtx.isAudioMuted()}
+          disabled={isConnecting()}
           dropdownContent={
             <>
               <DeviceList
@@ -338,6 +356,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
         <ControlButtonWithDropdown
           onClick={() => callCtx.toggleVideo()}
           active={!callCtx.isVideoMuted()}
+          disabled={isConnecting()}
           dropdownContent={
             <DeviceList
               label="Camera"
@@ -358,11 +377,12 @@ export function CallOverlay(props: { onLeave: () => void }) {
         <ControlButton
           onClick={() => callCtx.toggleScreenShare()}
           active={callCtx.isScreenSharing()}
+          disabled={isConnecting()}
         >
           <Screencast class="w-5 h-5" />
         </ControlButton>
 
-        <ControlButton onClick={props.onLeave} danger>
+        <ControlButton onClick={props.onLeave} disabled={isConnecting()} danger>
           <PhoneDisconnect class="w-5 h-5" />
         </ControlButton>
       </div>

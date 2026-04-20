@@ -19,7 +19,7 @@ export function ChannelCallButton(props: { channelId: string }) {
   const isCallInProgress = () => !!activeCallQuery.data;
   const isHighlighted = () => call.isInThisChannel() || isCallInProgress();
 
-  const isPending = () => call.isJoining() || call.isLeaving();
+  const isPending = () => call.isLeaving();
 
   const tooltip = () => {
     if (call.isInThisChannel()) return 'Leave Call';
@@ -28,7 +28,8 @@ export function ChannelCallButton(props: { channelId: string }) {
   };
 
   const handleClick = async () => {
-    if (isPending()) return;
+    if (call.isJoining() || call.isLeaving()) return;
+    
     try {
       if (call.isInThisChannel()) {
         await call.leaveCall();

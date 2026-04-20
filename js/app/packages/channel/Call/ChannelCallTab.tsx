@@ -13,16 +13,17 @@ export function ChannelCallTab(props: {
   pendingJoin?: Accessor<boolean>;
 }) {
   const call = useCall(() => props.channelId);
-  const showJoining = () =>
-    call.isJoining() || (props.pendingJoin?.() ?? false);
 
   return (
     <Show
       when={call.isInThisChannel()}
       fallback={
-        <Show when={showJoining()}>
+        // This fallback now only shows for the brief moment before
+        // beginOptimisticJoin fires (e.g. deep-link auto-join where
+        // pendingJoin is set but joinCall hasn't been called yet)
+        <Show when={props.pendingJoin?.()}>
           <div class="flex size-full items-center justify-center text-ink-muted">
-            Joining call…
+            Joining call...
           </div>
         </Show>
       }
