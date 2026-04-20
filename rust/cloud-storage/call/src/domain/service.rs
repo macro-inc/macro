@@ -4,7 +4,9 @@
 mod test;
 
 use connection::domain::ports::ConnectionService;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
+use entity_access::domain::models::{
+    AccessLevel, EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -18,6 +20,8 @@ use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
+
+use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
@@ -703,6 +707,29 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn edit_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        request: EditCallRecordRequest,
+    ) -> Result<(), CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+
+        self.repo
+            .patch_call_record(&call_id, &request)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
     }
 }
 

@@ -11,6 +11,8 @@ use uuid::Uuid;
 
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 
+use crate::domain::models::EditCallRecordRequest;
+
 use super::models::{
     Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallTokenResponse,
     CallWebhookEvent, EgressS3Config, GetCallRecordsRequest, LeaveCallResponse,
@@ -172,6 +174,13 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_record_id: &Uuid,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Patches a call record.
+    fn patch_call_record(
+        &self,
+        call_record_id: &Uuid,
+        request: &EditCallRecordRequest,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
@@ -319,6 +328,13 @@ pub trait CallService: Send + Sync + 'static {
     fn delete_call_record(
         &self,
         receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Edits a [`CallRecord`].
+    fn edit_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        request: EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 }
 

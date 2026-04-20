@@ -1,5 +1,7 @@
 //! Postgres-backed repository for call state.
 
+mod edit;
+
 #[cfg(test)]
 mod test;
 
@@ -18,7 +20,7 @@ use uuid::Uuid;
 use crate::domain::channel_name::{NameLookup, display_name, resolve_channel_name};
 use crate::domain::models::{
     Call, CallParticipant, CallRecord, CallRecordParticipant, CallRecordTranscriptSegment,
-    TranscriptSegmentRequest,
+    EditCallRecordRequest, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallRepository;
 
@@ -1039,5 +1041,21 @@ impl CallRepository for PgCallRepo {
         .fetch_optional(&self.pool)
         .await?;
         Ok(row.and_then(|r| r.recording_key))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_call_record(
+        &self,
+        call_record_id: &Uuid,
+        request: &EditCallRecordRequest,
+    ) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
+        if let Some(share_permission) = request.share_permission.as_ref() {
+            edit::update_share_permission(&mut tx, call_record_id, share_permission).await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
     }
 }
