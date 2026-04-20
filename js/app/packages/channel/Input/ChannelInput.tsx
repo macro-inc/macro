@@ -1,5 +1,6 @@
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isMobile } from '@core/mobile/isMobile';
+import { isIOS } from '@solid-primitives/platform';
 import { Input } from './Input';
 import { FormatButtons } from './FormatButtons';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
@@ -136,7 +137,19 @@ export function ChannelInput(props: ChannelInputProps) {
       );
     },
   });
-  clearComposer = () => markdownEditor.controls.clear();
+  // On iOS, blur before clearing so dictation finalizes and discards its buffer
+  // (otherwise it re-injects the sent text into the cleared editor). Re-focus
+  // via rAF so the keyboard stays up: rAF fires after Lexical's update commits,
+  // avoiding a conflict where clear()'s $setSelection(null) undoes the focus.
+  clearComposer = () => {
+    if (isIOS) {
+      markdownEditor.controls.blur();
+      markdownEditor.controls.clear();
+      requestAnimationFrame(() => markdownEditor.controls.focus());
+    } else {
+      markdownEditor.controls.clear();
+    }
+  };
 
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
