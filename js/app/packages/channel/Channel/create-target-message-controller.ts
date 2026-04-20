@@ -117,6 +117,16 @@ export function createTargetMessageController(
     )
   );
 
+  const reset = () => {
+    setTargetMessageData({
+      activeTargetMessageId: undefined,
+      activeTargetMessageReplyId: undefined,
+      loadAroundMessageId: undefined,
+      pendingScrollTargetId: undefined,
+      pendingTargetReplyId: undefined,
+    });
+  };
+
   return {
     activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
     activeTargetMessageReplyId: () =>
@@ -128,6 +138,7 @@ export function createTargetMessageController(
     goToMessage,
     completePendingScroll,
     completePendingReplyScroll,
+    reset,
   };
 }
 

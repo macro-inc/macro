@@ -2,7 +2,9 @@ import {
   type ChannelMessagesData,
   useChannelMessagesQuery,
   createMessageIndex,
+  getChannelMessagesQueryKey,
 } from '@queries/channel/channel-messages';
+import { queryClient } from '@queries/client';
 import {
   createEffect,
   createMemo,
@@ -275,6 +277,16 @@ export function Channel(props: ChannelProps) {
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
     });
 
+  const handleScrollToBottom = () => {
+    if (messagesQuery.hasPreviousPage) {
+      targetMessageController.reset();
+      const defaultKey = getChannelMessagesQueryKey(props.channelId, null);
+      queryClient.resetQueries({ queryKey: defaultKey });
+    } else {
+      threadListNavigation()?.scrollToBottom('end');
+    }
+  };
+
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
     hasMoreBelow: () => threadPaginator.hasMorePrepend(),
@@ -410,8 +422,8 @@ export function Channel(props: ChannelProps) {
                   }}
                 </ThreadList>
                 <ScrollToBottomOverlay
-                  navigation={threadListNavigation}
                   scrollState={threadListScrollState}
+                  onScrollToBottom={handleScrollToBottom}
                 />
               </Show>
             </div>
