@@ -94,28 +94,19 @@ export function stackNotifications(
       )
       .otherwise(() => false);
 
-  // Collect threadIds from all replies and thread-mentions (before shadowing)
-  // so root sends can be absorbed even when their only reply is shadowed.
-  const activeThreadIds = new Set([
-    ...filteredNotifications
-      .filter(byTag('channel_message_reply'))
+  const activeThreadIds = new Set(
+    filteredNotifications
       .map((n) =>
         match(n.notification_metadata)
           .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId)
-          .otherwise(() => undefined)
-      )
-      .filter((id): id is string => id !== undefined),
-    ...threadMentions
-      .map((n) =>
-        match(n.notification_metadata)
           .with(
             { tag: 'channel_mention' },
             (m) => m.content.threadId ?? undefined
           )
           .otherwise(() => undefined)
       )
-      .filter((id): id is string => id !== undefined),
-  ]);
+      .filter((id): id is string => id !== undefined)
+  );
 
   const replies = filteredNotifications
     .filter(byTag('channel_message_reply'))
