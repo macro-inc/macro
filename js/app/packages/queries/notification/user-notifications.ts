@@ -439,5 +439,11 @@ export function optimisticInsertNotification(
     );
   }
 
-  invalidateUserNotifications();
+  // Cache is already updated via setQueriesData above. Mark as stale without
+  // refetching — refetchType default would re-fetch every cached page of the
+  // infinite notification query for every incoming websocket notification.
+  queryClient.invalidateQueries({
+    queryKey: notificationKeys.user._def,
+    refetchType: 'none',
+  });
 }
