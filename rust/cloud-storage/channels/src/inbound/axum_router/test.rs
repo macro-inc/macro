@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelParticipant, MessagePageDirection, ParticipantRole,
+    ChannelAttachment, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
+    MessagePageDirection, ParticipantRole,
 };
 use crate::domain::ports::{
     ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult,
@@ -171,6 +172,7 @@ impl ChannelMessagesService for MockService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -233,6 +235,7 @@ impl ChannelMessagesService for ErrorService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
@@ -280,6 +283,7 @@ impl ChannelMessagesService for ParticipantsService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -578,6 +582,7 @@ impl ChannelMessagesService for NotFoundService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -636,6 +641,7 @@ impl ChannelMessagesService for AroundHasItemsService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()

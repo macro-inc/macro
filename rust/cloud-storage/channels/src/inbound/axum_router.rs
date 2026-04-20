@@ -2,8 +2,8 @@
 mod test;
 
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelParticipant, CountedReaction, MessageAttachment,
-    MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
+    ChannelAttachment, ChannelMessage, ChannelMessageFilters, ChannelParticipant, CountedReaction,
+    MessageAttachment, MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
 };
 use crate::domain::ports::{
     ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult, ChannelMessagesService,
@@ -142,7 +142,8 @@ where
     Router::new()
         .route(
             "/{channel_id}/messages",
-            get(get_channel_messages_handler::<S, Svc>),
+            get(get_channel_messages_handler::<S, Svc>)
+                .post(post_channel_messages_handler::<S, Svc>),
         )
         .route(
             "/{channel_id}/messages/{message_id}/replies",
@@ -196,9 +197,64 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: Entity
     Query(params): Query<Params>,
     cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let filters = ChannelMessageFilters::default();
+    channel_messages_response(&state, params, cursor, channel_id, &filters).await
+}
+
+/// Handler for `POST /channels/{channel_id}/messages`.
+#[utoipa::path(
+    post,
+    operation_id = "post_channel_messages",
+    path = "/channels/{channel_id}/messages",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
+        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value for older messages"),
+        ("previous_cursor" = Option<String>, Query, description = "Base64 encoded cursor value for newer messages"),
+        ("load_around_message_id" = Option<Uuid>, Query, description = "Return a centered window around this message ID"),
+    ),
+    request_body = ChannelMessageFilters,
+    responses(
+        (status = 200, body = ApiChannelMessagesPage),
+        (status = 401, body = ErrorResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(
+        channel_id = tracing::field::Empty,
+        limit = tracing::field::Empty,
+        page_direction = tracing::field::Empty,
+        has_cursor = tracing::field::Empty,
+        load_around_message_id = tracing::field::Empty
+    )
+)]
+pub async fn post_channel_messages_handler<S: ChannelMessagesService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+    Query(params): Query<Params>,
+    cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
+    Json(filters): Json<ChannelMessageFilters>,
+) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    channel_messages_response(&state, params, cursor, channel_id, &filters).await
+}
+
+async fn channel_messages_response<S: ChannelMessagesService, Svc>(
+    state: &ChannelsRouterState<S, Svc>,
+    params: Params,
+    cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
+    channel_id: Uuid,
+    filters: &ChannelMessageFilters,
+) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let (query, direction, has_cursor) = parse_messages_query(cursor);
-    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+
     let span = tracing::Span::current();
     span.record("channel_id", tracing::field::display(channel_id));
     span.record("limit", limit);
@@ -223,7 +279,7 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: Entity
                 has_more_newer,
             } = state
                 .service
-                .get_channel_messages(channel_id, query, direction, limit)
+                .get_channel_messages(channel_id, query, direction, limit, filters)
                 .await?;
             (page, has_more_newer)
         }

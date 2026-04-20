@@ -1,10 +1,14 @@
-use crate::domain::models::{MessagePageDirection, ParticipantRole};
+use crate::domain::models::{ChannelMessageFilters, MessagePageDirection, ParticipantRole};
 use crate::domain::ports::ChannelMessagesRepo;
 use crate::outbound::pg_channels_repo::PgChannelMessagesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_pagination::{CreatedAt, Cursor, CursorVal, Query};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
+
+const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
+    top_level_message_ids: Vec::new(),
+};
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
@@ -33,6 +37,7 @@ async fn top_level_excludes_thread_replies_and_fully_deleted(
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?;
     let rows = result.rows;
@@ -61,6 +66,7 @@ async fn top_level_ordered_newest_first(pool: Pool<Postgres>) -> anyhow::Result<
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?;
     let rows = result.rows;
@@ -99,7 +105,7 @@ async fn top_level_cursor_skips_earlier_messages(pool: Pool<Postgres>) -> anyhow
         filter: (),
     });
     let page2 = repo
-        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Older, 50)
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Older, 50, &NO_FILTERS)
         .await?
         .rows;
     let ids: Vec<Uuid> = page2.iter().map(|r| r.id).collect();
@@ -136,7 +142,7 @@ async fn top_level_newer_direction_returns_nearest_newer_page(
         filter: (),
     });
     let page = repo
-        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 2)
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 2, &NO_FILTERS)
         .await?;
 
     let ids: Vec<Uuid> = page.rows.iter().map(|r| r.id).collect();
@@ -174,7 +180,7 @@ async fn top_level_newer_direction_sets_has_more_newer_with_overfetch(
         filter: (),
     });
     let page = repo
-        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 1)
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 1, &NO_FILTERS)
         .await?;
 
     let ids: Vec<Uuid> = page.rows.iter().map(|r| r.id).collect();
@@ -195,6 +201,7 @@ async fn top_level_limit_is_respected(pool: Pool<Postgres>) -> anyhow::Result<()
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             2,
+            &NO_FILTERS,
         )
         .await?;
     let rows = result.rows;
@@ -218,6 +225,7 @@ async fn top_level_scoped_to_channel(pool: Pool<Postgres>) -> anyhow::Result<()>
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?;
     let rows = result.rows;
