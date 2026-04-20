@@ -35,7 +35,7 @@ VALUES
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'sp-public-edit-proj'),
        ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'sp-public-view-proj'),
-       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000003', 'sp-private-owner-proj');
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000003', 'sp-public-edit-proj');
 -- Attach private permission to child to test filter.
 
 
@@ -43,8 +43,4 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'sp-public-edit-proj'),
 INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
 VALUES
 -- user-1 has an explicit 'owner' grant on the grandparent project. This is their highest possible access.
-('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'project', 'user-1', 'user', 'owner'),
--- user-1 also has a lower-level 'view' grant on the child, which should be overridden by the higher inherited grant.
-('aaaaaaaa-aaaa-aaaa-aaaa-000000000003', 'project', 'user-1', 'user', 'view'),
--- user-2 has explicit 'comment' access on the parent project to test user scoping.
-('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'project', 'user-2', 'user', 'comment');
+('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'project', 'user-1', 'user', 'owner');

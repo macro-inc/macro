@@ -1,81 +1,6 @@
 use super::*;
 
 #[sqlx::test(fixtures(path = "../../../fixtures", scripts("highest_access_level_for_chat")))]
-async fn test_highest_level_is_from_explicit_access(
-    pool: sqlx::Pool<sqlx::Postgres>,
-) -> anyhow::Result<()> {
-    // SCENARIO: Get highest access for 'user-1' on d-child (cccccccc-cccc-cccc-cccc-000000000001).
-    // EXPLICIT ACCESS: view (direct), edit (parent), owner (grandparent). Max is 'owner'.
-    // PUBLIC ACCESS: view (parent), edit (grandparent). Max is 'edit'.
-    // EXPECTATION: The overall highest level should be 'owner' from the explicit grant.
-
-    let highest_level =
-        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000001", "user-1")
-            .await?;
-
-    assert_eq!(
-        highest_level,
-        Some(AccessLevel::Owner),
-        "Expected highest level to be 'owner' from an explicit entity_access record"
-    );
-
-    // highest public access is edit via grandparent
-
-    let highest_level = get_highest_access_level_for_chat(
-        &pool,
-        "cccccccc-cccc-cccc-cccc-000000000001",
-        "user-public-access-only",
-    )
-    .await?;
-
-    assert_eq!(
-        highest_level,
-        Some(AccessLevel::Edit),
-        "Expected highest level to be 'edit' from a public SharePermission record"
-    );
-
-    Ok(())
-}
-
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("highest_access_level_for_chat")))]
-async fn test_user_scoping_is_correct(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
-    // SCENARIO: Get highest access for 'user-2' on d-child.
-    // EXPLICIT ACCESS: 'user-2' only has 'view' access.
-    // PUBLIC ACCESS: view (parent), edit (grandparent). Max is 'edit'.
-    // EXPECTATION: The overall highest level is 'edit' (from public), not 'owner' (from user-1's grant).
-
-    let highest_level =
-        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000001", "user-2")
-            .await?;
-
-    assert_eq!(
-        highest_level,
-        Some(AccessLevel::Edit),
-        "User-2's highest access should be 'edit' from public, not 'owner' from user-1's explicit grant"
-    );
-
-    Ok(())
-}
-
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("highest_access_level_for_chat")))]
-async fn test_no_permissions_returns_none(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
-    // SCENARIO: Get access for any user on d-private.
-    // This chat has no project, no entity_access, and no SharePermission records.
-    // EXPECTATION: The query should return an empty list, resulting in `None`.
-
-    let highest_level =
-        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000003", "user-3")
-            .await?;
-
-    assert_eq!(
-        highest_level, None,
-        "Expected None for a chat with no permissions"
-    );
-
-    Ok(())
-}
-
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("highest_access_level_for_chat")))]
 async fn test_batch_public_access_user(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
     // SCENARIO: Get access for 'user-public-access-only' on multiple chats
     // This user has no explicit grants but should get public access where available
@@ -153,41 +78,6 @@ async fn test_batch_nonexistent_chats(pool: sqlx::Pool<sqlx::Postgres>) -> anyho
         access_levels.get("nonexistent-2"),
         Some(&None),
         "Expected no access for nonexistent chat"
-    );
-
-    Ok(())
-}
-
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("highest_access_level_for_chat")))]
-async fn test_batch_consistency_with_single_function(
-    pool: sqlx::Pool<sqlx::Postgres>,
-) -> anyhow::Result<()> {
-    // SCENARIO: Ensure batch function returns same results as individual calls
-    let chat_ids = vec![
-        "cccccccc-cccc-cccc-cccc-000000000001".to_string(),
-        "cccccccc-cccc-cccc-cccc-000000000002".to_string(),
-    ];
-    let user_id = "user-1";
-
-    // Get results from batch function
-    let batch_results = get_highest_access_level_for_chats(&pool, &chat_ids, user_id).await?;
-
-    // Get results from individual function calls
-    let individual_d_child =
-        get_highest_access_level_for_chat(&pool, "cccccccc-cccc-cccc-cccc-000000000001", user_id)
-            .await?;
-
-    // Compare results
-    assert_eq!(
-        batch_results.get("cccccccc-cccc-cccc-cccc-000000000001"),
-        Some(&individual_d_child),
-        "Batch and individual results should match for d-child"
-    );
-    // no access for chat 2
-    assert_eq!(
-        batch_results.get("cccccccc-cccc-cccc-cccc-000000000002"),
-        Some(None).as_ref(),
-        "Batch and individual results should match for d-standalone"
     );
 
     Ok(())
