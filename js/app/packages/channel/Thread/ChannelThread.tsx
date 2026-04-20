@@ -168,6 +168,7 @@ export function ChannelThread(props: ThreadProps) {
         );
         if (targetReplyIndex === -1) return;
 
+        props.onSelectMessage?.(props.data().id);
         replySelection.select(targetReplyId);
 
         if (!isExpanded) {
