@@ -4,8 +4,10 @@ import {
   type NotificationStack,
   getMostRecentNotification,
   getAllNotificationsFromGroup,
+  markNotificationsDone,
   openNotification,
 } from '@notifications';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { WithNotification } from '../types/notification';
 import { isChannelEntity, type EntityData } from '../types/entity';
@@ -93,10 +95,32 @@ function MobileStackRow(props: {
 
   const handleSwipeLeft = async () => {
     await ctx?.collapseEntity(stackEntityId());
-    void notificationSource.bulkMarkAsDone(
-      getAllNotificationsFromGroup(props.stack)
+
+    const notifications = getAllNotificationsFromGroup(props.stack);
+    const handle = markNotificationsDone(notifications.map((n) => n.id));
+
+    const toastId = toast.success(
+      'Marked as done',
+      undefined,
+      [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Undone'),
+              () => toast.failure('Failed to undo')
+            );
+          },
+        },
+      ],
+      10_000
     );
-    toast.success('Marked as done');
+
+    handle.done.catch(() => {
+      toast.failure('Failed to mark as done');
+    });
   };
 
   const handleClick = async (e: MouseEvent) => {

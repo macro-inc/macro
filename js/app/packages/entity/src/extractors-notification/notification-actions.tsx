@@ -1,6 +1,12 @@
-import type { NotificationStack } from '@notifications';
-import type { UnifiedNotification } from '@notifications';
-import { getAllNotificationsFromGroup } from '@notifications';
+import type {
+  MarkNotificationsDoneHandle,
+  NotificationStack,
+  UnifiedNotification,
+} from '@notifications';
+import {
+  getAllNotificationsFromGroup,
+  markNotificationsDone,
+} from '@notifications';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 
 interface NotificationActionsProps {
@@ -18,10 +24,11 @@ interface SingleNotificationActionsProps {
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
 
-  const markStackAsDone = async () => {
+  const markStackAsDone = (): MarkNotificationsDoneHandle => {
     const notifications = getAllNotificationsFromGroup(props.stack);
-    await notificationSource.bulkMarkAsDone(notifications);
+    const handle = markNotificationsDone(notifications.map((n) => n.id));
     props.onMarkAsDone?.();
+    return handle;
   };
 
   const markStackAsRead = async () => {

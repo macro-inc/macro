@@ -1,4 +1,8 @@
 import type { Entity, EntityType } from '@core/types';
+import { throwOnErr } from '@core/util/maybeResult';
+import { queryClient } from '@queries/client';
+import { notificationKeys } from '@queries/notification/keys';
+import { notificationServiceClient } from '@service-notification/client';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { isMatching, P } from 'ts-pattern';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
@@ -199,6 +203,96 @@ export function useNotificationsMutedForEntity(
       item_id: entity.id,
     })
   );
+}
+
+export type MarkNotificationsDoneHandle = {
+  /** Fire-and-forget promise for the API call. Rejects on failure (rolls back optimistic update). */
+  done: Promise<void>;
+  /** Restores the notification cache and calls the undone API. */
+  undo: () => Promise<void>;
+};
+
+type NotificationCacheData = {
+  pages: { items: { id: string }[] }[];
+};
+
+/**
+ * Optimistically marks notifications as done in the cache and fires the API
+ * call in the background. Returns synchronously so the caller can show an
+ * undo toast immediately.
+ */
+export function markNotificationsDone(
+  notificationIds: string[]
+): MarkNotificationsDoneHandle {
+  queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
+
+  const previousData = queryClient.getQueriesData<NotificationCacheData>({
+    queryKey: notificationKeys.user._def,
+  });
+
+  const idSet = new Set(notificationIds);
+
+  for (const [key, data] of previousData) {
+    if (!data) continue;
+    queryClient.setQueryData(key, {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items.filter((item) => !idSet.has(item.id)),
+      })),
+    });
+  }
+
+  const rollback = () => {
+    for (const [key, data] of previousData) {
+      queryClient.setQueryData(key, data);
+    }
+  };
+
+  const done = (async () => {
+    try {
+      await throwOnErr(
+        async () =>
+          await notificationServiceClient.bulkMarkNotificationAsDone({
+            notificationIds,
+          })
+      );
+    } catch (err) {
+      rollback();
+      throw err;
+    } finally {
+      await queryClient.invalidateQueries({
+        queryKey: notificationKeys.user._def,
+      });
+    }
+  })();
+
+  return {
+    done,
+    undo: async () => {
+      try {
+        await done;
+      } catch {
+        return;
+      }
+
+      rollback();
+
+      try {
+        await throwOnErr(
+          async () =>
+            await notificationServiceClient.bulkMarkNotificationAsUndone({
+              notificationIds,
+            })
+        );
+      } finally {
+        await queryClient.invalidateQueries({
+          queryKey: notificationKeys.user._def,
+          refetchType: 'none',
+        });
+      }
+    },
+  };
 }
 
 export function createEffectOnEntityTypeNotification(

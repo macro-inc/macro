@@ -4,6 +4,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/regular/check.svg';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   getChannelNotificationParams,
@@ -72,9 +73,32 @@ function NotificationStackRow(props: {
     props.onClick?.(e);
   };
 
-  const handleMarkAsDone = async (e?: PointerEvent | MouseEvent) => {
+  const handleMarkAsDone = (e?: PointerEvent | MouseEvent) => {
     e?.stopPropagation();
-    await markStackAsDone();
+    const handle = markStackAsDone();
+
+    const toastId = toast.success(
+      'Marked as done',
+      undefined,
+      [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Undone'),
+              () => toast.failure('Failed to undo')
+            );
+          },
+        },
+      ],
+      10_000
+    );
+
+    handle.done.catch(() => {
+      toast.failure('Failed to mark as done');
+    });
   };
 
   const handleMarkAsRead = async () => {
