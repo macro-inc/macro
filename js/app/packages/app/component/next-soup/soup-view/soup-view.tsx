@@ -173,7 +173,7 @@ type PersistedSoupViewState = {
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 2;
+const PERSISTED_STATE_VERSION = 3;
 
 const listStateCache = new Map<
   string,
