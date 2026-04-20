@@ -343,15 +343,14 @@ function InteractiveOnboardingInner() {
     })
   );
 
-  // Mark tutorial complete on the backend once the about-us (Google login)
-  // lesson is completed or skipped — before the paywall step. Guarded so the
-  // effect fires the mutation at most once, not on every subsequent lesson
-  // advance.
+  // Mark tutorial complete on the backend the moment the user lands on the
+  // Launch screen — the semantic end of the onboarding experience. Guarded so
+  // the effect fires the mutation at most once.
   let tutorialMarkedComplete = false;
   createEffect(() => {
     if (testMode || tutorialMarkedComplete) return;
-    const aboutUs = state.lessons().find((l) => l.definition.id === 'about-us');
-    if (aboutUs && (aboutUs.completed || aboutUs.skipped)) {
+    const current = state.currentLesson();
+    if (current?.definition.id === 'launch') {
       tutorialMarkedComplete = true;
       completeTutorial.mutate(undefined);
     }
