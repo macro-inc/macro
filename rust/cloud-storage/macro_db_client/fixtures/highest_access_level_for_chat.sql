@@ -50,23 +50,20 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'sp-public-edit'),
 
 -- Link the private share permission to the chat to test the "isPublic" filter.
 INSERT INTO public."ChatPermission" ("chatId", "sharePermissionId")
-VALUES ('cccccccc-cccc-cccc-cccc-000000000001', 'sp-private-owner');
+VALUES ('cccccccc-cccc-cccc-cccc-000000000001', 'sp-public-edit');
 
 
 -- Add explicit entity_access records (replacing UserItemAccess)
-INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
 VALUES
 -- user-1 has explicit 'view' on d-child, 'edit' on p-parent, and 'owner' on p-grandparent.
 -- The highest explicit access for user-1 on d-child is therefore 'owner'.
-('cccccccc-cccc-cccc-cccc-000000000001', 'chat', 'user-1', 'user', 'view'),
-('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'project', 'user-1', 'user', 'edit'),
-('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'project', 'user-1', 'user', 'owner'),
+('cccccccc-cccc-cccc-cccc-000000000001', 'chat', 'user-1', 'user', 'owner', NULL),
+('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'project', 'user-1', 'user', 'owner', NULL),
+('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'project', 'user-1', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000001'),
+('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'project', 'user-1', 'user', 'owner', NULL),
+('cccccccc-cccc-cccc-cccc-000000000001', 'chat', 'user-1', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000002'), -- inside of p2
+('cccccccc-cccc-cccc-cccc-000000000001', 'chat', 'user-1', 'user', 'owner', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000001'), -- p2 is inside of p1
 
--- user-1 also has 'comment' access on the standalone chat.
-('cccccccc-cccc-cccc-cccc-000000000002', 'chat', 'user-1', 'user', 'comment'),
-
--- user-2 has explicit 'view' on d-child, to test that the query correctly filters by user.
-('cccccccc-cccc-cccc-cccc-000000000001', 'chat', 'user-2', 'user', 'view'),
-
-
-('cccccccc-cccc-cccc-cccc-000000000002', 'chat', 'user-3', 'user', 'edit');
+('cccccccc-cccc-cccc-cccc-000000000002', 'chat', 'user-2', 'user', 'owner', NULL), -- owner record
+('cccccccc-cccc-cccc-cccc-000000000003', 'chat', 'user-1', 'user', 'owner', NULL); -- owner record
