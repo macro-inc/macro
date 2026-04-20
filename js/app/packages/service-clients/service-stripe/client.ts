@@ -46,13 +46,17 @@ export const stripeServiceClient = {
   createCheckoutSession: async (
     type: string = '',
     discount?: string,
-    tier?: string
+    tier?: string,
+    /** Override the default success URL. Useful for flows (e.g. onboarding) that want the user returned to a specific page. */
+    successUrl?: string
   ) => {
     const gaClientId = await getGaClientId();
     const { fbp, fbc } = getMetaIds();
 
     const result = await authServiceClient.createCheckoutSession({
-      successUrl: `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
+      successUrl:
+        successUrl ??
+        `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
       cancelUrl: `${window.location.origin}/app?subscriptionCancel=true${tier ? `&tier=${tier}` : ''}`,
       discount: discount ?? null,
       metadata: {
