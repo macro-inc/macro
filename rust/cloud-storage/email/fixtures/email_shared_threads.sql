@@ -27,11 +27,11 @@ VALUES
 
 -- == Shared project: user1 has access to this project owned by user2 ==
 INSERT INTO "Project" (id, name, "userId", "createdAt", "updatedAt")
-VALUES ('proj-cccc-cccc-cccc-cccccccccccc', 'Shared Project', 'macro|user2@test.com', NOW(), NOW());
+VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'Shared Project', 'macro|user2@test.com', NOW(), NOW());
 
 -- Grant user1 access to the shared project
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-VALUES ('proj-cccc-cccc-cccc-cccccccccccc'::uuid, 'project', 'macro|user1@test.com', 'user', 'view');
+VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid, 'project', 'macro|user1@test.com', 'user', 'view');
 
 -- == User2's email threads ==
 
@@ -54,7 +54,7 @@ INSERT INTO email_threads (
 VALUES
     ('20000102-0000-0000-0000-000000000102', 'shared_thread2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
      true, false, '2024-02-02 10:00:00+00', NULL, '2024-02-02 10:00:00+00', NOW(), NOW(),
-     'proj-cccc-cccc-cccc-cccccccccccc');
+     'cccccccc-cccc-cccc-cccc-cccccccccccc');
 
 -- Thread 103: User2's thread NOT shared with user1 (should never appear)
 INSERT INTO email_threads (
@@ -72,7 +72,7 @@ VALUES ('20000101-0000-0000-0000-000000000101'::uuid, 'thread', 'macro|user1@tes
 
 -- Denormalized row: thread 102 inherits access from the shared project
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
-VALUES ('20000102-0000-0000-0000-000000000102'::uuid, 'thread', 'macro|user1@test.com', 'user', 'view', 'proj-cccc-cccc-cccc-cccccccccccc');
+VALUES ('20000102-0000-0000-0000-000000000102'::uuid, 'thread', 'macro|user1@test.com', 'user', 'view', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
 
 -- == Messages for user2's threads ==
 INSERT INTO email_messages (
