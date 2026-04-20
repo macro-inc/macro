@@ -46,10 +46,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId != null) toast.dismiss(toastId);
-            handle.undo().then(
-              () => toast.success('Undone'),
-              () => toast.failure('Failed to undo')
-            );
+            handle.undo().catch(() => toast.failure('Failed to undo'));
           },
         },
       ],
