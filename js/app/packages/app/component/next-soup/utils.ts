@@ -584,7 +584,7 @@ export type MarkDoneHandle = {
 };
 
 type NotificationCacheData = {
-  pages: { items: { id: string }[] }[];
+  pages: { items: { id: string; done?: boolean }[] }[];
 };
 
 /**
@@ -616,10 +616,6 @@ export function markEntitiesDone(args: {
   }>({
     queryKey: queryKeys.all.email,
   });
-  const previousNotifications =
-    queryClient.getQueriesData<NotificationCacheData>({
-      queryKey: notificationKeys.user._def,
-    });
 
   const soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
 
@@ -634,25 +630,36 @@ export function markEntitiesDone(args: {
     });
   }
 
-  for (const [key, data] of previousNotifications) {
-    if (!data) continue;
-    queryClient.setQueryData(key, {
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        items: page.items.filter((item) => !notificationIdSet.has(item.id)),
-      })),
-    });
-  }
+  // Flip `done` on target notifications in place. Touching only the specific
+  // items (instead of snapshotting and restoring the whole cache) keeps any
+  // concurrent websocket inserts intact across the undo window.
+  const setNotificationDoneFlag = (value: boolean) => {
+    if (notificationIdSet.size === 0) return;
+    queryClient.setQueriesData<NotificationCacheData>(
+      { queryKey: notificationKeys.user._def },
+      (data) => {
+        if (!data) return data;
+        return {
+          ...data,
+          pages: data.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) =>
+              notificationIdSet.has(item.id) ? { ...item, done: value } : item
+            ),
+          })),
+        };
+      }
+    );
+  };
+
+  setNotificationDoneFlag(true);
 
   const rollback = () => {
     soupTxn?.rollback();
     for (const [key, data] of previousEmail) {
       queryClient.setQueryData(key, data);
     }
-    for (const [key, data] of previousNotifications) {
-      queryClient.setQueryData(key, data);
-    }
+    setNotificationDoneFlag(false);
   };
 
   const done = (async () => {

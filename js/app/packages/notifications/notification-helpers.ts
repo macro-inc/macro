@@ -213,7 +213,7 @@ export type MarkNotificationsDoneHandle = {
 };
 
 type NotificationCacheData = {
-  pages: { items: { id: string }[] }[];
+  pages: { items: { id: string; done?: boolean }[] }[];
 };
 
 /**
@@ -226,28 +226,30 @@ export function markNotificationsDone(
 ): MarkNotificationsDoneHandle {
   queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
 
-  const previousData = queryClient.getQueriesData<NotificationCacheData>({
-    queryKey: notificationKeys.user._def,
-  });
-
   const idSet = new Set(notificationIds);
 
-  for (const [key, data] of previousData) {
-    if (!data) continue;
-    queryClient.setQueryData(key, {
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        items: page.items.filter((item) => !idSet.has(item.id)),
-      })),
-    });
-  }
-
-  const rollback = () => {
-    for (const [key, data] of previousData) {
-      queryClient.setQueryData(key, data);
-    }
+  // Flip `done` on the targeted notifications in place. Touching only the
+  // specific items (instead of snapshotting and restoring the whole cache)
+  // keeps any concurrent websocket inserts intact.
+  const setDoneFlag = (value: boolean) => {
+    queryClient.setQueriesData<NotificationCacheData>(
+      { queryKey: notificationKeys.user._def },
+      (data) => {
+        if (!data) return data;
+        return {
+          ...data,
+          pages: data.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) =>
+              idSet.has(item.id) ? { ...item, done: value } : item
+            ),
+          })),
+        };
+      }
+    );
   };
+
+  setDoneFlag(true);
 
   const done = (async () => {
     try {
@@ -258,12 +260,11 @@ export function markNotificationsDone(
           })
       );
     } catch (err) {
-      rollback();
+      setDoneFlag(false);
       throw err;
     } finally {
-      // Cache is already consistent via the optimistic update (or rollback on
-      // failure). Avoid refetchType default — it would re-fetch every page of
-      // the infinite query.
+      // Cache is already consistent via the optimistic flip. refetchType
+      // default would re-fetch every page of the infinite query.
       await queryClient.invalidateQueries({
         queryKey: notificationKeys.user._def,
         refetchType: 'none',
@@ -280,7 +281,7 @@ export function markNotificationsDone(
         return;
       }
 
-      rollback();
+      setDoneFlag(false);
 
       try {
         await throwOnErr(
