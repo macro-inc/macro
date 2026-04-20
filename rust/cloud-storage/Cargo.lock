@@ -5513,6 +5513,7 @@ dependencies = [
  "model_file_type",
  "nom 8.0.0",
  "non_empty",
+ "rootcause",
  "schemars",
  "serde",
  "serde_json",
