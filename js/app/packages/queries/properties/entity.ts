@@ -84,9 +84,10 @@ export type SaveEntityPropertyParams = {
 
 type SaveEntityPropertyContext = SoupTransaction | undefined;
 
-function optimisticUpdateSoupEntityProperties(
+function optimisticUpdateSoupEntityProperty(
   entityId: string,
-  updates: Map<string, SoupPropertyValue>
+  propertyDefinitionId: string,
+  value: SoupPropertyValue
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
   if (
@@ -103,8 +104,8 @@ function optimisticUpdateSoupEntityProperties(
     data: {
       ...current.data,
       properties: current.data.properties.map((prop) =>
-        updates.has(prop.definition.id)
-          ? { ...prop, value: updates.get(prop.definition.id)! }
+        prop.definition.id === propertyDefinitionId
+          ? { ...prop, value }
           : prop
       ),
     },
@@ -181,14 +182,10 @@ export function useSaveEntityPropertyMutation(
       );
     },
     onMutate: (vars: SaveEntityPropertyParams): SaveEntityPropertyContext =>
-      optimisticUpdateSoupEntityProperties(
+      optimisticUpdateSoupEntityProperty(
         vars.entityId,
-        new Map([
-          [
-            vars.property.propertyDefinitionId,
-            apiValuesToSoupPropertyValue(vars.apiValues),
-          ],
-        ])
+        vars.property.propertyDefinitionId,
+        apiValuesToSoupPropertyValue(vars.apiValues)
       ),
     onError: (
       error: Error,
@@ -394,9 +391,10 @@ export function useSetPropertyStatusCompleteMutation(
       );
 
       // Optimistically update soup queries (embedded properties on entities)
-      const soupTxn = optimisticUpdateSoupEntityProperties(
+      const soupTxn = optimisticUpdateSoupEntityProperty(
         vars.entityId,
-        new Map([[SYSTEM_PROPERTY_IDS.STATUS, STATUS_COMPLETED_SOUP_VALUE]])
+        SYSTEM_PROPERTY_IDS.STATUS,
+        STATUS_COMPLETED_SOUP_VALUE
       );
 
       return {
@@ -490,34 +488,18 @@ export function useBulkSaveEntityPropertiesMutation(
         onMutate: (
           vars: BulkSaveEntityPropertiesParams
         ): BulkSaveEntityPropertiesContext => {
-          const updatesByEntity = new Map<
-            string,
-            Map<string, SoupPropertyValue>
-          >();
-          for (const item of vars.properties) {
-            let bucket = updatesByEntity.get(item.entityId);
-            if (!bucket) {
-              bucket = new Map();
-              updatesByEntity.set(item.entityId, bucket);
-            }
-            bucket.set(
-              item.property.id,
-              apiValuesToSoupPropertyValue(item.apiValues)
-            );
-          }
-
           const soupTxns = batch<SoupTransaction[]>(() => {
             const txns: SoupTransaction[] = [];
-            for (const [entityId, updates] of updatesByEntity) {
-              const txn = optimisticUpdateSoupEntityProperties(
-                entityId,
-                updates
+            for (const item of vars.properties) {
+              const txn = optimisticUpdateSoupEntityProperty(
+                item.entityId,
+                item.property.id,
+                apiValuesToSoupPropertyValue(item.apiValues)
               );
               if (txn) txns.push(txn);
             }
             return txns;
           });
-
           return { soupTxns };
         },
         onError(
@@ -547,13 +529,9 @@ export function useBulkSaveEntityPropertiesMutation(
           // write against the storage-service list read and clobbering the
           // optimistic update with stale data.
           batch(() => {
-            const seenEntityIds = new Set<string>();
             for (const p of variables.properties) {
               invalidatePropertiesForEntity(p.entityType, p.entityId);
-              if (!seenEntityIds.has(p.entityId)) {
-                seenEntityIds.add(p.entityId);
-                invalidateSoupEntity(p.entityId);
-              }
+              invalidateSoupEntity(p.entityId);
             }
           });
         },
