@@ -56,6 +56,7 @@ import {
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
 import { useCallContextOptional } from '@channel/Call/CallContext';
+import { InCallPanel } from '@channel/Call';
 
 interface SidebarItem {
   id: ListView;
@@ -514,12 +515,18 @@ export const AppSidebar = (props: AppSidebarProps) => {
       <div class="block max-h-[clamp(10%,60%,20rem)]">
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
       </div>
-
-      <div class="px-2 mt-auto w-full">
+      
+      <Show when={callCtx?.isInCall()}>
+        <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
+          <InCallPanel />
+        </div>
+      </Show>
+      
+      <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
         <hr class="border-edge-muted mb-[8px]" />
       </div>
 
-      <div class=" w-full px-2 flex flex-col">
+      <div class="w-full px-2 flex flex-col">
         <SidebarActionButton
           label="Invite"
           isSlim={isSlim}
@@ -677,16 +684,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
             </div>
           </Show>
 
-          <div class="flex items-center gap-1">
-            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-              {props.label}            
-            </span>
-
-            <Show when={props.id === 'calls' && callCtx?.isInCall()}>
-              <span class="size-1.5 rounded-full bg-task animate-pulse" />
-            </Show>
-          </div>
-          
+          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+            {props.label}            
+          </span>
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">

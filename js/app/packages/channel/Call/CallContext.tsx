@@ -168,6 +168,20 @@ function createCallState() {
 
   // --- internal helpers ---
 
+  /** Detach any track processor from the live mic track (e.g. Krisp). */
+  async function stopMicTrackProcessor(r: Room) {
+    const micPub = r.localParticipant.getTrackPublication(
+      Track.Source.Microphone
+    );
+    const t = micPub?.track as LocalTrack | undefined;
+    if (!t) return;
+    try {
+      await t.stopProcessor();
+    } catch (e) {
+      console.warn('stop mic track processor failed', e);
+    }
+  }
+
   /** (Re-)attach the Krisp processor to the current mic track. */
   async function ensureKrispOnMicTrack(r: Room) {
     if (!store.isNoiseSuppressed) return;
@@ -179,9 +193,18 @@ function createCallState() {
     if (!micPub?.track) return;
 
     try {
-      // Destroy the old instance — it's bound to the previous track.
+      // Detach from the track first so we never destroy Krisp while it's still
+      // wired into LiveKit's processing graph.
+      await (micPub.track as LocalTrack).stopProcessor().catch(() => {});
       const prev = krispFilter();
-      if (prev) prev.destroy();
+      if (prev) {
+        try {
+          prev.destroy();
+        } catch {
+          /* noop */
+        }
+      }
+      setKrispFilter(null);
 
       // `quality: 'high'` tells the Krisp model to filter more aggressively,
       // which matters for noisy offices (cars, chairs, cans, etc.).
@@ -194,6 +217,7 @@ function createCallState() {
       setKrispFilter(krisp);
     } catch (e) {
       console.error('failed to re-attach Krisp noise filter', e);
+      setKrispFilter(null);
     }
   }
 
@@ -213,6 +237,11 @@ function createCallState() {
   function attachRoomListeners(r: Room) {
     r.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
       setStore('connectionState', state);
+      // Local / remote participant fields (e.g. identity) can settle after this
+      // event; UI that reads them via `trackVersion` should re-run.
+      if (state === ConnectionState.Connected) {
+        bumpTrackVersion();
+      }
     });
 
     r.on(RoomEvent.ParticipantConnected, () => syncParticipantMap(r));
@@ -474,20 +503,53 @@ function createCallState() {
     const newMuted = !store.isAudioMuted;
     try {
       if (newMuted) {
+        // `KrispNoiseFilter.destroy()` does not detach from the LiveKit track —
+        // `LocalTrack.stopProcessor()` does. Without this, `unmute()` often never
+        // succeeds and the mic stays muted.
+        await stopMicTrackProcessor(r);
+        const prev = krispFilter();
+        if (prev) {
+          try {
+            prev.destroy();
+          } catch {
+            /* noop */
+          }
+          setKrispFilter(null);
+        }
         await r.localParticipant.setMicrophoneEnabled(false);
-      } else {
-        // Re-enable with the user's selected device
-        const deviceId = store.activeAudioInputDeviceId;
-        await r.localParticipant.setMicrophoneEnabled(
-          true,
-          deviceId ? { deviceId: { exact: deviceId } } : undefined
+        const pub = r.localParticipant.getTrackPublication(
+          Track.Source.Microphone
         );
-        // New track was created — re-attach the Krisp processor
-        await ensureKrispOnMicTrack(r);
+        setStore('isAudioMuted', pub ? pub.isMuted : true);
+      } else {
+        const deviceId = store.activeAudioInputDeviceId;
+        try {
+          await r.localParticipant.setMicrophoneEnabled(
+            true,
+            deviceId ? { deviceId: { exact: deviceId } } : undefined
+          );
+        } catch (e) {
+          // Stale device id after unplug / permission changes — fall back to default.
+          console.warn(
+            'mic re-enable with saved device failed, retrying default',
+            e
+          );
+          await r.localParticipant.setMicrophoneEnabled(true);
+        }
+        const pub = r.localParticipant.getTrackPublication(
+          Track.Source.Microphone
+        );
+        // Match LiveKit publication so UI cannot disagree with actual track state.
+        setStore('isAudioMuted', pub ? pub.isMuted : true);
+        trackActiveDevices(r);
+        void ensureKrispOnMicTrack(r);
       }
-      setStore('isAudioMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle audio', e);
+      const pub = r.localParticipant.getTrackPublication(
+        Track.Source.Microphone
+      );
+      setStore('isAudioMuted', pub ? pub.isMuted : true);
     }
   }
 
