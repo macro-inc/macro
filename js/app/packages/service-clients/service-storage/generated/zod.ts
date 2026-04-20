@@ -917,6 +917,62 @@ export const deleteCallRecordParams = zod.object({
 });
 
 /**
+ * Edits a call record — currently supports updating the record's share
+permissions. Access is validated via channel membership
+(MemberParticipantRole); changes that update `share_permission` additionally
+require Owner-level access on the call entity.
+ * @summary Handler for `PATCH /call/record/{call_id}`.
+ */
+export const editCallRecordParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+export const editCallRecordBody = zod
+  .object({
+    sharePermission: zod
+      .union([
+        zod.null(),
+        zod.object({
+          channelSharePermissions: zod
+            .array(
+              zod.object({
+                accessLevel: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['view', 'comment', 'edit', 'owner'])
+                      .describe(
+                        'Ordered from least to most access top -> bottom'
+                      ),
+                  ])
+                  .optional(),
+                channelId: zod.string().describe('The channel id'),
+                operation: zod.enum(['add', 'remove', 'replace']),
+              })
+            )
+            .nullish()
+            .describe(
+              'Any channel share permissions to be created/updated/removed'
+            ),
+          isPublic: zod
+            .boolean()
+            .nullish()
+            .describe('If the item is publicly accessible'),
+          publicAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+        }),
+      ])
+      .optional(),
+  })
+  .describe('Edit call request');
+
+/**
  * Gets or creates a call for the channel. If a call already exists, joins it;
 otherwise creates a new one. Always returns a join token.
  * @summary Handler for `GET /call/{channel_id}`.
