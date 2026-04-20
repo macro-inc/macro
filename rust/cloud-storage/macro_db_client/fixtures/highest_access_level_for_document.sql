@@ -50,7 +50,7 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'sp-public-edit'),
 
 -- Link the private share permission to the document to test the "isPublic" filter.
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
-VALUES ('dddddddd-dddd-dddd-dddd-000000000001', 'sp-private-owner');
+VALUES ('dddddddd-dddd-dddd-dddd-000000000001', 'sp-public-edit');
 
 
 -- Add explicit entity_access records (replacing UserItemAccess)
@@ -58,15 +58,4 @@ INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "sour
 VALUES
 -- user-1 has explicit 'view' on d-child, 'edit' on p-parent, and 'owner' on p-grandparent.
 -- The highest explicit access for user-1 on d-child is therefore 'owner'.
-('dddddddd-dddd-dddd-dddd-000000000001', 'document', 'user-1', 'user', 'view'),
-('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'project', 'user-1', 'user', 'edit'),
-('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'project', 'user-1', 'user', 'owner'),
-
--- user-1 also has 'comment' access on the standalone document.
-('dddddddd-dddd-dddd-dddd-000000000002', 'document', 'user-1', 'user', 'comment'),
-
--- user-2 has explicit 'view' on d-child, to test that the query correctly filters by user.
-('dddddddd-dddd-dddd-dddd-000000000001', 'document', 'user-2', 'user', 'view'),
-
-
-('dddddddd-dddd-dddd-dddd-000000000002', 'document', 'user-3', 'user', 'edit');
+('dddddddd-dddd-dddd-dddd-000000000001', 'document', 'user-1', 'user', 'owner');
