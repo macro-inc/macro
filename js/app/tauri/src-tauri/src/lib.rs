@@ -3,7 +3,7 @@ use macro_bundle_updater_plugin::BundleRoot;
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
-use reqwest::header::COOKIE;
+use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
 #[cfg(target_os = "ios")]
@@ -179,7 +179,13 @@ pub fn run() {
         .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
-                "http://localhost:3001/".parse().expect("valid url"),
+                if cfg!(debug_assertions) {
+                    "https://auth-service-dev.macro.com/"
+                } else {
+                    "https://auth-service.macro.com/"
+                }
+                .parse()
+                .expect("valid url"),
             ),
         );
 
@@ -294,23 +300,28 @@ pub fn run() {
 /// fn to merge the headers from the http cookie store into the initial
 /// GET request to open a websocket
 fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handle: &AppHandle<R>) {
-    tracing::trace!("got url {url}");
     let Some(s) = handle.try_state::<tauri_plugin_http::Http>() else {
         return;
     };
-    let Ok(mut url) = url.parse::<Url>() else {
+    let Ok(mut parsed_url) = url.parse::<Url>() else {
         return;
     };
-    url.set_scheme(match url.scheme() {
-        "ws" => "http",
-        _ => "https",
-    })
-    .ok();
-    tracing::trace!("checking cookies for {url}");
+    parsed_url
+        .set_scheme(match parsed_url.scheme() {
+            "ws" => "http",
+            _ => "https",
+        })
+        .ok();
+    tracing::trace!("checking cookies for {parsed_url}");
 
-    if let Some(cookie) = s.inner().cookies_jar.as_ref().cookies(&url) {
-        tracing::trace!("inserting cookie value for {url}, {cookie:?}");
+    if let Some(cookie) = s.inner().cookies_jar.as_ref().cookies(&parsed_url) {
+        tracing::trace!("inserting cookie value for {parsed_url}");
         headers.insert(COOKIE, cookie);
+    }
+
+    // The API Gateway authorizer for services.macro.com validates Origin against an allowlist.
+    if url.contains("services.macro.com") || url.contains("services-dev.macro.com") {
+        headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
     }
 }
 

@@ -37,8 +37,10 @@ import { ChannelThread } from '../Thread';
 import {
   ChannelInput,
   createInputAttachmentTracker,
+  type InputHandle,
   type InputSnapshot,
 } from '../Input';
+import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -72,7 +74,6 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
-import { resetKeyboardModality } from './util';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -127,6 +128,8 @@ export function Channel(props: ChannelProps) {
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
     createSignal<InputSnapshot>();
+  const [channelInputHandle, setChannelInputHandle] =
+    createSignal<InputHandle>();
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
@@ -252,6 +255,14 @@ export function Channel(props: ChannelProps) {
     keys: () => messageIndex.keys,
   });
 
+  const selectMessage = (messageId: string) => {
+    selection.select(messageId);
+  };
+
+  const clearSelection = () => {
+    selection.clear();
+  };
+
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
       selection,
@@ -284,15 +295,26 @@ export function Channel(props: ChannelProps) {
     const senderId = userId();
     if (!senderId) return;
 
-    sendMessageMutation.mutate({
-      channelID: props.channelId,
-      senderId,
-      optimisticId: crypto.randomUUID(),
-      message: buildPostMessageRequest({
-        snapshot,
-        participantIds: participants.ids(),
-      }),
-    });
+    sendMessageMutation.mutate(
+      {
+        channelID: props.channelId,
+        senderId,
+        optimisticId: crypto.randomUUID(),
+        message: buildPostMessageRequest({
+          snapshot,
+          participantIds: participants.ids(),
+        }),
+      },
+      {
+        onError: () => {
+          const handle = channelInputHandle();
+          if (!handle) return;
+          const current = channelInputSnapshot();
+          if (current && hasSendableInputContent(current)) return;
+          handle.restoreSnapshot(snapshot);
+        },
+      }
+    );
   };
 
   const isChannelReady = () => {
@@ -304,8 +326,7 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    const el = messageListElement();
-    if (el) resetKeyboardModality(el);
+    selectMessage(messageId);
     targetMessageController.goToMessage(messageId, replyId);
   };
 
@@ -331,13 +352,6 @@ export function Channel(props: ChannelProps) {
               }}
               tabIndex={-1}
               data-channel-message-list
-              data-channel-nav="keyboard"
-              onMouseMove={(e) => {
-                const el = e.currentTarget;
-                if (el.dataset.channelNav !== 'mouse') {
-                  el.dataset.channelNav = 'mouse';
-                }
-              }}
             >
               <Show when={messages().length > 0}>
                 <ThreadList
@@ -365,17 +379,12 @@ export function Channel(props: ChannelProps) {
                             isNewestThread={isNewestThread()}
                             getMessageActions={getMessageActions}
                             targetReplyId={targetMessageController.pendingTargetReplyId()}
-                            highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
                             onTargetReplyScrolled={(replyId) => {
                               targetMessageController.completePendingReplyScroll(
                                 m().id,
                                 replyId
                               );
                             }}
-                            highlighted={
-                              m().id ===
-                              targetMessageController.highlightedMessageId()
-                            }
                             isExpanded={state.isExpanded}
                             setIsExpanded={state.setIsExpanded}
                             isReplying={state.isReplying}
@@ -391,6 +400,8 @@ export function Channel(props: ChannelProps) {
                             }}
                             isNewMessage={activityTracker.isNewMessage}
                             selectedMessageId={selection.selectedId}
+                            onSelectMessage={selectMessage}
+                            onClearSelection={clearSelection}
                             messageListScopeId={messageListScopeId}
                           />
                         )}
@@ -428,6 +439,7 @@ export function Channel(props: ChannelProps) {
                   })}
                   onReady={(handle) => {
                     dragState.setAttachFilesToChannel(handle.attachFiles);
+                    setChannelInputHandle(handle);
                   }}
                   onChange={(snapshot) =>
                     void setChannelInputSnapshot(snapshot)

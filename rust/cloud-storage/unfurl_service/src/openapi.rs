@@ -2,6 +2,7 @@
 
 mod api;
 mod config;
+mod http_safety;
 mod unfurl;
 
 use utoipa::OpenApi;

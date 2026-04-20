@@ -43,7 +43,7 @@ export function useCreateComment() {
   return createCallback(
     async (info: CreateCommentRequest & { threadId: number }) => {
       analytics.track('comment_create', { blockType: 'md' });
-      const { threadId, text } = info;
+      const { threadId, text, mentions } = info;
 
       if (threadId === -1) {
         setActiveThread(threadId);
@@ -56,7 +56,11 @@ export function useCreateComment() {
 
         let response: CreateCommentResponse | null = null;
 
-        response = await createHighlightComment(text, comment.anchorId);
+        response = await createHighlightComment(
+          text,
+          comment.anchorId,
+          mentions
+        );
 
         if (response) {
           editor?.dispatchCommand(CREATE_COMMENT_COMMAND, {

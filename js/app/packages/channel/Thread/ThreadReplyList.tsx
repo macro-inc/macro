@@ -30,10 +30,10 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
-  highlightedReplyId?: string;
   onReady?: (handle: ThreadReplyListHandle) => void;
   selectedReplyId?: Accessor<string | undefined>;
   isThreadFocused?: Accessor<boolean>;
+  onSelectReply?: (replyId: string) => void;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
@@ -84,9 +84,8 @@ export function ThreadReplyList(props: {
                 actions={props.getMessageActions?.(replyMessage())}
                 listMeta={listMetaByReplyId()[reply.id]}
                 messageEditor={props.messageEditor}
-                highlighted={
-                  props.highlightedReplyId === reply.id || isReplySelected()
-                }
+                onClick={() => props.onSelectReply?.(reply.id)}
+                highlighted={isReplySelected()}
                 selectionState={
                   isReplySelected() ? { isSelected: true } : undefined
                 }

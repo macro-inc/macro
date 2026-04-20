@@ -1,4 +1,5 @@
 import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
+import { SKIP_SCROLL_INTO_VIEW_TAG } from '@lexical-core/constants';
 import { $isCodeNode } from '@lexical/code';
 import { $generateNodesFromDOM } from '@lexical/html';
 import {
@@ -1319,4 +1320,19 @@ export function pendingEditorState(
       resolve(editorState);
     });
   });
+}
+
+/**
+ * Calls `editor.focus()` on the editor instance with `SKIP_SCROLL_INTO_VIEW_TAG`
+ * to prevent focus scrolling
+ */
+export function focusEditorWithoutScroll(editor: LexicalEditor): void {
+  editor.update(
+    () => {
+      editor.focus();
+    },
+    {
+      tag: SKIP_SCROLL_INTO_VIEW_TAG,
+    }
+  );
 }

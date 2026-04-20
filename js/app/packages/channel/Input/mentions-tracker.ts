@@ -6,6 +6,7 @@ export type MentionsTracker = {
   onMentionCreate: MentionFn;
   onMentionRemove: MentionFn;
   mentions: Accessor<ItemMention[]>;
+  setMentions: (mentions: ItemMention[]) => void;
 };
 
 export function createMentionsTracker(): MentionsTracker {
@@ -29,5 +30,6 @@ export function createMentionsTracker(): MentionsTracker {
     onMentionCreate,
     onMentionRemove,
     mentions,
+    setMentions: (next) => setMentions(next),
   };
 }

@@ -1,4 +1,5 @@
 import type { Entity } from '@core/types';
+import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import {
   optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
@@ -131,6 +132,18 @@ export function createNotificationSource(
     const mutedEntities = mutedEntitiesQuery?.data ?? [];
     setMutedEntities(reconcile(mutedEntities));
   });
+
+  if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
+    createEffect(() => {
+      const toDiscard = notifications().filter(
+        (n) => n.notification_event_type === 'document_mention' && !n.done
+      );
+      if (toDiscard.length === 0) return;
+      void markNotificationsAsDoneMutation.mutateAsync({
+        notificationIds: toDiscard.map((n) => n.id),
+      });
+    });
+  }
 
   const mapWebsocketNotification = (
     raw: ConnGatewayInnerNotifValue

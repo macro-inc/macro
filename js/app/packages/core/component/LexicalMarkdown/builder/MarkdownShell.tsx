@@ -26,6 +26,7 @@ import {
 } from '../utils/fileUploadUtils';
 import {
   editorIsEmpty,
+  focusEditorWithoutScroll,
   initializeEditorEmpty,
   initializeEditorWithState,
   setEditorStateFromMarkdown,
@@ -60,7 +61,9 @@ export const MarkdownShell: Component<
 
   const onConnect = () => {
     if (props.autofocus) {
-      setTimeout(() => editor.focus());
+      setTimeout(() => {
+        focusEditorWithoutScroll(editor);
+      });
     }
 
     if (props.initialState) {

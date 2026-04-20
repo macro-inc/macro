@@ -118,11 +118,23 @@ pub async fn get_channel_participants_for_thread_id(
 ) -> Result<Vec<MacroUserIdStr<'static>>> {
     let participants: Vec<_> = sqlx::query!(
         r#"
-        SELECT DISTINCT(m.sender_id) as id
-        FROM comms_channel_participants cp
-        JOIN comms_channels c ON c.id = cp.channel_id
-        JOIN comms_messages m ON m.channel_id = c.id 
-        WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
+        SELECT DISTINCT id as "id!" FROM (
+            SELECT m.sender_id AS id
+            FROM comms_channel_participants cp
+            JOIN comms_channels c ON c.id = cp.channel_id
+            JOIN comms_messages m ON m.channel_id = c.id
+            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
+            UNION
+            SELECT em.entity_id AS id
+            FROM comms_entity_mentions em
+            JOIN comms_messages m ON m.id::text = em.source_entity_id
+            JOIN comms_channel_participants cp
+              ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
+            WHERE (m.id = $1 OR m.thread_id = $1)
+              AND em.source_entity_type = 'message'
+              AND em.entity_type = 'user'
+              AND cp.left_at IS NULL
+        ) AS combined
         "#,
         thread_id
     )
@@ -153,7 +165,7 @@ mod tests {
         let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
         let participants = get_channel_participants_for_thread_id(&pool, &thread_id).await?;
 
-        assert_eq!(participants.len(), 4);
+        assert_eq!(participants.len(), 5);
 
         assert!(
             participants.contains(&MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap())
@@ -166,6 +178,25 @@ mod tests {
         );
         assert!(
             participants.contains(&MacroUserIdStr::parse_from_str("macro|user4@test.com").unwrap())
+        );
+        // user5 is mentioned in a thread-1 reply and is a participant of channel 1,
+        // so they should be included via the mentions path even though they never
+        // posted in this thread.
+        assert!(
+            participants.contains(&MacroUserIdStr::parse_from_str("macro|user5@test.com").unwrap())
+        );
+
+        // user6 is mentioned in a message that belongs to a different thread and
+        // must not leak into this thread's participant set.
+        assert!(
+            !participants
+                .contains(&MacroUserIdStr::parse_from_str("macro|user6@test.com").unwrap())
+        );
+        // The outsider is mentioned in a thread-1 message but is not a participant
+        // of the channel, so the participation filter must exclude them.
+        assert!(
+            !participants
+                .contains(&MacroUserIdStr::parse_from_str("macro|outsider@test.com").unwrap())
         );
 
         Ok(())

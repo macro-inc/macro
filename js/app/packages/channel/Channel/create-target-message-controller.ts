@@ -31,7 +31,6 @@ export type TargetMessageController = ReturnType<
 type TargetMessageData = {
   activeTargetMessageId: string | undefined;
   activeTargetMessageReplyId: string | undefined;
-  highlightedMessageId: string | undefined;
   loadAroundMessageId: string | undefined;
   pendingScrollTargetId: string | undefined;
   pendingTargetReplyId: string | undefined;
@@ -43,8 +42,6 @@ export function createTargetMessageController(
   const initialTargetMessageData: TargetMessageData = {
     activeTargetMessageId: options.initialTargetMessageId,
     activeTargetMessageReplyId: options.initialTargetMessageReplyId,
-    highlightedMessageId:
-      options.initialTargetMessageReplyId ?? options.initialTargetMessageId,
     loadAroundMessageId: options.initialTargetMessageId,
     pendingScrollTargetId: options.initialTargetMessageId,
     pendingTargetReplyId: options.initialTargetMessageReplyId,
@@ -68,7 +65,6 @@ export function createTargetMessageController(
     setTargetMessageData({
       activeTargetMessageId: messageId,
       activeTargetMessageReplyId: replyId,
-      highlightedMessageId: replyId ?? messageId,
       loadAroundMessageId: hasMessageLoaded(messageId) ? undefined : messageId,
       pendingScrollTargetId: messageId,
       pendingTargetReplyId: replyId,
@@ -125,7 +121,6 @@ export function createTargetMessageController(
     activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
     activeTargetMessageReplyId: () =>
       targetMessageData['activeTargetMessageReplyId'],
-    highlightedMessageId: () => targetMessageData['highlightedMessageId'],
     loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
     pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
     pendingTargetReplyId: () => targetMessageData['pendingTargetReplyId'],
