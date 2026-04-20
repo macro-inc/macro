@@ -5,7 +5,8 @@ import { usePermissions } from '@core/context/user';
 import IconX from '@icon/regular/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useAnalytics } from '@app/component/analytics-context';
 import { PLANS, type PlanTier } from './plans';
 
@@ -35,19 +36,16 @@ const PaywallComponent = (props: PaywallComponent) => {
     return undefined;
   });
 
-  const [selectedTier, setSelectedTier] = createSignal<PlanTier>('sonnet');
-  // Seed `selectedTier` from `currentTier` once, the first time permissions resolve.
-  // Re-syncing on every `currentTier` change would clobber the user's active selection
-  // if permissions later refetch (post-update invalidation, multi-tab, etc.).
-  let seededFromCurrentTier = false;
-  createEffect(() => {
-    if (seededFromCurrentTier) return;
-    const tier = currentTier();
-    if (tier) {
-      setSelectedTier(tier);
-      seededFromCurrentTier = true;
-    }
-  });
+  // `userSelectedTier` is only set when the user explicitly clicks a plan card. Until
+  // then the UI derives its selection from `currentTier` (falling back to 'sonnet' for
+  // non-paying users). This avoids mirroring derived state into a signal via `createEffect`
+  // and also sidesteps the briefly-wrong-card window before permissions resolve.
+  const [userSelectedTier, setUserSelectedTier] = createSignal<PlanTier | null>(
+    null
+  );
+  const selectedTier = createMemo<PlanTier>(
+    () => userSelectedTier() ?? currentTier() ?? 'sonnet'
+  );
 
   const [updating, setUpdating] = createSignal(false);
 
@@ -96,27 +94,26 @@ const PaywallComponent = (props: PaywallComponent) => {
       const result = await stripeServiceClient.updateSubscriptionTier(next);
       if (!result.ok) {
         // Messages mirror the backend's StripeOperationError `Display` impls, adapted
-        // to second-person for UI. Switch on `result.code` — TS enforces exhaustiveness
-        // against `PatchSubscriptionTierErrorCode | 'UNKNOWN'`.
-        switch (result.code) {
-          case 'USER_IN_TEAM':
-            toast.failure('Contact your team owner to update.');
-            break;
-          case 'UPDATE_IN_PROGRESS':
-            toast.failure(
+        // to second-person for UI. `.exhaustive()` fails the build if the code union
+        // grows a new variant without a toast case.
+        const message = match(result.code)
+          .with('USER_IN_TEAM', () => 'Contact your team owner to update.')
+          .with(
+            'UPDATE_IN_PROGRESS',
+            () =>
               'Another subscription update is already in progress. Please try again in a moment.'
-            );
-            break;
-          case 'NO_SUBSCRIPTION':
-            toast.failure("You don't have an active subscription to update.");
-            break;
-          case 'TIER_UNCHANGED':
-            toast.failure('Subscription is already on the requested tier.');
-            break;
-          case 'UNKNOWN':
-            toast.failure('Failed to update subscription.');
-            break;
-        }
+          )
+          .with(
+            'NO_SUBSCRIPTION',
+            () => "You don't have an active subscription to update."
+          )
+          .with(
+            'TIER_UNCHANGED',
+            () => 'Subscription is already on the requested tier.'
+          )
+          .with('UNKNOWN', () => 'Failed to update subscription.')
+          .exhaustive();
+        toast.failure(message);
         return;
       }
       analytics.track('subscription_tier_updated', { from: prev, to: next });
@@ -161,7 +158,7 @@ const PaywallComponent = (props: PaywallComponent) => {
           <For each={PLANS}>
             {(plan) => (
               <button
-                onClick={() => setSelectedTier(plan.tier)}
+                onClick={() => setUserSelectedTier(plan.tier)}
                 class="p-4 sm:p-5 border flex flex-col transition-all relative text-left"
                 classList={{
                   'border-accent ring-1 ring-accent bg-active':

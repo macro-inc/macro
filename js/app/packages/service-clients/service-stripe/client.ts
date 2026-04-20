@@ -5,6 +5,7 @@ import {
   type PatchSubscriptionTierErrorCode,
 } from '@service-auth/client';
 import type { StripeProductTier } from '@service-auth/generated/schemas/stripeProductTier';
+import { match, P } from 'ts-pattern';
 
 /**
  * Gets Meta _fbp (browser ID) and _fbc (click ID) values from cookies set by the Meta Pixel.
@@ -100,16 +101,22 @@ export const stripeServiceClient = {
       newTier: tier,
     });
     if (isOk(result)) return { ok: true };
-    const code = result[0]?.code;
-    switch (code) {
-      case 'TIER_UNCHANGED':
-      case 'USER_IN_TEAM':
-      case 'NO_SUBSCRIPTION':
-      case 'UPDATE_IN_PROGRESS':
-        return { ok: false, code };
-      default:
-        return { ok: false, code: 'UNKNOWN' };
-    }
+    // Narrow the first error's code to our known union; anything else (NETWORK_ERROR,
+    // UNAUTHORIZED, SERVER_ERROR, etc.) collapses to 'UNKNOWN'. `match` + the explicit
+    // P.union of `PatchSubscriptionTierErrorCode` members means adding a new backend
+    // code without widening this union is a compile error.
+    const code = match(result[0]?.code)
+      .with(
+        P.union(
+          'TIER_UNCHANGED',
+          'USER_IN_TEAM',
+          'NO_SUBSCRIPTION',
+          'UPDATE_IN_PROGRESS'
+        ),
+        (c) => c
+      )
+      .otherwise(() => 'UNKNOWN' as const);
+    return { ok: false, code };
   },
 };
 

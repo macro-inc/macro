@@ -479,12 +479,16 @@ export const authServiceClient = {
         method: 'PATCH',
         body: JSON.stringify(args),
         errorResponseHandler: async (response) => {
+          // Custom handler fully replaces fetchWithAuth's default mapping, so preserve
+          // the base cases we still want (401/500) alongside our endpoint-specific codes.
           switch (response.status) {
             case 400:
               return {
                 code: 'TIER_UNCHANGED',
                 message: 'Subscription is already on the requested tier',
               };
+            case 401:
+              return { code: 'UNAUTHORIZED', message: 'Unauthorized access' };
             case 403:
               return {
                 code: 'USER_IN_TEAM',
@@ -501,6 +505,11 @@ export const authServiceClient = {
                 code: 'UPDATE_IN_PROGRESS',
                 message:
                   'Another subscription update is already in progress for this user',
+              };
+            case 500:
+              return {
+                code: 'SERVER_ERROR',
+                message: 'Internal server error',
               };
             default:
               return {
