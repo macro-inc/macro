@@ -54,6 +54,7 @@ pub async fn update_channel_share_permission(
         "chat" => EntityType::Chat,
         "project" => EntityType::Project,
         "thread" => EntityType::EmailThread,
+        "call" => EntityType::Call,
         _ => anyhow::bail!("unsupported item type: {}", item_type),
     };
 
