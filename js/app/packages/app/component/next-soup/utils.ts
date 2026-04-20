@@ -28,6 +28,9 @@ import {
 import { match } from 'ts-pattern';
 import { isAfter } from 'date-fns';
 import { getChannelParams } from '@block-channel/utils/link';
+import { compositeEntity, type NotificationSource } from '@notifications';
+import { notificationServiceClient } from '@service-notification/client';
+import { notificationKeys } from '@queries/notification/keys';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -568,6 +571,155 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
           queryKey: queryKeys.all.email,
           refetchType: 'none',
         });
+      }
+    },
+  };
+}
+
+export type MarkDoneHandle = {
+  /** Fire-and-forget promise for the API calls. Rejects on failure (rolls back optimistic update). */
+  done: Promise<void>;
+  /** Reverses the mark-done: restores caches and calls the undone APIs. */
+  undo: () => Promise<void>;
+};
+
+type NotificationCacheData = {
+  pages: { items: { id: string }[] }[];
+};
+
+/**
+ * Optimistically marks entities as done (archives emails, clears notifications),
+ * then fires the API calls in the background. Returns synchronously so the caller
+ * can show the undo toast immediately.
+ */
+export function markEntitiesDone(args: {
+  entities: EntityData[];
+  notificationSource: NotificationSource;
+}): MarkDoneHandle {
+  const { entities, notificationSource } = args;
+
+  const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
+  const emailIdSet = new Set(emailIds);
+
+  const notificationIds = entities.flatMap((entity) =>
+    (
+      notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
+    ).map((n) => n.id)
+  );
+  const notificationIdSet = new Set(notificationIds);
+
+  queryClient.cancelQueries({ queryKey: queryKeys.all.email });
+  queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
+
+  const previousEmail = queryClient.getQueriesData<{
+    pages: { items: EntityData[] }[];
+  }>({
+    queryKey: queryKeys.all.email,
+  });
+  const previousNotifications =
+    queryClient.getQueriesData<NotificationCacheData>({
+      queryKey: notificationKeys.user._def,
+    });
+
+  const soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
+
+  for (const [key, data] of previousEmail) {
+    if (!data) continue;
+    queryClient.setQueryData(key, {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items.filter((item) => !emailIdSet.has(item.id)),
+      })),
+    });
+  }
+
+  for (const [key, data] of previousNotifications) {
+    if (!data) continue;
+    queryClient.setQueryData(key, {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items.filter((item) => !notificationIdSet.has(item.id)),
+      })),
+    });
+  }
+
+  const rollback = () => {
+    soupTxn?.rollback();
+    for (const [key, data] of previousEmail) {
+      queryClient.setQueryData(key, data);
+    }
+    for (const [key, data] of previousNotifications) {
+      queryClient.setQueryData(key, data);
+    }
+  };
+
+  const done = (async () => {
+    try {
+      await Promise.all([
+        ...emailIds.map((id) => emailClient.flagArchived({ value: true, id })),
+        notificationIds.length > 0
+          ? throwOnErr(
+              async () =>
+                await notificationServiceClient.bulkMarkNotificationAsDone({
+                  notificationIds,
+                })
+            )
+          : Promise.resolve(),
+      ]);
+    } catch (err) {
+      rollback();
+      throw err;
+    } finally {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+        queryClient.invalidateQueries({
+          queryKey: notificationKeys.user._def,
+        }),
+        ...emailIds.map((id) => invalidateSoupEntity(id)),
+      ]);
+    }
+  })();
+
+  return {
+    done,
+    undo: async () => {
+      // Wait for the mark-done calls to finish. If they failed, rollback
+      // already happened — nothing to undo.
+      try {
+        await done;
+      } catch {
+        return;
+      }
+
+      rollback();
+
+      try {
+        await Promise.all([
+          ...emailIds.map((id) =>
+            emailClient.flagArchived({ value: false, id })
+          ),
+          notificationIds.length > 0
+            ? throwOnErr(
+                async () =>
+                  await notificationServiceClient.bulkMarkNotificationAsUndone({
+                    notificationIds,
+                  })
+              )
+            : Promise.resolve(),
+        ]);
+      } finally {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.email,
+            refetchType: 'none',
+          }),
+          queryClient.invalidateQueries({
+            queryKey: notificationKeys.user._def,
+            refetchType: 'none',
+          }),
+        ]);
       }
     },
   };

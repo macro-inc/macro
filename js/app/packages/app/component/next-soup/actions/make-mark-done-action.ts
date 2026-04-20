@@ -1,11 +1,9 @@
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { toast } from '@core/component/Toast/Toast';
 import { type EntityData, isTaskEntity } from '@entity';
-import {
-  markNotificationsForEntityAsDone,
-  type NotificationSource,
-} from '@notifications';
+import type { NotificationSource } from '@notifications';
 import type { SoupState } from '../create-soup-state';
-import { archiveEmail } from '@app/component/next-soup/utils';
+import { markEntitiesDone } from '@app/component/next-soup/utils';
 
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
@@ -32,26 +30,35 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   };
 
   const execute = async (entities: EntityData[]) => {
-    const source = notificationSource();
+    const handle = markEntitiesDone({
+      entities,
+      notificationSource: notificationSource(),
+    });
 
-    await Promise.all(
-      entities.map(async (entity) => {
-        if (entity.type === 'email') {
-          await archiveEmail(entity.id, {
-            archive: true,
-            optimisticallyExclude: true,
-          });
-        }
-
-        markNotificationsForEntityAsDone(source, entity);
-      })
-    );
-
-    toast.success(
+    const toastId = toast.success(
       entities.length > 1
         ? `Marked ${entities.length} items as done`
-        : 'Marked as done'
+        : 'Marked as done',
+      undefined,
+      [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Undone'),
+              () => toast.failure('Failed to undo')
+            );
+          },
+        },
+      ],
+      10_000
     );
+
+    handle.done.catch(() => {
+      toast.failure('Failed to mark as done');
+    });
   };
 
   const executeWithSoup = async (
