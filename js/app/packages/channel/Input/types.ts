@@ -71,6 +71,7 @@ export type InputHandle = {
   clear: () => void;
   focus: () => void;
   attachFiles: (files: File[]) => Promise<void>;
+  restoreSnapshot: (snapshot: InputSnapshot) => void;
 };
 
 export type InputAttachmentTracker = Tracker;

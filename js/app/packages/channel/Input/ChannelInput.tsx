@@ -155,6 +155,11 @@ export function ChannelInput(props: ChannelInputProps) {
     clear: () => markdownEditor.controls.clear(),
     focus: () => markdownEditor.controls.focus(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
+    restoreSnapshot: (snapshot) => {
+      markdownEditor.controls.setMarkdown(snapshot.value);
+      attachmentTracker.setAttachments(snapshot.attachments);
+      markdownEditor.controls.focus();
+    },
   });
 
   return (

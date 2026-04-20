@@ -37,8 +37,10 @@ import { ChannelThread } from '../Thread';
 import {
   ChannelInput,
   createInputAttachmentTracker,
+  type InputHandle,
   type InputSnapshot,
 } from '../Input';
+import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -126,6 +128,8 @@ export function Channel(props: ChannelProps) {
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
     createSignal<InputSnapshot>();
+  const [channelInputHandle, setChannelInputHandle] =
+    createSignal<InputHandle>();
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
@@ -291,15 +295,26 @@ export function Channel(props: ChannelProps) {
     const senderId = userId();
     if (!senderId) return;
 
-    sendMessageMutation.mutate({
-      channelID: props.channelId,
-      senderId,
-      optimisticId: crypto.randomUUID(),
-      message: buildPostMessageRequest({
-        snapshot,
-        participantIds: participants.ids(),
-      }),
-    });
+    sendMessageMutation.mutate(
+      {
+        channelID: props.channelId,
+        senderId,
+        optimisticId: crypto.randomUUID(),
+        message: buildPostMessageRequest({
+          snapshot,
+          participantIds: participants.ids(),
+        }),
+      },
+      {
+        onError: () => {
+          const handle = channelInputHandle();
+          if (!handle) return;
+          const current = channelInputSnapshot();
+          if (current && hasSendableInputContent(current)) return;
+          handle.restoreSnapshot(snapshot);
+        },
+      }
+    );
   };
 
   const isChannelReady = () => {
@@ -424,6 +439,7 @@ export function Channel(props: ChannelProps) {
                   })}
                   onReady={(handle) => {
                     dragState.setAttachFilesToChannel(handle.attachFiles);
+                    setChannelInputHandle(handle);
                   }}
                   onChange={(snapshot) =>
                     void setChannelInputSnapshot(snapshot)

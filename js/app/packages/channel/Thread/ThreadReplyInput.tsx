@@ -4,6 +4,7 @@ import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import { onCleanup, type Accessor, type Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import type { InputSnapshot } from '../Input';
+import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { buildPostMessageRequest } from '../Input/message-payload';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
@@ -98,16 +99,26 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 const senderId = userId();
                 if (!senderId) return;
 
-                sendMessageMutation.mutate({
-                  channelID: props.channelId,
-                  senderId,
-                  optimisticId: crypto.randomUUID(),
-                  message: buildPostMessageRequest({
-                    snapshot,
-                    threadId: props.messageId,
-                    participantIds: participants.ids(),
-                  }),
-                });
+                sendMessageMutation.mutate(
+                  {
+                    channelID: props.channelId,
+                    senderId,
+                    optimisticId: crypto.randomUUID(),
+                    message: buildPostMessageRequest({
+                      snapshot,
+                      threadId: props.messageId,
+                      participantIds: participants.ids(),
+                    }),
+                  },
+                  {
+                    onError: () => {
+                      const current = props.replyInputState();
+                      if (current && hasSendableInputContent(current)) return;
+                      props.setReplyInputState(snapshot);
+                      props.setIsReplying(true);
+                    },
+                  }
+                );
 
                 props.setReplyInputState(undefined);
                 props.setIsReplying(false);
