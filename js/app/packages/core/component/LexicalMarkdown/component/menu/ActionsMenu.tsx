@@ -1,7 +1,6 @@
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { debounce } from '@solid-primitives/scheduled';
 import type { LexicalEditor } from 'lexical';
@@ -32,8 +31,8 @@ false && clickOutside;
 false && floatWithSelection;
 false && floatWithElement;
 
-// py-2 on the menu container = 8px top + 8px bottom
-const MENU_DECORATION_HEIGHT = 16;
+// ClippedPanel's p-px border (2px) + py-2 padding (16px)
+const PANEL_DECORATION_HEIGHT = 18;
 
 export function ActionsMenuItem(props: {
   action: Action;
@@ -43,8 +42,17 @@ export function ActionsMenuItem(props: {
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
 }) {
+  let itemRef: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    if (props.selected && itemRef) {
+      itemRef.scrollIntoView({ block: 'nearest' });
+    }
+  });
+
   return (
     <div
+      ref={itemRef}
       on:mouseup={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -100,6 +108,10 @@ export function ActionMenu(props: {
   portalScope?: PortalScope;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
   useBlockBoundary?: boolean;
+  /** Extra actions appended to the default action list. */
+  additionalActions?: Action[];
+  /** IDs of default actions to exclude from the menu. */
+  ignoreActionIds?: string[];
 }) {
   const { isOpen, setIsOpen } = props.menu;
 
@@ -113,10 +125,12 @@ export function ActionMenu(props: {
     number | undefined
   >(undefined);
 
+  // Cap at 256px (16rem) so the menu stays compact when plenty of space is available,
+  // and floor at 0 after subtracting ClippedPanel decorations.
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
     if (h === undefined) return undefined;
-    return Math.max(0, h - MENU_DECORATION_HEIGHT);
+    return Math.min(256, Math.max(0, h - PANEL_DECORATION_HEIGHT));
   };
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -131,10 +145,6 @@ export function ActionMenu(props: {
     60
   );
 
-  const maxItems = () => {
-    return isMobileWidth() ? 4 : 8;
-  };
-
   const [, setEditorParent] = createSignal<HTMLElement>();
   autoRegister(() =>
     props.editor.registerRootListener(() => {
@@ -144,7 +154,15 @@ export function ActionMenu(props: {
     })
   );
 
-  const validActions = ACTIONS.filter(({ dependencies }) => {
+  const merged: Action[] = [...ACTIONS];
+  for (const override of props.additionalActions ?? []) {
+    const idx = merged.findIndex((a) => a.id === override.id);
+    if (idx >= 0) merged[idx] = override;
+    else merged.push(override);
+  }
+  const validActions = merged.filter((action) => {
+    if (props.ignoreActionIds?.includes(action.id)) return false;
+    const { dependencies } = action;
     if (dependencies === undefined || dependencies.length === 0) return true;
     return props.editor.hasNodes(dependencies);
   });
@@ -157,7 +175,7 @@ export function ActionMenu(props: {
   const filteredItems = createMemo(() => {
     return fuzzyFilter(searchTerm(), validActions, (item) =>
       [item.name, ...item.keywords].join(' ')
-    ).slice(0, maxItems());
+    );
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
