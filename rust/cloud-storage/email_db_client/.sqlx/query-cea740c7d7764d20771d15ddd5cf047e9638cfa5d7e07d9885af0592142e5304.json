@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, LOWER(email_address) as \"email_address!\", name\n        FROM email_contacts\n        WHERE (link_id, LOWER(email_address)) IN (\n            SELECT * FROM UNNEST($1::uuid[], $2::varchar[])\n        )\n        ",
+  "query": "\n        SELECT id, email_address, name\n        FROM email_contacts\n        WHERE (link_id, email_address) IN (\n            SELECT * FROM UNNEST($1::uuid[], $2::varchar[])\n        )\n        ",
   "describe": {
     "columns": [
       {
@@ -10,8 +10,8 @@
       },
       {
         "ordinal": 1,
-        "name": "email_address!",
-        "type_info": "Text"
+        "name": "email_address",
+        "type_info": "Varchar"
       },
       {
         "ordinal": 2,
@@ -27,9 +27,9 @@
     },
     "nullable": [
       false,
-      null,
+      false,
       true
     ]
   },
-  "hash": "5202dbabd4943bf87bcaab8c34b9a5ebb7f76933011fe8607aff109ccf1705a0"
+  "hash": "cea740c7d7764d20771d15ddd5cf047e9638cfa5d7e07d9885af0592142e5304"
 }
