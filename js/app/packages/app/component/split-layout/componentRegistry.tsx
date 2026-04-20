@@ -231,7 +231,7 @@ registerComponent(
     });
     return (
       <SoupView
-        viewName="Files"
+        viewName="Folders"
         queryFilters={preset.queryFilters}
         initialClientFilters={preset.clientFilters}
       />
