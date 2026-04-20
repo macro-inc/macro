@@ -179,7 +179,13 @@ pub fn run() {
         .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
-                "http://localhost:3001/".parse().expect("valid url"),
+                if cfg!(debug_assertions) {
+                    "https://auth-service-dev.macro.com/"
+                } else {
+                    "https://auth-service.macro.com/"
+                }
+                .parse()
+                .expect("valid url"),
             ),
         );
 
