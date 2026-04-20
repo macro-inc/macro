@@ -5,16 +5,14 @@ import {
   CHANNEL_INDEX,
   CHAT_INDEX,
   DOCUMENT_INDEX,
-  EMAIL_INDEX,
   IS_DRY_RUN,
 } from '../constants';
 
 const INDICES = [
   CHAT_INDEX,
   DOCUMENT_INDEX,
-  EMAIL_INDEX,
   CHANNEL_INDEX,
-  'emails_v2',
+  'emails_alias',
 ];
 
 async function setDynamicFalse(dryRun: boolean) {
