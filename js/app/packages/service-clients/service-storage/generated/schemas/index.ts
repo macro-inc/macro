@@ -256,6 +256,8 @@ export * from './editAnchorRequestOneOfAllOf';
 export * from './editAnchorRequestOneOfAllOfFileType';
 export * from './editAnchorResponse';
 export * from './editAnchorResponseAllOf';
+export * from './editCallRecordRequest';
+export * from './editCallRecordRequestSharePermission';
 export * from './editCommentRequest';
 export * from './editCommentRequestMentions';
 export * from './editCommentRequestText';
