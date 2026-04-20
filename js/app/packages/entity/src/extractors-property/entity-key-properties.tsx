@@ -10,7 +10,7 @@ import type {
 } from '@core/component/Properties/types';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show, Suspense, createMemo } from 'solid-js';
-import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
+import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { match } from 'ts-pattern';
 import {
   type EntityData,
@@ -68,26 +68,24 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
     return getSortedKeyProperties(soupProperties.map(soupPropertyToProperty));
   });
 
-  const saveMutation = useSaveEntityPropertyMutation();
+  const saveMutation = useBulkSaveEntityPropertiesMutation();
+
+  const saveOne = (property: Property, apiValues: PropertyApiValues) =>
+    saveMutation.mutateAsync({
+      properties: [
+        {
+          entityId: props.entity.id,
+          entityType: entityType(),
+          property,
+          apiValues,
+        },
+      ],
+    });
 
   const saveHandler: PropertySaveHandler = {
-    saveProperty: (property: Property, value: PropertyApiValues) =>
-      saveMutation.mutateAsync({
-        entityId: props.entity.id,
-        entityType: entityType(),
-        property,
-        apiValues: value,
-      }),
-    saveDate: (property: Property, date: Date) =>
-      saveMutation.mutateAsync({
-        entityId: props.entity.id,
-        entityType: entityType(),
-        property,
-        apiValues: {
-          valueType: 'DATE',
-          value: date,
-        },
-      }),
+    saveProperty: (property, value) => saveOne(property, value),
+    saveDate: (property, date) =>
+      saveOne(property, { valueType: 'DATE', value: date }),
   };
 
   return (

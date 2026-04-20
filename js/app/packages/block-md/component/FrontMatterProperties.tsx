@@ -19,7 +19,7 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
-import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
+import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
@@ -178,27 +178,18 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const height = () => containerSize.height;
   createEffect(on(height, layoutShift));
 
-  const saveMutation = useSaveEntityPropertyMutation();
+  const saveMutation = useBulkSaveEntityPropertiesMutation();
+
+  const saveOne = (property: Property, apiValues: PropertyApiValues) =>
+    saveMutation.mutateAsync({
+      properties: [{ entityId: blockId, entityType, property, apiValues }],
+    });
 
   // Network-based save handler for FrontMatter properties
   const saveHandler: PropertySaveHandler = {
-    saveProperty: (property: Property, value: PropertyApiValues) =>
-      saveMutation.mutateAsync({
-        entityId: blockId,
-        entityType,
-        property,
-        apiValues: value,
-      }),
-    saveDate: (property: Property, date: Date) =>
-      saveMutation.mutateAsync({
-        entityId: blockId,
-        entityType,
-        property,
-        apiValues: {
-          valueType: 'DATE',
-          value: date,
-        },
-      }),
+    saveProperty: (property, value) => saveOne(property, value),
+    saveDate: (property, date) =>
+      saveOne(property, { valueType: 'DATE', value: date }),
   };
 
   return (

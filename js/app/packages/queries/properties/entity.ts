@@ -9,7 +9,9 @@ import {
 import type {
   Property,
   PropertyApiValues,
+  PropertyDefinitionDomain,
 } from '../../core/component/Properties/types';
+import { isInstantiatedProperty } from '../../core/component/Properties/utils';
 import {
   type PropertiesEntityType,
   propertiesServiceClient,
@@ -68,14 +70,13 @@ export function invalidatePropertiesForEntity(
   });
 }
 
-export type SaveEntityPropertyParams = {
-  entityId: string;
-  entityType: EntityType;
-  property: Property;
-  apiValues: PropertyApiValues;
-};
-
-type SaveEntityPropertyContext = SoupTransaction | undefined;
+function getPropertyDefinitionId(
+  property: Property | PropertyDefinitionDomain
+): string {
+  return isInstantiatedProperty(property)
+    ? property.propertyDefinitionId
+    : property.id;
+}
 
 function optimisticUpdateSoupEntityProperty(
   entityId: string,
@@ -143,63 +144,6 @@ function apiValuesToSoupPropertyValue(
     default:
       return null;
   }
-}
-
-export function useSaveEntityPropertyMutation(
-  callbacks?: MutationCallbacks<
-    void,
-    Error,
-    SaveEntityPropertyParams,
-    SaveEntityPropertyContext
-  >
-) {
-  return useMutation(() => ({
-    mutationFn: async (vars: SaveEntityPropertyParams) => {
-      const propertyValue = propertyValueToApi(
-        vars.apiValues,
-        vars.property.isMultiSelect
-      );
-
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.setEntityProperty({
-            entity_type: vars.entityType,
-            entity_id: vars.entityId,
-            property_id: vars.property.propertyDefinitionId,
-            body: {
-              value: propertyValue,
-            },
-          })
-      );
-    },
-    onMutate: (vars: SaveEntityPropertyParams): SaveEntityPropertyContext =>
-      optimisticUpdateSoupEntityProperty(
-        vars.entityId,
-        vars.property.propertyDefinitionId,
-        apiValuesToSoupPropertyValue(vars.apiValues)
-      ),
-    onError: (
-      error: Error,
-      _vars: SaveEntityPropertyParams,
-      context: SaveEntityPropertyContext
-    ) => {
-      context?.rollback();
-      console.error('Failed to save property', error);
-      toast.failure('Failed to save property');
-    },
-    onSettled: (_data, _error, variables) => {
-      invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-      invalidateSoupEntity(variables.entityId);
-    },
-    ...(callbacks
-      ? withCallbacks<
-          void,
-          Error,
-          SaveEntityPropertyParams,
-          SaveEntityPropertyContext
-        >({}, callbacks)
-      : {}),
-  }));
 }
 
 export type DeleteEntityPropertyParams = {
@@ -289,7 +233,7 @@ export type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
     entityType: EntityType;
-    property: { id: string; isMultiSelect: boolean };
+    property: Property | PropertyDefinitionDomain;
     apiValues: PropertyApiValues;
   }>;
 };
@@ -321,7 +265,7 @@ export function useBulkSaveEntityPropertiesMutation(
               await propertiesServiceClient.setEntityProperty({
                 entity_type: item.entityType,
                 entity_id: item.entityId,
-                property_id: item.property.id,
+                property_id: getPropertyDefinitionId(item.property),
                 body: {
                   value: propertyValue,
                 },
@@ -345,7 +289,7 @@ export function useBulkSaveEntityPropertiesMutation(
             for (const item of vars.properties) {
               const txn = optimisticUpdateSoupEntityProperty(
                 item.entityId,
-                item.property.id,
+                getPropertyDefinitionId(item.property),
                 apiValuesToSoupPropertyValue(item.apiValues)
               );
               if (txn) txns.push(txn);
