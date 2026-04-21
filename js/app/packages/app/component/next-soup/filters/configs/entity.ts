@@ -7,6 +7,7 @@ import {
   taskFilter as taskPredicate,
   callsFilter as callsPredicate,
 } from '../predicates';
+import { defineQueryFilters } from '../filter-store/compile';
 import { config, isAgent, isNotTask, NIL_UUID } from './base';
 
 export const channelsFilter = config({
@@ -56,5 +57,5 @@ export const inFolderFilter = config({
 export const callsFilter = config({
   id: 'calls',
   predicate: callsPredicate,
-  query: { exclude: { callChannelId: [NIL_UUID] } },
+  query: defineQueryFilters({}, { skipTargets: ['callf'] }),
 });

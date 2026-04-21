@@ -290,16 +290,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'all',
     tabs: {
       all: () => ({
-        filters: defineQueryFilters({
-          exclude: { callChannelId: [NIL_UUID] },
-        }),
+        filters: defineQueryFilters({}, { skipTargets: ['callf'] }),
         clientFilters: { and: ['calls'] },
       }),
       unattended: () => ({
-        filters: defineQueryFilters({
-          exclude: { callChannelId: [NIL_UUID] },
-          include: { callAttended: false },
-        }),
+        filters: defineQueryFilters(
+          {
+            include: { callAttended: false },
+          },
+          { skipTargets: ['callf'] }
+        ),
         clientFilters: { and: ['calls'] },
       }),
     },

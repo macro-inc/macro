@@ -24,6 +24,7 @@ import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
+import { deepEqual } from '@core/util/compareUtils';
 
 // Filter IDs that are set by tabs and should not be shown as removable chips
 const TAB_ONLY_FILTERS = new Set([
@@ -93,13 +94,11 @@ export function useFilterRefinements() {
 
     // Check if there are any external filters set
     const currentFilterData = filterData();
-    const hasExternalFilters =
-      Object.keys(currentFilterData.include).length > 0 ||
-      Object.keys(currentFilterData.exclude).length > 0;
+    const hasQueryFilterDiff = !deepEqual(currentFilterData, preset.filters);
 
     const hasSubFilters = assigneeFilter().length > 0;
 
-    return hasClientFilterDiff || hasExternalFilters || hasSubFilters;
+    return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
   });
 
   /**
