@@ -5,10 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EditCallRecordRequestSharePermission } from './editCallRecordRequestSharePermission';
+import type { EditCallRecordRequestShareWithTeam } from './editCallRecordRequestShareWithTeam';
 
 /**
  * Edit call request
  */
 export interface EditCallRecordRequest {
   sharePermission?: EditCallRecordRequestSharePermission;
+  /** If `Some(true)`, grant the creator's team View access on the call.
+If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+The team is resolved from the call's `created_by`, not the acting user. */
+  shareWithTeam?: EditCallRecordRequestShareWithTeam;
 }

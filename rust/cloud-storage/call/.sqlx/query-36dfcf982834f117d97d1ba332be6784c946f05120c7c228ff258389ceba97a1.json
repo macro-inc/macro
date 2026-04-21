@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_notification_type_preference (user_id, notification_event_type)\n            VALUES ($1, $2)\n            ON CONFLICT (user_id, notification_event_type) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "36dfcf982834f117d97d1ba332be6784c946f05120c7c228ff258389ceba97a1"
+}

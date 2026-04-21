@@ -967,6 +967,12 @@ export const editCallRecordBody = zod
         }),
       ])
       .optional(),
+    shareWithTeam: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+      ),
   })
   .describe('Edit call request');
 
