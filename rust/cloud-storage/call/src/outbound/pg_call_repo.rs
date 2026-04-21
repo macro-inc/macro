@@ -369,13 +369,29 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<bool, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            UPDATE calls
+               SET share_with_team = NOT share_with_team
+             WHERE id = $1
+            RETURNING share_with_team
+            "#,
+            call_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.share_with_team)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
         let mut tx = self.pool.begin().await?;
 
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id, share_with_team
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -385,6 +401,34 @@ impl CallRepository for PgCallRepo {
         .fetch_optional(tx.as_mut())
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
+
+        // If the call opted in to team sharing, grant the creator's team View
+        // access on the archived call. Silently skip if the creator has no team.
+        if call.share_with_team {
+            let team_id: Option<Uuid> = sqlx::query_scalar!(
+                r#"
+                SELECT team_id
+                FROM team_user
+                WHERE user_id = $1
+                LIMIT 1
+                "#,
+                &call.created_by,
+            )
+            .fetch_optional(tx.as_mut())
+            .await?;
+
+            if let Some(team_id) = team_id {
+                entity_access_db_utils::insert_entity_access_row(
+                    &mut tx,
+                    call_id,
+                    entity_access_db_utils::EntityType::Call,
+                    &team_id.to_string(),
+                    entity_access_db_utils::EntityAccessSourceType::Team,
+                    entity_access_db_utils::AccessLevel::View,
+                )
+                .await?;
+            }
+        }
 
         let now = Utc::now();
         let duration_ms = now

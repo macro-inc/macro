@@ -79,6 +79,7 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 /// - `GET /record/{call_id}` — get a full call record (transcript + participants)
 /// - `PATCH /record/{call_id}` — edit a call record (e.g. share permissions)
 /// - `DELETE /record/{call_id}` — delete a call record
+/// - `POST /record/{call_id}/share-with-team/toggle` — flip the call's share_with_team flag
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -99,6 +100,10 @@ where
             get(get_call_record_handler::<S, Svc>)
                 .patch(edit_call_record_handler::<S, Svc>)
                 .delete(delete_call_record_handler::<S, Svc>),
+        )
+        .route(
+            "/record/{call_id}/share-with-team/toggle",
+            post(toggle_share_with_team_handler::<S, Svc>),
         )
         .with_state(state)
 }
@@ -384,6 +389,36 @@ pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
         .edit_call_record(access.entity_access_receipt, request)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
+///
+/// Toggles the `share_with_team` flag on the active call. Returns the new
+/// value as the JSON body.
+#[utoipa::path(
+    post,
+    operation_id = "toggle_share_with_team",
+    path = "/call/record/{call_id}/share-with-team/toggle",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 200, body = bool, content_type = "application/json", description = "New value of share_with_team after toggle"),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<MemberParticipantRole, Svc>,
+) -> Result<Json<bool>, CallError> {
+    let new_value = state
+        .service
+        .toggle_share_with_team(access.entity_access_receipt)
+        .await?;
+    Ok(Json(new_value))
 }
 
 /// Handler for `DELETE /call/{channel_id}`.

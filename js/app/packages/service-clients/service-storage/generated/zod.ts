@@ -973,6 +973,17 @@ export const editCallRecordBody = zod
   .describe('Edit call request');
 
 /**
+ * Toggles the `share_with_team` flag on the active call. Returns the new
+value as the JSON body.
+ * @summary Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
+ */
+export const toggleShareWithTeamParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+export const toggleShareWithTeamResponse = zod.boolean();
+
+/**
  * Gets or creates a call for the channel. If a call already exists, joins it;
 otherwise creates a new one. Always returns a join token.
  * @summary Handler for `GET /call/{channel_id}`.
