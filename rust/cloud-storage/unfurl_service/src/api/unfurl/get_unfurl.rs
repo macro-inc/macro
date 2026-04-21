@@ -1,5 +1,6 @@
 use axum::extract::Json;
 use axum::extract::Query;
+use axum::extract::State;
 use axum::http::StatusCode;
 
 use crate::unfurl::{
@@ -36,13 +37,17 @@ pub struct GetUnfurlQueryParams {
         ("url"=String, Query, description="URL to unfold"),
     )
 )]
-#[tracing::instrument]
+#[tracing::instrument(skip(http_client))]
 pub async fn get_unfurl_handler(
+    State(http_client): State<reqwest::Client>,
     Query(params): Query<GetUnfurlQueryParams>,
 ) -> (StatusCode, Json<Option<GetUnfurlResponse>>) {
-    let tags = match extract_meta_tags(&params.url).await {
+    let tags = match extract_meta_tags(&http_client, &params.url).await {
         Ok(t) => append_optimistic_favico(t, params.url.as_str()),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(None)),
+        Err(e) => {
+            tracing::warn!(error = %e, url = %params.url, "unfurl failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(None));
+        }
     };
 
     let response = GetUnfurlResponse::new(&params.url, &tags);
@@ -63,11 +68,12 @@ pub async fn get_unfurl_handler(
         // TODO: update
         //example=json!(["https://macro.com", "https://github.com"])
     ))]
-#[tracing::instrument]
+#[tracing::instrument(skip(http_client, body))]
 pub async fn get_bulk_unfurl_handler(
+    State(http_client): State<reqwest::Client>,
     body: Json<GetUnfurlBulkBody>,
 ) -> (StatusCode, Json<GetUnfurlBulkResponse>) {
-    let links = fetch_links_async(&body.url_list).await;
+    let links = fetch_links_async(&http_client, &body.url_list).await;
     let response = GetUnfurlBulkResponse { responses: links };
     (StatusCode::OK, Json(response))
 }

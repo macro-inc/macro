@@ -17,9 +17,14 @@ use email::{
     },
     inbound::{EmailLinkErr, EmailLinkExtractor, EmailRouterState},
 };
+use filter_ast::{Expr, ExprFrame};
 use item_filters::{
     EntityFilters,
-    ast::{EntityFilterAst, ExpandErr},
+    ast::{
+        EntityFilterAst, ExpandErr, LiteralTree, call::CallLiteral, channel::ChannelLiteral,
+        chat::ChatLiteral, document::DocumentLiteral, email::EmailLiteral, project::ProjectLiteral,
+        properties::PropertiesLiteral,
+    },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -29,6 +34,8 @@ use models_pagination::{
     TypeEraseCursor,
 };
 use models_soup::item::SoupItem;
+use recursion::CollapsibleExt;
+use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -213,6 +220,8 @@ pub enum SoupHandlerErr {
     EmailLinkErr(#[from] EmailLinkErr),
     #[error("Invalid filter arguments provided")]
     ExpandErr(ExpandErr),
+    #[error("Invalid compound filter could not be expanded")]
+    Expand,
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -227,7 +236,7 @@ impl From<SoupErr> for SoupHandlerErr {
 impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
-            SoupHandlerErr::ExpandErr(_) => StatusCode::BAD_REQUEST,
+            SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -360,7 +369,8 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct PostSoupAstRequest {
     #[serde(default, flatten)]
-    filters: EntityFilterAst,
+    #[schema(value_type = EntityFilterAst)]
+    filters: ApiEntityFilterAst,
     #[serde(default, flatten)]
     params: Params,
     /// the view of specific emails to display
@@ -404,6 +414,9 @@ where
         Err(EmailLinkErr::NotFound) => None,
         Err(e) => Err(e)?,
     };
+    let filters = filters
+        .into_entity_ast()
+        .map_err(|_| SoupHandlerErr::Expand)?;
     service
         .handle(
             macro_user_id,
@@ -416,4 +429,91 @@ where
             cursor,
         )
         .await
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ApiEntityFilterAst {
+    /// the filters that should be applied to the document entity
+    #[serde(default, rename = "df")]
+    pub document_filter: LiteralTree<ApiDocumentLiteral>,
+    /// the filters that should be applied to the project entity
+    #[serde(default, rename = "pf")]
+    pub project_filter: LiteralTree<ProjectLiteral>,
+    /// the filters that should be applied to the chat entity
+    #[serde(default, rename = "cf")]
+    pub chat_filter: LiteralTree<ChatLiteral>,
+    /// the filters that should be applied to the email entity
+    #[serde(default, rename = "ef")]
+    pub email_filter: LiteralTree<EmailLiteral>,
+    /// the filters that should be applied to the channel entity
+    #[serde(default, rename = "chanf")]
+    pub channel_filter: LiteralTree<ChannelLiteral>,
+    /// the filters that should be applied to the call entity
+    #[serde(default, rename = "callf")]
+    pub call_filter: LiteralTree<CallLiteral>,
+    /// the filters that should be applied based on entity properties
+    #[serde(default, rename = "propf")]
+    pub properties_filter: LiteralTree<PropertiesLiteral>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum ApiDocumentLiteral {
+    Plain(DocumentLiteral),
+    FileAssoc(CompoundDocumentLiteral),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum CompoundDocumentLiteral {
+    #[serde(rename = "fa")]
+    FileAssoc(String),
+}
+
+impl ApiEntityFilterAst {
+    #[tracing::instrument(err, skip(self))]
+    fn into_entity_ast(self) -> Result<EntityFilterAst, Report> {
+        let ApiEntityFilterAst {
+            document_filter,
+            project_filter,
+            chat_filter,
+            email_filter,
+            channel_filter,
+            call_filter,
+            properties_filter,
+        } = self;
+
+        let document_filter = document_filter
+            .map(|tree| {
+                tree.as_ref().try_collapse_frames(|frame| match frame {
+                    ExprFrame::And(a, b) => Ok(Expr::and(a, b)),
+                    ExprFrame::Or(a, b) => Ok(Expr::or(a, b)),
+                    ExprFrame::Not(a) => Ok(Expr::is_not(a)),
+                    ExprFrame::Literal(ApiDocumentLiteral::Plain(doc_lit)) => {
+                        Ok(Expr::val(doc_lit))
+                    }
+                    ExprFrame::Literal(ApiDocumentLiteral::FileAssoc(compound)) => match compound {
+                        CompoundDocumentLiteral::FileAssoc(s) => {
+                            let (_, file_types) =
+                                item_filters::ast::document::parse_to_file_types(&s)?;
+                            file_types
+                                .map(|ft| Expr::val(DocumentLiteral::FileType(ft)))
+                                .reduce(Expr::or)
+                                .ok_or(report!("File association list cannot be empty"))
+                        }
+                    },
+                })
+            })
+            .transpose()?
+            .map(Arc::new);
+
+        Ok(EntityFilterAst {
+            document_filter,
+            project_filter,
+            chat_filter,
+            email_filter,
+            channel_filter,
+            call_filter,
+            properties_filter,
+        })
+    }
 }

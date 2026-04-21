@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::BoolQueryBuilder;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -24,7 +24,7 @@ pub(crate) struct ChatSearchConfig;
 impl SearchQueryConfig for ChatSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "name";
-    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Chats;
+    const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Chats;
 }
 
 pub(crate) struct ChatQueryBuilder {

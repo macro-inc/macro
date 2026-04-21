@@ -220,7 +220,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           pendingJoinCall={pendingJoinCall}
           onHandled={() => setPendingJoinCall(false)}
         />
-        <div class="h-full flex flex-col px-2">
+        <div class="h-full flex flex-col px-2 mobile:px-0">
           <Switch>
             <Match when={activeTab() === 'messages'}>
               <NewChannel

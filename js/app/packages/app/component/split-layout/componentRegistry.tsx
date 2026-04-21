@@ -231,7 +231,7 @@ registerComponent(
     });
     return (
       <SoupView
-        viewName="Files"
+        viewName="Folders"
         queryFilters={preset.queryFilters}
         initialClientFilters={preset.clientFilters}
       />
@@ -275,6 +275,7 @@ registerComponent('task-compose', (params) => {
       initialContent={params?.initialContent}
       initialTitle={params?.initialTitle}
       initialAssigneeId={params?.initialAssigneeId}
+      onSuccess={params?.onSuccess}
     />
   );
 });

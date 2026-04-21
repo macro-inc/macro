@@ -36,7 +36,7 @@ export function useCreateComment() {
   return createCallback(
     async (info: CreateCommentRequest & { threadId: number }) => {
       analytics.track('comment_create', { blockType: 'pdf' });
-      const { threadId, text } = info;
+      const { threadId, text, mentions } = info;
 
       // new thread + anchor
       if (threadId === -1) {
@@ -56,9 +56,17 @@ export function useCreateComment() {
             }
 
             if (highlight.existsOnServer) {
-              response = await attachHighlightComment(text, highlight.uuid);
+              response = await attachHighlightComment(
+                text,
+                highlight.uuid,
+                mentions
+              );
             } else {
-              response = await createHighlightComment(text, highlight);
+              response = await createHighlightComment(
+                text,
+                highlight,
+                mentions
+              );
             }
             break;
           case 'free':
@@ -71,7 +79,11 @@ export function useCreateComment() {
               return response;
             }
 
-            response = await createFreeComment(text, newThreadPlaceable_);
+            response = await createFreeComment(
+              text,
+              newThreadPlaceable_,
+              mentions
+            );
             break;
           default:
             console.error('invalid comment type', comment.type);

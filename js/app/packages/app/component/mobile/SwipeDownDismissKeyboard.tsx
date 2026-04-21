@@ -1,0 +1,61 @@
+import {
+  virtualKeyboardHeight,
+  virtualKeyboardVisible,
+} from '@core/mobile/virtualKeyboard';
+import { isPlatform } from '@core/util/platform';
+import { onCleanup, onMount } from 'solid-js';
+
+const SWIPE_DOWN_THRESHOLD = 5; // px of downward movement to register as a swipe down
+const ZONE_HEIGHT = 20; // px above keyboard that activates blur
+
+export function SwipeDownDismissKeyboard() {
+  if (!isPlatform('ios')) return;
+
+  let startY = 0;
+
+  function handleTouchStart(e: TouchEvent) {
+    if (!virtualKeyboardVisible()) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    startY = touch.clientY;
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    if (!virtualKeyboardVisible()) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const keyboardTop = window.innerHeight - virtualKeyboardHeight();
+    const inZone =
+      touch.clientY >= keyboardTop - ZONE_HEIGHT &&
+      touch.clientY <= keyboardTop;
+    const swipingDown = touch.clientY - startY > SWIPE_DOWN_THRESHOLD;
+    if (inZone && swipingDown) {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) return;
+      // If the active element is inside a dialog, focus the dialog root instead of
+      // blurring — Kobalte's focus trap would immediately re-focus the input after blur().
+      // Focusing a non-input element that's still inside the trap satisfies the trap
+      // while dismissing the iOS keyboard.
+      const dialog = active.closest('[role="dialog"]') as HTMLElement | null;
+      if (dialog) {
+        if (!dialog.hasAttribute('tabindex'))
+          dialog.setAttribute('tabindex', '-1');
+        dialog.focus();
+      } else {
+        active.blur();
+      }
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchstart', handleTouchStart);
+
+    onCleanup(() => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+    });
+  });
+
+  return null;
+}

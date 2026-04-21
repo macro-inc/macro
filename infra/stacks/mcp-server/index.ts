@@ -1,6 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getAiToolsInfra,
+  getMacroApiToken,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { McpServer, SERVICE_DOMAIN_NAME } from './mcp-server';
 
@@ -19,11 +24,6 @@ const DATABASE_URL = aws.secretsmanager
     secretId: config.require('macro_db_secret_key'),
   })
   .apply((secret) => secret.secretString);
-
-const SYNC_SERVICE_AUTH_KEY = config.require('sync_service_auth_key');
-const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
 
 const JWT_SECRET_KEY = config.require('jwt_secret_key');
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
@@ -66,13 +66,11 @@ const MACRO_CACHE = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const INTERNAL_AUTH_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('internal_auth_key'),
-  })
-  .apply((secret) => secret.secretString);
-
 const MACRO_API_TOKENS = getMacroApiToken();
+
+// ── AI tools infra ───────────────────────────────────────────────────────────
+
+const aiTools = getAiToolsInfra();
 
 // ── Stack references ─────────────────────────────────────────────────────────
 
@@ -90,66 +88,6 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
-  .getOutput('documentStorageBucketId')
-  .apply((id) => id as string);
-
-const documentStorageBucketArn: pulumi.Output<string> = cloudStorageStack
-  .getOutput('documentStorageBucketArn')
-  .apply((arn) => arn as string);
-
-const cloudStorageServiceStack = new pulumi.StackReference(
-  'cloud-storage-service',
-  {
-    name: `macro-inc/cloud-storage-service/${stack}`,
-  }
-);
-
-const emailServiceStack = new pulumi.StackReference('email-service-stack', {
-  name: `macro-inc/email-service/${stack}`,
-});
-
-export const documentStorageServiceUrl: pulumi.Output<string> =
-  cloudStorageServiceStack
-    .getOutput('cloudStorageServiceUrl')
-    .apply((url) => url as string);
-
-const docxUploadBucketName: pulumi.Output<string> = cloudStorageServiceStack
-  .getOutput('docxUploadBucketName')
-  .apply((name) => name as string);
-
-const docxUploadBucketArn: pulumi.Output<string> = cloudStorageServiceStack
-  .getOutput('docxUploadBucketArn')
-  .apply((arn) => arn as string);
-
-const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
-  .getOutput('scheduledQueueArn')
-  .apply((arn) => arn as string);
-
-const emailScheduledQueueName: pulumi.Output<string> = emailServiceStack
-  .getOutput('scheduledQueueName')
-  .apply((name) => name as string);
-
-const linksharingStack = new pulumi.StackReference('linksharing-stack', {
-  name: `macro-inc/link-sharing/${stack}`,
-});
-
-const cloudfrontDistributionUrl: pulumi.Output<string> = linksharingStack
-  .getOutput('cloudfrontDistributionUrl')
-  .apply((url) => url as string);
-
-const cloudfrontSignerPublicKeyId: pulumi.Output<string> = linksharingStack
-  .getOutput('cloudfrontDistributionPublicKeyId')
-  .apply((key) => key as string);
-
-const CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME = `linksharing-private-key-${stack}`;
-
-const cloudfrontPrivateKeySecretArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretOutput({
-    name: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
-  })
-  .apply((secret) => secret.arn);
-
 // ── Service ──────────────────────────────────────────────────────────────────
 
 const mcpServer = new McpServer(`mcp-server-${stack}`, {
@@ -162,18 +100,18 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
   },
   secretKeyArns: [
     jwtSecretKeyArn,
-    syncServiceAuthKeyArn,
     fusionauthClientSecretArn,
     fusionauthApiKeyArn,
     googleClientSecretArn,
-    cloudfrontPrivateKeySecretArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+    ...aiTools.secretArns,
   ],
-  queueArns: [emailScheduledQueueArn],
-  bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
+  queueArns: [...aiTools.queueArns],
+  bucketArns: [...aiTools.bucketArns],
   serviceContainerPort: 8080,
   healthCheckPath: '/health',
   containerEnvVars: [
+    ...aiTools.envVars,
     {
       name: 'DATABASE_URL',
       value: pulumi.interpolate`${DATABASE_URL}`,
@@ -185,62 +123,6 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
     {
       name: 'RUST_LOG',
       value: 'info',
-    },
-    {
-      name: 'INTERNAL_API_SECRET_KEY',
-      value: pulumi.interpolate`${INTERNAL_AUTH_KEY}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_BUCKET',
-      value: pulumi.interpolate`${documentStorageBucketId}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: pulumi.interpolate`${documentStorageServiceUrl}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
-      value: pulumi.interpolate`${cloudfrontDistributionUrl}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
-      value: pulumi.interpolate`${cloudfrontSignerPublicKeyId}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
-      value: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
-    },
-    {
-      name: 'DOCX_DOCUMENT_UPLOAD_BUCKET',
-      value: pulumi.interpolate`${docxUploadBucketName}`,
-    },
-    {
-      name: 'SYNC_SERVICE_AUTH_KEY',
-      value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
-    },
-    {
-      name: 'SYNC_SERVICE_URL',
-      value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
-    },
-    {
-      name: 'LEXICAL_SERVICE_URL',
-      value: `https://lexical-service-${stack}.macroverse.workers.dev`,
-    },
-    {
-      name: 'EMAIL_SERVICE_URL',
-      value: `https://email-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
-      name: 'EMAIL_SCHEDULED_QUEUE',
-      value: pulumi.interpolate`${emailScheduledQueueName}`,
-    },
-    {
-      name: 'STATIC_FILE_SERVICE_URL',
-      value: `https://static-file-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
     },
     {
       name: 'JWT_SECRET_KEY',

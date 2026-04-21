@@ -1,6 +1,7 @@
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { PluginManager, SelectionData } from '../plugins';
+import type { Action } from '../plugins/actions/types';
 import { buildHandleFromConfig } from './buildHandleFromConfig';
 import type {
   ActionsOptions,
@@ -116,7 +117,29 @@ export class EditorConfigBuilder implements EditorBuilder {
   }
 
   withActions(config: ActionsOptions = {}): this {
-    this.state.actions = config;
+    const existing =
+      typeof this.state.actions === 'object' ? this.state.actions : {};
+
+    const existingAdditional = existing.additionalActions ?? [];
+    const incomingAdditional = config.additionalActions ?? [];
+    const byId = new Map<string, Action>();
+    for (const action of existingAdditional) byId.set(action.id, action);
+    for (const action of incomingAdditional) byId.set(action.id, action);
+    const mergedAdditional = Array.from(byId.values());
+
+    const mergedIgnore = Array.from(
+      new Set([
+        ...(existing.ignoreActionIds ?? []),
+        ...(config.ignoreActionIds ?? []),
+      ])
+    );
+
+    this.state.actions = {
+      ...existing,
+      ...config,
+      additionalActions: mergedAdditional.length ? mergedAdditional : undefined,
+      ignoreActionIds: mergedIgnore.length ? mergedIgnore : undefined,
+    };
     return this;
   }
 

@@ -1,4 +1,3 @@
-import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
@@ -184,7 +183,7 @@ export function Thread(props: {
           <div
             // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
             // pointer-events: none vs. all inside the .pdfOverlayInner div.
-            class="flex-shrink-0 bg-panel p-2 ring-1 ring-edge portal-scope pointer-events-auto pdf-pointer-event-reset"
+            class="flex-shrink-0 bg-panel p-2 ring-1 ring-edge-muted rounded-sm portal-scope pointer-events-auto pdf-pointer-event-reset"
             classList={{
               'transition-transform duration-100': true,
               '-translate-x-8': props.isActive,
@@ -295,15 +294,6 @@ export function Thread(props: {
               </Show>
             </Show>
           </div>
-          <BozzyBracketInnerSibling
-            classList={{
-              'opacity-0': !props.isActive,
-              'transition-transform duration-100': true,
-              'scale-110': !props.isActive,
-              'scale-100': props.isActive,
-              '-translate-x-8': props.isActive,
-            }}
-          />
         </MeasureContainer>
       </StaticMarkdownContext>
     </ThreadContext.Provider>

@@ -199,16 +199,25 @@ pub enum UpdateError {
     Other,
 }
 
-/// denotes that an update has been found and we are requesting approval
-#[derive(Debug, Clone, Copy)]
-pub struct UpdateRequested(());
-/// denotes that an update was approved via an [UpdateRequested]
+/// denotes that an update was approved
 #[derive(Debug, Clone)]
 pub struct UpdateGranted(());
 
-/// denotes that an update was denied via an [UpdateRequest]
+impl UpdateGranted {
+    pub fn new() -> Self {
+        UpdateGranted(())
+    }
+}
+
+/// denotes that an update was denied
 #[derive(Debug, Clone, Copy)]
 pub struct UpdateDenied(());
+
+impl UpdateDenied {
+    pub fn new() -> Self {
+        UpdateDenied(())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum UpdateApproval {
@@ -216,23 +225,8 @@ pub enum UpdateApproval {
     Denied(UpdateDenied),
 }
 
-impl UpdateRequested {
-    pub(crate) fn new_request() -> Self {
-        UpdateRequested(())
-    }
-
-    pub fn grant(self) -> UpdateGranted {
-        UpdateGranted(())
-    }
-
-    pub fn deny(self) -> UpdateDenied {
-        UpdateDenied(())
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct UpdateFoundStatus {
-    pub request: UpdateRequested,
     pub bundle: BundleUpdate,
 }
 

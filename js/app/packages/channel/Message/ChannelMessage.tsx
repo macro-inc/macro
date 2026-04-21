@@ -1,4 +1,4 @@
-import { Match, Show, Switch } from 'solid-js';
+import { Match, Show, Switch, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import type { MessageActions, MessageData } from './types';
 import { Message } from './Message';
@@ -19,6 +19,7 @@ type ChannelMessageProps = {
   messageEditor?: MessageEditor;
   highlighted?: boolean;
   selectionState?: MessageSelectionState;
+  onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
 };
 
 function isEditingMessage(
@@ -167,6 +168,8 @@ export function ChannelMessage(props: ChannelMessageProps) {
       message={props.message}
       actions={props.actions}
       highlighted={props.highlighted}
+      selected={props.selectionState?.isSelected}
+      onClick={props.onClick}
       ref={(el) =>
         longPressHighlight(el, () => ({
           onLongPress: () => drawerManager?.open(props.message, props.actions),

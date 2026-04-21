@@ -74,6 +74,26 @@ export function ChannelThread(props: ThreadProps) {
   });
 
   const isThreadFocused = () => isSelected() && !!replySelection.selectedId();
+  const selectThreadMessage = () => {
+    if (isSelected() && !isThreadFocused()) {
+      props.onClearSelection?.();
+      return;
+    }
+
+    props.onSelectMessage?.(props.data().id);
+    replySelection.clear();
+  };
+
+  const selectReply = (replyId: string) => {
+    if (isSelected() && replySelection.selectedId() === replyId) {
+      replySelection.clear();
+      props.onClearSelection?.();
+      return;
+    }
+
+    props.onSelectMessage?.(props.data().id);
+    replySelection.select(replyId);
+  };
 
   let replyInputContainerRef: HTMLDivElement | undefined;
 
@@ -148,6 +168,9 @@ export function ChannelThread(props: ThreadProps) {
         );
         if (targetReplyIndex === -1) return;
 
+        props.onSelectMessage?.(props.data().id);
+        replySelection.select(targetReplyId);
+
         if (!isExpanded) {
           const renderedTargetReplyIndex = renderedReplies.findIndex(
             (reply) => reply.id === targetReplyId
@@ -187,9 +210,8 @@ export function ChannelThread(props: ThreadProps) {
                 actions={props.getMessageActions?.(props.data())}
                 listMeta={props.listMeta}
                 messageEditor={props.messageEditor}
-                highlighted={
-                  props.highlighted || (isSelected() && !isThreadFocused())
-                }
+                onClick={selectThreadMessage}
+                highlighted={isSelected() && !isThreadFocused()}
                 selectionState={
                   isSelected() && !isThreadFocused()
                     ? { isSelected: true }
@@ -216,10 +238,10 @@ export function ChannelThread(props: ThreadProps) {
                       getMessageActions={props.getMessageActions}
                       messageEditor={props.messageEditor}
                       isNewMessage={props.isNewMessage}
-                      highlightedReplyId={props.highlightedReplyId}
                       onReady={setReplyListHandle}
                       selectedReplyId={replySelection.selectedId}
                       isThreadFocused={isThreadFocused}
+                      onSelectReply={selectReply}
                     />
                   </DebugSuspense>
 

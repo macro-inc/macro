@@ -1,7 +1,6 @@
-use crate::config::Config;
+use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
-use tower::ServiceBuilder;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -11,22 +10,24 @@ mod proxy;
 pub(crate) mod swagger;
 mod unfurl;
 
-pub async fn setup_and_serve(config: &Config) -> anyhow::Result<()> {
+pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
 
+    let env = state.environment;
     let app = api_router()
-        .layer(cors.clone())
-        .merge(health::router().layer(cors))
+        .with_state(state)
+        .merge(health::router())
+        .layer(cors)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port))
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
         .unwrap();
 
     tracing::info!(
         "\n📜 unfurl_service 📜\nenvironment {:?}\nport: {}",
-        &config.environment,
-        &config.port
+        &env,
+        &port
     );
 
     axum::serve(listener, app.into_make_service())
@@ -34,10 +35,10 @@ pub async fn setup_and_serve(config: &Config) -> anyhow::Result<()> {
         .context("error starting service")
 }
 
-fn api_router() -> Router {
+fn api_router() -> Router<ApiContext> {
     Router::new()
-        .nest("/unfurl", unfurl::router().layer(ServiceBuilder::new()))
-        .nest("/proxy", proxy::router().layer(ServiceBuilder::new()))
+        .nest("/unfurl", unfurl::router())
+        .nest("/proxy", proxy::router())
 }
 
 #[cfg(test)]
@@ -51,11 +52,19 @@ mod tests {
         http::{Request, StatusCode},
     };
     use http_body_util::BodyExt; // for `collect`
+    use macro_env::Environment;
     use tower::ServiceExt;
+
+    fn test_state() -> ApiContext {
+        ApiContext {
+            environment: Environment::Local,
+            http_client: reqwest::Client::new(),
+        }
+    }
 
     #[tokio::test]
     async fn test_not_found() {
-        let api = api_router();
+        let api = api_router().with_state(test_state());
 
         let response = api
             .oneshot(
@@ -74,7 +83,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unfurl_url_nonexistent() {
-        let api = api_router();
+        let api = api_router().with_state(test_state());
 
         let response = api
             .oneshot(
@@ -101,7 +110,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_unfurl_hello_url() {
-        let api = api_router();
+        let api = api_router().with_state(test_state());
 
         let response = api
             .oneshot(
@@ -133,7 +142,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_bulk() {
-        let api = api_router();
+        let api = api_router().with_state(test_state());
 
         let body = GetUnfurlBulkBody {
             url_list: ["https://hello.com", "https://example.com"]
@@ -171,7 +180,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_bulk_404_links() {
-        let api = api_router();
+        let api = api_router().with_state(test_state());
 
         let body = GetUnfurlBulkBody {
             url_list: [

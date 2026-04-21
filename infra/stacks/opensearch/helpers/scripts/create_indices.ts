@@ -25,6 +25,7 @@ async function createChannelIndex(opensearchClient: Client) {
           refresh_interval: '1s',
         },
         mappings: {
+          dynamic: 'false',
           properties: {
             // channel id
             entity_id: {
@@ -96,6 +97,7 @@ async function createDocumentIndex(opensearchClient: Client) {
           refresh_interval: '1s',
         },
         mappings: {
+          dynamic: 'false',
           properties: {
             // The id of the document
             entity_id: {
@@ -172,6 +174,7 @@ async function createChatIndex(opensearchClient: Client) {
           refresh_interval: '1s',
         },
         mappings: {
+          dynamic: 'false',
           properties: {
             /* All chat messages are put into OpenSearch under a chat index and are associated by their chat_id, chat_message_id, user_id, role, updated_at, title and content. */
             // The id of the chat
@@ -239,6 +242,7 @@ async function createEmailIndex(opensearchClient: Client) {
           refresh_interval: '2s', // We don't need emails to refresh often
         },
         mappings: {
+          dynamic: 'false',
           properties: {
             // The thread id of the email
             entity_id: {

@@ -26,6 +26,7 @@ import {
 } from '../utils/fileUploadUtils';
 import {
   editorIsEmpty,
+  focusEditorWithoutScroll,
   initializeEditorEmpty,
   initializeEditorWithState,
   setEditorStateFromMarkdown,
@@ -60,7 +61,9 @@ export const MarkdownShell: Component<
 
   const onConnect = () => {
     if (props.autofocus) {
-      setTimeout(() => editor.focus());
+      setTimeout(() => {
+        focusEditorWithoutScroll(editor);
+      });
     }
 
     if (props.initialState) {
@@ -251,10 +254,16 @@ export const MarkdownShell: Component<
             <ActionMenu
               editor={editor}
               menu={menu()}
-              useBlockBoundary={
-                typeof builderConfig.actions === 'object'
-                  ? (builderConfig.actions.useBlockBoundary ?? false)
-                  : false
+              useBlockBoundary={false}
+              additionalActions={
+                (builderConfig.actions &&
+                  builderConfig.actions.additionalActions) ||
+                undefined
+              }
+              ignoreActionIds={
+                (builderConfig.actions &&
+                  builderConfig.actions.ignoreActionIds) ||
+                undefined
               }
               portalScope={props.portalScope}
             />

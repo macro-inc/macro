@@ -90,6 +90,7 @@
           gst_all_1.gst-plugins-good
           gst_all_1.gst-plugins-bad
           jdk
+          xdg-utils
         ];
 
         packages = basePackages ++ pkgs.lib.optionals isLinux (linuxPackages ++ [ android_sdk ]);

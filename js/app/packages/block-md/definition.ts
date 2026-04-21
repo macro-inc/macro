@@ -27,6 +27,9 @@ const nodeSchema = schema.LoroMap({
   text: schema.LoroText({
     required: false,
   }),
+  ids: schema.LoroList(schema.String(), (idStr) => idStr, {
+    required: false,
+  }),
   children: schema.LoroMovableList(
     {} as SchemaType,
     (item) => {
