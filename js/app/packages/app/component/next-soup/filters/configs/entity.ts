@@ -18,7 +18,9 @@ export const channelsFilter = config({
 export const filesAndFolderFilter = config({
   id: 'file-folder',
   predicate: filesAndFolderPredicate,
-  query: { exclude: { fileType: ['md', 'canvas'], folderId: [NIL] } },
+  query: {
+    exclude: { fileAssoc: ['assoc:md', 'assoc:canvas'], folderId: [NIL] },
+  },
 });
 
 export const foldersFilter = config({

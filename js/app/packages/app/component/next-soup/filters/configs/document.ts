@@ -1,17 +1,17 @@
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { isDocumentEntity } from '@entity';
-import { config, IMAGE_EXTENSIONS, isNotTask, isEmailAttachment } from './base';
+import { config, IMAGE_EXTENSIONS, isEmailAttachment } from './base';
 
 export const docMarkdownFilter = config({
   id: 'doc-markdown',
   predicate: (e) => isDocumentEntity(e) && e.fileType === 'md',
-  query: { include: { fileType: ['md'] } },
+  query: { include: { fileAssoc: ['assoc:md'] } },
 });
 
 export const docCanvasFilter = config({
   id: 'doc-canvas',
   predicate: (e) => isDocumentEntity(e) && e.fileType === 'canvas',
-  query: { include: { fileType: ['canvas'] } },
+  query: { include: { fileAssoc: ['assoc:canvas'] } },
 });
 
 /**
