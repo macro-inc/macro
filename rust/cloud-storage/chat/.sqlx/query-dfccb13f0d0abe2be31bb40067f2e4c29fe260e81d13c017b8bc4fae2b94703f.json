@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"Project\"\n        SET \"uploadPending\" = false\n        WHERE id = ANY($1)\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dfccb13f0d0abe2be31bb40067f2e4c29fe260e81d13c017b8bc4fae2b94703f"
+}

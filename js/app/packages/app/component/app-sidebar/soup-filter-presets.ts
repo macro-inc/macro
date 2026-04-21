@@ -117,6 +117,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           clientFilters: { and: ['agent', 'shared-entity'] },
         };
       },
+      automations: () => ({
+        // Server returns nothing useful here — automations are merged
+        // into the soup client-side via `additionalEntities`.
+        queryFilters: QUERY_FILTERS.agent,
+        clientFilters: { and: ['automation'] },
+      }),
     },
   },
   mail: {
@@ -215,13 +221,25 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             include: {
               subType: ['task'],
               properties: [
-                { propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES, type: 'entity', value: ctx.userId },
+                {
+                  propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+                  type: 'entity',
+                  value: ctx.userId,
+                },
               ],
             },
             exclude: {
               properties: [
-                { propertyId: SYSTEM_PROPERTY_IDS.STATUS, type: 'select', value: PROPERTY_OPTION_IDS.STATUS.COMPLETED },
-                { propertyId: SYSTEM_PROPERTY_IDS.STATUS, type: 'select', value: PROPERTY_OPTION_IDS.STATUS.CANCELED },
+                {
+                  propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+                  type: 'select',
+                  value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+                },
+                {
+                  propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+                  type: 'select',
+                  value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
+                },
               ],
             },
           }),
@@ -275,6 +293,13 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({
           exclude: { callChannelId: [NIL] },
         }),
+        clientFilters: { and: ['calls'] },
+      }),
+      unattended: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.calls,
+          call_filters: { attended: false },
+        },
         clientFilters: { and: ['calls'] },
       }),
     },

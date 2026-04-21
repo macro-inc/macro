@@ -8,6 +8,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { useMutation } from '@tanstack/solid-query';
 import type { EntityData } from '@entity';
 import { callServiceClient } from '@service-call/client';
+import { scheduledActionClient } from '@service-scheduled-action/client';
+import { scheduledActionKeys } from '@queries/agent-schedule/keys';
 import type { ItemType } from '@service-storage/client';
 import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
@@ -26,7 +28,8 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'chat' ||
       type === 'document' ||
       type === 'project' ||
-      type === 'call'
+      type === 'call' ||
+      type === 'automation'
     );
   };
   return useMutation(() => ({
@@ -39,11 +42,33 @@ export function createBulkDeleteDssItemsMutation() {
               callServiceClient.deleteCallRecord(e.id)
             ).then(() => true);
           }
+          if (e.type === 'automation') {
+            return throwOnErr(() =>
+              scheduledActionClient.deleteSchedule({ scheduleId: e.id })
+            ).then(() => true);
+          }
           return deleteItem({ id: e.id, itemType: e.type as ItemType });
         })
       );
       if (deletable.some((e) => e.type === 'call')) {
         queryClient.invalidateQueries({ queryKey: ['call'] });
+      }
+      if (deletable.some((e) => e.type === 'automation')) {
+        const deletedIds = new Set(
+          deletable.filter((e) => e.type === 'automation').map((e) => e.id)
+        );
+        queryClient.setQueryData(
+          scheduledActionKeys.list.queryKey,
+          (current: unknown) => {
+            if (!Array.isArray(current)) return current;
+            return current.filter(
+              (item: { id?: string }) => !item.id || !deletedIds.has(item.id)
+            );
+          }
+        );
+        queryClient.invalidateQueries({
+          queryKey: scheduledActionKeys.list.queryKey,
+        });
       }
       return results;
     },

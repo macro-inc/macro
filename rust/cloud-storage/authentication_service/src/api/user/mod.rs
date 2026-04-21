@@ -60,6 +60,10 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
         .route("/stripe/checkout", post(stripe::create_checkout_session))
         .route("/stripe/portal", post(stripe::create_portal_session))
         .route(
+            "/stripe/subscription",
+            patch(stripe::patch_subscription_tier),
+        )
+        .route(
             "/legacy_user_permissions",
             get(get_legacy_user_permissions::handler),
         )

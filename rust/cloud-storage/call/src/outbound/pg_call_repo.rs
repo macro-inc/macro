@@ -1,5 +1,7 @@
 //! Postgres-backed repository for call state.
 
+mod edit;
+
 #[cfg(test)]
 mod test;
 
@@ -18,7 +20,7 @@ use uuid::Uuid;
 use crate::domain::channel_name::{NameLookup, display_name, resolve_channel_name};
 use crate::domain::models::{
     Call, CallParticipant, CallRecord, CallRecordParticipant, CallRecordTranscriptSegment,
-    TranscriptSegmentRequest,
+    EditCallRecordRequest, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallRepository;
 
@@ -35,11 +37,30 @@ fn extract_channel_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
 fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
+        Expr::Literal(CallLiteral::Attended(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_channel_ids(a, ids);
             collect_channel_ids(b, ids);
         }
         Expr::Not(inner) => collect_channel_ids(inner, ids),
+    }
+}
+
+/// Extract the `attended` literal from a call filter AST, if any.
+///
+/// `ExpandFrame::expand_ast` only emits at most one `Attended` literal, so we
+/// return the first one we find during a simple traversal.
+fn extract_attended(filter: &LiteralTree<CallLiteral>) -> Option<bool> {
+    let expr = filter.as_ref()?;
+    find_attended(expr)
+}
+
+fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
+    match expr {
+        Expr::Literal(CallLiteral::Attended(b)) => Some(*b),
+        Expr::Literal(CallLiteral::ChannelId(_)) => None,
+        Expr::And(a, b) | Expr::Or(a, b) => find_attended(a).or_else(|| find_attended(b)),
+        Expr::Not(inner) => find_attended(inner).map(|b| !b),
     }
 }
 
@@ -108,6 +129,27 @@ impl CallRepository for PgCallRepo {
             share_permission.channel_share_permissions.as_ref().unwrap()[0].access_level as _,
         )
         .execute(tx.as_mut())
+        .await?;
+
+        // owner entity access row
+        entity_access_db_utils::insert_entity_access_row(
+            &mut tx,
+            call_id,
+            entity_access_db_utils::EntityType::Call,
+            created_by.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await?;
+
+        entity_access_db_utils::insert_entity_access_row(
+            &mut tx,
+            call_id,
+            entity_access_db_utils::EntityType::Call,
+            &channel_id.to_string(),
+            entity_access_db_utils::EntityAccessSourceType::Channel,
+            entity_access_db_utils::AccessLevel::View,
+        )
         .await?;
 
         let row = sqlx::query!(
@@ -320,14 +362,25 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
         sqlx::query!(
             r#"
             DELETE FROM calls WHERE id = $1
             "#,
             call_id,
         )
-        .execute(&self.pool)
+        .execute(tx.as_mut())
         .await?;
+
+        entity_access_db_utils::delete_entity_access_rows(
+            &mut tx,
+            call_id,
+            entity_access_db_utils::EntityType::Call,
+        )
+        .await?;
+
+        tx.commit().await?;
         Ok(())
     }
 
@@ -346,13 +399,29 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<bool, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            UPDATE calls
+               SET share_with_team = NOT share_with_team
+             WHERE id = $1
+            RETURNING share_with_team
+            "#,
+            call_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.share_with_team)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
         let mut tx = self.pool.begin().await?;
 
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id, share_with_team
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -362,6 +431,34 @@ impl CallRepository for PgCallRepo {
         .fetch_optional(tx.as_mut())
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
+
+        // If the call opted in to team sharing, grant the creator's team View
+        // access on the archived call. Silently skip if the creator has no team.
+        if call.share_with_team {
+            let team_id: Option<Uuid> = sqlx::query_scalar!(
+                r#"
+                SELECT team_id
+                FROM team_user
+                WHERE user_id = $1
+                LIMIT 1
+                "#,
+                &call.created_by,
+            )
+            .fetch_optional(tx.as_mut())
+            .await?;
+
+            if let Some(team_id) = team_id {
+                entity_access_db_utils::insert_entity_access_row(
+                    &mut tx,
+                    call_id,
+                    entity_access_db_utils::EntityType::Call,
+                    &team_id.to_string(),
+                    entity_access_db_utils::EntityAccessSourceType::Team,
+                    entity_access_db_utils::AccessLevel::View,
+                )
+                .await?;
+            }
+        }
 
         let now = Utc::now();
         let duration_ms = now
@@ -686,6 +783,7 @@ impl CallRepository for PgCallRepo {
         // large for the soup feed).
         let channel_ids = extract_channel_ids(filter);
         let has_channel_filter = !channel_ids.is_empty();
+        let attended = extract_attended(filter);
 
         let rows = sqlx::query!(
             r#"
@@ -708,6 +806,10 @@ impl CallRepository for PgCallRepo {
                   AND ccp.left_at IS NULL
             )
             AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
+            AND ($5::bool IS NULL OR EXISTS (
+                SELECT 1 FROM call_participants cp
+                WHERE cp.call_id = c.id AND cp.user_id = $1
+            ) = $5)
             UNION ALL
             SELECT
                 id as "call_id!",
@@ -728,6 +830,10 @@ impl CallRepository for PgCallRepo {
                   AND ccp.left_at IS NULL
             )
             AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
+            AND ($5::bool IS NULL OR EXISTS (
+                SELECT 1 FROM call_record_participants crp
+                WHERE crp.call_record_id = cr.id AND crp.user_id = $1
+            ) = $5)
             ORDER BY "started_at!" DESC
             LIMIT $2
             "#,
@@ -735,6 +841,7 @@ impl CallRepository for PgCallRepo {
             limit as i64,
             has_channel_filter,
             &channel_ids,
+            attended,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -1009,14 +1116,45 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_call_record(&self, call_record_id: &Uuid) -> Result<Option<String>, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
         let row = sqlx::query!(
             r#"
             DELETE FROM call_records WHERE id = $1 RETURNING recording_key
             "#,
             call_record_id,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(tx.as_mut())
         .await?;
+
+        entity_access_db_utils::delete_entity_access_rows(
+            &mut tx,
+            call_record_id,
+            entity_access_db_utils::EntityType::Call,
+        )
+        .await?;
+
+        tx.commit().await?;
         Ok(row.and_then(|r| r.recording_key))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_call_record(
+        &self,
+        call_record_id: &Uuid,
+        request: &EditCallRecordRequest,
+    ) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
+        if let Some(share_permission) = request.share_permission.as_ref() {
+            edit::update_share_permission(&mut tx, call_record_id, share_permission).await?;
+        }
+
+        if let Some(share_with_team) = request.share_with_team {
+            edit::set_share_with_team(&mut tx, call_record_id, share_with_team).await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
     }
 }

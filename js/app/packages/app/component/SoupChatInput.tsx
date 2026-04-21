@@ -22,12 +22,11 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
   const analytics = useAnalytics();
-  let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
   const soup = useSoup();
   const input = useChatInputContext();
@@ -47,18 +46,27 @@ function SoupChatInputInner() {
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
-  const metaHeld = () => pressedKeys().has('cmd');
+  const [chatHasFocus, setChatHasFocus] = createSignal(false);
+  const metaHeld = () => chatHasFocus() && pressedKeys().has('cmd');
 
-  onMount(() => {
-    attachHotkeys(containerRef);
-  });
+  const attachContainer = (el: HTMLDivElement) => {
+    attachHotkeys(el);
+    const focusIn = () => setChatHasFocus(true);
+    const focusOut = () => setChatHasFocus(false);
+    el.addEventListener('focusin', focusIn);
+    el.addEventListener('focusout', focusOut);
+    onCleanup(() => {
+      el.removeEventListener('focusin', focusIn);
+      el.removeEventListener('focusout', focusOut);
+    });
+  };
 
-  // cmd+j - Focus the soup chat input
+  // cmd+j - Focus AI chat
   registerHotkey({
     hotkey: 'cmd+j',
     scopeId: splitPanelContext.splitHotkeyScope,
     hotkeyToken: TOKENS.chat.input.focus,
-    description: 'Focus chat input',
+    description: 'Focus AI chat',
     keyDownHandler: () => {
       editor.controls.focus();
       return true;
@@ -119,7 +127,7 @@ function SoupChatInputInner() {
   return (
     <Show when={!soup.previewEntity()}>
       <div
-        ref={containerRef}
+        ref={attachContainer}
         class="absolute bottom-0 right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
         style={{
           'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,

@@ -1,7 +1,7 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
-import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { useNavigate } from '@solidjs/router';
@@ -272,9 +272,10 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const [, setTabTitle] = tabTitleSignal;
 
   // Create the mobile swipe layout once on mobile devices.
-  const mobileSwipeLayout: MobileSwipeLayout | undefined = isMobile()
-    ? createMobileSwipeLayout(splitManager)
-    : undefined;
+  const mobileSwipeLayout: MobileSwipeLayout | undefined =
+    isNativeMobilePlatform()
+      ? createMobileSwipeLayout(splitManager)
+      : undefined;
 
   // Store a ref to each panel by id
   const panelRefs = new Map<SplitId, HTMLDivElement>();
@@ -310,7 +311,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
         class={cn('size-full p-2 mobile:p-0', { 'pl-0': isSidebarVisible() })}
       >
         <Show
-          when={isMobile() && mobileSwipeLayout}
+          when={isNativeMobilePlatform() && mobileSwipeLayout}
           fallback={
             // Desktop: side-by-side resizable splits.
             <Resize.Zone

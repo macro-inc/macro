@@ -5,24 +5,18 @@ import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { hapticImpact } from '@core/mobile/haptics';
-import {
-  type Component,
-  createMemo,
-  createSignal,
-  type JSX,
-  Show,
-} from 'solid-js';
+import { focusInput } from '@core/directive/focusInput';
+import { type Component, createSignal, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '@ui/utils/classname';
 import { useSplitLayout } from '../split-layout/layout';
-import { type ListView, isListViewID } from '@app/constants/list-views';
+import type { ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SearchState } from './mobileSearchState';
-import { runCreateAction, setCreateMenuOpen } from '../Launcher';
 import { useLocation } from '@solidjs/router';
-import { useAnalytics } from '@app/component/analytics-context';
+
+false && focusInput;
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
@@ -69,92 +63,34 @@ function MobileDockButton(props: MobileDockButtonProps) {
   );
 }
 
-type IconComponent = MobileDockButtonProps['icon'];
-
-const VIEW_CREATE_ICONS: Partial<Record<ListView, IconComponent>> = {
-  agents: AnimatedStarIcon,
-  mail: AnimatedEmailIcon,
-  documents: AnimatedPlusIcon,
-  tasks: AnimatedTaskIcon,
-  channels: AnimatedChannelIcon,
-  inbox: AnimatedPlusIcon,
-};
-
-function FloatingCreateButton(props: {
-  activeView: () => ListView | undefined;
-}) {
-  const analytics = useAnalytics();
+function SearchDockButton(props: { active: boolean; onClick: () => void }) {
   const [animating, setAnimating] = createSignal(false);
 
-  const VIEW_CREATE_ACTIONS: Partial<Record<ListView, () => void>> = {
-    agents: () => {
-      analytics.track('create_entity', {
-        entityType: 'chat',
-        source: 'mobile_dock',
-      });
-      runCreateAction('chat');
-    },
-    mail: () => {
-      analytics.track('create_entity', {
-        entityType: 'email',
-        source: 'mobile_dock',
-      });
-      runCreateAction('email');
-    },
-    documents: () => {
-      analytics.track('create_menu_open', { from: 'mobile_dock' });
-      setCreateMenuOpen(true);
-    },
-    tasks: () => {
-      analytics.track('create_entity', {
-        entityType: 'task',
-        source: 'mobile_dock',
-      });
-      runCreateAction('task');
-    },
-    channels: () => {
-      analytics.track('create_entity', {
-        entityType: 'channel',
-        source: 'mobile_dock',
-      });
-      runCreateAction('channel');
-    },
-  };
-
-  const createAction = createMemo(() => {
-    const view = props.activeView();
-    if (!view || view === 'search') return undefined;
-    return (
-      VIEW_CREATE_ACTIONS[view] ??
-      (() => {
-        analytics.track('create_menu_open', { from: 'mobile_dock' });
-        setCreateMenuOpen(true);
-      })
-    );
-  });
-
-  const createIcon = createMemo<IconComponent>(() => {
-    const view = props.activeView();
-    return (view && VIEW_CREATE_ICONS[view]) ?? AnimatedPlusIcon;
-  });
-
   return (
-    <Show when={createAction()}>
-      <button
-        type="button"
-        class="absolute bottom-full right-4 mb-14 w-11 h-11 rounded-full bg-panel text-accent flex items-center justify-center shadow-lg"
-        onPointerDown={() => {
-          hapticImpact('light');
-          setAnimating(true);
-          setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
-          createAction()?.();
-        }}
-      >
-        <div class="w-5 h-5 [&_svg]:size-5">
-          <Dynamic component={createIcon()} triggerAnimation={animating()} />
-        </div>
-      </button>
-    </Show>
+    <button
+      type="button"
+      use:focusInput={{
+        getTarget: () => document.getElementById('mobile-search-input'),
+      }}
+      // This needs to be onClick, rather than pointerDown like the other buttons, so that we can use onClick behavior of focusInput before the dialog overlay appears.
+      onClick={() => {
+        hapticImpact('light');
+        setAnimating(true);
+        setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
+        props.onClick();
+      }}
+      class={cn(
+        'flex flex-col items-center justify-center flex-1 pt-3 pb-2 bg-panel border-t border-edge-muted',
+        props.active && 'text-accent'
+      )}
+    >
+      <div class="w-6 h-6 [&_svg]:size-6">
+        <Dynamic
+          component={AnimatedSearchIcon}
+          triggerAnimation={animating()}
+        />
+      </div>
+    </button>
   );
 }
 
@@ -171,16 +107,6 @@ export function MobileDock() {
     return activeContent.id === id;
   };
 
-  const activeView = createMemo<ListView | undefined>(() => {
-    const activeContent = globalSplitManager()?.activeSplit()?.content();
-    if (activeContent?.type === 'component' && isListViewID(activeContent.id)) {
-      return activeContent.id;
-    }
-    const segments = location.pathname.split('/').filter(Boolean);
-    const last = segments[segments.length - 1];
-    return isListViewID(last) ? last : undefined;
-  });
-
   const navigate = (id: ListView) => {
     // If we're already on a soup/component view, replace in-place (mergeHistory)
     // so the tab switch doesn't push a new entry into the swipe-back BG slot.
@@ -194,7 +120,6 @@ export function MobileDock() {
   return (
     <div class="relative z-mobile-nav-bar flex flex-row justify-between">
       <div class="-z-1 absolute left-0 top-0 right-0 w-screen h-40 bg-panel" />
-      <FloatingCreateButton activeView={activeView} />
       <MobileDockButton
         icon={AnimatedInboxIcon}
         active={isActive('inbox')}
@@ -229,8 +154,7 @@ export function MobileDock() {
         active={isActive('agents')}
         onClick={() => navigate('agents')}
       />
-      <MobileDockButton
-        icon={AnimatedSearchIcon}
+      <SearchDockButton
         active={isActive('search')}
         onClick={() => {
           SearchState.maybeResetState();

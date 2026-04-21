@@ -1,13 +1,24 @@
 pub mod url_parsers;
 
 use anyhow::{Context, Error};
+use futures::StreamExt;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use url::Url;
 use utoipa::ToSchema;
 
+use crate::http_safety::{
+    FetchError, assert_not_internal, check_content_length, content_type_of, send_request,
+    validate_url,
+};
 use url_parsers::parse_custom_title;
+
+/// 1 MB max HTML response size for meta-tag extraction.
+pub const MAX_HTML_SIZE: u64 = 1024 * 1024;
+
+/// Cap on concurrent outbound requests for `fetch_links_async`.
+pub const BULK_CONCURRENCY: usize = 16;
 
 pub type GetUnfurlResponseList = Vec<Option<GetUnfurlResponse>>;
 
@@ -88,24 +99,89 @@ fn find_favicon(document: &Html, base_url: &Url) -> Option<String> {
 
     None
 }
-#[tracing::instrument]
-pub async fn extract_meta_tags_prod(
-    url: &str,
-) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
-    // Fetch the HTML content
-    // TODO: how to handle malicious input?
 
-    use http::StatusCode;
-    let url = Url::parse(url).context("invalid url")?;
+#[derive(Debug)]
+pub enum UnfurlFetchError {
+    Fetch(FetchError),
+    Parse(Error),
+}
 
-    let response = reqwest::get(url.clone()).await?;
-    if response.status() != StatusCode::OK {
-        return Err(anyhow::anyhow!("Site refused with code: {}", response.status()).into());
+impl std::fmt::Display for UnfurlFetchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Fetch(e) => write!(f, "{e}"),
+            Self::Parse(e) => write!(f, "{e}"),
+        }
     }
-    let html_content = response.text().await?;
-    let meta_tags = parse_document(&html_content, &url)?;
+}
+
+impl From<FetchError> for UnfurlFetchError {
+    fn from(e: FetchError) -> Self {
+        Self::Fetch(e)
+    }
+}
+
+#[tracing::instrument(err(Debug), skip(client))]
+pub async fn extract_meta_tags_prod(
+    client: &reqwest::Client,
+    raw_url: &str,
+) -> Result<HashMap<String, String>, UnfurlFetchError> {
+    let url = validate_url(raw_url)?;
+    assert_not_internal(&url).await?;
+
+    let response = send_request(client, &url).await?;
+
+    let content_type = content_type_of(&response);
+    if !is_html_content_type(&content_type) {
+        return Err(FetchError::UnexpectedContentType(content_type).into());
+    }
+
+    check_content_length(&response, MAX_HTML_SIZE, raw_url)?;
+
+    let html_content = read_body_capped(response, MAX_HTML_SIZE).await?;
+
+    let meta_tags = parse_document(&html_content, &url).map_err(UnfurlFetchError::Parse)?;
 
     Ok(meta_tags)
+}
+
+fn is_html_content_type(content_type: &str) -> bool {
+    // `content_type` may include charset, e.g. "text/html; charset=utf-8".
+    let primary = content_type
+        .split(';')
+        .next()
+        .unwrap_or(content_type)
+        .trim()
+        .to_ascii_lowercase();
+    primary == "text/html" || primary == "application/xhtml+xml"
+}
+
+async fn read_body_capped(
+    response: reqwest::Response,
+    max: u64,
+) -> Result<String, UnfurlFetchError> {
+    let mut stream = response.bytes_stream();
+    let mut buf: Vec<u8> = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| {
+            let chain = crate::http_safety::build_error_chain(&e);
+            tracing::warn!(error = %chain, "error reading unfurl response body");
+            UnfurlFetchError::Fetch(FetchError::ResponseRead(chain))
+        })?;
+        if (buf.len() as u64) + (chunk.len() as u64) > max {
+            tracing::warn!(max, "unfurl response exceeded max size during streaming");
+            return Err(UnfurlFetchError::Fetch(FetchError::ResponseTooLarge {
+                content_length: (buf.len() as u64) + (chunk.len() as u64),
+                max,
+            }));
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    String::from_utf8(buf).map_err(|e| {
+        UnfurlFetchError::Fetch(FetchError::ResponseRead(format!(
+            "response body was not valid UTF-8: {e}"
+        )))
+    })
 }
 
 pub fn favico_url(url: &str) -> Result<String, anyhow::Error> {
@@ -136,18 +212,19 @@ pub fn append_optimistic_favico(
 }
 
 pub async fn extract_meta_tags(
+    client: &reqwest::Client,
     url: &str,
-) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<HashMap<String, String>, UnfurlFetchError> {
     if cfg!(feature = "mock") {
         extract_meta_tags_mock(url).await
     } else {
-        extract_meta_tags_prod(url).await
+        extract_meta_tags_prod(client, url).await
     }
 }
 
 pub async fn extract_meta_tags_mock(
     url: &str,
-) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<HashMap<String, String>, UnfurlFetchError> {
     if url == "https://hello.com" {
         let mut m = HashMap::new();
         m.insert("property:og:title".to_string(), "Hello".to_string());
@@ -171,7 +248,7 @@ pub async fn extract_meta_tags_mock(
         return Ok(m);
     }
 
-    Err("not found".into())
+    Err(UnfurlFetchError::Parse(anyhow::anyhow!("not found")))
 }
 
 impl GetUnfurlResponse {
@@ -232,16 +309,29 @@ impl GetUnfurlResponse {
     }
 }
 
-pub async fn fetch_links_async(links: &[String]) -> GetUnfurlResponseList {
-    let futures = links.iter().map(|url| async move {
-        extract_meta_tags(url)
-            .await
-            .ok()
-            .map(|tags| append_optimistic_favico(tags, url))
-            .map(|tags| GetUnfurlResponse::new(url, &tags))
-    });
-
-    futures::future::join_all(futures).await
+pub async fn fetch_links_async(
+    client: &reqwest::Client,
+    links: &[String],
+) -> GetUnfurlResponseList {
+    futures::stream::iter(links.iter().cloned())
+        .map(|url| {
+            let client = client.clone();
+            async move {
+                match extract_meta_tags(&client, &url).await {
+                    Ok(tags) => {
+                        let tags = append_optimistic_favico(tags, &url);
+                        Some(GetUnfurlResponse::new(&url, &tags))
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, url = %url, "bulk unfurl failed for url");
+                        None
+                    }
+                }
+            }
+        })
+        .buffered(BULK_CONCURRENCY)
+        .collect()
+        .await
 }
 
 #[cfg(test)]
@@ -399,7 +489,10 @@ mod tests {
     #[cfg(feature = "mock")]
     #[tokio::test]
     async fn test_extract_meta_tags_mock() {
-        let tags = extract_meta_tags("https://hello.com").await.unwrap();
+        let client = reqwest::Client::new();
+        let tags = extract_meta_tags(&client, "https://hello.com")
+            .await
+            .unwrap();
         assert!(tags.contains_key("property:og:title"));
         let title = tags.get("property:og:title").unwrap();
         assert_eq!(title, "Hello");
@@ -480,5 +573,14 @@ mod tests {
         let regular_url = "https://example.com/some/page";
         let title = GetUnfurlResponse::get_title(regular_url, &tags);
         assert_eq!(title, "Regular Website Title");
+    }
+
+    #[test]
+    fn test_is_html_content_type() {
+        assert!(is_html_content_type("text/html"));
+        assert!(is_html_content_type("text/html; charset=utf-8"));
+        assert!(is_html_content_type("application/xhtml+xml"));
+        assert!(!is_html_content_type("image/png"));
+        assert!(!is_html_content_type("application/json"));
     }
 }

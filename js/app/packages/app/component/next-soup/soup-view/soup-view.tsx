@@ -23,7 +23,6 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -95,6 +94,7 @@ import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-vi
 import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { SettingsButton } from '@app/component/settings/SettingsButton';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { SoupViewMobileCreateButton } from '@app/component/next-soup/soup-view/soup-view-mobile-create-button';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -190,11 +190,22 @@ interface SoupViewProps {
   initialClientFilters?: InitialFiltersInput<string>;
   initialFilters?: Partial<QueryState>;
   disableLocalSearch?: boolean;
+  /**
+   * Client-side entities to merge into the soup results. Useful for entity
+   * types (e.g. automation) that don't come back from the soup API.
+   * Visibility is controlled by the active client filter set — use a tab
+   * preset whose `clientFilters` include a predicate that matches them.
+   */
+  additionalEntities?: Accessor<EntityData[]>;
 }
 
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+
+  createEffect(() => {
+    panel.handle.setDisplayName(props.viewName);
+  });
 
   useSoupNotificationInvalidators();
 
@@ -209,6 +220,11 @@ export const SoupView = (props: SoupViewProps) => {
   const isComponentListView = (listView: ListView) => {
     return component() === listView;
   };
+
+  const activeListView = createMemo<ListView | undefined>(() => {
+    const id = component();
+    return id && isListViewID(id) ? id : undefined;
+  });
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
@@ -254,6 +270,7 @@ export const SoupView = (props: SoupViewProps) => {
         soup={soup}
         initialQuery={props.initialFilters}
         disableLocalSearch={props.disableLocalSearch}
+        additionalEntities={props.additionalEntities}
       >
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">
@@ -352,6 +369,9 @@ export const SoupView = (props: SoupViewProps) => {
                 />
               </SoupViewFileDropzone>
             </Suspense>
+            <Show when={isMobile()}>
+              <SoupViewMobileCreateButton activeView={activeListView} />
+            </Show>
           </div>
           <Show when={isMobile()}>
             <MobileSoupViewTabs />
@@ -391,7 +411,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     assigneeFilter,
     setAssigneeFilter,
   } = useSoupView();
-  const { getSplitCount } = useSplitLayout();
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -400,10 +419,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     createSignal<VirtualizerHandle>();
 
   const [soupViewRef, setSoupViewRef] = createSignal<HTMLElement | undefined>();
-
-  const [previewPanelRef, setPreviewPanelRef] = createSignal<
-    HTMLElement | undefined
-  >();
 
   const focusFirstEntity = () => {
     const next = soup.navigate.toFirst();
@@ -468,7 +483,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
-    previewPanelRef,
   });
 
   // Register entity action hotkeys
@@ -493,7 +507,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     splitHandle: panel.handle,
     virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
-    getSplitCount,
     currentView,
     activeTab,
     applyTabPreset,
@@ -1008,7 +1021,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
           }
         >
           <PreviewPanel
-            ref={setPreviewPanelRef}
             selectedEntity={soup.focus.item()}
             orchestrator={orchestrator}
             splitPanelContext={panel}

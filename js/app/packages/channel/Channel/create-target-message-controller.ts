@@ -31,7 +31,6 @@ export type TargetMessageController = ReturnType<
 type TargetMessageData = {
   activeTargetMessageId: string | undefined;
   activeTargetMessageReplyId: string | undefined;
-  highlightedMessageId: string | undefined;
   loadAroundMessageId: string | undefined;
   pendingScrollTargetId: string | undefined;
   pendingTargetReplyId: string | undefined;
@@ -43,8 +42,6 @@ export function createTargetMessageController(
   const initialTargetMessageData: TargetMessageData = {
     activeTargetMessageId: options.initialTargetMessageId,
     activeTargetMessageReplyId: options.initialTargetMessageReplyId,
-    highlightedMessageId:
-      options.initialTargetMessageReplyId ?? options.initialTargetMessageId,
     loadAroundMessageId: options.initialTargetMessageId,
     pendingScrollTargetId: options.initialTargetMessageId,
     pendingTargetReplyId: options.initialTargetMessageReplyId,
@@ -68,7 +65,6 @@ export function createTargetMessageController(
     setTargetMessageData({
       activeTargetMessageId: messageId,
       activeTargetMessageReplyId: replyId,
-      highlightedMessageId: replyId ?? messageId,
       loadAroundMessageId: hasMessageLoaded(messageId) ? undefined : messageId,
       pendingScrollTargetId: messageId,
       pendingTargetReplyId: replyId,
@@ -121,11 +117,20 @@ export function createTargetMessageController(
     )
   );
 
+  const reset = () => {
+    setTargetMessageData({
+      activeTargetMessageId: undefined,
+      activeTargetMessageReplyId: undefined,
+      loadAroundMessageId: undefined,
+      pendingScrollTargetId: undefined,
+      pendingTargetReplyId: undefined,
+    });
+  };
+
   return {
     activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
     activeTargetMessageReplyId: () =>
       targetMessageData['activeTargetMessageReplyId'],
-    highlightedMessageId: () => targetMessageData['highlightedMessageId'],
     loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
     pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
     pendingTargetReplyId: () => targetMessageData['pendingTargetReplyId'],
@@ -133,6 +138,7 @@ export function createTargetMessageController(
     goToMessage,
     completePendingScroll,
     completePendingReplyScroll,
+    reset,
   };
 }
 
@@ -166,10 +172,14 @@ export function clearStaleRestoredChannelData(channelId: string) {
   const cached = queryClient.getQueryData<ChannelMessagesData>(defaultKey);
   if (!cached?.pages.length) return;
 
-  // First page (index 0) is the newest page in the infinite query.
-  // A genuine latest-messages fetch never has previous_cursor on its
-  // first page because there are no newer messages.
-  if (cached.pages[0].previous_cursor) {
+  // Check both the page cursor AND pageParams[0]. After fetchPreviousPage,
+  // pageParams[0] contains { previous_cursor } even if pages[0].previous_cursor
+  // might be different. A fresh load should have pageParams[0] = null.
+  const pageParams = cached.pageParams;
+  const hasStalePageParams = pageParams?.[0] != null;
+  const hasStalePageCursor = !!cached.pages[0].previous_cursor;
+
+  if (hasStalePageParams || hasStalePageCursor) {
     queryClient.removeQueries({ queryKey: defaultKey });
   }
 }

@@ -82,7 +82,6 @@ pub type LiteralTree<T> = Option<Arc<Expr<T>>>;
 /// Describes a bundle of filters that should be applied across different entity types
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[non_exhaustive]
 pub struct EntityFilterAst {
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]

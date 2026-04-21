@@ -11,17 +11,9 @@ use async_openai::types::{
 use crate::types::{
     AssistantMessagePart, ChatMessage, ChatMessageContent, ChatMessages, ImageData, Role,
 };
-use serde::Serialize;
 use std::collections::HashMap;
 
 const IMAGE_PROCESS_QUALITY: Option<ImageDetail> = Some(ImageDetail::High);
-
-#[derive(Serialize)]
-struct ToolResponseParseError {
-    error: String,
-    raw_response: String,
-    parse_error: String,
-}
 
 impl From<ImageData> for ImageUrl {
     fn from(value: ImageData) -> Self {
@@ -176,23 +168,17 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
                         AssistantMessagePart::ToolCallErr {
                             description, id, ..
                         } => {
-                            // If we have accumulated text, create a text message first
                             flush_pending(
                                 &mut messages,
                                 &mut pending_text,
                                 &mut pending_tool_calls,
                             );
 
-                            // Create a separate tool error response message with error marker
                             messages.push(ChatCompletionRequestMessage::Tool(
                                 ChatCompletionRequestToolMessage {
                                     tool_call_id: id.clone(),
                                     content: ChatCompletionRequestToolMessageContent::Text(
-                                        serde_json::json!({
-                                            "type": "error",
-                                            "description": description
-                                        })
-                                        .to_string(),
+                                        description,
                                     ),
                                 },
                             ));
@@ -366,25 +352,6 @@ pub fn convert_message(
                 }
             };
 
-            let response_json = match serde_json::from_str::<serde_json::Value>(&response_text) {
-                Ok(json) => json,
-                Err(e) => {
-                    tracing::error!(
-                        err=?e,
-                        response_text=%response_text,
-                        tool_call_id=%tool_msg.tool_call_id,
-                        "Failed to parse tool response as JSON, creating error response"
-                    );
-                    // Create structured error response instead of empty JSON
-                    let error_response = ToolResponseParseError {
-                        error: "Invalid JSON response".to_string(),
-                        raw_response: response_text,
-                        parse_error: e.to_string(),
-                    };
-                    serde_json::to_value(error_response).unwrap_or(serde_json::Value::Null)
-                }
-            };
-
             // Use the mapping to recover the original tool name
             let tool_name = tool_call_id_name_mapping
                 .and_then(|mapping| mapping.get(&tool_msg.tool_call_id).cloned())
@@ -397,35 +364,17 @@ pub fn convert_message(
                     tool_msg.tool_call_id.clone()
                 });
 
-            // Check if this is an error response based on the structure
-            let assistant_part = if let Some(obj) = response_json.as_object() {
-                if obj.get("type").and_then(|v| v.as_str()) == Some("error") {
-                    if let Some(description) = obj.get("description").and_then(|v| v.as_str()) {
-                        AssistantMessagePart::ToolCallErr {
-                            name: tool_name,
-                            description: description.to_string(),
-                            id: tool_msg.tool_call_id,
-                        }
-                    } else {
-                        AssistantMessagePart::ToolCallResponseJson {
-                            name: tool_name,
-                            json: response_json,
-                            id: tool_msg.tool_call_id,
-                        }
-                    }
-                } else {
-                    AssistantMessagePart::ToolCallResponseJson {
-                        name: tool_name,
-                        json: response_json,
-                        id: tool_msg.tool_call_id,
-                    }
-                }
-            } else {
-                AssistantMessagePart::ToolCallResponseJson {
+            let assistant_part = match serde_json::from_str::<serde_json::Value>(&response_text) {
+                Ok(json) => AssistantMessagePart::ToolCallResponseJson {
                     name: tool_name,
-                    json: response_json,
+                    json,
                     id: tool_msg.tool_call_id,
-                }
+                },
+                Err(_) => AssistantMessagePart::ToolCallErr {
+                    name: tool_name,
+                    description: response_text,
+                    id: tool_msg.tool_call_id,
+                },
             };
 
             ChatMessage {

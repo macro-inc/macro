@@ -7,6 +7,7 @@ use model::document::DocumentMetadata;
 use model::document::FileType;
 use model::document::ID;
 use model::document::VersionIDWithTimeStamps;
+use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::Pool;
@@ -37,6 +38,7 @@ pub struct CreateDocumentArgs<'a> {
 }
 
 /// Creates a new document
+/// NOTE: this is only used in seed_cli at the moment and needs to be deprecated
 #[instrument(skip(db))]
 pub async fn create_document(
     db: &Pool<Postgres>,
@@ -208,13 +210,13 @@ pub async fn create_document_txn(
             .await?;
     }
 
-    crate::item_access::insert::insert_user_item_access(
+    entity_access_db_utils::insert_entity_access_row(
         transaction,
-        user_id.copied(),
-        &document_id,
-        "document",
+        &macro_uuid::string_to_uuid(&document_id).unwrap(),
+        EntityType::Document,
+        user_id.as_ref(),
+        entity_access_db_utils::EntityAccessSourceType::User,
         AccessLevel::Owner,
-        None,
     )
     .await?;
 

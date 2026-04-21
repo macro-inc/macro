@@ -67,6 +67,35 @@ interface PageViewOptions {
 
 const GA_ID = 'G-52HPEL3FTV';
 
+// Meta Pixel distinguishes standard events (fbq('track', ...)) from custom
+// events (fbq('trackCustom', ...)). Calling `track` with a non-standard name
+// works but triggers Pixel Helper warnings and may affect Ads Manager
+// categorization. https://developers.facebook.com/docs/meta-pixel/reference
+const META_STANDARD_EVENT_NAMES = [
+  'AddPaymentInfo',
+  'AddToCart',
+  'AddToWishlist',
+  'CompleteRegistration',
+  'Contact',
+  'CustomizeProduct',
+  'Donate',
+  'FindLocation',
+  'InitiateCheckout',
+  'Lead',
+  'PageView',
+  'Purchase',
+  'Schedule',
+  'Search',
+  'StartTrial',
+  'SubmitApplication',
+  'Subscribe',
+  'ViewContent',
+] as const;
+
+export type MetaStandardEvent = (typeof META_STANDARD_EVENT_NAMES)[number];
+
+const META_STANDARD_EVENTS: Set<string> = new Set(META_STANDARD_EVENT_NAMES);
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -120,7 +149,10 @@ export const createAnalytics = () => {
           gtag('event', event, enriched);
         })
         .with('meta-pixel', () => {
-          fbq('track', event, enriched);
+          const fbqMethod = META_STANDARD_EVENTS.has(event)
+            ? 'track'
+            : 'trackCustom';
+          fbq(fbqMethod, event, enriched);
         })
         .with('posthog', () => {
           posthog.capture(event, enriched);
@@ -139,6 +171,31 @@ export const createAnalytics = () => {
     for (const provider of providersToSendTo) {
       sendEvent(provider, event, data);
     }
+  };
+
+  /**
+   * Fires a Meta Pixel **standard** event via `fbq('track', ...)`. `event` is
+   * typed to `MetaStandardEvent` (Lead, Purchase, CompleteRegistration, etc.),
+   * so custom names and typos fail at compile time.
+   *
+   * Prefer this over `track(..., ['meta-pixel'])` for anything that maps to a
+   * standard event: Meta's optimization models are pre-trained on the standard
+   * taxonomy (faster learning-phase exit), standard events get priority slots
+   * in iOS 14.5+ Aggregated Event Measurement, and Ads Manager surfaces them
+   * natively in reports and conversion pickers.
+   *
+   * To split one standard event across multiple surfaces (e.g. two `Lead`
+   * funnels), attach a `content_name` in `data` and filter on it via a Custom
+   * Conversion in Ads Manager.
+   *
+   * For the rare event with no standard equivalent, fall back to
+   * `track(event, data, ['meta-pixel'])` — that path uses `trackCustom`.
+   */
+  const trackMeta = (
+    event: MetaStandardEvent,
+    data?: Record<string, unknown>
+  ) => {
+    sendEvent('meta-pixel', event, data);
   };
 
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
@@ -213,6 +270,7 @@ export const createAnalytics = () => {
     posthog,
     initializeProviders,
     track,
+    trackMeta,
     identify,
     reset,
     pageView,
@@ -222,6 +280,7 @@ export const createAnalytics = () => {
 export type AnalyticsInterface = {
   posthog: PostHog;
   track: TrackFn;
+  trackMeta: (event: MetaStandardEvent, data?: Record<string, unknown>) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
   reset: () => void;
   pageView: (pageTitle: string, opts?: PageViewOptions) => void;

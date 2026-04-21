@@ -196,7 +196,9 @@ use utoipa::OpenApi;
         call::inbound::axum_router::check_active_call_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
         call::inbound::axum_router::get_call_record_handler,
+        call::inbound::axum_router::edit_call_record_handler,
         call::inbound::axum_router::delete_call_record_handler,
+        call::inbound::axum_router::toggle_share_with_team_handler,
         call::inbound::axum_router::webhook_handler,
         call::inbound::axum_router::transcript_handler,
 
@@ -222,10 +224,10 @@ use utoipa::OpenApi;
         projects::get_project::get_project_handler,
         projects::revert_delete_project::handler,
 
+        entity::get_entity_permission::handler,
+
         // threads
         threads::edit_thread::edit_thread_handler,
-
-        entity::get_entity_permission::handler,
 
         // /recents
         recents::recently_deleted::handler,
@@ -345,6 +347,7 @@ use utoipa::OpenApi;
             call::domain::models::CallRecord,
             call::domain::models::CallRecordParticipant,
             call::domain::models::CallRecordTranscriptSegment,
+            call::domain::models::EditCallRecordRequest,
             SoupCallRecord,
             SoupCallRecordParticipant,
 

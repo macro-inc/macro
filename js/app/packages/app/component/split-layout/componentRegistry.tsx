@@ -9,6 +9,7 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
 import NotificationRoute from '@notifications/components/NotificationRoute';
+import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/compose/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
@@ -124,11 +125,13 @@ registerComponent(
       userId: user.userId(),
       email: user.email(),
     });
+    const automationEntities = useAutomationEntities();
     return (
       <SoupView
         viewName="Agents"
         initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
+        initialClientFilters={preset.clientFilters}
+        additionalEntities={automationEntities}
       />
     );
   })
@@ -228,9 +231,9 @@ registerComponent(
     });
     return (
       <SoupView
-        viewName="Files"
+        viewName="Folders"
         initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
+        initialClientFilters={preset.clientFilters}
       />
     );
   })
@@ -268,6 +271,7 @@ registerComponent('task-compose', (params) => {
       initialContent={params?.initialContent}
       initialTitle={params?.initialTitle}
       initialAssigneeId={params?.initialAssigneeId}
+      onSuccess={params?.onSuccess}
     />
   );
 });

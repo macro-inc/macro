@@ -73,23 +73,35 @@ VALUES
     ('e5e5e5e5-e5e5-e5e5-e5e5-e5e5e5e5e5e5', 'Isolated Chat', 'macro|user-1@test.com', '55555555-5555-5555-5555-555555555555', '2023-01-06 14:00:00', '2023-01-06 14:00:00');
 
 ---------------------------------------------------
---  USER ACCESS PERMISSIONS (UserItemAccess)
+--  USER ACCESS PERMISSIONS (entity_access)
 ---------------------------------------------------
+-- entity_access denormalizes all access including project-inherited items.
 
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
 VALUES
--- User gets 'view' on project-A (gives access to A, B, C and their contents)
-(gen_random_uuid(), 'macro|user-1@test.com', '11111111-1111-1111-1111-111111111111', 'project', 'view'),
+-- Direct access to project-A (view)
+('11111111-1111-1111-1111-111111111111', 'project', 'macro|user-1@test.com', 'user', 'view', NULL),
+-- Inherited access to project-B and project-C from project-A
+('22222222-2222-2222-2222-222222222222', 'project', 'macro|user-1@test.com', 'user', 'view', '11111111-1111-1111-1111-111111111111'),
+('33333333-3333-3333-3333-333333333333', 'project', 'macro|user-1@test.com', 'user', 'view', '11111111-1111-1111-1111-111111111111'),
+-- Inherited access to documents and chats in A, B, C
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'view', '11111111-1111-1111-1111-111111111111'),
+('a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 'chat', 'macro|user-1@test.com', 'user', 'view', '11111111-1111-1111-1111-111111111111'),
+('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'macro|user-1@test.com', 'user', 'view', '11111111-1111-1111-1111-111111111111'),
+('b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2', 'chat', 'macro|user-1@test.com', 'user', 'view', '11111111-1111-1111-1111-111111111111'),
+('cccccccc-cccc-cccc-cccc-cccccccccccc', 'document', 'macro|user-1@test.com', 'user', 'view', '11111111-1111-1111-1111-111111111111'),
+('c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3', 'chat', 'macro|user-1@test.com', 'user', 'view', '11111111-1111-1111-1111-111111111111'),
 
--- Direct 'edit' on doc-in-B
-(gen_random_uuid(), 'macro|user-1@test.com', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'edit'),
+-- Direct 'edit' on doc-in-B (higher than inherited 'view')
+('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'macro|user-1@test.com', 'user', 'edit', NULL),
 
--- User gets 'owner' on project-D
-(gen_random_uuid(), 'macro|user-1@test.com', '44444444-4444-4444-4444-444444444444', 'project', 'owner'),
+-- Direct access to project-D (owner) and its document
+('44444444-4444-4444-4444-444444444444', 'project', 'macro|user-1@test.com', 'user', 'owner', NULL),
+('dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', 'macro|user-1@test.com', 'user', 'owner', '44444444-4444-4444-4444-444444444444'),
 
 -- Direct access to standalone items
-(gen_random_uuid(), 'macro|user-1@test.com', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'document', 'owner'),
-(gen_random_uuid(), 'macro|user-1@test.com', 'd4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4', 'chat', 'owner');
+('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'document', 'macro|user-1@test.com', 'user', 'owner', NULL),
+('d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4', 'chat', 'macro|user-1@test.com', 'user', 'owner', NULL);
 
 -- User history
 INSERT INTO public."UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")

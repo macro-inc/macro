@@ -56,9 +56,11 @@ export function focusInput(
       window.removeEventListener('beforeunload', cleanup);
     }
 
-    function focusTargetAndCleanup() {
-      getTarget()?.focus();
-      cleanup();
+    function handleAppearance(target: HTMLElement) {
+      setTimeout(() => {
+        target.focus();
+        cleanup();
+      }, 0);
     }
 
     if ((isTouchDevice() && isIOS) || isPlatform('ios')) {
@@ -78,7 +80,7 @@ export function focusInput(
 
     observer = new MutationObserver(() => {
       const current = getTarget();
-      if (current && isVisible(current)) focusTargetAndCleanup();
+      if (current && isVisible(current)) handleAppearance(current);
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
@@ -90,7 +92,10 @@ export function focusInput(
   onCleanup(() => el.removeEventListener('click', handleClick));
 }
 
-// Naively checks if element is visible. E.g. will not catch elements with `position: fixed`. We can make this more complex when needed.
 function isVisible(el: HTMLElement): boolean {
-  return el.offsetParent !== null;
+  // offsetParent is null for hidden elements, but also for position:fixed elements
+  // and their descendants — fall back to bounding rect in that case.
+  if (el.offsetParent !== null) return true;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 || rect.height > 0;
 }

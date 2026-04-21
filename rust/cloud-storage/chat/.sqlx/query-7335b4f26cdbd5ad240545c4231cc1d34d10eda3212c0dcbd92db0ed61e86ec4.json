@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE \"Document\" SET \"documentFamilyId\" = $1 WHERE id = $2;\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7335b4f26cdbd5ad240545c4231cc1d34d10eda3212c0dcbd92db0ed61e86ec4"
+}

@@ -1,5 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '../../packages/shared';
+import { getAiToolsServiceRoleArns, stack } from '../../packages/shared';
 import {
   attachPolicyToBucket,
   getStorageBucketFromName,
@@ -118,27 +118,8 @@ const convertServiceStack = new pulumi.StackReference('convert-service-stack', {
   name: `macro-inc/convert-service/${stack}`,
 });
 
-const documentCognitionStack = new pulumi.StackReference(
-  'document-cognition-stack',
-  {
-    name: `macro-inc/document-cognition/${stack}`,
-  }
-);
-
 const convertServiceRoleArn: pulumi.Output<string> = convertServiceStack
   .getOutput('convertServiceRoleArn')
-  .apply((arn) => arn as string);
-
-const documentCognitionRoleArn: pulumi.Output<string> = documentCognitionStack
-  .getOutput('documentCognitionServiceRoleArn')
-  .apply((arn) => arn as string);
-
-const mcpServerStack = new pulumi.StackReference('mcp-server-stack', {
-  name: `macro-inc/mcp-server/${stack}`,
-});
-
-const mcpServerRoleArn: pulumi.Output<string> = mcpServerStack
-  .getOutput('mcpServerRoleArn')
   .apply((arn) => arn as string);
 
 export const bucketPolicy = attachPolicyToBucket({
@@ -154,6 +135,5 @@ export const bucketPolicy = attachPolicyToBucket({
   searchProcessingServiceRoleArn,
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
-  documentCognitionRoleArn,
-  mcpServerRoleArn,
+  aiToolsServiceRoleArns: getAiToolsServiceRoleArns(),
 });

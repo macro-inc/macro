@@ -3,7 +3,7 @@ use crate::{
     search::builder::{SearchQueryBuilder, SearchQueryConfig},
 };
 
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{BoolQueryBuilder, QueryType};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -25,7 +25,7 @@ pub(crate) struct ChannelMessageSearchConfig;
 impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: &'static str = "sender_id";
     const TITLE_KEY: &'static str = "name";
-    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Channels;
+    const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Channels;
 }
 
 #[derive(Default)]

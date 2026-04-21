@@ -125,6 +125,19 @@ export default defineConfig({
       target: './service-properties/openapi.json',
     },
   },
+  scheduledActionService: {
+    output: {
+      client: 'fetch',
+      target: './service-scheduled-action/generated/client.ts',
+      schemas: './service-scheduled-action/generated/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-scheduled-action/openapi.json',
+    },
+  },
   searchService: {
     output: {
       client: 'fetch',

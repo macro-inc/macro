@@ -1,12 +1,12 @@
-import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
-import LinkIcon from '@icon/regular/link.svg';
-import PencilIcon from '@icon/regular/pencil.svg';
-import SmileyIcon from '@icon/regular/smiley.svg';
-import TrashIcon from '@icon/regular/trash.svg';
+import ReplyIcon from '@macro-icons/square/reply.svg';
+import LinkIcon from '@macro-icons/square/link.svg';
+import EditIcon from '@macro-icons/square/edit.svg';
+import AddEmojiIcon from '@macro-icons/square/add-emoji.svg';
+import TrashIcon from '@macro-icons/square/trash.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
-import { useMessage, useMessageActions, useMessageSelection } from './context';
+import { useMessage, useMessageActions } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
 import { renderIcon } from './render-icon';
@@ -40,15 +40,14 @@ function ActionButton(props: {
       aria-label={props.action.label}
       data-message-action={props.action.id}
       class={cn(
-        'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
-        {
-          'text-failure-ink': props.action.destructive,
-        },
+        'h-8 px-2 flex items-center justify-center text-ink hover:bg-hover hover-transition-bg',
         props.action.class
       )}
       onClick={props.onClick}
     >
-      {renderIcon(props.action.icon)}
+      <span class="block size-5">
+        {renderIcon(props.action.icon, 'w-full h-full')}
+      </span>
     </button>
   );
 }
@@ -56,7 +55,6 @@ function ActionButton(props: {
 export function ActionMenu(props: ActionMenuProps) {
   const message = useMessage();
   const actions = useMessageActions();
-  const selection = useMessageSelection();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
@@ -75,25 +73,27 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Task',
       icon: TaskIcon,
       onClick: actions?.onCreateTask,
-      class: 'text-task',
     },
     {
       id: 'reply',
       label: 'Reply',
       icon: ReplyIcon,
       onClick: actions?.onReply,
+      class: 'px-1.5',
     },
     {
       id: 'copy-link',
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+      class: 'px-1.5',
     },
     {
       id: 'edit',
       label: 'Edit',
-      icon: PencilIcon,
+      icon: EditIcon,
       onClick: actions?.onEdit,
+      class: 'px-1.5',
     },
     {
       id: 'delete',
@@ -101,6 +101,7 @@ export function ActionMenu(props: ActionMenuProps) {
       icon: TrashIcon,
       onClick: actions?.onDelete,
       destructive: true,
+      class: 'px-1.5 text-failure-ink',
     },
   ];
 
@@ -108,11 +109,11 @@ export function ActionMenu(props: ActionMenuProps) {
 
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
-      <HoverActions
-        class={props.class}
-        persistentVisible={emojiMenuOpen() || !!selection?.isSelected}
-      >
-        <div class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets -space-x-1">
+      <HoverActions class={props.class} persistentVisible={emojiMenuOpen()}>
+        <div
+          class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets -space-x-1"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Show when={hasReactAction()}>
             <For each={QUICK_REACTION_EMOJIS}>
               {(emoji) => (
@@ -139,7 +140,7 @@ export function ActionMenu(props: ActionMenuProps) {
               onEmojiSelect={(emoji) => {
                 handleReaction(emoji);
               }}
-              trigger={renderIcon(SmileyIcon)}
+              trigger={renderIcon(AddEmojiIcon)}
               triggerProps={{
                 title: 'More reactions',
                 'aria-label': 'More reactions',
@@ -148,6 +149,9 @@ export function ActionMenu(props: ActionMenuProps) {
                   'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
               }}
             />
+            <Show when={visibleActions.length > 0}>
+              <div class="w-px self-stretch bg-edge-muted mx-1" />
+            </Show>
           </Show>
 
           <For each={visibleActions}>

@@ -1,7 +1,7 @@
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
-import { tryMacroId, useDisplayName } from '@core/user';
-import { UserIcon } from '@core/component/UserIcon';
-import { formatDate } from '@core/util/date';
+import type { ApiChannelMessage } from '@service-comms/client';
+import { Message } from '@channel/Message';
+import { Thread } from '@channel/Thread/Thread';
 import { createMemo, For, Show } from 'solid-js';
 
 // Match the channel message grouping window (5 minutes).
@@ -24,57 +24,83 @@ function shouldGroupWithPrevious(
   return gap >= 0 && gap <= GROUPING_WINDOW_MS;
 }
 
-function TranscriptSegmentRow(props: { segment: CallRecordTranscriptSegment }) {
-  const macroId = () => tryMacroId(props.segment.speakerId);
-  const [displayName] = useDisplayName(macroId());
+function segmentToApiChannelMessage(
+  s: CallRecordTranscriptSegment,
+  channelId: string
+): ApiChannelMessage {
+  return {
+    id: s.segmentId ?? `transcript-${s.sequenceNum}`,
+    channel_id: channelId,
+    content: s.content,
+    sender_id: s.speakerId,
+    created_at: s.startedAt,
+    updated_at: s.startedAt,
+    attachments: [],
+    reactions: [],
+    thread: { preview: [], reply_count: 0 },
+  };
+}
 
+function TranscriptSegmentRow(props: {
+  segment: CallRecordTranscriptSegment;
+  channelId: string;
+}) {
+  const message = createMemo(() =>
+    segmentToApiChannelMessage(props.segment, props.channelId)
+  );
   return (
-    <div
-      class="grid min-w-0 items-start gap-x-2 pr-2 pl-(--message-padding-x) pt-(--regular-message-padding-t)"
-      style={{
-        'grid-template-columns': 'var(--user-icon-width) minmax(0, 1fr)',
-      }}
-    >
-      <div class="flex-shrink-0 size-[var(--user-icon-width)]">
-        <UserIcon id={props.segment.speakerId} size="fill" />
-      </div>
-      <div class="flex flex-col min-w-0">
-        <div class="flex items-center gap-1 min-w-0">
-          <span class="text-sm font-medium text-ink truncate">
-            {displayName()}
-          </span>
-          <span class="ml-auto text-xs text-ink-placeholder">
-            {formatDate(props.segment.startedAt, { showTime: true })}
-          </span>
-        </div>
-        <div class="whitespace-pre-wrap break-words text-sm text-ink">
-          {props.segment.content}
-        </div>
-      </div>
-    </div>
+    <Thread.Row message={message()}>
+      <Message.Root message={message()}>
+        <Message.Layout class="pt-(--regular-message-padding-t)">
+          <Message.Slot placement="icon">
+            <Message.SenderIcon />
+          </Message.Slot>
+          <Message.Slot
+            placement="header"
+            class="flex items-center gap-1 min-w-0"
+          >
+            <Message.SenderName />
+            <Message.Timestamp class="ml-auto" />
+          </Message.Slot>
+          <Message.Slot placement="content">
+            <div class="whitespace-pre-wrap break-words text-sm">
+              {props.segment.content}
+            </div>
+          </Message.Slot>
+        </Message.Layout>
+      </Message.Root>
+    </Thread.Row>
   );
 }
 
 function GroupedTranscriptSegmentRow(props: {
   segment: CallRecordTranscriptSegment;
+  channelId: string;
 }) {
+  const message = createMemo(() =>
+    segmentToApiChannelMessage(props.segment, props.channelId)
+  );
   return (
-    <div
-      class="grid min-w-0 items-start gap-x-2 pr-2 pl-(--message-padding-x)"
-      style={{
-        'grid-template-columns': 'var(--user-icon-width) minmax(0, 1fr)',
-      }}
-    >
-      <div aria-hidden="true" />
-      <div class="whitespace-pre-wrap break-words text-sm text-ink">
-        {props.segment.content}
-      </div>
-    </div>
+    <Thread.Row message={message()}>
+      <Message.Root message={message()}>
+        <Message.Layout>
+          <Message.Slot placement="icon">
+            <Message.SenderIcon hidden />
+          </Message.Slot>
+          <Message.Slot placement="content">
+            <div class="whitespace-pre-wrap break-words text-sm">
+              {props.segment.content}
+            </div>
+          </Message.Slot>
+        </Message.Layout>
+      </Message.Root>
+    </Thread.Row>
   );
 }
 
 export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
+  channelId: string;
 }) {
   const items = createMemo<SegmentItem[]>(() => {
     const sorted = [...props.transcript].sort(
@@ -92,9 +118,17 @@ export function CallTranscript(props: {
         {(item) => (
           <Show
             when={item.groupedWithPrevious}
-            fallback={<TranscriptSegmentRow segment={item.segment} />}
+            fallback={
+              <TranscriptSegmentRow
+                segment={item.segment}
+                channelId={props.channelId}
+              />
+            }
           >
-            <GroupedTranscriptSegmentRow segment={item.segment} />
+            <GroupedTranscriptSegmentRow
+              segment={item.segment}
+              channelId={props.channelId}
+            />
           </Show>
         )}
       </For>

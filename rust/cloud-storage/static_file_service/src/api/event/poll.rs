@@ -50,12 +50,7 @@ async fn poll(sqs_url: String, context: AppState) -> Result<(), PollError> {
                     tracing::error!("failed to delete sqs message {:?}", e);
                     e
                 });
-            s3_message::handle_s3_message(
-                message,
-                context.metadata_client.clone(),
-                context.storage_client.clone(),
-            )
-            .await;
+            s3_message::handle_s3_message(message, context.metadata_client.clone()).await;
         }
     }
     Ok(())

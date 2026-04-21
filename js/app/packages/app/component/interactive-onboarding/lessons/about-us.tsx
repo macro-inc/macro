@@ -65,7 +65,7 @@ const PANELS: { icon: () => JSX.Element; label: string }[] = [
   },
   {
     icon: () => <UsersThree class="size-12 text-accent" />,
-    label: 'Trusted by over 170k users',
+    label: 'Trusted by over 200k users',
   },
 ];
 

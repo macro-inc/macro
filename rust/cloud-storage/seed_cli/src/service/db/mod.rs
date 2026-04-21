@@ -1,5 +1,7 @@
 //! Database service wrapper.
 
+use std::str::FromStr;
+
 #[cfg(test)]
 pub use MockSeedDb as Db;
 #[cfg(not(test))]
@@ -124,27 +126,17 @@ impl SeedDb {
             tracing::warn!(error=?e, "channel share permission may already exist, continuing");
         }
 
-        let participants = comms_db_client::participants::get_participants::get_participants(
-            &self.inner,
-            &channel_id,
-        )
-        .await?;
-
-        let active_user_ids: Vec<_> = participants
-            .into_iter()
-            .filter(|p| p.left_at.is_none())
-            .map(|p| p.user_id)
-            .collect();
-
-        macro_db_client::item_access::insert::upsert_user_item_access_bulk(
-            &self.inner,
-            &active_user_ids,
-            item_id,
-            item_type,
+        let mut tx = self.inner.begin().await?;
+        entity_access_db_utils::insert_entity_access_row(
+            &mut tx,
+            &macro_uuid::string_to_uuid(item_id).unwrap(),
+            model_entity::EntityType::from_str(item_type).unwrap(),
+            &channel_id.to_string(),
+            entity_access_db_utils::EntityAccessSourceType::Channel,
             AccessLevel::View,
-            Some(channel_id),
         )
         .await?;
+        tx.commit().await?;
 
         Ok(())
     }

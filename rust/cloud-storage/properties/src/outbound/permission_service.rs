@@ -103,17 +103,13 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             return Ok(());
         }
 
-        // Tasks are stored as "document" type in the permission system
-        let item_type = "document";
-
         // Grant edit permissions to all users
-        macro_db_client::item_access::insert::upsert_user_item_access_bulk(
+        entity_access_db_utils::upsert_user_entity_access_bulk(
             &self.db,
             user_ids,
-            task_id,
-            item_type,
+            &macro_uuid::string_to_uuid(task_id).unwrap(),
+            model_entity::EntityType::Document,
             AccessLevel::Edit,
-            None, // No channel association for direct task assignee permissions
         )
         .await?;
 

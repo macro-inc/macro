@@ -95,10 +95,6 @@ export const MODAL_DIMENSIONS = {
   DEFAULT_WIDTH: 448, // 28rem
   DEFAULT_HEIGHT: 384, // 24rem
   PROPERTY_EDITOR_HEIGHT: 384,
-  SELECTOR_TOP_PERCENTAGE: 0.2, // 20% from top
-  SELECTOR_MIN_TOP_MARGIN: 16, // 1rem
-  SELECTOR_SMALL_SCREEN_THRESHOLD: 600, // Mobile breakpoint
-  SELECTOR_SMALL_SCREEN_TOP_PERCENTAGE: 0.1, // 10% from top
 } as const;
 
 // Common option ids for mapping to custom icons.

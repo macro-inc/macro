@@ -1,30 +1,55 @@
 [package]
-name = "memory"
-version = "0.1.0"
 edition = "2024"
+name = "memory"
 publish = false
+version = "0.1.0"
 
 
 [dependencies]
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-thiserror = { workspace = true }
+ai = { path = "../ai" }
 ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
-ai = { path = "../ai" }
-futures = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-chrono = { workspace = true }
-sqlx = { workspace = true }
-tokio = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
-model_user = { path = "../model_user", features = ["axum"] }
-tracing = { workspace = true }
-utoipa = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+model_user = { path = "../model_user", features = ["axum"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
 
+# For building ToolServiceContext
+comms = { path = "../comms" }
+document_storage_service_client = { path = "../document_storage_service_client" }
+documents = { path = "../documents" }
+email = { path = "../email" }
+email_service_client = { path = "../email_service_client" }
+entity_access = { path = "../entity_access" }
+entity_access_management = { path = "../entity_access_management" }
+frecency = { path = "../frecency" }
+lexical_client = { path = "../lexical_client" }
+macro_aws_config = { path = "../macro_aws_config" }
+properties = { path = "../properties" }
+readonly_pool = { path = "../readonly_pool" }
+scribe = { path = "../scribe" }
+search_service_client = { path = "../search_service_client" }
+soup = { path = "../soup", features = ["all"] }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "email",
+  "gmail",
+] }
+static_file_service_client = { path = "../static_file_service_client" }
+sync_service_client = { path = "../sync_service_client" }
+
+
+[dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

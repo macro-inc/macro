@@ -1,3 +1,5 @@
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import { cn } from '@ui/utils/classname';
 import ChevronDownIcon from '@icon/bold/caret-down-bold.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import {
@@ -9,7 +11,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
 
 export type DropdownOption<T> = {
   value: T;
@@ -116,17 +117,17 @@ export const Dropdown = <T extends string | number>(
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen())}
-        class="w-full px-3 py-1.5 border border-edge-muted bg-menu text-sm text-ink text-left flex items-center gap-2 hover:bg-hover font-mono"
+        class="w-full p-1.5 border border-edge-muted/50 bg-input text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm"
       >
         {props.renderValue?.(selectedOption()) ??
           defaultRenderValue(selectedOption())}
         <ChevronDownIcon class="w-3 h-3 text-ink-muted flex-shrink-0" />
       </button>
       <Show when={isOpen()}>
-        <Portal>
+        <ScopedPortal scope="local">
           <div
             ref={menuRef}
-            class="z-toast-region border border-edge bg-menu shadow-lg max-h-64 overflow-y-auto font-mono"
+            class="z-toast-region border border-edge-muted/50 bg-menu shadow-lg max-h-64 overflow-y-auto p-1"
             style={getMenuStyle()}
           >
             <For each={props.options}>
@@ -144,13 +145,14 @@ export const Dropdown = <T extends string | number>(
                       }
                     }}
                     disabled={isDisabled()}
-                    class={`w-full px-3 py-2 text-sm text-left flex items-center justify-between ${
+                    class={cn(
+                      'w-full p-1.5 text-sm text-left flex items-center justify-between',
                       isDisabled()
                         ? 'opacity-50 cursor-not-allowed'
                         : isSelected()
-                          ? 'bg-active text-accent-ink'
-                          : 'hover:bg-hover text-ink'
-                    }`}
+                          ? 'bg-active text-ink'
+                          : 'hover:bg-hover/50 text-ink'
+                    )}
                   >
                     {props.renderOption?.(option, isSelected()) ??
                       defaultRenderOption(option, isSelected())}
@@ -159,7 +161,7 @@ export const Dropdown = <T extends string | number>(
               }}
             </For>
           </div>
-        </Portal>
+        </ScopedPortal>
       </Show>
     </div>
   );

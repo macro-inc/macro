@@ -37,6 +37,7 @@ export interface BlockMethodRegistry {
   color: EmptySpec;
   component: EmptySpec;
   task: EmptySpec;
+  automation: EmptySpec;
 }
 
 // Type helper to get the method spec for a block name

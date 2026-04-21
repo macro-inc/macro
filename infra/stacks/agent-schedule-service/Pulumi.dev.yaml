@@ -6,6 +6,7 @@ config:
   agent-schedule-service:fusionauth_client_id: fusionauth-client-id-key-dev
   agent-schedule-service:fusionauth_issuer: fusionauth-dev.macro.com
   agent-schedule-service:internal_auth_key: document-storage-service-auth-key-dev
+  agent-schedule-service:sync_service_auth_key: sync-service-key-dev
   agent-schedule-service:openai_api_key: openai-key
   agent-schedule-service:anthropic_api_key: anthropic-api-key-dev
   agent-schedule-service:xai-api-key: xai-api-key

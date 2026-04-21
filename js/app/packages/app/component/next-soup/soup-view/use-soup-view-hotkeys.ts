@@ -34,7 +34,6 @@ type UseSoupViewHotkeysOptions = {
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
   previewState: Accessor<boolean>;
-  getSplitCount: () => number;
   currentView: Accessor<ListView | undefined>;
   activeTab: Accessor<string | undefined>;
   applyTabPreset: (view: ListView, tabId: string) => void;
@@ -47,7 +46,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     splitHandle,
     virtualizerHandle,
     previewState,
-    getSplitCount,
     currentView,
     activeTab,
     applyTabPreset,
@@ -57,12 +55,10 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
 
-  // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
+  // escape - Multi-purpose: Clear selection / Close spotlight
   const clearMultiCondition = () =>
     soup.selection.count() > 0 && splitIsUnifiedList();
   const closeSpotlightCondition = () => splitHandle.isSpotLight();
-  const goHomeCondition = () => !splitIsUnifiedList();
-  const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
 
   const escapeDescription = () => {
     if (clearMultiCondition()) {
@@ -70,12 +66,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     }
     if (closeSpotlightCondition()) {
       return 'Close spotlight';
-    }
-    if (closeSplitCondition()) {
-      return 'Close split';
-    }
-    if (goHomeCondition()) {
-      return 'Go home';
     }
     return '';
   };
@@ -277,16 +267,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     runWithInputFocused: true,
   }).withGroup(group);
 
-  // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
+  // escape - Multi-purpose: Clear selection / Close spotlight
   registerHotkey({
     hotkey: ['escape'],
     scopeId,
     description: escapeDescription,
-    condition: () =>
-      clearMultiCondition() ||
-      closeSpotlightCondition() ||
-      closeSplitCondition() ||
-      goHomeCondition(),
+    condition: () => clearMultiCondition() || closeSpotlightCondition(),
     keyDownHandler: () => {
       if (clearMultiCondition()) {
         const length = soup.selection.count();

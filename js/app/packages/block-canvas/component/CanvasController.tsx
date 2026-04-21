@@ -864,6 +864,8 @@ export function CanvasController(props: ParentProps) {
     // TODO: add channel message support
     if (entityType === 'channel_message') return;
     if (entityType === 'call') return;
+    // Automation entities aren't yet renderable as canvas mentions.
+    if (entityType === 'automation') return;
 
     // Track document mention and get UUID
     let mentionUuid: string | undefined;

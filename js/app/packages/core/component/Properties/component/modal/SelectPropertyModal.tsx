@@ -1,41 +1,42 @@
 import { useBlockId } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import { DialogWrapper } from '@core/component/DialogWrapper';
+import { useListKeyBindings } from '@core/util/useListKeyBindings';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import XIcon from '@icon/regular/x.svg';
+import PlusIcon from '@icon/regular/plus.svg';
+import { Dialog } from '@kobalte/core/dialog';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import { useListPropertiesQuery } from '@queries/properties/definitions';
+import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createMemo,
+  createSelector,
   createSignal,
   For,
-  onCleanup,
   Show,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertySelection } from '../../hooks/usePropertySelection';
-import { PROPERTY_STYLES } from '../../styles';
 import type {
   PropertyDefinitionDomain,
   PropertySelectorProps,
 } from '../../types';
 import {
   getPropertyDefinitionTypeDisplay,
+  PropertyDataTypeIcon,
   toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
-import { useListPropertiesQuery } from '@queries/properties/definitions';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
   const { entityType, onPropertyAdded, openCreateProperty } =
     usePropertiesContext();
-  const [isAdding, setIsAdding] = createSignal(false);
+
   const [searchQuery, setSearchQuery] = createSignal('');
+  const [focusedIndex, setFocusedIndex] = createSignal(0);
+
+  const [dialogRef, setDialogRef] = createSignal<HTMLDivElement | undefined>();
 
   const addMutation = useAddEntityPropertyMutation();
 
@@ -69,69 +70,38 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   });
 
   let searchInputRef!: HTMLInputElement;
-  let modalRef!: HTMLDivElement;
 
-  const { selectedPropertyIds, filteredProperties, togglePropertySelection } =
-    usePropertySelection(props.existingPropertyIds, availableProperties, () =>
-      searchQuery()
-    );
+  const { filteredProperties } = usePropertySelection(
+    props.existingPropertyIds,
+    availableProperties,
+    () => searchQuery()
+  );
 
-  const handleAddProperties = async () => {
-    const selected = Array.from(selectedPropertyIds());
-    if (selected.length === 0) return;
+  const createLabel = createMemo(() => {
+    const query = searchQuery().trim();
+    return query ? `Create Property "${query}"` : 'Create New Property';
+  });
 
-    setIsAdding(true);
+  const createIndex = createMemo(() => filteredProperties().length);
 
+  const addProperty = async (propertyDefinitionId: string) => {
     try {
-      const addPromises = selected.map(async (propertyDefinitionId) => {
-        try {
-          await addMutation.mutateAsync({
-            entityId: blockId,
-            entityType,
-            propertyDefinitionId,
-          });
-          return propertyDefinitionId;
-        } catch {
-          // Error toast is shown by mutation's onError callback
-          return undefined;
-        }
+      await addMutation.mutateAsync({
+        entityId: blockId,
+        entityType,
+        propertyDefinitionId,
       });
-
-      const results = await Promise.all(addPromises);
-      const succeeded = results.filter((id): id is string => !!id);
-
-      props.onClose();
-
-      if (succeeded.length > 0) {
-        onPropertyAdded(succeeded);
-      }
+      onPropertyAdded([propertyDefinitionId]);
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
-      setIsAdding(false);
+      props.onClose();
     }
   };
 
-  // Always center horizontally but anchor to top for stable positioning
-  const modalPosition = () => {
-    const viewportHeight = window.innerHeight;
-    const topPercentage = MODAL_DIMENSIONS.SELECTOR_TOP_PERCENTAGE;
-    const minTopMargin = MODAL_DIMENSIONS.SELECTOR_MIN_TOP_MARGIN;
-
-    const topPosition = Math.max(minTopMargin, viewportHeight * topPercentage);
-
-    const finalTopPosition =
-      viewportHeight < MODAL_DIMENSIONS.SELECTOR_SMALL_SCREEN_THRESHOLD
-        ? Math.max(
-            minTopMargin,
-            viewportHeight *
-              MODAL_DIMENSIONS.SELECTOR_SMALL_SCREEN_TOP_PERCENTAGE
-          )
-        : topPosition;
-
-    return {
-      top: `${finalTopPosition}px`,
-      left: '50%',
-      transform: 'translateX(-50%)',
-    };
+  const handleCreate = () => {
+    props.onClose();
+    openCreateProperty(true);
   };
 
   useSearchInputFocus(
@@ -146,202 +116,129 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   });
 
   createEffect(() => {
-    if (!props.isOpen) return;
-
-    const handleResize = () => {
-      if (modalRef) {
-        const newPosition = modalPosition();
-        modalRef.style.top = newPosition.top;
-        modalRef.style.left = newPosition.left;
-        modalRef.style.transform = newPosition.transform;
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    onCleanup(() => window.removeEventListener('resize', handleResize));
+    searchQuery();
+    setFocusedIndex(0);
   });
 
+  createEffect(() => {
+    const index = focusedIndex();
+    const elem = document.getElementById(`select-property-option-${index}`);
+    if (elem) {
+      elem.scrollIntoView({ block: 'nearest' });
+    }
+  });
+
+  const setKeybindings = useListKeyBindings(dialogRef);
+
+  createEffect(() => {
+    const items = filteredProperties();
+    const totalLen = items.length + 1; // +1 for Create row
+    setKeybindings({
+      next: () => setFocusedIndex((prev) => (prev + 1) % totalLen),
+      previous: () =>
+        setFocusedIndex((prev) => (prev - 1 + totalLen) % totalLen),
+      select: () => {
+        const idx = focusedIndex();
+        if (idx >= items.length) {
+          handleCreate();
+        } else {
+          addProperty(items[idx].id);
+        }
+      },
+    });
+  });
+
+  const isFocused = createSelector(focusedIndex);
+
   return (
-    <Portal>
-      <div
-        class="fixed inset-0 z-modal-overlay"
-        onClick={() => props.onClose()}
-        onKeyDown={(e) => e.key === 'Escape' && props.onClose()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div
-          ref={modalRef}
-          class={`absolute bg-dialog border-3 border-edge shadow-xl w-full overflow-hidden font-mono z-modal-content max-w-md max-h-[80vh] ${MODAL_VIEWPORT_CLASSES}`}
-          style={{
-            ...modalPosition(),
-            'max-width': '28rem',
-            'max-height': '80vh',
-          }}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          role="document"
-        >
-          <div class="flex items-center justify-between p-4">
-            <h3 class="text-base font-semibold text-ink">Add Properties</h3>
-            <DeprecatedIconButton
-              icon={XIcon}
-              theme="clear"
-              size="sm"
-              onClick={() => props.onClose()}
-            />
-          </div>
-
-          <Show when={availableProperties().length > 0}>
-            <div class="px-4 pb-2">
-              <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
-                  <SearchIcon class="h-4 w-4 text-ink-muted" />
-                </div>
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery()}
-                  onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                  placeholder="Search properties..."
-                  class={`${PROPERTY_STYLES.input.search} relative z-0`}
-                />
-              </div>
+    <Dialog
+      open={props.isOpen}
+      onOpenChange={(open) => {
+        if (!open) props.onClose();
+      }}
+      modal={true}
+    >
+      <Dialog.Portal>
+        <DialogWrapper contentRef={setDialogRef}>
+          <div class="flex flex-col overflow-hidden bracket-never text-sm">
+            <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+              <span class="pl-2 pointer-events-none">❯</span>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery()}
+                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                placeholder="Add a property..."
+                class="flex-1 text-base border-0 outline-none! focus:outline-none ring-0! focus:ring-0 bg-transparent"
+                autofocus
+              />
             </div>
-          </Show>
 
-          <div class="px-4 pb-2 overflow-y-auto max-h-[60vh]">
-            <Show
-              when={!listPropertiesQuery.isLoading}
-              fallback={
-                <div class="flex items-center justify-center py-8">
-                  <div class="w-5 h-5 animate-spin">
-                    <LoadingSpinner />
-                  </div>
-                  <span class="ml-2 text-ink-muted">Loading properties...</span>
-                </div>
-              }
-            >
-              <Show when={!listPropertiesQuery.error}>
-                <Show
-                  when={availableProperties().length > 0}
-                  fallback={
-                    <div class="text-center py-6">
-                      <div class="text-ink-muted text-sm">
-                        No additional properties available
-                      </div>
+            <div class="min-h-0 overflow-y-auto scrollbar-hidden">
+              <Show
+                when={!listPropertiesQuery.isLoading}
+                fallback={
+                  <div class="flex items-center justify-center py-8">
+                    <div class="w-5 h-5 animate-spin">
+                      <LoadingSpinner />
                     </div>
-                  }
-                >
-                  <div class="space-y-2 max-h-80 overflow-y-auto">
-                    <Show
-                      when={filteredProperties().length > 0}
-                      fallback={
-                        <div class="text-center py-4 text-ink-muted text-sm">
-                          No properties match your search
-                        </div>
-                      }
-                    >
-                      <For each={filteredProperties()}>
-                        {(property) => {
-                          const isSelected = () =>
-                            selectedPropertyIds().has(property.id);
-
-                          return (
-                            <button
-                              type="button"
-                              class={`w-full px-2.5 py-1.5 text-left border ${isSelected() ? 'bg-active border-accent text-accent-ink' : 'hover:bg-hover border-edge text-ink'}`}
-                              onClick={() =>
-                                togglePropertySelection(property.id)
-                              }
-                            >
-                              <div class="flex items-center justify-between">
-                                <div class="flex-1">
-                                  <div class="flex items-center gap-2">
-                                    <h4 class="font-medium text-xs">
-                                      {property.displayName}
-                                    </h4>
-                                  </div>
-                                  <div class="text-xs text-ink-muted mt-0.5">
-                                    {getPropertyDefinitionTypeDisplay({
-                                      dataType: property.valueType,
-                                      specificEntityType:
-                                        property.specificEntityType,
-                                      isMultiSelect: property.isMultiSelect,
-                                    })}
-                                  </div>
-                                </div>
-                                <div
-                                  class={`${PROPERTY_STYLES.checkbox.base} border-edge bg-transparent`}
-                                >
-                                  <Show when={isSelected()}>
-                                    <CheckIcon class="w-3 h-3 text-accent" />
-                                  </Show>
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        }}
-                      </For>
-                    </Show>
+                    <span class="ml-2 text-ink-muted">
+                      Loading properties...
+                    </span>
                   </div>
-                </Show>
-              </Show>
-            </Show>
-          </div>
-
-          <div class="flex items-center justify-between p-4 pt-2">
-            <button
-              type="button"
-              class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.secondary}`}
-              onClick={() => props.onClose()}
-              disabled={isAdding()}
-            >
-              Cancel
-            </button>
-            <Show when={selectedPropertyIds().size > 0}>
-              <button
-                type="button"
-                class={`${PROPERTY_STYLES.button.base} ${selectedPropertyIds().size > 0 && !isAdding() ? PROPERTY_STYLES.button.accent : 'bg-ink-muted text-ink cursor-not-allowed'}`}
-                onClick={handleAddProperties}
-                disabled={selectedPropertyIds().size === 0 || isAdding()}
+                }
               >
-                <Show
-                  when={!isAdding()}
-                  fallback={
-                    <div class="flex items-center gap-1.5">
-                      <div class="w-3 h-3 animate-spin">
-                        <LoadingSpinner />
-                      </div>
-                      Adding...
-                    </div>
-                  }
-                >
-                  Add{' '}
-                  {selectedPropertyIds().size > 0
-                    ? `(${selectedPropertyIds().size})`
-                    : ''}
-                </Show>
-              </button>
-            </Show>
-            <Show when={selectedPropertyIds().size === 0}>
-              <div class="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    props.onClose();
-                    openCreateProperty();
-                  }}
-                  class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent}`}
-                  disabled={false}
-                >
-                  Create New Property
-                </button>
-              </div>
-            </Show>
+                <div class="p-1">
+                  <For each={filteredProperties()}>
+                    {(property, index) => (
+                      <button
+                        type="button"
+                        id={`select-property-option-${index()}`}
+                        class={cn(
+                          'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
+                          isFocused(index()) && 'bg-hover'
+                        )}
+                        onClick={() => addProperty(property.id)}
+                        onMouseEnter={() => setFocusedIndex(index())}
+                      >
+                        <PropertyDataTypeIcon
+                          property={property}
+                          class="opacity-50 shrink-0"
+                        />
+                        <p class="text-sm font-medium truncate text-left grow-1">
+                          {property.displayName}
+                        </p>
+                        <p class="text-sm text-ink-extra-muted/50 shrink-0">
+                          {getPropertyDefinitionTypeDisplay({
+                            dataType: property.valueType,
+                            specificEntityType: property.specificEntityType,
+                            isMultiSelect: property.isMultiSelect,
+                          })}
+                        </p>
+                      </button>
+                    )}
+                  </For>
+                  <button
+                    type="button"
+                    id={`select-property-option-${createIndex()}`}
+                    class={cn(
+                      'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
+                      isFocused(createIndex()) && 'bg-hover'
+                    )}
+                    onClick={handleCreate}
+                    onMouseEnter={() => setFocusedIndex(createIndex())}
+                  >
+                    <PlusIcon class="size-4 shrink-0" />
+                    <p class="text-sm font-medium truncate flex-1 text-left">
+                      {createLabel()}
+                    </p>
+                  </button>
+                </div>
+              </Show>
+            </div>
           </div>
-        </div>
-      </div>
-    </Portal>
+        </DialogWrapper>
+      </Dialog.Portal>
+    </Dialog>
   );
 }

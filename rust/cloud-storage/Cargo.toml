@@ -47,6 +47,7 @@ members = [
   "email_utils",
   "email_validator",
   "entity_access",
+  "entity_access_db_utils",
   "entity_access_management",
   "frecency",
   "fusionauth",
@@ -70,7 +71,6 @@ members = [
   "macro_redis",
   "macro_service_client",
   "macro_sha_count_client",
-  "macro_share_permissions",
   "macro_uuid",
   "mcp_auth_proxy",
   "mcp_service",
@@ -177,23 +177,6 @@ hex = "0.4.3"
 hmac = "0.12.1"
 http = "1"
 http-body-util = "0.1.2"
-image = { version = "0.25", default-features = false, features = [
-  "avif",
-  "bmp",
-  "dds",
-  "exr",
-  "ff",
-  "gif",
-  "hdr",
-  "ico",
-  "jpeg",
-  "png",
-  "pnm",
-  "qoi",
-  "tga",
-  "tiff",
-  "webp",
-] }
 inquire = "0.7"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [

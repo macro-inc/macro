@@ -1,5 +1,21 @@
 lambda_name := file_name(justfile_directory())
 
+DATABASE_URL := "postgres://user:password@localhost:5432/macrodb"
+
+mod sqlx '../sqlx.just'
+force_drop_db:
+    echo "y" | just sqlx::drop_db {{ DATABASE_URL }}
+
+check:
+    SQLX_OFFLINE=true cargo check
+
+create_db:
+    just sqlx::create_db {{ DATABASE_URL }}
+
+# Prepare DB for offline cache for docker image
+prepare_db:
+    just sqlx::prepare_db {{ DATABASE_URL }}
+
 test:
     cargo test --all-features
 

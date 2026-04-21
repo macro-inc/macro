@@ -3,22 +3,12 @@
 mod queries;
 
 use crate::domain::{
-    models::{AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult},
+    models::{AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityType},
     ports::AccessRepository,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
-
-/// Convert a list of user ID strings from the database into typed [`MacroUserIdStr`] values.
-///
-/// Invalid user IDs are silently filtered out to avoid failing the entire query
-/// due to a single malformed row.
-fn parse_user_ids(raw: Vec<String>) -> Vec<MacroUserIdStr<'static>> {
-    raw.into_iter()
-        .filter_map(|s| MacroUserIdStr::try_from(s).ok())
-        .collect()
-}
 
 /// PostgreSQL-backed implementation of [`AccessRepository`].
 ///
@@ -42,7 +32,16 @@ impl AccessRepository for PgAccessRepository {
         document_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(queries::document_access::get_document_access(&self.pool, document_id, user_id).await?)
+        let document_uuid = document_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid document ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(
+            queries::document_access::get_document_access(&self.pool, &document_uuid, &source_ids)
+                .await?,
+        )
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -51,7 +50,13 @@ impl AccessRepository for PgAccessRepository {
         chat_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(queries::chat_access::get_chat_access(&self.pool, chat_id, user_id).await?)
+        let chat_uuid = chat_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid chat ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(queries::chat_access::get_chat_access(&self.pool, &chat_uuid, &source_ids).await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -60,7 +65,16 @@ impl AccessRepository for PgAccessRepository {
         project_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(queries::project_access::get_project_access(&self.pool, project_id, user_id).await?)
+        let project_uuid = project_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid project ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(
+            queries::project_access::get_project_access(&self.pool, &project_uuid, &source_ids)
+                .await?,
+        )
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -69,7 +83,34 @@ impl AccessRepository for PgAccessRepository {
         thread_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(queries::thread_access::get_thread_access(&self.pool, thread_id, user_id).await?)
+        let thread_uuid = thread_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid thread ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(queries::thread_access::get_thread_access(
+            &self.pool,
+            &thread_uuid,
+            &source_ids,
+            user_id,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_access(
+        &self,
+        call_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let call_uuid = call_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+        Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -103,39 +144,14 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_document_users(
+    async fn get_entity_users(
         &self,
-        document_id: &str,
+        entity_id: &uuid::Uuid,
+        entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        let raw = queries::document_users::get_document_users(&self.pool, document_id).await?;
-        Ok(parse_user_ids(raw))
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_chat_users(
-        &self,
-        chat_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        let raw = queries::chat_users::get_chat_users(&self.pool, chat_id).await?;
-        Ok(parse_user_ids(raw))
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_project_users(
-        &self,
-        project_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        let raw = queries::project_users::get_project_users(&self.pool, project_id).await?;
-        Ok(parse_user_ids(raw))
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_thread_users(
-        &self,
-        thread_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        let raw = queries::thread_users::get_thread_users(&self.pool, thread_id).await?;
-        Ok(parse_user_ids(raw))
+        queries::get_entity_users(&self.pool, entity_id, entity_type)
+            .await
+            .map_err(|_| AccessError::Internal)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -143,8 +159,9 @@ impl AccessRepository for PgAccessRepository {
         &self,
         channel_id: &Uuid,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        let raw = queries::channel_users::get_channel_users(&self.pool, channel_id).await?;
-        Ok(parse_user_ids(raw))
+        queries::channel_users::get_channel_users(&self.pool, channel_id)
+            .await
+            .map_err(|_| AccessError::Internal)
     }
 
     #[tracing::instrument(err, skip(self))]

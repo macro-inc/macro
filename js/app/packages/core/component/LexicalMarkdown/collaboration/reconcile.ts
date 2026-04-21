@@ -23,9 +23,6 @@ type NodeWithChildren = {
 } & SerializedLexicalNode;
 
 type NodeWithCustomId = { $: { id: string } } & SerializedLexicalNode;
-type NodeWithPeerId = {
-  $: { peerId: string; local: boolean };
-} & SerializedLexicalNode;
 
 // Improved type guards with clearer naming
 function hasChildren(node: SerializedLexicalNode): node is NodeWithChildren {
@@ -34,12 +31,6 @@ function hasChildren(node: SerializedLexicalNode): node is NodeWithChildren {
 
 function hasCustomId(node: SerializedLexicalNode): node is NodeWithCustomId {
   return '$' in node && 'id' in node.$!;
-}
-
-function _hasPeerId(
-  node: SerializedLexicalNode | Partial<SerializedLexicalNode>
-): node is NodeWithPeerId {
-  return '$' in node && 'peerId' in node.$!;
 }
 
 function getNodeId(node: SerializedLexicalNode): string | undefined {
