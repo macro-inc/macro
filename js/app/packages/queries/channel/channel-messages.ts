@@ -5,7 +5,11 @@ import {
   type ApiThreadReply,
   type ChannelMessagesPage,
 } from '@service-comms/client';
-import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/solid-query';
 import { type Accessor, createEffect, on } from 'solid-js';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
@@ -100,6 +104,26 @@ export function useChannelMessagesQuery(
   return useInfiniteQuery(() =>
     channelMessagesQueryOptions(channelId(), loadAroundMessageId() ?? null)
   );
+}
+
+export function useChannelMessagesByIdsQuery(
+  channelId: Accessor<string>,
+  messageIds: Accessor<string[]>
+) {
+  return useQuery(() => ({
+    queryKey: channelKeys.messagesByIds(channelId(), messageIds()).queryKey,
+    queryFn: async (): Promise<ApiChannelMessage[]> => {
+      const page = await throwOnErr(() =>
+        commsServiceClient.postChannelMessages({
+          channel_id: channelId(),
+          filters: { message_ids: messageIds() },
+        })
+      );
+      return page.items;
+    },
+    enabled: messageIds().length > 0,
+    staleTime: Infinity,
+  }));
 }
 
 /** Returns the cache key for one channel message query variant. */

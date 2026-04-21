@@ -1,0 +1,68 @@
+import type { ApiChannelMessage } from '@service-comms/client';
+import { createSignal, Show } from 'solid-js';
+import { useUserId } from '@core/context/user';
+import { useDeleteMessageMutation } from '@queries/channel/message';
+import {
+  useAddReactionMutation,
+  useRemoveReactionMutation,
+} from '@queries/channel/reaction';
+import { createChannelMessageActions } from '../Channel/create-channel-message-actions';
+import { Thread } from '../Thread';
+import type { InputSnapshot } from '../Input';
+import { Root } from './Root';
+import { ParentMessage } from './ParentMessage';
+import { Replies } from './Replies';
+import { useStandaloneThread } from './context';
+
+type EditableThreadProps = {
+  channelId: string;
+  messageId: string;
+  data?: ApiChannelMessage;
+};
+
+export function EditableThread(props: EditableThreadProps) {
+  const ctx = useStandaloneThread();
+  const userId = useUserId();
+
+  const [replyInputState, setReplyInputState] = createSignal<
+    InputSnapshot | undefined
+  >();
+
+  const deleteMessageMutation = useDeleteMessageMutation();
+  const addReactionMutation = useAddReactionMutation();
+  const removeReactionMutation = useRemoveReactionMutation();
+
+  const getMessageActions = createChannelMessageActions({
+    channelId: ctx.channelId,
+    userId,
+    deleteMessage: deleteMessageMutation.mutate,
+    addReaction: addReactionMutation.mutate,
+    removeReaction: removeReactionMutation.mutate,
+    onReply: () => void ctx.setIsReplying(true),
+  });
+
+  const parentActions = () => {
+    const p = ctx.parent();
+    return p ? getMessageActions(p) : undefined;
+  };
+
+  return (
+    <Root
+      channelId={props.channelId}
+      messageId={props.messageId}
+      data={props.data}
+    >
+      <ParentMessage actions={parentActions()} />
+      <Replies getMessageActions={getMessageActions} showReplyButton />
+      <Show when={ctx.isReplying()}>
+        <Thread.ReplyInput
+          channelId={ctx.channelId()}
+          messageId={ctx.messageId()}
+          replyInputState={replyInputState}
+          setReplyInputState={setReplyInputState}
+          setIsReplying={ctx.setIsReplying}
+        />
+      </Show>
+    </Root>
+  );
+}

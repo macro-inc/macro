@@ -1,4 +1,6 @@
 import { URL_PARAMS } from '@block-channel/constants';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import type { BlockOrchestrator } from '@core/orchestrator';
 
 export function getChannelParams(
   messageId: string,
@@ -25,4 +27,28 @@ export function getUrlToMessage(
     url += `&${URL_PARAMS.thread}=${threadId}`;
   }
   return url;
+}
+
+export async function navigateToChannelMessage(
+  orchestrator: BlockOrchestrator,
+  channelId: string,
+  messageId: string,
+  threadId?: string
+) {
+  const params = getChannelParams(messageId, threadId);
+  const splitManager = globalSplitManager();
+  if (!splitManager) return;
+
+  const existing = splitManager.getSplitByContent('channel', channelId);
+  if (existing) {
+    existing.activate();
+  } else {
+    splitManager.openWithSplit(
+      { type: 'channel', id: channelId, params },
+      { activate: true, referredFrom: null }
+    );
+  }
+
+  const handle = await orchestrator.getBlockHandle(channelId, 'channel');
+  handle?.goToLocationFromParams(params);
 }
