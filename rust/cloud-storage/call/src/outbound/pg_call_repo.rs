@@ -58,7 +58,7 @@ fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
         Expr::Literal(CallLiteral::Attended(b)) => Some(*b),
         Expr::Literal(CallLiteral::ChannelId(_)) => None,
         Expr::And(a, b) | Expr::Or(a, b) => find_attended(a).or_else(|| find_attended(b)),
-        Expr::Not(inner) => find_attended(inner),
+        Expr::Not(inner) => find_attended(inner).map(|b| !b),
     }
 }
 
