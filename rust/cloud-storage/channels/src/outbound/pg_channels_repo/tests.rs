@@ -242,9 +242,7 @@ async fn top_level_scoped_to_channel(pool: Pool<Postgres>) -> anyhow::Result<()>
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn top_level_message_ids_filter_limits_to_subset(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn top_level_message_ids_filter_limits_to_subset(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let filters = ChannelMessageFilters {
         message_ids: vec![MSG1, MSG3],
