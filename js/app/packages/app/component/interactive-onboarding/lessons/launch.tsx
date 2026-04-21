@@ -11,7 +11,6 @@ function LaunchContent(props: LessonContentProps) {
     // `type` is set on the Stripe success redirect (see choose-plan.tsx). Free
     // users skip Stripe entirely so the param is absent — default to 'free'.
     const tier = searchParams.type ?? 'free';
-    console.log('onboarding_launch', { tier });
     analytics.trackMeta('CompleteRegistration', {
       content_name: 'onboarding_launch',
       content_category: tier,
