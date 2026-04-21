@@ -199,13 +199,21 @@ async fn get_participant_count_correct(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn delete_call_cascades_to_participants(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = repo(pool);
+    let repo = repo(pool.clone());
 
     repo.delete_call(&CALL1).await?;
 
     assert!(repo.get_call_by_channel_id(&CH1).await?.is_none());
     // Participants should be cascade-deleted.
     assert_eq!(repo.get_participant_count(&CALL1).await?, 0);
+    // entity_access grants for the call must be cleaned up atomically.
+    let remaining_grants: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM entity_access WHERE entity_id = $1 AND entity_type = 'call'"#,
+        CALL1,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining_grants, 0);
     Ok(())
 }
 
@@ -817,6 +825,14 @@ async fn delete_call_record_cascades(pool: Pool<Postgres>) -> anyhow::Result<()>
     .await?;
     assert_eq!(remaining_participants, 0);
     assert_eq!(remaining_transcripts, 0);
+    // entity_access grants for the archived call must be cleaned up atomically.
+    let remaining_grants: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM entity_access WHERE entity_id = $1 AND entity_type = 'call'"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining_grants, 0);
     Ok(())
 }
 

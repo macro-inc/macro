@@ -343,14 +343,25 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
         sqlx::query!(
             r#"
             DELETE FROM calls WHERE id = $1
             "#,
             call_id,
         )
-        .execute(&self.pool)
+        .execute(tx.as_mut())
         .await?;
+
+        entity_access_db_utils::delete_entity_access_rows(
+            &mut tx,
+            call_id,
+            entity_access_db_utils::EntityType::Call,
+        )
+        .await?;
+
+        tx.commit().await?;
         Ok(())
     }
 
@@ -1076,14 +1087,25 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_call_record(&self, call_record_id: &Uuid) -> Result<Option<String>, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
         let row = sqlx::query!(
             r#"
             DELETE FROM call_records WHERE id = $1 RETURNING recording_key
             "#,
             call_record_id,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(tx.as_mut())
         .await?;
+
+        entity_access_db_utils::delete_entity_access_rows(
+            &mut tx,
+            call_record_id,
+            entity_access_db_utils::EntityType::Call,
+        )
+        .await?;
+
+        tx.commit().await?;
         Ok(row.and_then(|r| r.recording_key))
     }
 

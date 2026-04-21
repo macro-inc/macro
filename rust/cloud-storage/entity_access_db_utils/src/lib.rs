@@ -42,6 +42,28 @@ pub async fn insert_entity_access_row(
     Ok(())
 }
 
+/// Deletes all entity_access rows for a given (entity_id, entity_type).
+/// *NOTE*: The transaction does not get committed automatically.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn delete_entity_access_rows(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        DELETE FROM entity_access
+        WHERE entity_id = $1 AND entity_type = $2
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
+
 /// Bulk upserts entity access for users
 #[tracing::instrument(skip(executor), err)]
 pub async fn upsert_user_entity_access_bulk<'e, E>(
