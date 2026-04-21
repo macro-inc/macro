@@ -18,14 +18,13 @@ type EditableThreadProps = {
   data?: ApiChannelMessage;
 };
 
-export function EditableThread(props: EditableThreadProps) {
+
+function EditableThreadInner() {
   const ctx = useStandaloneThread();
   const userId = useUserId();
-
   const [replyInputState, setReplyInputState] = createSignal<
     InputSnapshot | undefined
   >();
-
   const deleteMessageMutation = useDeleteMessageMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
@@ -45,11 +44,7 @@ export function EditableThread(props: EditableThreadProps) {
   };
 
   return (
-    <StandaloneThread.Root
-      channelId={props.channelId}
-      messageId={props.messageId}
-      data={props.data}
-    >
+    <>
       <StandaloneThread.ParentMessage actions={parentActions()} />
       <StandaloneThread.Replies
         getMessageActions={getMessageActions}
@@ -64,6 +59,18 @@ export function EditableThread(props: EditableThreadProps) {
           setIsReplying={ctx.setIsReplying}
         />
       </Show>
+    </>
+  )
+}
+
+export function EditableThread(props: EditableThreadProps) {
+  return (
+    <StandaloneThread.Root
+      channelId={props.channelId}
+      messageId={props.messageId}
+      data={props.data}
+    >
+      <EditableThreadInner />
     </StandaloneThread.Root>
   );
 }
