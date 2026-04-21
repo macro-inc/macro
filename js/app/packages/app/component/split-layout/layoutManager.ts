@@ -968,6 +968,12 @@ export function createSplitLayout(
         if (splitAtSameIndex) {
           newSplit.id = splitAtSameIndex.id;
           usedIds.add(splitAtSameIndex.id);
+          setSplitNamesById(
+            produce((map) => {
+              delete map[splitAtSameIndex.id];
+              return map;
+            })
+          );
         }
         resultSplits.push(newSplit);
       }
