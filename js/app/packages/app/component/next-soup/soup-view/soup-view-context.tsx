@@ -28,11 +28,7 @@ import {
   useContext,
 } from 'solid-js';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
-import {
-  createFilterStore,
-  type FilterData,
-  type FilterSetter,
-} from '@app/component/next-soup/filters/filter-store';
+import type { QueryState } from '@app/component/next-soup/filters/filter-store';
 import { useUserId } from '@core/context/user';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
@@ -76,8 +72,8 @@ interface SoupViewContextValues {
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
-  filters: Accessor<FilterData>;
-  setFilters: FilterSetter;
+  filters: Accessor<QueryState>;
+  setFilters: SoupState['query']['set'];
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
@@ -102,7 +98,7 @@ export const useMaybeSoupView = () => useContext(SoupViewContext);
 
 interface SoupViewContextProviderProps {
   soup?: SoupState;
-  initialFilters?: Partial<FilterData>;
+  initialQuery?: QueryState;
   disableLocalSearch?: boolean;
 }
 
@@ -117,7 +113,7 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
 export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
-  const soup = props.soup ?? createSoupState();
+  const soup = props.soup ?? createSoupState({ initialQuery: props.initialQuery });
 
   const queryClient = useQueryClient();
 
@@ -135,11 +131,7 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const [filters, setFiltersInternal, getAst] = createFilterStore(
-    props.initialFilters
-  );
-
-  const setFilters: FilterSetter = (fn) => {
+  const setFilters: SoupState['filterStore']['query']['set'] = (...args) => {
     // Invalidate query cache when filters change to avoid refetching all pages
     queryClient.setQueryData(
       soupKeys.astItems({
@@ -155,7 +147,7 @@ export const SoupViewContextProvider: FlowComponent<
         return prev;
       }
     );
-    setFiltersInternal(fn);
+    soup.filters.query.set(...args);
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
@@ -165,17 +157,17 @@ export const SoupViewContextProvider: FlowComponent<
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
-    if (!soup.filters.isActive('task')) {
+    if (!soup.filters.predicates.isActive('task')) {
       setAssigneeFilter([]);
     }
   });
 
   // soupBody is derived from the filter store's compiled AST
-  const soupBody = createMemo(() => getAst());
+  const soupBody = createMemo(() => soup.filters.query.compile());
 
   const search = createSearchState({
     soup,
-    filters,
+    filters: () => soup.filters.query.state,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
     searchMentions,
@@ -279,7 +271,7 @@ export const SoupViewContextProvider: FlowComponent<
 
     const next = [];
     for (const entity of transformed) {
-      if (!soup.filters.test(entity, ctx)) {
+      if (!soup.filters.predicates.test(entity, ctx)) {
         continue;
       }
       next.push(entity);
@@ -358,7 +350,7 @@ export const SoupViewContextProvider: FlowComponent<
     featuredIds: search.featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
-    filters,
+    filters: () => soup.filters.query.state,
     setFilters,
     assigneeFilter,
     setAssigneeFilter,

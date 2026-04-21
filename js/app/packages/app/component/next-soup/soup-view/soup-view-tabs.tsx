@@ -95,7 +95,7 @@ export const useApplyPreset = () => {
         d.properties = preset.filters.properties ?? [];
         d.emailView = preset.filters.emailView;
       });
-      soup.filters.set(preset.clientFilters);
+      soup.filters.predicates.set(preset.clientFilters);
     });
     return true;
   };

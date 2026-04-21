@@ -70,7 +70,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useUserId } from '@core/context/user';
@@ -431,7 +431,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // Focus first entity on filter/search changes
   createEffect(
     on(
-      () => [soup.filters.activeIds(), searchText(), featuredIds()] as const,
+      () => [soup.filters.predicates.activeIds(), searchText(), featuredIds()] as const,
       () => {
         if (!focusEffectsEnabled()) return;
         focusFirstEntity();
@@ -687,7 +687,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         applyTabPreset(contentId, initialPersistedState.activeTab);
       if (!applied) {
         batch(() => {
-          soup.filters.set(
+          soup.filters.predicates.set(
             isStale
               ? (props.initialClientFilters ?? {})
               : initialPersistedState.filters
@@ -717,7 +717,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       });
     } else {
       if (props.initialClientFilters) {
-        soup.filters.set(props.initialClientFilters);
+        soup.filters.predicates.set(props.initialClientFilters);
       }
       // Set default tab for list views when no persisted state exists
       if (isListViewID(contentId)) {
@@ -736,10 +736,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
           version: PERSISTED_STATE_VERSION,
           activeTab: activeTab(),
           filters: {
-            and: [...soup.filters.andFilters().map((f) => f.id)],
-            or: [...soup.filters.orFilters().map((f) => f.id)],
+            and: [...soup.filters.predicates.andIds()],
+            or: [...soup.filters.predicates.orIds()],
           },
-          filterData: { ...filters() },
+          filterData: JSON.parse(JSON.stringify(filters())),
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),
@@ -909,8 +909,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   soup.focus.set(row.original.id);
                                 }}
                                 showUnrollNotifications={
-                                  soup.filters.isActive('inbox') &&
-                                  !soup.filters.isActive('noise')
+                                  soup.filters.predicates.isActive('inbox') &&
+                                  !soup.filters.predicates.isActive('noise')
                                 }
                                 checked={row.isSelected()}
                                 onChecked={(next: boolean, shiftKey: boolean) =>

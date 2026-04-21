@@ -31,12 +31,25 @@ const emptyQueryState = (): QueryState => ({
   emailView: undefined,
 });
 
+const mergeQuery = (base: QueryState, query: Query | undefined): QueryState => {
+  if (!query) return base;
+  return {
+    include: addFieldValues(base.include, query.include),
+    exclude: addFieldValues(base.exclude, query.exclude),
+    emailView: query.emailView ?? base.emailView,
+  };
+};
+
 export function createFilterStore<
   T,
   TFilter extends FilterConfig<T>,
   TId extends string = TFilter['id'],
 >(options: FilterStoreOptions<T, TFilter, TId>) {
-  const { filters: availableFilters, initialFilters = {} } = options;
+  const {
+    filters: availableFilters,
+    initialFilters = {},
+    initialQuery,
+  } = options;
 
   const filterMap = new Map<string, TFilter>(
     availableFilters.map((f) => [f.id, f])
@@ -116,16 +129,12 @@ export function createFilterStore<
   };
 
   const [queryState, setQueryState] = createStore<QueryState>(
-    emptyQueryState()
+    mergeQuery(emptyQueryState(), initialQuery)
   );
 
   const addQuery = (query: Query | undefined) => {
     if (!query) return;
-    setQueryState((prev) => ({
-      include: addFieldValues(prev.include, query.include),
-      exclude: addFieldValues(prev.exclude, query.exclude),
-      emailView: query.emailView ?? prev.emailView,
-    }));
+    setQueryState((prev) => mergeQuery(prev, query));
   };
 
   const removeQuery = (query: Query | undefined) => {
@@ -167,6 +176,7 @@ export function createFilterStore<
 
     query: {
       state: queryState,
+      set: setQueryState,
       add: addQuery,
       remove: removeQuery,
       clear: clearQuery,

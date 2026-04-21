@@ -206,9 +206,8 @@ export const createSearchState = ({
 
   const allFiltersResults = createMemo((): Map<string, EntityData[]> => {
     if (!localFuzzyResults()) return new Map();
-    const allFilters = getValidSearchFilters(soup.filters.available);
     const filterToResultMap = new Map<string, EntityData[]>();
-    for (const filter of allFilters) {
+    for (const filter of soup.filters.predicates.available) {
       filterToResultMap.set(
         filter.id,
         localFuzzyResults().filter((e) => filter.predicate(e))
@@ -228,12 +227,14 @@ export const createSearchState = ({
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
     if (hasChannelQueryFilters()) return [];
-    const activeFilters = getValidSearchFilters(soup.filters.active());
+    const activeIds = getValidSearchFilters(
+      soup.filters.predicates.activeIds()
+    );
     const results =
-      activeFilters.length === 0
+      activeIds.length === 0
         ? localFuzzyResults()
         : intersectEntityPools(
-            activeFilters.map((f) => allFiltersResults().get(f.id) ?? [])
+            activeIds.map((id) => allFiltersResults().get(id) ?? [])
           );
     const channels = results.filter((e) => isChannelEntity(e));
     const nonChannels = results

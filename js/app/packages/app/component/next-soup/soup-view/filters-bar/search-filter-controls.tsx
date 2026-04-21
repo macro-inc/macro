@@ -205,8 +205,8 @@ export function useSearchIndexController() {
   const changeIndex = (newValue: string) => {
     batch(() => {
       for (const opt of INDEX_OPTIONS) {
-        if (soup.filters.isActive(opt.value)) {
-          soup.filters.toggle({ or: [opt.value as FilterID] });
+        if (soup.filters.predicates.isActive(opt.value)) {
+          soup.filters.predicates.toggle({ or: [opt.value as FilterID] });
         }
       }
 
@@ -221,7 +221,7 @@ export function useSearchIndexController() {
 
       const opt = INDEX_OPTIONS.find((o) => o.value === newValue);
       if (!opt) return;
-      soup.filters.toggle({ or: [opt.value as FilterID] });
+      soup.filters.predicates.toggle({ or: [opt.value as FilterID] });
 
       if (opt.value === 'channels') {
         const cached = getCachedChannelSubFilters(contentId);

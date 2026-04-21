@@ -79,6 +79,7 @@ export type FilterStoreOptions<
     readonly and?: readonly TId[];
     readonly or?: readonly TId[];
   };
+  readonly initialQuery?: Query;
 };
 
 export type FilterIdInput<TId extends string> = TId | (string & {});

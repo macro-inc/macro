@@ -98,7 +98,7 @@ export function useFilterRefinements() {
       ...(preset.clientFilters.or ?? []),
     ]);
 
-    const currentIds = new Set(soup.filters.activeIds() as FilterID[]);
+    const currentIds = new Set(soup.filters.predicates.activeIds() as FilterID[]);
 
     const hasClientFilterDiff =
       expectedIds.size !== currentIds.size ||
@@ -154,7 +154,7 @@ export function useFilterRefinements() {
     for (const category of viewCategories()) {
       for (const option of category.options) {
         if (
-          !soup.filters.isActive(option.id) ||
+          !soup.filters.predicates.isActive(option.id) ||
           TAB_ONLY_FILTERS.has(option.id) ||
           presetFilterIds.has(option.id as FilterID)
         ) {
@@ -178,7 +178,7 @@ export function useFilterRefinements() {
     for (const option of INDEX_OPTIONS) {
       const optionId = option.value as FilterID;
       if (
-        !soup.filters.isActive(optionId) ||
+        !soup.filters.predicates.isActive(optionId) ||
         coveredByView.has(optionId) ||
         presetFilterIds.has(optionId)
       ) {
@@ -283,7 +283,7 @@ export function useFilterRefinements() {
 
     // Email importance (only when the email index is active in the search view
     // and the user has explicitly set a value — undefined means "All", no chip)
-    if (currentView() === 'search' && soup.filters.isActive('email')) {
+    if (currentView() === 'search' && soup.filters.predicates.isActive('email')) {
       const importance = filterData().include.emailImportance?.[0];
       if (importance !== undefined) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
@@ -317,7 +317,7 @@ export function useFilterRefinements() {
   });
 
   const isOptionActive = (optionId: string) => {
-    return soup.filters.isActive(optionId);
+    return soup.filters.predicates.isActive(optionId);
   };
 
   const getFilterContext = (): FilterContext => ({
@@ -326,7 +326,7 @@ export function useFilterRefinements() {
   });
 
   const getFilterQuery = (optionId: string) => {
-    const filter = soup.filters.getFilter(optionId);
+    const filter = soup.filters.predicates.getFilter(optionId);
     if (!filter?.query) return undefined;
     return typeof filter.query === 'function'
       ? filter.query(getFilterContext())
@@ -336,7 +336,7 @@ export function useFilterRefinements() {
   const removeFilter = (optionId: string) => {
     const query = getFilterQuery(optionId);
     batch(() => {
-      soup.filters.toggle({ or: [optionId as FilterID] });
+      soup.filters.predicates.toggle({ or: [optionId as FilterID] });
       if (query) {
         setFilters((d) => removeQuery(d, query));
       }
@@ -347,8 +347,8 @@ export function useFilterRefinements() {
     const oldQuery = getFilterQuery(oldOptionId);
     const newQuery = getFilterQuery(newOptionId);
     batch(() => {
-      soup.filters.toggle({ or: [oldOptionId as FilterID] });
-      soup.filters.toggle({ or: [newOptionId as FilterID] });
+      soup.filters.predicates.toggle({ or: [oldOptionId as FilterID] });
+      soup.filters.predicates.toggle({ or: [newOptionId as FilterID] });
       setFilters((d) => {
         if (oldQuery) removeQuery(d, oldQuery);
         if (newQuery) addQuery(d, newQuery);
@@ -361,7 +361,7 @@ export function useFilterRefinements() {
     if (!preset) return;
 
     batch(() => {
-      soup.filters.set(preset.clientFilters);
+      soup.filters.predicates.set(preset.clientFilters);
       setFilters((d) =>
         applyFilterData(d, preset.filters ?? emptyFilterData())
       );

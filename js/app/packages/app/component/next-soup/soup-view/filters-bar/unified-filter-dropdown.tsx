@@ -529,14 +529,14 @@ export const UnifiedFilterDropdown = () => {
   });
 
   const isOptionActive = (optionId: string) => {
-    return soup.filters.isActive(optionId);
+    return soup.filters.predicates.isActive(optionId);
   };
 
   const toggleFilter = (optionId: string) => {
-    const wasActive = soup.filters.isActive(optionId);
-    soup.filters.toggle({ or: [optionId] });
+    const wasActive = soup.filters.predicates.isActive(optionId);
+    soup.filters.predicates.toggle({ or: [optionId] });
 
-    const filter = soup.filters.getFilter(optionId);
+    const filter = soup.filters.predicates.getFilter(optionId);
     if (!filter?.query) return;
 
     const ctx: FilterContext = {
@@ -615,10 +615,10 @@ export const UnifiedFilterDropdown = () => {
 
   const isTasksView = () => currentView() === 'tasks';
   const isSearchView = () => currentView() === 'search';
-  const isChannelsIndexActive = () => soup.filters.isActive('channels');
-  const isEmailIndexActive = () => soup.filters.isActive('email');
+  const isChannelsIndexActive = () => soup.filters.predicates.isActive('channels');
+  const isEmailIndexActive = () => soup.filters.predicates.isActive('email');
   const hasActiveIndex = () =>
-    INDEX_OPTIONS.some((opt) => soup.filters.isActive(opt.value));
+    INDEX_OPTIONS.some((opt) => soup.filters.predicates.isActive(opt.value));
 
   const { changeIndex: handleIndexChange } = useSearchIndexController();
 
@@ -806,7 +806,7 @@ export const UnifiedFilterDropdown = () => {
                     <For each={INDEX_OPTIONS}>
                       {(option) => {
                         const active = () =>
-                          soup.filters.isActive(option.value);
+                          soup.filters.predicates.isActive(option.value);
                         const hasSub =
                           option.value === 'channels' ||
                           option.value === 'email';
