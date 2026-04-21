@@ -1354,6 +1354,13 @@ export const postChannelMessagesQueryParams = zod.object({
 
 export const postChannelMessagesBody = zod
   .object({
+    last_activity: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe(
+        'When set, only return top-level messages that have activity after this\ntimestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time.'
+      ),
     message_ids: zod
       .array(zod.string().uuid())
       .optional()

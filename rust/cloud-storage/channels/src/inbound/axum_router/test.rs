@@ -882,6 +882,7 @@ async fn post_messages_empty_body_uses_default_filters() {
 
     let captured = svc.captured.lock().unwrap().clone().unwrap();
     assert!(captured.message_ids.is_empty());
+    assert!(captured.last_activity.is_none());
 }
 
 #[tokio::test]
@@ -910,6 +911,39 @@ async fn post_messages_forwards_message_ids_filter() {
 
     let captured = svc.captured.lock().unwrap().clone().unwrap();
     assert_eq!(captured.message_ids, vec![id_a, id_b]);
+}
+
+#[tokio::test]
+async fn post_messages_forwards_last_activity_filter() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let body = serde_json::json!({ "last_activity": "2024-06-01T12:00:00Z" }).to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert!(captured.last_activity.is_some());
+    let ts = captured.last_activity.unwrap();
+    assert_eq!(
+        ts,
+        chrono::DateTime::parse_from_rfc3339("2024-06-01T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    );
 }
 
 #[tokio::test]

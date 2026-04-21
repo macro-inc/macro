@@ -19,6 +19,11 @@ pub struct ChannelMessageFilters {
     /// When non-empty, only return messages with these IDs.
     #[serde(default)]
     pub message_ids: Vec<Uuid>,
+    /// When set, only return top-level messages that have activity after this
+    /// timestamp. Activity means either the message itself was created after
+    /// this time, or a thread reply was created after this time.
+    #[serde(default)]
+    pub last_activity: Option<DateTime<Utc>>,
 }
 
 /// Direction for cursor-based message pagination.

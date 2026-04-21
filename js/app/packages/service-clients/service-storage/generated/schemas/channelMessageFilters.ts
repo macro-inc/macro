@@ -4,11 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelMessageFiltersLastActivity } from './channelMessageFiltersLastActivity';
 
 /**
  * Filters for channel message queries.
  */
 export interface ChannelMessageFilters {
+  /** When set, only return top-level messages that have activity after this
+timestamp. Activity means either the message itself was created after
+this time, or a thread reply was created after this time. */
+  last_activity?: ChannelMessageFiltersLastActivity;
   /** When non-empty, only return messages with these IDs. */
   message_ids?: string[];
 }

@@ -99,6 +99,7 @@ export * from './channelFiltersTeamId';
 export * from './channelMessage';
 export * from './channelMessageDeletedAt';
 export * from './channelMessageFilters';
+export * from './channelMessageFiltersLastActivity';
 export * from './channelMessageThreadId';
 export * from './channelName';
 export * from './channelOrgId';

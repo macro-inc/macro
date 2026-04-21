@@ -134,6 +134,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         } else {
             Some(&filters.message_ids)
         };
+        let last_activity = filters.last_activity;
 
         let (rows, has_more_newer) = match direction {
             MessagePageDirection::Older => {
@@ -158,6 +159,15 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                       ))
                       AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
+                      AND ($6::timestamptz IS NULL OR (
+                          m.created_at > $6
+                          OR EXISTS (
+                              SELECT 1 FROM comms_messages r
+                              WHERE r.thread_id = m.id
+                                AND r.deleted_at IS NULL
+                                AND r.created_at > $6
+                          )
+                      ))
                     ORDER BY m.created_at DESC, m.id DESC
                     LIMIT $4
                     "#,
@@ -166,6 +176,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                     cursor_id,
                     limit_i64,
                     message_ids_filter as Option<&[Uuid]>,
+                    last_activity,
                 )
                 .fetch_all(&self.pool)
                 .await?;
@@ -194,6 +205,15 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                       ))
                       AND ($2::timestamptz IS NOT NULL AND (m.created_at, m.id) > ($2, $3))
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
+                      AND ($6::timestamptz IS NULL OR (
+                          m.created_at > $6
+                          OR EXISTS (
+                              SELECT 1 FROM comms_messages r
+                              WHERE r.thread_id = m.id
+                                AND r.deleted_at IS NULL
+                                AND r.created_at > $6
+                          )
+                      ))
                     ORDER BY m.created_at ASC, m.id ASC
                     LIMIT $4
                     "#,
@@ -202,6 +222,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                     cursor_id,
                     limit_i64 + 1,
                     message_ids_filter as Option<&[Uuid]>,
+                    last_activity,
                 )
                 .fetch_all(&self.pool)
                 .await?;

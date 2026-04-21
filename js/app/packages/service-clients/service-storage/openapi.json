@@ -6461,6 +6461,11 @@
         "type": "object",
         "description": "Filters for channel message queries.",
         "properties": {
+          "last_activity": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages that have activity after this\ntimestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time."
+          },
           "message_ids": {
             "type": "array",
             "items": {
