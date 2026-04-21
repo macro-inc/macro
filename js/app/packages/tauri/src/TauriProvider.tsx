@@ -5,6 +5,7 @@ import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
   type Accessor,
   createContext,
+  createEffect,
   createSignal,
   type JSX,
   onCleanup,
@@ -69,6 +70,15 @@ function TauriProvider(props: { children: JSX.Element }) {
     });
     onCleanup(() => {
       unlistenPromise.then((unlisten) => unlisten());
+    });
+
+    // Auto-approve download when an update is found so the user only
+    // needs to confirm the final "Update" step.
+    createEffect(() => {
+      if (bundleUpdateStatus().status === 'UpdateFound') {
+        console.info('[bundle-update] update found, auto-approving download');
+        invoke('grant_bundle_update', { approved: true });
+      }
     });
 
     if (value.os === 'android') {
