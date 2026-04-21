@@ -3,8 +3,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment,
-        MessagePageDirection, ParticipantRole, ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        ChannelAttachment, ChannelMessageFilters, ChannelParticipant, CountedReaction,
+        MessageAttachment, MessagePageDirection, ParticipantRole, ThreadData, ThreadReplyRow,
+        TopLevelMessageRow,
     },
     ports::{ChannelMessagesRepo, TopLevelMessagesQueryResult},
 };
@@ -119,6 +120,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         query: &Query<Uuid, CreatedAt, ()>,
         direction: MessagePageDirection,
         limit: u16,
+        filters: &ChannelMessageFilters,
     ) -> Result<TopLevelMessagesQueryResult, Self::Err> {
         let (cursor_created_at, cursor_id) = match query.vals() {
             (Some(id), Some(val)) => (Some(*val), Some(*id)),
@@ -126,6 +128,12 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         };
         let limit_i64 = i64::from(limit);
         let limit_usize = usize::from(limit);
+
+        let message_ids_filter: Option<&[Uuid]> = if filters.message_ids.is_empty() {
+            None
+        } else {
+            Some(&filters.message_ids)
+        };
 
         let (rows, has_more_newer) = match direction {
             MessagePageDirection::Older => {
@@ -149,6 +157,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                           WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                       ))
                       AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
+                      AND ($5::uuid[] IS NULL OR m.id = ANY($5))
                     ORDER BY m.created_at DESC, m.id DESC
                     LIMIT $4
                     "#,
@@ -156,17 +165,14 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                     cursor_created_at,
                     cursor_id,
                     limit_i64,
+                    message_ids_filter as Option<&[Uuid]>,
                 )
                 .fetch_all(&self.pool)
                 .await?;
 
-                // For older pagination with a cursor, there is always at least one newer item
-                // (the cursor anchor itself) from the API's perspective.
                 (rows, cursor_created_at.is_some())
             }
             MessagePageDirection::Newer => {
-                // Query in ASC so we can overfetch one newer row and trim while preserving the
-                // "nearest newer page" semantics before reversing back to DESC.
                 let mut rows = sqlx::query_as!(
                     TopLevelRow,
                     r#"
@@ -187,6 +193,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                           WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                       ))
                       AND ($2::timestamptz IS NOT NULL AND (m.created_at, m.id) > ($2, $3))
+                      AND ($5::uuid[] IS NULL OR m.id = ANY($5))
                     ORDER BY m.created_at ASC, m.id ASC
                     LIMIT $4
                     "#,
@@ -194,6 +201,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                     cursor_created_at,
                     cursor_id,
                     limit_i64 + 1,
+                    message_ids_filter as Option<&[Uuid]>,
                 )
                 .fetch_all(&self.pool)
                 .await?;

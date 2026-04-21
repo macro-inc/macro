@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelParticipant, MessagePageDirection, ParticipantRole,
+    ChannelAttachment, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
+    MessagePageDirection, ParticipantRole,
 };
 use crate::domain::ports::{
     ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult,
@@ -171,6 +172,7 @@ impl ChannelMessagesService for MockService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -233,6 +235,7 @@ impl ChannelMessagesService for ErrorService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
@@ -280,6 +283,7 @@ impl ChannelMessagesService for ParticipantsService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -578,6 +582,7 @@ impl ChannelMessagesService for NotFoundService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -636,6 +641,7 @@ impl ChannelMessagesService for AroundHasItemsService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -776,6 +782,161 @@ async fn messages_around_returns_404_when_not_found() {
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["message"], "Message not found");
+}
+
+// --- POST /messages filter tests ---
+
+struct CapturingService {
+    captured: std::sync::Mutex<Option<ChannelMessageFilters>>,
+}
+
+impl CapturingService {
+    fn new() -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self {
+            captured: std::sync::Mutex::new(None),
+        })
+    }
+}
+
+impl ChannelMessagesService for std::sync::Arc<CapturingService> {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        filters: &ChannelMessageFilters,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        *self.captured.lock().unwrap() = Some(filters.clone());
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelMessage>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+}
+
+#[tokio::test]
+async fn post_messages_empty_body_uses_default_filters() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from("{}"))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert!(captured.message_ids.is_empty());
+}
+
+#[tokio::test]
+async fn post_messages_forwards_message_ids_filter() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let id_a = Uuid::new_v4();
+    let id_b = Uuid::new_v4();
+    let body = serde_json::json!({ "message_ids": [id_a, id_b] }).to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert_eq!(captured.message_ids, vec![id_a, id_b]);
+}
+
+#[tokio::test]
+async fn post_messages_rejects_oversized_filter_list() {
+    let router = channels_router(ChannelsRouterState::new(
+        MockService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let ids: Vec<Uuid> = (0..101).map(|_| Uuid::new_v4()).collect();
+    let body = serde_json::json!({ "message_ids": ids }).to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["message"], "too many message_ids");
 }
 
 #[tokio::test]

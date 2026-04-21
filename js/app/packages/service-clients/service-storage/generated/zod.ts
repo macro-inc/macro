@@ -1323,6 +1323,201 @@ export const getChannelMessagesResponse = zod
   .describe('Paginated response of channel messages.');
 
 /**
+ * @summary Handler for `POST /channels/{channel_id}/messages`.
+ */
+export const postChannelMessagesParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const postChannelMessagesQueryLimitMin = 0;
+
+export const postChannelMessagesQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(postChannelMessagesQueryLimitMin)
+    .optional()
+    .describe('Page size (1-100, default 50)'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for older messages'),
+  previous_cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for newer messages'),
+  load_around_message_id: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe('Return a centered window around this message ID'),
+});
+
+export const postChannelMessagesBody = zod
+  .object({
+    message_ids: zod
+      .array(zod.string().uuid())
+      .optional()
+      .describe('When non-empty, only return messages with these IDs.'),
+  })
+  .describe('Filters for channel message queries.');
+
+export const postChannelMessagesResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod
+                      .string()
+                      .datetime({})
+                      .describe('When the attachment was created.'),
+                    entity_id: zod.string().describe('Entity id.'),
+                    entity_type: zod.string().describe('Type of entity.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Height (for images).'),
+                    id: zod.string().uuid().describe('Attachment id.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Width (for images).'),
+                  })
+                  .describe('An attachment on a message.')
+              )
+              .describe('Attachments on this message.'),
+            channel_id: zod.string().uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod
+              .string()
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.string().uuid().describe('Message id.'),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('The emoji string.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User ids who added this reaction.'),
+                  })
+                  .describe('A reaction with emoji and user list.')
+              )
+              .describe('Reactions on this message.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread: zod
+              .object({
+                latest_reply_at: zod
+                  .string()
+                  .datetime({})
+                  .nullish()
+                  .describe('Timestamp of the latest reply.'),
+                preview: zod
+                  .array(
+                    zod
+                      .object({
+                        attachments: zod
+                          .array(
+                            zod
+                              .object({
+                                created_at: zod
+                                  .string()
+                                  .datetime({})
+                                  .describe('When the attachment was created.'),
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Height (for images).'),
+                                id: zod
+                                  .string()
+                                  .uuid()
+                                  .describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width (for images).'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this reply.'),
+                        content: zod.string().describe('Reply content.'),
+                        created_at: zod
+                          .string()
+                          .datetime({})
+                          .describe('When the reply was created.'),
+                        edited_at: zod
+                          .string()
+                          .datetime({})
+                          .nullish()
+                          .describe('When the reply was edited.'),
+                        id: zod.string().uuid().describe('Reply id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod
+                                  .string()
+                                  .describe('The emoji string.'),
+                                users: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'User ids who added this reaction.'
+                                  ),
+                              })
+                              .describe('A reaction with emoji and user list.')
+                          )
+                          .describe('Reactions on this reply.'),
+                        sender_id: zod.string().describe('Sender user id.'),
+                        updated_at: zod
+                          .string()
+                          .datetime({})
+                          .describe('When the reply was last updated.'),
+                      })
+                      .describe('A thread reply shown in preview.')
+                  )
+                  .describe('Last N replies for thread preview.'),
+                reply_count: zod.number().describe('Total reply count.'),
+              })
+              .describe('Thread metadata and preview replies.'),
+            updated_at: zod
+              .string()
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe('A top-level channel message with thread info.')
+      )
+      .describe('Messages on this page.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the next page, null if no more pages.'),
+    previous_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the previous page, null if no newer page exists.'),
+  })
+  .describe('Paginated response of channel messages.');
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
  */
 export const getThreadRepliesParams = zod.object({

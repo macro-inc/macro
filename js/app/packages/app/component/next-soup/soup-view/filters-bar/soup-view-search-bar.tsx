@@ -64,6 +64,10 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       editor.controls.blur();
       props.onDismiss?.();
       return true;
+    })
+    .onTab((e) => {
+      e.preventDefault();
+      return true;
     });
 
   // Sync search text + mention filters only when the mention menu is closed.
@@ -120,7 +124,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         >
           <MarkdownShell
             config={editor}
-            placeholder="Search"
+            placeholder="Search, @mention contacts"
             autofocus={props.autoFocus}
             class="!min-h-0 !overflow-visible"
           />

@@ -1,6 +1,7 @@
 use crate::domain::models::{
-    ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment,
-    MessagePageDirection, ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    ChannelAttachment, ChannelMessageFilters, ChannelParticipant, CountedReaction,
+    MessageAttachment, MessagePageDirection, ThreadData, ThreadReply, ThreadReplyRow,
+    TopLevelMessageRow,
 };
 use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, Query};
@@ -20,6 +21,7 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         query: &Query<Uuid, CreatedAt, ()>,
         direction: MessagePageDirection,
         limit: u16,
+        filters: &ChannelMessageFilters,
     ) -> impl Future<Output = Result<TopLevelMessagesQueryResult, Self::Err>> + Send;
 
     /// Batch-fetch thread data (stats + preview replies) for parent messages in a single query.
@@ -89,6 +91,7 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         query: Query<Uuid, CreatedAt, ()>,
         direction: MessagePageDirection,
         limit: u16,
+        filters: &ChannelMessageFilters,
     ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
 
     /// Fetch a paginated page of channel-level attachments.

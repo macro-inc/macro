@@ -2,7 +2,7 @@ import { Show } from 'solid-js';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { Button } from '@ui/components/Button';
-import PhoneIcon from '@icon/regular/phone.svg';
+import PhoneIcon from '@macro-icons/wide/call.svg';
 import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useCall } from './useCall';
