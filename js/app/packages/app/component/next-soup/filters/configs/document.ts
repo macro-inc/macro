@@ -36,7 +36,7 @@ export const fileCodeFilter = config({
     if (e.type !== 'document') return false;
     return (codeFileExtensions as readonly string[]).includes(e.fileType ?? '');
   },
-  query: { include: { fileType: codeFileExtensions as unknown as string[] } },
+  query: { include: { fileAssoc: ['assoc:code'] } },
 });
 
 export const fileImageFilter = config({
@@ -45,19 +45,19 @@ export const fileImageFilter = config({
     if (e.type !== 'document') return false;
     return (IMAGE_EXTENSIONS as readonly string[]).includes(e.fileType ?? '');
   },
-  query: { include: { fileType: [...IMAGE_EXTENSIONS] } },
+  query: { include: { fileAssoc: ['assoc:image'] } },
 });
 
 export const filePdfFilter = config({
   id: 'file-pdf',
   predicate: (e) => e.type === 'document' && e.fileType === 'pdf',
-  query: { include: { fileType: ['pdf'] } },
+  query: { include: { fileAssoc: ['assoc:pdf'] } },
 });
 
 export const fileDocxFilter = config({
   id: 'file-docx',
   predicate: (e) => e.type === 'document' && e.fileType === 'docx',
-  query: { include: { fileType: ['docx'] } },
+  query: { include: { fileAssoc: ['assoc:document'] } },
 });
 
 export const fileOtherFilter = config({
@@ -70,7 +70,10 @@ export const fileOtherFilter = config({
     if ((IMAGE_EXTENSIONS as readonly string[]).includes(ft)) return false;
     return true;
   },
-  query: isNotTask,
+  query: {
+    include: { fileAssoc: ['assoc:other'] },
+    exclude: { fileAssoc: ['assoc:document', 'assoc:image'] },
+  },
 });
 
 export const FILE_TYPE_FILTERS = [
