@@ -919,8 +919,6 @@ export const deleteCallRecordParams = zod.object({
 /**
  * Edits a call record — currently supports updating the record's share
 permissions. Access is validated via channel membership
-(MemberParticipantRole); changes that update `share_permission` additionally
-require Owner-level access on the call entity.
  * @summary Handler for `PATCH /call/record/{call_id}`.
  */
 export const editCallRecordParams = zod.object({

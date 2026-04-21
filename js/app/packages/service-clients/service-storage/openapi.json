@@ -711,7 +711,7 @@
       "patch": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `PATCH /call/record/{call_id}`.",
-        "description": "Edits a call record — currently supports updating the record's share\npermissions. Access is validated via channel membership\n(MemberParticipantRole); changes that update `share_permission` additionally\nrequire Owner-level access on the call entity.",
+        "description": "Edits a call record — currently supports updating the record's share\npermissions. Access is validated via channel membership",
         "operationId": "edit_call_record",
         "parameters": [
           {
