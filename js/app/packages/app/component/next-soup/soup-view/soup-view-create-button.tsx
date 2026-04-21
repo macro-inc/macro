@@ -3,11 +3,15 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { openFilePicker } from '@core/util/upload';
+import {
+  handleFolderSelect,
+  openFilePicker,
+  openFolderPicker,
+} from '@core/util/upload';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import type { BlockName } from '@core/block';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import UploadIcon from '@icon/regular/upload.svg';
+import UploadIcon from '@icon/regular/upload-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { createMemo, For, Show } from 'solid-js';
 import { Button } from '@ui/components/Button';
@@ -24,11 +28,18 @@ const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, BlockName[]>> = {
 };
 
 type CreateOption = {
-  id: BlockName | 'import';
+  id: BlockName | 'import-file' | 'import-folder';
   label: string;
 };
 
-const IMPORT_OPTION: CreateOption = { id: 'import', label: 'Import' };
+const IMPORT_FILE_OPTION: CreateOption = {
+  id: 'import-file',
+  label: 'Import file',
+};
+const IMPORT_FOLDER_OPTION: CreateOption = {
+  id: 'import-folder',
+  label: 'Import folder',
+};
 
 /**
  * Fallback labels for blocks that shouldn't appear in the global launcher
@@ -48,14 +59,22 @@ function getViewCreateOptions(view: ListView): CreateOption[] {
     if (viewOnlyLabel) return [{ id: name, label: viewOnlyLabel }];
     return [];
   });
-  if (view === 'documents') options.push(IMPORT_OPTION);
+  if (view === 'documents') {
+    options.push(IMPORT_FILE_OPTION);
+    options.push(IMPORT_FOLDER_OPTION);
+  }
+  if (view === 'folders') {
+    options.push(IMPORT_FOLDER_OPTION);
+  }
   return options;
 }
 
-function CreateOptionIcon(props: { id: BlockName | 'import' }) {
+function CreateOptionIcon(props: {
+  id: BlockName | 'import-file' | 'import-folder';
+}) {
   return (
     <Show
-      when={props.id !== 'import'}
+      when={props.id !== 'import-file' && props.id !== 'import-folder'}
       fallback={<UploadIcon class="size-3.5" />}
     >
       <EntityIcon
@@ -84,9 +103,17 @@ export const SoupViewCreateButton = () => {
   });
 
   const handleSelect = (option: CreateOption) => {
-    if (option.id === 'import') {
+    if (option.id === 'import-file') {
       openFilePicker({ multiple: true }, async (files) => {
         await handleFileUpload(files, false);
+      });
+      return;
+    }
+    if (option.id === 'import-folder') {
+      openFolderPicker({}, async (files) => {
+        await handleFolderSelect(files, async (fileEntries) => {
+          await handleFileUpload(fileEntries, false);
+        });
       });
       return;
     }

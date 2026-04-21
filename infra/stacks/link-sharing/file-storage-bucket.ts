@@ -44,8 +44,7 @@ export const attachPolicyToBucket = ({
   searchProcessingServiceRoleArn,
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
-  documentCognitionRoleArn,
-  mcpServerRoleArn,
+  aiToolsServiceRoleArns,
 }: {
   cloudfrontDistributionArn: pulumi.Output<string>;
   bucket: pulumi.Output<GetStorageBucketResult>;
@@ -59,8 +58,7 @@ export const attachPolicyToBucket = ({
   searchProcessingServiceRoleArn: pulumi.Output<string>;
   bulkUploadLambdaRoleArn: pulumi.Output<string>;
   convertServiceRoleArn: pulumi.Output<string>;
-  documentCognitionRoleArn: pulumi.Output<string>;
-  mcpServerRoleArn: pulumi.Output<string>;
+  aiToolsServiceRoleArns: pulumi.Output<string>[];
 }) => {
   const groupName = config.require('adminGroupName');
 
@@ -89,8 +87,7 @@ export const attachPolicyToBucket = ({
         searchProcessingServiceRoleArn,
         bulkUploadLambdaRoleArn,
         convertServiceRoleArn,
-        documentCognitionRoleArn,
-        mcpServerRoleArn,
+        ...aiToolsServiceRoleArns,
       ];
     });
 
@@ -246,24 +243,10 @@ export const attachPolicyToBucket = ({
         Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
       },
       {
-        Sid: 'AllowAccessForDocumentCognitionService',
+        Sid: 'AllowAccessForAiToolsServices',
         Effect: 'Allow',
         Principal: {
-          AWS: documentCognitionRoleArn,
-        },
-        Action: [
-          's3:ListBucket',
-          's3:GetObject',
-          's3:PutObject',
-          's3:DeleteObject',
-        ],
-        Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
-      },
-      {
-        Sid: 'AllowAccessForMcpServer',
-        Effect: 'Allow',
-        Principal: {
-          AWS: mcpServerRoleArn,
+          AWS: aiToolsServiceRoleArns,
         },
         Action: [
           's3:ListBucket',

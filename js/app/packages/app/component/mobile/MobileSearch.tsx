@@ -173,7 +173,7 @@ export function MobileSearchInner() {
           <ArrowLeft class="size-6" />
         </button>
         <input
-          ref={(el) => setTimeout(() => el.focus(), 50)} // setTimeout needed: iOS only allows focus() within the user gesture window
+          id="mobile-search-input"
           type="text"
           class="pt-3 pb-2 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
           placeholder={'Search...'}

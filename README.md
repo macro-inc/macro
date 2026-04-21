@@ -174,3 +174,14 @@ We're hiring! If you're interested in working on macro, please email teo@macro.c
 ## CONTRIBUTIONS
 
 Email contribute@macro.com to join the community.
+
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=macro-inc%2Fmacro&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=macro-inc/macro&type=date&legend=top-left" />
+ </picture>
+</a>

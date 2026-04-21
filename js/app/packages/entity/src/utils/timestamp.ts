@@ -33,8 +33,12 @@ export function formatTimestamp(date: DateValue): string {
  * - Yesterday: "3:45pm yesterday"
  * - Older: Shows date (e.g., "Jan 27" or "1/27/24")
  */
-export function formatRelativeTimestamp(date: DateValue): string {
+export function formatRelativeTimestamp(
+  date: DateValue,
+  options?: { condensed?: boolean }
+): string {
   const now = new Date();
+  const condensed = options?.condensed ?? false;
 
   const minutesAgo = differenceInMinutes(now, date);
 
@@ -43,17 +47,19 @@ export function formatRelativeTimestamp(date: DateValue): string {
   }
 
   if (minutesAgo < 60) {
-    return `${minutesAgo} ${minutesAgo === 1 ? 'minute' : 'minutes'} ago`;
+    const unit = condensed ? 'min' : minutesAgo === 1 ? 'minute' : 'minutes';
+    return `${minutesAgo} ${unit} ago`;
   }
 
   const hoursAgo = differenceInHours(now, date);
 
   if (hoursAgo < 24) {
-    return `${hoursAgo} ${hoursAgo === 1 ? 'hour' : 'hours'} ago`;
+    const unit = condensed ? 'hr' : hoursAgo === 1 ? 'hour' : 'hours';
+    return `${hoursAgo} ${unit} ago`;
   }
 
   if (isYesterday(date)) {
-    return `${format(date, 'h:mma')} yesterday`;
+    return condensed ? 'yest' : `${format(date, 'h:mma')} yesterday`;
   }
 
   if (isSameYear(date, now)) {

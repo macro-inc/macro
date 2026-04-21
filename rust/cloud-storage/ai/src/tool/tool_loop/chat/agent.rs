@@ -154,8 +154,9 @@ where
         stream_parts: Vec<PartOrExt<I::ResponseExtension>>,
         request_context: RequestContext,
     ) -> ProcessedStream {
-        let mut messages: Vec<ChatCompletionRequestMessage> = vec![];
-        let mut tool_stream_parts: Vec<ToolResponse> = vec![];
+        let mut new_messages: Vec<ChatCompletionRequestMessage> = vec![];
+        // yielded to consumer
+        let mut tool_responses: Vec<ToolResponse> = vec![];
 
         // Current assistant segment being built
         let mut content = String::new();
@@ -183,14 +184,14 @@ where
                             StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) => {
                                 // Server-side tool response - flush current assistant and start new segment
                                 if !content.is_empty() || !tool_calls.is_empty() {
-                                    messages.push(
+                                    new_messages.push(
                                         self.make_assistant_message(&mut content, &mut tool_calls),
                                     );
-                                    messages.append(&mut pending_tool_messages);
+                                    new_messages.append(&mut pending_tool_messages);
                                 }
                                 let content_text = serde_json::to_string_pretty(&json)
                                     .unwrap_or_else(|_| "internal error parsing".into());
-                                messages.push(ChatCompletionRequestMessage::Tool(
+                                new_messages.push(ChatCompletionRequestMessage::Tool(
                                     ChatCompletionRequestToolMessage {
                                         content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
                                             content_text,
@@ -216,7 +217,7 @@ where
                             },
                         });
 
-                        let tool_response = match self
+                        let tool_response_text = match self
                             .toolset
                             .try_tool_call(
                                 self.context.clone(),
@@ -226,30 +227,34 @@ where
                             )
                             .await
                         {
+                            // found tool and call success
                             Ok(ToolResult::Ok(output)) => {
-                                let content_text = serde_json::to_string_pretty(&output)
+                                let json_string = serde_json::to_string_pretty(&output)
                                     .unwrap_or_else(|_| {
                                         "internal error formatting response".to_string()
                                     });
-                                tool_stream_parts.push(ToolResponse::Json {
+                                tool_responses.push(ToolResponse::Json {
                                     id: call.id.clone(),
                                     json: output,
                                     name: call.name.clone(),
                                 });
-                                content_text
+                                json_string
                             }
+                            // found tool and call fail
                             Ok(ToolResult::Err(fail)) => {
-                                tool_stream_parts.push(ToolResponse::Err {
+                                tracing::error!(error=?fail, "tool execution error");
+                                tool_responses.push(ToolResponse::Err {
                                     id: call.id.clone(),
                                     description: fail.description.clone(),
                                     name: call.name.clone(),
                                 });
                                 fail.description
                             }
+                            // tool call not found | malformed json
                             Err(err) => {
                                 tracing::error!(error=?err, "error calling tool");
                                 let desc = format!("Error calling tool: {}", err);
-                                tool_stream_parts.push(ToolResponse::Err {
+                                tool_responses.push(ToolResponse::Err {
                                     id: call.id.clone(),
                                     description: desc.clone(),
                                     name: call.name.clone(),
@@ -258,10 +263,11 @@ where
                             }
                         };
 
+                        // response message in message chain
                         pending_tool_messages.push(ChatCompletionRequestMessage::Tool(
                             ChatCompletionRequestToolMessage {
                                 content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
-                                    tool_response,
+                                    tool_response_text,
                                 ),
                                 tool_call_id: call.id,
                             },
@@ -274,12 +280,12 @@ where
         }
 
         // Flush remaining assistant content
-        messages.push(self.make_assistant_message(&mut content, &mut tool_calls));
-        messages.append(&mut pending_tool_messages);
+        new_messages.push(self.make_assistant_message(&mut content, &mut tool_calls));
+        new_messages.append(&mut pending_tool_messages);
 
         ProcessedStream {
-            new_messages: messages,
-            tool_responses: tool_stream_parts,
+            new_messages,
+            tool_responses,
         }
     }
 

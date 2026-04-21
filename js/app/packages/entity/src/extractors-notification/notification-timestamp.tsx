@@ -1,6 +1,7 @@
 import type { Notification } from '../types/notification';
 import type { NotificationStack } from '@notifications';
 import { formatRelativeTimestamp } from '../utils/timestamp';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 
 interface NotificationTimestampProps {
   notification?: Notification;
@@ -25,7 +26,9 @@ export function NotificationTimestamp(props: NotificationTimestampProps) {
 
   const formattedTimestamp = () => {
     const ts = timestamp();
-    return ts ? formatRelativeTimestamp(ts) : '';
+    return ts
+      ? formatRelativeTimestamp(ts, { condensed: isMobileWidth() })
+      : '';
   };
 
   return <>{formattedTimestamp()}</>;

@@ -18,6 +18,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { cn } from '@ui/utils/classname';
 import { NotificationContent } from './notification-content';
+import { NotificationTimestamp } from './notification-timestamp';
 
 export type EntityRowConfig = {
   swipeLeftColor?: string;
@@ -38,7 +39,7 @@ function MobileStackRowLayout(props: {
       onClick={props.onClick}
       style={{
         'grid-template-columns':
-          'var(--soup-stack-row-unread-column-width) 1fr 8ch',
+          'var(--soup-stack-row-unread-column-width) 1fr auto',
         'grid-template-rows': 'auto auto',
         'grid-template-areas': '"unread title timestamp" "unread body body"',
         'border-left-width': 'var(--soup-stack-row-border-l)',
@@ -52,16 +53,21 @@ function MobileStackRowLayout(props: {
       </Entity.Slot>
       <Entity.Slot
         placement="title"
-        class="flex items-center gap-2 truncate font-semibold pt-3"
+        class="flex items-center gap-2 overflow-hidden min-w-0 font-semibold pt-3"
       >
-        <Entity.Notification.Icon stack={props.stack} class="size-3.5" />
-        <Entity.Notification.Description stack={props.stack} />
+        <Entity.Notification.Icon
+          stack={props.stack}
+          class="size-3.5 flex-shrink-0"
+        />
+        <span class="truncate min-w-0">
+          <Entity.Notification.Description stack={props.stack} />
+        </span>
       </Entity.Slot>
       <Entity.Slot
         placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
+        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4 pl-2"
       >
-        <Entity.Timestamp entity={props.entity} />
+        <NotificationTimestamp stack={props.stack} />
       </Entity.Slot>
       <Entity.Slot
         placement="body"

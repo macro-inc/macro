@@ -21,7 +21,6 @@ use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
 use scheduled_action::outbound::pg_polling_dispatcher::PgPollingDispatcher;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::swagger::ApiDoc;
-use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -65,10 +64,7 @@ async fn main() -> Result<()> {
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
-    let internal_api_secret = secretsmanager_client
-        .get_maybe_secret_value(environment, InternalApiSecretKey::new()?)
-        .await
-        .context("failed to fetch internal api secret")?;
+    let internal_api_secret = InternalApiSecretKey::new()?;
 
     let conn_gateway_client = Arc::new(ConnectionGatewayClient::new(
         internal_api_secret.as_ref().to_string(),

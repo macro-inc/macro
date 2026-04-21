@@ -134,7 +134,7 @@ describe('stackNotifications', () => {
       }
     });
 
-    it('keeps mentions as individual items', () => {
+    it('keeps root mentions (no threadId) as individual items', () => {
       const notifications = [
         createMentionNotification('m1', 'msg-1', 1000),
         createMentionNotification('m2', 'msg-2', 2000),
@@ -144,6 +144,116 @@ describe('stackNotifications', () => {
 
       expect(result).toHaveLength(2);
       expect(result.every((g) => g.type === 'channel_mention')).toBe(true);
+    });
+  });
+
+  describe('thread stacking', () => {
+    it('absorbs root send into thread stack when replies exist', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createReplyNotification('r1', 'reply-1', 'msg-1', 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      expect(getThreadId(result[0])).toBe('msg-1');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('n1');
+      expect(ids).toContain('r1');
+    });
+
+    it('keeps root send in new messages stack when no thread activity', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createNewMessageNotification('n2', 'msg-2', 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_send');
+      expect(result[0].notifications).toHaveLength(2);
+    });
+
+    it('groups thread mention (with threadId) into the thread stack', () => {
+      const notifications = [
+        createReplyNotification('r1', 'reply-1', 'thread-A', 1000),
+        createMentionNotification('m1', 'reply-2', 2000, 'thread-A'),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      expect(getThreadId(result[0])).toBe('thread-A');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('r1');
+      expect(ids).toContain('m1');
+    });
+
+    it('groups root send, replies, and thread mention all in one thread stack', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createReplyNotification('r1', 'reply-1', 'msg-1', 2000),
+        createMentionNotification('m1', 'reply-2', 3000, 'msg-1'),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      expect(result[0].notifications).toHaveLength(3);
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('n1');
+      expect(ids).toContain('r1');
+      expect(ids).toContain('m1');
+      // Sorted most-recent first
+      expect(result[0].notifications[0].id).toBe('m1');
+    });
+
+    it('thread mention shadows reply with same messageId in same thread', () => {
+      const notifications = [
+        createReplyNotification('r1', 'reply-1', 'thread-A', 1000),
+        createMentionNotification('m1', 'reply-1', 2000, 'thread-A'),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('m1');
+      expect(ids).not.toContain('r1'); // shadowed by the thread mention
+    });
+
+    it('root mention for thread root merges into thread stack', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createReplyNotification('r1', 'reply-1', 'msg-1', 2000),
+        createMentionNotification('m1', 'msg-1', 3000), // root mention, no threadId
+      ];
+
+      const result = stackNotifications(notifications);
+
+      // All in one thread stack: m1 + r1 (n1 shadowed by root mention m1)
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      expect(getThreadId(result[0])).toBe('msg-1');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('m1');
+      expect(ids).toContain('r1');
+      expect(ids).not.toContain('n1'); // shadowed by root mention
+    });
+
+    it('root mention with no thread activity stays as individual stack', () => {
+      const notifications = [createMentionNotification('m1', 'msg-1', 1000)];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_mention');
     });
   });
 

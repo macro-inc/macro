@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
         CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus, UpdateApproval,
-        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateRequested, UpdateStatus,
+        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
@@ -13,17 +13,29 @@ pub struct Service {
     handle: WorkerHandle,
 }
 
+/// Sender half the worker uses to offer a oneshot back to the main thread.
+type GrantOfferTx = tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<UpdateApproval>>;
+/// Receiver half the main thread uses to obtain the oneshot sender.
+type GrantOfferRx = tokio::sync::mpsc::Receiver<tokio::sync::oneshot::Sender<UpdateApproval>>;
+
+/// Main thread sends on this to start the checker loop.
+type StartTx = tokio::sync::mpsc::Sender<()>;
+/// Worker receives on this to know when to run the checker loop.
+type StartRx = tokio::sync::mpsc::Receiver<()>;
+
 struct Worker<U, Fs, Q> {
     update_repo: U,
     fs_repo: Fs,
     system_query: Q,
     status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, Report<UpdateError>>>,
-    grant_rx: Option<tokio::sync::oneshot::Receiver<UpdateApproval>>,
+    grant_offer_tx: GrantOfferTx,
+    start_rx: StartRx,
 }
 
 struct WorkerHandle {
     status_rx: tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>>,
-    grant_tx: Option<tokio::sync::oneshot::Sender<UpdateApproval>>,
+    grant_offer_rx: GrantOfferRx,
+    start_tx: StartTx,
 }
 
 /// the name of the app entrypoint
@@ -32,40 +44,56 @@ const ENTRYPOINT_NAME: &str = "index.html";
 impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
     fn new_handle(update_repo: U, fs_repo: Fs, system_query: Q) -> WorkerHandle {
         let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(UpdateStatus::Idle));
-        let (grant_tx, grant_rx) = tokio::sync::oneshot::channel();
+        let (grant_offer_tx, grant_offer_rx) = tokio::sync::mpsc::channel(1);
+        let (start_tx, start_rx) = tokio::sync::mpsc::channel(1);
 
         Worker {
             update_repo,
             fs_repo,
             system_query,
             status_tx,
-            grant_rx: Some(grant_rx),
+            grant_offer_tx,
+            start_rx,
         }
         .run_background();
 
         WorkerHandle {
             status_rx,
-            grant_tx: Some(grant_tx),
+            grant_offer_rx,
+            start_tx,
         }
     }
 
     fn run_background(mut self) {
         tauri::async_runtime::spawn(async move {
-            loop {
-                let Ok(status) = self.status_tx.borrow().as_ref().cloned() else {
-                    break;
-                };
-                if let UpdateStatus::NoUpdateNeeded | UpdateStatus::Completed(_) = status {
+            // Run the checker loop once on startup, then again each time we
+            // receive a restart signal from the main thread.
+            while let Some(()) = self.start_rx.recv().await {
+                // Reset status to Idle for the new run
+                if self.status_tx.send(Ok(UpdateStatus::Idle)).is_err() {
                     break;
                 }
 
-                let next = self.next_status(status).await;
-
-                let Ok(()) = self.status_tx.send(next) else {
-                    break;
-                };
+                self.run_check_loop().await;
             }
         });
+    }
+
+    async fn run_check_loop(&mut self) {
+        loop {
+            let Ok(status) = self.status_tx.borrow().as_ref().cloned() else {
+                break;
+            };
+            if let UpdateStatus::NoUpdateNeeded | UpdateStatus::Completed(_) = status {
+                break;
+            }
+
+            let next = self.next_status(status).await;
+
+            let Ok(()) = self.status_tx.send(next) else {
+                break;
+            };
+        }
     }
 
     #[tracing::instrument(ret, err, skip(self))]
@@ -92,18 +120,18 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
 
                 match res {
                     Some(update) => Ok(UpdateStatus::UpdateFound(UpdateFoundStatus {
-                        request: UpdateRequested::new_request(),
                         bundle: update,
                     })),
                     None => Ok(UpdateStatus::NoUpdateNeeded),
                 }
             }
             UpdateStatus::UpdateFound(update_found_status) => {
-                let Some(rx) = self.grant_rx.take() else {
-                    return Err(
-                        report!("Already granted permission").context(UpdateError::GrantErr)
-                    );
-                };
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                // Send the oneshot sender to the main thread so it can respond
+                self.grant_offer_tx.send(tx).await.map_err(|_| {
+                    report!("Grant offer receiver was dropped").context(UpdateError::GrantErr)
+                })?;
+                // Wait for the main thread to send approval back
                 let res = rx.await.map_err(|e| {
                     rootcause::report!("Failed to receive grant {e:?}. The sender was dropped")
                         .context(UpdateError::GrantErr)
@@ -233,11 +261,20 @@ impl AutoUpdateService for Service {
         &self.handle.status_rx
     }
 
-    fn grant_or_deny(&mut self, grant: UpdateApproval) -> Result<(), Report> {
-        let Some(tx) = self.handle.grant_tx.take() else {
-            return Err(report!("Already granted"));
-        };
-        tx.send(grant)
-            .map_err(|e| rootcause::report!("Failed to send {e:?}. The rx channel was dropped"))
+    fn try_recv_grant_sender(
+        &mut self,
+    ) -> Result<tokio::sync::oneshot::Sender<UpdateApproval>, Report> {
+        self.handle
+            .grant_offer_rx
+            .try_recv()
+            .map_err(|e| report!("No pending grant offer: {e}"))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    fn start(&self) -> Result<(), Report> {
+        self.handle
+            .start_tx
+            .try_send(())
+            .map_err(|e| report!("Failed to send start signal: {e}"))
     }
 }

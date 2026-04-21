@@ -42,7 +42,7 @@ export type SplitContent =
   | {
       type: 'component';
       id: string;
-      params?: Record<string, string>;
+      params?: Record<string, unknown>;
     };
 
 export type SplitContentType = SplitContent['type'];

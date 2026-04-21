@@ -7,6 +7,7 @@ type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
   message: MessageData;
   actions?: MessageActions;
   highlighted?: boolean;
+  selected?: boolean;
 };
 
 export function Root(props: RootProps) {
@@ -16,6 +17,7 @@ export function Root(props: RootProps) {
     'message',
     'actions',
     'highlighted',
+    'selected',
   ]);
 
   return (
@@ -24,9 +26,10 @@ export function Root(props: RootProps) {
       data-message
       data-message-id={local.message.id}
       data-highlighted={local.highlighted ? '' : undefined}
+      data-selected={local.selected ? '' : undefined}
       {...rest}
     >
-      <div class="absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0 message-accent-bar" />
+      <div class="absolute h-full w-1 left-0 top-0 bg-accent opacity-0 message-accent-bar" />
       <MessageProvider value={() => local.message}>
         <MessageActionsProvider value={local.actions}>
           {props.children}

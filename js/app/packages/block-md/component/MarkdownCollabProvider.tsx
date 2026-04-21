@@ -40,6 +40,7 @@ import {
   $updateAllNodeIds,
   COLLABORATION_TAG,
   CustomCodeNode,
+  LOCAL_STATUS_TAG,
   type NodeIdMappings,
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
@@ -360,9 +361,13 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
     }
     // State updates tagged with 'FROM_LORO' are from the syncToLexical function
     // and should not be synced to the loroManager. This would cause an infinite loop.
+    // LOCAL_STATUS_TAG updates carry only per-peer ownership state, which is
+    // resolved independently on each client — producers of this tag must not
+    // mutate node content in the same update, or those changes will be dropped here.
     if (
       tags.has(FROM_LORO_TAG) ||
       tags.has(COLLABORATION_TAG) ||
+      tags.has(LOCAL_STATUS_TAG) ||
       tags.has(CODE_HIGHLIGHT_IDS_TAG)
     ) {
       return false;

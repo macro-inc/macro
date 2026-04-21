@@ -34,16 +34,18 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const execute = async (entities: EntityData[]) => {
     const source = notificationSource();
 
-    for (const entity of entities) {
-      if (entity.type === 'email') {
-        await archiveEmail(entity.id, {
-          archive: true,
-          optimisticallyExclude: true,
-        });
-      }
+    await Promise.all(
+      entities.map(async (entity) => {
+        if (entity.type === 'email') {
+          await archiveEmail(entity.id, {
+            archive: true,
+            optimisticallyExclude: true,
+          });
+        }
 
-      markNotificationsForEntityAsDone(source, entity);
-    }
+        markNotificationsForEntityAsDone(source, entity);
+      })
+    );
 
     toast.success(
       entities.length > 1

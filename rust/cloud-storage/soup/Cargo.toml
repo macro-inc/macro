@@ -38,9 +38,9 @@ ports = ["dep:tokio", "frecency/ports"]
 ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
-call = { path = "../call", default-features = false, features = ["ports"] }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
+call = { path = "../call", default-features = false, features = ["ports"] }
 chrono = { workspace = true }
 comms = { path = "../comms", default-features = false }
 cowlike = { path = "../cowlike" }
@@ -62,6 +62,7 @@ non_empty = { path = "../non_empty" }
 properties_db_client = { path = "../properties_db_client/" }
 readonly_pool = { path = "../readonly_pool", optional = true }
 recursion = { workspace = true }
+rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }

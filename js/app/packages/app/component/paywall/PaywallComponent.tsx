@@ -1,8 +1,12 @@
 import { useHasPaidAccess } from '@core/auth';
+import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
+import { usePermissions } from '@core/context/user';
 import IconX from '@icon/regular/x.svg';
+import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
-import { createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useAnalytics } from '@app/component/analytics-context';
 import { PLANS, type PlanTier } from './plans';
 
@@ -17,9 +21,33 @@ interface PaywallComponent {
 
 const PaywallComponent = (props: PaywallComponent) => {
   const analytics = useAnalytics();
-
-  const [selectedTier, setSelectedTier] = createSignal<PlanTier>('sonnet');
+  const permissions = usePermissions();
   const hasPaid = useHasPaidAccess();
+
+  // Tier a paying user is currently subscribed to, derived from RBAC permissions
+  // (sub_opus grants write:opus; sub_sonnet grants write:sonnet + write:haiku;
+  // sub_haiku grants write:haiku — so check highest-to-lowest).
+  const currentTier = createMemo((): PlanTier | undefined => {
+    if (!hasPaid()) return undefined;
+    const perms = permissions();
+    if (perms.includes('write:opus')) return 'opus';
+    if (perms.includes('write:sonnet')) return 'sonnet';
+    if (perms.includes('write:haiku')) return 'haiku';
+    return undefined;
+  });
+
+  // `userSelectedTier` is only set when the user explicitly clicks a plan card. Until
+  // then the UI derives its selection from `currentTier` (falling back to 'sonnet' for
+  // non-paying users). This avoids mirroring derived state into a signal via `createEffect`
+  // and also sidesteps the briefly-wrong-card window before permissions resolve.
+  const [userSelectedTier, setUserSelectedTier] = createSignal<PlanTier | null>(
+    null
+  );
+  const selectedTier = createMemo<PlanTier>(
+    () => userSelectedTier() ?? currentTier() ?? 'sonnet'
+  );
+
+  const [updating, setUpdating] = createSignal(false);
 
   const handleCheckout = async (tier: PlanTier) => {
     try {
@@ -57,6 +85,47 @@ const PaywallComponent = (props: PaywallComponent) => {
     handleCheckout(selectedTier());
   };
 
+  const handleUpdateTier = async () => {
+    const next = selectedTier();
+    const prev = currentTier();
+    if (!prev || next === prev) return;
+    setUpdating(true);
+    try {
+      const result = await stripeServiceClient.updateSubscriptionTier(next);
+      if (!result.ok) {
+        // Messages mirror the backend's StripeOperationError `Display` impls, adapted
+        // to second-person for UI. `.exhaustive()` fails the build if the code union
+        // grows a new variant without a toast case.
+        const message = match(result.code)
+          .with('USER_IN_TEAM', () => 'Contact your team owner to update.')
+          .with(
+            'UPDATE_IN_PROGRESS',
+            () =>
+              'Another subscription update is already in progress. Please try again in a moment.'
+          )
+          .with(
+            'NO_SUBSCRIPTION',
+            () => "You don't have an active subscription to update."
+          )
+          .with(
+            'TIER_UNCHANGED',
+            () => 'Subscription is already on the requested tier.'
+          )
+          .with('UNKNOWN', () => 'Failed to update subscription.')
+          .exhaustive();
+        toast.failure(message);
+        return;
+      }
+      analytics.track('subscription_tier_updated', { from: prev, to: next });
+      // Refetches permissions so `currentTier` reflects the new tier and this button
+      // auto-hides (selectedTier === currentTier).
+      await invalidateUserInfo();
+      toast.success('Subscription updated!');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   return (
     <div class="space-y-6 sm:space-y-8 w-full">
       <div class="relative w-full text-center">
@@ -89,8 +158,7 @@ const PaywallComponent = (props: PaywallComponent) => {
           <For each={PLANS}>
             {(plan) => (
               <button
-                inert={hasPaid()}
-                onClick={() => setSelectedTier(plan.tier)}
+                onClick={() => setUserSelectedTier(plan.tier)}
                 class="p-4 sm:p-5 border flex flex-col transition-all relative text-left"
                 classList={{
                   'border-accent ring-1 ring-accent bg-active':
@@ -129,18 +197,31 @@ const PaywallComponent = (props: PaywallComponent) => {
       </div>
 
       <div class="mx-auto mt-8 max-w-2xl text-center">
-        <button
-          onClick={handleContinue}
-          class={`w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent ${
-            hasPaid()
-              ? 'bg-active text-ink border-edge hover:bg-hover hover:border-edge'
-              : 'bg-accent text-page hover:bg-accent-ink'
-          }`}
+        <Show
+          when={hasPaid() && currentTier() && selectedTier() !== currentTier()}
+          fallback={
+            <button
+              onClick={handleContinue}
+              class={`w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent ${
+                hasPaid()
+                  ? 'bg-active text-ink border-edge hover:bg-hover hover:border-edge'
+                  : 'bg-accent text-page hover:bg-accent-ink'
+              }`}
+            >
+              <Show when={!hasPaid()} fallback={'Manage Subscription'}>
+                Get {PLANS.find((p) => p.tier === selectedTier())?.name}
+              </Show>
+            </button>
+          }
         >
-          <Show when={!hasPaid()} fallback={'Manage Subscription'}>
-            Get {PLANS.find((p) => p.tier === selectedTier())?.name}
-          </Show>
-        </button>
+          <button
+            onClick={handleUpdateTier}
+            disabled={updating()}
+            class="w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent bg-accent text-page hover:bg-accent-ink disabled:opacity-60"
+          >
+            {updating() ? 'Updating…' : 'Update Subscription'}
+          </button>
+        </Show>
         <Show when={!hasPaid() && props.handleGuest}>
           <button
             onClick={() => props.handleGuest?.()}
