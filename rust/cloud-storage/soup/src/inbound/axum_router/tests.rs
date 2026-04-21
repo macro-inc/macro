@@ -20,6 +20,8 @@ use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
 
+use item_filters::ast::EntityFilterAst;
+
 use crate::{
     domain::{
         models::{
@@ -940,5 +942,189 @@ async fn it_can_filter_chat_owners() {
     assert_eq!(
         filter.chat_filters.owners,
         vec!["macro|rahul@macro.com".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn ast_endpoint_expands_file_assoc_pdf() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "df": { "l": { "fa": "assoc:pdf" } }
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard
+            .pop()
+            .expect("SoupService::handle should have been called")
+    };
+
+    let filter: EntityFilterAst = serde_json::from_value(arg.filter).unwrap();
+    let doc_tree = filter
+        .document_filter
+        .expect("document_filter should be set");
+    let doc_json = serde_json::to_value(doc_tree.as_ref()).unwrap();
+    assert_eq!(doc_json, json!({ "l": { "ft": "pdf" } }));
+}
+
+#[tokio::test]
+async fn ast_endpoint_passes_through_plain_document_literal() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let doc_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "df": { "l": { "id": doc_id.to_string() } }
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard
+            .pop()
+            .expect("SoupService::handle should have been called")
+    };
+
+    let filter: EntityFilterAst = serde_json::from_value(arg.filter).unwrap();
+    let doc_tree = filter
+        .document_filter
+        .expect("document_filter should be set");
+    let doc_json = serde_json::to_value(doc_tree.as_ref()).unwrap();
+    assert_eq!(doc_json, json!({ "l": { "id": doc_id.to_string() } }));
+}
+
+#[tokio::test]
+async fn ast_endpoint_expands_file_assoc_image_to_or_tree() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "df": { "l": { "fa": "assoc:image" } }
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard
+            .pop()
+            .expect("SoupService::handle should have been called")
+    };
+
+    let filter: EntityFilterAst = serde_json::from_value(arg.filter).unwrap();
+    let doc_tree = filter
+        .document_filter
+        .expect("document_filter should be set");
+
+    // collect all file type strings from the expanded OR-tree
+    fn collect_file_types(
+        expr: &filter_ast::Expr<item_filters::ast::document::DocumentLiteral>,
+        out: &mut Vec<String>,
+    ) {
+        match expr {
+            filter_ast::Expr::Or(a, b) => {
+                collect_file_types(a, out);
+                collect_file_types(b, out);
+            }
+            filter_ast::Expr::Literal(item_filters::ast::document::DocumentLiteral::FileType(
+                ft,
+            )) => {
+                out.push(
+                    serde_json::to_value(ft)
+                        .unwrap()
+                        .as_str()
+                        .unwrap()
+                        .to_string(),
+                );
+            }
+            other => panic!("unexpected node in expanded image tree: {other:?}"),
+        }
+    }
+
+    let mut actual: Vec<String> = Vec::new();
+    collect_file_types(doc_tree.as_ref(), &mut actual);
+    actual.sort();
+
+    let mut expected: Vec<String> = item_filters::ast::document::resolve_file_types("assoc:image")
+        .into_iter()
+        .map(|ft| {
+            serde_json::to_value(ft)
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+    expected.sort();
+
+    assert_eq!(actual, expected);
+    assert!(
+        actual.len() > 1,
+        "image association should expand to multiple file types"
     );
 }

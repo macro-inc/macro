@@ -75,7 +75,6 @@ describe('createTargetMessageController', () => {
       controller.goToMessage('message-2');
 
       expect(controller.activeTargetMessageId()).toBe('message-2');
-      expect(controller.highlightedMessageId()).toBe('message-2');
       expect(controller.pendingScrollTargetId()).toBe('message-2');
       expect(controller.loadAroundMessageId()).toBeUndefined();
       dispose();
@@ -91,7 +90,6 @@ describe('createTargetMessageController', () => {
       controller.goToMessage('message-9');
 
       expect(controller.activeTargetMessageId()).toBe('message-9');
-      expect(controller.highlightedMessageId()).toBe('message-9');
       expect(controller.pendingScrollTargetId()).toBe('message-9');
       expect(controller.loadAroundMessageId()).toBe('message-9');
       dispose();

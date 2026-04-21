@@ -3,7 +3,7 @@ use crate::{
     search::builder::{SearchQueryBuilder, SearchQueryConfig},
 };
 
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{BoolQueryBuilder, QueryType};
 
 #[derive(Clone)]
@@ -12,7 +12,7 @@ pub(crate) struct DocumentSearchConfig;
 impl SearchQueryConfig for DocumentSearchConfig {
     const USER_ID_KEY: &'static str = "owner_id";
     const TITLE_KEY: &'static str = "name";
-    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
+    const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Documents;
 }
 
 pub(crate) struct DocumentQueryBuilder {

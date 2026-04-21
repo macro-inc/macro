@@ -1,9 +1,10 @@
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import { onCleanup, type Accessor, type Setter } from 'solid-js';
+import { createSignal, onCleanup, type Accessor, type Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
-import type { InputSnapshot } from '../Input';
+import type { InputHandle, InputSnapshot } from '../Input';
+import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { buildPostMessageRequest } from '../Input/message-payload';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
@@ -45,6 +46,8 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
     tracker,
   });
 
+  const [replyInputHandle, setReplyInputHandle] = createSignal<InputHandle>();
+
   return (
     <div
       class="relative pt-2"
@@ -75,6 +78,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 threadId: props.messageId,
               })}
               markdownNamespace={`thread-reply-input-${props.messageId}-markdown`}
+              onReady={setReplyInputHandle}
               onChange={(snapshot) => void props.setReplyInputState(snapshot)}
               onStartTyping={() =>
                 typingMutation.mutate({
@@ -98,19 +102,31 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 const senderId = userId();
                 if (!senderId) return;
 
-                sendMessageMutation.mutate({
-                  channelID: props.channelId,
-                  senderId,
-                  optimisticId: crypto.randomUUID(),
-                  message: buildPostMessageRequest({
-                    snapshot,
-                    threadId: props.messageId,
-                    participantIds: participants.ids(),
-                  }),
-                });
-
-                props.setReplyInputState(undefined);
-                props.setIsReplying(false);
+                sendMessageMutation.mutate(
+                  {
+                    channelID: props.channelId,
+                    senderId,
+                    optimisticId: crypto.randomUUID(),
+                    message: buildPostMessageRequest({
+                      snapshot,
+                      threadId: props.messageId,
+                      participantIds: participants.ids(),
+                    }),
+                  },
+                  {
+                    onSuccess: () => {
+                      props.setReplyInputState(undefined);
+                      props.setIsReplying(false);
+                    },
+                    onError: () => {
+                      const handle = replyInputHandle();
+                      if (!handle) return;
+                      const current = props.replyInputState();
+                      if (current && hasSendableInputContent(current)) return;
+                      handle.restoreSnapshot(snapshot);
+                    },
+                  }
+                );
               }}
             />
           </div>

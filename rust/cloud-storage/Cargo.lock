@@ -5513,6 +5513,7 @@ dependencies = [
  "model_file_type",
  "nom 8.0.0",
  "non_empty",
+ "rootcause",
  "schemars",
  "serde",
  "serde_json",
@@ -11428,6 +11429,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bytes",
  "futures",
  "http 1.3.1",
  "http-body-util",

@@ -197,7 +197,11 @@ export const useSoupNavigationHotkeys = (
   const getCollapsibleToggle = () => {
     const focusedId = soup.focus.id();
     if (!focusedId) return undefined;
-    const entityEl = document.querySelector(`[data-entity-id="${focusedId}"]`);
+    const splitEl = document.querySelector(
+      `[data-split-id="${splitHandle.id}"]`
+    );
+    if (!splitEl) return undefined;
+    const entityEl = splitEl.querySelector(`[data-entity-id="${focusedId}"]`);
     if (!entityEl) return undefined;
     return entityEl.querySelector(
       'button[data-collapsible-toggle]'

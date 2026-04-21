@@ -7,7 +7,7 @@ use url::Url;
 
 use crate::{
     domain::{
-        models::{UpdateApproval, UpdateError, UpdateStatus},
+        models::{UpdateApproval, UpdateDenied, UpdateError, UpdateGranted, UpdateStatus},
         ports::AutoUpdateService,
         service::Service,
     },
@@ -78,23 +78,19 @@ pub fn grant_bundle_update(
     approved: bool,
 ) -> Result<(), String> {
     let mut service = service.lock().unwrap();
-    let request = {
-        let status = service.status().borrow();
-        match status.as_ref() {
-            Ok(UpdateStatus::UpdateFound(found)) => found.request,
-            _ => return Err("No pending update request".into()),
-        }
-    };
+    let grant_tx = service.try_recv_grant_sender().map_err(|e| e.to_string())?;
     let approval = if approved {
-        UpdateApproval::Granted(request.grant())
+        UpdateApproval::Granted(UpdateGranted::new())
     } else {
-        UpdateApproval::Denied(request.deny())
+        UpdateApproval::Denied(UpdateDenied::new())
     };
-    service.grant_or_deny(approval).map_err(|e| e.to_string())
+    grant_tx
+        .send(approval)
+        .map_err(|_| "Worker dropped the grant receiver".to_string())
 }
 
 #[tauri::command]
-#[tracing::instrument(err, skip(service, bundle_root))]
+#[tracing::instrument(err, skip(service, bundle_root, app_handle))]
 pub fn perform_update<R: Runtime>(
     service: tauri::State<'_, Mutex<Service>>,
     bundle_root: tauri::State<'_, crate::BundleRoot>,
@@ -119,14 +115,36 @@ pub fn perform_update<R: Runtime>(
     tracing::info!("Setting bundle root to {bundle_dir:?}");
     *bundle_root.0.write().map_err(|e| e.to_string())? = Some(bundle_dir);
 
+    // Persist so subsequent restarts use the updated bundle
+    let cache_dir = app_handle
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?;
+    bundle_root.persist(&cache_dir).map_err(|e| e.to_string())?;
+
     // Navigate to the updated bundle, preserving the current hash route.
     if let Some(webview) = app_handle.webview_windows().values().next() {
         tracing::info!("Bundle update complete, navigating to updated bundle");
         let _ = webview.eval(
-            "window.location.href = 'tauri://localhost/app/index.html' + window.location.hash;"
+            "window.location.href = 'tauri://localhost/app/index.html' + window.location.hash;",
         );
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn check_for_update(service: tauri::State<'_, Mutex<Service>>) -> Result<(), String> {
+    let service = service.lock().unwrap();
+    service.start().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_bundle_update_status(
+    service: tauri::State<'_, Mutex<Service>>,
+) -> Result<BundleUpdateEvent, String> {
+    let service = service.lock().unwrap();
+    let status = service.status().borrow();
+    Ok(BundleUpdateEvent::new(&status))
 }
 
 impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
@@ -146,6 +164,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let service = Service::new(client, fs, system_info);
         let mut status_rx = service.status().clone();
 
+        let _ = service.start();
         app.manage(Mutex::new(service));
 
         let app_handle = app.clone();

@@ -12,6 +12,7 @@ import {
   useContext,
 } from 'solid-js';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { listenForHeartbeat } from './heartbeat';
 import { useTauriNavigationEffect } from './navigation';
@@ -19,9 +20,20 @@ import { MaybePushNotificationRegistration } from './PushNotification';
 
 type NotAndroid = 'not-android';
 
+export type BundleUpdateStatus =
+  | { status: 'Idle' }
+  | { status: 'CheckingForUpdate' }
+  | { status: 'UpdateFound'; data: { version: string; notes: string | null } }
+  | { status: 'NoUpdateNeeded' }
+  | { status: 'Downloading'; data: { progress: number } }
+  | { status: 'Unzipping'; data: { progress: number } }
+  | { status: 'Completed' }
+  | { status: 'Error'; data: { message: string } };
+
 interface TauriContextValue {
   os: OsType;
   runtimeInsets: Accessor<Insets | NotAndroid>;
+  bundleUpdateStatus: Accessor<BundleUpdateStatus>;
 }
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
@@ -33,16 +45,29 @@ function TauriProvider(props: { children: JSX.Element }) {
   const [insets, setInsets] = createSignal<NotAndroid | Insets>(
     'not-android' as const
   );
+  const [bundleUpdateStatus, setBundleUpdateStatus] =
+    createSignal<BundleUpdateStatus>({ status: 'Idle' });
 
   const value: TauriContextValue = {
     runtimeInsets: insets,
     os: osType(),
+    bundleUpdateStatus,
   };
 
   onMount(() => {
     listenForHeartbeat();
-    const unlistenPromise = listen('bundle-update-status', (ev) => {
-      console.info('[bundle-update]', ev.payload);
+    console.info('[bundle-update] registering listener');
+    const unlistenPromise = listen<BundleUpdateStatus>(
+      'bundle-update-status',
+      (ev) => {
+        console.info('[bundle-update] received', JSON.stringify(ev.payload));
+        setBundleUpdateStatus(ev.payload);
+      }
+    );
+    // Fetch current status since events emitted before the listener registered are missed
+    invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
+      console.info('[bundle-update] initial status', JSON.stringify(status));
+      setBundleUpdateStatus(status);
     });
     onCleanup(() => {
       unlistenPromise.then((unlisten) => unlisten());

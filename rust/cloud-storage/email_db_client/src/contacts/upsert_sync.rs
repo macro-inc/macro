@@ -52,9 +52,9 @@ pub async fn upsert_contacts(
 
     let existing_contacts = sqlx::query!(
         r#"
-        SELECT id, LOWER(email_address) as "email_address!", name
+        SELECT id, email_address, name
         FROM email_contacts
-        WHERE (link_id, LOWER(email_address)) IN (
+        WHERE (link_id, email_address) IN (
             SELECT * FROM UNNEST($1::uuid[], $2::varchar[])
         )
         "#,

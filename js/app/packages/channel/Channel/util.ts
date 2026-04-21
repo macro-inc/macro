@@ -41,9 +41,3 @@ export function isNewMessage(
     ctx.userId !== message.sender_id
   );
 }
-
-export function resetKeyboardModality(listElement: HTMLElement) {
-  if (listElement && listElement.dataset.channelNav !== 'keyboard') {
-    listElement.dataset.channelNav = 'keyboard';
-  }
-}
