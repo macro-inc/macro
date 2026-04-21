@@ -589,7 +589,7 @@ function NarrowInboxLayout(props: LayoutProps) {
                 >
                   {(ms) => formatCallDuration(ms())}
                 </Show>
-                <Show when={soupView?.activeTab() === 'all'}>
+                <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
                   <AttendanceBadge attended={entity().attended} />
                 </Show>
               </span>
@@ -776,7 +776,7 @@ function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
-            <Show when={soupView?.activeTab() === 'all'}>
+            <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
               <AttendanceBadge attended={entity().attended} />
             </Show>
           )}
