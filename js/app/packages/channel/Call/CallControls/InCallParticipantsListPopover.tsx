@@ -7,9 +7,9 @@ import {
   type JSX,
 } from 'solid-js';
 import { tryMacroId, useDisplayName } from '@core/user';
-import type { InCallPanelMember, UseInCallPanelResult } from './types';
-import { InCallParticipantAvatar } from './InCallParticipantAvatar';
-import { profilePictureIdForMember } from './profilePictureIdForMember';
+import type { InCallPanelMember, UseInCallPanelResult } from '../InCallPanel/types';
+import { InCallParticipantAvatar } from '../InCallPanel/InCallParticipantAvatar';
+import { profilePictureIdForMember } from '../InCallPanel/profilePictureIdForMember';
 import { cn } from '@ui/utils/classname';
 
 function InCallParticipantNameRow(props: {

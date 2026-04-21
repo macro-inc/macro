@@ -3,7 +3,7 @@ import { For, Show } from 'solid-js';
 import { TrackView } from './TrackView';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext } from './CallContext';
-import { CallControls } from './CallControls';
+import { CallControls } from './CallControls/CallControls';
 
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();

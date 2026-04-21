@@ -1,6 +1,7 @@
-import { type Accessor, Show } from 'solid-js';
+import { type Accessor, Show, onCleanup, onMount } from 'solid-js';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { useCallContext } from './CallContext';
 import { useCall } from './useCall';
 import { CallOverlay } from './CallOverlay';
 
@@ -14,7 +15,18 @@ export function ChannelCallTab(props: {
    */
   pendingJoin?: Accessor<boolean>;
 }) {
+  const callCtx = useCallContext();
   const { setActiveTab } = useChannelTab();
+
+  // Same intent as NewChannelBlockAdapter’s effect, but runs on tab content
+  // mount so `isCallPage()` is true on the first paint (avoids expand flash).
+  onMount(() => {
+    callCtx.syncCallPageTab(props.channelId, true);
+  });
+  onCleanup(() => {
+    callCtx.syncCallPageTab(props.channelId, false);
+  });
+
   // Match ChannelCallButton / ChannelCallAutoJoin so leaving from the
   // overlay (or disconnect) switches back to Messages — not only when
   // the join was initiated from the header button.

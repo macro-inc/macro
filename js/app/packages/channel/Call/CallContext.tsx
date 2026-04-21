@@ -727,18 +727,19 @@ function createCallState() {
     setJoinError,
     callPageChannelId: () => store.callPageChannelId,
     syncCallPageTab,
+    /**
+     * True when the channel block reports the Call tab for the same channel as
+     * the active call target (including optimistic join). Intentionally does
+     * **not** require LiveKit "connected" — otherwise the expand control stays
+     * visible on the Call tab during "Joining…" and other edge states.
+     */
     isCallPage: () => {
       store.callPageChannelId;
       store.activeChannelId;
       store.optimisticJoinChannelId;
-      store.connectionState;
       const page = store.callPageChannelId;
       const active = store.activeChannelId ?? store.optimisticJoinChannelId;
-      if (page === null || active === null) return false;
-      const inCall =
-        store.connectionState === ConnectionState.Connected ||
-        store.optimisticJoinChannelId !== null;
-      return inCall && page === active;
+      return page !== null && active !== null && page === active;
     },
   };
 

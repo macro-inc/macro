@@ -48,7 +48,8 @@ export type UseInCallPanelResult = {
 };
 
 export type InCallPanelProps = {
-  isSlim: boolean;
+  /** Plain boolean or accessor so sidebar width updates stay tracked in Solid. */
+  isSlim: boolean | Accessor<boolean>;
   channelId?: Accessor<string | undefined>;
   onLeaveCall?: () => void;
   onJoinCall?: () => void;

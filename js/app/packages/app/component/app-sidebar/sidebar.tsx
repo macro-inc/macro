@@ -2,10 +2,12 @@ import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
+  onCleanup,
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -423,6 +425,20 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';
+
+  // Delay the slim→expanded flip by the sidebar's CSS transition duration so
+  // InCallPanel avatars only grow once the sidebar has reached full width.
+  // Collapsing (expanded→slim) still flips immediately for a snappy feel.
+  const [panelIsSlim, setPanelIsSlim] = createSignal(isSlim());
+  createEffect(() => {
+    if (isSlim()) {
+      setPanelIsSlim(true);
+    } else {
+      const t = setTimeout(() => setPanelIsSlim(false), 100);
+      onCleanup(() => clearTimeout(t));
+    }
+  });
+
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   registerSidebarHotkeys({
@@ -518,7 +534,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       
       <Show when={callCtx?.isInCall()}>
         <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
-          <InCallPanel isSlim={isSlim()} />
+          <InCallPanel isSlim={panelIsSlim} />
         </div>
       </Show>
       
