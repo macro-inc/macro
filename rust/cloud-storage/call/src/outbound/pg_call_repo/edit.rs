@@ -123,6 +123,7 @@ pub(super) async fn set_share_with_team(
               AND entity_type = $2
               AND source_id = $3
               AND source_type = $4
+              AND granted_from_project_id IS NULL
             "#,
             call_id,
             EntityType::Call.as_ref(),
