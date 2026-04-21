@@ -1,7 +1,7 @@
 import ReplyIcon from '@macro-icons/square/reply.svg';
 import LinkIcon from '@macro-icons/square/link.svg';
 import EditIcon from '@macro-icons/square/edit.svg';
-import EllipsisIcon from '@macro-icons/square/add-emoji.svg';
+import AddEmojiIcon from '@macro-icons/square/add-emoji.svg';
 import TrashIcon from '@macro-icons/square/trash.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
@@ -141,7 +141,7 @@ export function ActionMenu(props: ActionMenuProps) {
               onEmojiSelect={(emoji) => {
                 handleReaction(emoji);
               }}
-              trigger={renderIcon(EllipsisIcon)}
+              trigger={renderIcon(AddEmojiIcon)}
               triggerProps={{
                 title: 'More reactions',
                 'aria-label': 'More reactions',
