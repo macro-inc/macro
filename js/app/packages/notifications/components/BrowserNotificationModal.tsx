@@ -1,5 +1,6 @@
 import Bell from '@icon/regular/bell.svg';
 import { toast } from '@core/component/Toast/Toast';
+import { useTutorialCompleted } from '@core/context/user';
 import { useIsAuthenticated } from '@queries/auth';
 import { createEffect } from 'solid-js';
 import { useNotificationSettings } from '../notification-settings';
@@ -7,6 +8,7 @@ import { useNotificationSettings } from '../notification-settings';
 export const BrowserNotificationModal = () => {
   const settings = useNotificationSettings();
   const isAuthenticated = useIsAuthenticated();
+  const tutorialCompleted = useTutorialCompleted();
 
   if (!settings.isSupported) return null;
 
@@ -17,6 +19,7 @@ export const BrowserNotificationModal = () => {
     if (import.meta.env.DEV) return;
     if (!settings.shouldPrompt()) return;
     if (!isAuthenticated()) return;
+    if (!tutorialCompleted()) return;
 
     shown = true;
 
