@@ -137,6 +137,7 @@ impl<
 #[derive(Serialize, Deserialize, Clone)]
 struct CallStartedNotification {
     sender_profile_picture_url: Option<String>,
+    channel_name: Option<String>,
 }
 
 impl Notification for CallStartedNotification {
@@ -159,7 +160,10 @@ impl NotificationExtIos for CallStartedNotification {
         Some(APNSPushNotification {
             aps: Aps {
                 alert: Some(Alert::Dictionary(AlertDictionary {
-                    title: Some("Incoming Call".to_string()),
+                    title: Some(match &self.channel_name {
+                        Some(name) => format!("Incoming Call in #{name}"),
+                        None => "Incoming Call".to_string(),
+                    }),
                     body: Some(format!(
                         "{} is calling you",
                         sender_id
@@ -287,48 +291,53 @@ impl<
                         .await;
 
                         // Send push notification to channel members (best-effort).
-                        let channel_id_str = channel_id.to_string();
-                        let recipient_ids: HashSet<MacroUserIdStr<'_>> = match self
-                            .entity_access_service
-                            .get_users_by_entity(&channel_id_str, EntityType::Channel)
-                            .await
-                        {
-                            Ok(users) => users
+                        let _: Result<(), anyhow::Error> = async {
+                            let channel_name = self
+                                .repo
+                                .resolve_channel_name(channel_id, user_id.copied())
+                                .await
+                                .map_err(Into::into)?;
+
+                            let channel_id_str = channel_id.to_string();
+                            let recipient_ids: HashSet<MacroUserIdStr<'_>> = self
+                                .entity_access_service
+                                .get_users_by_entity(&channel_id_str, EntityType::Channel)
+                                .await?
                                 .into_iter()
                                 .filter(|u| u.as_ref() != user_id.as_ref())
-                                .collect(),
-                            Err(e) => {
-                                tracing::error!(error=?e, "failed to fetch channel users for call notification");
-                                HashSet::new()
+                                .collect();
+
+                            let sender_profile_picture_url = self
+                                .repo
+                                .get_user_profile_picture(user_id.copied())
+                                .await
+                                .ok()
+                                .flatten();
+
+                            let req = SendNotificationRequestBuilder {
+                                notification_entity: EntityType::Channel
+                                    .with_entity_string(channel_id_str),
+                                notification: CallStartedNotification {
+                                    sender_profile_picture_url,
+                                    channel_name,
+                                },
+                                sender_id: Some(user_id.copied()),
+                                recipient_ids,
                             }
-                        };
+                            .into_request()
+                            .with_apns();
 
-                        let sender_profile_picture_url = self
-                            .repo
-                            .get_user_profile_picture(user_id.copied())
-                            .await
-                            .ok()
-                            .flatten();
+                            self.notification_ingress
+                                .send_notification(req)
+                                .await
+                                .map_err(|e| anyhow::anyhow!(e))?;
 
-                        let req = SendNotificationRequestBuilder {
-                            notification_entity: EntityType::Channel
-                                .with_entity_string(channel_id_str),
-                            notification: CallStartedNotification {
-                                sender_profile_picture_url,
-                            },
-                            sender_id: Some(user_id.copied()),
-                            recipient_ids,
+                            Ok(())
                         }
-                        .into_request()
-                        .with_apns();
-
-                        let _ = self
-                            .notification_ingress
-                            .send_notification(req)
-                            .await
-                            .inspect_err(|e| {
-                                tracing::error!(error=?e, "failed to send call started notification")
-                            });
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(error=?e, "failed to send call started notification");
+                        });
 
                         call
                     }
