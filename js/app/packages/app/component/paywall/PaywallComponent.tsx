@@ -8,7 +8,15 @@ import { stripeServiceClient } from '@service-stripe/client';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useAnalytics } from '@app/component/analytics-context';
-import { PLANS, type PlanTier } from './plans';
+import { PLANS, PLAN_FEATURES, type PaidPlanTier } from './plans';
+
+// Paid-only plans for the billing paywall — Stripe has no product for the
+// 'free' tier, so it must be excluded here. Filtered once at module scope so
+// the component doesn't re-filter on every render.
+const PAID_PLANS = PLANS.filter(
+  (p): p is Extract<(typeof PLANS)[number], { tier: PaidPlanTier }> =>
+    p.tier !== 'free'
+);
 
 interface PaywallComponent {
   cb: () => Promise<void> | void;
@@ -27,7 +35,7 @@ const PaywallComponent = (props: PaywallComponent) => {
   // Tier a paying user is currently subscribed to, derived from RBAC permissions
   // (sub_opus grants write:opus; sub_sonnet grants write:sonnet + write:haiku;
   // sub_haiku grants write:haiku — so check highest-to-lowest).
-  const currentTier = createMemo((): PlanTier | undefined => {
+  const currentTier = createMemo((): PaidPlanTier | undefined => {
     if (!hasPaid()) return undefined;
     const perms = permissions();
     if (perms.includes('write:opus')) return 'opus';
@@ -40,23 +48,23 @@ const PaywallComponent = (props: PaywallComponent) => {
   // then the UI derives its selection from `currentTier` (falling back to 'sonnet' for
   // non-paying users). This avoids mirroring derived state into a signal via `createEffect`
   // and also sidesteps the briefly-wrong-card window before permissions resolve.
-  const [userSelectedTier, setUserSelectedTier] = createSignal<PlanTier | null>(
-    null
-  );
-  const selectedTier = createMemo<PlanTier>(
+  const [userSelectedTier, setUserSelectedTier] =
+    createSignal<PaidPlanTier | null>(null);
+  const selectedTier = createMemo<PaidPlanTier>(
     () => userSelectedTier() ?? currentTier() ?? 'sonnet'
   );
 
   const [updating, setUpdating] = createSignal(false);
 
-  const handleCheckout = async (tier: PlanTier) => {
+  const handleCheckout = async (tier: PaidPlanTier) => {
     try {
       await props.cb();
-      const url = await stripeServiceClient.createCheckoutSession(
-        props.customType ? props.customType : (props.errorKey ?? undefined),
-        undefined,
-        tier
-      );
+      const url = await stripeServiceClient.createCheckoutSession({
+        type: props.customType
+          ? props.customType
+          : (props.errorKey ?? undefined),
+        tier,
+      });
       analytics.track('subscription_start', {
         type: tier,
         customType: props.customType,
@@ -155,7 +163,7 @@ const PaywallComponent = (props: PaywallComponent) => {
 
       <div class="mx-auto mt-6 w-full max-w-2xl">
         <div class="gap-3 sm:gap-4 grid grid-cols-1 sm:grid-cols-3">
-          <For each={PLANS}>
+          <For each={PAID_PLANS}>
             {(plan) => (
               <button
                 onClick={() => setUserSelectedTier(plan.tier)}
@@ -185,8 +193,12 @@ const PaywallComponent = (props: PaywallComponent) => {
                     <span class="text-base text-ink/40">/mo</span>
                   </div>
                   <div class="text-sm text-ink/60 flex flex-col gap-1">
-                    <For each={plan.features}>
-                      {(feature) => <span>{feature}</span>}
+                    <For each={PLAN_FEATURES}>
+                      {(feature) => (
+                        <span>
+                          {feature.label}: {feature.values[plan.tier]}
+                        </span>
+                      )}
                     </For>
                   </div>
                 </div>

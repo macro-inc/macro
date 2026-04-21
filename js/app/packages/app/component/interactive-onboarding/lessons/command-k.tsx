@@ -15,9 +15,10 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
-import { Hotkey } from '@core/component/Hotkey';
-import { HotkeyCallout } from '../components-lib';
+import { ClickCallout, HotkeyCallout } from '../components-lib';
 import { MockAppChrome } from '../components/MockAppChrome';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
+import { IS_MAC } from '@core/constant/isMac';
 import { OnboardingEntityList } from '../OnboardingEntityList';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
@@ -44,34 +45,27 @@ function CommandKContent(_props: LessonContentProps) {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
       <p>
-        The Command Menu is another way to quickly find items in your workspace.
-        Search for documents, tasks, channels, and more — and navigate to them
-        instantly.
+        The Command Menu allows you to search for documents, tasks, channels,
+        and more — and navigate to them instantly.
       </p>
-      <HotkeyCallout
-        keys={['⌘', 'K']}
-        label="to open the command menu"
+      <div class="mt-2">
+        <HotkeyCallout
+          keys={[IS_MAC ? '⌘' : 'Ctrl', 'K']}
+          separator="+"
+          label=""
+          completed={completed()}
+        />
+      </div>
+      <div class="flex items-center gap-3 text-sm text-ink/40">
+        <div class="h-px w-8 bg-edge-muted" />
+        or
+        <div class="h-px flex-1 bg-edge-muted" />
+      </div>
+      <ClickCallout
+        icon={AnimatedCommandIcon}
+        label="in the sidebar"
         completed={completed()}
       />
-      <p class="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm text-fg-muted">
-        <strong>Tip:</strong> Search and use
-        <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-          <Hotkey shortcut="ctrl+j" class="space-x-1" />
-        </span>
-        /
-        <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-          <Hotkey shortcut="ctrl+k" class="space-x-1" />
-        </span>
-        or
-        <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-          <Hotkey shortcut="arrowup" class="space-x-1" />
-        </span>
-        /
-        <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-          <Hotkey shortcut="arrowdown" class="space-x-1" />
-        </span>
-        to move the cursor.
-      </p>
     </div>
   );
 }
@@ -154,7 +148,10 @@ function CommandKDemo(props: LessonContentProps) {
   return (
     <>
       {/* Entity list visible behind the modal */}
-      <MockAppChrome>
+      <MockAppChrome
+        onCommandClick={() => setCommandKOpen((v) => !v)}
+        highlightCommand
+      >
         <OnboardingEntityList soup={soup} />
       </MockAppChrome>
 
@@ -192,6 +189,5 @@ export const commandKLesson: LessonDefinition = {
   title: 'Command Menu',
   content: CommandKContent,
   demo: CommandKDemo,
-  skippable: true,
   order: 40,
 };
