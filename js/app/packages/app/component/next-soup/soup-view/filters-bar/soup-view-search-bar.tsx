@@ -8,6 +8,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
 import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
 
 type SearchbarVariant = 'filled' | 'secondary';
@@ -68,7 +69,18 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     .onTab((e) => {
       e.preventDefault();
       return true;
-    });
+    })
+    .use((lex) =>
+      lex.registerCommand(
+        KEY_ARROW_DOWN_COMMAND,
+        () => {
+          if (menuIsOpen()) return false;
+          lex.getRootElement()?.blur();
+          return true;
+        },
+        COMMAND_PRIORITY_HIGH
+      )
+    );
 
   // Sync search text + mention filters only when the mention menu is closed.
   // This avoids cascading reactive updates during mention insertion and
@@ -114,13 +126,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         <div
           data-soup-search
           class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
-          onKeyDown={(e) => {
-            if (menuIsOpen()) return;
-            if (e.key === 'ArrowDown' || e.key === 'j') {
-              e.preventDefault();
-              editor.controls.blur();
-            }
-          }}
         >
           <MarkdownShell
             config={editor}
