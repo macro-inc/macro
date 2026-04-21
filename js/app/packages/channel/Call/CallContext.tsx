@@ -577,21 +577,36 @@ function createCallState() {
 
   async function toggleVideo() {
     const r = room();
-    if (!r) return;
+    if (!r) {
+      console.warn('[toggleVideo] no room instance — call not connected');
+      return;
+    }
     const newMuted = !store.isVideoMuted;
     try {
       if (newMuted) {
         await r.localParticipant.setCameraEnabled(false);
+        const pub = r.localParticipant.getTrackPublication(Track.Source.Camera);
+        setStore('isVideoMuted', !pub || pub.isMuted);
       } else {
         const deviceId = store.activeVideoInputDeviceId;
-        await r.localParticipant.setCameraEnabled(
-          true,
-          deviceId ? { deviceId: { exact: deviceId } } : undefined
-        );
-        // Read the actual device the browser chose so the dropdown is accurate
+        try {
+          await r.localParticipant.setCameraEnabled(
+            true,
+            deviceId ? { deviceId: { exact: deviceId } } : undefined
+          );
+        } catch (e) {
+          // Stale device id after unplug / permission changes — fall back to default.
+          console.warn(
+            'camera re-enable with saved device failed, retrying default',
+            e
+          );
+          await r.localParticipant.setCameraEnabled(true);
+        }
         const camPub = r.localParticipant.getTrackPublication(
           Track.Source.Camera
         );
+        // Match LiveKit publication so UI cannot disagree with actual track state.
+        setStore('isVideoMuted', !camPub || camPub.isMuted);
         if (camPub?.track) {
           const settings = (
             camPub.track as LocalTrack
@@ -601,9 +616,10 @@ function createCallState() {
           }
         }
       }
-      setStore('isVideoMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle video', e);
+      const pub = r.localParticipant.getTrackPublication(Track.Source.Camera);
+      setStore('isVideoMuted', !pub || pub.isMuted);
     }
   }
 

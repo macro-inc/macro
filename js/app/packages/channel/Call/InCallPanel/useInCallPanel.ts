@@ -3,6 +3,10 @@ import { useCall } from '../useCall';
 import { useCallContext } from '../CallContext';
 import type { UseInCallPanelOptions, UseInCallPanelResult } from './types';
 import {
+  debugInCallExtraRemoteMembers,
+  readInCallPanelDebugExtraRemoteCount,
+} from './inCallPanelDebug';
+import {
   IN_CALL_PANEL_VISIBLE_AVATAR_COUNT,
   buildOrderedInCallMembers,
   buildVisibleAvatarSlots,
@@ -12,6 +16,8 @@ import {
 /**
  * Headless model for the in-call sidebar strip: participant split + the same
  * control surface as `CallOverlay` (mic / cam / screen / leave + device switches).
+ *
+ * Dev: `?in_call_debug_extra=8` appends fake remotes for crowded-roster UI (see `inCallPanelDebug.ts`).
  */
 export function useInCallPanel(
   options?: UseInCallPanelOptions
@@ -26,9 +32,15 @@ export function useInCallPanel(
     onLeave: options?.onLeaveCall,
   });
 
-  const members = createMemo(() =>
-    buildOrderedInCallMembers(callCtx.room(), callCtx.remoteParticipants())
-  );
+  const members = createMemo(() => {
+    const real = buildOrderedInCallMembers(
+      callCtx.room(),
+      callCtx.remoteParticipants()
+    );
+    const extra = readInCallPanelDebugExtraRemoteCount();
+    if (extra === 0) return real;
+    return [...real, ...debugInCallExtraRemoteMembers(extra)];
+  });
 
   const avatarSplit = createMemo(() =>
     splitInCallMembersForAvatars(

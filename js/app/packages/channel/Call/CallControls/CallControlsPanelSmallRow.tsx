@@ -65,14 +65,14 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
               class={menuItemClass}
               onSelect={() => void callCtx.toggleAudio()}
             >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
+              <div class="flex min-w-0 flex-1 items-baseline gap-2">
                 <Show
                   when={!callCtx.isAudioMuted()}
                   fallback={<MicrophoneSlash class="h-4 w-4 shrink-0" />}
                 >
                   <Microphone class="h-4 w-4 shrink-0" />
                 </Show>
-                <span class="truncate">
+                <span class="min-w-0 flex-1">
                   {callCtx.isAudioMuted()
                     ? 'Unmute microphone'
                     : 'Mute microphone'}
@@ -93,15 +93,18 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
                     class={menuItemClass}
                     onSelect={() => void callCtx.switchAudioInput(device.deviceId)}
                   >
-                    <div class="flex min-w-0 flex-1 items-center gap-2">
-                      <span class="flex-1 truncate">{device.label}</span>
-                      <Show
-                        when={
-                          callCtx.activeAudioInputDeviceId() === device.deviceId
-                        }
-                      >
-                        <CheckIcon class="h-3 w-3 shrink-0 text-accent" />
-                      </Show>
+                    <div class="flex min-w-0 flex-1 items-baseline gap-2">
+                      <span class="min-w-0 flex-1">{device.label}</span>
+                      <span class="inline-flex w-3 shrink-0 justify-center">
+                        <Show
+                          when={
+                            callCtx.activeAudioInputDeviceId() ===
+                            device.deviceId
+                          }
+                        >
+                          <CheckIcon class="h-3 w-3 text-accent" />
+                        </Show>
+                      </span>
                     </div>
                   </DropdownMenu.Item>
                 )}
@@ -122,16 +125,20 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
                         void callCtx.switchAudioOutput(device.deviceId)
                       }
                     >
-                      <div class="flex min-w-0 flex-1 items-center gap-2">
-                        <span class="flex-1 truncate">{device.label}</span>
-                        <Show
-                          when={
-                            callCtx.activeAudioOutputDeviceId() ===
-                            device.deviceId
-                          }
-                        >
-                          <CheckIcon class="h-3 w-3 shrink-0 text-accent" />
-                        </Show>
+                      <div class="flex min-w-0 flex-1 items-baseline gap-2">
+                        <span class="min-w-0 flex-1">
+                          {device.label}
+                        </span>
+                        <span class="inline-flex w-3 shrink-0 justify-center">
+                          <Show
+                            when={
+                              callCtx.activeAudioOutputDeviceId() ===
+                              device.deviceId
+                            }
+                          >
+                            <CheckIcon class="h-3 w-3 text-accent" />
+                          </Show>
+                        </span>
                       </div>
                     </DropdownMenu.Item>
                   )}
@@ -152,7 +159,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
                 >
                   <VideoCamera class="h-4 w-4 shrink-0" />
                 </Show>
-                <span class="truncate">
+                <span class="min-w-0 flex-1">
                   {callCtx.isVideoMuted()
                     ? 'Turn camera on'
                     : 'Turn camera off'}
@@ -162,7 +169,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
 
             <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
 
-            <DropdownMenu.Group>
+            <DropdownMenu.Group class="w-full">
               <DropdownMenu.GroupLabel class={menuGroupLabelClass}>
                 Camera
               </DropdownMenu.GroupLabel>
@@ -172,15 +179,18 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
                     class={menuItemClass}
                     onSelect={() => void callCtx.switchVideoInput(device.deviceId)}
                   >
-                    <div class="flex min-w-0 flex-1 items-center gap-2">
-                      <span class="flex-1 truncate">{device.label}</span>
-                      <Show
-                        when={
-                          callCtx.activeVideoInputDeviceId() === device.deviceId
-                        }
-                      >
-                        <CheckIcon class="h-3 w-3 shrink-0 text-accent" />
-                      </Show>
+                    <div class="flex min-w-0 flex-1 items-baseline gap-2">
+                      <span class="min-w-0 flex-1">{device.label}</span>
+                      <span class="inline-flex w-3 shrink-0 justify-center">
+                        <Show
+                          when={
+                            callCtx.activeVideoInputDeviceId() ===
+                            device.deviceId
+                          }
+                        >
+                          <CheckIcon class="h-3 w-3 text-accent" />
+                        </Show>
+                      </span>
                     </div>
                   </DropdownMenu.Item>
                 )}
@@ -195,7 +205,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">
                 <Screencast class="h-4 w-4 shrink-0" />
-                <span class="truncate">
+                <span class="min-w-0 flex-1">
                   {callCtx.isScreenSharing()
                     ? 'Stop sharing screen'
                     : 'Share screen'}
@@ -211,7 +221,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">
                 <PhoneDisconnect class="h-4 w-4 shrink-0" />
-                <span class="truncate">Leave call</span>
+                <span class="min-w-0 flex-1">Leave call</span>
               </div>
             </DropdownMenu.Item>
           </DropdownMenuContent>

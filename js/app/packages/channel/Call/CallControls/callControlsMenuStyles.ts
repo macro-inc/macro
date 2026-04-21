@@ -6,7 +6,7 @@ export const menuItemClass = cn(
   'cursor-pointer hover:bg-hover hover-transition-bg'
 );
 
-export const menuGroupLabelClass = `${MENU_ITEM_CLASS} text-xs! text-ink-extra-muted`;
+export const menuGroupLabelClass = `${MENU_ITEM_CLASS} text-xs! text-accent`;
 
 export const leaveItemClass = cn(
   MENU_ITEM_CLASS,

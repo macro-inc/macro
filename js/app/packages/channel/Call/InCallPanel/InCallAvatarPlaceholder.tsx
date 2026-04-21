@@ -1,13 +1,13 @@
 import User from '@phosphor-icons/core/regular/user.svg?component-solid';
-import { type Component } from 'solid-js';
+import DotsThree from '@icon/regular/dots-three.svg';
+import { Show, type Component } from 'solid-js';
 import type { UserIconProps } from '@core/component/UserIcon';
 import { cn } from '@ui/utils/classname';
 
-/** Matches `UserIcon` outer ring + Phosphor user silhouette. */
 export function inCallAvatarPlaceholderClasses(size: UserIconProps['size']) {
   const s = size ?? 'md';
   const container = cn(
-    'shrink-0 rounded-full bg-ink-extra-muted text-panel flex items-center justify-center',
+    'flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-panel leading-none',
     s === 'xs' && 'size-4',
     s === 'sm' && 'size-6',
     s === 'md' && 'size-8',
@@ -28,11 +28,27 @@ export function inCallAvatarPlaceholderClasses(size: UserIconProps['size']) {
 
 export const InCallAvatarPlaceholderShell: Component<{
   size?: UserIconProps['size'];
+  variant?: 'placeholder' | 'view-more';
 }> = (props) => {
   const classes = () => inCallAvatarPlaceholderClasses(props.size);
   return (
-    <div class={classes().container} data-in-call-panel-avatar-placeholder>
-      <User class={classes().icon} aria-hidden />
+    <div
+      class={cn(
+        classes().container,
+        props.variant === 'view-more' &&
+          'bg-transparent border-2 border-accent/70 rounded-full'
+      )}
+    >
+      <Show when={props.variant === 'placeholder'}>
+        <User class={cn(classes().icon, 'block')} aria-hidden />
+      </Show>
+
+      <Show when={props.variant === 'view-more'}>
+        <DotsThree
+          class="block h-6 w-6 bg-transparent text-accent"
+          aria-hidden
+        />
+      </Show>
     </div>
   );
 };

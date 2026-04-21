@@ -3,9 +3,10 @@ import { MENU_ITEM_CLASS } from '@core/component/Menu';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import { For, Show } from 'solid-js';
 import type { MediaDeviceInfo } from './CallContext';
+import { cn } from '@ui/utils/classname';
 
 const deviceRadioRowClass =
-  'flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket';
+  'flex min-w-0 items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket';
 
 /** Device picker rows for use inside `DropdownMenu` + `DropdownMenuContent` only. */
 export function CallDeviceList(props: {
@@ -15,9 +16,9 @@ export function CallDeviceList(props: {
   onSelect: (deviceId: string) => void;
 }) {
   return (
-    <DropdownMenu.Group>
+    <DropdownMenu.Group class="w-full">
       <DropdownMenu.GroupLabel
-        class={`${MENU_ITEM_CLASS} text-xs! text-ink-extra-muted`}
+        class={`${MENU_ITEM_CLASS} text-xs! text-accent`}
       >
         {props.label}
       </DropdownMenu.GroupLabel>
@@ -29,12 +30,14 @@ export function CallDeviceList(props: {
           {(device) => (
             <DropdownMenu.RadioItem
               value={device.deviceId}
-              class={deviceRadioRowClass}
+              class={cn(deviceRadioRowClass, 'w-full items-baseline')}
             >
-              <div class="flex-1 truncate">{device.label}</div>
-              <Show when={props.activeDeviceId === device.deviceId}>
-                <CheckIcon class="w-3 h-3 shrink-0 text-accent" />
-              </Show>
+              <div class="min-w-0 flex-1">{device.label}</div>
+              <span class="inline-flex w-3 shrink-0 justify-center">
+                <Show when={props.activeDeviceId === device.deviceId}>
+                  <CheckIcon class="h-3 w-3 text-accent" />
+                </Show>
+              </span>
             </DropdownMenu.RadioItem>
           )}
         </For>

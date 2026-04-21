@@ -49,40 +49,41 @@ export function ProfilePicture(props: ProfilePictureProps) {
 
   if (!ENABLE_PROFILE_PICTURES) {
     return (
-      <div class={`flex-shrink-0 ${props.sizeClass.text}`}>
-        {email().substring(0, 1).toUpperCase()}
+      <div class="flex size-full min-h-0 min-w-0 items-center justify-center">
+        <span class={`shrink-0 leading-none ${props.sizeClass.text}`}>
+          {email().substring(0, 1).toUpperCase()}
+        </span>
       </div>
     );
   }
 
   const [profilePicUrl] = useProfilePictureUrl(props.id);
   return (
-    <Show
-      when={profilePicUrl()}
-      fallback={
-        <div
-          class={`shrink-0 ${props.sizeClass.container} flex items-center justify-center`}
-          style={{
-            'line-height': 0,
-          }}
-        >
-          <span class={props.sizeClass.text}>
-            {email().substring(0, 1).toUpperCase()}
-          </span>
-        </div>
-      }
-      keyed
-    >
-      {(url) => (
-        <div
-          class={`${props.sizeClass.container} flex-shrink-0 overflow-hidden rounded-full`}
-        >
-          <img
-            src={url}
-            class="object-cover rounded-full w-full h-full origin-[50%_20%]"
-          />
-        </div>
-      )}
-    </Show>
+    <div class="flex size-full min-h-0 min-w-0 flex-col items-center justify-center">
+      <Show
+        when={profilePicUrl()}
+        fallback={
+          <div
+            class="flex size-full min-h-0 min-w-0 flex-col items-center justify-center"
+            style={{ 'line-height': 0 }}
+          >
+            <span class={`shrink-0 leading-none ${props.sizeClass.text}`}>
+              {email().substring(0, 1).toUpperCase()}
+            </span>
+          </div>
+        }
+        keyed
+      >
+        {(url) => (
+          <div class="size-full min-h-0 min-w-0 shrink-0 overflow-hidden rounded-full">
+            <img
+              src={url}
+              alt=""
+              class="block size-full object-cover rounded-full"
+            />
+          </div>
+        )}
+      </Show>
+    </div>
   );
 }

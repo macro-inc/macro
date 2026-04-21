@@ -4,6 +4,10 @@ import type { InCallPanelMember, InCallVisibleAvatarSlot } from './types';
 /** How many participant avatars show inline before the rest go in a dropdown. */
 export const IN_CALL_PANEL_VISIBLE_AVATAR_COUNT = 3;
 
+/** Non-slim panel: when there are more than this many people, show this many inline avatars plus the roster trigger. */
+export const IN_CALL_PANEL_CROWDED_MEMBER_THRESHOLD = 5;
+export const IN_CALL_PANEL_VISIBLE_AVATAR_COUNT_CROWDED = 4;
+
 /**
  * Ordered list: local participant first, then non-agent remotes.
  * Empty when there is no room yet (e.g. still connecting).

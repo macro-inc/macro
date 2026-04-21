@@ -1,15 +1,75 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
 import type { CallControlVariant } from '../CallControls/CallControlButton';
 import type { UserIconProps } from '@core/component/UserIcon';
+import { tryMacroId, useDisplayName } from '@core/user';
+import { isOk } from '@core/util/maybeResult';
+import { commsServiceClient } from '@service-comms/client';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { Tooltip } from '@core/component/Tooltip';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
 import { CallControls } from '../CallControls/CallControls';
 import { openChannelCallTab } from '../openChannelCallTab';
 import { InCallAvatarPlaceholderShell } from '../InCallPanel/InCallAvatarPlaceholder';
 import { InCallParticipantAvatar } from '../InCallPanel/InCallParticipantAvatar';
-import { InCallParticipantsListPopover } from '../CallControls/InCallParticipantsListPopover';
-import type { InCallPanelProps } from '../InCallPanel/types';
+import { InCallParticipantsListPopover } from './InCallParticipantsListPopover'
+import { profilePictureIdForMember } from '../InCallPanel/profilePictureIdForMember';
+import {
+  IN_CALL_PANEL_CROWDED_MEMBER_THRESHOLD,
+  IN_CALL_PANEL_VISIBLE_AVATAR_COUNT,
+  IN_CALL_PANEL_VISIBLE_AVATAR_COUNT_CROWDED,
+} from './members';
+import type { InCallPanelMember, InCallPanelProps, InCallVisibleAvatarSlot, UseInCallPanelResult } from '../InCallPanel/types';
 import { useInCallPanel } from '../InCallPanel/useInCallPanel';
 import { cn } from '@ui/utils/classname';
+
+function InCallAvatarButton(props: {
+  panel: UseInCallPanelResult;
+  member: InCallPanelMember;
+  size: NonNullable<UserIconProps['size']>;
+}) {
+  const { replaceOrInsertSplit } = useSplitLayout();
+
+  const raw = profilePictureIdForMember(props.panel, props.member);
+  const [displayName] = useDisplayName(tryMacroId(raw ?? ''));
+  const nameLabel = createMemo(() => {
+    props.panel.callCtx.trackVersion();
+    const r = profilePictureIdForMember(props.panel, props.member);
+    return displayName() || r || (props.member.kind === 'local' ? 'You' : 'Participant');
+  });
+
+  const isRemote = () => props.member.kind === 'remote';
+
+  const openDm = async () => {
+    if (props.member.kind !== 'remote') return;
+    const macroId = tryMacroId(props.member.participant.identity);
+    if (!macroId) return;
+    const result = await commsServiceClient.getOrCreateDirectMessage({
+      recipient_id: macroId,
+    });
+    const channelId = isOk(result) && result[1]?.channel_id;
+    if (channelId) replaceOrInsertSplit({ type: 'channel', id: channelId });
+  };
+
+  return (
+    <Tooltip
+      tooltip={nameLabel()}
+      placement="top"
+      class="inline-flex"
+    >
+      <button
+        type="button"
+        onClick={isRemote() ? openDm : undefined}
+        class={cn(
+          'inline-flex items-center justify-center rounded-full p-0 transition-opacity',
+          isRemote() ? 'cursor-pointer hover:opacity-80' : 'cursor-default pointer-events-none'
+        )}
+        aria-label={isRemote() ? `Message ${nameLabel()}` : nameLabel()}
+      >
+        <InCallParticipantAvatar panel={props.panel} member={props.member} size={props.size} />
+      </button>
+    </Tooltip>
+  );
+}
 
 export const InCallPanel: Component<InCallPanelProps> = (props) => {
   const panel = useInCallPanel({
@@ -33,8 +93,28 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
     () => !isSlimLayout() || (isSlimLayout() && onCallPage())
   );
 
-  const visibleSlots = createMemo(() => panel.visibleAvatarSlots());
-  const overflowMembersList = createMemo(() => panel.overflowMembers());
+  const orderedMembers = createMemo(() => [
+    ...panel.visibleMembers(),
+    ...panel.overflowMembers(),
+  ]);
+
+  /** Non-slim: first 4 when more than 5 in call; otherwise same cap as `useInCallPanel` (3). */
+  const visibleSlotsNonSlim = createMemo((): InCallVisibleAvatarSlot[] => {
+    if (!panel.isActive()) return [];
+    const members = orderedMembers();
+    if (members.length === 0) {
+      return [{ type: 'placeholder', key: 'connecting' }];
+    }
+    const crowded = members.length > IN_CALL_PANEL_CROWDED_MEMBER_THRESHOLD;
+    const cap = crowded
+      ? IN_CALL_PANEL_VISIBLE_AVATAR_COUNT_CROWDED
+      : IN_CALL_PANEL_VISIBLE_AVATAR_COUNT;
+    return members.slice(0, cap).map((member) => ({
+      type: 'member' as const,
+      member,
+      key: member.kind === 'local' ? 'local' : member.participant.sid,
+    }));
+  });
 
   const avatarSize = createMemo((): NonNullable<UserIconProps['size']> =>
     slim() ? 'xs' : 'md'
@@ -54,29 +134,6 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
         : 'justify-center'
     )
   );
-
-  const avatarCluster = createMemo(() => (
-    <div
-      class="flex flex-row flex-wrap items-center gap-1"
-      data-in-call-panel-avatars
-    >
-      <For each={visibleSlots()}>
-        {(slot) => (
-          <div data-in-call-panel-avatar>
-            {slot.type === 'member' ? (
-              <InCallParticipantAvatar
-                panel={panel}
-                member={slot.member}
-                size={avatarSize()}
-              />
-            ) : (
-              <InCallAvatarPlaceholderShell size={avatarSize()} />
-            )}
-          </div>
-        )}
-      </For>
-    </div>
-  ));
 
   return (
     <Show when={() => panel.isActive()}>
@@ -114,7 +171,6 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
               aria-label="Open full call view"
               onClick={() => {
                 const id = panel.callCtx.activeChannelId();
-
                 if (id) void openChannelCallTab(id);
               }}
             >
@@ -134,31 +190,36 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             slim() && 'px-2 pt-2 pb-1 flex flex-col items-center gap-2'
           )}
         >
-          <InCallParticipantsListPopover
-            panel={panel}
-            class={cn(slim() && 'justify-center')}
+          <div
+            class={cn(
+              'flex flex-row items-center gap-1 leading-none',
+              slim() ? 'justify-center' : 'justify-between'
+            )}
+            data-in-call-panel-avatars
           >
-            {avatarCluster()}
-          </InCallParticipantsListPopover>
-
-          <Show when={showCallLabel()}>
-            <div
-              class="flex flex-row flex-wrap items-center gap-1"
-              data-in-call-panel-overflow
-            >
-              <For each={overflowMembersList()}>
-                {(member) => (
-                  <div data-in-call-panel-avatar>
-                    <InCallParticipantAvatar
-                      panel={panel}
-                      member={member}
-                      size="sm"
-                    />
-                  </div>
+            <Show when={!slim()}>
+              <For each={visibleSlotsNonSlim()}>
+                {(slot) => (
+                  <>
+                    {slot.type === 'member' ? (
+                      <InCallAvatarButton
+                        panel={panel}
+                        member={slot.member}
+                        size={avatarSize()}
+                      />
+                    ) : (
+                      <InCallAvatarPlaceholderShell size={avatarSize()} />
+                    )}
+                  </>
                 )}
               </For>
-            </div>
-          </Show>
+            </Show>
+
+            <InCallParticipantsListPopover
+              panel={panel}
+              size={slim() ? 'slim' : 'default'}
+            />
+          </div>
         </div>
 
         <div class={cn(!slim() && 'bg-panel border-t border-edge-muted', slim() && 'px-2 pt-1 pb-2')}>

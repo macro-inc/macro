@@ -45,10 +45,10 @@ export function CallControlButtonWithDropdown(props: {
       class={cn(
         'isolate flex items-center transition-colors',
         resolvedVariant() === 'default' &&
-          'before:pointer-events-none outline-1 outline-task/30 rounded-lg gap-1 pr-2',
+          'before:pointer-events-none outline-1 outline-task/50 rounded-lg gap-1 pr-2',
         isPanelVariant() &&
-          'gap-0.5 border-0 bg-transparent pr-1 outline-none shadow-none',
-        resolvedVariant() === 'default' && props.active && 'bg-task/15',
+          'gap-0.5 border-0 bg-transparent pr-1 outline-none shadow-none hover:bg-hover',
+        resolvedVariant() === 'default' && props.active && 'bg-task/30',
         interactionDisabled() && 'opacity-50 pointer-events-none',
         resolvedVariant() === 'default' &&
           !interactionDisabled() &&
@@ -71,7 +71,7 @@ export function CallControlButtonWithDropdown(props: {
           resolvedVariant() === 'default' &&
             `before:pointer-events-none before:absolute before:right-0 before:top-2 before:bottom-2 before:h-auto before:w-[2px] before:bg-task/30 before:content-[''] w-10 h-10 -translate-x-[3px] rounded-lg`,
           isPanelVariant() &&
-            'w-5 h-5 rounded-md border-0 bg-transparent shadow-none'
+            'w-5 h-8 rounded-md border-0 bg-transparent shadow-none'
         )}
       >
         <span class="relative z-10 flex items-center justify-center">

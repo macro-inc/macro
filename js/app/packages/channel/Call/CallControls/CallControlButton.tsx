@@ -69,7 +69,7 @@ export const CallControlButton: Component<{
             !interactionDisabled() &&
               !props.danger &&
               props.active &&
-              'border border-accent-2 hover:bg-accent-2/40 text-accent-2',
+              'border border-accent-2 bg-accent-2/20 hover:bg-accent-2/40',
             !interactionDisabled() &&
               !props.danger &&
               !props.active &&
@@ -78,7 +78,7 @@ export const CallControlButton: Component<{
           ),
         isPanelVariant() &&
           cn(
-            'w-8 h-8 rounded-md border-0 bg-transparent shadow-none',
+            'w-8 h-8 border-0 bg-transparent shadow-none hover:bg-hover',
             !interactionDisabled() &&
               props.danger &&
               'text-failure hover:text-failure/90',
