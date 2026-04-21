@@ -8,7 +8,12 @@ export default function MobileWebSignupSent() {
   const analytics = useAnalytics();
 
   onMount(() => {
-    analytics.track('mobile_web_signup_sent_viewed', {}, ['posthog', 'meta-pixel']);
+    analytics.track('mobile_web_signup_sent_viewed', {}, ['posthog']);
+    analytics.track(
+      'Lead',
+      { content_name: 'mobile_web_signup' },
+      ['meta-pixel']
+    );
   });
 
   return (

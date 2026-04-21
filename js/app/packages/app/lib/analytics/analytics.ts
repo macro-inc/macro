@@ -145,7 +145,9 @@ export const createAnalytics = () => {
           gtag('event', event, enriched);
         })
         .with('meta-pixel', () => {
-          const fbqMethod = META_STANDARD_EVENTS.has(event) ? 'track' : 'trackCustom';
+          const fbqMethod = META_STANDARD_EVENTS.has(event)
+            ? 'track'
+            : 'trackCustom';
           fbq(fbqMethod, event, enriched);
         })
         .with('posthog', () => {
