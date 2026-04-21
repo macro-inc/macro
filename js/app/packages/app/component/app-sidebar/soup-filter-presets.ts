@@ -1,6 +1,6 @@
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
-  NIL,
+  NIL_UUID,
   defineQueryFilters,
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
@@ -75,11 +75,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         filters: {
           exclude: {
-            documentId: [NIL],
-            threadId: [NIL],
-            channelId: [NIL],
-            chatId: [NIL],
-            folderId: [NIL],
+            documentId: [NIL_UUID],
+            threadId: [NIL_UUID],
+            channelId: [NIL_UUID],
+            chatId: [NIL_UUID],
+            folderId: [NIL_UUID],
           },
           emailView: 'all',
         },
@@ -144,7 +144,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       drafts: () => ({
         filters: defineQueryFilters({
-          exclude: { threadId: [NIL] },
+          exclude: { threadId: [NIL_UUID] },
           emailView: 'drafts',
         }),
         clientFilters: { and: ['email-drafts'] },
@@ -168,7 +168,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       all: () => ({
         filters: defineQueryFilters({
-          exclude: { threadId: [NIL] },
+          exclude: { threadId: [NIL_UUID] },
           emailView: 'all',
         }),
         clientFilters: { and: ['email'] },
@@ -291,13 +291,13 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       all: () => ({
         filters: defineQueryFilters({
-          exclude: { callChannelId: [NIL] },
+          exclude: { callChannelId: [NIL_UUID] },
         }),
         clientFilters: { and: ['calls'] },
       }),
       unattended: () => ({
         filters: defineQueryFilters({
-          exclude: { callChannelId: [NIL] },
+          exclude: { callChannelId: [NIL_UUID] },
           include: { callAttended: false },
         }),
         clientFilters: { and: ['calls'] },
@@ -318,7 +318,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       },
       all: () => ({
         filters: defineQueryFilters({
-          exclude: { folderId: [NIL] },
+          exclude: { folderId: [NIL_UUID] },
         }),
         clientFilters: { and: ['folders'] },
       }),

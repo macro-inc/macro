@@ -4,7 +4,7 @@ import type { Query, PropertyFilter } from '../filter-store';
 
 export const NO_ASSIGNEE = '__no_assignee__';
 
-export const NIL = '00000000-0000-0000-0000-000000000000';
+export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 export const IMAGE_EXTENSIONS = [
   'png',
@@ -15,13 +15,13 @@ export const IMAGE_EXTENSIONS = [
   'webp',
 ] as const;
 
-export const isEmail = { exclude: { threadId: [NIL] } };
-export const isAgent = { exclude: { chatId: [NIL] } };
+export const isEmail = { exclude: { threadId: [NIL_UUID] } };
+export const isAgent = { exclude: { chatId: [NIL_UUID] } };
 export const isTask = { include: { subType: ['task'] } };
 export const isNotTask = { exclude: { subType: ['task'] } };
 export const isEmailAttachment = { include: { isEmailAttachment: true } };
-export const isChannel = { exclude: { channelId: [NIL] } };
-export const isFolder = { exclude: { folderId: [NIL] } };
+export const isChannel = { exclude: { channelId: [NIL_UUID] } };
+export const isFolder = { exclude: { folderId: [NIL_UUID] } };
 
 export type FilterContext = {
   userId?: string;

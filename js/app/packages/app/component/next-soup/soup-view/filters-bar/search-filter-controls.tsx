@@ -11,12 +11,11 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
+  NIL_UUID,
   defineQueryFilters,
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import { batch, createMemo, type JSX } from 'solid-js';
-
-const NIL = '00000000-0000-0000-0000-000000000000';
 
 export type SearchableOption = {
   id: string;
@@ -152,7 +151,7 @@ export const INDEX_OPTIONS: IndexOption[] = [
     icon: () => (
       <EntityIcon targetType="channel" size="xs" theme="monochrome" />
     ),
-    filterData: defineQueryFilters({ exclude: { channelId: [NIL] } }),
+    filterData: defineQueryFilters({ exclude: { channelId: [NIL_UUID] } }),
   },
   {
     value: 'document-or-file',
@@ -171,7 +170,7 @@ export const INDEX_OPTIONS: IndexOption[] = [
     label: 'Email',
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
     filterData: defineQueryFilters({
-      exclude: { threadId: [NIL] },
+      exclude: { threadId: [NIL_UUID] },
       include: { emailImportance: true },
     }),
   },
@@ -181,13 +180,13 @@ export const INDEX_OPTIONS: IndexOption[] = [
     icon: () => (
       <EntityIcon targetType="project" size="xs" theme="monochrome" />
     ),
-    filterData: defineQueryFilters({ exclude: { folderId: [NIL] } }),
+    filterData: defineQueryFilters({ exclude: { folderId: [NIL_UUID] } }),
   },
   {
     value: 'agent',
     label: 'Agents',
     icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({ exclude: { chatId: [NIL] } }),
+    filterData: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
   },
 ];
 

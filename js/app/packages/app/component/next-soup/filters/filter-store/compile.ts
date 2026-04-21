@@ -1,6 +1,6 @@
 import type { FieldFilters, FieldName, PropertyFilter, Query, QueryState, EmailView } from './types';
 
-const NIL = '00000000-0000-0000-0000-000000000000';
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 type BackendAst =
   | { '&': [BackendAst, BackendAst] }
@@ -222,7 +222,7 @@ export function defineQueryFilters(input: Query): Query {
   for (const [target, idFieldName] of Object.entries(ID_FIELD_NAMES)) {
     if (referencedTargets.has(target as QueryTarget)) continue;
     if (idFieldName) {
-      (include as Record<string, unknown[]>)[idFieldName] = [NIL];
+      (include as Record<string, unknown[]>)[idFieldName] = [NIL_UUID];
     }
   }
 

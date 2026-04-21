@@ -8,7 +8,7 @@ import {
   noiseFilter,
   explicitNoiseFilter,
 } from '../inbox-filters';
-import { config, NIL } from './base';
+import { config, NIL_UUID } from './base';
 
 export const inboxFilter = config({
   id: 'inbox',
@@ -54,11 +54,11 @@ export const explicitNoiseFilterDef = config({
   predicate: (e) => !explicitNoiseFilter(e),
   query: {
     exclude: {
-      documentId: [NIL],
-      channelId: [NIL],
-      chatId: [NIL],
-      folderId: [NIL],
-      threadId: [NIL],
+      documentId: [NIL_UUID],
+      channelId: [NIL_UUID],
+      chatId: [NIL_UUID],
+      folderId: [NIL_UUID],
+      threadId: [NIL_UUID],
     },
     emailView: 'all',
   },

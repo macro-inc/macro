@@ -110,7 +110,7 @@ import {
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import type { InitialFiltersInput } from '@app/component/next-soup/filters/create-filter-state';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 
 const useSoupNotificationInvalidators = () => {
@@ -166,7 +166,7 @@ const useSoupNotificationInvalidators = () => {
 type PersistedSoupViewState = {
   version?: number;
   activeTab: string | undefined;
-  filters: InitialFiltersInput<string>;
+  filters: SetPredicatesInput<string>;
   filterData: Partial<QueryState>;
   sort: SystemSortOption[];
   previewEntity: string | undefined;
@@ -187,7 +187,7 @@ const listStateCache = new Map<
 
 interface SoupViewProps {
   viewName: string;
-  initialClientFilters?: InitialFiltersInput<string>;
+  initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Partial<QueryState>;
   disableLocalSearch?: boolean;
   /**
@@ -390,7 +390,7 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  initialClientFilters?: InitialFiltersInput<string>;
+  initialClientFilters?: SetPredicatesInput<string>;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {

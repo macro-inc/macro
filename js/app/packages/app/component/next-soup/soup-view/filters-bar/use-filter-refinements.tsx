@@ -4,9 +4,8 @@ import {
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID, FilterContext } from '@app/component/next-soup/filters';
+import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-
-const NIL = '00000000-0000-0000-0000-000000000000';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -46,14 +45,9 @@ const TAB_ONLY_FILTERS = new Set([
  * and a function to reset filters to the current tab's default state.
  */
 export function useFilterRefinements() {
-  const {
-    soup,
-    queryFilters,
-    filters: filterData,
-    assigneeFilter,
-    setAssigneeFilter,
-    activeTab,
-  } = useSoupView();
+  const { soup, queryFilters, assigneeFilter, setAssigneeFilter, activeTab } =
+    useSoupView();
+  const filterData = () => queryFilters.state;
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
   const contacts = useContacts();
@@ -297,7 +291,7 @@ export function useFilterRefinements() {
 
     // Search operator filters: in: (channel_ids)
     const channelIds = (filterData().include.channelId ?? []).filter(
-      (id) => id !== NIL
+      (id) => id !== NIL_UUID
     );
     // Keep the chip alive while its popup is still open, even if the user
     // toggled every option off — they may be mid-way through swapping A→B
@@ -313,19 +307,21 @@ export function useFilterRefinements() {
             categoryLabel: 'In',
             optionId: () => {
               const ids = (filterData().include.channelId ?? []).filter(
-                (id) => id !== NIL
+                (id) => id !== NIL_UUID
               );
               return `in:${ids.join(',')}`;
             },
             optionLabel: () => {
               const ids = (filterData().include.channelId ?? []).filter(
-                (id) => id !== NIL
+                (id) => id !== NIL_UUID
               );
               return labelForIds(ids, channelLabelMap());
             },
             searchableOptions: channelOptions,
             activeSearchableIds: () =>
-              (filterData().include.channelId ?? []).filter((id) => id !== NIL),
+              (filterData().include.channelId ?? []).filter(
+                (id) => id !== NIL_UUID
+              ),
             onSearchableChange: setChannelIds,
             searchPlaceholder: 'Search channels...',
             onRemove: () => setChannelIds([]),
