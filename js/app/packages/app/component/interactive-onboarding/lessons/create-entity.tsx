@@ -43,12 +43,24 @@ const BLOCK_TO_SANDBOX: Record<string, SandboxEntityType> = {
 
 // Module-level signals shared between content (left) and demo (right)
 const [sharedSoup, setSharedSoup] = createSignal<SoupState | undefined>();
-const [onCreated, setOnCreated] = createSignal<(() => void) | undefined>();
-const [launcherOpen, setLauncherOpen] = createSignal(false);
+const [launcherOpen, setLauncherOpenRaw] = createSignal(false);
 const [completed, setCompleted] = createSignal(false);
+const [onLauncherOpened, setOnLauncherOpened] = createSignal<
+  (() => void) | undefined
+>();
+
+// Wrap the setter so opening the launcher also fires the lesson-completion
+// callback. This replaces a createEffect on launcherOpen — per AGENTS.md,
+// prefer wrapping the setter over using an effect to trigger updates.
+const setLauncherOpen = (value: boolean | ((prev: boolean) => boolean)) => {
+  const next = typeof value === 'function' ? value(launcherOpen()) : value;
+  const wasOpen = launcherOpen();
+  setLauncherOpenRaw(next);
+  if (next && !wasOpen) onLauncherOpened()?.();
+};
 
 function CreateEntityContent(props: LessonContentProps) {
-  setOnCreated(() => () => {
+  setOnLauncherOpened(() => () => {
     if (!completed()) {
       setCompleted(true);
       props.onComplete();
@@ -70,10 +82,12 @@ function CreateEntityContent(props: LessonContentProps) {
     }).withGroup(group);
   });
 
-  // Return focus to content panel when launcher closes
+  // Return focus to content panel when launcher closes, but only while the
+  // lesson is still in progress. Once completed, the parent auto-focuses the
+  // Continue button — refocusing here would steal it back.
   createEffect(
     on(launcherOpen, (open, prevOpen) => {
-      if (!open && prevOpen) {
+      if (!open && prevOpen && !completed()) {
         containerRef?.focus();
       }
     })
@@ -82,7 +96,7 @@ function CreateEntityContent(props: LessonContentProps) {
   onCleanup(() => {
     group.dispose();
     setLauncherOpen(false);
-    setOnCreated(undefined);
+    setOnLauncherOpened(undefined);
     setCompleted(false);
   });
 
@@ -140,7 +154,6 @@ function CreateEntityDemo(props: LessonContentProps) {
       if (sandboxType) {
         const entity = createSandboxEntity(sandboxType);
         addSandboxEntity(entity);
-        onCreated()?.();
       }
       setLauncherOpen(false);
       return true;
@@ -166,7 +179,18 @@ function CreateEntityDemo(props: LessonContentProps) {
       <Dialog open={launcherOpen()} onOpenChange={setLauncherOpen} modal={true}>
         <Dialog.Portal>
           <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-          <Dialog.Content>
+          <Dialog.Content
+            onCloseAutoFocus={(e) => {
+              // Once the lesson is complete, don't let the Dialog restore
+              // focus to the element that opened it (containerRef or the `+`
+              // button). Re-fire onComplete so the parent schedules focus on
+              // the Continue button — otherwise Enter won't advance the step.
+              if (completed()) {
+                e.preventDefault();
+                props.onComplete();
+              }
+            }}
+          >
             <div
               class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
               onClick={(e) => {
@@ -191,5 +215,5 @@ export const createEntityLesson: LessonDefinition = {
   subtitle: 'Use the launcher to create docs, emails, and more.',
   content: CreateEntityContent,
   demo: CreateEntityDemo,
-  order: 45,
+  order: 40,
 };

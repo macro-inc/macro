@@ -11,7 +11,7 @@ function ChoosePlanContent(props: LessonContentProps) {
 
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
-      <p>Pick the plan that works best for your team.</p>
+      <p>Pick the plan that matches how you want to use Macro.</p>
     </div>
   );
 }

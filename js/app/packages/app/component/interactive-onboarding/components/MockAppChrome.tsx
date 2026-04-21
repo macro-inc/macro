@@ -157,8 +157,8 @@ export function MockAppChrome(props: MockAppChromeProps) {
     <div class="size-full p-4 bg-panel">
       <style>{`
         @keyframes sidebar-glow-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgb(from var(--color-accent) r g b / 0.5), 0 0 8px 2px rgb(from var(--color-accent) r g b / 0.35); }
-          50%      { box-shadow: 0 0 0 2px rgb(from var(--color-accent) r g b / 0.15), 0 0 14px 4px rgb(from var(--color-accent) r g b / 0.55); }
+          0%, 100% { box-shadow: 0 0 0 0 rgb(from var(--color-accent) r g b / 0.7), 0 0 6px 1px rgb(from var(--color-accent) r g b / 0.7), 0 0 12px 3px rgb(from var(--color-accent) r g b / 0.4); }
+          50%      { box-shadow: 0 0 0 1px rgb(from var(--color-accent) r g b / 0.4), 0 0 10px 3px rgb(from var(--color-accent) r g b / 0.9), 0 0 18px 6px rgb(from var(--color-accent) r g b / 0.6); }
         }
         .sidebar-glow { animation: sidebar-glow-pulse 1.8s ease-in-out infinite; border-radius: 4px; }
       `}</style>
