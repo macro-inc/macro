@@ -192,6 +192,30 @@ export function invalidateUserNotifications() {
   });
 }
 
+/** Plain-async wrapper around `bulkMarkNotificationAsDone`. Throws on failure. */
+export async function bulkMarkNotificationsAsDone(
+  notificationIds: string[]
+): Promise<void> {
+  await throwOnErr(
+    async () =>
+      await notificationServiceClient.bulkMarkNotificationAsDone({
+        notificationIds,
+      })
+  );
+}
+
+/** Plain-async wrapper around `bulkMarkNotificationAsUndone`. Throws on failure. */
+export async function bulkMarkNotificationsAsUndone(
+  notificationIds: string[]
+): Promise<void> {
+  await throwOnErr(
+    async () =>
+      await notificationServiceClient.bulkMarkNotificationAsUndone({
+        notificationIds,
+      })
+  );
+}
+
 export function invalidateEntityNotifications(eventItemId: string) {
   return queryClient.invalidateQueries({
     queryKey: [...notificationKeys.entity._def, eventItemId],

@@ -1,8 +1,10 @@
 import type { Entity, EntityType } from '@core/types';
-import { throwOnErr } from '@core/util/maybeResult';
 import { queryClient } from '@queries/client';
 import { notificationKeys } from '@queries/notification/keys';
-import { notificationServiceClient } from '@service-notification/client';
+import {
+  bulkMarkNotificationsAsDone,
+  bulkMarkNotificationsAsUndone,
+} from '@queries/notification/user-notifications';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { isMatching, P } from 'ts-pattern';
 import { CHANNEL_EVENT_TYPES, setDoneOverride } from './notification-source';
@@ -216,12 +218,7 @@ export async function executeMarkNotificationsDone(
   setDoneOverride(notificationIds, true);
   await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
   try {
-    await throwOnErr(
-      async () =>
-        await notificationServiceClient.bulkMarkNotificationAsDone({
-          notificationIds,
-        })
-    );
+    await bulkMarkNotificationsAsDone(notificationIds);
   } catch (err) {
     setDoneOverride(notificationIds, false);
     throw err;
@@ -244,12 +241,7 @@ export async function executeMarkNotificationsUndone(
   setDoneOverride(notificationIds, false);
   await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
   try {
-    await throwOnErr(
-      async () =>
-        await notificationServiceClient.bulkMarkNotificationAsUndone({
-          notificationIds,
-        })
-    );
+    await bulkMarkNotificationsAsUndone(notificationIds);
   } catch (err) {
     setDoneOverride(notificationIds, true);
     throw err;

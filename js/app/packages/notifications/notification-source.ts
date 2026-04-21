@@ -136,18 +136,19 @@ export function createNotificationSource(
 
   // Prune overrides for notifications that are no longer in the query cache
   // (aged out of QUERY_LIMIT, deleted server-side) so the map doesn't grow
-  // unbounded. Also drop overrides whose target server state now matches the
-  // cache — the override is redundant at that point.
+  // unbounded. Overrides whose value happens to match the cache are NOT
+  // pruned — during an in-flight mutation the cache may still hold the
+  // pre-mutation value and a stale fetch could flip it back before the
+  // API lands.
   createEffect(() => {
     if (!notificationsQuery.isSuccess) return;
     const raw = notificationsQuery.data;
     const overrides = doneOverrides();
     if (overrides.size === 0) return;
-    const present = new Map(raw.map((n) => [n.id, n.done ?? false]));
+    const presentIds = new Set(raw.map((n) => n.id));
     const toPrune: string[] = [];
-    for (const [id, expected] of overrides) {
-      const actual = present.get(id);
-      if (actual === undefined || actual === expected) toPrune.push(id);
+    for (const id of overrides.keys()) {
+      if (!presentIds.has(id)) toPrune.push(id);
     }
     if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
   });

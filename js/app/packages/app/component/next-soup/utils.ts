@@ -33,7 +33,10 @@ import {
   type NotificationSource,
   setDoneOverride,
 } from '@notifications';
-import { notificationServiceClient } from '@service-notification/client';
+import {
+  bulkMarkNotificationsAsDone,
+  bulkMarkNotificationsAsUndone,
+} from '@queries/notification/user-notifications';
 import { notificationKeys } from '@queries/notification/keys';
 
 const mergeSearchEntities = <T extends EntityData>(
@@ -585,10 +588,12 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
 }
 
 export type MarkEntitiesDoneContext = {
-  /** Reverses the optimistic cache writes. Safe to call multiple times. */
+  /** Clears optimistic state — use for mark-done failure (cache is pre-mutation). */
   rollback: () => void;
-  /** Re-applies the optimistic cache writes with a fresh soup transaction. */
+  /** Re-applies the optimistic done state. Use for redo / undo failure. */
   reapply: () => void;
+  /** Reverts email/soup caches and forces `done=false` override. Use for undo. */
+  applyUndone: () => void;
 };
 
 /**
@@ -695,9 +700,18 @@ export function applyEntitiesDoneOptimistic(args: {
     setDoneOverride(notificationIds, undefined);
   };
 
+  const applyUndone = () => {
+    soupTxn?.rollback();
+    soupTxn = null;
+    restoreEmailCache();
+    // Force `done=false` — cache may have reconciled to `done=true` from the
+    // server, so clearing the override would leave the UI hidden after undo.
+    setDoneOverride(notificationIds, false);
+  };
+
   reapply();
 
-  return { rollback, reapply };
+  return { rollback, reapply, applyUndone };
 }
 
 /**
@@ -722,12 +736,7 @@ export async function executeMarkEntitiesDone(args: {
       )
     ),
     notificationIds.length > 0
-      ? throwOnErr(
-          async () =>
-            await notificationServiceClient.bulkMarkNotificationAsDone({
-              notificationIds,
-            })
-        )
+      ? bulkMarkNotificationsAsDone(notificationIds)
       : Promise.resolve(),
   ]);
 
@@ -780,12 +789,7 @@ export async function executeMarkEntitiesUndone(args: {
       )
     ),
     notificationIds.length > 0
-      ? throwOnErr(
-          async () =>
-            await notificationServiceClient.bulkMarkNotificationAsUndone({
-              notificationIds,
-            })
-        )
+      ? bulkMarkNotificationsAsUndone(notificationIds)
       : Promise.resolve(),
   ]);
 

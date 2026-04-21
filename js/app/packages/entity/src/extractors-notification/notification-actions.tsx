@@ -6,7 +6,7 @@ import {
   executeMarkNotificationsUndone,
   getAllNotificationsFromGroup,
 } from '@notifications';
-import { useUndoableMutation } from '@queries/undo';
+import { useMutationUndoContext, useUndoableMutation } from '@queries/undo';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { restoreSoupFocus } from '@app/component/next-soup/utils';
 
@@ -26,12 +26,13 @@ type MarkStackDoneVariables = { notificationIds: string[] };
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
+  const undoCtx = useMutationUndoContext();
 
   const mutation = useUndoableMutation<void, Error, MarkStackDoneVariables>(
     () => ({
       mutationFn: async (vars) =>
         await executeMarkNotificationsDone(vars.notificationIds),
-      onSuccess: (_data, vars) => {
+      onSuccess: () => {
         const toastId = toast.success(
           'Marked as done',
           undefined,
@@ -41,9 +42,9 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
               icon: ArrowCounterClockwise,
               onClick: () => {
                 if (toastId != null) toast.dismiss(toastId);
-                executeMarkNotificationsUndone(vars.notificationIds).catch(() =>
-                  toast.failure('Failed to undo')
-                );
+                undoCtx.undo({
+                  onError: () => toast.failure('Failed to undo'),
+                });
                 restoreSoupFocus();
               },
             },

@@ -2,7 +2,7 @@ import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-cl
 import { toast } from '@core/component/Toast/Toast';
 import { type EntityData, isTaskEntity } from '@entity';
 import type { NotificationSource } from '@notifications';
-import { useUndoableMutation } from '@queries/undo';
+import { useMutationUndoContext, useUndoableMutation } from '@queries/undo';
 import {
   applyEntitiesDoneOptimistic,
   executeMarkEntitiesDone,
@@ -30,6 +30,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
   const previewPanel = useMaybePreviewPanel();
   const inPreview = previewPanel !== undefined;
+  const undoCtx = useMutationUndoContext();
 
   const mutation = useUndoableMutation<
     void,
@@ -47,7 +48,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         emailIds: variables.emailIds,
         notificationIds: variables.notificationIds,
       }),
-    onSuccess: (_data, variables, context) => {
+    onSuccess: (_data, variables) => {
       const count = variables.entities.length;
       const firstEntityId = variables.entities[0]?.id;
       const toastId = toast.success(
@@ -57,18 +58,13 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           {
             label: 'Undo',
             icon: ArrowCounterClockwise,
-            onClick: async () => {
+            onClick: () => {
               if (toastId != null) toast.dismiss(toastId);
-              context?.rollback();
-              try {
-                await executeMarkEntitiesUndone({
-                  emailIds: variables.emailIds,
-                  notificationIds: variables.notificationIds,
-                });
-              } catch {
-                context?.reapply();
-                toast.failure('Failed to undo');
-              }
+              // Route through the undo stack so the entry is popped and
+              // Cmd+Z / shift+Cmd+Z stay in sync with the toast action.
+              undoCtx.undo({
+                onError: () => toast.failure('Failed to undo'),
+              });
               restoreSoupFocus(firstEntityId, inPreview);
             },
           },
@@ -82,7 +78,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       toast.failure('Failed to mark as done');
     },
     undoFn: async (variables, context) => {
-      context?.rollback();
+      context?.applyUndone();
       try {
         await executeMarkEntitiesUndone({
           emailIds: variables.emailIds,
@@ -101,7 +97,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           notificationIds: variables.notificationIds,
         });
       } catch (err) {
-        context?.rollback();
+        context?.applyUndone();
         throw err;
       }
     },
