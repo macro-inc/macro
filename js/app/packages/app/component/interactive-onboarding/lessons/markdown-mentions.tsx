@@ -15,12 +15,13 @@ function MarkdownMentionsContent(_props: LessonContentProps) {
     <div class="flex flex-col gap-3 onboarding-stagger">
       <HotkeyCallout
         keys={['@']}
-        label="to mention someone"
+        label="to mention someone or something"
         completed={completed()}
       />
       <p>
         Macro's editor supports rich markdown, mentions, and emoji. Try
-        mentioning something by typing <strong>@</strong> in the editor.
+        mentioning someone or something by typing <strong>@</strong> in the
+        editor.
       </p>
     </div>
   );
