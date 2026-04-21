@@ -593,8 +593,9 @@ export type MarkDoneHandle = {
 
 /**
  * Optimistically marks entities as done (archives emails, clears notifications),
- * then fires the API calls in the background. Returns synchronously so the caller
- * can show the undo toast immediately.
+ * then fires the API calls in the background. Awaits `cancelQueries` so a stale
+ * in-flight fetch can't clobber the optimistic update, then returns a handle
+ * the caller can hold onto for the undo toast.
  */
 export async function markEntitiesDone(args: {
   entities: EntityData[];
@@ -671,11 +672,13 @@ export async function markEntitiesDone(args: {
           ...current,
           pages: current.pages.map((page, idx) => {
             const filtered = page.items.filter((i) => !restoredIds.has(i.id));
-            return idx === 0
-              ? { ...page, items: [...toRestore, ...filtered] }
-              : filtered.length === page.items.length
-                ? page
-                : { ...page, items: filtered };
+            if (idx === 0) {
+              return { ...page, items: [...toRestore, ...filtered] };
+            }
+            if (filtered.length === page.items.length) {
+              return page;
+            }
+            return { ...page, items: filtered };
           }),
         };
       });

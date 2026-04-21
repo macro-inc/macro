@@ -74,6 +74,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       );
       context?.setSuccessToastId(toastId);
     },
+    onError: () => {
+      toast.failure('Failed to mark as done');
+    },
     undoFn: async (_variables, context) => {
       await context?.handle.undo();
     },

@@ -134,6 +134,24 @@ export function createNotificationSource(
     });
   });
 
+  // Prune overrides for notifications that are no longer in the query cache
+  // (aged out of QUERY_LIMIT, deleted server-side) so the map doesn't grow
+  // unbounded. Also drop overrides whose target server state now matches the
+  // cache — the override is redundant at that point.
+  createEffect(() => {
+    if (!notificationsQuery.isSuccess) return;
+    const raw = notificationsQuery.data;
+    const overrides = doneOverrides();
+    if (overrides.size === 0) return;
+    const present = new Map(raw.map((n) => [n.id, n.done ?? false]));
+    const toPrune: string[] = [];
+    for (const [id, expected] of overrides) {
+      const actual = present.get(id);
+      if (actual === undefined || actual === expected) toPrune.push(id);
+    }
+    if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
+  });
+
   const notificationsByEntity = createMemo(() => {
     const data = notifications();
     const grouped: NotificationsByEntity = {};

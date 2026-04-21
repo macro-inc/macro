@@ -74,6 +74,9 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
         context?.setSuccessToastId(toastId);
         props.onMarkAsDone?.();
       },
+      onError: () => {
+        toast.failure('Failed to mark as done');
+      },
       undoFn: async (_variables, context) => {
         await context?.handle.undo();
       },
