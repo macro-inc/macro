@@ -9,7 +9,7 @@ import {
   getAllNotificationsFromGroup,
   markNotificationsDone,
 } from '@notifications';
-import { useMutationUndoContext, useUndoableMutation } from '@queries/undo';
+import { useUndoableMutation } from '@queries/undo';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 
 interface NotificationActionsProps {
@@ -24,22 +24,36 @@ interface SingleNotificationActionsProps {
   onMarkAsRead?: () => void;
 }
 
-type MarkStackDoneContext = { handle: MarkNotificationsDoneHandle };
+type MarkStackDoneContext = {
+  handle: MarkNotificationsDoneHandle;
+  setSuccessToastId: (id: number | undefined) => void;
+};
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
-  const undoCtx = useMutationUndoContext();
 
   const mutation = useUndoableMutation<void, Error, void, MarkStackDoneContext>(
     () => ({
       mutationFn: async () => {},
-      onMutate: () => {
+      onMutate: async () => {
         const notifications = getAllNotificationsFromGroup(props.stack);
-        const handle = markNotificationsDone(notifications.map((n) => n.id));
-        handle.done.catch(() => toast.failure('Failed to mark as done'));
-        return { handle };
+        const handle = await markNotificationsDone(
+          notifications.map((n) => n.id)
+        );
+        let successToastId: number | undefined;
+        handle.done.catch(() => {
+          if (successToastId != null) toast.dismiss(successToastId);
+          toast.failure('Failed to mark as done');
+        });
+        return {
+          handle,
+          setSuccessToastId: (id) => {
+            successToastId = id;
+          },
+        };
       },
-      onSuccess: () => {
+      onSuccess: (_data, _variables, context) => {
+        const handle = context?.handle;
         const toastId = toast.success(
           'Marked as done',
           undefined,
@@ -49,14 +63,15 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
               icon: ArrowCounterClockwise,
               onClick: () => {
                 if (toastId != null) toast.dismiss(toastId);
-                undoCtx.undo({
-                  onError: () => toast.failure('Failed to undo'),
-                });
+                // Invoke this action's own undo so older toasts don't pop
+                // newer entries off the global undo stack.
+                handle?.undo().catch(() => toast.failure('Failed to undo'));
               },
             },
           ],
           10_000
         );
+        context?.setSuccessToastId(toastId);
         props.onMarkAsDone?.();
       },
       undoFn: async (_variables, context) => {

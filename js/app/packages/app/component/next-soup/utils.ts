@@ -592,10 +592,10 @@ type NotificationCacheData = {
  * then fires the API calls in the background. Returns synchronously so the caller
  * can show the undo toast immediately.
  */
-export function markEntitiesDone(args: {
+export async function markEntitiesDone(args: {
   entities: EntityData[];
   notificationSource: NotificationSource;
-}): MarkDoneHandle {
+}): Promise<MarkDoneHandle> {
   const { entities, notificationSource } = args;
 
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
@@ -608,8 +608,12 @@ export function markEntitiesDone(args: {
   );
   const notificationIdSet = new Set(notificationIds);
 
-  queryClient.cancelQueries({ queryKey: queryKeys.all.email });
-  queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
+  // Cancel in-flight fetches up front so arriving responses can't clobber
+  // the optimistic update (TanStack Query v5 pattern for optimistic updates).
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+  ]);
 
   const previousEmail = queryClient.getQueriesData<{
     pages: { items: EntityData[] }[];
@@ -617,18 +621,24 @@ export function markEntitiesDone(args: {
     queryKey: queryKeys.all.email,
   });
 
-  const soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
+  const filterEmailCache = () => {
+    for (const [key, data] of previousEmail) {
+      if (!data) continue;
+      queryClient.setQueryData(key, {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          items: page.items.filter((item) => !emailIdSet.has(item.id)),
+        })),
+      });
+    }
+  };
 
-  for (const [key, data] of previousEmail) {
-    if (!data) continue;
-    queryClient.setQueryData(key, {
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        items: page.items.filter((item) => !emailIdSet.has(item.id)),
-      })),
-    });
-  }
+  const restoreEmailCache = () => {
+    for (const [key, data] of previousEmail) {
+      queryClient.setQueryData(key, data);
+    }
+  };
 
   // Flip `done` on target notifications in place. Touching only the specific
   // items (instead of snapshotting and restoring the whole cache) keeps any
@@ -652,20 +662,32 @@ export function markEntitiesDone(args: {
     );
   };
 
-  setNotificationDoneFlag(true);
+  // Re-runnable optimistic update. Each application needs a fresh soup
+  // transaction since rollback consumes the previous one.
+  let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
+  const applyOptimistic = () => {
+    soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
+    filterEmailCache();
+    setNotificationDoneFlag(true);
+  };
 
   const rollback = () => {
     soupTxn?.rollback();
-    for (const [key, data] of previousEmail) {
-      queryClient.setQueryData(key, data);
-    }
+    soupTxn = null;
+    restoreEmailCache();
     setNotificationDoneFlag(false);
   };
+
+  applyOptimistic();
 
   const done = (async () => {
     try {
       await Promise.all([
-        ...emailIds.map((id) => emailClient.flagArchived({ value: true, id })),
+        ...emailIds.map((id) =>
+          throwOnErr(
+            async () => await emailClient.flagArchived({ value: true, id })
+          )
+        ),
         notificationIds.length > 0
           ? throwOnErr(
               async () =>
@@ -707,12 +729,19 @@ export function markEntitiesDone(args: {
         return;
       }
 
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+        queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+      ]);
+
       rollback();
 
       try {
         await Promise.all([
           ...emailIds.map((id) =>
-            emailClient.flagArchived({ value: false, id })
+            throwOnErr(
+              async () => await emailClient.flagArchived({ value: false, id })
+            )
           ),
           notificationIds.length > 0
             ? throwOnErr(
@@ -723,6 +752,11 @@ export function markEntitiesDone(args: {
               )
             : Promise.resolve(),
         ]);
+      } catch (err) {
+        // Server still thinks these are done — re-apply the optimistic done
+        // state so the UI matches the backend.
+        applyOptimistic();
+        throw err;
       } finally {
         await Promise.all([
           queryClient.invalidateQueries({

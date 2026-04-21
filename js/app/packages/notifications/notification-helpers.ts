@@ -221,12 +221,14 @@ type NotificationCacheData = {
  * call in the background. Returns synchronously so the caller can show an
  * undo toast immediately.
  */
-export function markNotificationsDone(
+export async function markNotificationsDone(
   notificationIds: string[]
-): MarkNotificationsDoneHandle {
-  queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
-
+): Promise<MarkNotificationsDoneHandle> {
   const idSet = new Set(notificationIds);
+
+  // Cancel in-flight fetches up front so an arriving response can't clobber
+  // the optimistic flip (TanStack Query v5 pattern for optimistic updates).
+  await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
 
   // Flip `done` on the targeted notifications in place. Touching only the
   // specific items (instead of snapshotting and restoring the whole cache)
@@ -281,6 +283,9 @@ export function markNotificationsDone(
         return;
       }
 
+      await queryClient.cancelQueries({
+        queryKey: notificationKeys.user._def,
+      });
       setDoneFlag(false);
 
       try {
@@ -290,6 +295,11 @@ export function markNotificationsDone(
               notificationIds,
             })
         );
+      } catch (err) {
+        // Server still thinks these are done — re-apply the optimistic done
+        // state so the UI matches the backend.
+        setDoneFlag(true);
+        throw err;
       } finally {
         await queryClient.invalidateQueries({
           queryKey: notificationKeys.user._def,

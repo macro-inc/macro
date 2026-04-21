@@ -2,7 +2,7 @@ import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-cl
 import { toast } from '@core/component/Toast/Toast';
 import { type EntityData, isTaskEntity } from '@entity';
 import type { NotificationSource } from '@notifications';
-import { useMutationUndoContext, useUndoableMutation } from '@queries/undo';
+import { useUndoableMutation } from '@queries/undo';
 import {
   type MarkDoneHandle,
   markEntitiesDone,
@@ -15,11 +15,18 @@ type MakeMarkDoneOptions = {
 };
 
 type MarkDoneVariables = { entities: EntityData[] };
-type MarkDoneContext = { handle: MarkDoneHandle };
+type MarkDoneContext = {
+  handle: MarkDoneHandle;
+  /** Populated by onSuccess; `handle.done` failures use it to dismiss the stale success toast. */
+  setSuccessToastId: (id: number | undefined) => void;
+};
 
+/**
+ * Must be invoked inside a component tree that provides `MutationUndoProvider`
+ * (via `useUndoableMutation`) and the notification source.
+ */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
-  const undoCtx = useMutationUndoContext();
 
   const mutation = useUndoableMutation<
     void,
@@ -30,17 +37,29 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     // onMutate does the optimistic work and starts the API calls via the
     // handle. mutationFn is a no-op so the mutation resolves immediately and
     // onSuccess fires (pushing the undo entry) before the user can react.
+    // API failures surface via handle.done.catch below, which dismisses the
+    // stale success toast and shows a failure toast.
     mutationFn: async () => {},
-    onMutate: (variables) => {
-      const handle = markEntitiesDone({
+    onMutate: async (variables) => {
+      const handle = await markEntitiesDone({
         entities: variables.entities,
         notificationSource: notificationSource(),
       });
-      handle.done.catch(() => toast.failure('Failed to mark as done'));
-      return { handle };
+      let successToastId: number | undefined;
+      handle.done.catch(() => {
+        if (successToastId != null) toast.dismiss(successToastId);
+        toast.failure('Failed to mark as done');
+      });
+      return {
+        handle,
+        setSuccessToastId: (id) => {
+          successToastId = id;
+        },
+      };
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (_data, variables, context) => {
       const count = variables.entities.length;
+      const handle = context?.handle;
       const toastId = toast.success(
         count > 1 ? `Marked ${count} items as done` : 'Marked as done',
         undefined,
@@ -50,14 +69,15 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             icon: ArrowCounterClockwise,
             onClick: () => {
               if (toastId != null) toast.dismiss(toastId);
-              undoCtx.undo({
-                onError: () => toast.failure('Failed to undo'),
-              });
+              // Invoke this action's own undo so older toasts don't pop
+              // newer entries off the global undo stack.
+              handle?.undo().catch(() => toast.failure('Failed to undo'));
             },
           },
         ],
         10_000
       );
+      context?.setSuccessToastId(toastId);
     },
     undoFn: async (_variables, context) => {
       await context?.handle.undo();
