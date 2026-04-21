@@ -119,9 +119,21 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .context(UpdateError::DownloadErr)?;
 
                 match res {
-                    Some(update) => Ok(UpdateStatus::UpdateFound(UpdateFoundStatus {
-                        bundle: update,
-                    })),
+                    Some(update) => {
+                        // Check if this version was already downloaded in a previous session.
+                        if let Ok(update_dir) = self.system_query.get_update_dir().await {
+                            if let Some(entrypoint) =
+                                find_cached_bundle(&self.fs_repo, &update_dir, &update.version)
+                            {
+                                return Ok(UpdateStatus::Completed(CompletedStatus {
+                                    entrypoint,
+                                }));
+                            }
+                        }
+                        Ok(UpdateStatus::UpdateFound(UpdateFoundStatus {
+                            bundle: update,
+                        }))
+                    }
                     None => Ok(UpdateStatus::NoUpdateNeeded),
                 }
             }
@@ -234,6 +246,32 @@ pub(crate) fn next_bundle_index(names: &[String]) -> u64 {
         .filter_map(|n| n.parse::<u64>().ok())
         .max()
         .map_or(0, |m| m + 1)
+}
+
+/// Search existing numeric bundle directories for one whose `semver.txt`
+/// matches `version`. Returns the entrypoint path if found.
+fn find_cached_bundle(
+    fs: &impl FsRepo,
+    update_dir: &std::path::Path,
+    version: &semver::Version,
+) -> Option<PathBuf> {
+    let version_str = version.to_string();
+    for name in fs.list_dir_names(update_dir) {
+        if name.parse::<u64>().is_err() {
+            continue;
+        }
+        let dir = update_dir.join(&name);
+        let semver_path = dir.join("semver.txt");
+        if let Ok(contents) = fs.read_to_string(&semver_path) {
+            if contents.trim() == version_str {
+                let entrypoint = dir.join(ENTRYPOINT_NAME);
+                if fs.read_to_string(&entrypoint).is_ok() {
+                    return Some(entrypoint);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Remove all numeric bundle subdirectories under `dir` except `keep`.
