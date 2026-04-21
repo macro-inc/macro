@@ -244,8 +244,6 @@ export function defineQueryFilters(
     }
   }
 
-  if (referencedTargets.size === 0) return input;
-
   const include: FieldFilters = { ...input.include };
 
   for (const [target, idFieldName] of Object.entries(ID_FIELD_NAMES)) {
