@@ -729,6 +729,28 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn toggle_share_with_team(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> Result<bool, CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+
+        self.repo
+            .toggle_share_with_team(&call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
 }
 
 /// Extract the recording key from a full S3 URL.

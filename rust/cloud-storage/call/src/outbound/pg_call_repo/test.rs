@@ -308,6 +308,123 @@ async fn archive_call_preserves_soft_deleted_participants(
     Ok(())
 }
 
+/// Test helper: give `user_id` a brand new team owned by that user. Inserts
+/// the parent `macro_user` and `User` rows that the `team_user` FK requires.
+async fn give_user_a_team(
+    pool: &Pool<Postgres>,
+    user_id: &str,
+    team_id: &Uuid,
+) -> anyhow::Result<()> {
+    let macro_user_id = Uuid::now_v7();
+
+    sqlx::query(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $3, '')"#,
+    )
+    .bind(macro_user_id)
+    .bind(user_id)
+    .bind(format!("{user_id}@test.com"))
+    .execute(pool)
+    .await?;
+
+    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#)
+        .bind(user_id)
+        .bind(format!("{user_id}@test.com"))
+        .bind(macro_user_id)
+        .execute(pool)
+        .await?;
+
+    sqlx::query(r#"INSERT INTO team (id, name, owner_id) VALUES ($1, $2, $3)"#)
+        .bind(team_id)
+        .bind("test team")
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+    sqlx::query(r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'owner')"#)
+        .bind(user_id)
+        .bind(team_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+// -- archive_call grants team view access when share_with_team is true -------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_call_grants_team_view_access_when_share_with_team_true(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use sqlx::Row as _;
+
+    let repo = repo(pool.clone());
+    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaaaaa);
+
+    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
+
+    // share_with_team defaults to TRUE on the fixture call.
+    repo.archive_call(&CALL1).await?;
+
+    let row = sqlx::query(
+        r#"
+        SELECT entity_id, entity_type, source_id, access_level
+        FROM entity_access
+        WHERE entity_id = $1 AND source_type = 'team'
+        "#,
+    )
+    .bind(CALL1)
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(row.get::<Uuid, _>("entity_id"), CALL1);
+    assert_eq!(row.get::<String, _>("entity_type"), "call");
+    assert_eq!(row.get::<String, _>("source_id"), team_id.to_string());
+    assert_eq!(row.get::<AccessLevel, _>("access_level"), AccessLevel::View);
+
+    Ok(())
+}
+
+// -- archive_call skips team grant when share_with_team is false -------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_call_skips_team_grant_when_share_with_team_false(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use sqlx::Row as _;
+
+    let repo = repo(pool.clone());
+    let team_id: Uuid = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbbbbb);
+
+    // USER_A is on a team, but the call opted out of team sharing — so no
+    // team-scoped entity_access row should be created at archive time.
+    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
+
+    sqlx::query(r#"UPDATE calls SET share_with_team = false WHERE id = $1"#)
+        .bind(CALL1)
+        .execute(&pool)
+        .await?;
+
+    repo.archive_call(&CALL1).await?;
+
+    let count: i64 = sqlx::query(
+        r#"SELECT COUNT(*) AS count FROM entity_access WHERE entity_id = $1 AND source_type = 'team'"#,
+    )
+    .bind(CALL1)
+    .map(|r: sqlx::postgres::PgRow| r.get::<i64, _>("count"))
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(count, 0);
+
+    Ok(())
+}
+
 // -- archive_call preserves id and share_permission_id ------------------------
 
 #[sqlx::test(
