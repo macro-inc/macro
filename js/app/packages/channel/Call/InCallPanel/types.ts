@@ -48,6 +48,7 @@ export type UseInCallPanelResult = {
 };
 
 export type InCallPanelProps = {
+  isSlim: boolean;
   channelId?: Accessor<string | undefined>;
   onLeaveCall?: () => void;
   onJoinCall?: () => void;

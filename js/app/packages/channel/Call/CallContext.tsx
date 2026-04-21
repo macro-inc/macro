@@ -52,6 +52,8 @@ type CallStoreState = {
   isNoiseSuppressed: boolean;
   optimisticJoinChannelId: string | null;
   joinError: string | null;
+  /** Which channel block has the Call tab selected (synced from the channel UI). */
+  callPageChannelId: string | null;
 };
 
 const initialState: CallStoreState = {
@@ -72,6 +74,7 @@ const initialState: CallStoreState = {
   isNoiseSuppressed: false,
   optimisticJoinChannelId: null,
   joinError: null,
+  callPageChannelId: null,
 };
 
 export type CallState = {
@@ -139,6 +142,22 @@ export type CallState = {
   joinError: () => string | null;
   /** Set the join error message */
   setJoinError: (error: string | null) => void;
+  /**
+   * Which channel has the Call tab focused in a channel split. `null` when no
+   * channel block reports the Call tab (e.g. user is on Messages).
+   */
+  callPageChannelId: () => string | null;
+  /**
+   * Channel blocks call this when the tab strip changes. When `isCallTab` is
+   * true, sets the call-page channel to `channelId`; when false, clears only
+   * if this channel still owns the value (avoids races across splits).
+   */
+  syncCallPageTab: (channelId: string, isCallTab: boolean) => void;
+  /**
+   * True when there is an active call and the Call tab is focused for that
+   * same channel (full in-channel call view / “call page”).
+   */
+  isCallPage: () => boolean;
 };
 
 const CallContext = createContext<CallState>();
@@ -240,6 +259,9 @@ function createCallState() {
       // Local / remote participant fields (e.g. identity) can settle after this
       // event; UI that reads them via `trackVersion` should re-run.
       if (state === ConnectionState.Connected) {
+        // Keep store in sync with LiveKit: optimistic join must not outlive a
+        // real connection or CallControls stay disabled while video works.
+        setStore('optimisticJoinChannelId', null);
         bumpTrackVersion();
       }
     });
@@ -624,6 +646,14 @@ function createCallState() {
     setStore('joinError', error);
   }
 
+  function syncCallPageTab(channelId: string, isCallTab: boolean) {
+    if (isCallTab) {
+      setStore('callPageChannelId', channelId);
+    } else if (store.callPageChannelId === channelId) {
+      setStore('callPageChannelId', null);
+    }
+  }
+
   // --- cleanup ---
 
   const handleBeforeUnload = () => {
@@ -676,7 +706,9 @@ function createCallState() {
     activeAudioInputDeviceId: () => store.activeAudioInputDeviceId,
     activeAudioOutputDeviceId: () => store.activeAudioOutputDeviceId,
     activeVideoInputDeviceId: () => store.activeVideoInputDeviceId,
-    isConnecting: () => store.optimisticJoinChannelId !== null,
+    isConnecting: () =>
+      store.optimisticJoinChannelId !== null &&
+      store.connectionState !== ConnectionState.Connected,
 
     // mutations
     connect,
@@ -693,6 +725,21 @@ function createCallState() {
     rollbackOptimisticJoin,
     joinError: () => store.joinError,
     setJoinError,
+    callPageChannelId: () => store.callPageChannelId,
+    syncCallPageTab,
+    isCallPage: () => {
+      store.callPageChannelId;
+      store.activeChannelId;
+      store.optimisticJoinChannelId;
+      store.connectionState;
+      const page = store.callPageChannelId;
+      const active = store.activeChannelId ?? store.optimisticJoinChannelId;
+      if (page === null || active === null) return false;
+      const inCall =
+        store.connectionState === ConnectionState.Connected ||
+        store.optimisticJoinChannelId !== null;
+      return inCall && page === active;
+    },
   };
 
   return state;

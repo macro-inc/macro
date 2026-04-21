@@ -13,8 +13,10 @@ export { CallAudioSink } from './CallAudioSink';
 export { ChannelCallButton } from './ChannelCallButton';
 export { ChannelCallTab } from './ChannelCallTab';
 export { ChannelCallAutoJoin } from './ChannelCallAutoJoin';
+export { openChannelCallTab } from './openChannelCallTab';
 export {
   InCallPanel,
+  InCallParticipantsListPopover,
   useInCallPanel,
   buildOrderedInCallMembers,
   buildVisibleAvatarSlots,
@@ -28,4 +30,5 @@ export type {
   UseInCallPanelOptions,
   UseInCallPanelResult,
   InCallPanelProps,
+  InCallParticipantsListPopoverProps,
 } from './InCallPanel';

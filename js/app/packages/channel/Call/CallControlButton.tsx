@@ -1,7 +1,12 @@
-import { createSignal, type Component, type JSX } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
-export type CallControlVariant = 'default' | 'panel';
+export type CallControlVariant = 'default' | 'panel' | 'panel-small';
 
 export const CallControlButton: Component<{
   onClick: () => Promise<void> | void;
@@ -11,25 +16,18 @@ export const CallControlButton: Component<{
   disabled?: boolean;
   /** `default`: bordered pill. `panel`: flat; icon `text-*` matches default border/bg tokens. */
   variant?: CallControlVariant;
-}> = (incoming) => {
-  const {
-    onClick,
-    children,
-    variant: variantProp,
-    active,
-    danger,
-    disabled: disabledProp,
-  } = incoming;
-
-  const resolvedVariant = variantProp ?? 'default';
+}> = (props) => {
   const [isPending, setIsPending] = createSignal(false);
-  const isInteractionDisabled = () => isPending() || !!disabledProp;
+  // Do not destructure `disabled` / `active` — Solid only tracks `props.*` reads.
+  const interactionDisabled = createMemo(
+    () => isPending() || !!props.disabled
+  );
 
   const handleClick = async () => {
-    if (isInteractionDisabled()) return;
+    if (interactionDisabled()) return;
     setIsPending(true);
     try {
-      await onClick();
+      await props.onClick();
     } catch (e) {
       console.error('ControlButton action failed', e);
     } finally {
@@ -37,45 +35,49 @@ export const CallControlButton: Component<{
     }
   };
 
-  const interactionDisabled = isInteractionDisabled();
+  const resolvedVariant = () => props.variant ?? 'default';
+  const isPanelVariant = () => {
+    const v = resolvedVariant();
+    return v === 'panel' || v === 'panel-small';
+  };
 
   return (
     <button
       onClick={handleClick}
-      disabled={interactionDisabled}
+      disabled={interactionDisabled()}
       class={cn(
         'flex items-center justify-center transition-colors cursor-pointer',
-        interactionDisabled && 'opacity-50 pointer-events-none',
-        resolvedVariant === 'default' &&
+        interactionDisabled() && 'opacity-50 pointer-events-none',
+        resolvedVariant() === 'default' &&
           cn(
             'w-10 h-10 rounded-lg',
-            !interactionDisabled &&
-              danger &&
+            !interactionDisabled() &&
+              props.danger &&
               'border border-failure/50 bg-failure/10 hover:bg-failure/40',
-            !interactionDisabled &&
-              !danger &&
-              !active &&
+            !interactionDisabled() &&
+              !props.danger &&
+              !props.active &&
               'border border-edge-muted bg-surface-2/70 hover:bg-surface-2/40',
-            !interactionDisabled &&
-              !danger &&
-              active &&
+            !interactionDisabled() &&
+              !props.danger &&
+              props.active &&
               'border border-accent-2 hover:bg-accent-2/40'
           ),
-        resolvedVariant === 'panel' &&
+        isPanelVariant() &&
           cn(
             'w-8 h-8 rounded-md border-0 bg-transparent shadow-none',
-            !interactionDisabled &&
-              danger &&
+            !interactionDisabled() &&
+              props.danger &&
               'text-failure hover:text-failure/90',
-            !interactionDisabled &&
-              !danger &&
-              !active &&
+            !interactionDisabled() &&
+              !props.danger &&
+              !props.active &&
               'text-ink',
-            !interactionDisabled && !danger && active && 'text-accent-2'
+            !interactionDisabled() && !props.danger && props.active && 'text-accent-2'
           )
       )}
     >
-      {children}
+      {props.children}
     </button>
   );
 };

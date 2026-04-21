@@ -33,7 +33,7 @@ export function ChannelCallTab(props: {
 
   return (
     <Show
-      when={call.isInThisChannel()}
+      when={() => call.isInThisChannel()}
       fallback={
         <Show
           when={call.joinError()}

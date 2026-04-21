@@ -518,7 +518,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       
       <Show when={callCtx?.isInCall()}>
         <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
-          <InCallPanel />
+          <InCallPanel isSlim={isSlim()} />
         </div>
       </Show>
       
@@ -680,7 +680,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Show when={props.icon}>
             <div class="flex shrink-0 [&_svg]:size-4">
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-              
             </div>
           </Show>
 
