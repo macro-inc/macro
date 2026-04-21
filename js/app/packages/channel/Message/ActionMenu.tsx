@@ -1,7 +1,7 @@
-import ReplyIcon from '@macro-icons/wide/reply.svg';
+import ReplyIcon from '@macro-icons/square/reply.svg';
 import LinkIcon from '@macro-icons/square/link.svg';
 import EditIcon from '@macro-icons/square/edit.svg';
-import EllipsisIcon from '@macro-icons/square/ellipsis.svg';
+import EllipsisIcon from '@macro-icons/square/add-emoji.svg';
 import TrashIcon from '@macro-icons/square/trash.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
@@ -45,7 +45,9 @@ function ActionButton(props: {
       )}
       onClick={props.onClick}
     >
-      <span class="block size-5">{renderIcon(props.action.icon, 'w-full h-full')}</span>
+      <span class="block size-5">
+        {renderIcon(props.action.icon, 'w-full h-full')}
+      </span>
     </button>
   );
 }
@@ -78,6 +80,7 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Reply',
       icon: ReplyIcon,
       onClick: actions?.onReply,
+      class: 'px-1.5',
     },
     {
       id: 'copy-link',
@@ -147,7 +150,9 @@ export function ActionMenu(props: ActionMenuProps) {
                   'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
               }}
             />
-            <div class="w-px h-5 bg-edge-muted mx-1" />
+            <Show when={visibleActions.length > 0}>
+              <div class="w-px self-stretch bg-edge-muted mx-1" />
+            </Show>
           </Show>
 
           <For each={visibleActions}>
