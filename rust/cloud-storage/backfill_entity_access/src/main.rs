@@ -8,6 +8,7 @@ use anyhow::Context;
 use config::EnvVars;
 use futures::stream::{self, StreamExt};
 use macro_entrypoint::MacroEntrypoint;
+use models_entity_access_management::EntityAccessSourceType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::QueryBuilder;
 use sqlx::postgres::PgPoolOptions;
@@ -18,15 +19,6 @@ const WRITE_BATCH_SIZE: usize = 1000;
 
 /// Max concurrent write tasks.
 const WRITE_CONCURRENCY: usize = 10;
-
-#[derive(Debug, Clone, Copy, sqlx::Type)]
-#[sqlx(type_name = "\"entity_access_source_type\"", rename_all = "lowercase")]
-/// Ordered from least to most access top -> bottom
-pub enum SourceEntityType {
-    Channel,
-    Team,
-    User,
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -78,7 +70,7 @@ async fn bulk_upsert(
         macro_uuid::Uuid,
         String,
         String,
-        SourceEntityType,
+        EntityAccessSourceType,
         AccessLevel,
     )>,
 ) -> anyhow::Result<()> {
@@ -172,7 +164,7 @@ async fn backfill_owned_items(db: &Pool<Postgres>) -> anyhow::Result<()> {
                     item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
                     item_type,
                     item.user_id.to_string(),
-                    SourceEntityType::User,
+                    EntityAccessSourceType::User,
                     item.access_level,
                 )
             })
@@ -240,7 +232,7 @@ async fn backfill_non_projects_channels_and_teams(db: &Pool<Postgres>) -> anyhow
                     item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
                     item_type.clone(),
                     channel_id.to_string(),
-                    SourceEntityType::Channel,
+                    EntityAccessSourceType::Channel,
                     item.access_level,
                 ));
             }
@@ -249,7 +241,7 @@ async fn backfill_non_projects_channels_and_teams(db: &Pool<Postgres>) -> anyhow
                     item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
                     item_type.clone(),
                     team_id.to_string(),
-                    SourceEntityType::Team,
+                    EntityAccessSourceType::Team,
                     item.access_level,
                 ));
             }
@@ -346,10 +338,10 @@ async fn backfill_project_items(db: &Pool<Postgres>) -> anyhow::Result<()> {
                         if let Some(granted_from_channel_id) = project.granted_from_channel_id {
                             (
                                 granted_from_channel_id.to_string(),
-                                SourceEntityType::Channel,
+                                EntityAccessSourceType::Channel,
                             )
                         } else {
-                            (project.project_owner, SourceEntityType::User)
+                            (project.project_owner, EntityAccessSourceType::User)
                         };
 
                     let inserts: Vec<_> = item_ids
