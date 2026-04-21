@@ -1,4 +1,4 @@
-import { onCleanup, onMount } from 'solid-js';
+import { createEffect } from 'solid-js';
 import type { JSXElement } from 'solid-js';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { UnifiedNotification } from '@notifications/types';
@@ -21,24 +21,13 @@ export function MarkMessageNotifications(props: {
     isChannelNotification(n) &&
     n.notification_metadata.content.messageId === props.messageId;
 
-  let unsubscribe: () => void = () => {};
-  onCleanup(() => {
-    unsubscribe();
-  });
+  let marked = false;
 
-  onMount(() => {
+  createEffect(() => {
+    if (marked) return;
     const existing = notifications().find(isMessageNotification);
-
-    if (!existing) {
-      unsubscribe = notificationSource.subscribe((n) => {
-        if (!isMessageNotification(n)) return;
-        notificationSource.markAsRead(n);
-        unsubscribe();
-      });
-      return;
-    }
-
-    if (!existing.viewed_at) {
+    if (existing && !existing.viewed_at) {
+      marked = true;
       notificationSource.markAsRead(existing);
     }
   });
