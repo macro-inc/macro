@@ -252,7 +252,7 @@ export const SoupView = (props: SoupViewProps) => {
     >
       <SoupViewContextProvider
         soup={soup}
-        initialFilters={props.initialFilters}
+        initialQuery={props.initialFilters}
         disableLocalSearch={props.disableLocalSearch}
       >
         <div class="size-full flex flex-col">
@@ -695,10 +695,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
           const persistedFilterData = isStale
             ? {}
             : (initialPersistedState.filterData ?? {});
-          setFilters((d) => {
-            d.include = persistedFilterData.include ?? {};
-            d.exclude = persistedFilterData.exclude ?? {};
-            d.emailView = persistedFilterData.emailView;
+          setFilters({
+            include: persistedFilterData.include ?? {},
+            exclude: persistedFilterData.exclude ?? {},
+            emailView: persistedFilterData.emailView,
           });
           if (isListViewID(contentId)) {
             const tab =

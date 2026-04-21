@@ -25,6 +25,8 @@ export type {
 
 export { defineQueryFilters, type TargetAstMap } from './compile';
 
+export const NIL = '00000000-0000-0000-0000-000000000000';
+
 const emptyQueryState = (): QueryState => ({
   include: {},
   exclude: {},

@@ -2,14 +2,17 @@ import type { FilterID } from '@app/component/next-soup/filters';
 import {
   NIL,
   defineQueryFilters,
-  type FilterData,
+  type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 
 export type SoupFiltersPreset = {
   /** Filter data for server query */
-  filters: Partial<FilterData>;
+  filters: Query;
   /** Client filters to apply */
   clientFilters: { and?: FilterID[]; or?: FilterID[] };
 };
@@ -32,27 +35,27 @@ export type ViewTabConfig = {
 };
 
 /** Filters for inbox/signal: not done, importance=true for emails */
-const INBOX_SIGNAL_FILTERS: Partial<FilterData> = {
+const INBOX_SIGNAL_FILTERS: Query = {
   include: {
-    documentDone: [false],
-    emailDone: [false],
-    emailImportance: [true],
-    channelDone: [false],
-    chatDone: [false],
-    folderDone: [false],
+    documentDone: false,
+    emailDone: false,
+    emailImportance: true,
+    channelDone: false,
+    chatDone: false,
+    folderDone: false,
   },
   emailView: 'inbox',
 };
 
 /** Filters for inbox/noise: not done, importance=false for emails */
-const INBOX_NOISE_FILTERS: Partial<FilterData> = {
+const INBOX_NOISE_FILTERS: Query = {
   include: {
-    documentDone: [false],
-    emailDone: [false],
-    emailImportance: [false],
-    channelDone: [false],
-    chatDone: [false],
-    folderDone: [false],
+    documentDone: false,
+    emailDone: false,
+    emailImportance: false,
+    channelDone: false,
+    chatDone: false,
+    folderDone: false,
   },
   emailView: 'inbox',
 };
@@ -121,14 +124,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       important: () => ({
         filters: defineQueryFilters({
-          include: { emailImportance: [true] },
+          include: { emailImportance: true },
           emailView: 'inbox',
         }),
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       noise: () => ({
         filters: defineQueryFilters({
-          include: { emailImportance: [false] },
+          include: { emailImportance: false },
           emailView: 'inbox',
         }),
         clientFilters: { and: ['email', 'no-drafts'] },
@@ -144,7 +147,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.email) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { sender: [ctx.email] },
+            include: { emailSender: [ctx.email] },
             emailView: 'sent',
           }),
           clientFilters: { and: ['email', 'no-drafts'] },
@@ -152,7 +155,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       },
       shared: () => ({
         filters: defineQueryFilters({
-          include: { shared: ['only'] },
+          include: { emailShared: 'only' },
           emailView: 'all',
         }),
         clientFilters: { and: ['email', 'shared-entity'] },
@@ -190,7 +193,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       },
       attachments: () => ({
         filters: defineQueryFilters({
-          include: { isEmailAttachment: [true] },
+          include: { isEmailAttachment: true },
         }),
         clientFilters: { and: ['document-or-file'] },
       }),
@@ -209,28 +212,18 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { subType: ['task'] },
-            properties: [
-              { ASSIGNEES: [{ type: 'entity', value: ctx.userId }] },
-              {
-                STATUS: [
-                  {
-                    type: 'select',
-                    value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
-                    negate: true,
-                  },
-                ],
-              },
-              {
-                STATUS: [
-                  {
-                    type: 'select',
-                    value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
-                    negate: true,
-                  },
-                ],
-              },
-            ],
+            include: {
+              subType: ['task'],
+              properties: [
+                { propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES, type: 'entity', value: ctx.userId },
+              ],
+            },
+            exclude: {
+              properties: [
+                { propertyId: SYSTEM_PROPERTY_IDS.STATUS, type: 'select', value: PROPERTY_OPTION_IDS.STATUS.COMPLETED },
+                { propertyId: SYSTEM_PROPERTY_IDS.STATUS, type: 'select', value: PROPERTY_OPTION_IDS.STATUS.CANCELED },
+              ],
+            },
           }),
           clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
         };
@@ -257,7 +250,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       recent: () => ({
         filters: defineQueryFilters({
-          include: { channelImportance: [true] },
+          include: { channelImportance: true },
         }),
         clientFilters: { and: ['channels'] },
       }),

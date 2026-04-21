@@ -5,7 +5,6 @@ import {
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { FilterContext } from '@app/component/next-soup/filters/configs';
-import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 
 const NIL = '00000000-0000-0000-0000-000000000000';

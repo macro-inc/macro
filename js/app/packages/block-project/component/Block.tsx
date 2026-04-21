@@ -118,7 +118,6 @@ const Block: Component = () => {
         predicate: (entity) => PROJECT_ENTITY_TYPES.includes(entity.type),
       },
     ],
-    filterGroups: [],
   });
 
   const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
@@ -183,7 +182,7 @@ const ProjectEntityList = (props: {
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
         soup={props.soup}
-        initialFilters={{
+        initialQuery={{
           include: {
             // Filter documents by project
             projectId: [props.projectId],

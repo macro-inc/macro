@@ -89,11 +89,10 @@ export const useApplyPreset = () => {
 
     batch(() => {
       setActiveTab(tabId);
-      setFilters((d) => {
-        d.include = preset.filters.include ?? {};
-        d.exclude = preset.filters.exclude ?? {};
-        d.properties = preset.filters.properties ?? [];
-        d.emailView = preset.filters.emailView;
+      setFilters({
+        include: preset.filters.include ?? {},
+        exclude: preset.filters.exclude ?? {},
+        emailView: preset.filters.emailView,
       });
       soup.filters.predicates.set(preset.clientFilters);
     });

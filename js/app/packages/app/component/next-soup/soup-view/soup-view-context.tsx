@@ -28,7 +28,7 @@ import {
   useContext,
 } from 'solid-js';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
-import type { QueryState } from '@app/component/next-soup/filters/filter-store';
+import type { Query, QueryState } from '@app/component/next-soup/filters/filter-store';
 import { useUserId } from '@core/context/user';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
@@ -73,7 +73,7 @@ interface SoupViewContextValues {
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
   filters: Accessor<QueryState>;
-  setFilters: SoupState['filters']['query']['set'];
+  setFilters: (next: QueryState) => void;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
@@ -98,7 +98,7 @@ export const useMaybeSoupView = () => useContext(SoupViewContext);
 
 interface SoupViewContextProviderProps {
   soup?: SoupState;
-  initialQuery?: QueryState;
+  initialQuery?: Query;
   disableLocalSearch?: boolean;
 }
 
@@ -131,7 +131,7 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const setFilters: SoupState['filters']['query']['set'] = (...args) => {
+  const setFilters = (next: QueryState) => {
     // Invalidate query cache when filters change to avoid refetching all pages
     queryClient.setQueryData(
       soupKeys.astItems({
@@ -147,7 +147,7 @@ export const SoupViewContextProvider: FlowComponent<
         return prev;
       }
     );
-    soup.filters.query.set(...args);
+    soup.filters.query.set(next);
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
