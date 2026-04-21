@@ -5,7 +5,7 @@ import { notificationKeys } from '@queries/notification/keys';
 import { notificationServiceClient } from '@service-notification/client';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { isMatching, P } from 'ts-pattern';
-import { CHANNEL_EVENT_TYPES } from './notification-source';
+import { CHANNEL_EVENT_TYPES, setDoneOverride } from './notification-source';
 import type { NotificationSource } from './notification-source';
 import { type UnifiedNotification, compositeEntity } from './types';
 
@@ -212,10 +212,6 @@ export type MarkNotificationsDoneHandle = {
   undo: () => Promise<void>;
 };
 
-type NotificationCacheData = {
-  pages: { items: { id: string; done?: boolean }[] }[];
-};
-
 /**
  * Optimistically marks notifications as done in the cache and fires the API
  * call in the background. Returns synchronously so the caller can show an
@@ -224,29 +220,12 @@ type NotificationCacheData = {
 export async function markNotificationsDone(
   notificationIds: string[]
 ): Promise<MarkNotificationsDoneHandle> {
-  const idSet = new Set(notificationIds);
-
   await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
 
-  const setDoneFlag = (value: boolean) => {
-    queryClient.setQueriesData<NotificationCacheData>(
-      { queryKey: notificationKeys.user._def },
-      (data) => {
-        if (!data) return data;
-        return {
-          ...data,
-          pages: data.pages.map((page) => ({
-            ...page,
-            items: page.items.map((item) =>
-              idSet.has(item.id) ? { ...item, done: value } : item
-            ),
-          })),
-        };
-      }
-    );
-  };
-
-  setDoneFlag(true);
+  // Override lives outside the cache so an in-flight page fetch that lands
+  // after this flip cannot revert it. The notifications memo applies the
+  // override when reading cache data.
+  setDoneOverride(notificationIds, true);
 
   const done = (async () => {
     try {
@@ -257,7 +236,7 @@ export async function markNotificationsDone(
           })
       );
     } catch (err) {
-      setDoneFlag(false);
+      setDoneOverride(notificationIds, undefined);
       throw err;
     } finally {
       await queryClient.invalidateQueries({
@@ -276,10 +255,7 @@ export async function markNotificationsDone(
         return;
       }
 
-      await queryClient.cancelQueries({
-        queryKey: notificationKeys.user._def,
-      });
-      setDoneFlag(false);
+      setDoneOverride(notificationIds, false);
 
       try {
         await throwOnErr(
@@ -289,7 +265,7 @@ export async function markNotificationsDone(
             })
         );
       } catch (err) {
-        setDoneFlag(true);
+        setDoneOverride(notificationIds, true);
         throw err;
       } finally {
         await queryClient.invalidateQueries({

@@ -28,7 +28,11 @@ import {
 import { match } from 'ts-pattern';
 import { isAfter } from 'date-fns';
 import { getChannelParams } from '@block-channel/utils/link';
-import { compositeEntity, type NotificationSource } from '@notifications';
+import {
+  compositeEntity,
+  type NotificationSource,
+  setDoneOverride,
+} from '@notifications';
 import { notificationServiceClient } from '@service-notification/client';
 import { notificationKeys } from '@queries/notification/keys';
 
@@ -587,10 +591,6 @@ export type MarkDoneHandle = {
   undo: () => Promise<void>;
 };
 
-type NotificationCacheData = {
-  pages: { items: { id: string; done?: boolean }[] }[];
-};
-
 /**
  * Optimistically marks entities as done (archives emails, clears notifications),
  * then fires the API calls in the background. Returns synchronously so the caller
@@ -610,7 +610,6 @@ export async function markEntitiesDone(args: {
       notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
     ).map((n) => n.id)
   );
-  const notificationIdSet = new Set(notificationIds);
 
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
@@ -642,37 +641,18 @@ export async function markEntitiesDone(args: {
     }
   };
 
-  const setNotificationDoneFlag = (value: boolean) => {
-    if (notificationIdSet.size === 0) return;
-    queryClient.setQueriesData<NotificationCacheData>(
-      { queryKey: notificationKeys.user._def },
-      (data) => {
-        if (!data) return data;
-        return {
-          ...data,
-          pages: data.pages.map((page) => ({
-            ...page,
-            items: page.items.map((item) =>
-              notificationIdSet.has(item.id) ? { ...item, done: value } : item
-            ),
-          })),
-        };
-      }
-    );
-  };
-
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
   const applyOptimistic = () => {
     soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
     filterEmailCache();
-    setNotificationDoneFlag(true);
+    setDoneOverride(notificationIds, true);
   };
 
   const rollback = () => {
     soupTxn?.rollback();
     soupTxn = null;
     restoreEmailCache();
-    setNotificationDoneFlag(false);
+    setDoneOverride(notificationIds, undefined);
   };
 
   applyOptimistic();
