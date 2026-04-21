@@ -2,7 +2,6 @@ import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
   SOUP_FILTERS,
   type FilterID,
-  type FilterDefinition,
 } from '@app/component/next-soup/filters/configs/';
 import {
   createPredicatesStore,
@@ -16,15 +15,6 @@ import type { EntityData, WithSearch } from '@entity';
 import { createMemo, createSignal } from 'solid-js';
 
 type SoupEntity = EntityData | WithSearch<EntityData>;
-
-const toPredicateConfigs = (
-  filters: readonly FilterDefinition[]
-): PredicateConfig<SoupEntity, string>[] =>
-  filters.map((f) => ({
-    id: f.id,
-    predicate: f.predicate,
-    query: f.query,
-  }));
 
 export type NavigationResult<T> = { item: T; index: number } | undefined;
 
@@ -59,7 +49,7 @@ export const createSoupState = <TId extends string = FilterID>(
   });
 
   const predicates = createPredicatesStore({
-    configs: predicateConfigs ?? toPredicateConfigs(SOUP_FILTERS),
+    configs: predicateConfigs ?? SOUP_FILTERS,
     initial: initialPredicates,
   });
 
