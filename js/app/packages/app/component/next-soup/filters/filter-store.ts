@@ -405,6 +405,8 @@ function compileToAst(data: FilterData): TargetAstMap {
     propf: [],
   };
 
+  const includedByField: Record<string, unknown[]> = {};
+
   for (const field of Object.keys(data.include) as FieldName[]) {
     const values = data.include[field];
     const config: FieldConfig = FIELD_CONFIG[field];
@@ -414,10 +416,21 @@ function compileToAst(data: FilterData): TargetAstMap {
     const formatted = config.formatValue
       ? values.map(config.formatValue)
       : values;
+
+    let tracked = includedByField[field];
+
+    if (!tracked) {
+      tracked = [];
+      includedByField[field] = tracked;
+    }
+
+    tracked.push(...formatted);
+
     byTarget[config.target].push(AST.fieldOr(config.field, formatted));
   }
 
   for (const field of Object.keys(data.exclude) as FieldName[]) {
+    const includeValues = includedByField[field];
     const values = data.exclude[field];
     const config: FieldConfig = FIELD_CONFIG[field];
 
@@ -426,7 +439,15 @@ function compileToAst(data: FilterData): TargetAstMap {
     const formatted = config.formatValue
       ? values.map(config.formatValue)
       : values;
-    byTarget[config.target].push(AST.not(AST.fieldOr(config.field, formatted)));
+
+    const unique = [];
+    for (const value of formatted) {
+      if (includeValues?.includes(value as never)) continue;
+
+      unique.push(value);
+    }
+
+    byTarget[config.target].push(AST.not(AST.fieldOr(config.field, unique)));
   }
 
   // Properties: array of records (AND), within each record values are OR'd by property
