@@ -5352,6 +5352,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "image_optimizer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-lambda",
+ "aws-sdk-s3",
+ "base64 0.22.1",
+ "image",
+ "lambda_runtime",
+ "macro_aws_config",
+ "macro_entrypoint",
+ "macro_env_var",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "image_proxy_service"
 version = "0.1.0"
 dependencies = [
