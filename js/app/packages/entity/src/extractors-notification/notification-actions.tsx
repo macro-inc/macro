@@ -38,9 +38,7 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
       mutationFn: async () => {},
       onMutate: async () => {
         const notifications = getAllNotificationsFromGroup(props.stack);
-        const handle = await markNotificationsDone(
-          notifications.map((n) => n.id)
-        );
+        const handle = markNotificationsDone(notifications.map((n) => n.id));
         let successToastId: number | undefined;
         handle.done.catch(() => {
           if (successToastId != null) toast.dismiss(successToastId);

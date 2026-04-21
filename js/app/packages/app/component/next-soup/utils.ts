@@ -594,8 +594,8 @@ export type MarkDoneHandle = {
 /**
  * Optimistically marks entities as done (archives emails, clears notifications),
  * then fires the API calls in the background. Awaits `cancelQueries` so a stale
- * in-flight fetch can't clobber the optimistic update, then returns a handle
- * the caller can hold onto for the undo toast.
+ * in-flight fetch can't clobber the email/soup cache writes before returning
+ * the handle the caller uses for the undo toast.
  */
 export async function markEntitiesDone(args: {
   entities: EntityData[];

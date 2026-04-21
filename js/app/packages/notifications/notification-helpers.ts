@@ -217,17 +217,16 @@ export type MarkNotificationsDoneHandle = {
  * call in the background. Returns synchronously so the caller can show an
  * undo toast immediately.
  */
-export async function markNotificationsDone(
+export function markNotificationsDone(
   notificationIds: string[]
-): Promise<MarkNotificationsDoneHandle> {
-  await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
-
+): MarkNotificationsDoneHandle {
   // Override lives outside the cache so an in-flight page fetch that lands
   // after this flip cannot revert it. The notifications memo applies the
   // override when reading cache data.
   setDoneOverride(notificationIds, true);
 
   const done = (async () => {
+    await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
     try {
       await throwOnErr(
         async () =>
