@@ -101,6 +101,3 @@ cycles:
 
 cycles-ci:
     bunx --bun biome lint --changed --only=nursery/noImportCycles
-
-publish-lexical:
-    cd packages/lexical-core && bun publish

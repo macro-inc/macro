@@ -41,8 +41,6 @@ on:
         required: true
       POSTHOG_API_KEY:
         required: true
-      NPMRC_GH_TOKEN:
-        required: true
 
 concurrency:
   group: ${{ github.workflow }}-web-app-${{ inputs.environment }}
@@ -60,8 +58,6 @@ jobs:
           ref: ${{ github.ref_name }}
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
-        with:
-          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Build
         working-directory: js/app
         run: just build-${{ inputs.environment }}

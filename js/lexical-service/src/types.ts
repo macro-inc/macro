@@ -1,16 +1,16 @@
 export type SearchableNode = {
-  nodeId: string,
+  nodeId: string;
   /** Plain text search content */
-  content: string,
+  content: string;
   /** Raw JSON content */
-  rawContent: string
+  rawContent: string;
 };
 
 export type CognitionNode = {
-  nodeId: string,
-  type: string,
+  nodeId: string;
+  type: string;
   /** Markdown text search content */
-  content: string,
+  content: string;
   /** Raw JSON content */
-  rawContent: string,
+  rawContent: string;
 };

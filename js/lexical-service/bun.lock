@@ -18,7 +18,6 @@
         "@lexical/selection": "0.32.1",
         "@lexical/table": "0.32.1",
         "@lexical/utils": "0.32.1",
-        "@macro-inc/lexical-core": "^0.2.0",
         "chanfana": "^2.6.3",
         "hono": "^4.6.20",
         "lexical": "0.32.1",
@@ -180,8 +179,6 @@
     "@lexical/text": ["@lexical/text@0.32.1", "", { "dependencies": { "lexical": "0.32.1" } }, "sha512-0Ek8F3KC4d16b2YaTHdyYFqDSBZ5KRtGrqU3GBog+VOGxucGaEbXEK1/ypX5CTe/wwkQDrH0FKWPQbd3l5t5YQ=="],
 
     "@lexical/utils": ["@lexical/utils@0.32.1", "", { "dependencies": { "@lexical/list": "0.32.1", "@lexical/selection": "0.32.1", "@lexical/table": "0.32.1", "lexical": "0.32.1" } }, "sha512-ZaqZZksNIHJd+g8GXc11D1ESi8JzsdLVQZ+9odXVaNxtwDIaGIqMSccFyuZ9VSoJDde4JXZkgp/0PShbAZDkyw=="],
-
-    "@macro-inc/lexical-core": ["@macro-inc/lexical-core@0.2.0", "https://npm.pkg.github.com/download/@macro-inc/lexical-core/0.2.0/563a7074fe6a985474a160e4db90b1b377c7c1f0", { "peerDependencies": { "@lexical/code": "^0.32.1", "@lexical/link": "^0.32.1", "@lexical/list": "^0.32.1", "@lexical/mark": "^0.32.1", "@lexical/markdown": "^0.32.1", "@lexical/rich-text": "^0.32.1", "@lexical/table": "^0.32.1", "@lexical/utils": "^0.32.1", "lexical": "^0.32.1" } }, "sha512-oThc0D4kLjrGQwilM5Tw6TotVuPF2k8RclimBC/F4r/XTsHUF9veNHxAkeKcyiz2Ws9jOtnH5oxF5xIk1A6SUA=="],
 
     "@poppinss/colors": ["@poppinss/colors@4.1.5", "", { "dependencies": { "kleur": "^4.1.5" } }, "sha512-FvdDqtcRCtz6hThExcFOgW0cWX+xwSMWcRuQe5ZEb2m7cVQOAVZOIMt+/v9RxGiD9/OY16qJBXK4CVKWAPalBw=="],
 
