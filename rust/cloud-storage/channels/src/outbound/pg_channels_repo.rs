@@ -129,10 +129,10 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         let limit_i64 = i64::from(limit);
         let limit_usize = usize::from(limit);
 
-        let message_ids_filter: Option<&[Uuid]> = if filters.top_level_message_ids.is_empty() {
+        let message_ids_filter: Option<&[Uuid]> = if filters.message_ids.is_empty() {
             None
         } else {
-            Some(&filters.top_level_message_ids)
+            Some(&filters.message_ids)
         };
 
         let (rows, has_more_newer) = match direction {

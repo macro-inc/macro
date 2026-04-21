@@ -784,6 +784,134 @@ async fn messages_around_returns_404_when_not_found() {
     assert_eq!(json["message"], "Message not found");
 }
 
+// --- POST /messages filter tests ---
+
+struct CapturingService {
+    captured: std::sync::Mutex<Option<ChannelMessageFilters>>,
+}
+
+impl CapturingService {
+    fn new() -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self {
+            captured: std::sync::Mutex::new(None),
+        })
+    }
+}
+
+impl ChannelMessagesService for std::sync::Arc<CapturingService> {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        filters: &ChannelMessageFilters,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        *self.captured.lock().unwrap() = Some(filters.clone());
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelMessage>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+}
+
+#[tokio::test]
+async fn post_messages_empty_body_uses_default_filters() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from("{}"))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert!(captured.message_ids.is_empty());
+}
+
+#[tokio::test]
+async fn post_messages_forwards_message_ids_filter() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let id_a = Uuid::new_v4();
+    let id_b = Uuid::new_v4();
+    let body = serde_json::json!({ "message_ids": [id_a, id_b] }).to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert_eq!(captured.message_ids, vec![id_a, id_b]);
+}
+
 #[tokio::test]
 async fn thread_replies_returns_empty_list() {
     let router = mock_router();

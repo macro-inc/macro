@@ -18,7 +18,7 @@ pub struct GetChannelMessagesRequest {
 pub struct ChannelMessageFilters {
     /// When non-empty, only return messages with these IDs.
     #[serde(default)]
-    pub top_level_message_ids: Vec<Uuid>,
+    pub message_ids: Vec<Uuid>,
 }
 
 /// Direction for cursor-based message pagination.
