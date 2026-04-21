@@ -73,6 +73,9 @@ function Image(props: {
         loading={props.loading}
         onClick={() => props.onOpen?.()}
         onLoad={() => setLoaded(true)}
+        onDragStart={(e) => {
+          e.dataTransfer?.setData('application/x-macro-internal', '1');
+        }}
       />
     </>
   );
