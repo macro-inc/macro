@@ -608,8 +608,6 @@ export async function markEntitiesDone(args: {
   );
   const notificationIdSet = new Set(notificationIds);
 
-  // Cancel in-flight fetches up front so arriving responses can't clobber
-  // the optimistic update (TanStack Query v5 pattern for optimistic updates).
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
@@ -640,9 +638,6 @@ export async function markEntitiesDone(args: {
     }
   };
 
-  // Flip `done` on target notifications in place. Touching only the specific
-  // items (instead of snapshotting and restoring the whole cache) keeps any
-  // concurrent websocket inserts intact across the undo window.
   const setNotificationDoneFlag = (value: boolean) => {
     if (notificationIdSet.size === 0) return;
     queryClient.setQueriesData<NotificationCacheData>(
@@ -662,8 +657,6 @@ export async function markEntitiesDone(args: {
     );
   };
 
-  // Re-runnable optimistic update. Each application needs a fresh soup
-  // transaction since rollback consumes the previous one.
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
   const applyOptimistic = () => {
     soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
@@ -701,9 +694,6 @@ export async function markEntitiesDone(args: {
       rollback();
       throw err;
     } finally {
-      // Cache is already consistent via the optimistic update (or rollback on
-      // failure). Skip refetches — invalidating the infinite notification
-      // query would otherwise re-fetch every cached page.
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: queryKeys.all.email,
@@ -721,8 +711,6 @@ export async function markEntitiesDone(args: {
   return {
     done,
     undo: async () => {
-      // Wait for the mark-done calls to finish. If they failed, rollback
-      // already happened — nothing to undo.
       try {
         await done;
       } catch {
@@ -753,8 +741,6 @@ export async function markEntitiesDone(args: {
             : Promise.resolve(),
         ]);
       } catch (err) {
-        // Server still thinks these are done — re-apply the optimistic done
-        // state so the UI matches the backend.
         applyOptimistic();
         throw err;
       } finally {

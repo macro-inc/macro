@@ -63,8 +63,6 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
               icon: ArrowCounterClockwise,
               onClick: () => {
                 if (toastId != null) toast.dismiss(toastId);
-                // Invoke this action's own undo so older toasts don't pop
-                // newer entries off the global undo stack.
                 handle?.undo().catch(() => toast.failure('Failed to undo'));
               },
             },

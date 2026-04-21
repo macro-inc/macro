@@ -226,13 +226,8 @@ export async function markNotificationsDone(
 ): Promise<MarkNotificationsDoneHandle> {
   const idSet = new Set(notificationIds);
 
-  // Cancel in-flight fetches up front so an arriving response can't clobber
-  // the optimistic flip (TanStack Query v5 pattern for optimistic updates).
   await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
 
-  // Flip `done` on the targeted notifications in place. Touching only the
-  // specific items (instead of snapshotting and restoring the whole cache)
-  // keeps any concurrent websocket inserts intact.
   const setDoneFlag = (value: boolean) => {
     queryClient.setQueriesData<NotificationCacheData>(
       { queryKey: notificationKeys.user._def },
@@ -265,8 +260,6 @@ export async function markNotificationsDone(
       setDoneFlag(false);
       throw err;
     } finally {
-      // Cache is already consistent via the optimistic flip. refetchType
-      // default would re-fetch every page of the infinite query.
       await queryClient.invalidateQueries({
         queryKey: notificationKeys.user._def,
         refetchType: 'none',
@@ -296,8 +289,6 @@ export async function markNotificationsDone(
             })
         );
       } catch (err) {
-        // Server still thinks these are done — re-apply the optimistic done
-        // state so the UI matches the backend.
         setDoneFlag(true);
         throw err;
       } finally {

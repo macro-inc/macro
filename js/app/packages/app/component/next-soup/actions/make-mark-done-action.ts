@@ -17,14 +17,10 @@ type MakeMarkDoneOptions = {
 type MarkDoneVariables = { entities: EntityData[] };
 type MarkDoneContext = {
   handle: MarkDoneHandle;
-  /** Populated by onSuccess; `handle.done` failures use it to dismiss the stale success toast. */
   setSuccessToastId: (id: number | undefined) => void;
 };
 
-/**
- * Must be invoked inside a component tree that provides `MutationUndoProvider`
- * (via `useUndoableMutation`) and the notification source.
- */
+/** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
 
@@ -34,11 +30,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     MarkDoneVariables,
     MarkDoneContext
   >(() => ({
-    // onMutate does the optimistic work and starts the API calls via the
-    // handle. mutationFn is a no-op so the mutation resolves immediately and
-    // onSuccess fires (pushing the undo entry) before the user can react.
-    // API failures surface via handle.done.catch below, which dismisses the
-    // stale success toast and shows a failure toast.
     mutationFn: async () => {},
     onMutate: async (variables) => {
       const handle = await markEntitiesDone({
@@ -69,8 +60,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             icon: ArrowCounterClockwise,
             onClick: () => {
               if (toastId != null) toast.dismiss(toastId);
-              // Invoke this action's own undo so older toasts don't pop
-              // newer entries off the global undo stack.
               handle?.undo().catch(() => toast.failure('Failed to undo'));
             },
           },
