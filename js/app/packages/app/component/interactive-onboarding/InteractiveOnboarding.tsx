@@ -19,7 +19,7 @@ import { resetSandbox } from './sandbox/sandbox-store';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
-import { ContinueButton, SkipButton } from './components-lib';
+import { ContinueButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
@@ -27,7 +27,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useIsAuthenticated } from '@core/auth';
 import { fetchToken } from '@core/util/fetchWithToken';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import MobileWebWelcome from './MobileWebWelcome';
@@ -106,7 +105,6 @@ function InteractiveOnboardingInner() {
     if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
       return false;
     if (l.id === 'about-us' && isAuthenticated()) return false;
-    if (l.id === 'launch' && !isMobile()) return false;
     return true;
   });
   const lessons = isTouch
@@ -114,7 +112,6 @@ function InteractiveOnboardingInner() {
         (l) =>
           l.id === 'welcome' ||
           l.id === 'about-us' ||
-          l.id === 'email-invite' ||
           l.id === 'choose-plan' ||
           l.id === 'launch'
       )
@@ -194,6 +191,25 @@ function InteractiveOnboardingInner() {
     }
   };
 
+  // Programmatic advance for lessons that progress on their own interaction
+  // (e.g. clicking a plan card) rather than the Continue button.
+  const advanceLesson = () => {
+    const current = state.currentLesson();
+    if (!current) return;
+    analytics.track(
+      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
+      {
+        id: current.definition.id,
+        index: current.index,
+        state: 'completed',
+      }
+    );
+    state.completeLesson(current.definition.id);
+    setReadyToContinue(false);
+    setContinueLabel(undefined);
+    setLessonKey((k) => k + 1);
+  };
+
   const handleContinue = () => {
     const current = state.currentLesson();
     if (!current || !readyToContinue()) return;
@@ -225,26 +241,6 @@ function InteractiveOnboardingInner() {
     }
 
     state.completeLesson(current.definition.id);
-    setReadyToContinue(false);
-    setContinueLabel(undefined);
-    setLessonKey((k) => k + 1);
-  };
-
-  const handleSkip = () => {
-    const current = state.currentLesson();
-
-    if (!current) return;
-
-    analytics.track(
-      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
-      {
-        id: current.definition.id,
-        index: current.index,
-        state: 'skipped',
-      }
-    );
-
-    state.skipLesson(current.definition.id);
     setReadyToContinue(false);
     setContinueLabel(undefined);
     setLessonKey((k) => k + 1);
@@ -296,18 +292,6 @@ function InteractiveOnboardingInner() {
     },
   });
 
-  const skipReg = registerHotkey({
-    scopeId,
-    hotkey: 'escape',
-    description: 'Skip',
-    runWithInputFocused: true,
-    keyDownHandler: () => {
-      if (!state.currentLesson()?.definition.skippable) return false;
-      handleSkip();
-      return true;
-    },
-  });
-
   // Block global cmd+k during the entire tutorial.
   // On the command-k lesson slide this opens/closes the sandbox command menu.
   const cmdkReg = registerHotkey({
@@ -346,7 +330,6 @@ function InteractiveOnboardingInner() {
     CommandState.close = origClose;
   });
   onCleanup(() => reg.dispose());
-  onCleanup(() => skipReg.dispose());
   onCleanup(() => cmdkReg.dispose());
   onCleanup(() => resetSandbox());
 
@@ -360,25 +343,16 @@ function InteractiveOnboardingInner() {
     })
   );
 
-  // Mark tutorial complete on the backend once the email-invite lesson is
-  // completed or skipped — before the paywall step. On touch devices there is
-  // no email-invite step, so we complete after the about-us lesson instead.
+  // Mark tutorial complete on the backend the moment the user lands on the
+  // Launch screen — the semantic end of the onboarding experience. Guarded so
+  // the effect fires the mutation at most once.
+  let tutorialMarkedComplete = false;
   createEffect(() => {
-    if (testMode) return;
-    if (isTouch) {
-      const aboutUs = state
-        .lessons()
-        .find((l) => l.definition.id === 'about-us');
-      if (aboutUs && (aboutUs.completed || aboutUs.skipped)) {
-        completeTutorial.mutate(undefined);
-      }
-    } else {
-      const invite = state
-        .lessons()
-        .find((l) => l.definition.id === 'email-invite');
-      if (invite && (invite.completed || invite.skipped)) {
-        completeTutorial.mutate(undefined);
-      }
+    if (testMode || tutorialMarkedComplete) return;
+    const current = state.currentLesson();
+    if (current?.definition.id === 'launch') {
+      tutorialMarkedComplete = true;
+      completeTutorial.mutate(undefined);
     }
   });
 
@@ -542,23 +516,18 @@ function InteractiveOnboardingInner() {
                           <Dynamic
                             component={lesson().definition.content}
                             onComplete={handleLessonComplete}
+                            advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}
                           />
                         </div>
-                        {/* Show demo inline on touch — skip email-invite's MockAppChrome */}
-                        <Show
-                          when={
-                            lesson().definition.id !== 'email-invite'
-                              ? lesson().definition.demo
-                              : undefined
-                          }
-                        >
+                        <Show when={lesson().definition.demo}>
                           {(Demo) => (
                             <div class="w-full">
                               <Dynamic
                                 component={Demo()}
                                 onComplete={handleLessonComplete}
+                                advance={advanceLesson}
                                 isActive={true}
                                 scopeId={scopeId}
                               />
@@ -576,9 +545,6 @@ function InteractiveOnboardingInner() {
                               disabled={!readyToContinue()}
                               centered={lesson().definition.centeredButton}
                             />
-                            <Show when={lesson().definition.skippable}>
-                              <SkipButton onClick={handleSkip} />
-                            </Show>
                             <Show when={lesson().definition.secondaryAction}>
                               {(Action) => <Dynamic component={Action()} />}
                             </Show>
@@ -613,6 +579,7 @@ function InteractiveOnboardingInner() {
                         <Dynamic
                           component={lesson().definition.content}
                           onComplete={handleLessonComplete}
+                          advance={advanceLesson}
                           isActive={true}
                           scopeId={scopeId}
                         />
@@ -628,9 +595,6 @@ function InteractiveOnboardingInner() {
                             disabled={!readyToContinue()}
                             centered={lesson().definition.centeredButton}
                           />
-                          <Show when={lesson().definition.skippable}>
-                            <SkipButton onClick={handleSkip} />
-                          </Show>
                           <Show when={lesson().definition.secondaryAction}>
                             {(Action) => <Dynamic component={Action()} />}
                           </Show>
@@ -669,6 +633,7 @@ function InteractiveOnboardingInner() {
                           <Dynamic
                             component={Demo()}
                             onComplete={handleLessonComplete}
+                            advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}
                           />

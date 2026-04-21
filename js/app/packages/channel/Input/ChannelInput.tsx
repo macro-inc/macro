@@ -136,6 +136,7 @@ export function ChannelInput(props: ChannelInputProps) {
         inputState.commands.attachFiles(entries.map((entry) => entry.file))
       );
     },
+    onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
   });
   // On iOS, blur before clearing so dictation finalizes and discards its buffer
   // (otherwise it re-injects the sent text into the cleared editor). Re-focus

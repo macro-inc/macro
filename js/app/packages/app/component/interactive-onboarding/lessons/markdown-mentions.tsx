@@ -82,5 +82,4 @@ export const markdownMentionsLesson: LessonDefinition = {
   content: MarkdownMentionsContent,
   demo: MarkdownMentionsDemo,
   order: 50,
-  skippable: true,
 };

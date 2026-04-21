@@ -1,5 +1,5 @@
 import { Show, type Accessor } from 'solid-js';
-import type { ThreadListNavigation, ThreadListScrollState } from './ThreadList';
+import type { ThreadListScrollState } from './ThreadList';
 
 export function shouldShowScrollToBottomButton(
   state: ThreadListScrollState | undefined
@@ -14,8 +14,8 @@ export function shouldShowScrollToBottomButton(
 }
 
 type ScrollToBottomOverlayProps = {
-  navigation: Accessor<ThreadListNavigation | undefined>;
   scrollState: Accessor<ThreadListScrollState | undefined>;
+  onScrollToBottom: () => void;
   class?: string;
 };
 
@@ -26,7 +26,7 @@ export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
         type="button"
         class={`absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 text-xs bg-menu border border-edge-muted hover:bg-hover hover-transition-bg ${props.class ?? ''}`}
         onClick={() => {
-          props.navigation()?.scrollToBottom('end');
+          props.onScrollToBottom();
         }}
       >
         Scroll to bottom

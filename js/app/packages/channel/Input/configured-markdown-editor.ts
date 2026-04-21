@@ -4,6 +4,10 @@ import {
   type ItemMention,
   keyboardShortcutsPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
+import {
+  ActionCategory,
+  type Action,
+} from '@core/component/LexicalMarkdown/plugins/actions/types';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
@@ -11,6 +15,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { IUser } from '@core/user/types';
 import { isIOS } from '@solid-primitives/platform';
 import type { Accessor } from 'solid-js';
+import ImageIcon from '@icon/regular/image.svg';
 
 type CreateConfiguredChannelMarkdownEditorOptions = {
   namespace: string;
@@ -24,6 +29,8 @@ type CreateConfiguredChannelMarkdownEditorOptions = {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  /** Invoked when the user picks the "Image" slash action. Opens a file picker and hands files back. */
+  onAttachFromDisk?: (files: File[]) => void;
   scrollContainer?: Accessor<HTMLElement | undefined>;
 };
 
@@ -49,11 +56,37 @@ export function createConfiguredChannelMarkdownEditor(
 
   editor
     .withEmojis()
+    .withActions({ ignoreActionIds: ['hr', 'table', 'latex'] })
     .withLinks({ floatingMenu: true })
     .withHistory({ timeGap: 400 })
     .withCode()
     .withRestoreFocus()
-    .withSelectionData()
+    .withSelectionData();
+
+  if (options.onAttachFromDisk) {
+    const onAttachFromDisk = options.onAttachFromDisk;
+    const attachFromDiskAction: Action = {
+      id: 'image',
+      name: 'Image',
+      keywords: ['picture', 'photo', 'img', 'upload', 'attach'],
+      category: ActionCategory.MEDIA,
+      icon: ImageIcon,
+      action: () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*';
+        input.addEventListener('change', () => {
+          const files = Array.from(input.files ?? []);
+          if (files.length > 0) onAttachFromDisk(files);
+        });
+        input.click();
+      },
+    };
+    editor.withActions({ additionalActions: [attachFromDiskAction] });
+  }
+
+  editor
     .use(
       tablePlugin({
         hasCellMerge: true,

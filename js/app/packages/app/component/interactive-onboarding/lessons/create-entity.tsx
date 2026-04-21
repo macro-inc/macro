@@ -18,7 +18,8 @@ import {
 import { useListNavigation } from '../use-list-navigation';
 import { OnboardingEntityList } from '../OnboardingEntityList';
 import { MockAppChrome } from '../components/MockAppChrome';
-import { HotkeyCallout } from '../components-lib';
+import { ClickCallout, HotkeyCallout } from '../components-lib';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import {
   filteredSandboxEntities,
@@ -93,11 +94,19 @@ function CreateEntityContent(props: LessonContentProps) {
     >
       <p>
         The <strong>Create Launcher</strong> lets you create Macro Editor
-        quickly, from anywhere. Press <strong>C</strong> to open the Launcher.
+        quickly, from anywhere.
       </p>
-      <HotkeyCallout
-        keys={['C']}
-        label="to open the Create menu"
+      <div class="mt-2">
+        <HotkeyCallout keys={['C']} label="" completed={completed()} />
+      </div>
+      <div class="flex items-center gap-3 text-sm text-ink/40">
+        <div class="h-px w-8 bg-edge-muted" />
+        or
+        <div class="h-px flex-1 bg-edge-muted" />
+      </div>
+      <ClickCallout
+        icon={AnimatedPlusIcon}
+        label="in the sidebar"
         completed={completed()}
       />
     </div>
@@ -145,7 +154,10 @@ function CreateEntityDemo(props: LessonContentProps) {
 
   return (
     <div class="flex flex-col h-full relative">
-      <MockAppChrome>
+      <MockAppChrome
+        onCreateClick={() => setLauncherOpen((v) => !v)}
+        highlightCreate
+      >
         <Show when={sharedSoup()}>
           {(s) => <OnboardingEntityList soup={s()} />}
         </Show>
@@ -180,5 +192,4 @@ export const createEntityLesson: LessonDefinition = {
   content: CreateEntityContent,
   demo: CreateEntityDemo,
   order: 45,
-  skippable: true,
 };

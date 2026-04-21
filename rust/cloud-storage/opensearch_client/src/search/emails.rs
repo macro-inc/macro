@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery};
 
 pub(crate) struct EmailSearchConfig;
@@ -14,7 +14,7 @@ pub(crate) struct EmailSearchConfig;
 impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "subject";
-    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
+    const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Emails;
 }
 
 /// The fields to search across with simple_query_string for email search.

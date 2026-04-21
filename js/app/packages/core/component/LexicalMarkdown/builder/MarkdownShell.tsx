@@ -254,10 +254,16 @@ export const MarkdownShell: Component<
             <ActionMenu
               editor={editor}
               menu={menu()}
-              useBlockBoundary={
-                typeof builderConfig.actions === 'object'
-                  ? (builderConfig.actions.useBlockBoundary ?? false)
-                  : false
+              useBlockBoundary={false}
+              additionalActions={
+                (builderConfig.actions &&
+                  builderConfig.actions.additionalActions) ||
+                undefined
+              }
+              ignoreActionIds={
+                (builderConfig.actions &&
+                  builderConfig.actions.ignoreActionIds) ||
+                undefined
               }
               portalScope={props.portalScope}
             />

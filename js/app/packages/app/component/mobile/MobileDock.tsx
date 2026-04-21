@@ -6,6 +6,7 @@ import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { hapticImpact } from '@core/mobile/haptics';
+import { focusInput } from '@core/directive/focusInput';
 import { type Component, createSignal, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '@ui/utils/classname';
@@ -14,6 +15,8 @@ import type { ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SearchState } from './mobileSearchState';
 import { useLocation } from '@solidjs/router';
+
+false && focusInput;
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
@@ -56,6 +59,37 @@ function MobileDockButton(props: MobileDockButtonProps) {
       <Show when={props.label}>
         <span class="text-xs">{props.label}</span>
       </Show>
+    </button>
+  );
+}
+
+function SearchDockButton(props: { active: boolean; onClick: () => void }) {
+  const [animating, setAnimating] = createSignal(false);
+
+  return (
+    <button
+      type="button"
+      use:focusInput={{
+        getTarget: () => document.getElementById('mobile-search-input'),
+      }}
+      // This needs to be onClick, rather than pointerDown like the other buttons, so that we can use onClick behavior of focusInput before the dialog overlay appears.
+      onClick={() => {
+        hapticImpact('light');
+        setAnimating(true);
+        setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
+        props.onClick();
+      }}
+      class={cn(
+        'flex flex-col items-center justify-center flex-1 pt-3 pb-2 bg-panel border-t border-edge-muted',
+        props.active && 'text-accent'
+      )}
+    >
+      <div class="w-6 h-6 [&_svg]:size-6">
+        <Dynamic
+          component={AnimatedSearchIcon}
+          triggerAnimation={animating()}
+        />
+      </div>
     </button>
   );
 }
@@ -120,8 +154,7 @@ export function MobileDock() {
         active={isActive('agents')}
         onClick={() => navigate('agents')}
       />
-      <MobileDockButton
-        icon={AnimatedSearchIcon}
+      <SearchDockButton
         active={isActive('search')}
         onClick={() => {
           SearchState.maybeResetState();

@@ -11,11 +11,16 @@ import type {
   PluginManager,
   SelectionData,
 } from '../plugins';
+import type { Action } from '../plugins/actions/types';
 import type { createMenuOperations } from '../shared/inlineMenu';
 import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 
 export interface ActionsOptions {
   useBlockBoundary?: boolean;
+  /** Extra actions to append to the default slash-menu actions. */
+  additionalActions?: Action[];
+  /** IDs of default actions to hide from the slash menu. */
+  ignoreActionIds?: string[];
 }
 
 export interface MentionsOptions {
