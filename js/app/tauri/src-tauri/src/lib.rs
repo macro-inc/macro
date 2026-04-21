@@ -323,6 +323,16 @@ fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handl
     if url.contains("services.macro.com") || url.contains("services-dev.macro.com") {
         headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
     }
+
+    // The sync service (macroverse.workers.dev) also validates Origin.
+    if url.contains("macroverse.workers.dev") {
+        let origin = if cfg!(debug_assertions) {
+            "https://dev.macro.com"
+        } else {
+            "https://macro.com"
+        };
+        headers.insert(ORIGIN, HeaderValue::from_static(origin));
+    }
 }
 
 trait AppChain {
