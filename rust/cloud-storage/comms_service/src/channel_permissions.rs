@@ -83,7 +83,7 @@ pub async fn update_channel_share_permission(
     // Insert channel share permission
     if let Err(e) =
         macro_db_client::share_permission::channel_permission::create::insert_channel_share_permission(
-            db,
+            &mut *transaction,
             &share_permission_id,
             channel_id,
             &channel_share_permission_access_level,
