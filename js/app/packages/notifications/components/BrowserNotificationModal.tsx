@@ -2,8 +2,11 @@ import Bell from '@icon/regular/bell.svg';
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
 import { useIsAuthenticated } from '@queries/auth';
-import { createEffect } from 'solid-js';
-import { useNotificationSettings } from '../notification-settings';
+import { createMemo, onMount, Show } from 'solid-js';
+import {
+  type SupportedNotificationSettings,
+  useNotificationSettings,
+} from '../notification-settings';
 
 export const BrowserNotificationModal = () => {
   const settings = useNotificationSettings();
@@ -12,17 +15,25 @@ export const BrowserNotificationModal = () => {
 
   if (!settings.isSupported) return null;
 
-  let shown = false;
+  const shouldShow = createMemo(
+    () =>
+      !import.meta.env.DEV &&
+      settings.shouldPrompt() &&
+      isAuthenticated() &&
+      !!tutorialCompleted()
+  );
 
-  createEffect(() => {
-    if (shown) return;
-    if (import.meta.env.DEV) return;
-    if (!settings.shouldPrompt()) return;
-    if (!isAuthenticated()) return;
-    if (!tutorialCompleted()) return;
+  return (
+    <Show when={shouldShow()}>
+      <NotificationToastTrigger settings={settings} />
+    </Show>
+  );
+};
 
-    shown = true;
-
+function NotificationToastTrigger(props: {
+  settings: SupportedNotificationSettings;
+}) {
+  onMount(() => {
     const toastId = toast.custom(
       {
         title: 'Enable Browser Notifications',
@@ -37,7 +48,7 @@ export const BrowserNotificationModal = () => {
           {
             label: 'Hide',
             onClick: () => {
-              settings.dismissPrompt();
+              props.settings.dismissPrompt();
               toast.dismiss(toastId);
             },
           },
@@ -45,7 +56,7 @@ export const BrowserNotificationModal = () => {
             label: 'Enable',
             onClick: async () => {
               try {
-                await settings.toggle(true);
+                await props.settings.toggle(true);
               } catch (error) {
                 console.error('Failed to enable notifications:', error);
               }
@@ -59,4 +70,4 @@ export const BrowserNotificationModal = () => {
   });
 
   return null;
-};
+}
