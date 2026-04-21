@@ -1,5 +1,6 @@
 import './ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
+import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
@@ -40,7 +41,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import { DraftBadge, SharedBadge } from '../components/Badges';
+import { AttendanceBadge, DraftBadge, SharedBadge } from '../components/Badges';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../components/UnreadIndicator';
@@ -364,6 +365,7 @@ function NarrowLayout(props: LayoutProps) {
 }
 
 function NarrowInboxLayout(props: LayoutProps) {
+  const soupView = useMaybeSoupView();
   const isDirectMessage = () =>
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
@@ -580,12 +582,15 @@ function NarrowInboxLayout(props: LayoutProps) {
               <span class="text-ink-muted text-xs truncate">
                 {entity().channelName ?? 'Call'}
               </span>
-              <span class="text-ink-extra-muted text-xs">
+              <span class="text-ink-extra-muted text-xs flex items-center gap-2">
                 <Show
                   when={entity().durationMs}
                   fallback={entity().isActive ? 'In progress' : 'No duration'}
                 >
                   {(ms) => formatCallDuration(ms())}
+                </Show>
+                <Show when={soupView?.activeTab() === 'all'}>
+                  <AttendanceBadge attended={entity().attended} />
                 </Show>
               </span>
             </Entity.Slot>
@@ -605,6 +610,7 @@ function WideLayout(props: LayoutProps) {
     HTMLElement | undefined
   >();
   const chars = useCharacterCount(emailSnippetContainerRef);
+  const soupView = useMaybeSoupView();
 
   return (
     <Entity.Layout
@@ -767,6 +773,13 @@ function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={props.isShared}>
           <SharedBadge ownerId={props.entity.ownerId} />
+        </Show>
+        <Show when={isCallEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <Show when={soupView?.activeTab() === 'all'}>
+              <AttendanceBadge attended={entity().attended} />
+            </Show>
+          )}
         </Show>
         <Show when={isTaskEntity(props.entity) && props.entity}>
           {(entity) => <Entity.Properties entity={entity()} />}
