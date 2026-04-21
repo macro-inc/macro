@@ -192,40 +192,40 @@ export const INDEX_OPTIONS: IndexOption[] = [
 ];
 
 export function useSearchIndexController() {
-  const { soup } = useSoupView();
+  const { soup, queryFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
 
   const changeIndex = (newValue: string) => {
     batch(() => {
       for (const opt of INDEX_OPTIONS) {
-        if (soup.filters.predicates.isActive(opt.value)) {
-          soup.filters.predicates.toggle({ or: [opt.value as FilterID] });
+        if (soup.predicates.isActive(opt.value)) {
+          soup.predicates.toggle({ or: [opt.value as FilterID] });
         }
       }
 
       if (newValue === 'all') {
         cacheChannelSubFilters(contentId, {});
-        soup.filters.query.clear();
-        soup.filters.query.add({ include: { emailImportance: true } });
+        queryFilters.clear();
+        queryFilters.add({ include: { emailImportance: true } });
         return;
       }
 
       const opt = INDEX_OPTIONS.find((o) => o.value === newValue);
       if (!opt) return;
-      soup.filters.predicates.toggle({ or: [opt.value as FilterID] });
+      soup.predicates.toggle({ or: [opt.value as FilterID] });
 
       if (opt.value === 'channels') {
         const cached = getCachedChannelSubFilters(contentId);
-        soup.filters.query.clear();
-        soup.filters.query.add(opt.filterData);
+        queryFilters.clear();
+        queryFilters.add(opt.filterData);
         if (cached.channel_ids?.length) {
-          soup.filters.query.add({
+          queryFilters.add({
             include: { channelId: cached.channel_ids },
           });
         }
         if (cached.sender_ids?.length) {
-          soup.filters.query.add({
+          queryFilters.add({
             include: { channelSenderId: cached.sender_ids },
           });
         }
@@ -235,14 +235,14 @@ export function useSearchIndexController() {
           'importance' in cached
             ? (cached.importance ?? undefined)
             : opt.filterData.include?.emailImportance;
-        soup.filters.query.clear();
-        soup.filters.query.add(opt.filterData);
+        queryFilters.clear();
+        queryFilters.add(opt.filterData);
         if (importance !== undefined) {
-          soup.filters.query.add({ include: { emailImportance: importance } });
+          queryFilters.add({ include: { emailImportance: importance } });
         }
       } else {
-        soup.filters.query.clear();
-        soup.filters.query.add(opt.filterData);
+        queryFilters.clear();
+        queryFilters.add(opt.filterData);
       }
     });
   };

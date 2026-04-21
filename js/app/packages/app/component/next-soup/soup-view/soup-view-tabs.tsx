@@ -94,7 +94,7 @@ export const useApplyPreset = () => {
         exclude: preset.filters.exclude ?? {},
         emailView: preset.filters.emailView,
       });
-      soup.filters.predicates.set(preset.clientFilters);
+      soup.predicates.set(preset.clientFilters);
     });
     return true;
   };

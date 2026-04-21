@@ -506,7 +506,7 @@ const SearchableFilterSubmenu = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, filters, assigneeFilter, setAssigneeFilter } =
+  const { soup, queryFilters, filters, assigneeFilter, setAssigneeFilter } =
     useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
@@ -526,14 +526,14 @@ export const UnifiedFilterDropdown = () => {
   });
 
   const isOptionActive = (optionId: string) => {
-    return soup.filters.predicates.isActive(optionId);
+    return soup.predicates.isActive(optionId);
   };
 
   const toggleFilter = (optionId: string) => {
-    const wasActive = soup.filters.predicates.isActive(optionId);
-    soup.filters.predicates.toggle({ or: [optionId] });
+    const wasActive = soup.predicates.isActive(optionId);
+    soup.predicates.toggle({ or: [optionId] });
 
-    const filter = soup.filters.predicates.getFilter(optionId);
+    const filter = soup.predicates.getConfig(optionId);
     if (!filter?.query) return;
 
     const ctx: FilterContext = {
@@ -544,9 +544,9 @@ export const UnifiedFilterDropdown = () => {
       typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
 
     if (wasActive) {
-      soup.filters.query.remove(query);
+      queryFilters.remove(query);
     } else {
-      soup.filters.query.add(query);
+      queryFilters.add(query);
     }
   };
 
@@ -602,18 +602,18 @@ export const UnifiedFilterDropdown = () => {
 
     const query = { include: { properties: [assigneeProp] } };
     if (wasActive) {
-      soup.filters.query.remove(query);
+      queryFilters.remove(query);
     } else {
-      soup.filters.query.add(query);
+      queryFilters.add(query);
     }
   };
 
   const isTasksView = () => currentView() === 'tasks';
   const isSearchView = () => currentView() === 'search';
-  const isChannelsIndexActive = () => soup.filters.predicates.isActive('channels');
-  const isEmailIndexActive = () => soup.filters.predicates.isActive('email');
+  const isChannelsIndexActive = () => soup.predicates.isActive('channels');
+  const isEmailIndexActive = () => soup.predicates.isActive('email');
   const hasActiveIndex = () =>
-    INDEX_OPTIONS.some((opt) => soup.filters.predicates.isActive(opt.value));
+    INDEX_OPTIONS.some((opt) => soup.predicates.isActive(opt.value));
 
   const { changeIndex: handleIndexChange } = useSearchIndexController();
 
@@ -648,9 +648,9 @@ export const UnifiedFilterDropdown = () => {
         ? current.filter((cid) => cid !== id)
         : [...current, id];
       if (nextIds.length > 0) {
-        soup.filters.query.add({ include: { channelId: nextIds } });
+        queryFilters.add({ include: { channelId: nextIds } });
       } else {
-        soup.filters.query.remove({ include: { channelId: current } });
+        queryFilters.remove({ include: { channelId: current } });
       }
     });
   };
@@ -667,9 +667,9 @@ export const UnifiedFilterDropdown = () => {
         ? current.filter((sid) => sid !== id)
         : [...current, id];
       if (nextIds.length > 0) {
-        soup.filters.query.add({ include: { channelSenderId: nextIds } });
+        queryFilters.add({ include: { channelSenderId: nextIds } });
       } else {
-        soup.filters.query.remove({ include: { channelSenderId: current } });
+        queryFilters.remove({ include: { channelSenderId: current } });
       }
     });
   };
@@ -678,9 +678,9 @@ export const UnifiedFilterDropdown = () => {
     batch(() => {
       if (!isEmailIndexActive()) handleIndexChange('email');
       if (val !== undefined) {
-        soup.filters.query.add({ include: { emailImportance: val } });
+        queryFilters.add({ include: { emailImportance: val } });
       } else {
-        soup.filters.query.remove({ include: { emailImportance: filters().include.emailImportance } });
+        queryFilters.remove({ include: { emailImportance: filters().include.emailImportance } });
       }
     });
   };
@@ -795,7 +795,7 @@ export const UnifiedFilterDropdown = () => {
                     <For each={INDEX_OPTIONS}>
                       {(option) => {
                         const active = () =>
-                          soup.filters.predicates.isActive(option.value);
+                          soup.predicates.isActive(option.value);
                         const hasSub =
                           option.value === 'channels' ||
                           option.value === 'email';

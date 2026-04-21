@@ -113,7 +113,7 @@ export const MobileFilterDrawer = () => {
     categories().length > 0 || isTasksView() || sortOptions().length > 0;
 
   const toggleFilter = (optionId: FilterOption['id']) => {
-    soup.filters.predicates.toggle({ or: [optionId] });
+    soup.predicates.toggle({ or: [optionId] });
   };
 
   const toggleAssignee = (id: string) => {
@@ -287,7 +287,7 @@ export const MobileFilterDrawer = () => {
                         const activeCount = createMemo(
                           () =>
                             category.options.filter((o) =>
-                              soup.filters.predicates.isActive(o.id)
+                              soup.predicates.isActive(o.id)
                             ).length
                         );
                         return (
@@ -320,7 +320,7 @@ export const MobileFilterDrawer = () => {
                               <For each={category.options}>
                                 {(option) => {
                                   const active = () =>
-                                    soup.filters.predicates.isActive(option.id);
+                                    soup.predicates.isActive(option.id);
                                   return (
                                     <button
                                       type="button"

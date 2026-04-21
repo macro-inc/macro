@@ -5,10 +5,9 @@ import {
   type FilterDefinition,
 } from '@app/component/next-soup/filters/configs/';
 import {
-  createFilterStore,
-  type FilterConfig,
-  type Query,
-} from '@app/component/next-soup/filters/filter-store';
+  createPredicatesStore,
+  type PredicateConfig,
+} from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
@@ -18,13 +17,12 @@ import { createMemo, createSignal } from 'solid-js';
 
 type SoupEntity = EntityData | WithSearch<EntityData>;
 
-/** Converts FilterDefinition[] to FilterConfig[] (predicates evaluate without context) */
-const toFilterConfigs = (
+const toPredicateConfigs = (
   filters: readonly FilterDefinition[]
-): FilterConfig<SoupEntity, string>[] =>
+): PredicateConfig<SoupEntity, string>[] =>
   filters.map((f) => ({
     id: f.id,
-    predicate: f.predicate ?? (() => true), // Context-aware filtering can happen in soup-view-context
+    predicate: f.predicate,
     query: f.query,
   }));
 
@@ -42,34 +40,27 @@ export type SortConfig<T> = {
 
 interface SoupContextOptions<TId extends string = FilterID> {
   initialData?: SoupEntity[];
-  initialFilters?: {
-    and?: readonly TId[];
-    or?: readonly TId[];
+  initialPredicates?: {
+    and?: TId[];
+    or?: TId[];
   };
-  initialQuery?: Query;
-  filterConfigs?: FilterConfig<SoupEntity, string>[];
+  predicateConfigs?: PredicateConfig<SoupEntity, string>[];
   wrapNavigation?: boolean;
 }
 
 export const createSoupState = <TId extends string = FilterID>(
   options: SoupContextOptions<TId> = { wrapNavigation: false }
 ) => {
-  const {
-    wrapNavigation,
-    initialData,
-    initialFilters,
-    initialQuery,
-    filterConfigs,
-  } = options;
+  const { wrapNavigation, initialData, initialPredicates, predicateConfigs } =
+    options;
 
   const selection = createSelectionState<SoupEntity>({
     getItemId: (i) => i.id,
   });
 
-  const filters = createFilterStore({
-    filters: filterConfigs ?? toFilterConfigs(SOUP_FILTERS),
-    initialFilters,
-    initialQuery,
+  const predicates = createPredicatesStore({
+    configs: predicateConfigs ?? toPredicateConfigs(SOUP_FILTERS),
+    initial: initialPredicates,
   });
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
@@ -163,7 +154,7 @@ export const createSoupState = <TId extends string = FilterID>(
   return {
     data,
     setData,
-    filters,
+    predicates,
     selection,
     sort,
     groups,
@@ -208,7 +199,7 @@ export const createSoupState = <TId extends string = FilterID>(
       set: setCollapseEntityCallback,
       shouldCollapse: () => {
         return (
-          filters.predicates.isActive('not-done') &&
+          predicates.isActive('not-done') &&
           collapseEntityCallback() !== undefined &&
           isModality('touch')
         );

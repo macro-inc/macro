@@ -28,7 +28,12 @@ import {
   useContext,
 } from 'solid-js';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
-import type { Query, QueryState } from '@app/component/next-soup/filters/filter-store';
+import {
+  createQueryStore,
+  type Query,
+  type QueryState,
+  type QueryStore,
+} from '@app/component/next-soup/filters/filter-store/query-store';
 import { useUserId } from '@core/context/user';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
@@ -72,6 +77,7 @@ interface SoupViewContextValues {
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
+  queryFilters: QueryStore;
   filters: Accessor<QueryState>;
   setFilters: (next: QueryState) => void;
   assigneeFilter: Accessor<string[]>;
@@ -113,7 +119,9 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
 export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
-  const soup = props.soup ?? createSoupState({ initialQuery: props.initialQuery });
+  const soup = props.soup ?? createSoupState();
+
+  const queryFilters = createQueryStore({ initial: props.initialQuery });
 
   const queryClient = useQueryClient();
 
@@ -147,7 +155,7 @@ export const SoupViewContextProvider: FlowComponent<
         return prev;
       }
     );
-    soup.filters.query.set(next);
+    queryFilters.set(next);
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
@@ -157,17 +165,17 @@ export const SoupViewContextProvider: FlowComponent<
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
-    if (!soup.filters.predicates.isActive('task')) {
+    if (!soup.predicates.isActive('task')) {
       setAssigneeFilter([]);
     }
   });
 
-  // soupBody is derived from the filter store's compiled AST
-  const soupBody = createMemo(() => soup.filters.query.compile());
+  // soupBody is derived from the query filter store's compiled AST
+  const soupBody = createMemo(() => queryFilters.compile());
 
   const search = createSearchState({
     soup,
-    filters: () => soup.filters.query.state,
+    filters: () => queryFilters.state,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
     searchMentions,
@@ -271,7 +279,7 @@ export const SoupViewContextProvider: FlowComponent<
 
     const next = [];
     for (const entity of transformed) {
-      if (!soup.filters.predicates.test(entity, ctx)) {
+      if (!soup.predicates.test(entity, ctx)) {
         continue;
       }
       next.push(entity);
@@ -350,7 +358,8 @@ export const SoupViewContextProvider: FlowComponent<
     featuredIds: search.featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
-    filters: () => soup.filters.query.state,
+    queryFilters,
+    filters: () => queryFilters.state,
     setFilters,
     assigneeFilter,
     setAssigneeFilter,

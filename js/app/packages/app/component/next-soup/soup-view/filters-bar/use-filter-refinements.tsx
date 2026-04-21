@@ -50,6 +50,7 @@ const TAB_ONLY_FILTERS = new Set([
 export function useFilterRefinements() {
   const {
     soup,
+    queryFilters,
     filters: filterData,
     assigneeFilter,
     setAssigneeFilter,
@@ -93,7 +94,7 @@ export function useFilterRefinements() {
       ...(preset.clientFilters.or ?? []),
     ]);
 
-    const currentIds = new Set(soup.filters.predicates.activeIds() as FilterID[]);
+    const currentIds = new Set(soup.predicates.activeIds() as FilterID[]);
 
     const hasClientFilterDiff =
       expectedIds.size !== currentIds.size ||
@@ -148,7 +149,7 @@ export function useFilterRefinements() {
     for (const category of viewCategories()) {
       for (const option of category.options) {
         if (
-          !soup.filters.predicates.isActive(option.id) ||
+          !soup.predicates.isActive(option.id) ||
           TAB_ONLY_FILTERS.has(option.id) ||
           presetFilterIds.has(option.id as FilterID)
         ) {
@@ -172,7 +173,7 @@ export function useFilterRefinements() {
     for (const option of INDEX_OPTIONS) {
       const optionId = option.value as FilterID;
       if (
-        !soup.filters.predicates.isActive(optionId) ||
+        !soup.predicates.isActive(optionId) ||
         coveredByView.has(optionId) ||
         presetFilterIds.has(optionId)
       ) {
@@ -205,7 +206,7 @@ export function useFilterRefinements() {
         onRemove: () => {
           batch(() => {
             setAssigneeFilter(assigneeFilter().filter((a) => a !== id));
-            soup.filters.query.remove({
+            queryFilters.remove({
               include: {
                 properties: [{ propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES, type: 'entity', value: id }],
               },
@@ -233,9 +234,9 @@ export function useFilterRefinements() {
     const setChannelIds = (ids: string[]) => {
       const current = filterData().include.channelId ?? [];
       if (ids.length > 0) {
-        soup.filters.query.add({ include: { channelId: ids } });
+        queryFilters.add({ include: { channelId: ids } });
       } else if (current.length > 0) {
-        soup.filters.query.remove({ include: { channelId: current } });
+        queryFilters.remove({ include: { channelId: current } });
       }
     };
     if (channelIds.length > 0) {
@@ -257,9 +258,9 @@ export function useFilterRefinements() {
     const setSenderIds = (ids: string[]) => {
       const current = filterData().include.channelSenderId ?? [];
       if (ids.length > 0) {
-        soup.filters.query.add({ include: { channelSenderId: ids } });
+        queryFilters.add({ include: { channelSenderId: ids } });
       } else if (current.length > 0) {
-        soup.filters.query.remove({ include: { channelSenderId: current } });
+        queryFilters.remove({ include: { channelSenderId: current } });
       }
     };
     if (senderIds.length > 0) {
@@ -277,7 +278,7 @@ export function useFilterRefinements() {
 
     // Email importance (only when the email index is active in the search view
     // and the user has explicitly set a value — undefined means "All", no chip)
-    if (currentView() === 'search' && soup.filters.predicates.isActive('email')) {
+    if (currentView() === 'search' && soup.predicates.isActive('email')) {
       const importance = filterData().include.emailImportance;
       if (importance !== undefined) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
@@ -296,9 +297,9 @@ export function useFilterRefinements() {
           multiple: false,
           isOptionActive: (optionId) => optionId === currentOptionId,
           onRemove: () =>
-            soup.filters.query.remove({ include: { emailImportance: importance } }),
+            queryFilters.remove({ include: { emailImportance: importance } }),
           onReplace: (newOptionId) =>
-            soup.filters.query.add({ include: { emailImportance: newOptionId === IMPORTANCE_SIGNAL } }),
+            queryFilters.add({ include: { emailImportance: newOptionId === IMPORTANCE_SIGNAL } }),
         });
       }
     }
@@ -307,7 +308,7 @@ export function useFilterRefinements() {
   });
 
   const isOptionActive = (optionId: string) => {
-    return soup.filters.predicates.isActive(optionId);
+    return soup.predicates.isActive(optionId);
   };
 
   const getFilterContext = (): FilterContext => ({
@@ -316,7 +317,7 @@ export function useFilterRefinements() {
   });
 
   const getFilterQuery = (optionId: string) => {
-    const filter = soup.filters.predicates.getFilter(optionId);
+    const filter = soup.predicates.getConfig(optionId);
     if (!filter?.query) return undefined;
     return typeof filter.query === 'function'
       ? filter.query(getFilterContext())
@@ -326,9 +327,9 @@ export function useFilterRefinements() {
   const removeFilter = (optionId: string) => {
     const query = getFilterQuery(optionId);
     batch(() => {
-      soup.filters.predicates.toggle({ or: [optionId as FilterID] });
+      soup.predicates.toggle({ or: [optionId as FilterID] });
       if (query) {
-        soup.filters.query.remove(query);
+        queryFilters.remove(query);
       }
     });
   };
@@ -337,10 +338,10 @@ export function useFilterRefinements() {
     const oldQuery = getFilterQuery(oldOptionId);
     const newQuery = getFilterQuery(newOptionId);
     batch(() => {
-      soup.filters.predicates.toggle({ or: [oldOptionId as FilterID] });
-      soup.filters.predicates.toggle({ or: [newOptionId as FilterID] });
-      if (oldQuery) soup.filters.query.remove(oldQuery);
-      if (newQuery) soup.filters.query.add(newQuery);
+      soup.predicates.toggle({ or: [oldOptionId as FilterID] });
+      soup.predicates.toggle({ or: [newOptionId as FilterID] });
+      if (oldQuery) queryFilters.remove(oldQuery);
+      if (newQuery) queryFilters.add(newQuery);
     });
   };
 
@@ -349,10 +350,10 @@ export function useFilterRefinements() {
     if (!preset) return;
 
     batch(() => {
-      soup.filters.predicates.set(preset.clientFilters);
-      soup.filters.query.clear();
+      soup.predicates.set(preset.clientFilters);
+      queryFilters.clear();
       if (preset.filters) {
-        soup.filters.query.add(preset.filters);
+        queryFilters.add(preset.filters);
       }
       setAssigneeFilter([]);
     });

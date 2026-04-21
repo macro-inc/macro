@@ -111,11 +111,12 @@ const Block: Component = () => {
   }
 
   const projectSoup = createSoupState({
-    initialFilters: { and: ['project-content'] },
-    filterConfigs: [
+    initialPredicates: { and: ['project-content'] },
+    predicateConfigs: [
       {
         id: 'project-content',
-        predicate: (entity) => PROJECT_ENTITY_TYPES.includes(entity.type),
+        predicate: (entity: { type: string }) =>
+          PROJECT_ENTITY_TYPES.includes(entity.type),
       },
     ],
   });

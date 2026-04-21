@@ -431,7 +431,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // Focus first entity on filter/search changes
   createEffect(
     on(
-      () => [soup.filters.predicates.activeIds(), searchText(), featuredIds()] as const,
+      () => [soup.predicates.activeIds(), searchText(), featuredIds()] as const,
       () => {
         if (!focusEffectsEnabled()) return;
         focusFirstEntity();
@@ -687,7 +687,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         applyTabPreset(contentId, initialPersistedState.activeTab);
       if (!applied) {
         batch(() => {
-          soup.filters.predicates.set(
+          soup.predicates.set(
             isStale
               ? (props.initialClientFilters ?? {})
               : initialPersistedState.filters
@@ -716,7 +716,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       });
     } else {
       if (props.initialClientFilters) {
-        soup.filters.predicates.set(props.initialClientFilters);
+        soup.predicates.set(props.initialClientFilters);
       }
       // Set default tab for list views when no persisted state exists
       if (isListViewID(contentId)) {
@@ -735,8 +735,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
           version: PERSISTED_STATE_VERSION,
           activeTab: activeTab(),
           filters: {
-            and: [...soup.filters.predicates.andIds()],
-            or: [...soup.filters.predicates.orIds()],
+            and: [...soup.predicates.andIds()],
+            or: [...soup.predicates.orIds()],
           },
           filterData: JSON.parse(JSON.stringify(filters())),
           sort: soup.sort.active().map((s) => s.id),
@@ -908,8 +908,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   soup.focus.set(row.original.id);
                                 }}
                                 showUnrollNotifications={
-                                  soup.filters.predicates.isActive('inbox') &&
-                                  !soup.filters.predicates.isActive('noise')
+                                  soup.predicates.isActive('inbox') &&
+                                  !soup.predicates.isActive('noise')
                                 }
                                 checked={row.isSelected()}
                                 onChecked={(next: boolean, shiftKey: boolean) =>

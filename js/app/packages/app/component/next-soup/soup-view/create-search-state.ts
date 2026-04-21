@@ -206,10 +206,11 @@ export const createSearchState = ({
   const allFiltersResults = createMemo((): Map<string, EntityData[]> => {
     if (!localFuzzyResults()) return new Map();
     const filterToResultMap = new Map<string, EntityData[]>();
-    for (const filter of soup.filters.predicates.available) {
+    for (const filter of soup.predicates.available) {
+      if (!filter.predicate) continue;
       filterToResultMap.set(
         filter.id,
-        localFuzzyResults().filter((e) => filter.predicate(e))
+        localFuzzyResults().filter((e) => filter.predicate!(e))
       );
     }
     return filterToResultMap;
@@ -226,7 +227,7 @@ export const createSearchState = ({
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
     if (hasChannelQueryFilters()) return [];
-    const activeIds = soup.filters.predicates
+    const activeIds = soup.predicates
       .activeIds()
       .filter((id) => id !== 'explicit-noise');
     const results =
