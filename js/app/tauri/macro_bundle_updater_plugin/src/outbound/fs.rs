@@ -95,4 +95,16 @@ impl FsRepo for FileSystem {
     fn read_to_string(&self, path: &std::path::Path) -> Result<String, std::io::Error> {
         std::fs::read_to_string(path)
     }
+
+    fn write(&self, path: &std::path::Path, contents: &[u8]) -> Result<(), std::io::Error> {
+        std::fs::write(path, contents)
+    }
+
+    fn remove_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
+        match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
 }

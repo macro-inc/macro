@@ -43,6 +43,12 @@ pub trait FsRepo: Send + Sync + 'static {
 
     /// Read a file's contents as a string.
     fn read_to_string(&self, path: &Path) -> Result<String, std::io::Error>;
+
+    /// Write bytes to a file, creating or overwriting it.
+    fn write(&self, path: &Path, contents: &[u8]) -> Result<(), std::io::Error>;
+
+    /// Remove a file. Returns `Ok(())` if the file does not exist.
+    fn remove_file(&self, path: &Path) -> Result<(), std::io::Error>;
 }
 
 pub trait SystemQuery: Send + Sync + 'static {

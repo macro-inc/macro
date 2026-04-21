@@ -1,15 +1,16 @@
 use crate::domain::{
     models::{
-        CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus, UpdateApproval,
-        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateStatus,
+        BundleRoot, CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus,
+        UpdateApproval, UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
 use rootcause::{Report, prelude::ResultExt, report};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct Service {
     handle: WorkerHandle,
+    bundle_root: BundleRoot,
 }
 
 /// Sender half the worker uses to offer a oneshot back to the main thread.
@@ -275,7 +276,36 @@ impl Service {
         system_query: Q,
     ) -> Self {
         let handle = Worker::new_handle(update_repo, fs_repo, system_query);
-        Service { handle }
+        Service {
+            handle,
+            bundle_root: BundleRoot::new(),
+        }
+    }
+
+    /// Load persisted bundle root from the given cache directory.
+    pub fn load_bundle_root(&mut self, cache_dir: &Path, fs: &impl FsRepo) {
+        self.bundle_root = BundleRoot::load(cache_dir, fs);
+    }
+
+    /// Get the current bundle root path, if an OTA update has been applied.
+    pub fn bundle_root_path(&self) -> Option<&Path> {
+        self.bundle_root.path()
+    }
+
+    /// Set the bundle root to a new directory and persist it.
+    pub fn set_bundle_root(
+        &mut self,
+        path: PathBuf,
+        cache_dir: &Path,
+        fs: &impl FsRepo,
+    ) -> Result<(), std::io::Error> {
+        self.bundle_root.set(path);
+        self.bundle_root.persist(cache_dir, fs)
+    }
+
+    /// Read the bundle version from `semver.txt` inside the current bundle root.
+    pub fn bundle_version(&self, fs: &impl FsRepo) -> Option<semver::Version> {
+        self.bundle_root.version(fs)
     }
 }
 

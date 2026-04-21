@@ -31,8 +31,12 @@ impl<R: Runtime> SystemInfo<R> {
         // in the bundle root so the server can compare build metadata accurately.
         if let Some(v) = self
             .app_handle
-            .try_state::<crate::BundleRoot>()
-            .and_then(|br| br.version(&crate::outbound::fs::FileSystem))
+            .try_state::<std::sync::Mutex<crate::domain::service::Service>>()
+            .and_then(|s| {
+                s.lock()
+                    .ok()?
+                    .bundle_version(&crate::outbound::fs::FileSystem)
+            })
         {
             return v;
         }

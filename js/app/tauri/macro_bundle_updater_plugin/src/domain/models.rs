@@ -5,6 +5,79 @@ use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, channel};
 use url::Url;
 
+use super::ports::FsRepo;
+
+/// Name of the file used to persist the bundle root path across restarts.
+const BUNDLE_ROOT_FILE: &str = "bundle_root";
+
+/// Swappable root directory for serving frontend assets.
+/// `None` = use built-in asset resolver (initial bundle from `frontendDist`).
+/// `Some(path)` = serve files from this directory (after OTA update).
+pub(crate) struct BundleRoot(Option<PathBuf>);
+
+impl BundleRoot {
+    /// Create an empty bundle root (no OTA update applied).
+    pub(crate) fn new() -> Self {
+        Self(None)
+    }
+
+    /// Load persisted bundle root from the given cache directory.
+    pub(crate) fn load(cache_dir: &Path, fs: &impl FsRepo) -> Self {
+        let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
+        tracing::info!("Loading bundle root from {persist_path:?}");
+        match fs.read_to_string(&persist_path) {
+            Ok(contents) => {
+                let path = PathBuf::from(contents.trim());
+                let index = path.join("index.html");
+                // Check existence via read — if index.html is unreadable, treat as missing.
+                if fs.read_to_string(&index).is_ok() {
+                    tracing::info!("Restored bundle root: {path:?}");
+                    Self(Some(path))
+                } else {
+                    tracing::warn!(
+                        "Persisted bundle root {path:?} missing index.html at {index:?}"
+                    );
+                    Self(None)
+                }
+            }
+            Err(e) => {
+                tracing::info!("No persisted bundle root: {e}");
+                Self(None)
+            }
+        }
+    }
+
+    /// Persist the bundle root path so it survives app restarts.
+    pub(crate) fn persist(&self, cache_dir: &Path, fs: &impl FsRepo) -> Result<(), std::io::Error> {
+        let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
+        match self.0.as_ref() {
+            Some(root) => {
+                tracing::info!("Persisting bundle root {root:?} to {persist_path:?}");
+                fs.write(&persist_path, root.to_string_lossy().as_bytes())
+            }
+            None => fs.remove_file(&persist_path),
+        }
+    }
+
+    /// Get the current bundle root path, if any.
+    pub(crate) fn path(&self) -> Option<&Path> {
+        self.0.as_deref()
+    }
+
+    /// Set the bundle root to a new path.
+    pub(crate) fn set(&mut self, path: PathBuf) {
+        self.0 = Some(path);
+    }
+
+    /// Read the bundle version from `semver.txt` inside the bundle root.
+    pub(crate) fn version(&self, fs: &impl FsRepo) -> Option<semver::Version> {
+        let semver_path = self.0.as_ref()?.join("semver.txt");
+        fs.read_to_string(&semver_path)
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+    }
+}
+
 /// the bounded size of mpsc channels
 const MPSC_CHAN_SIZE: usize = 10;
 

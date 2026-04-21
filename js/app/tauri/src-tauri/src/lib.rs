@@ -1,12 +1,12 @@
 use logger::Logger;
-use macro_bundle_updater_plugin::BundleRoot;
+use macro_bundle_updater_plugin::domain::service::Service;
+use macro_bundle_updater_plugin::outbound::fs::FileSystem;
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
 use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
-use std::sync::RwLock;
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{Manager, Runtime};
 
@@ -157,25 +157,12 @@ pub fn run() {
                 let h = handler.get_or_init(|| {
                     // Restore persisted bundle root before the first request is served
                     let app = ctx.app_handle();
-                    match app.path().app_cache_dir() {
-                        Ok(cache_dir) => {
-                            tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
-                            let restored = BundleRoot::load(&cache_dir);
-                            if let Ok(val) = restored.0.read()
-                                && let Some(ref path) = *val
-                            {
-                                if let Some(br) = app.try_state::<BundleRoot>() {
-                                    tracing::info!("Setting managed BundleRoot to {path:?}");
-                                    if let Ok(mut w) = br.0.write() {
-                                        *w = Some(path.clone());
-                                    }
-                                } else {
-                                    tracing::warn!("BundleRoot state not managed yet");
-                                }
+                    if let Ok(cache_dir) = app.path().app_cache_dir() {
+                        tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
+                        if let Some(s) = app.try_state::<std::sync::Mutex<Service>>() {
+                            if let Ok(mut service) = s.lock() {
+                                service.load_bundle_root(&cache_dir, &FileSystem);
                             }
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to get app_cache_dir: {e}");
                         }
                     }
                     tauri_protocol::get(app.clone(), &window_origin)
@@ -183,7 +170,6 @@ pub fn run() {
                 h(ctx.webview_label(), request, responder);
             }
         })
-        .manage(BundleRoot(RwLock::new(None)))
         .invoke_handler(tauri::generate_handler![
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
@@ -193,14 +179,10 @@ pub fn run() {
         .setup(|app| {
             // Restore persisted bundle root on startup
             if let Ok(cache_dir) = app.path().app_cache_dir() {
-                let restored = BundleRoot::load(&cache_dir);
-                if let Ok(val) = restored.0.read()
-                    && let Some(ref path) = *val
-                {
-                    let bundle_root = app.state::<BundleRoot>();
-                    if let Ok(mut w) = bundle_root.0.write() {
-                        *w = Some(path.clone());
-                        tracing::info!("Setup: restored BundleRoot to {path:?}");
+                if let Some(s) = app.try_state::<std::sync::Mutex<Service>>() {
+                    if let Ok(mut service) = s.lock() {
+                        service.load_bundle_root(&cache_dir, &FileSystem);
+                        tracing::info!("Setup: restored bundle root to {:?}", service.bundle_root_path());
                     }
                 }
             }

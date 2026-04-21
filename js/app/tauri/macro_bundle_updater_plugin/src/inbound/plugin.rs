@@ -8,7 +8,7 @@ use url::Url;
 use crate::{
     domain::{
         models::{UpdateApproval, UpdateDenied, UpdateError, UpdateGranted, UpdateStatus},
-        ports::{AutoUpdateService, FsRepo},
+        ports::AutoUpdateService,
         service::Service,
     },
     outbound::{api_client::BundleClient, fs::FileSystem, system_info::SystemInfo},
@@ -90,15 +90,12 @@ pub fn grant_bundle_update(
 }
 
 #[tauri::command]
-#[tracing::instrument(err, skip(service, bundle_root, app_handle))]
+#[tracing::instrument(err, skip(service, app_handle))]
 pub fn perform_update<R: Runtime>(
     service: tauri::State<'_, Mutex<Service>>,
-    bundle_root: tauri::State<'_, crate::BundleRoot>,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<(), String> {
-    let Ok(service) = service.lock() else {
-        return Err("autoupdate state mutex is poisoned".to_string());
-    };
+    let mut service = service.lock().map_err(|e| e.to_string())?;
     let entrypoint = {
         let status = service.status().borrow();
         match status.as_ref() {
@@ -112,15 +109,16 @@ pub fn perform_update<R: Runtime>(
         .parent()
         .ok_or_else(|| format!("entrypoint {entrypoint:?} has no parent directory"))?
         .to_path_buf();
-    tracing::info!("Setting bundle root to {bundle_dir:?}");
-    *bundle_root.0.write().map_err(|e| e.to_string())? = Some(bundle_dir);
 
-    // Persist so subsequent restarts use the updated bundle
     let cache_dir = app_handle
         .path()
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
-    bundle_root.persist(&cache_dir).map_err(|e| e.to_string())?;
+
+    tracing::info!("Setting bundle root to {bundle_dir:?}");
+    service
+        .set_bundle_root(bundle_dir.clone(), &cache_dir, &FileSystem)
+        .map_err(|e| e.to_string())?;
 
     // Remove old bundle directories now that we've switched to the new one
     crate::domain::service::cleanup_old_bundles(&FileSystem, &cache_dir, &bundle_dir);
