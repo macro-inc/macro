@@ -81,29 +81,33 @@ impl FsRepo for FileSystem {
         tokio::fs::create_dir_all(path)
     }
 
-    fn list_dir_names(&self, dir: &std::path::Path) -> Vec<String> {
-        std::fs::read_dir(dir)
-            .into_iter()
-            .flatten()
-            .filter_map(|e| e.ok())
-            .filter_map(|e| e.file_name().into_string().ok())
-            .collect()
+    async fn list_dir_names(&self, dir: &std::path::Path) -> Vec<String> {
+        let mut names = Vec::new();
+        let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
+            return names;
+        };
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            if let Ok(name) = entry.file_name().into_string() {
+                names.push(name);
+            }
+        }
+        names
     }
 
-    fn remove_dir_all(&self, dir: &std::path::Path) -> Result<(), std::io::Error> {
-        std::fs::remove_dir_all(dir)
+    async fn remove_dir_all(&self, dir: &std::path::Path) -> Result<(), std::io::Error> {
+        tokio::fs::remove_dir_all(dir).await
     }
 
-    fn read_to_string(&self, path: &std::path::Path) -> Result<String, std::io::Error> {
-        std::fs::read_to_string(path)
+    async fn read_to_string(&self, path: &std::path::Path) -> Result<String, std::io::Error> {
+        tokio::fs::read_to_string(path).await
     }
 
-    fn write(&self, path: &std::path::Path, contents: &[u8]) -> Result<(), std::io::Error> {
-        std::fs::write(path, contents)
+    async fn write(&self, path: &std::path::Path, contents: &[u8]) -> Result<(), std::io::Error> {
+        tokio::fs::write(path, contents).await
     }
 
-    fn remove_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
-        match std::fs::remove_file(path) {
+    async fn remove_file(&self, path: &std::path::Path) -> Result<(), std::io::Error> {
+        match tokio::fs::remove_file(path).await {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e),

@@ -28,19 +28,17 @@ impl<R: Runtime> SystemInfo<R> {
         }
     }
 
-    fn get_version(&self) -> Version {
+    async fn get_version(&self) -> Version {
         // If an OTA update has been applied, read the version from semver.txt
         // in the bundle root so the server can compare build metadata accurately.
-        if let Some(v) = self
+        if let Some(s) = self
             .app_handle
-            .try_state::<std::sync::Mutex<crate::domain::service::Service<crate::outbound::fs::FileSystem>>>()
-            .and_then(|s| {
-                s.lock()
-                    .ok()?
-                    .bundle_version()
-            })
+            .try_state::<tokio::sync::Mutex<crate::inbound::plugin::PluginService>>()
         {
-            return v;
+            let service = s.lock().await;
+            if let Some(v) = service.bundle_version().await {
+                return v;
+            }
         }
         self.app_handle.package_info().version.clone()
     }
@@ -59,7 +57,7 @@ impl<R: Runtime> SystemInfo<R> {
 impl<R: Runtime> SystemQuery for SystemInfo<R> {
     async fn get_system_info(&self) -> Result<AppInfo, rootcause::Report> {
         Ok(AppInfo {
-            current_version: self.get_version(),
+            current_version: self.get_version().await,
             arch: self.get_arch(),
             target: self.get_target(),
         })

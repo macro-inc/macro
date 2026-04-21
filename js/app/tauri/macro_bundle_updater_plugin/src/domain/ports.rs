@@ -43,19 +43,35 @@ pub trait FsRepo: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 
     /// List the names of immediate children in `dir`.
-    fn list_dir_names(&self, dir: &Path) -> Vec<String>;
+    fn list_dir_names(
+        &self,
+        dir: &Path,
+    ) -> impl Future<Output = Vec<String>> + Send;
 
     /// Recursively remove a directory.
-    fn remove_dir_all(&self, dir: &Path) -> Result<(), std::io::Error>;
+    fn remove_dir_all(
+        &self,
+        dir: &Path,
+    ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 
     /// Read a file's contents as a string.
-    fn read_to_string(&self, path: &Path) -> Result<String, std::io::Error>;
+    fn read_to_string(
+        &self,
+        path: &Path,
+    ) -> impl Future<Output = Result<String, std::io::Error>> + Send;
 
     /// Write bytes to a file, creating or overwriting it.
-    fn write(&self, path: &Path, contents: &[u8]) -> Result<(), std::io::Error>;
+    fn write(
+        &self,
+        path: &Path,
+        contents: &[u8],
+    ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 
     /// Remove a file. Returns `Ok(())` if the file does not exist.
-    fn remove_file(&self, path: &Path) -> Result<(), std::io::Error>;
+    fn remove_file(
+        &self,
+        path: &Path,
+    ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 }
 
 /// Port for querying system metadata (version, arch, cache dirs).

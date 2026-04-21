@@ -22,15 +22,14 @@ impl BundleRoot {
     }
 
     /// Load persisted bundle root from the given cache directory.
-    pub(crate) fn load(cache_dir: &Path, fs: &impl FsRepo) -> Self {
+    pub(crate) async fn load(cache_dir: &Path, fs: &impl FsRepo) -> Self {
         let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
         tracing::info!("Loading bundle root from {persist_path:?}");
-        match fs.read_to_string(&persist_path) {
+        match fs.read_to_string(&persist_path).await {
             Ok(contents) => {
                 let path = PathBuf::from(contents.trim());
                 let index = path.join("index.html");
-                // Check existence via read — if index.html is unreadable, treat as missing.
-                if fs.read_to_string(&index).is_ok() {
+                if fs.read_to_string(&index).await.is_ok() {
                     tracing::info!("Restored bundle root: {path:?}");
                     Self(Some(path))
                 } else {
@@ -48,14 +47,18 @@ impl BundleRoot {
     }
 
     /// Persist the bundle root path so it survives app restarts.
-    pub(crate) fn persist(&self, cache_dir: &Path, fs: &impl FsRepo) -> Result<(), std::io::Error> {
+    pub(crate) async fn persist(
+        &self,
+        cache_dir: &Path,
+        fs: &impl FsRepo,
+    ) -> Result<(), std::io::Error> {
         let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
         match self.0.as_ref() {
             Some(root) => {
                 tracing::info!("Persisting bundle root {root:?} to {persist_path:?}");
-                fs.write(&persist_path, root.to_string_lossy().as_bytes())
+                fs.write(&persist_path, root.to_string_lossy().as_bytes()).await
             }
-            None => fs.remove_file(&persist_path),
+            None => fs.remove_file(&persist_path).await,
         }
     }
 
@@ -75,9 +78,10 @@ impl BundleRoot {
     }
 
     /// Read the bundle version from `semver.txt` inside the bundle root.
-    pub(crate) fn version(&self, fs: &impl FsRepo) -> Option<semver::Version> {
+    pub(crate) async fn version(&self, fs: &impl FsRepo) -> Option<semver::Version> {
         let semver_path = self.0.as_ref()?.join("semver.txt");
         fs.read_to_string(&semver_path)
+            .await
             .ok()
             .and_then(|s| s.trim().parse().ok())
     }

@@ -12,7 +12,7 @@ use http::{Response as HttpResponse, StatusCode, header::CONTENT_TYPE};
 use tauri::{Manager, Runtime, UriSchemeResponder};
 
 use macro_bundle_updater_plugin::inbound::plugin::PluginService;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 
 type ProtocolHandler = Box<dyn Fn(&str, http::Request<Vec<u8>>, UriSchemeResponder) + Send + Sync>;
 
@@ -62,7 +62,7 @@ pub fn get<R: Runtime>(app_handle: tauri::AppHandle<R>, window_origin: &str) -> 
         let service = app_handle.try_state::<Mutex<PluginService>>();
         let root_dir_owned = service
             .as_ref()
-            .and_then(|s| s.lock().ok())
+            .and_then(|s| s.try_lock().ok())
             .and_then(|s| s.bundle_root_path().map(|p| p.to_path_buf()));
 
         if let Some(ref root_dir) = root_dir_owned {

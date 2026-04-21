@@ -233,7 +233,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         &self,
         mut bundle: PathBuf,
     ) -> Result<PathBuf, std::io::Error> {
-        let next = next_bundle_index(&self.fs_repo.list_dir_names(&bundle));
+        let next = next_bundle_index(&self.fs_repo.list_dir_names(&bundle).await);
         bundle.push(next.to_string());
         self.fs_repo.create_dir_all(&bundle).await?;
         bundle.push("bundle.zip");
@@ -252,22 +252,22 @@ pub(crate) fn next_bundle_index(names: &[String]) -> u64 {
 
 /// Search existing numeric bundle directories for one whose `semver.txt`
 /// matches `version`. Returns the entrypoint path if found.
-fn find_cached_bundle(
+async fn find_cached_bundle(
     fs: &impl FsRepo,
     update_dir: &std::path::Path,
     version: &semver::Version,
 ) -> Option<PathBuf> {
     let version_str = version.to_string();
-    for name in fs.list_dir_names(update_dir) {
+    for name in fs.list_dir_names(update_dir).await {
         if name.parse::<u64>().is_err() {
             continue;
         }
         let dir = update_dir.join(&name);
         let semver_path = dir.join("semver.txt");
-        if let Ok(contents) = fs.read_to_string(&semver_path) {
+        if let Ok(contents) = fs.read_to_string(&semver_path).await {
             if contents.trim() == version_str {
                 let entrypoint = dir.join(ENTRYPOINT_NAME);
-                if fs.read_to_string(&entrypoint).is_ok() {
+                if fs.read_to_string(&entrypoint).await.is_ok() {
                     return Some(entrypoint);
                 }
             }
@@ -276,23 +276,6 @@ fn find_cached_bundle(
     None
 }
 
-/// Remove all numeric bundle subdirectories under `dir` except `keep`.
-///
-/// Called after a successful update to free disk space from prior bundles.
-pub fn cleanup_old_bundles(fs: &impl FsRepo, dir: &std::path::Path, keep: &std::path::Path) {
-    for name in fs.list_dir_names(dir) {
-        if name.parse::<u64>().is_err() {
-            continue;
-        }
-        let path = dir.join(&name);
-        if path == keep {
-            continue;
-        }
-        if let Err(e) = fs.remove_dir_all(&path) {
-            tracing::warn!(error=?e, "Failed to remove old bundle directory {path:?}");
-        }
-    }
-}
 
 /// helper function which pipes the progress of an event from one channel into another
 /// returning true if the value in the sender channel was modified
@@ -327,8 +310,8 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Load persisted bundle root from the given cache directory.
-    pub fn load_bundle_root(&mut self, cache_dir: &Path) {
-        self.bundle_root = BundleRoot::load(cache_dir, &self.fs_repo);
+    pub async fn load_bundle_root(&mut self, cache_dir: &Path) {
+        self.bundle_root = BundleRoot::load(cache_dir, &self.fs_repo).await;
     }
 
     /// Get the current bundle root path, if an OTA update has been applied.
@@ -337,29 +320,45 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Set the bundle root to a new directory and persist it.
-    pub fn set_bundle_root(
+    pub async fn set_bundle_root(
         &mut self,
         path: PathBuf,
         cache_dir: &Path,
     ) -> Result<(), std::io::Error> {
         self.bundle_root.set(path);
-        self.bundle_root.persist(cache_dir, &self.fs_repo)
+        self.bundle_root.persist(cache_dir, &self.fs_repo).await
     }
 
     /// Clear the bundle root and remove all downloaded bundles.
-    pub fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
-        for name in self.fs_repo.list_dir_names(cache_dir) {
+    pub async fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
+        for name in self.fs_repo.list_dir_names(cache_dir).await {
             if name.parse::<u64>().is_ok() {
-                let _ = self.fs_repo.remove_dir_all(&cache_dir.join(&name));
+                let _ = self.fs_repo.remove_dir_all(&cache_dir.join(&name)).await;
             }
         }
         self.bundle_root.clear();
-        self.bundle_root.persist(cache_dir, &self.fs_repo)
+        self.bundle_root.persist(cache_dir, &self.fs_repo).await
     }
 
     /// Read the bundle version from `semver.txt` inside the current bundle root.
-    pub fn bundle_version(&self) -> Option<semver::Version> {
-        self.bundle_root.version(&self.fs_repo)
+    pub async fn bundle_version(&self) -> Option<semver::Version> {
+        self.bundle_root.version(&self.fs_repo).await
+    }
+
+    /// Remove all numeric bundle subdirectories under `dir` except `keep`.
+    pub async fn cleanup_old_bundles(&self, dir: &Path, keep: &Path) {
+        for name in self.fs_repo.list_dir_names(dir).await {
+            if name.parse::<u64>().is_err() {
+                continue;
+            }
+            let path = dir.join(&name);
+            if path == keep {
+                continue;
+            }
+            if let Err(e) = self.fs_repo.remove_dir_all(&path).await {
+                tracing::warn!(error=?e, "Failed to remove old bundle directory {path:?}");
+            }
+        }
     }
 }
 

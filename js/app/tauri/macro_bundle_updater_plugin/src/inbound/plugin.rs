@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 
 use rootcause::Report;
 use serde::Serialize;
@@ -93,11 +93,11 @@ impl MacroBundleUpdaterPlugin {
 
 /// Approve or deny a pending bundle update.
 #[tauri::command]
-pub fn grant_bundle_update(
+pub async fn grant_bundle_update(
     service: tauri::State<'_, Mutex<PluginService>>,
     approved: bool,
 ) -> Result<(), String> {
-    let mut service = service.lock().unwrap();
+    let mut service = service.lock().await;
     let grant_tx = service.try_recv_grant_sender().map_err(|e| e.to_string())?;
     let approval = if approved {
         UpdateApproval::Granted(UpdateGranted::new())
@@ -112,11 +112,11 @@ pub fn grant_bundle_update(
 /// Apply a completed bundle update: set the bundle root and navigate to it.
 #[tauri::command]
 #[tracing::instrument(err, skip(service, app_handle))]
-pub fn perform_update<R: Runtime>(
+pub async fn perform_update<R: Runtime>(
     service: tauri::State<'_, Mutex<PluginService>>,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<(), String> {
-    let mut service = service.lock().map_err(|e| e.to_string())?;
+    let mut service = service.lock().await;
     let entrypoint = {
         let status = service.status().borrow();
         match status.as_ref() {
@@ -125,7 +125,6 @@ pub fn perform_update<R: Runtime>(
         }
     };
 
-    // Set the bundle root to the parent of index.html (the unzipped directory)
     let bundle_dir = entrypoint
         .parent()
         .ok_or_else(|| format!("entrypoint {entrypoint:?} has no parent directory"))?
@@ -139,10 +138,13 @@ pub fn perform_update<R: Runtime>(
     tracing::info!("Setting bundle root to {bundle_dir:?}");
     service
         .set_bundle_root(bundle_dir.clone(), &cache_dir)
+        .await
         .map_err(|e| e.to_string())?;
 
     // Remove old bundle directories now that we've switched to the new one
-    crate::domain::service::cleanup_old_bundles(&FileSystem, &cache_dir, &bundle_dir);
+    service.cleanup_old_bundles(&cache_dir, &bundle_dir).await;
+
+    drop(service);
 
     // Navigate to the updated bundle, preserving the current hash route.
     if let Some(webview) = app_handle.webview_windows().values().next() {
@@ -156,35 +158,39 @@ pub fn perform_update<R: Runtime>(
 
 /// Trigger a manual check for bundle updates.
 #[tauri::command]
-pub fn check_for_update(service: tauri::State<'_, Mutex<PluginService>>) -> Result<(), String> {
-    let service = service.lock().unwrap();
+pub async fn check_for_update(
+    service: tauri::State<'_, Mutex<PluginService>>,
+) -> Result<(), String> {
+    let service = service.lock().await;
     service.start().map_err(|e| e.to_string())
 }
 
 /// Return the current bundle update status as a serializable event.
 #[tauri::command]
-pub fn get_bundle_update_status(
+pub async fn get_bundle_update_status(
     service: tauri::State<'_, Mutex<PluginService>>,
 ) -> Result<BundleUpdateEvent, String> {
-    let service = service.lock().unwrap();
+    let service = service.lock().await;
     let status = service.status().borrow();
     Ok(BundleUpdateEvent::new(&status))
 }
 
 /// Clear the downloaded bundle and revert to built-in assets.
 #[tauri::command]
-pub fn clear_bundle<R: Runtime>(
+pub async fn clear_bundle<R: Runtime>(
     service: tauri::State<'_, Mutex<PluginService>>,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<(), String> {
-    let mut service = service.lock().map_err(|e| e.to_string())?;
     let cache_dir = app_handle
         .path()
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
 
     service
+        .lock()
+        .await
         .clear_bundle_root(&cache_dir)
+        .await
         .map_err(|e| e.to_string())?;
 
     tracing::info!("Bundle cleared, navigating to built-in assets");
@@ -214,7 +220,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let mut status_rx = service.status().clone();
 
         let _ = service.start();
-        app.manage(Mutex::new(service));
+        app.manage(tokio::sync::Mutex::new(service));
 
         let app_handle = app.clone();
         tauri::async_runtime::spawn(async move {

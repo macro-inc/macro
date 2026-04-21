@@ -158,10 +158,11 @@ pub fn run() {
                     let app = ctx.app_handle();
                     if let Ok(cache_dir) = app.path().app_cache_dir() {
                         tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
-                        if let Some(s) = app.try_state::<std::sync::Mutex<PluginService>>() {
-                            if let Ok(mut service) = s.lock() {
-                                service.load_bundle_root(&cache_dir);
-                            }
+                        if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
+                            tauri::async_runtime::block_on(async {
+                                let mut service = s.lock().await;
+                                service.load_bundle_root(&cache_dir).await;
+                            });
                         }
                     }
                     tauri_protocol::get(app.clone(), &window_origin)
@@ -179,14 +180,15 @@ pub fn run() {
         .setup(|app| {
             // Restore persisted bundle root on startup
             if let Ok(cache_dir) = app.path().app_cache_dir() {
-                if let Some(s) = app.try_state::<std::sync::Mutex<PluginService>>() {
-                    if let Ok(mut service) = s.lock() {
-                        service.load_bundle_root(&cache_dir);
+                if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
+                    tauri::async_runtime::block_on(async {
+                        let mut service = s.lock().await;
+                        service.load_bundle_root(&cache_dir).await;
                         tracing::info!(
                             "Setup: restored bundle root to {:?}",
                             service.bundle_root_path()
                         );
-                    }
+                    });
                 }
             }
 
