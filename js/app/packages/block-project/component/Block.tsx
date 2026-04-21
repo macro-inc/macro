@@ -29,7 +29,7 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
-import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
+import { defineQueryFilters } from '@app/component/next-soup/filters/filter-store';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
@@ -183,7 +183,7 @@ const ProjectEntityList = (props: {
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
         soup={props.soup}
-        initialQuery={{
+        initialQuery={defineQueryFilters({
           include: {
             // Filter documents by project
             projectId: [props.projectId],
@@ -194,11 +194,7 @@ const ProjectEntityList = (props: {
             // Filter emails by project
             emailProjectId: [props.projectId],
           },
-          exclude: {
-            // Exclude channels
-            channelId: [NIL_UUID],
-          },
-        }}
+        })}
       >
         <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
       </SoupViewContextProvider>

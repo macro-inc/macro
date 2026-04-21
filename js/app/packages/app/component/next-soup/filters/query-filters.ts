@@ -1,4 +1,5 @@
 import type { SoupItemsQueryFilters, SoupBody } from '@queries/soup/items';
+import { ChannelTypeEnum } from '@service-comms/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
 
@@ -28,6 +29,14 @@ function isValueFilteredOut(
   if (!values || values.length === 0) return false;
   if (!value) return true;
   return !values.includes(value);
+}
+
+function isAttendedFilteredOut(
+  attendedFilter: boolean | null | undefined,
+  itemAttended: boolean
+): boolean {
+  if (attendedFilter !== true && attendedFilter !== false) return false;
+  return itemAttended !== attendedFilter;
 }
 
 // TODO: this only supports the subset of soup filters needed for cache matching.
@@ -67,7 +76,8 @@ export function filterSoupItemByRequestBody(
     .with(
       { tag: 'callRecord' },
       ({ data }) =>
-        !isIdFilteredOut(body.call_filters?.channel_ids, data.channelId)
+        !isIdFilteredOut(body.call_filters?.channel_ids, data.channelId) &&
+        !isAttendedFilteredOut(body.call_filters?.attended, data.attended)
     )
     .exhaustive();
 }

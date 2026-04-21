@@ -538,11 +538,11 @@ export const UnifiedFilterDropdown = () => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
       const current = queryFilters.state.include.channelId ?? [];
-      if (ids.length > 0) {
-        queryFilters.add({ include: { channelId: ids } });
-      } else {
-        queryFilters.remove({ include: { channelId: current } });
-      }
+      const toAdd = ids.filter((id) => !current.includes(id));
+      const toRemove = current.filter((id) => !ids.includes(id));
+      if (toRemove.length)
+        queryFilters.remove({ include: { channelId: toRemove } });
+      if (toAdd.length) queryFilters.add({ include: { channelId: toAdd } });
     });
   };
 
@@ -554,11 +554,12 @@ export const UnifiedFilterDropdown = () => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
       const current = queryFilters.state.include.channelSenderId ?? [];
-      if (ids.length > 0) {
-        queryFilters.add({ include: { channelSenderId: ids } });
-      } else {
-        queryFilters.remove({ include: { channelSenderId: current } });
-      }
+      const toAdd = ids.filter((id) => !current.includes(id));
+      const toRemove = current.filter((id) => !ids.includes(id));
+      if (toRemove.length)
+        queryFilters.remove({ include: { channelSenderId: toRemove } });
+      if (toAdd.length)
+        queryFilters.add({ include: { channelSenderId: toAdd } });
     });
   };
 

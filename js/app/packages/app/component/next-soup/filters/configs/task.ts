@@ -147,7 +147,33 @@ export const taskLowPriorityFilter = priorityFilter(
 export const taskNoPriorityFilter = config({
   id: 'task-no-priority',
   predicate: hasNoPriority,
-  query: isTask,
+  query: {
+    ...isTask,
+    exclude: {
+      properties: [
+        propFilter(
+          SYSTEM_PROPERTY_IDS.PRIORITY,
+          'select',
+          PROPERTY_OPTION_IDS.PRIORITY.URGENT
+        ),
+        propFilter(
+          SYSTEM_PROPERTY_IDS.PRIORITY,
+          'select',
+          PROPERTY_OPTION_IDS.PRIORITY.HIGH
+        ),
+        propFilter(
+          SYSTEM_PROPERTY_IDS.PRIORITY,
+          'select',
+          PROPERTY_OPTION_IDS.PRIORITY.MEDIUM
+        ),
+        propFilter(
+          SYSTEM_PROPERTY_IDS.PRIORITY,
+          'select',
+          PROPERTY_OPTION_IDS.PRIORITY.LOW
+        ),
+      ],
+    },
+  },
 });
 
 export const TASK_PRIORITY_FILTERS = [
