@@ -146,12 +146,11 @@ pub async fn perform_update<R: Runtime>(
 
     drop(service);
 
-    // Navigate to the updated bundle, preserving the current hash route.
+    // Reload to pick up the new bundle. Using location.reload() instead of
+    // navigating to a new URL preserves WKWebView's cookie store.
     if let Some(webview) = app_handle.webview_windows().values().next() {
-        tracing::info!("Bundle update complete, navigating to updated bundle");
-        let _ = webview.eval(
-            "window.location.href = 'tauri://localhost/app/index.html' + window.location.hash;",
-        );
+        tracing::info!("Bundle update complete, reloading to pick up new assets");
+        let _ = webview.eval("window.location.reload();");
     }
     Ok(())
 }
@@ -193,11 +192,9 @@ pub async fn clear_bundle<R: Runtime>(
         .await
         .map_err(|e| e.to_string())?;
 
-    tracing::info!("Bundle cleared, navigating to built-in assets");
+    tracing::info!("Bundle cleared, reloading to revert to built-in assets");
     if let Some(webview) = app_handle.webview_windows().values().next() {
-        let _ = webview.eval(
-            "window.location.href = 'tauri://localhost/app/index.html' + window.location.hash;",
-        );
+        let _ = webview.eval("window.location.reload();");
     }
     Ok(())
 }

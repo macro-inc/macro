@@ -258,21 +258,37 @@ async fn find_cached_bundle(
     version: &semver::Version,
 ) -> Option<PathBuf> {
     let version_str = version.to_string();
-    for name in fs.list_dir_names(update_dir).await {
+    let names = fs.list_dir_names(update_dir).await;
+    tracing::info!(
+        "find_cached_bundle: looking for version {version_str} in {update_dir:?}, found dirs: {names:?}"
+    );
+    for name in names {
         if name.parse::<u64>().is_err() {
             continue;
         }
         let dir = update_dir.join(&name);
         let semver_path = dir.join("semver.txt");
-        if let Ok(contents) = fs.read_to_string(&semver_path).await {
-            if contents.trim() == version_str {
-                let entrypoint = dir.join(ENTRYPOINT_NAME);
-                if fs.read_to_string(&entrypoint).await.is_ok() {
-                    return Some(entrypoint);
+        match fs.read_to_string(&semver_path).await {
+            Ok(contents) => {
+                tracing::info!(
+                    "find_cached_bundle: {semver_path:?} contains {:?}, want {version_str:?}",
+                    contents.trim()
+                );
+                if contents.trim() == version_str {
+                    let entrypoint = dir.join(ENTRYPOINT_NAME);
+                    if fs.read_to_string(&entrypoint).await.is_ok() {
+                        tracing::info!("find_cached_bundle: hit — reusing {entrypoint:?}");
+                        return Some(entrypoint);
+                    }
                 }
+                }
+            }
+            Err(e) => {
+                tracing::debug!("find_cached_bundle: no semver.txt in {dir:?}: {e}");
             }
         }
     }
+    tracing::info!("find_cached_bundle: no cached bundle found for {version_str}");
     None
 }
 
