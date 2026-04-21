@@ -361,8 +361,6 @@ pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService
 ///
 /// Edits a call record — currently supports updating the record's share
 /// permissions. Access is validated via channel membership
-/// (MemberParticipantRole); changes that update `share_permission` additionally
-/// require Owner-level access on the call entity.
 #[utoipa::path(
     patch,
     operation_id = "edit_call_record",
