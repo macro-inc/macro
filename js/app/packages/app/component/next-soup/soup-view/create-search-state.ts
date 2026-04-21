@@ -1,4 +1,6 @@
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
+import type { FilterContext } from '@app/component/next-soup/filters/configs/base';
 import type { QueryState } from '@app/component/next-soup/filters/filter-store';
 import { useSearchContext } from '@app/component/next-soup/search-context';
 import {
@@ -7,6 +9,7 @@ import {
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
 import { arrayEquals } from '@core/util/compareUtils';
+import { useUserId } from '@core/context/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { isChannelEntity, type EntityData } from '@entity';
 import {
@@ -102,6 +105,7 @@ const freshSearch = createSoupFreshSearch();
 interface CreateSearchStateArgs {
   soup: SoupState;
   filters: Accessor<QueryState>;
+  assignees: Accessor<string[]>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
   searchMentions?: Accessor<string[]>;
@@ -110,11 +114,21 @@ interface CreateSearchStateArgs {
 export const createSearchState = ({
   soup,
   filters,
+  assignees,
   disableLocalSearch,
   searchPaused,
   searchMentions,
 }: CreateSearchStateArgs) => {
   const [searchText, setSearchText] = createSignal('');
+
+  const notificationSource = useGlobalNotificationSource();
+  const userId = useUserId();
+
+  const getFilterContext = (): FilterContext => ({
+    userId: userId(),
+    notificationSource,
+    assignees: assignees(),
+  });
 
   const trimmedSearchText = createMemo(() => searchText().trim());
 
@@ -206,11 +220,12 @@ export const createSearchState = ({
   const allFiltersResults = createMemo((): Map<string, EntityData[]> => {
     if (!localFuzzyResults()) return new Map();
     const filterToResultMap = new Map<string, EntityData[]>();
+    const ctx = getFilterContext();
     for (const filter of soup.predicates.available) {
       if (!filter.predicate) continue;
       filterToResultMap.set(
         filter.id,
-        localFuzzyResults().filter((e) => filter.predicate!(e))
+        localFuzzyResults().filter((e) => filter.predicate!(e, ctx))
       );
     }
     return filterToResultMap;

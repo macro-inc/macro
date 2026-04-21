@@ -193,6 +193,7 @@ export const SoupViewContextProvider: FlowComponent<
   const search = createSearchState({
     soup,
     filters: () => queryFilters.state,
+    assignees: assigneeFilter,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
     searchMentions,
