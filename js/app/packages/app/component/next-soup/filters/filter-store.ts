@@ -59,12 +59,11 @@ type FieldConfig = {
   formatValue?: (v: unknown) => unknown;
 };
 
-const wrapPartial = (v: unknown) => ({ Partial: v });
-
 const FIELD_CONFIG = {
   // Documents (df)
   documentId: { target: 'df', field: 'id' },
   fileType: { target: 'df', field: 'ft' },
+  fileAssoc: { target: 'df', field: 'fa' },
   subType: { target: 'df', field: 'dst' },
   projectId: { target: 'df', field: 'pid' },
   documentOwnerId: { target: 'df', field: 'o' },
@@ -78,7 +77,11 @@ const FIELD_CONFIG = {
   emailDone: { target: 'ef', field: 'NotificationDone' },
   emailImportance: { target: 'ef', field: 'Importance' },
   emailProjectId: { target: 'ef', field: 'ProjectId' },
-  sender: { target: 'ef', field: 'Sender', formatValue: wrapPartial },
+  sender: {
+    target: 'ef',
+    field: 'Sender',
+    formatValue: (v: unknown) => ({ Partial: v }),
+  },
   shared: { target: 'ef', field: 'Shared' },
 
   // Channels (chanf)
@@ -111,6 +114,7 @@ type FieldName = keyof typeof FIELD_CONFIG;
 type FieldValueMap = {
   documentId: string;
   fileType: string;
+  fileAssoc: string;
   subType: string;
   projectId: string;
   documentOwnerId: string;
