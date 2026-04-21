@@ -49,6 +49,25 @@ import {
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { isMobile } from '@core/mobile/isMobile';
 import { useAnalytics } from '@app/component/analytics-context';
+import { createFreshSearch } from '@core/util/freshSort';
+
+const mobileAllSearch = createFreshSearch<MentionItem>({
+  config: {
+    useViewedAt: true,
+    fuzzyWeight: 0.4,
+    timeWeight: 0.6,
+    brevityWeight: 0,
+  },
+  getName: (item) => {
+    if (item.kind === 'date') return item.data.displayText;
+    if (item.kind === 'group') return item.data.groupAlias;
+    return item.searchText;
+  },
+  getTimestamp: (item) => {
+    if (item.kind === 'date' || item.kind === 'group') return {};
+    return item.timestamps;
+  },
+});
 
 const MAX_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
@@ -209,14 +228,18 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
-  // On mobile, combine all sources into a single flat list
-  const mobileAllItems = createLazyMemo((): MentionItem[] => [
-    ...(usersAndGroups() ?? []),
-    ...(docs() ?? []),
-    ...(channels() ?? []),
-    ...(emails() ?? []),
-    ...(dates() ?? []),
-  ]);
+  // On mobile, combine all sources into a single list interleaved by
+  // freshness instead of grouped by category.
+  const mobileAllItems = createLazyMemo((): MentionItem[] => {
+    const combined: MentionItem[] = [
+      ...(usersAndGroups() ?? []),
+      ...(docs() ?? []),
+      ...(channels() ?? []),
+      ...(emails() ?? []),
+      ...(dates() ?? []),
+    ];
+    return mobileAllSearch(combined, searchTerm()).map(({ item }) => item);
+  });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
     if (isMobile()) {
