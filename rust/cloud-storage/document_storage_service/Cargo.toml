@@ -14,10 +14,6 @@ name = "backfill_document_search"
 path = "src/bin/backfill_search.rs"
 
 [[bin]]
-name = "backfill_useritemaccess"
-path = "src/bin/backfill_useritemaccess/mod.rs"
-
-[[bin]]
 name = "document_storage_service_openapi"
 path = "src/openapi.rs"
 
@@ -58,7 +54,8 @@ document_sub_type = { path = "../document_sub_type" }
 documents_hex = { path = "../documents", package = "documents" }
 dynamodb_client = { path = "../dynamodb_client" }
 email = { path = "../email", features = ["outbound", "ports"] }
-entity_access = { path = "../entity_access", features = ["schema", "inbound"] }
+entity_access = { path = "../entity_access", features = ["inbound", "schema"] }
+entity_access_management = { path = "../entity_access_management" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 github = { path = "../github", default-features = false, features = [
@@ -87,12 +84,10 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 ] }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_sha_count_client = { path = "../macro_sha_count_client" }
-macro_share_permissions = { path = "../macro_share_permissions" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true }
 model = { path = "../model" }
-s3_key = { path = "../s3_key" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 model_user = { path = "../model_user", features = ["axum"] }
@@ -108,6 +103,7 @@ properties = { path = "../properties" }
 properties_db_client = { path = "../properties_db_client" }
 properties_service = { path = "../properties_service" }
 rayon = "1.10.0"
+readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = [
   "aio",
   "cluster-async",
@@ -115,10 +111,10 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true }
+s3_key = { path = "../s3_key" }
 saved_views = { path = "../saved_views" }
 schemars = { workspace = true }
 search_service = { path = "../search_service" }
-readonly_pool = { path = "../readonly_pool" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

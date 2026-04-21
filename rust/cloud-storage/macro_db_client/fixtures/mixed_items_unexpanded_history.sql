@@ -32,11 +32,10 @@ VALUES ('cccccccc-1111-1111-1111-111111111111', 'macro|user@user.com', 'Test Cha
         'ffffffff-ffff-ffff-ffff-ffffffffffff');
 
 -- Add user access to all items (Same as original)
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level", "created_at")
-VALUES (gen_random_uuid(), 'macro|user@user.com', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', 'owner', '2023-01-15 10:00:00'),
-       (gen_random_uuid(), 'macro|user@user.com', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', 'view', '2023-01-15 10:30:00'),
-       (gen_random_uuid(), 'macro|user@user.com', 'cccccccc-1111-1111-1111-111111111111', 'chat', 'owner', '2023-01-16 11:00:00'),
-       (gen_random_uuid(), 'macro|user@user.com', 'ffffffff-ffff-ffff-ffff-ffffffffffff', 'project', 'owner', '2023-01-17 12:00:00');
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+VALUES ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', 'macro|user@user.com', 'user', 'owner'),
+       ('cccccccc-1111-1111-1111-111111111111', 'chat', 'macro|user@user.com', 'user', 'owner'),
+       ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user@user.com', 'user', 'owner');
 
 ---------------------------------------------------
 --  NEW: USER HISTORY DATA

@@ -233,6 +233,9 @@ async fn main() -> anyhow::Result<()> {
         s3_upload_adapter,
         NoOpTaskProperties,
         NoOpConnectionService,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
     );
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(

@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+use serde::Deserialize;
 use uuid::Uuid;
 
 /// Request to fetch a page of channel messages.
@@ -9,6 +10,15 @@ pub struct GetChannelMessagesRequest {
     pub channel_id: Uuid,
     /// Page size, clamped to [1, 100].
     pub limit: u16,
+}
+
+/// Filters for channel message queries.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ChannelMessageFilters {
+    /// When non-empty, only return messages with these IDs.
+    #[serde(default)]
+    pub message_ids: Vec<Uuid>,
 }
 
 /// Direction for cursor-based message pagination.

@@ -218,6 +218,9 @@ async fn build_tool_context(
         s3_upload_adapter,
         NoOpTaskProperties,
         NoOpConnectionService,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
     );
     let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT created_by as \"created_by!\"\n        FROM (\n            SELECT created_by FROM calls WHERE id = $1\n            UNION ALL\n            SELECT created_by FROM call_records WHERE id = $1\n        ) t\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_by!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "77b9642e3ce72202c80aacda76790b7a1e1eee80d0b7388c2ad68e8ce5a996c7"
+}

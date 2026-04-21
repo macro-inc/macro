@@ -79,7 +79,7 @@ pub async fn get_entity_name_and_owner(
             .fetch_one(db)
             .await?
         }
-        _ => {
+        SearchEntityType::Projects => {
             anyhow::bail!("entity type not supported");
         }
     };

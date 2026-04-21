@@ -917,6 +917,77 @@ export const deleteCallRecordParams = zod.object({
 });
 
 /**
+ * Edits a call record — currently supports updating the record's share
+permissions. Access is validated via channel membership
+ * @summary Handler for `PATCH /call/record/{call_id}`.
+ */
+export const editCallRecordParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+export const editCallRecordBody = zod
+  .object({
+    sharePermission: zod
+      .union([
+        zod.null(),
+        zod.object({
+          channelSharePermissions: zod
+            .array(
+              zod.object({
+                accessLevel: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['view', 'comment', 'edit', 'owner'])
+                      .describe(
+                        'Ordered from least to most access top -> bottom'
+                      ),
+                  ])
+                  .optional(),
+                channelId: zod.string().describe('The channel id'),
+                operation: zod.enum(['add', 'remove', 'replace']),
+              })
+            )
+            .nullish()
+            .describe(
+              'Any channel share permissions to be created/updated/removed'
+            ),
+          isPublic: zod
+            .boolean()
+            .nullish()
+            .describe('If the item is publicly accessible'),
+          publicAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+        }),
+      ])
+      .optional(),
+    shareWithTeam: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+      ),
+  })
+  .describe('Edit call request');
+
+/**
+ * Toggles the `share_with_team` flag on the active call. Returns the new
+value as the JSON body.
+ * @summary Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
+ */
+export const toggleShareWithTeamParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+export const toggleShareWithTeamResponse = zod.boolean();
+
+/**
  * Gets or creates a call for the channel. If a call already exists, joins it;
 otherwise creates a new one. Always returns a join token.
  * @summary Handler for `GET /call/{channel_id}`.
@@ -1096,6 +1167,201 @@ export const getChannelMessagesQueryParams = zod.object({
 });
 
 export const getChannelMessagesResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod
+                      .string()
+                      .datetime({})
+                      .describe('When the attachment was created.'),
+                    entity_id: zod.string().describe('Entity id.'),
+                    entity_type: zod.string().describe('Type of entity.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Height (for images).'),
+                    id: zod.string().uuid().describe('Attachment id.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Width (for images).'),
+                  })
+                  .describe('An attachment on a message.')
+              )
+              .describe('Attachments on this message.'),
+            channel_id: zod.string().uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod
+              .string()
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.string().uuid().describe('Message id.'),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('The emoji string.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User ids who added this reaction.'),
+                  })
+                  .describe('A reaction with emoji and user list.')
+              )
+              .describe('Reactions on this message.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread: zod
+              .object({
+                latest_reply_at: zod
+                  .string()
+                  .datetime({})
+                  .nullish()
+                  .describe('Timestamp of the latest reply.'),
+                preview: zod
+                  .array(
+                    zod
+                      .object({
+                        attachments: zod
+                          .array(
+                            zod
+                              .object({
+                                created_at: zod
+                                  .string()
+                                  .datetime({})
+                                  .describe('When the attachment was created.'),
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Height (for images).'),
+                                id: zod
+                                  .string()
+                                  .uuid()
+                                  .describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width (for images).'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this reply.'),
+                        content: zod.string().describe('Reply content.'),
+                        created_at: zod
+                          .string()
+                          .datetime({})
+                          .describe('When the reply was created.'),
+                        edited_at: zod
+                          .string()
+                          .datetime({})
+                          .nullish()
+                          .describe('When the reply was edited.'),
+                        id: zod.string().uuid().describe('Reply id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod
+                                  .string()
+                                  .describe('The emoji string.'),
+                                users: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'User ids who added this reaction.'
+                                  ),
+                              })
+                              .describe('A reaction with emoji and user list.')
+                          )
+                          .describe('Reactions on this reply.'),
+                        sender_id: zod.string().describe('Sender user id.'),
+                        updated_at: zod
+                          .string()
+                          .datetime({})
+                          .describe('When the reply was last updated.'),
+                      })
+                      .describe('A thread reply shown in preview.')
+                  )
+                  .describe('Last N replies for thread preview.'),
+                reply_count: zod.number().describe('Total reply count.'),
+              })
+              .describe('Thread metadata and preview replies.'),
+            updated_at: zod
+              .string()
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe('A top-level channel message with thread info.')
+      )
+      .describe('Messages on this page.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the next page, null if no more pages.'),
+    previous_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the previous page, null if no newer page exists.'),
+  })
+  .describe('Paginated response of channel messages.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/messages`.
+ */
+export const postChannelMessagesParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const postChannelMessagesQueryLimitMin = 0;
+
+export const postChannelMessagesQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(postChannelMessagesQueryLimitMin)
+    .optional()
+    .describe('Page size (1-100, default 50)'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for older messages'),
+  previous_cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for newer messages'),
+  load_around_message_id: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe('Return a centered window around this message ID'),
+});
+
+export const postChannelMessagesBody = zod
+  .object({
+    message_ids: zod
+      .array(zod.string().uuid())
+      .optional()
+      .describe('When non-empty, only return messages with these IDs.'),
+  })
+  .describe('Filters for channel message queries.');
+
+export const postChannelMessagesResponse = zod
   .object({
     items: zod
       .array(
@@ -4712,6 +4978,11 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
+              attended: zod
+                .boolean()
+                .describe(
+                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table).'
+                ),
               callId: zod.string().uuid().describe('The call identifier.'),
               channelId: zod
                 .string()
@@ -4791,6 +5062,12 @@ export const postItemsSoupBody = zod
   .object({
     call_filters: zod
       .object({
+        attended: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
+          ),
         channel_ids: zod
           .array(zod.string())
           .optional()
@@ -6388,6 +6665,11 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
+              attended: zod
+                .boolean()
+                .describe(
+                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table).'
+                ),
               callId: zod.string().uuid().describe('The call identifier.'),
               channelId: zod
                 .string()
@@ -7724,6 +8006,11 @@ export const postItemsSoupAstResponse = zod.object({
         zod.object({
           data: zod
             .object({
+              attended: zod
+                .boolean()
+                .describe(
+                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table).'
+                ),
               callId: zod.string().uuid().describe('The call identifier.'),
               channelId: zod
                 .string()
@@ -8178,6 +8465,7 @@ export const createProjectHandlerBody = zod.object({
   name: zod.string().describe('The name of the project.'),
   projectParentId: zod
     .string()
+    .uuid()
     .nullish()
     .describe('The project that the new project will belong to.'),
 });
@@ -9767,6 +10055,67 @@ export const patchViewHandlerBody = zod.object({
 });
 
 /**
+ * @summary Edits the share permissions of a thread.
+ */
+export const editThreadV2Params = zod.object({
+  thread_id: zod.string().describe('thread ID'),
+});
+
+export const editThreadV2Body = zod.object({
+  projectId: zod
+    .string()
+    .nullish()
+    .describe('The new project that the thread will belong to.'),
+  sharePermission: zod
+    .union([
+      zod.null(),
+      zod.object({
+        channelSharePermissions: zod
+          .array(
+            zod.object({
+              accessLevel: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum(['view', 'comment', 'edit', 'owner'])
+                    .describe(
+                      'Ordered from least to most access top -> bottom'
+                    ),
+                ])
+                .optional(),
+              channelId: zod.string().describe('The channel id'),
+              operation: zod.enum(['add', 'remove', 'replace']),
+            })
+          )
+          .nullish()
+          .describe(
+            'Any channel share permissions to be created/updated/removed'
+          ),
+        isPublic: zod
+          .boolean()
+          .nullish()
+          .describe('If the item is publicly accessible'),
+        publicAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
+      }),
+    ])
+    .optional(),
+});
+
+export const editThreadV2Response = zod.object({
+  data: zod.object({
+    success: zod.boolean().describe('Indicates if the request was successful'),
+  }),
+  error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
  * @summary Gets a UserPdfDocumentLocation entry
  */
 export const getUserDocumentViewLocationParams = zod.object({
@@ -9896,67 +10245,6 @@ export const editProjectV2Body = zod.object({
 });
 
 export const editProjectV2Response = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
-
-/**
- * @summary Edits the share permissions of a thread.
- */
-export const editThreadV2Params = zod.object({
-  thread_id: zod.string().describe('thread ID'),
-});
-
-export const editThreadV2Body = zod.object({
-  projectId: zod
-    .string()
-    .nullish()
-    .describe('The new project that the thread will belong to.'),
-  sharePermission: zod
-    .union([
-      zod.null(),
-      zod.object({
-        channelSharePermissions: zod
-          .array(
-            zod.object({
-              accessLevel: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum(['view', 'comment', 'edit', 'owner'])
-                    .describe(
-                      'Ordered from least to most access top -> bottom'
-                    ),
-                ])
-                .optional(),
-              channelId: zod.string().describe('The channel id'),
-              operation: zod.enum(['add', 'remove', 'replace']),
-            })
-          )
-          .nullish()
-          .describe(
-            'Any channel share permissions to be created/updated/removed'
-          ),
-        isPublic: zod
-          .boolean()
-          .nullish()
-          .describe('If the item is publicly accessible'),
-        publicAccessLevel: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['view', 'comment', 'edit', 'owner'])
-              .describe('Ordered from least to most access top -> bottom'),
-          ])
-          .optional(),
-      }),
-    ])
-    .optional(),
-});
-
-export const editThreadV2Response = zod.object({
   data: zod.object({
     success: zod.boolean().describe('Indicates if the request was successful'),
   }),

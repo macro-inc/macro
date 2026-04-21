@@ -5,8 +5,9 @@ import {
 } from '../sandbox/sandbox-store';
 import { createEffect, createSignal } from 'solid-js';
 import { OnboardingEntityList } from '../OnboardingEntityList';
-import { HotkeyCallout } from '../components-lib';
+import { ClickCallout, HotkeyCallout } from '../components-lib';
 import { MockAppChrome } from '../components/MockAppChrome';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 function SidebarNavContent(props: LessonContentProps) {
@@ -20,19 +21,28 @@ function SidebarNavContent(props: LessonContentProps) {
 
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
+      <p>Use the sidebar to quickly jump between views.</p>
       <p>
-        Use the sidebar to quickly jump between views. Try navigating to{' '}
-        <strong>Emails</strong>.
+        Try navigating to <strong>Emails</strong>.
       </p>
-      <HotkeyCallout
-        keys={['G', 'E']}
-        separator="then"
-        label="Go to Emails"
+      <div class="mt-2">
+        <HotkeyCallout
+          keys={['G', 'E']}
+          separator="then"
+          label=""
+          completed={done()}
+        />
+      </div>
+      <div class="flex items-center gap-3 text-sm text-ink/40">
+        <div class="h-px w-8 bg-edge-muted" />
+        or
+        <div class="h-px flex-1 bg-edge-muted" />
+      </div>
+      <ClickCallout
+        icon={AnimatedEmailIcon}
+        label="in the sidebar"
         completed={done()}
       />
-      <p class="text-sm text-ink/50">
-        Or click the email icon in the sidebar on the right.
-      </p>
     </div>
   );
 }
@@ -48,7 +58,7 @@ function SidebarNavDemo() {
   });
 
   return (
-    <MockAppChrome>
+    <MockAppChrome highlightId="mail">
       <OnboardingEntityList soup={soup} />
     </MockAppChrome>
   );
@@ -60,5 +70,4 @@ export const sidebarNavLesson: LessonDefinition = {
   content: SidebarNavContent,
   demo: SidebarNavDemo,
   order: 5,
-  skippable: true,
 };

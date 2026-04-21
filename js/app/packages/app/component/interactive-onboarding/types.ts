@@ -10,9 +10,7 @@ export interface LessonDefinition {
   /** Optional component rendered in the right demo panel. When omitted the Macro logo is shown. */
   demo?: Component<LessonContentProps>;
   order?: number;
-  /** Whether the user can skip this lesson. Defaults to false. */
-  skippable?: boolean;
-  /** Hide the continue/skip buttons entirely — the lesson drives its own advancement. */
+  /** Hide the continue button entirely — the lesson drives its own advancement. */
   hideContinue?: boolean;
   /** Called instead of the default complete-and-advance flow. On web, redirects externally (returns void). On native mobile, performs auth inline and returns true to advance. */
   onContinue?: () => void | Promise<boolean>;
@@ -33,6 +31,8 @@ export interface LessonContentProps {
   isActive: boolean;
   /** Hotkey scope ID from the shell — register all lesson hotkeys into this scope */
   scopeId: string;
+  /** Programmatically mark the current lesson complete and advance to the next one. */
+  advance: () => void;
 }
 
 export interface LessonState {

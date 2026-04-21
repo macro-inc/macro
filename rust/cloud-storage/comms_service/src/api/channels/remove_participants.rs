@@ -1,6 +1,5 @@
 use crate::api::context::AppState;
 use crate::api::extractors::{ChannelId, ChannelMember, ChannelTypeExtractor};
-use crate::channel_permissions;
 use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::State, http::StatusCode};
@@ -65,22 +64,6 @@ pub async fn handler(
             )
         })?;
     }
-
-    let start = std::time::Instant::now();
-    channel_permissions::remove_permissions_for_channel_users(
-        &ctx.db,
-        &channel_id.to_string(),
-        &req.participants,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to remove permissions for channel items");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "unable to remove permissions for channel items".to_string(),
-        )
-    })?;
-    tracing::info!(elapsed=?start.elapsed(), "removed user channel permissions");
 
     Ok(StatusCode::OK)
 }

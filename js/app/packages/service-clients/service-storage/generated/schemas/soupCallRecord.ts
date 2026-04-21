@@ -14,6 +14,9 @@ import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
 and transcript — fields that are irrelevant for the soup feed.
  */
 export interface SoupCallRecord {
+  /** Whether the requesting user attended this call (i.e. appears in the
+`call_participants` / `call_record_participants` table). */
+  attended: boolean;
   /** The call identifier. */
   callId: string;
   /** The channel this call belongs to. */

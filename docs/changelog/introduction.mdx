@@ -7,7 +7,45 @@ All notable changes to Macro, pulled from [GitHub Releases](https://github.com/m
 
 Releases follow the format `vYYYY.M.D.patch`.
 
-    <Update label="v2026.4.17.1 (Current)">
+    <Update label="v2026.4.20.0 (Current)">
+## What's Changed
+* feat(auth-service): Change stripe tier endpoint by @evanhutnik in https://github.com/macro-inc/macro/pull/2655
+* fix(ai-email): Send HTML body instead of raw markdown when sending emails by @evanhutnik in https://github.com/macro-inc/macro/pull/2432
+* fix: add back cmd+esc to close split by @peterchinman in https://github.com/macro-inc/macro/pull/2664
+* chore: add star history by @seanaye in https://github.com/macro-inc/macro/pull/2665
+* fix: scope expand/collapse hotkey to active split by @gbirman in https://github.com/macro-inc/macro/pull/2667
+* fix[mobile]: notification timestamps by @peterchinman in https://github.com/macro-inc/macro/pull/2670
+* feat(fe): Subscription tier update UI by @evanhutnik in https://github.com/macro-inc/macro/pull/2666
+* fix(task): add create by as property display to task front-matter by @sedson in https://github.com/macro-inc/macro/pull/2669
+* fix(soup): optimistic batch updating of properties by @synoet in https://github.com/macro-inc/macro/pull/2668
+* feat(soup): ast file assoc expansion by @seanaye in https://github.com/macro-inc/macro/pull/2674
+* feat(tauri): autoupdate ui and persistence by @seanaye in https://github.com/macro-inc/macro/pull/2657
+* fix: ios dictation buffer by @peterchinman in https://github.com/macro-inc/macro/pull/2677
+* fix(list): preserve scroll position on expand/collapse by @gbirman in https://github.com/macro-inc/macro/pull/2678
+* fix: notification stacking behavior by @peterchinman in https://github.com/macro-inc/macro/pull/2673
+* fix(unfurl): Improvements to unfurl service to have it match what we do for similar functionality in other services by @whutchinson98 in https://github.com/macro-inc/macro/pull/2679
+* fix(soup): bulk marking emails as done happens in parallel by @synoet in https://github.com/macro-inc/macro/pull/2675
+* chore(soup): bump persisted state version by @dev-rb in https://github.com/macro-inc/macro/pull/2680
+* feat(comms): add thread mentionees to notification for channel message by @whutchinson98 in https://github.com/macro-inc/macro/pull/2682
+* fix(email): use unique index on email_contacts upsert lookup by @gbirman in https://github.com/macro-inc/macro/pull/2683
+* fix[soup]: import folder button by @peterchinman in https://github.com/macro-inc/macro/pull/2681
+* chore(ai infra): consolidate env vars for tools by @ehayes2000 in https://github.com/macro-inc/macro/pull/2672
+* fix(md): potentially fix md comment clone bug by @sedson in https://github.com/macro-inc/macro/pull/2685
+* chg(channels): improve distinction between keyboard selected + hover by @synoet in https://github.com/macro-inc/macro/pull/2684
+* chore: bump version + update changelog by @synoet in https://github.com/macro-inc/macro/pull/2689
+* fix(ai): tool error handling by @ehayes2000 in https://github.com/macro-inc/macro/pull/2671
+* chg(opensearch): drop unknown fields instead of auto-creating by @gbirman in https://github.com/macro-inc/macro/pull/2690
+* feat(channels): add failed to send message failover by @synoet in https://github.com/macro-inc/macro/pull/2693
+* fix(channels/lexical): fix input focus causing scroll instability by @synoet in https://github.com/macro-inc/macro/pull/2687
+* fix(fe-notifs): add metion info to create thread calls by @sedson in https://github.com/macro-inc/macro/pull/2695
+* Seanaye/fix/tauri services ws by @seanaye in https://github.com/macro-inc/macro/pull/2688
+* fix(channel): fix scroll to bottom when mid pagination by @synoet in https://github.com/macro-inc/macro/pull/2696
+
+
+**Full Changelog**: https://github.com/macro-inc/macro/compare/v2026.4.17.1...v2026.4.20.0
+    </Update>
+
+    <Update label="v2026.4.17.1">
 ## What's Changed
 * fix(agent-schedule-service): wire SYNC_SERVICE_AUTH_KEY env var by @gbirman in https://github.com/macro-inc/macro/pull/2663
 

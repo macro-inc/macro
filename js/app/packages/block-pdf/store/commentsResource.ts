@@ -16,6 +16,7 @@ import type { Comment } from '@service-storage/generated/schemas/comment';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { CreateCommentRequest } from '@service-storage/generated/schemas/createCommentRequest';
 import type { CreateCommentRequestAnchor } from '@service-storage/generated/schemas/createCommentRequestAnchor';
+import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
 import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import type { CreateUnthreadedAnchorRequest } from '@service-storage/generated/schemas/createUnthreadedAnchorRequest';
 import type { CreateUnthreadedAnchorResponse } from '@service-storage/generated/schemas/createUnthreadedAnchorResponse';
@@ -339,7 +340,11 @@ export function useDeleteCommentResource() {
 export function useCreateFreeCommentResource() {
   const createComment = useCreateComment();
 
-  return async (text: string, placeable: IThreadPlaceable) => {
+  return async (
+    text: string,
+    placeable: IThreadPlaceable,
+    mentions?: CreateCommentRequestMentions
+  ) => {
     let anchor: CreateCommentRequestAnchor | undefined;
     if (placeable) {
       anchor = {
@@ -366,6 +371,7 @@ export function useCreateFreeCommentResource() {
       text: text,
       threadId: undefined,
       anchor,
+      mentions,
     };
 
     return createComment(body);
@@ -375,7 +381,11 @@ export function useCreateFreeCommentResource() {
 export function useCreateHighlightCommentResource() {
   const createComment = useCreateComment();
 
-  return async (text: string, highlight: IHighlight) => {
+  return async (
+    text: string,
+    highlight: IHighlight,
+    mentions?: CreateCommentRequestMentions
+  ) => {
     let anchor: CreateCommentRequestAnchor | undefined;
     if (highlight) {
       if (highlight.pageViewport == null) {
@@ -403,6 +413,7 @@ export function useCreateHighlightCommentResource() {
       text: text,
       threadId: undefined,
       anchor,
+      mentions,
     };
 
     return createComment(body);
@@ -412,7 +423,11 @@ export function useCreateHighlightCommentResource() {
 export function useAttachHighlightCommentResource() {
   const createComment = useCreateComment();
 
-  return async (text: string, uuid: string) => {
+  return async (
+    text: string,
+    uuid: string,
+    mentions?: CreateCommentRequestMentions
+  ) => {
     const body: CreateCommentRequest = {
       text: text,
       threadId: undefined,
@@ -422,6 +437,7 @@ export function useAttachHighlightCommentResource() {
         attachmentType: 'highlight',
         uuid,
       },
+      mentions,
     };
 
     return createComment(body);

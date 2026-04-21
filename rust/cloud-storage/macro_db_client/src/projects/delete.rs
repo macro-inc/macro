@@ -1,6 +1,7 @@
 use super::get_project::get_project_chats::get_chats_from_project_ids;
 use super::get_project::get_project_documents::get_documents_from_project_ids;
 use anyhow::Context;
+use model_entity::EntityType;
 use sqlx::{Pool, Postgres, Transaction};
 
 use super::get_project::get_sub_items::get_all_sub_project_ids;
@@ -138,10 +139,10 @@ pub async fn delete_project(db: Pool<Postgres>, project_id: &str) -> anyhow::Res
         .await?;
     }
 
-    crate::item_access::delete::delete_user_item_access_by_item(
+    crate::item_access::delete::delete_user_entity_access_by_item(
         &mut transaction,
-        project_id,
-        "project",
+        &macro_uuid::string_to_uuid(project_id).unwrap(),
+        EntityType::Project,
     )
     .await?;
 
@@ -166,37 +167,7 @@ pub async fn delete_projects_bulk(
 ) -> anyhow::Result<()> {
     let mut transaction = db.begin().await.context("unable to begin transaction")?;
 
-    sqlx::query!(
-        r#"
-            DELETE FROM "SharePermission"
-            WHERE id IN (
-                SELECT "sharePermissionId"
-                FROM "ProjectPermission"
-                WHERE "projectId" = ANY($1)
-            )
-        "#,
-        project_ids
-    )
-    .execute(&mut *transaction)
-    .await
-    .context("unable to delete share permissions")?;
-
-    crate::item_access::delete::delete_user_item_access_bulk(
-        &mut transaction,
-        project_ids,
-        "project",
-    )
-    .await?;
-
-    sqlx::query!(
-        r#"
-        DELETE FROM "Project"
-        WHERE id = ANY($1)"#,
-        project_ids
-    )
-    .execute(&mut *transaction)
-    .await
-    .context("unable to delete projects")?;
+    delete_projects_bulk_tsx(&mut transaction, project_ids).await?;
 
     transaction
         .commit()
@@ -252,8 +223,15 @@ pub async fn delete_projects_bulk_tsx(
     .await
     .context("unable to delete share permissions")?;
 
-    crate::item_access::delete::delete_user_item_access_bulk(transaction, project_ids, "project")
-        .await?;
+    crate::item_access::delete::delete_user_entity_access_bulk(
+        transaction,
+        &project_ids
+            .iter()
+            .map(|p| macro_uuid::string_to_uuid(p).unwrap())
+            .collect::<Vec<uuid::Uuid>>(),
+        EntityType::Project,
+    )
+    .await?;
 
     sqlx::query!(
         r#"

@@ -1,4 +1,4 @@
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch::{Error, http::response::Response};
 
 #[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
@@ -50,7 +50,7 @@ pub enum OpensearchClientError {
     BoolQueryNotBuilt,
 
     #[error("empty ids with ids only for {0}")]
-    EmptyIdsWithIdsOnly(SearchEntityType),
+    EmptyIdsWithIdsOnly(OpenSearchEntityType),
 
     #[error("searching with exhausted cursor")]
     SearchWithExhaustedCursor,

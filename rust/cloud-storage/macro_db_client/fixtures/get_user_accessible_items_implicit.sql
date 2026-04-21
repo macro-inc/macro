@@ -1,7 +1,7 @@
 -- This fixture tests implicit (hierarchical) permissions.
 -- user-2 owns a project structure: Project A contains Project B, Document A, and Chat A.
--- user-1 is ONLY given explicit 'view' access to the top-level Project A.
--- The tests will verify that user-1 correctly gains implicit access to the nested items.
+-- user-1 has access via entity_access to all entities (entity_access has rows for items
+-- inside projects via granted_from_project_id).
 
 SET session_replication_role = 'replica';
 
@@ -19,25 +19,28 @@ VALUES ('user-1', 'user1@test.com', 'stripe_1', 1, 'a1111111-1111-1111-1111-1111
 
 -- === Project Hierarchy (owned by user-2) ===
 INSERT INTO public."Project" ("id", "name", "userId", "parentId")
-VALUES ('project-A', 'Top Level Project', 'user-2', NULL),
-       ('project-B', 'Nested Project', 'user-2', 'project-A');
+VALUES ('b0000000-0000-0000-0000-0000000e0001', 'Top Level Project', 'user-2', NULL),
+       ('b0000000-0000-0000-0000-0000000e0002', 'Nested Project', 'user-2', 'b0000000-0000-0000-0000-0000000e0001');
 
 -- === Items inside Project A (owned by user-2) ===
 INSERT INTO public."Chat" ("id", "name", "userId", "projectId")
-VALUES ('chat-A', 'Nested Chat', 'user-2', 'project-A');
+VALUES ('b0000000-0000-0000-0000-0000000e0003', 'Nested Chat', 'user-2', 'b0000000-0000-0000-0000-0000000e0001');
 INSERT INTO public."Document" ("id", "name", "owner", "projectId")
-VALUES ('doc-A', 'Nested Document', 'user-2', 'project-A');
+VALUES ('b0000000-0000-0000-0000-0000000e0004', 'Nested Document', 'user-2', 'b0000000-0000-0000-0000-0000000e0001');
 
 -- Dependencies
 INSERT INTO public."DocumentFamily" ("id", "rootDocumentId")
-VALUES (1, 'doc-A');
+VALUES (1, 'b0000000-0000-0000-0000-0000000e0004');
 INSERT INTO public."DocumentInstance" ("id", "documentId", "sha")
-VALUES (1, 'doc-A', 'sha-A');
+VALUES (1, 'b0000000-0000-0000-0000-0000000e0004', 'sha-A');
 
--- === Grant Access ===
--- user-1 is ONLY granted access to the top-level project.
--- All other access must be implicitly derived from this single grant.
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'user-1', 'project-A', 'project', 'view');
+-- === Grant Access via entity_access ===
+-- entity_access has explicit rows for all entities the user can access (including nested items).
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
+VALUES
+    ('b0000000-0000-0000-0000-0000000e0001'::uuid, 'project', 'user-1', 'user', 'view', NULL),
+    ('b0000000-0000-0000-0000-0000000e0002'::uuid, 'project', 'user-1', 'user', 'view', 'b0000000-0000-0000-0000-0000000e0001'),
+    ('b0000000-0000-0000-0000-0000000e0003'::uuid, 'chat', 'user-1', 'user', 'view', 'b0000000-0000-0000-0000-0000000e0001'),
+    ('b0000000-0000-0000-0000-0000000e0004'::uuid, 'document', 'user-1', 'user', 'view', 'b0000000-0000-0000-0000-0000000e0001');
 
 SET session_replication_role = 'origin';

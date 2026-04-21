@@ -12,6 +12,7 @@ import type { AnnotationIncrementalUpdate } from '@service-storage/generated/sch
 import type { Comment } from '@service-storage/generated/schemas/comment';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { CreateCommentRequest } from '@service-storage/generated/schemas/createCommentRequest';
+import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
 import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import type { DeleteCommentRequest } from '@service-storage/generated/schemas/deleteCommentRequest';
 import type { DeleteCommentResponse } from '@service-storage/generated/schemas/deleteCommentResponse';
@@ -206,7 +207,11 @@ export function useDeleteCommentResource() {
 export function useCreateHighlightCommentResource() {
   const createComment = useCreateComment();
 
-  return async (text: string, markId: MarkId) => {
+  return async (
+    text: string,
+    markId: MarkId,
+    mentions?: CreateCommentRequestMentions
+  ) => {
     const metadata: ThreadMetadata = {
       markId,
     };
@@ -214,6 +219,7 @@ export function useCreateHighlightCommentResource() {
       text: text,
       threadId: undefined,
       threadMetadata: metadata,
+      mentions,
     };
 
     return createComment(body);

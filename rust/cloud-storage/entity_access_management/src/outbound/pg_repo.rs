@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use entity_access_db_utils::SimpleEntity;
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
@@ -21,15 +22,6 @@ struct ProjectSourceEntity {
     pub source_type: EntityAccessSourceType,
     /// The access level for the source entity
     pub access_level: AccessLevel,
-}
-
-/// Simple entity wrapper
-#[derive(Clone, Debug)]
-struct SimpleEntity {
-    /// The entity id
-    pub entity_id: String,
-    /// The entity type
-    pub entity_type: String,
 }
 
 /// PostgreSQL-backed implementation of [`EntityAccessManagementRepository`]
@@ -54,43 +46,7 @@ impl PgRepository {
         transaction: &mut Transaction<'_, Postgres>,
         project_id: &uuid::Uuid,
     ) -> Result<Vec<SimpleEntity>, sqlx::Error> {
-        let results = sqlx::query!(
-            r#"
-            WITH RECURSIVE child_projects AS (
-                SELECT id FROM "Project" WHERE id = $1
-
-                UNION ALL
-
-                SELECT p.id FROM "Project" p
-                INNER JOIN child_projects cp ON p."parentId" = cp.id
-            )
-            SELECT id as "entity_id!", 'project' as "entity_type!" FROM child_projects
-
-            UNION ALL
-
-            SELECT d.id as "entity_id!", 'document' as "entity_type!" FROM "Document" d
-            WHERE d."projectId" IN (SELECT id FROM child_projects)
-
-            UNION ALL
-
-            SELECT c.id as "entity_id!", 'chat' as "entity_type!" FROM "Chat" c
-            WHERE c."projectId" IN (SELECT id FROM child_projects)
-
-            UNION ALL
-
-            SELECT et.id::text as "entity_id!", 'email_thread' as "entity_type!" FROM email_threads et
-            WHERE et.project_id IN (SELECT id FROM child_projects)
-            "#,
-            &project_id.to_string()
-        )
-        .map(|r| SimpleEntity {
-            entity_id: r.entity_id,
-            entity_type: r.entity_type,
-        })
-        .fetch_all(transaction.as_mut())
-        .await?;
-
-        Ok(results)
+        entity_access_db_utils::get_nested_project_entities(transaction, project_id).await
     }
 
     /// Walks up the project tree and grabs all projects including the project provided id
@@ -100,31 +56,7 @@ impl PgRepository {
         transaction: &mut Transaction<'_, Postgres>,
         project_id: &uuid::Uuid,
     ) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
-        let results = sqlx::query!(
-            r#"
-            WITH RECURSIVE parent_projects AS (
-                -- Base case: the project itself
-                SELECT id, name, "parentId"
-                FROM "Project"
-                WHERE id = $1
-
-                UNION ALL
-
-                -- Recursive case: walk up to the parent
-                SELECT p.id, p.name, p."parentId"
-                FROM "Project" p
-                INNER JOIN parent_projects pp ON p.id = pp."parentId"
-            )
-            SELECT id as "id!"
-            FROM parent_projects
-            "#,
-            &project_id.to_string()
-        )
-        .map(|p| Uuid::parse_str(&p.id).unwrap()) // SAFETY: the project_id is always a uuid, we just haven't migrated the type to be that in the db schema
-        .fetch_all(transaction.as_mut())
-        .await?;
-
-        Ok(results)
+        entity_access_db_utils::walk_up_project_tree(transaction, project_id).await
     }
 
     /// Given a list of project ids, this will return a list of all source entities (source_id/source_type/access_level) entries that we need to insert rows for the new entity

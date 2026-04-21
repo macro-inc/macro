@@ -31,6 +31,14 @@ function isValueFilteredOut(
   return !values.includes(value);
 }
 
+function isAttendedFilteredOut(
+  attendedFilter: boolean | null | undefined,
+  itemAttended: boolean
+): boolean {
+  if (attendedFilter !== true && attendedFilter !== false) return false;
+  return itemAttended !== attendedFilter;
+}
+
 // TODO: this only supports the subset of soup filters needed for cache matching.
 export function filterSoupItemByRequestBody(
   item: SoupApiItem,
@@ -68,7 +76,8 @@ export function filterSoupItemByRequestBody(
     .with(
       { tag: 'callRecord' },
       ({ data }) =>
-        !isIdFilteredOut(body.call_filters?.channel_ids, data.channelId)
+        !isIdFilteredOut(body.call_filters?.channel_ids, data.channelId) &&
+        !isAttendedFilteredOut(body.call_filters?.attended, data.attended)
     )
     .exhaustive();
 }

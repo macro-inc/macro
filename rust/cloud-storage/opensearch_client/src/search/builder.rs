@@ -4,7 +4,7 @@ use crate::Result;
 use crate::error::OpensearchClientError;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_terms_must_query;
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, Script, ScriptSort, ScriptSortType, SortOrder, SortType,
@@ -83,7 +83,7 @@ pub trait SearchQueryConfig {
     /// Content field
     const CONTENT_KEY: &'static str = "content";
     /// The entity index for the search query
-    const ENTITY_INDEX: SearchEntityType;
+    const ENTITY_INDEX: OpenSearchEntityType;
 }
 
 #[derive(Default)]

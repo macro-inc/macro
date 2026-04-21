@@ -1,6 +1,6 @@
 -- Fixture for testing shared email thread filtering.
 -- Builds on email_dynamic_query fixture by adding a second user with their own
--- email threads, some of which are shared with user1 via UserItemAccess or project membership.
+-- email threads, some of which are shared with user1 via entity_access or project membership.
 
 -- == Second user ==
 INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
@@ -27,15 +27,15 @@ VALUES
 
 -- == Shared project: user1 has access to this project owned by user2 ==
 INSERT INTO "Project" (id, name, "userId", "createdAt", "updatedAt")
-VALUES ('proj-cccc-cccc-cccc-cccccccccccc', 'Shared Project', 'macro|user2@test.com', NOW(), NOW());
+VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'Shared Project', 'macro|user2@test.com', NOW(), NOW());
 
 -- Grant user1 access to the shared project
-INSERT INTO "UserItemAccess" (id, user_id, item_id, item_type, access_level, created_at, updated_at)
-VALUES ('acc00000-0000-0000-0000-000000000001', 'macro|user1@test.com', 'proj-cccc-cccc-cccc-cccccccccccc', 'project', 'view', NOW(), NOW());
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid, 'project', 'macro|user1@test.com', 'user', 'view');
 
 -- == User2's email threads ==
 
--- Thread 101: Directly shared with user1 via UserItemAccess (not in any shared project)
+-- Thread 101: Directly shared with user1 via entity_access (not in any shared project)
 INSERT INTO email_threads (
     id, provider_id, link_id, inbox_visible, is_read,
     latest_inbound_message_ts, latest_outbound_message_ts, latest_non_spam_message_ts,
@@ -54,7 +54,7 @@ INSERT INTO email_threads (
 VALUES
     ('20000102-0000-0000-0000-000000000102', 'shared_thread2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
      true, false, '2024-02-02 10:00:00+00', NULL, '2024-02-02 10:00:00+00', NOW(), NOW(),
-     'proj-cccc-cccc-cccc-cccccccccccc');
+     'cccccccc-cccc-cccc-cccc-cccccccccccc');
 
 -- Thread 103: User2's thread NOT shared with user1 (should never appear)
 INSERT INTO email_threads (
@@ -67,8 +67,12 @@ VALUES
      true, false, '2024-02-03 10:00:00+00', NULL, '2024-02-03 10:00:00+00', NOW(), NOW());
 
 -- Direct share: thread 101 shared with user1
-INSERT INTO "UserItemAccess" (id, user_id, item_id, item_type, access_level, created_at, updated_at)
-VALUES ('acc00000-0000-0000-0000-000000000002', 'macro|user1@test.com', '20000101-0000-0000-0000-000000000101', 'thread', 'view', NOW(), NOW());
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+VALUES ('20000101-0000-0000-0000-000000000101'::uuid, 'thread', 'macro|user1@test.com', 'user', 'view');
+
+-- Denormalized row: thread 102 inherits access from the shared project
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+VALUES ('20000102-0000-0000-0000-000000000102'::uuid, 'thread', 'macro|user1@test.com', 'user', 'view', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
 
 -- == Messages for user2's threads ==
 INSERT INTO email_messages (

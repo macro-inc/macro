@@ -1,25 +1,22 @@
 //! Query for email thread access level.
 
-use crate::domain::models::AccessLevel;
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use std::str::FromStr;
 use uuid::Uuid;
 
 /// Get the highest access level a user has for an email thread.
-///
-/// Considers both explicit grants (UserItemAccess) and public access
-/// (SharePermission) inherited through the project hierarchy.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_thread_access(
     pool: &PgPool,
-    thread_id: &str,
+    thread_id: &Uuid,
+    source_ids: &SourceIds,
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
-    let user_id = user_id.map(AsRef::as_ref).unwrap_or("");
+    let user_id_str = user_id.map(AsRef::as_ref).unwrap_or("");
 
-    let thread_uuid = Uuid::parse_str(thread_id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
-
+    // Thread-specific: check if user is the thread owner via email_links
     let is_owner = sqlx::query_scalar!(
         r#"
             SELECT EXISTS (
@@ -30,8 +27,8 @@ pub async fn get_thread_access(
                   AND l.macro_id = $2
             ) AS "exists!"
             "#,
-        thread_uuid,
-        user_id
+        thread_id,
+        user_id_str
     )
     .fetch_one(pool)
     .await?;
@@ -40,42 +37,53 @@ pub async fn get_thread_access(
         return Ok(Some(AccessLevel::Owner));
     }
 
+    // Check share permission access only
+    if source_ids.0.is_empty() {
+        let access_level = sqlx::query_scalar!(
+            r#"
+            SELECT
+                "publicAccessLevel" as "access_level!"
+            FROM "SharePermission"
+            WHERE "isPublic" = true
+            AND "publicAccessLevel" IS NOT NULL
+            AND id IN (
+                SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $1
+            )
+
+            "#,
+            &thread_id.to_string()
+        )
+        .fetch_optional(pool)
+        .await?;
+
+        return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
+    }
+
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
-        WITH RECURSIVE project_hierarchy AS (
-            SELECT p.id as project_id
-            FROM email_threads t
-            JOIN "Project" p ON t.project_id = p.id AND p."deletedAt" IS NULL
-            WHERE t.id = $1
+        SELECT access_level FROM (
+            -- Source 1: entity_access source_id match
+            SELECT
+                access_level::text FROM entity_access
+            WHERE entity_id = $1
+            AND entity_type = 'email_thread'
+            AND source_id = ANY($2)
+
             UNION ALL
-            SELECT parent.id as project_id
-            FROM project_hierarchy ph
-            JOIN "Project" parent ON parent.id = (
-                SELECT "parentId" FROM "Project" WHERE id = ph.project_id AND "parentId" IS NOT NULL AND "deletedAt" IS NULL
+            -- Source 2: items share permission
+            SELECT
+                "publicAccessLevel" as "access_level!"
+            FROM "SharePermission"
+            WHERE "isPublic" = true
+            AND "publicAccessLevel" IS NOT NULL
+            AND id IN (
+                SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $3
             )
         )
-        SELECT access_level FROM (
-            -- Source 1: Cast the AccessLevel enum to text.
-            SELECT access_level::text FROM "UserItemAccess"
-            WHERE user_id = $3 AND item_id IN (
-                SELECT $2 -- The thread ID as text
-                UNION
-                SELECT project_id FROM project_hierarchy -- All parent projects
-            )
-            UNION ALL
-            -- Source 2: Select the publicAccessLevel (which is already text).
-            SELECT "publicAccessLevel" as access_level
-            FROM "SharePermission"
-            WHERE "isPublic" = true AND "publicAccessLevel" IS NOT NULL AND id IN (
-                SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $2
-                UNION
-                SELECT "sharePermissionId" FROM "ProjectPermission" WHERE "projectId" IN (SELECT project_id FROM project_hierarchy)
-            )
-        ) as all_levels
         "#,
-        thread_uuid,
         thread_id,
-        user_id
+        &source_ids.0,
+        &thread_id.to_string()
     )
     .fetch_all(pool)
     .await?;

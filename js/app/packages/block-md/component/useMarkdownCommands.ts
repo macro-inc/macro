@@ -158,6 +158,16 @@ export function registerMarkdownCommands(
         editor.focus();
         return true;
       },
+      hide: () => {
+        const editor = getEditor();
+        if (!editor) return true;
+        return !editor.hasNodes(action.dependencies ?? []);
+      },
+      condition: () => {
+        const editor = getEditor();
+        if (!editor) return false;
+        return editor.hasNodes(action.dependencies ?? []);
+      },
     }).withGroup(group);
   }
 
