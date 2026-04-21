@@ -125,7 +125,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                         // Check if this version was already downloaded in a previous session.
                         if let Ok(update_dir) = self.system_query.get_update_dir().await {
                             if let Some(entrypoint) =
-                                find_cached_bundle(&self.fs_repo, &update_dir, &update.version)
+                                find_cached_bundle(&self.fs_repo, &update_dir, &update.version).await
                             {
                                 return Ok(UpdateStatus::Completed(CompletedStatus {
                                     entrypoint,
@@ -281,7 +281,6 @@ async fn find_cached_bundle(
                         return Some(entrypoint);
                     }
                 }
-                }
             }
             Err(e) => {
                 tracing::debug!("find_cached_bundle: no semver.txt in {dir:?}: {e}");
@@ -336,13 +335,18 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Set the bundle root to a new directory and persist it.
+    ///
+    /// The in-memory state is only updated after persistence succeeds.
     pub async fn set_bundle_root(
         &mut self,
         path: PathBuf,
         cache_dir: &Path,
     ) -> Result<(), std::io::Error> {
-        self.bundle_root.set(path);
-        self.bundle_root.persist(cache_dir, &self.fs_repo).await
+        // Persist first — only commit in-memory if the write succeeds.
+        let new_root = BundleRoot::from_path(path);
+        new_root.persist(cache_dir, &self.fs_repo).await?;
+        self.bundle_root = new_root;
+        Ok(())
     }
 
     /// Clear the bundle root and remove all downloaded bundles.

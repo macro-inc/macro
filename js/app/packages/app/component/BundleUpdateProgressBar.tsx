@@ -25,7 +25,13 @@ export function BundleUpdateProgressBar() {
     on(status, (cur, prev) => {
       if (prev !== 'Completed' && cur === 'Completed') {
         toast.success('Update downloaded', 'Tap to apply update', [
-          { label: 'Update', onClick: () => invoke('perform_update') },
+          {
+            label: 'Update',
+            onClick: () =>
+              invoke('perform_update').catch((e) =>
+                console.error('[bundle-update] perform_update failed', e)
+              ),
+          },
         ]);
       }
     })

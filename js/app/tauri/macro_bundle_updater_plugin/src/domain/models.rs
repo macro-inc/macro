@@ -21,6 +21,11 @@ impl BundleRoot {
         Self(None)
     }
 
+    /// Create a bundle root pointing to the given path.
+    pub(crate) fn from_path(path: PathBuf) -> Self {
+        Self(Some(path))
+    }
+
     /// Load persisted bundle root from the given cache directory.
     pub(crate) async fn load(cache_dir: &Path, fs: &impl FsRepo) -> Self {
         let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
@@ -36,6 +41,9 @@ impl BundleRoot {
                     tracing::warn!(
                         "Persisted bundle root {path:?} missing index.html at {index:?}"
                     );
+                    if let Err(e) = fs.remove_file(&persist_path).await {
+                        tracing::debug!("Failed to remove stale bundle_root file: {e}");
+                    }
                     Self(None)
                 }
             }
