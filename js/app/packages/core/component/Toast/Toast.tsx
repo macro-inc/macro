@@ -165,10 +165,19 @@ function success(
   message: string,
   subtext?: string,
   actions?: ToastAction[],
-  duration?: number
+  duration?: number,
+  /** When true, bypasses the 3s dedupe so repeated calls stack instead of replacing. */
+  stack?: boolean
 ): number | undefined {
-  dismissIfRecent(message, ToastType.SUCCESS);
-  return createToast(message, ToastType.SUCCESS, subtext, actions, duration);
+  if (!stack) dismissIfRecent(message, ToastType.SUCCESS);
+  return createToast(
+    message,
+    ToastType.SUCCESS,
+    subtext,
+    actions,
+    duration,
+    stack
+  );
 }
 
 function dismiss(toastId: number) {
@@ -468,18 +477,17 @@ function createToast(
   actions?: ToastAction[],
   // When undefined, the toast auto-dismisses after a default delay but shows NO progress bar.
   // When explicitly set, the toast uses that duration AND shows the progress bar.
-  duration?: number
+  duration?: number,
+  /** Skip recentToasts tracking so this toast never dedupes against a future call. */
+  stack?: boolean
 ) {
-  const key = createToastKey(message, toastType);
-
-  const existingToast = recentToasts.get(key);
-  if (existingToast?.timeoutId) {
-    clearTimeout(existingToast.timeoutId);
+  if (!stack) {
+    const key = createToastKey(message, toastType);
+    const existingToast = recentToasts.get(key);
+    if (existingToast?.timeoutId) {
+      clearTimeout(existingToast.timeoutId);
+    }
   }
-
-  const timeoutId = setTimeout(() => {
-    recentToasts.delete(key);
-  }, THROTTLE_DURATION);
 
   const toastId = toaster.show(
     (props) => (
@@ -497,15 +505,21 @@ function createToast(
     { region: 'toast-region' }
   );
 
-  recentToasts.set(key, {
-    message,
-    toastType,
-    timestamp: Date.now(),
-    timeoutId,
-    toastId,
-    subtext,
-    actions,
-  });
+  if (!stack) {
+    const key = createToastKey(message, toastType);
+    const timeoutId = setTimeout(() => {
+      recentToasts.delete(key);
+    }, THROTTLE_DURATION);
+    recentToasts.set(key, {
+      message,
+      toastType,
+      timestamp: Date.now(),
+      timeoutId,
+      toastId,
+      subtext,
+      actions,
+    });
+  }
 
   return toastId;
 }

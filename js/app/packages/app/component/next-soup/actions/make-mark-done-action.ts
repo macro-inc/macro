@@ -70,7 +70,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             },
           },
         ],
-        10_000
+        10_000,
+        true
       );
       context?.setSuccessToastId(toastId);
     },

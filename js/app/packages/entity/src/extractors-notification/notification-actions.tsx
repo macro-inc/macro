@@ -67,7 +67,8 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
               },
             },
           ],
-          10_000
+          10_000,
+          true
         );
         context?.setSuccessToastId(toastId);
         props.onMarkAsDone?.();
