@@ -37,7 +37,7 @@ export type QueryFn = (ctx: FilterContext) => QueryInput;
 export type FilterDefinition<TId extends string = string> = {
   id: TId;
   group?: string;
-  predicate?: Predicate;
+  predicate: Predicate;
   query: QueryInput | QueryFn;
 };
 
@@ -46,7 +46,7 @@ export type FilterGroupConfig = { id: string; allowMultiple: boolean };
 export function config<TId extends string>(opts: {
   id: TId;
   query: QueryInput | QueryFn;
-  predicate?: Predicate;
+  predicate: Predicate;
   group?: string;
 }): FilterDefinition<TId> {
   return {

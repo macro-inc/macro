@@ -4,7 +4,7 @@ export type FilterPredicate<T> = (entity: T, ctx?: unknown) => boolean;
 
 export type PredicateConfig<T, TId extends string = string> = {
   id: TId;
-  predicate?: FilterPredicate<T>;
+  predicate: FilterPredicate<T>;
   query?: unknown;
 };
 
@@ -115,14 +115,14 @@ export function createPredicatesStore<
 
     for (const id of andList) {
       const config = configMap.get(id);
-      if (config && !config.predicate?.(entity, ctx)) return false;
+      if (config && !config.predicate(entity, ctx)) return false;
     }
 
     if (orList.length > 0) {
       let anyMatch = false;
       for (const id of orList) {
         const config = configMap.get(id);
-        if (config?.predicate?.(entity, ctx)) {
+        if (config?.predicate(entity, ctx)) {
           anyMatch = true;
           break;
         }

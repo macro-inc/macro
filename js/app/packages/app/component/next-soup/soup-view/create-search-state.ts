@@ -222,10 +222,9 @@ export const createSearchState = ({
     const filterToResultMap = new Map<string, EntityData[]>();
     const ctx = getFilterContext();
     for (const filter of soup.predicates.available) {
-      if (!filter.predicate) continue;
       filterToResultMap.set(
         filter.id,
-        localFuzzyResults().filter((e) => filter.predicate!(e, ctx))
+        localFuzzyResults().filter((e) => filter.predicate(e, ctx))
       );
     }
     return filterToResultMap;
