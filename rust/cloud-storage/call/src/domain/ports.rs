@@ -5,7 +5,7 @@
 use std::fmt::Debug;
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole, ViewAccessLevel};
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
