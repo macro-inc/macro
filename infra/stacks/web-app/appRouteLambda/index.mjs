@@ -51,7 +51,7 @@ export const handler = async (event) => {
     // Update the html page title with the document name
     const body = template.replace(
       /<head[^>]*>/i,
-      `<head><title>Macro - ${documentTitle}</title>`
+      `<head><title data-sm="">Macro - ${documentTitle}</title>`
     );
 
     // Return the response
