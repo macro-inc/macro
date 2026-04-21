@@ -1,253 +1,336 @@
-import { useUserId } from '@core/context/user';
-import { useCanEdit } from '@core/signal/permissions';
-import { Message } from '@channel/Message/Message';
-import { ChannelInput } from '@channel/Input/ChannelInput';
-import { Thread } from '@channel/Thread/Thread';
-import { ThreadRail } from '@channel/Thread/ThreadRail';
-import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
-import { replyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
-import type { MessageActions } from '@channel/Message/types';
-import type { InputSnapshot } from '@channel/Input/types';
-import type { Comment } from '@service-storage/generated/schemas/comment';
-import { createSignal, For, Show } from 'solid-js';
+import { ChannelInput } from "@channel/Input/ChannelInput";
+import type { InputSnapshot } from "@channel/Input/types";
+import { Message } from "@channel/Message/Message";
+import type { MessageActions } from "@channel/Message/types";
+import { Thread } from "@channel/Thread/Thread";
+import { ThreadRail } from "@channel/Thread/ThreadRail";
+import { ThreadReplyInputConnector } from "@channel/Thread/ThreadReplyInputConnector";
+import { replyInputOffsetX } from "@channel/Thread/utils/thread-rail-geometry";
+import type { ItemMention } from "@core/component/LexicalMarkdown/plugins";
+import { useUserId } from "@core/context/user";
+import { useCanEdit } from "@core/signal/permissions";
+import { tryMacroId, useDisplayName } from "@core/user";
+import CaretDown from "@icon/bold/caret-down-bold.svg";
+import CaretRight from "@icon/bold/caret-right-bold.svg";
+import type { Comment } from "@service-storage/generated/schemas/comment";
+import type { CommentThread } from "@service-storage/generated/schemas/commentThread";
+import type { CreateCommentRequestMentions } from "@service-storage/generated/schemas/createCommentRequestMentions";
+import { createSignal, For, Show } from "solid-js";
 import {
-  discussionThreads,
-  sortComments,
-  useCreateDiscussionThread,
-  useCreateDiscussionReply,
-  useEditDiscussionComment,
-  useDeleteDiscussionComment,
-} from '../comments/discussionResource';
-import { commentToMessageData } from '../comments/discussionAdapter';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+	commentToApiChannelMessage,
+	commentToMessageData,
+} from "../comments/discussionAdapter";
+import {
+	discussionThreads,
+	sortComments,
+	useCreateDiscussionReply,
+	useCreateDiscussionThread,
+	useDeleteDiscussionComment,
+	useEditDiscussionComment,
+} from "../comments/discussionResource";
+
+/**
+ * Converts ItemMention[] from InputSnapshot to API format for comment mentions
+ */
+function buildCommentMentions(
+	mentions: ItemMention[],
+): CreateCommentRequestMentions | undefined {
+	const userIds = mentions
+		.filter((m) => m.itemType === "user")
+		.map((m) => m.itemId);
+
+	if (userIds.length === 0) {
+		return undefined;
+	}
+
+	return {
+		mentionId: crypto.randomUUID(),
+		users: userIds,
+	};
+}
 
 export function TaskDiscussion() {
-  const canEdit = useCanEdit();
-  const createThread = useCreateDiscussionThread();
-  let newThreadInputHandle: { clear: () => void } | undefined;
+	const canEdit = useCanEdit();
+	const createThread = useCreateDiscussionThread();
+	const [isExpanded, setIsExpanded] = createSignal(true);
 
-  const handleCreateThread = async (snapshot: InputSnapshot) => {
-    const text = snapshot.value.trim();
-    if (!text) return;
-    await createThread(text);
-    newThreadInputHandle?.clear();
-  };
+	let newThreadInputHandle: { clear: () => void } | undefined;
 
-  return (
-    <section class="mt-8 pb-12">
-      <div class="border-t border-edge-muted mb-4" />
-      <h3 class="text-sm font-medium text-ink-muted mb-4">Activity</h3>
+	const toggleExpanded = () => {
+		setIsExpanded(!isExpanded());
+	};
 
-      <div class="flex flex-col gap-4">
-        <For each={discussionThreads() ?? []}>
-          {(thread) => <DiscussionThread thread={thread} />}
-        </For>
-      </div>
+	const handleCreateThread = async (snapshot: InputSnapshot) => {
+		const text = snapshot.value.trim();
+		if (!text) return;
+		const mentions = buildCommentMentions(snapshot.mentions);
+		await createThread(text, mentions);
+		newThreadInputHandle?.clear();
+	};
 
-      <Show when={canEdit()}>
-        <div class="mt-4">
-          <ChannelInput
-            input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
-            onSend={handleCreateThread}
-            onReady={(handle) => {
-              newThreadInputHandle = handle;
-            }}
-            autofocus={false}
-          />
-        </div>
-      </Show>
-    </section>
-  );
+	return (
+		<section class="mt-8 pb-12">
+			{/* Collapsible header with horizontal line */}
+			<div class="flex items-center gap-2 pt-2">
+				<div class="w-6 border-t border-edge-muted" />
+				<button
+					type="button"
+					class="flex items-center gap-1 px-2 hover:opacity-70 transition-opacity"
+					onClick={toggleExpanded}
+				>
+					{isExpanded() ? (
+						<CaretDown class="w-3 h-3" />
+					) : (
+						<CaretRight class="w-3 h-3" />
+					)}
+					<span class="text-xs">Activity</span>
+				</button>
+				<div class="flex-1 border-t border-edge-muted" />
+			</div>
+
+			{/* Collapsible content */}
+			<Show when={isExpanded()}>
+				<div class="py-2 text-xs">
+					<div>
+						<For each={discussionThreads() ?? []}>
+							{(thread) => <DiscussionThread thread={thread} />}
+						</For>
+					</div>
+
+					<Show when={canEdit()}>
+						<div>
+							<ChannelInput
+								input={{ mode: "channel", placeholder: "Leave a comment..." }}
+								onSend={handleCreateThread}
+								onReady={(handle) => {
+									newThreadInputHandle = handle;
+								}}
+								autofocus={false}
+							/>
+						</div>
+					</Show>
+				</div>
+			</Show>
+		</section>
+	);
 }
 
 function DiscussionThread(props: { thread: CommentThread }) {
-  const userId = useUserId();
-  const canEdit = useCanEdit();
-  const createReply = useCreateDiscussionReply();
-  const editComment = useEditDiscussionComment();
-  const deleteComment = useDeleteDiscussionComment();
+	const userId = useUserId();
+	const canEdit = useCanEdit();
+	const createReply = useCreateDiscussionReply();
+	const editComment = useEditDiscussionComment();
+	const deleteComment = useDeleteDiscussionComment();
 
-  const [isReplying, setIsReplying] = createSignal(false);
-  const [editingId, setEditingId] = createSignal<number | null>(null);
-  let replyInputHandle: { clear: () => void } | undefined;
-  let replyInputContainerRef: HTMLDivElement | undefined;
+	const [isReplying, setIsReplying] = createSignal(false);
+	const [editingId, setEditingId] = createSignal<number | null>(null);
+	let replyInputHandle: { clear: () => void } | undefined;
+	let replyInputContainerRef: HTMLDivElement | undefined;
 
-  const sorted = () => [...props.thread.comments].sort(sortComments);
-  const root = () => sorted()[0];
-  const replies = () => sorted().slice(1);
-  const hasReplies = () => replies().length > 0;
+	const sorted = () => [...props.thread.comments].sort(sortComments);
+	const root = () => sorted()[0];
+	const replies = () => sorted().slice(1);
+	const hasReplies = () => replies().length > 0;
 
-  const threadId = () => props.thread.thread.threadId;
+	const threadId = () => props.thread.thread.threadId;
 
-  const isOwn = (comment: Comment) =>
-    (comment.sender ?? comment.owner) === userId();
+	const replyUserId = () => userId() ?? root()?.sender ?? root()?.owner ?? "";
+	const macroId = () => tryMacroId(replyUserId());
+	const [displayName] = useDisplayName(macroId());
 
-  const makeActions = (comment: Comment, isRoot: boolean): MessageActions => {
-    const own = isOwn(comment);
-    return {
-      onReply: isRoot
-        ? () => {
-            setIsReplying(true);
-          }
-        : undefined,
-      onEdit: own
-        ? () => {
-            setEditingId(comment.commentId);
-          }
-        : undefined,
-      onDelete:
-        own && canEdit()
-          ? async () => {
-              await deleteComment(comment.commentId, {});
-            }
-          : undefined,
-    };
-  };
+	const isOwn = (comment: Comment) =>
+		(comment.sender ?? comment.owner) === userId();
 
-  const handleReply = async (snapshot: InputSnapshot) => {
-    const text = snapshot.value.trim();
-    if (!text) return;
-    await createReply(text, threadId());
-    replyInputHandle?.clear();
-    setIsReplying(false);
-  };
+	const makeActions = (comment: Comment, isRoot: boolean): MessageActions => {
+		const own = isOwn(comment);
+		return {
+			onReply: isRoot
+				? () => {
+						setIsReplying(true);
+					}
+				: undefined,
+			onEdit: own
+				? () => {
+						setEditingId(comment.commentId);
+					}
+				: undefined,
+			onDelete:
+				own && canEdit()
+					? async () => {
+							await deleteComment(comment.commentId, {});
+						}
+					: undefined,
+		};
+	};
 
-  const handleEdit = async (comment: Comment, snapshot: InputSnapshot) => {
-    const text = snapshot.value.trim();
-    if (!text) return;
-    await editComment(comment.commentId, {
-      text,
-      threadId: threadId(),
-    });
-    setEditingId(null);
-  };
+	const handleReply = async (snapshot: InputSnapshot) => {
+		const text = snapshot.value.trim();
+		if (!text) return;
+		const mentions = buildCommentMentions(snapshot.mentions);
+		await createReply(text, threadId(), mentions);
+		replyInputHandle?.clear();
+		setIsReplying(false);
+	};
 
-  return (
-    <div class="discussion-thread">
-      <Show when={root()}>
-        {(rootComment) => (
-          <div class="flex flex-col w-full">
-            <DiscussionMessage
-              comment={rootComment()}
-              actions={makeActions(rootComment(), true)}
-              editingId={editingId()}
-              onEditSave={(snapshot) => handleEdit(rootComment(), snapshot)}
-              onEditCancel={() => setEditingId(null)}
-            />
+	const handleEdit = async (comment: Comment, snapshot: InputSnapshot) => {
+		const text = snapshot.value.trim();
+		if (!text) return;
+		await editComment(comment.commentId, {
+			text,
+			threadId: threadId(),
+		});
+		setEditingId(null);
+	};
 
-            <Show when={hasReplies() || isReplying()}>
-              <div class="relative w-full">
-                <Thread.ReplyRailDecorations
-                  isReplying={isReplying}
-                  firstThreadReplyNewMessage={false}
-                />
-                <Thread.RepliesContainer>
-                  <For each={replies()}>
-                    {(reply) => (
-                      <div class="relative">
-                        <ThreadRail />
-                        <DiscussionMessage
-                          comment={reply}
-                          actions={makeActions(reply, false)}
-                          editingId={editingId()}
-                          onEditSave={(snapshot) => handleEdit(reply, snapshot)}
-                          onEditCancel={() => setEditingId(null)}
-                        />
-                      </div>
-                    )}
-                  </For>
+	return (
+		<Show when={root()}>
+			{(rootComment) => {
+				const rootMessageData = () => commentToApiChannelMessage(rootComment());
+				return (
+					<div class="flex flex-col w-full gap-0">
+						<Thread.Row message={rootMessageData()}>
+							<DiscussionMessage
+								comment={rootComment()}
+								actions={makeActions(rootComment(), true)}
+								editingId={editingId()}
+								onEditSave={(snapshot) => handleEdit(rootComment(), snapshot)}
+								onEditCancel={() => setEditingId(null)}
+							/>
 
-                  <Show when={isReplying() && canEdit()}>
-                    <div
-                      ref={replyInputContainerRef}
-                      class="relative pt-2"
-                      style={{ 'margin-left': replyInputOffsetX }}
-                    >
-                      <ThreadReplyInputConnector />
-                      <ChannelInput
-                        input={{ mode: 'reply', placeholder: 'Reply...' }}
-                        onSend={handleReply}
-                        onClose={() => {
-                          setIsReplying(false);
-                        }}
-                        onReady={(handle) => {
-                          replyInputHandle = handle;
-                        }}
-                      />
-                    </div>
-                  </Show>
+							<Show when={hasReplies() || isReplying()}>
+								<div class="relative w-full">
+									{/*
+										ThreadReplyRailDecorations renders the curved connector from the root message to the reply thread.
+										If rails are misaligned, check:
+										1. CSS variables (--left-of-connector, --thread-shift, --user-icon-width) are defined
+										2. ThreadRepliesContainer padding-left matches threadOffsetX calculation
+										3. Message.Layout padding matches expectations
+									*/}
+									<Thread.ReplyRailDecorations
+										isReplying={isReplying}
+										firstThreadReplyNewMessage={false}
+									/>
+									<Thread.RepliesContainer>
+										<For each={replies()}>
+											{(reply) => (
+												<div class="relative">
+													<ThreadRail />
+													<DiscussionMessage
+														comment={reply}
+														actions={makeActions(reply, false)}
+														editingId={editingId()}
+														onEditSave={(snapshot) =>
+															handleEdit(reply, snapshot)
+														}
+														onEditCancel={() => setEditingId(null)}
+													/>
+												</div>
+											)}
+										</For>
 
-                  <Show when={!isReplying() && canEdit()}>
-                    <Thread.ActionsFooter>
-                      <Thread.ReplyButton
-                        getFocusTarget={() =>
-                          replyInputContainerRef?.querySelector<HTMLElement>(
-                            '[contenteditable]'
-                          ) ?? null
-                        }
-                        onClick={() => setIsReplying(true)}
-                        aria-label="Reply"
-                      />
-                    </Thread.ActionsFooter>
-                  </Show>
-                </Thread.RepliesContainer>
-              </div>
-            </Show>
-          </div>
-        )}
-      </Show>
-    </div>
-  );
+										<Show when={isReplying() && canEdit()}>
+											<div class="ph-no-capture">
+												<Show when={!hasReplies()}>
+													<Thread.ReplyAuthor
+														userId={replyUserId()}
+														displayName={displayName()}
+													/>
+												</Show>
+												<div
+													ref={replyInputContainerRef}
+													class="relative pt-2"
+													style={{ "margin-left": replyInputOffsetX }}
+												>
+													<ThreadReplyInputConnector />
+													<ChannelInput
+														input={{ mode: "reply", placeholder: "Reply..." }}
+														onSend={handleReply}
+														onClose={() => {
+															setIsReplying(false);
+														}}
+														onReady={(handle) => {
+															replyInputHandle = handle;
+														}}
+													/>
+												</div>
+											</div>
+										</Show>
+
+										<Show when={!isReplying() && canEdit()}>
+											<Thread.ActionsFooter>
+												<Thread.ReplyButton
+													getFocusTarget={() =>
+														replyInputContainerRef?.querySelector<HTMLElement>(
+															"[contenteditable]",
+														) ?? null
+													}
+													onClick={() => setIsReplying(true)}
+													aria-label="Reply"
+												/>
+											</Thread.ActionsFooter>
+										</Show>
+									</Thread.RepliesContainer>
+								</div>
+							</Show>
+						</Thread.Row>
+					</div>
+				);
+			}}
+		</Show>
+	);
 }
 
 function DiscussionMessage(props: {
-  comment: Comment;
-  actions: MessageActions;
-  editingId: number | null;
-  onEditSave: (snapshot: InputSnapshot) => void;
-  onEditCancel: () => void;
+	comment: Comment;
+	actions: MessageActions;
+	editingId: number | null;
+	onEditSave: (snapshot: InputSnapshot) => void;
+	onEditCancel: () => void;
 }) {
-  const isEditing = () => props.editingId === props.comment.commentId;
-  const messageData = () => commentToMessageData(props.comment);
+	const isEditing = () => props.editingId === props.comment.commentId;
+	const messageData = () => commentToMessageData(props.comment);
 
-  return (
-    <Show
-      when={!isEditing()}
-      fallback={
-        <ChannelInput
-          input={{
-            mode: 'reply',
-            placeholder: 'Edit comment...',
-            value: props.comment.text,
-          }}
-          onSend={props.onEditSave}
-          onClose={() => {
-            props.onEditCancel();
-          }}
-        />
-      }
-    >
-      <Message.Root message={messageData()} actions={props.actions}>
-        <Message.Layout class="pt-(--regular-message-padding-t)">
-          <Message.Slot placement="icon">
-            <Message.SenderIcon />
-          </Message.Slot>
-          <Message.Slot
-            placement="header"
-            class="flex items-center gap-1 min-w-0"
-          >
-            <Message.SenderName />
-            <Message.EditedIndicator />
-            <Message.Timestamp class="ml-auto" />
-          </Message.Slot>
-          <Message.Slot placement="content" class="ph-no-capture">
-            <Message.Content />
-          </Message.Slot>
-          <Message.Slot placement="actions">
-            <Message.ActionMenu />
-          </Message.Slot>
-        </Message.Layout>
-      </Message.Root>
-    </Show>
-  );
+	return (
+		<Show
+			when={!isEditing()}
+			fallback={
+				<ChannelInput
+					input={{
+						mode: "reply",
+						placeholder: "Edit comment...",
+						value: props.comment.text,
+					}}
+					onSend={props.onEditSave}
+					onClose={() => {
+						props.onEditCancel();
+					}}
+				/>
+			}
+		>
+			<Message.Root message={messageData()} actions={props.actions}>
+				<Message.Layout class="pt-(--regular-message-padding-t)">
+					<Message.Slot placement="icon">
+						<Message.SenderIcon />
+					</Message.Slot>
+					<Message.Slot
+						placement="header"
+						class="flex items-center gap-1 min-w-0 w-full"
+					>
+						<Message.SenderName />
+						<Message.EditedIndicator />
+						<div class="grow-1 shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1">
+							<Message.Timestamp
+								class="ml-auto shrink-0"
+								format="dateAndTime"
+							/>
+						</div>
+					</Message.Slot>
+					<Message.Slot placement="content" class="ph-no-capture">
+						<Message.Content />
+					</Message.Slot>
+					<Message.ActionMenu />
+				</Message.Layout>
+			</Message.Root>
+		</Show>
+	);
 }
