@@ -250,25 +250,29 @@ export const restoreSoupFocus = async (
     );
   }
 
-  if (!domRef) return;
+  if (!(domRef instanceof HTMLElement)) return;
 
   // Wait for DOM to update after modal closes
   await waitForFrames(2);
 
-  // Find and focus the entity element
+  // Entity rows are plain divs without a `tabindex` attribute so `.focus()`
+  // on them is a no-op. Targeting them is still useful because the browser
+  // may scroll them into view as part of the focus attempt. Always follow
+  // up by focusing the soup container (which has `tabindex={-1}`) — that's
+  // what actually reactivates the hotkey scope.
   if (entityId) {
     const entityEl = domRef.querySelector(`[data-entity-id="${entityId}"]`);
-    if (entityEl instanceof HTMLElement) {
-      entityEl.focus();
-      return;
-    }
+    if (entityEl instanceof HTMLElement) entityEl.focus();
   }
 
-  // Fallback: focus the first entity in the list if no specific entity to focus
+  if (document.activeElement && domRef.contains(document.activeElement)) return;
+
   const firstEntityEl = domRef.querySelector('[data-entity-id]');
-  if (firstEntityEl instanceof HTMLElement) {
-    firstEntityEl.focus();
-  }
+  if (firstEntityEl instanceof HTMLElement) firstEntityEl.focus();
+
+  if (document.activeElement && domRef.contains(document.activeElement)) return;
+
+  domRef.focus();
 };
 
 export interface OpenEntityOptions {
