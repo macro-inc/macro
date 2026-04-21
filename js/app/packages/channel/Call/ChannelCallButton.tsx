@@ -3,7 +3,7 @@ import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { Button } from '@ui/components/Button';
 import PhoneIcon from '@macro-icons/wide/call.svg';
-import PhoneDisconnectIcon from '@icon/regular/phone-disconnect.svg';
+import PhoneDisconnectIcon from '@macro-icons/wide/call-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useCall } from './useCall';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
