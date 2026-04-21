@@ -39,7 +39,7 @@ const AST = {
 
 const FIELD_CONFIG: Record<
   CompiledFieldName,
-  { target: QueryTarget; field: string }
+  { target: QueryTarget; field: string; formatValue?: (value: unknown) => unknown }
 > = {
   documentId: { target: 'df', field: 'id' },
   fileType: { target: 'df', field: 'ft' },
@@ -55,7 +55,7 @@ const FIELD_CONFIG: Record<
   emailDone: { target: 'ef', field: 'NotificationDone' },
   emailImportance: { target: 'ef', field: 'Importance' },
   emailProjectId: { target: 'ef', field: 'ProjectId' },
-  emailSender: { target: 'ef', field: 'Sender' },
+  emailSender: { target: 'ef', field: 'Sender', formatValue: (v) => ({ Partial: v }) },
   emailShared: { target: 'ef', field: 'Shared' },
   channelId: { target: 'chanf', field: 'ChannelId' },
   channelType: { target: 'chanf', field: 'ChannelType' },
@@ -100,13 +100,15 @@ export function compileToAst(state: QueryState): TargetAstMap {
     const includeVal = state.include[fieldName];
     const excludeVal = state.exclude[fieldName];
 
+    const format = config.formatValue ?? ((v: unknown) => v);
+
     if (Array.isArray(includeVal) || Array.isArray(excludeVal)) {
       const includeVals = includeVal as unknown[] | undefined;
       const excludeVals = excludeVal as unknown[] | undefined;
 
       if (includeVals?.length) {
         byTarget[config.target].push(
-          AST.or(includeVals.map((v) => AST.literal(config.field, v)))
+          AST.or(includeVals.map((v) => AST.literal(config.field, format(v))))
         );
       }
 
@@ -117,16 +119,16 @@ export function compileToAst(state: QueryState): TargetAstMap {
 
         if (filtered.length > 0) {
           byTarget[config.target].push(
-            AST.not(AST.or(filtered.map((v) => AST.literal(config.field, v))))
+            AST.not(AST.or(filtered.map((v) => AST.literal(config.field, format(v)))))
           );
         }
       }
     } else {
       if (includeVal !== undefined) {
-        byTarget[config.target].push(AST.literal(config.field, includeVal));
+        byTarget[config.target].push(AST.literal(config.field, format(includeVal)));
       } else if (excludeVal !== undefined) {
         byTarget[config.target].push(
-          AST.not(AST.literal(config.field, excludeVal))
+          AST.not(AST.literal(config.field, format(excludeVal)))
         );
       }
     }
