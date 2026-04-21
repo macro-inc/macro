@@ -78,6 +78,7 @@ export * from './basicDocumentUpdatedAt';
 export * from './bomPart';
 export * from './callActiveResponse';
 export * from './callFilters';
+export * from './callFiltersAttended';
 export * from './callRecord';
 export * from './callRecordChannelName';
 export * from './callRecordDurationMs';

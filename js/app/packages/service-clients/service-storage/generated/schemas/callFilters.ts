@@ -4,11 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CallFiltersAttended } from './callFiltersAttended';
 
 /**
  * Filters for call records.
  */
 export interface CallFilters {
+  /** Filter by whether the requesting user attended the call.
+`None` = no filter, `Some(true)` = only calls the user joined,
+`Some(false)` = only calls the user did not join. */
+  attended?: CallFiltersAttended;
   /** Channel IDs to filter calls by. Empty to include all calls. */
   channel_ids?: string[];
 }

@@ -4712,6 +4712,11 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
+              attended: zod
+                .boolean()
+                .describe(
+                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table).'
+                ),
               callId: zod.string().uuid().describe('The call identifier.'),
               channelId: zod
                 .string()
@@ -4791,6 +4796,12 @@ export const postItemsSoupBody = zod
   .object({
     call_filters: zod
       .object({
+        attended: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
+          ),
         channel_ids: zod
           .array(zod.string())
           .optional()
@@ -6388,6 +6399,11 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
+              attended: zod
+                .boolean()
+                .describe(
+                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table).'
+                ),
               callId: zod.string().uuid().describe('The call identifier.'),
               channelId: zod
                 .string()
@@ -7724,6 +7740,11 @@ export const postItemsSoupAstResponse = zod.object({
         zod.object({
           data: zod
             .object({
+              attended: zod
+                .boolean()
+                .describe(
+                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table).'
+                ),
               callId: zod.string().uuid().describe('The call identifier.'),
               channelId: zod
                 .string()

@@ -5892,6 +5892,10 @@
         "type": "object",
         "description": "Filters for call records.",
         "properties": {
+          "attended": {
+            "type": ["boolean", "null"],
+            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+          },
           "channel_ids": {
             "type": "array",
             "items": {
@@ -10482,9 +10486,14 @@
           "createdBy",
           "startedAt",
           "isActive",
+          "attended",
           "participants"
         ],
         "properties": {
+          "attended": {
+            "type": "boolean",
+            "description": "Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table)."
+          },
           "callId": {
             "type": "string",
             "format": "uuid",
