@@ -78,8 +78,6 @@ interface SoupViewContextValues {
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
   queryFilters: QueryStore;
-  filters: Accessor<QueryState>;
-  setFilters: (next: QueryState) => void;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
@@ -126,8 +124,6 @@ export const SoupViewContextProvider: FlowComponent<
 > = (props) => {
   const soup = props.soup ?? createSoupState();
 
-  const queryFilters = createQueryStore({ initial: props.initialQuery });
-
   const queryClient = useQueryClient();
 
   const soupParams = createMemo((): SoupParams => {
@@ -144,8 +140,9 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const setFilters = (next: QueryState) => {
-    // Invalidate query cache when filters change to avoid refetching all pages
+  const store = createQueryStore({ initial: props.initialQuery });
+
+  const invalidateCache = () => {
     queryClient.setQueryData(
       soupKeys.astItems({
         params: soupParams(),
@@ -160,7 +157,22 @@ export const SoupViewContextProvider: FlowComponent<
         return prev;
       }
     );
-    queryFilters.set(next);
+  };
+
+  const queryFilters: QueryStore = {
+    ...store,
+    set: (query) => {
+      invalidateCache();
+      store.set(query);
+    },
+    add: (query) => {
+      invalidateCache();
+      store.add(query);
+    },
+    remove: (query) => {
+      invalidateCache();
+      store.remove(query);
+    },
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
@@ -370,8 +382,6 @@ export const SoupViewContextProvider: FlowComponent<
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
     queryFilters,
-    filters: () => queryFilters.state,
-    setFilters,
     assigneeFilter,
     setAssigneeFilter,
     activeTab,

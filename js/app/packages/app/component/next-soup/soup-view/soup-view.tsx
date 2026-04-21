@@ -401,8 +401,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     rows,
     searchText,
     setSearchText,
-    filters,
-    setFilters,
+    queryFilters,
     featuredIds,
     isSearchServiceLoading,
     isLocalSearchSettling,
@@ -708,9 +707,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
           const persistedFilterData = isStale
             ? {}
             : (initialPersistedState.filterData ?? {});
-          setFilters({
-            include: persistedFilterData.include ?? {},
-            exclude: persistedFilterData.exclude ?? {},
+          queryFilters.set({
+            include: persistedFilterData.include,
+            exclude: persistedFilterData.exclude,
             emailView: persistedFilterData.emailView,
           });
           if (isListViewID(contentId)) {
@@ -751,7 +750,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             and: [...soup.predicates.andIds()],
             or: [...soup.predicates.orIds()],
           },
-          filterData: JSON.parse(JSON.stringify(filters())),
+          filterData: JSON.parse(JSON.stringify(queryFilters.state)),
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),

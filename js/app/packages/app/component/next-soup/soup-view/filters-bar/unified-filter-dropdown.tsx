@@ -401,7 +401,7 @@ const SearchableFilterSubmenu = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, queryFilters, filters, assigneeFilter, setAssigneeFilter } =
+  const { soup, queryFilters, assigneeFilter, setAssigneeFilter } =
     useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
@@ -515,8 +515,8 @@ const toggleAssignee = (id: string) => {
   createEffect(() => {
     if (!isSearchView() || !isChannelsIndexActive()) return;
     const sub: ChannelSubFilters = {};
-    const channelIds = filters().include.channelId;
-    const senderIds = filters().include.channelSenderId;
+    const channelIds = queryFilters.state.include.channelId;
+    const senderIds = queryFilters.state.include.channelSenderId;
     if (channelIds?.length) sub.channel_ids = channelIds;
     if (senderIds?.length) sub.sender_ids = senderIds;
     cacheChannelSubFilters(contentId, sub);
@@ -524,7 +524,7 @@ const toggleAssignee = (id: string) => {
 
   createEffect(() => {
     if (!isSearchView() || !isEmailIndexActive()) return;
-    const importance = filters().include.emailImportance;
+    const importance = queryFilters.state.include.emailImportance;
     cacheEmailSubFilters(contentId, { importance: importance ?? null });
   });
 
@@ -532,13 +532,13 @@ const toggleAssignee = (id: string) => {
     useSearchFilterOptions();
 
   const activeChannelIds: Accessor<string[]> = createMemo(
-    () => filters().include.channelId ?? []
+    () => queryFilters.state.include.channelId ?? []
   );
 
   const setChannelIds = (ids: string[]) => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
-      const current = filters().include.channelId ?? [];
+      const current = queryFilters.state.include.channelId ?? [];
       if (ids.length > 0) {
         queryFilters.add({ include: { channelId: ids } });
       } else {
@@ -548,13 +548,13 @@ const toggleAssignee = (id: string) => {
   };
 
   const activeSenderIds: Accessor<string[]> = createMemo(
-    () => filters().include.channelSenderId ?? []
+    () => queryFilters.state.include.channelSenderId ?? []
   );
 
   const setSenderIds = (ids: string[]) => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
-      const current = filters().include.channelSenderId ?? [];
+      const current = queryFilters.state.include.channelSenderId ?? [];
       if (ids.length > 0) {
         queryFilters.add({ include: { channelSenderId: ids } });
       } else {
@@ -569,12 +569,12 @@ const toggleAssignee = (id: string) => {
       if (val !== undefined) {
         queryFilters.add({ include: { emailImportance: val } });
       } else {
-        queryFilters.remove({ include: { emailImportance: filters().include.emailImportance } });
+        queryFilters.remove({ include: { emailImportance: queryFilters.state.include.emailImportance } });
       }
     });
   };
 
-  const importance = createMemo(() => filters().include.emailImportance);
+  const importance = createMemo(() => queryFilters.state.include.emailImportance);
 
   const [openChannelSub, setOpenChannelSub] = createSignal<
     'in' | 'from' | null

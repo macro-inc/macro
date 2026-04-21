@@ -5,19 +5,6 @@ export {
 } from './inbox-filters';
 
 export {
-  createFilterState,
-  type FilterState,
-  type FilterStateOptions,
-  type FilterConfig,
-  type FilterGroupConfig,
-  type FilterPredicate,
-  type SetFiltersInput,
-  type SetFiltersCallback,
-  type CurrentFilterState,
-  type InitialFiltersInput,
-} from './create-filter-state';
-
-export {
   SOUP_FILTERS,
   SOUP_FILTER_GROUPS,
   ENTITY_TYPE_FILTERS,

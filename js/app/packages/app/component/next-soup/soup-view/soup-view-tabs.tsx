@@ -87,7 +87,7 @@ const useCurrentListView = () => {
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const { setFilters, setActiveTab } = useSoupView();
+  const { queryFilters, setActiveTab } = useSoupView();
   const user = useUserContext();
 
   const getPresetContext = (): PresetContext => ({
@@ -101,9 +101,9 @@ export const useApplyPreset = () => {
 
     batch(() => {
       setActiveTab(tabId);
-      setFilters({
-        include: preset.filters.include ?? {},
-        exclude: preset.filters.exclude ?? {},
+      queryFilters.set({
+        include: preset.filters.include,
+        exclude: preset.filters.exclude,
         emailView: preset.filters.emailView,
       });
       soup.predicates.set(preset.clientFilters);
