@@ -11,7 +11,7 @@ import { useBlockAliasedName, useBlockId } from '@core/block';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import {
   ENABLE_MARKDOWN_COMMENTS,
-  RAIL_CHAT_TASK_COMMENTS,
+  ENABLE_RAIL_CHAT_TASK_COMMENTS,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -289,7 +289,7 @@ export function Notebook() {
           fallback={<div class="h-6 w-full" />}
         />
         <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
-        <Show when={RAIL_CHAT_TASK_COMMENTS && isTask}>
+        <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
           <TaskDiscussion />
         </Show>
       </div>

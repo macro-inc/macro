@@ -310,12 +310,7 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   false
 );
 
-export const ENABLE_TASK_DISCUSSION = resolveFeatureFlag(
-  'ENABLE_TASK_DISCUSSION',
-  true
-);
-
-export const RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
+export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
   'RAIL_CHAT_TASK_COMMENTS',
   DEV_MODE_ENV
 );
