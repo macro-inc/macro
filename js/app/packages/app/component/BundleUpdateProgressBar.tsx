@@ -11,9 +11,9 @@ export function BundleUpdateProgressBar() {
     if (!status) return null;
     switch (status.status) {
       case 'Downloading':
-        return status.data.progress;
+        return status.data.progress * 0.95;
       case 'Unzipping':
-        return status.data.progress;
+        return 95 + status.data.progress * 0.05;
       default:
         return null;
     }
