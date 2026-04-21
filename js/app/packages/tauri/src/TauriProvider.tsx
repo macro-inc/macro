@@ -75,7 +75,8 @@ function TauriProvider(props: { children: JSX.Element }) {
     // Auto-approve download when an update is found so the user only
     // needs to confirm the final "Update" step.
     createEffect(() => {
-      if (bundleUpdateStatus().status === 'UpdateFound') {
+      const status = bundleUpdateStatus();
+      if (status.status === 'UpdateFound') {
         console.info('[bundle-update] update found, auto-approving download');
         invoke('grant_bundle_update', { approved: true });
       }
