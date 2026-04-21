@@ -681,12 +681,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
             <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
               {props.label}            
             </span>
-
-            <Show when={props.id === 'calls' && callCtx?.isInCall()}>
-              <span class="size-1.5 rounded-full bg-task animate-pulse" />
-            </Show>
           </div>
-          
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
