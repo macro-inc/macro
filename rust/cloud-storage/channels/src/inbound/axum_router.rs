@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod test;
 
+pub use crate::domain::models::ChannelMessageFilters;
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelMessageFilters, ChannelParticipant, CountedReaction,
-    MessageAttachment, MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
+    ChannelAttachment, ChannelMessage, ChannelParticipant, CountedReaction, MessageAttachment,
+    MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
 };
 use crate::domain::ports::{
     ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult, ChannelMessagesService,
