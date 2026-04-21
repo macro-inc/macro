@@ -4,14 +4,11 @@ import {
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
-import {
-  addQuery,
-  applyFilterData,
-  emptyFilterData,
-  removeQuery,
-  NIL,
-} from '@app/component/next-soup/filters/filter-store';
 import type { FilterContext } from '@app/component/next-soup/filters/configs';
+import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+
+const NIL = '00000000-0000-0000-0000-000000000000';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -55,7 +52,6 @@ export function useFilterRefinements() {
   const {
     soup,
     filters: filterData,
-    setFilters,
     assigneeFilter,
     setAssigneeFilter,
     activeTab,
@@ -108,8 +104,7 @@ export function useFilterRefinements() {
     const currentFilterData = filterData();
     const hasExternalFilters =
       Object.keys(currentFilterData.include).length > 0 ||
-      Object.keys(currentFilterData.exclude).length > 0 ||
-      currentFilterData.properties.length > 0;
+      Object.keys(currentFilterData.exclude).length > 0;
 
     const hasSubFilters = assigneeFilter().length > 0;
 
@@ -211,10 +206,10 @@ export function useFilterRefinements() {
         onRemove: () => {
           batch(() => {
             setAssigneeFilter(assigneeFilter().filter((a) => a !== id));
-            setFilters((d) => {
-              removeQuery(d, {
-                properties: [{ ASSIGNEES: [{ type: 'entity', value: id }] }],
-              });
+            soup.filters.query.remove({
+              include: {
+                properties: [{ propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES, type: 'entity', value: id }],
+              },
             });
           });
         },
@@ -236,14 +231,14 @@ export function useFilterRefinements() {
     const channelIds = (filterData().include.channelId ?? []).filter(
       (id) => id !== NIL
     );
-    const setChannelIds = (ids: string[]) =>
-      setFilters((d) => {
-        if (ids.length > 0) {
-          d.include.channelId = ids;
-        } else {
-          delete d.include.channelId;
-        }
-      });
+    const setChannelIds = (ids: string[]) => {
+      const current = filterData().include.channelId ?? [];
+      if (ids.length > 0) {
+        soup.filters.query.add({ include: { channelId: ids } });
+      } else if (current.length > 0) {
+        soup.filters.query.remove({ include: { channelId: current } });
+      }
+    };
     if (channelIds.length > 0) {
       filters.push({
         categoryLabel: 'In',
@@ -260,14 +255,14 @@ export function useFilterRefinements() {
 
     // Search operator filters: from: (sender_ids)
     const senderIds = filterData().include.channelSenderId ?? [];
-    const setSenderIds = (ids: string[]) =>
-      setFilters((d) => {
-        if (ids.length > 0) {
-          d.include.channelSenderId = ids;
-        } else {
-          delete d.include.channelSenderId;
-        }
-      });
+    const setSenderIds = (ids: string[]) => {
+      const current = filterData().include.channelSenderId ?? [];
+      if (ids.length > 0) {
+        soup.filters.query.add({ include: { channelSenderId: ids } });
+      } else if (current.length > 0) {
+        soup.filters.query.remove({ include: { channelSenderId: current } });
+      }
+    };
     if (senderIds.length > 0) {
       filters.push({
         categoryLabel: 'From',
@@ -284,7 +279,7 @@ export function useFilterRefinements() {
     // Email importance (only when the email index is active in the search view
     // and the user has explicitly set a value — undefined means "All", no chip)
     if (currentView() === 'search' && soup.filters.predicates.isActive('email')) {
-      const importance = filterData().include.emailImportance?.[0];
+      const importance = filterData().include.emailImportance;
       if (importance !== undefined) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
         const IMPORTANCE_NOISE = 'importance:noise';
@@ -302,13 +297,9 @@ export function useFilterRefinements() {
           multiple: false,
           isOptionActive: (optionId) => optionId === currentOptionId,
           onRemove: () =>
-            setFilters((d) => {
-              delete d.include.emailImportance;
-            }),
+            soup.filters.query.remove({ include: { emailImportance: importance } }),
           onReplace: (newOptionId) =>
-            setFilters((d) => {
-              d.include.emailImportance = [newOptionId === IMPORTANCE_SIGNAL];
-            }),
+            soup.filters.query.add({ include: { emailImportance: newOptionId === IMPORTANCE_SIGNAL } }),
         });
       }
     }
@@ -338,7 +329,7 @@ export function useFilterRefinements() {
     batch(() => {
       soup.filters.predicates.toggle({ or: [optionId as FilterID] });
       if (query) {
-        setFilters((d) => removeQuery(d, query));
+        soup.filters.query.remove(query);
       }
     });
   };
@@ -349,10 +340,8 @@ export function useFilterRefinements() {
     batch(() => {
       soup.filters.predicates.toggle({ or: [oldOptionId as FilterID] });
       soup.filters.predicates.toggle({ or: [newOptionId as FilterID] });
-      setFilters((d) => {
-        if (oldQuery) removeQuery(d, oldQuery);
-        if (newQuery) addQuery(d, newQuery);
-      });
+      if (oldQuery) soup.filters.query.remove(oldQuery);
+      if (newQuery) soup.filters.query.add(newQuery);
     });
   };
 
@@ -362,9 +351,10 @@ export function useFilterRefinements() {
 
     batch(() => {
       soup.filters.predicates.set(preset.clientFilters);
-      setFilters((d) =>
-        applyFilterData(d, preset.filters ?? emptyFilterData())
-      );
+      soup.filters.query.clear();
+      if (preset.filters) {
+        soup.filters.query.add(preset.filters);
+      }
       setAssigneeFilter([]);
     });
   };

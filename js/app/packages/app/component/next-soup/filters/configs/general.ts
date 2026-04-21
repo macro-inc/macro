@@ -20,12 +20,12 @@ export const inboxFilter = config({
       : false),
   query: {
     include: {
-      documentDone: [false],
-      emailDone: [false],
-      emailImportance: [true],
-      channelDone: [false],
-      chatDone: [false],
-      folderDone: [false],
+      documentDone: false,
+      emailDone: false,
+      emailImportance: true,
+      channelDone: false,
+      chatDone: false,
+      folderDone: false,
     },
     emailView: 'inbox',
   },
@@ -37,12 +37,12 @@ export const noiseFilterDef = config({
   predicate: (e) => noiseFilter(e),
   query: {
     include: {
-      documentDone: [false],
-      emailDone: [false],
-      emailImportance: [false],
-      channelDone: [false],
-      chatDone: [false],
-      folderDone: [false],
+      documentDone: false,
+      emailDone: false,
+      emailImportance: false,
+      channelDone: false,
+      chatDone: false,
+      folderDone: false,
     },
     emailView: 'inbox',
   },
@@ -70,11 +70,11 @@ export const unreadFilter = config({
     ctx.notificationSource ? unreadPredicate(ctx.notificationSource)(e) : false,
   query: {
     include: {
-      documentSeen: [false],
-      emailSeen: [false],
-      channelSeen: [false],
-      chatSeen: [false],
-      folderSeen: [false],
+      documentSeen: false,
+      emailSeen: false,
+      channelSeen: false,
+      chatSeen: false,
+      folderSeen: false,
     },
   },
 });
@@ -87,11 +87,11 @@ export const readFilter = config({
       : false,
   query: {
     include: {
-      documentSeen: [true],
-      emailSeen: [true],
-      channelSeen: [true],
-      chatSeen: [true],
-      folderSeen: [true],
+      documentSeen: true,
+      emailSeen: true,
+      channelSeen: true,
+      chatSeen: true,
+      folderSeen: true,
     },
   },
 });
@@ -104,11 +104,11 @@ export const notDoneFilter = config({
       : false,
   query: {
     include: {
-      documentDone: [false],
-      emailDone: [false],
-      channelDone: [false],
-      chatDone: [false],
-      folderDone: [false],
+      documentDone: false,
+      emailDone: false,
+      channelDone: false,
+      chatDone: false,
+      folderDone: false,
     },
   },
 });
@@ -121,11 +121,11 @@ export const doneFilter = config({
       : false,
   query: {
     include: {
-      documentDone: [true],
-      emailDone: [true],
-      channelDone: [true],
-      chatDone: [true],
-      folderDone: [true],
+      documentDone: true,
+      emailDone: true,
+      channelDone: true,
+      chatDone: true,
+      folderDone: true,
     },
   },
 });

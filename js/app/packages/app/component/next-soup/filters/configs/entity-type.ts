@@ -70,7 +70,7 @@ export const fileFilter = config({
 export const recentChannelsFilter = config({
   id: 'recent-channels',
   predicate: (e) => e.type === 'channel' || e.type === 'channel_message',
-  query: { include: { channelImportance: [true] } },
+  query: { include: { channelImportance: true } },
 });
 
 export const ENTITY_TYPE_FILTERS = [

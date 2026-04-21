@@ -1,7 +1,33 @@
 import { deepEqual } from '@core/util/compareUtils';
 import type { FieldFilters, FieldName } from './types';
 
-const useDeepEqual = (key: FieldName) => key === 'properties';
+export const hasFieldValues = (
+  target: FieldFilters,
+  source: FieldFilters | undefined
+): boolean => {
+  if (!source) return true;
+
+  for (const key of Object.keys(source) as FieldName[]) {
+    const value = source[key];
+    if (value === undefined) continue;
+
+    const existing = target[key];
+
+    if (!Array.isArray(value)) {
+      if (existing !== value) return false;
+      continue;
+    }
+
+    if (!value.length) continue;
+    if (!Array.isArray(existing)) return false;
+
+    for (const v of value) {
+      if (!existing.some((e) => deepEqual(e, v))) return false;
+    }
+  }
+
+  return true;
+};
 
 export const addFieldValues = (
   target: FieldFilters,
@@ -24,13 +50,9 @@ export const addFieldValues = (
 
     const existing = (target[key] ?? []) as unknown[];
     const updated = [...existing];
-    const compare = useDeepEqual(key);
 
     for (const v of value) {
-      const exists = compare
-        ? updated.some((e) => deepEqual(e, v))
-        : updated.includes(v);
-      if (!exists) updated.push(v);
+      if (!updated.some((e) => deepEqual(e, v))) updated.push(v);
     }
 
     result[key] = updated;
@@ -59,11 +81,10 @@ export const removeFieldValues = (
     const existing = target[key] as unknown[];
     if (!value.length || !Array.isArray(existing)) continue;
 
-    const compare = useDeepEqual(key);
     const toRemove = value as unknown[];
-    const filtered = compare
-      ? existing.filter((e) => !toRemove.some((v) => deepEqual(e, v)))
-      : existing.filter((e) => !toRemove.includes(e));
+    const filtered = existing.filter(
+      (e) => !toRemove.some((v) => deepEqual(e, v))
+    );
 
     if (filtered.length === 0) {
       delete result[key];

@@ -1,4 +1,6 @@
-import type { FieldName, PropertyFilter, QueryState, EmailView } from './types';
+import type { FieldFilters, FieldName, PropertyFilter, Query, QueryState, EmailView } from './types';
+
+const NIL = '00000000-0000-0000-0000-000000000000';
 
 type BackendAst =
   | { '&': [BackendAst, BackendAst] }
@@ -186,4 +188,42 @@ export function compileToAst(state: QueryState): TargetAstMap {
   }
 
   return result;
+}
+
+const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
+  df: 'documentId',
+  ef: 'threadId',
+  chanf: 'channelId',
+  cf: 'chatId',
+  pf: 'folderId',
+  callf: 'callChannelId',
+};
+
+export function defineQueryFilters(input: Query): Query {
+  const referencedTargets = new Set<QueryTarget>();
+
+  for (const field of Object.keys(input.include ?? {}) as CompiledFieldName[]) {
+    if (field in FIELD_CONFIG) {
+      referencedTargets.add(FIELD_CONFIG[field].target);
+    }
+  }
+
+  for (const field of Object.keys(input.exclude ?? {}) as CompiledFieldName[]) {
+    if (field in FIELD_CONFIG) {
+      referencedTargets.add(FIELD_CONFIG[field].target);
+    }
+  }
+
+  if (referencedTargets.size === 0) return input;
+
+  const include: FieldFilters = { ...input.include };
+
+  for (const [target, idFieldName] of Object.entries(ID_FIELD_NAMES)) {
+    if (referencedTargets.has(target as QueryTarget)) continue;
+    if (idFieldName) {
+      (include as Record<string, unknown[]>)[idFieldName] = [NIL];
+    }
+  }
+
+  return { ...input, include };
 }

@@ -19,10 +19,10 @@ import {
   taskFilter as taskPredicate,
   taskAssignedToUserFilter as taskAssignedToUserPredicate,
 } from '../predicates';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import {
   config,
-  propSelect,
-  propEntity,
+  propFilter,
   isTask,
   NO_ASSIGNEE,
   type Predicate,
@@ -36,7 +36,7 @@ const statusFilter = <TId extends string>(
   config({
     id,
     predicate,
-    query: { properties: [{ STATUS: [propSelect(status)] }] },
+    query: { include: { properties: [propFilter(SYSTEM_PROPERTY_IDS.STATUS, 'select', status)] } },
   });
 
 const priorityFilter = <TId extends string>(
@@ -47,7 +47,7 @@ const priorityFilter = <TId extends string>(
   config({
     id,
     predicate,
-    query: { properties: [{ PRIORITY: [propSelect(priority)] }] },
+    query: { include: { properties: [propFilter(SYSTEM_PROPERTY_IDS.PRIORITY, 'select', priority)] } },
   });
 
 export const taskNotStartedFilter = statusFilter(
@@ -85,10 +85,12 @@ export const activeTaskFilter = config({
   predicate: (e) => taskPredicate(e) && isOpen(e),
   query: {
     include: { subType: ['task'] },
-    properties: [
-      { STATUS: [propSelect(PROPERTY_OPTION_IDS.STATUS.COMPLETED, true)] },
-      { STATUS: [propSelect(PROPERTY_OPTION_IDS.STATUS.CANCELED, true)] },
-    ],
+    exclude: {
+      properties: [
+        propFilter(SYSTEM_PROPERTY_IDS.STATUS, 'select', PROPERTY_OPTION_IDS.STATUS.COMPLETED),
+        propFilter(SYSTEM_PROPERTY_IDS.STATUS, 'select', PROPERTY_OPTION_IDS.STATUS.CANCELED),
+      ],
+    },
   },
 });
 
@@ -142,7 +144,7 @@ export const assignedToMeFilter = config({
   id: 'assigned-to',
   predicate: (e, ctx) => taskAssignedToUserPredicate(() => ctx.userId)(e),
   query: (ctx) => ({
-    properties: [{ ASSIGNEES: [propEntity(ctx.userId ?? '')] }],
+    include: { properties: [propFilter(SYSTEM_PROPERTY_IDS.ASSIGNEES, 'entity', ctx.userId ?? '')] },
   }),
 });
 
@@ -151,17 +153,17 @@ export const assigneeFilter = config({
   predicate: (e, ctx) => {
     if (!ctx.assignees?.length || !isTaskEntity(e)) return true;
     const ids = getTaskAssigneeIds(e as unknown as TaskEntityWithProperties);
-    return ctx.assignees.some((id) =>
+    return ctx.assignees.some((id: string) =>
       id === NO_ASSIGNEE ? ids.length === 0 : ids.includes(id)
     );
   },
   query: (ctx) => {
     if (!ctx.assignees?.length) return {};
-    const userIds = ctx.assignees.filter((id) => id !== NO_ASSIGNEE);
+    const userIds = ctx.assignees.filter((id: string) => id !== NO_ASSIGNEE);
     if (userIds.length === 0) return isTask;
     return {
       ...isTask,
-      properties: [{ ASSIGNEES: userIds.map((id) => propEntity(id)) }],
+      include: { properties: userIds.map((id: string) => propFilter(SYSTEM_PROPERTY_IDS.ASSIGNEES, 'entity', id)) },
     };
   },
 });

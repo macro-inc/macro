@@ -23,7 +23,7 @@ export type {
   SetFiltersInput,
 } from './types';
 
-export type { TargetAstMap } from './compile';
+export { defineQueryFilters, type TargetAstMap } from './compile';
 
 const emptyQueryState = (): QueryState => ({
   include: {},

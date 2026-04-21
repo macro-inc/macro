@@ -11,13 +11,12 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
-  NIL,
   defineQueryFilters,
-  applyFilterData,
-  type FilterData,
+  type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import { batch, createMemo, type JSX } from 'solid-js';
-import type { Option } from './filter-primitives';
+
+const NIL = '00000000-0000-0000-0000-000000000000';
 
 export type SearchableOption = {
   id: string;
@@ -139,7 +138,12 @@ export function cacheEmailSubFilters(
   }
 }
 
-type IndexOption = Option & { filterData: Partial<FilterData> };
+type IndexOption = {
+  value: string;
+  label: string;
+  icon?: () => JSX.Element;
+  filterData: Query;
+};
 
 export const INDEX_OPTIONS: IndexOption[] = [
   {
@@ -148,25 +152,19 @@ export const INDEX_OPTIONS: IndexOption[] = [
     icon: () => (
       <EntityIcon targetType="channel" size="xs" theme="monochrome" />
     ),
-    filterData: defineQueryFilters({
-      exclude: { channelId: [NIL] },
-    }),
+    filterData: defineQueryFilters({ exclude: { channelId: [NIL] } }),
   },
   {
     value: 'document-or-file',
     label: 'Documents',
     icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({
-      exclude: { subType: ['task'] },
-    }),
+    filterData: defineQueryFilters({ exclude: { subType: ['task'] } }),
   },
   {
     value: 'task',
     label: 'Tasks',
     icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({
-      include: { subType: ['task'] },
-    }),
+    filterData: defineQueryFilters({ include: { subType: ['task'] } }),
   },
   {
     value: 'email',
@@ -174,7 +172,7 @@ export const INDEX_OPTIONS: IndexOption[] = [
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
     filterData: defineQueryFilters({
       exclude: { threadId: [NIL] },
-      include: { emailImportance: [true] },
+      include: { emailImportance: true },
     }),
   },
   {
@@ -183,22 +181,18 @@ export const INDEX_OPTIONS: IndexOption[] = [
     icon: () => (
       <EntityIcon targetType="project" size="xs" theme="monochrome" />
     ),
-    filterData: defineQueryFilters({
-      exclude: { folderId: [NIL] },
-    }),
+    filterData: defineQueryFilters({ exclude: { folderId: [NIL] } }),
   },
   {
     value: 'agent',
     label: 'Agents',
     icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({
-      exclude: { chatId: [NIL] },
-    }),
+    filterData: defineQueryFilters({ exclude: { chatId: [NIL] } }),
   },
 ];
 
 export function useSearchIndexController() {
-  const { soup, setFilters } = useSoupView();
+  const { soup } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
 
@@ -212,10 +206,8 @@ export function useSearchIndexController() {
 
       if (newValue === 'all') {
         cacheChannelSubFilters(contentId, {});
-        setFilters((d) => {
-          applyFilterData(d, {});
-          d.include.emailImportance = [true];
-        });
+        soup.filters.query.clear();
+        soup.filters.query.add({ include: { emailImportance: true } });
         return;
       }
 
@@ -225,33 +217,32 @@ export function useSearchIndexController() {
 
       if (opt.value === 'channels') {
         const cached = getCachedChannelSubFilters(contentId);
-        setFilters((d) => {
-          applyFilterData(d, opt.filterData);
-          if (cached.channel_ids?.length) {
-            d.include.channelId = cached.channel_ids;
-          }
-          if (cached.sender_ids?.length) {
-            d.include.channelSenderId = cached.sender_ids;
-          }
-        });
+        soup.filters.query.clear();
+        soup.filters.query.add(opt.filterData);
+        if (cached.channel_ids?.length) {
+          soup.filters.query.add({
+            include: { channelId: cached.channel_ids },
+          });
+        }
+        if (cached.sender_ids?.length) {
+          soup.filters.query.add({
+            include: { channelSenderId: cached.sender_ids },
+          });
+        }
       } else if (opt.value === 'email') {
         const cached = getCachedEmailSubFilters(contentId);
         const importance =
           'importance' in cached
             ? (cached.importance ?? undefined)
-            : opt.filterData.include?.emailImportance?.[0];
-        setFilters((d) => {
-          applyFilterData(d, opt.filterData);
-          if (importance !== undefined) {
-            d.include.emailImportance = [importance];
-          } else {
-            delete d.include.emailImportance;
-          }
-        });
+            : opt.filterData.include?.emailImportance;
+        soup.filters.query.clear();
+        soup.filters.query.add(opt.filterData);
+        if (importance !== undefined) {
+          soup.filters.query.add({ include: { emailImportance: importance } });
+        }
       } else {
-        setFilters((d) => {
-          applyFilterData(d, opt.filterData);
-        });
+        soup.filters.query.clear();
+        soup.filters.query.add(opt.filterData);
       }
     });
   };

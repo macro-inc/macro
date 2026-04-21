@@ -29,11 +29,8 @@ import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
 import type { FilterID } from '@app/component/next-soup/filters';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
-import {
-  addQuery,
-  removeQuery,
-  type PropertyValue,
-} from '@app/component/next-soup/filters/filter-store';
+import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
@@ -509,7 +506,7 @@ const SearchableFilterSubmenu = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, filters, setFilters, assigneeFilter, setAssigneeFilter } =
+  const { soup, filters, assigneeFilter, setAssigneeFilter } =
     useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
@@ -546,13 +543,11 @@ export const UnifiedFilterDropdown = () => {
     const query =
       typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
 
-    setFilters((d) => {
-      if (wasActive) {
-        removeQuery(d, query);
-      } else {
-        addQuery(d, query);
-      }
-    });
+    if (wasActive) {
+      soup.filters.query.remove(query);
+    } else {
+      soup.filters.query.add(query);
+    }
   };
 
   // Assignee options for tasks view
@@ -599,18 +594,18 @@ export const UnifiedFilterDropdown = () => {
       : [...current, id];
     setAssigneeFilter(updated);
 
-    const assigneeProp: PropertyValue = {
+    const assigneeProp: PropertyFilter = {
+      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
       type: 'entity',
       value: id,
     };
 
-    setFilters((d) => {
-      if (wasActive) {
-        removeQuery(d, { properties: [{ ASSIGNEES: [assigneeProp] }] });
-      } else {
-        addQuery(d, { properties: [{ ASSIGNEES: [assigneeProp] }] });
-      }
-    });
+    const query = { include: { properties: [assigneeProp] } };
+    if (wasActive) {
+      soup.filters.query.remove(query);
+    } else {
+      soup.filters.query.add(query);
+    }
   };
 
   const isTasksView = () => currentView() === 'tasks';
@@ -634,7 +629,7 @@ export const UnifiedFilterDropdown = () => {
 
   createEffect(() => {
     if (!isSearchView() || !isEmailIndexActive()) return;
-    const importance = filters().include.emailImportance?.[0];
+    const importance = filters().include.emailImportance;
     cacheEmailSubFilters(contentId, { importance: importance ?? null });
   });
 
@@ -652,13 +647,11 @@ export const UnifiedFilterDropdown = () => {
       const nextIds = current.includes(id)
         ? current.filter((cid) => cid !== id)
         : [...current, id];
-      setFilters((d) => {
-        if (nextIds.length > 0) {
-          d.include.channelId = nextIds;
-        } else {
-          delete d.include.channelId;
-        }
-      });
+      if (nextIds.length > 0) {
+        soup.filters.query.add({ include: { channelId: nextIds } });
+      } else {
+        soup.filters.query.remove({ include: { channelId: current } });
+      }
     });
   };
 
@@ -673,30 +666,26 @@ export const UnifiedFilterDropdown = () => {
       const nextIds = current.includes(id)
         ? current.filter((sid) => sid !== id)
         : [...current, id];
-      setFilters((d) => {
-        if (nextIds.length > 0) {
-          d.include.channelSenderId = nextIds;
-        } else {
-          delete d.include.channelSenderId;
-        }
-      });
+      if (nextIds.length > 0) {
+        soup.filters.query.add({ include: { channelSenderId: nextIds } });
+      } else {
+        soup.filters.query.remove({ include: { channelSenderId: current } });
+      }
     });
   };
 
   const setImportance = (val: boolean | undefined) => {
     batch(() => {
       if (!isEmailIndexActive()) handleIndexChange('email');
-      setFilters((d) => {
-        if (val !== undefined) {
-          d.include.emailImportance = [val];
-        } else {
-          delete d.include.emailImportance;
-        }
-      });
+      if (val !== undefined) {
+        soup.filters.query.add({ include: { emailImportance: val } });
+      } else {
+        soup.filters.query.remove({ include: { emailImportance: filters().include.emailImportance } });
+      }
     });
   };
 
-  const importance = createMemo(() => filters().include.emailImportance?.[0]);
+  const importance = createMemo(() => filters().include.emailImportance);
 
   registerHotkey({
     hotkey: 'f',

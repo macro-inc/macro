@@ -84,7 +84,7 @@ import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 
-import type { FilterData } from '@app/component/next-soup/filters/filter-store';
+import type { QueryState } from '@app/component/next-soup/filters/filter-store';
 import {
   SoupViewTabs,
   CollapsedSoupViewTabs,
@@ -167,7 +167,7 @@ type PersistedSoupViewState = {
   version?: number;
   activeTab: string | undefined;
   filters: InitialFiltersInput<string>;
-  filterData: Partial<FilterData>;
+  filterData: Partial<QueryState>;
   sort: SystemSortOption[];
   previewEntity: string | undefined;
   assigneeFilter: string[];
@@ -188,7 +188,7 @@ const listStateCache = new Map<
 interface SoupViewProps {
   viewName: string;
   initialClientFilters?: InitialFiltersInput<string>;
-  initialFilters?: Partial<FilterData>;
+  initialFilters?: Partial<QueryState>;
   disableLocalSearch?: boolean;
 }
 
@@ -698,7 +698,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
           setFilters((d) => {
             d.include = persistedFilterData.include ?? {};
             d.exclude = persistedFilterData.exclude ?? {};
-            d.properties = persistedFilterData.properties ?? [];
             d.emailView = persistedFilterData.emailView;
           });
           if (isListViewID(contentId)) {

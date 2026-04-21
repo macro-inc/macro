@@ -1,6 +1,6 @@
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
-import type { FilterData, PropertyValue } from '../filter-store';
+import type { Query, PropertyFilter } from '../filter-store';
 
 export const NO_ASSIGNEE = '__no_assignee__';
 
@@ -19,7 +19,7 @@ export const isEmail = { exclude: { threadId: [NIL] } };
 export const isAgent = { exclude: { chatId: [NIL] } };
 export const isTask = { include: { subType: ['task'] } };
 export const isNotTask = { exclude: { subType: ['task'] } };
-export const isEmailAttachment = { include: { isEmailAttachment: [true] } };
+export const isEmailAttachment = { include: { isEmailAttachment: true } };
 export const isChannel = { exclude: { channelId: [NIL] } };
 export const isFolder = { exclude: { folderId: [NIL] } };
 
@@ -31,7 +31,7 @@ export type FilterContext = {
 
 export type Predicate = (entity: EntityData, ctx: FilterContext) => boolean;
 
-export type QueryInput = Partial<FilterData>;
+export type QueryInput = Query;
 export type QueryFn = (ctx: FilterContext) => QueryInput;
 
 export type FilterDefinition<TId extends string = string> = {
@@ -57,14 +57,12 @@ export function config<TId extends string>(opts: {
   };
 }
 
-export const propSelect = (value: string, negate = false): PropertyValue => ({
-  type: 'select',
+export const propFilter = (
+  propertyId: string,
+  type: 'select' | 'entity',
+  value: string
+): PropertyFilter => ({
+  propertyId,
+  type,
   value,
-  ...(negate && { negate }),
-});
-
-export const propEntity = (value: string, negate = false): PropertyValue => ({
-  type: 'entity',
-  value,
-  ...(negate && { negate }),
 });

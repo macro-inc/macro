@@ -73,7 +73,7 @@ interface SoupViewContextValues {
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
   filters: Accessor<QueryState>;
-  setFilters: SoupState['query']['set'];
+  setFilters: SoupState['filters']['query']['set'];
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
@@ -131,7 +131,7 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const setFilters: SoupState['filterStore']['query']['set'] = (...args) => {
+  const setFilters: SoupState['filters']['query']['set'] = (...args) => {
     // Invalidate query cache when filters change to avoid refetching all pages
     queryClient.setQueryData(
       soupKeys.astItems({

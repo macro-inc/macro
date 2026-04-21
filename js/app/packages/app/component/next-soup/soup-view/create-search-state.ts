@@ -1,9 +1,8 @@
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import type { FilterData } from '@app/component/next-soup/filters/filter-store';
+import type { QueryState } from '@app/component/next-soup/filters/filter-store';
 import { useSearchContext } from '@app/component/next-soup/search-context';
 import {
   createSoupFreshSearch,
-  getValidSearchFilters,
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
@@ -18,7 +17,7 @@ import type { EntityFilters } from '@service-search/generated/models';
 import type { UnifiedSearchRequest } from '@service-search/generated/models';
 import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 
-function filterDataToQueryFilters(data: FilterData): EntityFilters {
+function filterDataToQueryFilters(data: QueryState): EntityFilters {
   const filters: EntityFilters = {};
   const { include } = data;
 
@@ -40,11 +39,11 @@ function filterDataToQueryFilters(data: FilterData): EntityFilters {
   }
 
   // Email filters
-  if (include.threadId?.length || include.sender?.length || include.shared) {
+  if (include.threadId?.length || include.emailSender?.length || include.emailShared) {
     filters.email_filters = {
       email_thread_ids: include.threadId,
-      senders: include.sender,
-      shared: include.shared?.[0],
+      senders: include.emailSender,
+      shared: include.emailShared,
     };
   }
 
@@ -102,7 +101,7 @@ const freshSearch = createSoupFreshSearch();
 
 interface CreateSearchStateArgs {
   soup: SoupState;
-  filters: Accessor<FilterData>;
+  filters: Accessor<QueryState>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
   searchMentions?: Accessor<string[]>;
@@ -227,9 +226,9 @@ export const createSearchState = ({
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
     if (hasChannelQueryFilters()) return [];
-    const activeIds = getValidSearchFilters(
-      soup.filters.predicates.activeIds()
-    );
+    const activeIds = soup.filters.predicates
+      .activeIds()
+      .filter((id) => id !== 'explicit-noise');
     const results =
       activeIds.length === 0
         ? localFuzzyResults()
