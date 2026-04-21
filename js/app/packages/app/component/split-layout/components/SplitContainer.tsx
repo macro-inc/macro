@@ -41,6 +41,7 @@ export function SplitContainer(
   const [ref, setRef] = createSignal<HTMLDivElement>();
   createEffect(
     on([ref], () => {
+      if (isMobile()) return;
       ref()?.focus();
     })
   );

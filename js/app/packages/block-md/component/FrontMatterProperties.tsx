@@ -12,16 +12,19 @@ import { getDefaultPinnedProperties } from '@core/component/Properties/constants
 import {
   PropertiesProvider,
   type PropertySaveHandler,
+  usePropertiesContext,
 } from '@core/component/Properties/context/PropertiesContext';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
-import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
+import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
+import Plus from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -63,14 +66,15 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     entityType,
-    true
+    false
   );
 
   // Track expanded/collapsed state from persisted preference
-  // Default to collapsed on mobile, expanded on desktop
+  // Tasks default to expanded on desktop; other documents default to collapsed
   const isExpanded = createMemo(() => {
     const preference = frontMatterPreference[blockId];
-    return preference === undefined ? !isMobile() : preference;
+    if (preference !== undefined) return preference;
+    return entityType === 'TASK' ? !isMobile() : false;
   });
 
   const toggleExpanded = () => {
@@ -103,21 +107,58 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     onCleanup(unregister);
   });
 
-  // Filter properties to show metadata, default pinned, and user-pinned properties
+  // Mock createdBy as a prop for display in tasks.
+  const docMetadataQuery = useDocumentMetadataQuery(() => blockId);
+  const createdByProperty = createMemo<Property | null>(() => {
+    if (entityType !== 'TASK') return null;
+    const ownerId = docMetadataQuery.data?.owner;
+    if (!ownerId) return null;
+    const now = new Date();
+    return {
+      propertyId: `${blockId}-created-by`,
+      propertyDefinitionId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+      displayName: 'Created By',
+      isMultiSelect: false,
+      isMetadata: true,
+      owner: { scope: 'system' },
+      specificEntityType: 'USER',
+      createdAt: now,
+      updatedAt: now,
+      valueType: 'ENTITY',
+      value: [{ entity_id: ownerId, entity_type: 'USER' }],
+    };
+  });
+
   const filteredPinnedProperties = createMemo(() => {
     const allProps = properties();
     const pinnedIds = pinnedPropertyIds();
     const defaultPinnedIds = getDefaultPinnedProperties(blockName);
 
-    return allProps.filter(
+    const pinned = allProps.filter(
       (prop) =>
-        (prop.isMetadata && !(prop.displayName === 'Document Name')) ||
-        defaultPinnedIds.includes(prop.propertyDefinitionId) ||
-        pinnedIds.includes(prop.propertyId)
+        !prop.isMetadata &&
+        (defaultPinnedIds.includes(prop.propertyDefinitionId) ||
+          pinnedIds.includes(prop.propertyId))
     );
+
+    const createdBy = createdByProperty();
+    return createdBy ? [createdBy, ...pinned] : pinned;
   });
 
-  const handlePropertyAdded = async () => {
+  // Track properties added via the selector so we can pin them as soon as
+  // the refetched property list includes them.
+  const [pendingPinDefIds, setPendingPinDefIds] = createSignal<Set<string>>(
+    new Set()
+  );
+
+  const handlePropertyAdded = async (addedDefinitionIds?: string[]) => {
+    if (addedDefinitionIds && addedDefinitionIds.length > 0) {
+      setPendingPinDefIds((prev) => {
+        const next = new Set(prev);
+        for (const id of addedDefinitionIds) next.add(id);
+        return next;
+      });
+    }
     refetch();
   };
 
@@ -139,32 +180,42 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     }
   };
 
+  // Once a just-added property shows up in the refetched list, pin it and
+  // drop it from the pending set.
+  createEffect(() => {
+    const pending = pendingPinDefIds();
+    if (pending.size === 0) return;
+    const current = properties();
+    const remaining = new Set(pending);
+    for (const defId of pending) {
+      const instance = current.find((p) => p.propertyDefinitionId === defId);
+      if (instance) {
+        handlePropertyPinned(instance.propertyId);
+        remaining.delete(defId);
+      }
+    }
+    if (remaining.size !== pending.size) {
+      setPendingPinDefIds(remaining);
+    }
+  });
+
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const containerSize = createElementSize(containerRef);
   const height = () => containerSize.height;
   createEffect(on(height, layoutShift));
 
-  const saveMutation = useSaveEntityPropertyMutation();
+  const saveMutation = useBulkSaveEntityPropertiesMutation();
+
+  const saveOne = (property: Property, apiValues: PropertyApiValues) =>
+    saveMutation.mutateAsync({
+      properties: [{ entityId: blockId, entityType, property, apiValues }],
+    });
 
   // Network-based save handler for FrontMatter properties
   const saveHandler: PropertySaveHandler = {
-    saveProperty: (property: Property, value: PropertyApiValues) =>
-      saveMutation.mutateAsync({
-        entityId: blockId,
-        entityType,
-        property,
-        apiValues: value,
-      }),
-    saveDate: (property: Property, date: Date) =>
-      saveMutation.mutateAsync({
-        entityId: blockId,
-        entityType,
-        property,
-        apiValues: {
-          valueType: 'DATE',
-          value: date,
-        },
-      }),
+    saveProperty: (property, value) => saveOne(property, value),
+    saveDate: (property, date) =>
+      saveOne(property, { valueType: 'DATE', value: date }),
   };
 
   return (
@@ -216,12 +267,19 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                   <div class="text-failure-ink text-center py-4">{error()}</div>
                 </Show>
 
-                <PanelContainer
-                  properties={filteredPinnedProperties}
-                  isLoading={isLoading}
-                  error={error}
-                  emptyMessage="No properties pinned yet"
-                />
+                <Show when={filteredPinnedProperties().length > 0}>
+                  <PanelContainer
+                    properties={filteredPinnedProperties}
+                    isLoading={isLoading}
+                    error={error}
+                  />
+                </Show>
+
+                <Show when={props.canEdit}>
+                  <div class="pt-2">
+                    <AddPinnedPropertyButton />
+                  </div>
+                </Show>
 
                 <div class="pt-4 pb-2">
                   <button
@@ -241,5 +299,18 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
         </div>
       </Suspense>
     </Show>
+  );
+}
+
+function AddPinnedPropertyButton() {
+  const { openPropertySelector } = usePropertiesContext();
+  return (
+    <button
+      class="flex items-center gap-1 opacity-75 hover:opacity-50 transition-opacity"
+      onClick={openPropertySelector}
+    >
+      <Plus class="w-3 h-3 mr-2" />
+      <span class="text-ink-muted">Add property</span>
+    </button>
   );
 }

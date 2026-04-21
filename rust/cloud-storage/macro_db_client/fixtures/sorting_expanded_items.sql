@@ -26,9 +26,17 @@ INSERT INTO public."Project" ("id", "name", "userId", "parentId", "createdAt", "
 VALUES ('aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'Project A', 'macro|user-1@test.com', NULL, '2024-01-01 09:00:00', '2024-01-01 09:00:00'),
        ('bbbbbbbb-ffff-ffff-ffff-ffffffffffff', 'Project B', 'macro|user-1@test.com', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff', '2024-01-01 09:30:00', '2024-01-01 09:30:00');
 
--- Give user access to the top-level project to test hierarchical access
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'macro|user-1@test.com', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'project', 'owner');
+-- Give user access to the top-level project and all inherited items
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
+VALUES
+-- Direct access to project-A
+('aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'owner', NULL),
+-- Inherited access to project-B and all items in A and B
+('bbbbbbbb-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('aaaaaaaa-cccc-cccc-cccc-cccccccccccc', 'chat', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'),
+('bbbbbbbb-cccc-cccc-cccc-cccccccccccc', 'chat', 'macro|user-1@test.com', 'user', 'owner', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff');
 
 -- Item Creation
 -- Document A (in Project A): Oldest created, Middle updated, Newest viewed

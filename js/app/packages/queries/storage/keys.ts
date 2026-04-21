@@ -17,6 +17,17 @@ export const binaryDocumentKeys = createQueryKeys('binaryDocument', {
   }),
 });
 
+// Scoped under `entity` so `invalidateQueries({ queryKey: ['entity'] })`
+// (fired from the move/rename mutations) refreshes every key below.
+export const entityKeys = createQueryKeys('entity', {
+  documentMetadata: (documentId: string) => ({
+    queryKey: [documentId],
+  }),
+  projectData: (projectId: string) => ({
+    queryKey: [projectId],
+  }),
+});
+
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {
   id: null,
   text: (id: string) => ({

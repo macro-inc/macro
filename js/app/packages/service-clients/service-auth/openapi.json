@@ -895,6 +895,65 @@
         }
       }
     },
+    "/mobile-welcome-email": {
+      "post": {
+        "tags": ["mobile_welcome_email"],
+        "summary": "Sends a mobile welcome email to the given address, if it hasn't already been sent\nand the email is not blocked.",
+        "operationId": "send_mobile_welcome_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMobileWelcomeEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendMobileWelcomeEmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oauth/passwordless/{code}": {
       "get": {
         "tags": ["oauth::passwordless_callback"],
@@ -2894,9 +2953,9 @@
           "400": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2904,9 +2963,9 @@
           "404": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2914,9 +2973,9 @@
           "409": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2924,9 +2983,9 @@
           "500": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2963,9 +3022,9 @@
           "400": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2973,9 +3032,81 @@
           "500": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/stripe/subscription": {
+      "patch": {
+        "tags": ["user::stripe"],
+        "summary": "Updates the user's subscription tier, swapping both their RBAC role and Stripe subscription line item.",
+        "operationId": "patch_subscription_tier",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSubscriptionTierRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3388,6 +3519,17 @@
           }
         }
       },
+      "PatchSubscriptionTierRequest": {
+        "type": "object",
+        "description": "Request body for changing the user's subscription tier",
+        "required": ["newTier"],
+        "properties": {
+          "newTier": {
+            "$ref": "#/components/schemas/StripeProductTier",
+            "description": "The new tier to move the user to"
+          }
+        }
+      },
       "PatchTeamRequest": {
         "type": "object",
         "description": "Request to update a team",
@@ -3533,6 +3675,26 @@
           "recipient": {
             "type": "string",
             "description": "the recipient of the referral email"
+          }
+        }
+      },
+      "SendMobileWelcomeEmailRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email address to send the welcome email to"
+          }
+        }
+      },
+      "SendMobileWelcomeEmailResponse": {
+        "type": "object",
+        "required": ["sent"],
+        "properties": {
+          "sent": {
+            "type": "boolean",
+            "description": "Whether the email was sent (false if it was already sent previously)"
           }
         }
       },

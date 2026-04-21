@@ -27,6 +27,7 @@ export interface DatePickerModalState {
 
 export interface CreatePropertyModalState {
   isOpen: boolean;
+  autoPinOnCreate?: boolean;
 }
 
 export interface PropertySaveHandler {
@@ -40,7 +41,7 @@ export interface PropertiesContextValue {
   documentName?: string;
   properties: () => Property[];
   onRefresh: () => void;
-  onPropertyAdded: () => void;
+  onPropertyAdded: (addedDefinitionIds?: string[]) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
@@ -66,7 +67,7 @@ export interface PropertiesContextValue {
   ) => void;
   closeDatePicker: () => void;
 
-  openCreateProperty: () => void;
+  openCreateProperty: (autoPinOnCreate?: boolean) => void;
   closeCreateProperty: () => void;
 
   // Convenience function to close all modals
@@ -79,7 +80,7 @@ export interface PropertiesProviderProps extends ParentProps {
   documentName?: string;
   properties: () => Property[];
   onRefresh: () => void;
-  onPropertyAdded: () => void;
+  onPropertyAdded: (addedDefinitionIds?: string[]) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
@@ -131,8 +132,8 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
   };
 
   // Create Property actions
-  const openCreateProperty = () => {
-    setCreatePropertyModal({ isOpen: true });
+  const openCreateProperty = (autoPinOnCreate?: boolean) => {
+    setCreatePropertyModal({ isOpen: true, autoPinOnCreate });
   };
 
   const closeCreateProperty = () => {

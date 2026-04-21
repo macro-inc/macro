@@ -81,6 +81,10 @@ export function agentFilter(entity: EntityData): boolean {
   return entity.type === 'chat';
 }
 
+export function automationFilter(entity: EntityData): boolean {
+  return entity.type === 'automation';
+}
+
 export function projectFilter(entity: EntityData): boolean {
   return entity.type === 'project';
 }

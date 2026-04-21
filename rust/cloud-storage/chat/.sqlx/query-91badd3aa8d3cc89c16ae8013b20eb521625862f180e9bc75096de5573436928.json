@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO \"DocumentFamily\" (\"rootDocumentId\")\n                VALUES ($1)\n                RETURNING id;\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "91badd3aa8d3cc89c16ae8013b20eb521625862f180e9bc75096de5573436928"
+}

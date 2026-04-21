@@ -724,15 +724,15 @@ html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focu
   pointer-events: none;
 }
 
-/* Channel message highlight: hover only in mouse nav, keyboard selection only in keyboard nav */
+/* Channel message hover + non-selection highlight */
 /* Suppressed on touch devices */
-html:not([data-touch-device="true"]) [data-channel-nav="mouse"] [data-message]:hover,
-html:not([data-touch-device="true"]) [data-channel-nav="keyboard"] [data-message][data-highlighted] {
+html:not([data-touch-device="true"]) [data-message]:hover,
+html:not([data-touch-device="true"]) [data-message][data-highlighted] {
     @apply bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px];
 }
 
-html:not([data-touch-device="true"]) [data-channel-nav="mouse"] [data-message]:hover > .message-accent-bar,
-html:not([data-touch-device="true"]) [data-channel-nav="keyboard"] [data-message][data-highlighted] > .message-accent-bar {
+/* Keyboard selection accent bar can coexist with hover styles */
+[data-message][data-selected] > .message-accent-bar {
     @apply opacity-100;
 }
 

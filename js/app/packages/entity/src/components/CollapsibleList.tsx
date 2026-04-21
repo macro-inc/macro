@@ -4,10 +4,8 @@ import { createSignal, For, type JSX, Show } from 'solid-js';
 
 interface ToggleButtonProps {
   hasMore: boolean;
-  toggleRef: (el: HTMLDivElement) => void;
   showAll: boolean;
-  collapse: (e: MouseEvent) => void;
-  setShowAll: (value: boolean) => void;
+  toggle: (e: MouseEvent) => void;
   getExpandTextFn: (count: number) => string;
   visibleCount: number;
   itemsLength: number;
@@ -16,20 +14,13 @@ interface ToggleButtonProps {
 function ToggleButton(props: ToggleButtonProps) {
   return (
     <Show when={props.hasMore}>
-      <div ref={props.toggleRef} class="w-full flex items-center gap-2 my-2">
+      <div class="w-full flex items-center gap-2 my-2">
         <button
           type="button"
           class="flex items-center gap-1 text-xs bracket-never hover:text-accent"
           data-collapsible-toggle
           data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
-          onClick={(e) => {
-            if (props.showAll) {
-              props.collapse(e);
-            } else {
-              e.stopPropagation();
-              props.setShowAll(true);
-            }
-          }}
+          onClick={props.toggle}
         >
           <ChevronDownIcon
             class={cn('w-3 h-3 transition-transform duration-100', {
@@ -67,7 +58,6 @@ interface CollapsibleListProps<T> {
  */
 export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
   const [showAll, setShowAll] = createSignal(false);
-  let toggleRef: HTMLDivElement | undefined;
 
   const visibleCount = () => props.visibleCount ?? 3;
 
@@ -85,39 +75,19 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
   const getExpandTextFn = () =>
     props.expandText ?? ((count: number) => `Show ${count} More`);
 
-  const getScrollParent = (el: Element | null): Element | null => {
-    let parent = el?.parentElement ?? null;
-    while (parent) {
-      const { overflow, overflowY } = getComputedStyle(parent);
-      if (/auto|scroll/.test(`${overflow}${overflowY}`)) return parent;
-      parent = parent.parentElement;
-    }
-    return null;
-  };
-
-  const collapse = (e: MouseEvent) => {
+  // Let the virtualizer (virtua) handle scroll anchoring on item resize via
+  // its built-in ACTION_ITEM_RESIZE logic and overflow-anchor: none. Manually
+  // shifting scrollTop here fights that logic and causes the viewport to
+  // drift across expand/collapse cycles.
+  const toggle = (e: MouseEvent) => {
     e.stopPropagation();
-
-    const entity = toggleRef?.closest('[data-entity]');
-    const scrollContainer = entity ? getScrollParent(entity) : null;
-    const heightBefore = entity?.getBoundingClientRect().height ?? 0;
-
-    setShowAll(false);
-
-    if (entity && scrollContainer) {
-      const heightAfter = entity.getBoundingClientRect().height;
-      scrollContainer.scrollTop -= heightBefore - heightAfter;
-    }
+    setShowAll((prev) => !prev);
   };
 
   const toggleButtonProps = () => ({
     hasMore: hasMore(),
-    toggleRef: (el: HTMLDivElement) => {
-      toggleRef = el;
-    },
     showAll: showAll(),
-    collapse,
-    setShowAll,
+    toggle,
     getExpandTextFn: getExpandTextFn(),
     visibleCount: visibleCount(),
     itemsLength: props.items.length,

@@ -28,6 +28,7 @@ import { CommandMenu } from './command';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
+import { AutomationComposer } from '@block-automation/component';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
@@ -39,6 +40,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileDock } from './mobile/MobileDock';
 import { MobileSearchOuter } from './mobile/MobileSearch';
+import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   SidebarVisibilityContext,
@@ -208,11 +210,13 @@ function LayoutInner(props: RouteSectionProps) {
       <Show when={isMobile()}>
         <MobileSearchOuter />
       </Show>
+      <SwipeDownDismissKeyboard />
       <Suspense>
         <Show
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
+          <AutomationComposer />
         </Show>
       </Suspense>
     </div>

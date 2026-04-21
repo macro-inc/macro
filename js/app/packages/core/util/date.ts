@@ -18,7 +18,28 @@ export interface FormatDateOptions {
   timeZone?: string;
   /** If true, always include time in the output (e.g., 'Thursday at 4:53 PM' instead of 'Thursday'). */
   showTime?: boolean;
+  /** If true, use short weekday names (e.g., 'Wed' instead of 'Wednesday'). */
+  shortWeekday?: boolean;
 }
+
+/**
+ * Formats a date to just the time, e.g. '4:53 PM'.
+ * @param date - Date object or RFC3339 string
+ * @param timeZone - IANA timezone string. Defaults to system timezone.
+ */
+export const formatTime = (
+  date: DateValue | null | undefined,
+  timeZone?: string
+): string => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : toDate(date);
+  return d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone,
+  });
+};
 
 /**
  * Formats a date to a human readable string.
@@ -33,28 +54,23 @@ export const formatDate = (
 ) => {
   if (!date) return '';
   const d = date instanceof Date ? date : toDate(date);
-  const { timeZone, showTime } = options ?? {};
+  const { timeZone, showTime, shortWeekday } = options ?? {};
   const timeZoneOpts = timeZone ? { in: tz(timeZone) } : {};
   const now = new Date();
 
-  const time = d.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZone,
-  });
+  const time = formatTime(date, timeZone);
 
   if (isToday(date, timeZoneOpts)) {
     return time;
   }
 
   if (isYesterday(date, timeZoneOpts)) {
-    return `Yesterday at ${time}`;
+    return `${shortWeekday ? 'Yest' : 'Yesterday'} at ${time}`;
   }
 
   if (differenceInWeeks(now, date) < 1) {
     const weekday = d.toLocaleDateString(undefined, {
-      weekday: 'long',
+      weekday: shortWeekday ? 'short' : 'long',
       timeZone,
     });
     return showTime ? `${weekday} at ${time}` : weekday;

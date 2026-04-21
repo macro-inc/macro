@@ -33,7 +33,10 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
   const soupQuery = useSoupItemsQuery(
     () => ({
       params: { limit: 500 },
-      body: buildAttachmentEntityFilters(documentAttachments()),
+      body: buildAttachmentEntityFilters(
+        documentAttachments(),
+        props.channelId
+      ),
     }),
     () => ({ enabled: documentAttachments().length > 0 })
   );

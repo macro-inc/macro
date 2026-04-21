@@ -1,26 +1,26 @@
-import type { InfiniteData, QueryKey } from '@tanstack/solid-query';
+import { isErr } from '@core/util/maybeResult';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,
   SoupApiItem,
 } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
-import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
-import { isErr } from '@core/util/maybeResult';
+import type { InfiniteData, QueryKey } from '@tanstack/solid-query';
+import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
+import type { SoupApiItemFilter } from '../items';
 import { soupKeys } from '../keys';
 import {
-  getSoupNormalizer,
   getNormalizationObjectKey,
+  getSoupNormalizer,
   type NormalizerData,
 } from './normalizer';
 import type {
-  SoupTransaction,
-  SoupEntityTag,
   SoupEntityPartial,
+  SoupEntityTag,
+  SoupTransaction,
 } from './types';
-import type { SoupApiItemFilter } from '../items';
-import { isAfter } from 'date-fns';
 
 /**
  * Optimistically update a single soup entity across all queries that reference it.

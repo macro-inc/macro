@@ -13,6 +13,7 @@ import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientC
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
+import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
 import { isErr } from '@core/util/maybeResult';
 import { useChatQuery } from '@queries/chat';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -35,7 +36,6 @@ type ComposeToolProps = {
 
 type SendEmailSnapshot = {
   bcc: Array<{ email: string; name: string | null }>;
-  body: string;
   cc: Array<{ email: string; name: string | null }>;
   replyingToId: string | null;
   subject: string;
@@ -74,7 +74,6 @@ function createSendEmailSnapshot(data: SendEmail): SendEmailSnapshot {
       name: item.name ?? null,
     })),
     subject: data.subject ?? '',
-    body: data.body ?? '',
     replyingToId: data.replyingToId ?? null,
   };
 }
@@ -172,7 +171,6 @@ export function ComposeTool(props: ComposeToolProps) {
     bcc: toEmailRecipients(props.initialData.bcc ?? []),
   });
   const [subject, setSubject] = createSignal(props.initialData.subject ?? '');
-  const [body, setBody] = createSignal(props.initialData.body ?? '');
   const [isSending, setIsSending] = createSignal(false);
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [validationErrors, setValidationErrors] = createSignal<
@@ -187,7 +185,7 @@ export function ComposeTool(props: ComposeToolProps) {
       cc: fromEmailRecipients(recipients().cc),
       bcc: fromEmailRecipients(recipients().bcc),
       subject: subject(),
-      body: body(),
+      body: prepareEmailBody(editor())?.bodyHtml ?? '',
       replyingToId: props.initialData.replyingToId,
     };
   }
@@ -202,7 +200,7 @@ export function ComposeTool(props: ComposeToolProps) {
       });
     }
 
-    if (!body().trim()) {
+    if (!prepareEmailBody(editor())?.bodyText.trim()) {
       errors.push({ type: 'no_message', message: 'Write a message' });
     }
 
@@ -258,6 +256,7 @@ export function ComposeTool(props: ComposeToolProps) {
 
   async function handleSend() {
     if (ownerGateDisabled()) return;
+
     if (!validate()) return;
 
     setIsSending(true);
@@ -310,7 +309,7 @@ export function ComposeTool(props: ComposeToolProps) {
     attachments: () => [],
     sendTime: () => undefined,
     initialHtml: () => undefined,
-    initialMarkdown: () => props.initialData.body,
+    initialMarkdown: () => props.initialData.body ?? undefined,
     setRecipients: (field, value) => {
       setRecipients((prev) => ({ ...prev, [field]: value }));
       scheduleUpdate();
@@ -319,8 +318,7 @@ export function ComposeTool(props: ComposeToolProps) {
       setSubject(value);
       scheduleUpdate();
     },
-    onContentChange: (content) => {
-      setBody(content);
+    onContentChange: () => {
       scheduleUpdate();
     },
     onAddAttachments: (_: DraftFormAttachment[]) => {},

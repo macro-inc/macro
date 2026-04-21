@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { type Accessor, Show } from 'solid-js';
 import { Modals } from './component/modal/Modals';
 import { AddPropertyButton } from './component/panel/AddPropertyButton';
 import { PanelContainer } from './component/panel/PanelContainer';
@@ -27,10 +27,10 @@ export function PropertiesView(props: PropertiesPanelProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     props.entityType,
-    true // includeMetadata
+    false
   );
 
-  const saveMutation = useSaveEntityPropertyMutation();
+  const saveMutation = useBulkSaveEntityPropertiesMutation();
 
   const handleRefresh = () => {
     refetch();
@@ -49,24 +49,22 @@ export function PropertiesView(props: PropertiesPanelProps) {
     handleRefresh();
   };
 
-  const saveHandler: PropertySaveHandler = {
-    saveProperty: (property: Property, value: PropertyApiValues) =>
-      saveMutation.mutateAsync({
-        entityId: blockId,
-        entityType: props.entityType,
-        property,
-        apiValues: value,
-      }),
-    saveDate: (property: Property, date: Date) =>
-      saveMutation.mutateAsync({
-        entityId: blockId,
-        entityType: props.entityType,
-        property,
-        apiValues: {
-          valueType: 'DATE',
-          value: date,
+  const saveOne = (property: Property, apiValues: PropertyApiValues) =>
+    saveMutation.mutateAsync({
+      properties: [
+        {
+          entityId: blockId,
+          entityType: props.entityType,
+          property,
+          apiValues,
         },
-      }),
+      ],
+    });
+
+  const saveHandler: PropertySaveHandler = {
+    saveProperty: (property, value) => saveOne(property, value),
+    saveDate: (property, date) =>
+      saveOne(property, { valueType: 'DATE', value: date }),
   };
 
   return (
@@ -101,7 +99,6 @@ function PropertiesViewContent(props: {
   canEdit: boolean;
 }) {
   const { openPropertySelector } = usePropertiesContext();
-  const hasProperties = createMemo(() => props.properties().length > 0);
 
   return (
     <div class={CONTAINER_CLASSES}>
@@ -123,7 +120,7 @@ function PropertiesViewContent(props: {
         error={props.error}
       />
 
-      <Show when={props.canEdit && hasProperties()}>
+      <Show when={props.canEdit}>
         <div class="flex-shrink-0 p-4">
           <AddPropertyButton onClick={openPropertySelector} />
         </div>

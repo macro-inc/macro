@@ -17,7 +17,14 @@ import ChevronDownIcon from '@icon/regular/caret-down.svg';
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
   ListView,
-  'inbox' | 'agents' | 'mail' | 'documents' | 'tasks' | 'channels' | 'folders'
+  | 'inbox'
+  | 'agents'
+  | 'mail'
+  | 'documents'
+  | 'tasks'
+  | 'channels'
+  | 'calls'
+  | 'folders'
 >;
 
 /** Tab definitions for each list view. */
@@ -31,6 +38,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'owned', label: 'Owned' },
     { value: 'running', label: 'Running' },
     { value: 'shared', label: 'Shared' },
+    { value: 'automations', label: 'Automations' },
   ],
   mail: [
     { value: 'important', label: 'Signal' },
@@ -55,6 +63,10 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'recent', label: 'Recent' },
     { value: 'people', label: 'People' },
     { value: 'teams', label: 'Teams' },
+  ],
+  calls: [
+    { value: 'all', label: 'All' },
+    { value: 'unattended', label: 'Unattended' },
   ],
   folders: [
     { value: 'owned', label: 'Owned' },

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            \"tokenCount\" as token_count\n            FROM\n            \"DocumentText\"\n            WHERE\n            \"documentId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c17d5fb574b826a4615cd339d550302bcd20260c4d2d82e49167e5c7c7e77958"
+}

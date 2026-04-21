@@ -20,6 +20,7 @@ mod email;
 mod link;
 #[allow(unused_imports)]
 mod merge;
+mod mobile_welcome_email;
 
 mod health;
 mod internal;
@@ -123,6 +124,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         )
         .nest("/jwt", jwt::router(state.jwt_args.clone()))
         .nest("/session", session::router())
+        .merge(mobile_welcome_email::router(state.clone()))
         .nest(
             "/webhooks",
             webhooks::router().layer(ServiceBuilder::new().layer(axum::middleware::from_fn(

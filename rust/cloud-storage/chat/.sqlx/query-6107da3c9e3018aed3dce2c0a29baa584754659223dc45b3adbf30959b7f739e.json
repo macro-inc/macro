@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM \"SharePermission\"\n            WHERE id IN (\n                SELECT \"sharePermissionId\"\n                FROM \"ChatPermission\"\n                WHERE \"chatId\" = ANY($1)\n            )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6107da3c9e3018aed3dce2c0a29baa584754659223dc45b3adbf30959b7f739e"
+}

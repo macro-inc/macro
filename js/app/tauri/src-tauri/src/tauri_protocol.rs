@@ -8,7 +8,7 @@
 // to the upstream handler which handles dev proxy, CSP, security headers, etc.
 // When `BundleRoot` is `Some(path)`, files are served directly from disk.
 
-use http::{header::CONTENT_TYPE, Response as HttpResponse, StatusCode};
+use http::{Response as HttpResponse, StatusCode, header::CONTENT_TYPE};
 use tauri::{Manager, Runtime, UriSchemeResponder};
 
 use macro_bundle_updater_plugin::BundleRoot;
@@ -42,9 +42,7 @@ fn rewrite_uri(uri: &str) -> String {
             if !prefix.ends_with('/') && !rest.is_empty() && !rest.starts_with('/') {
                 continue;
             }
-            let origin = prefix
-                .trim_end_matches("/app/")
-                .trim_end_matches("/app");
+            let origin = prefix.trim_end_matches("/app/").trim_end_matches("/app");
             return format!("{}/{}", origin, rest);
         }
     }
@@ -55,10 +53,7 @@ fn rewrite_uri(uri: &str) -> String {
 ///
 /// The upstream handler is called for all requests where `BundleRoot` is not set.
 /// When `BundleRoot` is set (after an OTA update), files are served from disk instead.
-pub fn get<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    window_origin: &str,
-) -> ProtocolHandler {
+pub fn get<R: Runtime>(app_handle: tauri::AppHandle<R>, window_origin: &str) -> ProtocolHandler {
     let upstream = tauri::protocol::tauri::get(app_handle.clone(), window_origin, None);
     let origin = window_origin.to_string();
 
@@ -87,6 +82,11 @@ pub fn get<R: Runtime>(
                 .unwrap_or(&raw_path);
 
             let asset_path = strip_app_prefix(path);
+            // Serve index.html for empty/root paths (SPA fallback)
+            let asset_path = match asset_path {
+                "" | "/" => "index.html",
+                p => p.strip_prefix('/').unwrap_or(p),
+            };
 
             let br = bundle_root.unwrap();
             let guard = br.0.read().unwrap();
@@ -146,6 +146,18 @@ pub fn get<R: Runtime>(
                     );
                 }
                 Err(_) => {
+                    // SPA fallback: serve index.html for extensionless paths (client-side routes)
+                    let has_extension = std::path::Path::new(asset_path).extension().is_some();
+                    if !has_extension && let Ok(data) = std::fs::read(root_dir.join("index.html")) {
+                        responder.respond(
+                            HttpResponse::builder()
+                                .header(CONTENT_TYPE, "text/html")
+                                .header("Access-Control-Allow-Origin", &*origin)
+                                .body(data)
+                                .unwrap(),
+                        );
+                        return;
+                    }
                     responder.respond(
                         HttpResponse::builder()
                             .status(StatusCode::NOT_FOUND)

@@ -43,5 +43,11 @@ pub trait SystemQuery: Send + Sync + 'static {
 
 pub trait AutoUpdateService: 'static {
     fn status(&self) -> &tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>>;
-    fn grant_or_deny(&mut self, grant: UpdateApproval) -> Result<(), Report>;
+    /// Try to receive the oneshot sender the worker offered for grant/deny.
+    /// Returns `Err` if the worker hasn't offered one yet.
+    fn try_recv_grant_sender(
+        &mut self,
+    ) -> Result<tokio::sync::oneshot::Sender<UpdateApproval>, Report>;
+    /// Signal the worker to start the checker loop from Idle.
+    fn start(&self) -> Result<(), Report>;
 }

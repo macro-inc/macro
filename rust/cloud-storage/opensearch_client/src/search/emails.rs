@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery};
 
 pub(crate) struct EmailSearchConfig;
@@ -14,7 +14,7 @@ pub(crate) struct EmailSearchConfig;
 impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "subject";
-    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
+    const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Emails;
 }
 
 /// The fields to search across with simple_query_string for email search.
@@ -36,13 +36,19 @@ const EMAIL_SIMPLE_QUERY_FIELDS: &[&str] = &[
 /// Single-word terms become `(term | term@*)` so they match both text fields
 /// and keyword email-address fields. Multi-word terms (containing spaces) skip
 /// the `@*` pattern since email addresses never contain spaces.
+/// Email-like terms (containing `@`) are wrapped in quotes to force phrase
+/// matching on analyzed text fields — otherwise the standard analyzer tokenizes
+/// `hutch@macro.com` into `[hutch, macro, com]`, causing `macro.com` to be
+/// highlighted inside unrelated addresses like `gab@macro.com`.
 /// The email pattern is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
 fn build_simple_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains(' ') {
+            if term.contains('@') {
+                format!("\"{}\"", term)
+            } else if term.contains(' ') {
                 format!("({})", term)
             } else {
                 format!("({} | {}@*)", term, term.to_lowercase())

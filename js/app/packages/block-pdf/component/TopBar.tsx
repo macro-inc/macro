@@ -14,6 +14,7 @@ import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
+import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   DocumentPropertiesButton,
   PROPERTIES_DRAWER_ID,
@@ -37,6 +38,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@icon/regular/download-simple.svg';
+import Info from '@icon/regular/info.svg';
 import Printer from '@icon/regular/printer.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
@@ -69,6 +71,7 @@ export function TopBar() {
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const createShareUrl = useCreateShareUrl();
@@ -162,7 +165,12 @@ export function TopBar() {
   });
 
   const ops: FileOperation[] = [
-    { op: 'rename' },
+    {
+      label: 'Details',
+      icon: Info,
+      action: detailsControl.toggle,
+    },
+    { op: 'rename', divideAbove: true },
     { op: 'copy' },
     { op: 'moveToProject' },
     {

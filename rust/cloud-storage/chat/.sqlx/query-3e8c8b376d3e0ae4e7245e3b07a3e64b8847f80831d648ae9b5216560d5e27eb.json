@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Document\" SET \"uploaded\" = true WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3e8c8b376d3e0ae4e7245e3b07a3e64b8847f80831d648ae9b5216560d5e27eb"
+}

@@ -17,6 +17,7 @@ struct MockRepo {
     chat_access: Arc<Mutex<Option<AccessLevel>>>,
     project_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
+    call_access: Arc<Mutex<Option<AccessLevel>>>,
     channel_membership: Arc<Mutex<Vec<Uuid>>>,
     channel_role: Arc<Mutex<ChannelRoleResult>>,
     document_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
@@ -34,6 +35,7 @@ impl MockRepo {
             chat_access: Arc::new(Mutex::new(None)),
             project_access: Arc::new(Mutex::new(None)),
             thread_access: Arc::new(Mutex::new(None)),
+            call_access: Arc::new(Mutex::new(None)),
             channel_membership: Arc::new(Mutex::new(vec![])),
             channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
             document_users: Arc::new(Mutex::new(vec![])),
@@ -62,6 +64,11 @@ impl MockRepo {
 
     fn with_thread_access(mut self, level: AccessLevel) -> Self {
         self.thread_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_call_access(mut self, level: AccessLevel) -> Self {
+        self.call_access = Arc::new(Mutex::new(Some(level)));
         self
     }
 
@@ -146,32 +153,26 @@ impl AccessRepository for MockRepo {
         Ok(*self.channel_role.lock().await)
     }
 
-    async fn get_document_users(
+    async fn get_call_access(
         &self,
-        _document_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        Ok(self.document_users.lock().await.clone())
+        _call_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.call_access.lock().await)
     }
 
-    async fn get_chat_users(
+    async fn get_entity_users(
         &self,
-        _chat_id: &str,
+        _entity_id: &uuid::Uuid,
+        entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        Ok(self.chat_users.lock().await.clone())
-    }
-
-    async fn get_project_users(
-        &self,
-        _project_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        Ok(self.project_users.lock().await.clone())
-    }
-
-    async fn get_thread_users(
-        &self,
-        _thread_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        Ok(self.thread_users.lock().await.clone())
+        match entity_type {
+            EntityType::Document => Ok(self.document_users.lock().await.clone()),
+            EntityType::Chat => Ok(self.chat_users.lock().await.clone()),
+            EntityType::Project => Ok(self.project_users.lock().await.clone()),
+            EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
+            _ => Err(AccessError::BadRequest("unsupported entity type")),
+        }
     }
 
     async fn get_channel_users(
@@ -924,7 +925,7 @@ async fn test_get_users_by_entity_document_returns_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("doc-1", EntityType::Document)
+        .get_users_by_entity("00000000-0000-0000-0000-000000000001", EntityType::Document)
         .await
         .unwrap();
 
@@ -939,7 +940,7 @@ async fn test_get_users_by_entity_document_returns_empty_when_no_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("doc-1", EntityType::Document)
+        .get_users_by_entity("00000000-0000-0000-0000-000000000001", EntityType::Document)
         .await
         .unwrap();
 
@@ -953,7 +954,7 @@ async fn test_get_users_by_entity_chat_returns_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("chat-1", EntityType::Chat)
+        .get_users_by_entity("00000000-0000-0000-0000-000000000002", EntityType::Chat)
         .await
         .unwrap();
 
@@ -967,7 +968,7 @@ async fn test_get_users_by_entity_chat_returns_empty_when_no_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("chat-1", EntityType::Chat)
+        .get_users_by_entity("00000000-0000-0000-0000-000000000002", EntityType::Chat)
         .await
         .unwrap();
 
@@ -985,7 +986,7 @@ async fn test_get_users_by_entity_project_returns_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("proj-1", EntityType::Project)
+        .get_users_by_entity("00000000-0000-0000-0000-000000000003", EntityType::Project)
         .await
         .unwrap();
 
@@ -1001,7 +1002,7 @@ async fn test_get_users_by_entity_project_returns_empty_when_no_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("proj-1", EntityType::Project)
+        .get_users_by_entity("00000000-0000-0000-0000-000000000003", EntityType::Project)
         .await
         .unwrap();
 
@@ -1018,7 +1019,10 @@ async fn test_get_users_by_entity_thread_returns_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("thread-1", EntityType::EmailThread)
+        .get_users_by_entity(
+            "00000000-0000-0000-0000-000000000004",
+            EntityType::EmailThread,
+        )
         .await
         .unwrap();
 
@@ -1033,7 +1037,10 @@ async fn test_get_users_by_entity_thread_returns_empty_when_no_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("thread-1", EntityType::EmailThread)
+        .get_users_by_entity(
+            "00000000-0000-0000-0000-000000000004",
+            EntityType::EmailThread,
+        )
         .await
         .unwrap();
 
@@ -1084,7 +1091,7 @@ async fn test_get_users_by_entity_document_with_single_user() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("doc-1", EntityType::Document)
+        .get_users_by_entity("00000000-0000-0000-0000-000000000001", EntityType::Document)
         .await
         .unwrap();
 
@@ -1101,7 +1108,7 @@ async fn test_get_users_by_entity_project_with_many_users() {
     let service = EntityAccessServiceImpl::new(repo);
 
     let result = service
-        .get_users_by_entity("proj-1", EntityType::Project)
+        .get_users_by_entity("00000000-0000-0000-0000-000000000003", EntityType::Project)
         .await
         .unwrap();
 

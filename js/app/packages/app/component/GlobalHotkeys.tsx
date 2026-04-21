@@ -187,7 +187,6 @@ export default function GlobalShortcuts() {
   };
 
   registerHotkey({
-    hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: 'cmd+\\',
     scopeId: 'global',
     description: 'Create new split',
@@ -197,6 +196,7 @@ export default function GlobalShortcuts() {
   });
 
   registerHotkey({
+    hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: '\\',
     scopeId: 'global',
     description: 'Create new split',

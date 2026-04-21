@@ -13,6 +13,7 @@ pub struct RateLimitConfig {
     #[allow(dead_code)]
     pub merge_email_daily: (u64, i64),
     pub create_user_hourly: (u64, i64),
+    pub mobile_welcome_email: (u64, i64),
     // pub sso: (u64, i64),
 }
 
@@ -29,4 +30,5 @@ pub static RATE_LIMIT_CONFIG: RateLimitConfig = RateLimitConfig {
     merge_email_daily: (5, 86400),
 
     create_user_hourly: (50, 3600),
+    mobile_welcome_email: (5, 3600), // 10 attempts per hour per IP
 };

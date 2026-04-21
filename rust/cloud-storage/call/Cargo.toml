@@ -16,10 +16,10 @@ inbound = [
 ]
 outbound = [
   "dep:aws-sdk-s3",
-  "dep:macro_aws_config",
+  "dep:entity_access_db_utils",
   "dep:livekit-api",
   "dep:livekit-protocol",
-  "dep:models_permissions",
+  "dep:macro_aws_config",
   "dep:sqlx",
   "ports",
 ]
@@ -36,17 +36,21 @@ connection = { path = "../connection", default-features = false, features = [
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = [
   "ports",
 ] }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 filter_ast = { path = "../filter_ast" }
 item_filters = { path = "../item_filters" }
 livekit-api = { workspace = true, optional = true }
 livekit-protocol = { workspace = true, optional = true }
-macro_aws_config = { path = "../macro_aws_config", optional = true, features = ["s3"] }
+macro_aws_config = { path = "../macro_aws_config", optional = true, features = [
+  "s3",
+] }
 macro_user_id = { path = "../macro_user_id" }
-models_pagination = { path = "../models_pagination" }
+macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
-models_permissions = { path = "../models_permissions", optional = true }
+models_pagination = { path = "../models_pagination" }
+models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }
 serde = { workspace = true }
 serde_json = { workspace = true }

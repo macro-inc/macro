@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n            \"publicAccessLevel\" as \"access_level!\"\n            FROM \"SharePermission\"\n            WHERE id in (SELECT share_permission_id\n            FROM calls\n            WHERE id = $1\n            UNION ALL\n            SELECT share_permission_id\n            FROM call_records\n            WHERE id = $1\n            LIMIT 1)\n            AND \"isPublic\" = true\n            AND \"publicAccessLevel\" IS NOT NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "bdb882d426cf81329dd6d824a5d945cfd0ea2fffa26b5324ef641dfe3e304682"
+}

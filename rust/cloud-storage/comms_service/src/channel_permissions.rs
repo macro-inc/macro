@@ -8,10 +8,11 @@ use entity_access::domain::models::EntityType;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::user_item_access::UserItemAccess;
+use models_permissions::share_permission::channel_share_permission::{
+    UpdateChannelSharePermission, UpdateOperation,
+};
 use sqlx::PgPool;
 use std::str::FromStr;
-use uuid::Uuid;
 
 /// Updates the channel share permission for an item shared in a channel message.
 ///
@@ -29,10 +30,16 @@ pub async fn update_channel_share_permission(
     item_id: &str,
     item_type: &str,
 ) -> anyhow::Result<()> {
+    // The item id should be a uuid
+    let entity_id = macro_uuid::string_to_uuid(item_id)?;
+
     // If the item type is not a supported shareable item type, return success early
     if model::item::ShareableItemType::from_str(item_type).is_err() {
         return Ok(());
     }
+
+    // TODO: we should make everything here use the transaction
+    let mut transaction = db.begin().await?;
 
     // Ensure thread share permissions exist before getting access level
     if item_type == "thread" {
@@ -47,7 +54,7 @@ pub async fn update_channel_share_permission(
         "chat" => EntityType::Chat,
         "project" => EntityType::Project,
         "thread" => EntityType::EmailThread,
-        "channel" => EntityType::Channel,
+        "call" => EntityType::Call,
         _ => anyhow::bail!("unsupported item type: {}", item_type),
     };
 
@@ -92,132 +99,17 @@ pub async fn update_channel_share_permission(
         }
     }
 
-    // This flow means the channel share permission is new - the user shared the item directly
-    // through a channel message. Grant all channel participants view access.
-    let channel_uuid = Uuid::parse_str(channel_id).context("failed to parse channel_id as UUID")?;
-
-    let channel_participants =
-        comms_db_client::participants::get_participants::get_participants(db, &channel_uuid)
-            .await
-            .context("failed to get channel participants")?
-            .into_iter()
-            .filter_map(|p| match p.left_at {
-                // If the user left we should not update their user item access
-                Some(_) => None,
-                None => Some(p.user_id),
-            })
-            .collect::<Vec<_>>();
-
-    macro_db_client::item_access::insert::upsert_user_item_access_bulk(
-        db,
-        &channel_participants,
-        item_id,
-        item_type,
-        channel_share_permission_access_level,
-        Some(channel_uuid),
+    entity_access_db_utils::update_entity_access_channel_share_permissions(
+        &mut transaction,
+        &entity_id,
+        entity_type,
+        &[UpdateChannelSharePermission {
+            channel_id: channel_id.to_string(),
+            operation: UpdateOperation::Add,
+            access_level: Some(channel_share_permission_access_level),
+        }],
     )
-    .await
-    .context("failed to insert user item access rows")?;
+    .await?;
 
     Ok(())
-}
-
-/// Adds permissions for users who have been added to a channel.
-///
-/// When users are added to a channel, they need to be granted access to all items
-/// that have been shared with that channel.
-#[tracing::instrument(skip(db))]
-pub async fn add_permissions_for_channel_users(
-    db: &PgPool,
-    channel_id: &str,
-    user_ids: &[String],
-) -> anyhow::Result<()> {
-    if user_ids.is_empty() {
-        return Ok(());
-    }
-
-    let channel_uuid =
-        macro_uuid::string_to_uuid(channel_id).context("failed to parse channel_id as UUID")?;
-
-    let mut items_to_insert: Vec<UserItemAccess> = Vec::new();
-
-    // Get all channel share permissions for the channel
-    let csps = macro_db_client::share_permission::channel_permission::get::get_channel_share_permissions_by_channel_id(
-        db,
-        channel_id,
-    )
-    .await
-    .context("failed to get channel share permissions for channel")?;
-
-    let csp_ids = csps
-        .iter()
-        .map(|csp| csp.share_permission_id.clone())
-        .collect::<Vec<_>>();
-
-    if csp_ids.is_empty() {
-        return Ok(());
-    }
-
-    // Get all items matching the channel share permission IDs
-    let item_type_map =
-        macro_db_client::share_permission::get::get_items_by_share_permission_ids(db, &csp_ids)
-            .await
-            .context("failed to get items for share permission ids")?;
-
-    // For each item, add an entry for each user into UserItemAccess
-    for csp in csps {
-        if let Some((item_id, item_type)) = item_type_map.get(&csp.share_permission_id) {
-            for user_id in user_ids.iter() {
-                items_to_insert.push(UserItemAccess {
-                    id: macro_uuid::generate_uuid_v7(),
-                    user_id: user_id.to_string(),
-                    item_id: item_id.to_string(),
-                    item_type: item_type.to_string(),
-                    access_level: csp.access_level,
-                    granted_from_channel_id: Some(channel_uuid),
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
-                });
-            }
-        }
-    }
-
-    if !items_to_insert.is_empty() {
-        // Insert into database
-        macro_db_client::item_access::insert::insert_user_item_access_batch(db, &items_to_insert)
-            .await
-            .context("failed to insert user item access records")?;
-    }
-
-    Ok(())
-}
-
-/// Removes permissions for users who have been removed from a channel.
-///
-/// When users are removed from a channel, their access to items granted through
-/// that channel should be revoked.
-#[tracing::instrument(skip(db))]
-pub async fn remove_permissions_for_channel_users(
-    db: &PgPool,
-    channel_id: &str,
-    user_ids: &[String],
-) -> anyhow::Result<u64> {
-    if user_ids.is_empty() {
-        return Ok(0);
-    }
-
-    let channel_uuid =
-        macro_uuid::string_to_uuid(channel_id).context("failed to parse channel_id as UUID")?;
-
-    // Delete all UserItemAccess records for these users granted from this channel
-    let rows_affected =
-        macro_db_client::item_access::delete::delete_user_item_access_by_channel_and_users(
-            db,
-            channel_uuid,
-            user_ids,
-        )
-        .await
-        .context("failed to delete user item access records")?;
-
-    Ok(rows_affected)
 }

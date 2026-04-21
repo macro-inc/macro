@@ -16,7 +16,9 @@ import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
   InitGithubLinkResponse,
+  PatchSubscriptionTierRequest,
   PatchUserTutorialRequest,
+  SendMobileWelcomeEmailResponse,
   UserQuota,
 } from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
@@ -126,6 +128,12 @@ export async function getAccessToken(): Promise<string | null> {
 }
 
 export type { GetLegacyUserPermissionsResponse, UserOrganizationResponse };
+
+export type PatchSubscriptionTierErrorCode =
+  | 'TIER_UNCHANGED'
+  | 'USER_IN_TEAM'
+  | 'NO_SUBSCRIPTION'
+  | 'UPDATE_IN_PROGRESS';
 
 export const authServiceClient = {
   async logout() {
@@ -456,6 +464,65 @@ export const authServiceClient = {
   },
 
   /**
+   * Patches the current user's subscription tier. Backend swaps both the RBAC role and
+   * Stripe subscription line item; caller should invalidate user info afterwards so the
+   * new permissions are picked up.
+   *
+   * Maps each distinct backend failure (distinguished by HTTP status) to a semantic code
+   * the UI can switch on. Uses `_fetchWithAuth` directly so the `CustomErrorCode` generic
+   * survives the module-level `fetchWithAuth` cast.
+   */
+  async patchSubscriptionTier(args: PatchSubscriptionTierRequest) {
+    return _fetchWithAuth<{}, PatchSubscriptionTierErrorCode>(
+      `${authHost}/user/stripe/subscription`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+        errorResponseHandler: async (response) => {
+          // Custom handler fully replaces fetchWithAuth's default mapping, so preserve
+          // the base cases we still want (401/500) alongside our endpoint-specific codes.
+          switch (response.status) {
+            case 400:
+              return {
+                code: 'TIER_UNCHANGED',
+                message: 'Subscription is already on the requested tier',
+              };
+            case 401:
+              return { code: 'UNAUTHORIZED', message: 'Unauthorized access' };
+            case 403:
+              return {
+                code: 'USER_IN_TEAM',
+                message:
+                  'User is a member of a team; tier is managed by the team owner',
+              };
+            case 404:
+              return {
+                code: 'NO_SUBSCRIPTION',
+                message: 'User does not have an active subscription',
+              };
+            case 409:
+              return {
+                code: 'UPDATE_IN_PROGRESS',
+                message:
+                  'Another subscription update is already in progress for this user',
+              };
+            case 500:
+              return {
+                code: 'SERVER_ERROR',
+                message: 'Internal server error',
+              };
+            default:
+              return {
+                code: 'HTTP_ERROR',
+                message: `HTTP error! status: ${response.status}`,
+              };
+          }
+        },
+      }
+    );
+  },
+
+  /**
    * Initializes the github account link for the user.
    * Returns the url you need to redirect user to to start the link.
    */
@@ -481,6 +548,32 @@ export const authServiceClient = {
         method: 'DELETE',
       }),
       (_result) => {}
+    );
+  },
+
+  async sendMobileWelcomeEmail(email: string) {
+    return safeFetch<
+      SendMobileWelcomeEmailResponse,
+      'RATE_LIMITED' | 'INVALID_EMAIL'
+    >(
+      `${authHost}/mobile-welcome-email`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+        credentials: 'include',
+      },
+      async (response) => {
+        if (response.status === 429) {
+          return { code: 'RATE_LIMITED', message: 'Rate limit exceeded' };
+        }
+        if (response.status === 400) {
+          return { code: 'INVALID_EMAIL', message: 'Invalid email address' };
+        }
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+      }
     );
   },
 };

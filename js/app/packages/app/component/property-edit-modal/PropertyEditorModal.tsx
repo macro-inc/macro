@@ -50,7 +50,7 @@ import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
 import {
   useListKeyBindings,
   type ListNavActions,
-} from './hooks/useListKeyBindings';
+} from '@core/util/useListKeyBindings';
 import {
   getEntityName,
   getEntityType,
@@ -107,15 +107,17 @@ export function PropertyEditorModal() {
   const handlePropertySave = (value: PropertyApiValues) => {
     const { selectedEntities, targetProperty } = propertyEditorState;
     if (!selectedEntities.length || !targetProperty) return;
+
+    // Snapshot before closing — closing resets selectedEntities.
+    const count = selectedEntities.length;
+    const message = `Set ${targetProperty.displayName} for ${
+      count === 1 ? selectedEntities[0].name : count + ' entities'
+    }`;
+
     saveProperties(selectedEntities, targetProperty, value).then((success) => {
-      if (success) {
-        const count = selectedEntities.length;
-        const message = `Set ${targetProperty.displayName} for ${count === 1 ? selectedEntities[0].name : count + ' entities'}`;
-        toast.success(message);
-      }
-      // failure toast handled by mutation
-      closePropertyEditor();
+      if (success) toast.success(message);
     });
+    closePropertyEditor();
   };
 
   const { dispose: disposeHotkey } = registerHotkey({

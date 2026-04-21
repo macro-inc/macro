@@ -2,6 +2,7 @@
 
 use ai_toolset::AsyncToolSet;
 use ai_toolset::schema::{ToolSchemaGenerator, ToolSchemas};
+mod build_context;
 pub mod code_execution;
 pub mod prompts;
 pub mod read;
@@ -22,6 +23,7 @@ use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use web_fetch::anthropic_web_fetch_tool;
 
+pub use build_context::build_tool_service_context_from_env;
 pub use search::search_toolset;
 pub use tool_context::*;
 

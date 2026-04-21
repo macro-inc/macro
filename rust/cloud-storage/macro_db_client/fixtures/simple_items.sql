@@ -34,10 +34,10 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'sha-a'),
        ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'sha-c');
 
 -- Give the user access to all three documents
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES (gen_random_uuid(), 'macro|user@user.com', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'owner'),
-       (gen_random_uuid(), 'macro|user@user.com', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'document', 'owner');
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user@user.com', 'user', 'owner'),
+       ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'macro|user@user.com', 'user', 'owner'),
+       ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'document', 'macro|user@user.com', 'user', 'owner');
 
 -- Create UserHistory entries with their own distinct ordering
 INSERT INTO public."UserHistory" ("userId", "itemId", "itemType", "updatedAt")

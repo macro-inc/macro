@@ -1,4 +1,11 @@
-import { For, Show, type JSX, onMount, onCleanup } from 'solid-js';
+import {
+  For,
+  Show,
+  type JSX,
+  onMount,
+  onCleanup,
+  createSignal,
+} from 'solid-js';
 import MacroIcon from '@macro-icons/macro-logo.svg';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '@ui/utils/classname';
@@ -13,6 +20,9 @@ import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
+import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { registerHotkey, createHotkeyGroup } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
@@ -20,16 +30,10 @@ import { Tooltip } from '@core/component/Tooltip';
 
 export const MOCK_SIDEBAR_LINKS = [
   {
-    id: 'channels',
-    label: 'Channels',
-    icon: AnimatedChannelIcon,
-    hotkey: 'c',
-  },
-  {
-    id: 'documents',
-    label: 'Documents',
-    icon: AnimatedFileMdIcon,
-    hotkey: 'd',
+    id: 'agents',
+    label: 'Agents',
+    icon: AnimatedStarIcon,
+    hotkey: 'a',
   },
   {
     id: 'mail',
@@ -38,16 +42,22 @@ export const MOCK_SIDEBAR_LINKS = [
     hotkey: 'e',
   },
   {
+    id: 'documents',
+    label: 'Documents',
+    icon: AnimatedFileMdIcon,
+    hotkey: 'd',
+  },
+  {
     id: 'tasks',
     label: 'Tasks',
     icon: AnimatedTaskIcon,
     hotkey: 't',
   },
   {
-    id: 'agents',
-    label: 'Agents',
-    icon: AnimatedStarIcon,
-    hotkey: 'a',
+    id: 'channels',
+    label: 'Channels',
+    icon: AnimatedChannelIcon,
+    hotkey: 'c',
   },
   {
     id: 'folders',
@@ -66,6 +76,16 @@ interface MockAppChromeProps {
   children?: JSX.Element;
   /** Called whenever the sidebar filter changes (click or hotkey). */
   onFilterChange?: (filter: SandboxSidebarFilter) => void;
+  /** When set, highlights that sidebar icon in accent color until activated. */
+  highlightId?: SandboxSidebarFilter;
+  /** Called when the command menu button at the bottom of the sidebar is clicked. If omitted, the button is inert. */
+  onCommandClick?: () => void;
+  /** When true, glows the command menu button until it's clicked for the first time. */
+  highlightCommand?: boolean;
+  /** Called when the create (+) button at the top of the sidebar is clicked. If omitted, the button is inert. */
+  onCreateClick?: () => void;
+  /** When true, glows the create button until it's clicked for the first time. */
+  highlightCreate?: boolean;
 }
 
 export function MockAppChrome(props: MockAppChromeProps) {
@@ -76,10 +96,34 @@ export function MockAppChrome(props: MockAppChromeProps) {
     return match?.label ?? 'All Items';
   };
 
+  // Tracks which highlight ids have been activated at least once so the glow
+  // turns off permanently after the user interacts with that specific target.
+  // Stored as a Set of ids so the component supports `highlightId` changing
+  // between sidebar items — not just latching a single boolean.
+  const [activatedHighlights, setActivatedHighlights] = createSignal<
+    ReadonlySet<SandboxSidebarFilter>
+  >(new Set());
+
   const setFilter = (filter: SandboxSidebarFilter) => {
     setSidebarFilter(filter);
+    if (filter !== null && filter === props.highlightId) {
+      setActivatedHighlights((prev) => {
+        if (prev.has(filter)) return prev;
+        const next = new Set(prev);
+        next.add(filter);
+        return next;
+      });
+    }
     props.onFilterChange?.(filter);
   };
+
+  const [commandActivated, setCommandActivated] = createSignal(false);
+  const isCommandHighlighted = () =>
+    !!props.highlightCommand && !commandActivated();
+
+  const [createActivated, setCreateActivated] = createSignal(false);
+  const isCreateHighlighted = () =>
+    !!props.highlightCreate && !createActivated();
 
   const group = createHotkeyGroup();
 
@@ -111,9 +155,34 @@ export function MockAppChrome(props: MockAppChromeProps) {
 
   return (
     <div class="size-full p-4 bg-panel">
+      <style>{`
+        @keyframes sidebar-glow-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgb(from var(--color-accent) r g b / 0.5), 0 0 8px 2px rgb(from var(--color-accent) r g b / 0.35); }
+          50%      { box-shadow: 0 0 0 2px rgb(from var(--color-accent) r g b / 0.15), 0 0 14px 4px rgb(from var(--color-accent) r g b / 0.55); }
+        }
+        .sidebar-glow { animation: sidebar-glow-pulse 1.8s ease-in-out infinite; border-radius: 4px; }
+      `}</style>
       <div class="flex size-full bg-page rounded-sm border border-edge-muted">
         <div class="px-2 shrink-0 bg-surface-secondary/50 flex flex-col items-center py-3 gap-1">
-          <MacroIcon class="size-5 text-accent mb-4" />
+          <MacroIcon class="size-5 text-accent mb-3" />
+          <button
+            type="button"
+            class={cn(
+              'size-6 text-ink rounded-xs p-1 transition-colors cursor-default',
+              isCreateHighlighted()
+                ? 'opacity-100 hover:bg-ink/10 sidebar-glow'
+                : 'opacity-50 hover:opacity-80 hover:bg-ink/10'
+            )}
+            onClick={(e) => {
+              e.preventDefault();
+              setCreateActivated(true);
+              props.onCreateClick?.();
+            }}
+            title="Create"
+          >
+            <AnimatedPlusIcon />
+          </button>
+          <hr class="border-ink/5 w-full my-1" />
           <button
             type="button"
             class={cn(
@@ -145,6 +214,18 @@ export function MockAppChrome(props: MockAppChromeProps) {
           <For each={MOCK_SIDEBAR_LINKS}>
             {(link) => {
               const isActive = () => sidebarFilter() === link.id;
+              const isHighlighted = () =>
+                props.highlightId === link.id &&
+                !activatedHighlights().has(link.id);
+              const stateClass = () => {
+                if (isActive()) {
+                  return 'opacity-100 bg-ink/10 text-ink hover:bg-ink/10';
+                }
+                if (isHighlighted()) {
+                  return 'opacity-100 text-ink hover:bg-ink/10 sidebar-glow';
+                }
+                return 'text-ink opacity-50 hover:opacity-80 hover:bg-ink/10';
+              };
               return (
                 <Tooltip
                   tooltip={
@@ -166,10 +247,8 @@ export function MockAppChrome(props: MockAppChromeProps) {
                   <button
                     type="button"
                     class={cn(
-                      'size-6 text-ink rounded-xs p-1 transition-colors cursor-default hover:bg-ink/10',
-                      isActive()
-                        ? 'opacity-100 bg-ink/10 text-ink'
-                        : 'opacity-50 hover:opacity-80'
+                      'size-6 rounded-xs p-1 transition-colors cursor-default',
+                      stateClass()
                     )}
                     onClick={(e) => {
                       e.preventDefault();
@@ -184,6 +263,34 @@ export function MockAppChrome(props: MockAppChromeProps) {
               );
             }}
           </For>
+
+          <div class="mt-auto flex flex-col items-center gap-1">
+            <button
+              type="button"
+              class={cn(
+                'size-6 text-ink rounded-xs p-1 transition-colors cursor-default',
+                isCommandHighlighted()
+                  ? 'opacity-100 hover:bg-ink/10 sidebar-glow'
+                  : 'opacity-50 hover:opacity-80 hover:bg-ink/10'
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                setCommandActivated(true);
+                props.onCommandClick?.();
+              }}
+              title="Command Menu"
+            >
+              <AnimatedCommandIcon />
+            </button>
+            <button
+              type="button"
+              class="size-6 text-ink rounded-xs p-1 transition-colors cursor-default opacity-50 hover:opacity-80 hover:bg-ink/10"
+              onClick={(e) => e.preventDefault()}
+              title="Settings"
+            >
+              <AnimatedGearIcon />
+            </button>
+          </div>
         </div>
 
         {/* Main area */}

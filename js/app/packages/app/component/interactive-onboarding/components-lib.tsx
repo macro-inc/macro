@@ -1,6 +1,39 @@
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  type Component,
+  type JSX,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import { cn } from '@ui/utils/classname';
+
+interface CalloutShellProps {
+  leader: string;
+  label: string;
+  completed?: boolean;
+  children: JSX.Element;
+}
+
+function CalloutShell(props: CalloutShellProps) {
+  return (
+    <div class="flex items-center gap-3 rounded-xs bg-hover/50 px-4 py-3 border border-edge-muted bracket-never">
+      <span class="text-sm text-muted">{props.leader}</span>
+      <div class="flex items-center gap-2.5 bracket-never">
+        {props.children}
+      </div>
+      <span class="text-sm text-muted">{props.label}</span>
+      <Show when={props.completed}>
+        <div class="bg-accent text-panel size-5 rounded xs flex items-center justify-center ml-auto">
+          <CheckIcon class="size-4" />
+        </div>
+      </Show>
+    </div>
+  );
+}
 
 const DISPLAY_TO_EVENT_KEY: Record<string, string> = {
   '↓': 'arrowdown',
@@ -11,6 +44,7 @@ const DISPLAY_TO_EVENT_KEY: Record<string, string> = {
   enter: 'enter',
   cmd: 'meta',
   '⌘': 'meta',
+  ctrl: 'control',
 };
 
 function displayToEventKey(display: string): string {
@@ -74,7 +108,7 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
   });
 
   return (
-    <div class="flex items-center gap-3 rounded-xs bg-hover/50 px-4 py-3 border border-edge-muted bracket-never">
+    <CalloutShell leader="Type" label={props.label} completed={props.completed}>
       <style>{`
         @keyframes hotkey-pulse {
           0%   { outline: 2px solid rgb(from var(--color-edge) r g b / 0.3); outline-offset: 0px; }
@@ -84,67 +118,86 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
           animation: hotkey-pulse 1.4s cubic-bezier(0.2, 0.8, 0.4, 1);
         }
       `}</style>
-      <div class="flex items-center gap-1.5 bracket-never">
-        <For each={props.keys}>
-          {(key, i) => {
-            let keyRef: HTMLSpanElement | undefined;
+      <For each={props.keys}>
+        {(key, i) => {
+          let keyRef: HTMLSpanElement | undefined;
 
-            const isPressed = () => pressedKeys().has(key);
+          const isPressed = () => pressedKeys().has(key);
 
-            onMount(() => {
-              const onKeyDown = (e: KeyboardEvent) => {
-                const pressed = e.key.toLowerCase();
-                if (displayToEventKey(key) !== pressed) return;
-                if (!keyRef) return;
-                keyRef.classList.remove('hotkey-pulsing');
-                void keyRef.offsetWidth; // reflow to restart animation
-                keyRef.classList.add('hotkey-pulsing');
-              };
-              const onAnimationEnd = () => {
-                keyRef?.classList.remove('hotkey-pulsing');
-              };
-              document.addEventListener('keydown', onKeyDown, {
+          onMount(() => {
+            const onKeyDown = (e: KeyboardEvent) => {
+              const pressed = e.key.toLowerCase();
+              if (displayToEventKey(key) !== pressed) return;
+              if (!keyRef) return;
+              keyRef.classList.remove('hotkey-pulsing');
+              void keyRef.offsetWidth; // reflow to restart animation
+              keyRef.classList.add('hotkey-pulsing');
+            };
+            const onAnimationEnd = () => {
+              keyRef?.classList.remove('hotkey-pulsing');
+            };
+            document.addEventListener('keydown', onKeyDown, {
+              capture: true,
+            });
+            keyRef?.addEventListener('animationend', onAnimationEnd);
+            onCleanup(() => {
+              document.removeEventListener('keydown', onKeyDown, {
                 capture: true,
               });
-              keyRef?.addEventListener('animationend', onAnimationEnd);
-              onCleanup(() => {
-                document.removeEventListener('keydown', onKeyDown, {
-                  capture: true,
-                });
-                keyRef?.removeEventListener('animationend', onAnimationEnd);
-              });
+              keyRef?.removeEventListener('animationend', onAnimationEnd);
             });
+          });
 
-            return (
-              <>
-                {i() > 0 && props.separator && (
-                  <span class="text-ink-extra-muted/70 text-sm">
-                    {props.separator}
-                  </span>
+          return (
+            <>
+              {i() > 0 && props.separator && (
+                <span class="text-sm text-muted">{props.separator}</span>
+              )}
+              <span
+                ref={keyRef}
+                class={cn(
+                  'inline-grid place-items-center rounded-sm border px-2.5 py-1 text-base',
+                  isPressed() || props.completed
+                    ? 'bg-ink/20 border-edge text-ink'
+                    : 'bg-ink/10 border-edge text-ink'
                 )}
-                <span
-                  ref={keyRef}
-                  class={cn(
-                    'inline-grid place-items-center rounded-sm border px-2.5 py-1 text-base',
-                    isPressed() || props.completed
-                      ? 'bg-ink/10 border-edge text-ink'
-                      : 'bg-transparent border-edge-muted text-ink'
-                  )}
-                >
-                  {key}
-                </span>
-              </>
-            );
-          }}
-        </For>
-      </div>
-      <span class="text-sm text-muted">{props.label}</span>
-      <Show when={props.completed}>
-        <div class="bg-accent text-panel size-5 rounded xs flex items-center justify-center ml-auto">
-          <CheckIcon class="size-4" />
-        </div>
-      </Show>
-    </div>
+              >
+                {key}
+              </span>
+            </>
+          );
+        }}
+      </For>
+    </CalloutShell>
+  );
+}
+
+interface ClickCalloutProps {
+  icon: Component<Record<string, unknown>>;
+  label: string;
+  completed?: boolean;
+}
+
+export function ClickCallout(props: ClickCalloutProps) {
+  return (
+    <CalloutShell
+      leader="Click"
+      label={props.label}
+      completed={props.completed}
+    >
+      <span
+        class={cn(
+          'inline-grid place-items-center rounded-sm border aspect-square h-[34px]',
+          props.completed
+            ? 'bg-ink/20 border-edge text-ink'
+            : 'bg-ink/10 border-edge text-ink'
+        )}
+      >
+        <span class="size-3.5 inline-grid place-items-center">
+          <Dynamic component={props.icon} />
+        </span>
+      </span>
+    </CalloutShell>
   );
 }
 
@@ -184,23 +237,6 @@ export function ContinueButton(props: ContinueButtonProps) {
         <span>+</span>
         <span>Enter</span>
       </span>*/}
-    </button>
-  );
-}
-
-interface SkipButtonProps {
-  onClick: () => void;
-}
-
-export function SkipButton(props: SkipButtonProps) {
-  return (
-    <button
-      type="button"
-      class="w-full px-4 py-2.5 text-lg rounded-xs flex items-center gap-2 bg-transparent text-ink/40 hover:bg-hover/60 bracket-never focus:bg-hover/50"
-      onClick={props.onClick}
-    >
-      Skip
-      <span class="opacity-50">(esc)</span>
     </button>
   );
 }

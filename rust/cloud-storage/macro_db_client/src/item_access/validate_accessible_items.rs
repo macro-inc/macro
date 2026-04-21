@@ -4,8 +4,9 @@ use cached::proc_macro::cached;
 use model::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
 use sqlx::{Pool, Postgres};
 
-/// given a list of shareable items, returns all accessible items for a user, traversing nested project structure
-#[tracing::instrument(skip(db, items))]
+/// Given a list of shareable items, returns the subset that are accessible to the user,
+/// querying entity_access with the user's source IDs (user ID, team memberships, channel participations).
+#[tracing::instrument(skip(db, items), err)]
 #[cfg_attr(
     not(test),
     cached(
@@ -46,93 +47,47 @@ pub async fn validate_user_accessible_items(
 
     let results = sqlx::query!(
         r#"
-        WITH RECURSIVE ProjectHierarchy AS (
-            -- Find direct user access to ALL projects (not filtered) as starting point
-            SELECT
-                p.id,
-                uia.access_level
-            FROM "Project" p
-            JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
-            WHERE uia.user_id = $1 AND p."deletedAt" IS NULL
-
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
             UNION ALL
-
-            -- Then walk down the project tree and grab child projects, keeping parent's access
-            SELECT
-                p.id,
-                ph.access_level
-            FROM "Project" p
-            JOIN ProjectHierarchy ph ON p."parentId" = ph.id
-            WHERE p."deletedAt" IS NULL
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = $1
+            UNION ALL
+            SELECT $1
         ),
-        -- Now build up all the ways a user can have access to stuff
+        -- Get all entities the user has access to via entity_access, filtered to requested items
         AllAccessGrants AS (
-            -- Explicit access to documents via UserItemAccess table
-            SELECT uia.item_id, uia.item_type, uia.access_level
-            FROM "UserItemAccess" uia
-            LEFT JOIN "Document" d ON uia.item_type = 'document' AND uia.item_id = d.id
-            WHERE uia.user_id = $1
-              AND uia.item_type = 'document'
-              AND uia.item_id = ANY($2)
+            -- Documents the user has access to
+            SELECT ea.entity_id::text as item_id, ea.entity_type as item_type
+            FROM entity_access ea
+            LEFT JOIN "Document" d ON ea.entity_type = 'document' AND ea.entity_id::text = d.id
+            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+              AND ea.entity_type = 'document'
+              AND ea.entity_id::text = ANY($2)
               AND d."deletedAt" IS NULL
 
             UNION ALL
 
-            -- Explicit access to chats via UserItemAccess table
-            SELECT uia.item_id, uia.item_type, uia.access_level
-            FROM "UserItemAccess" uia
-            LEFT JOIN "Chat" c ON uia.item_type = 'chat' AND uia.item_id = c.id
-            WHERE uia.user_id = $1
-              AND uia.item_type = 'chat'
-              AND uia.item_id = ANY($3)
+            -- Chats the user has access to
+            SELECT ea.entity_id::text as item_id, ea.entity_type as item_type
+            FROM entity_access ea
+            LEFT JOIN "Chat" c ON ea.entity_type = 'chat' AND ea.entity_id::text = c.id
+            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+              AND ea.entity_type = 'chat'
+              AND ea.entity_id::text = ANY($3)
               AND c."deletedAt" IS NULL
 
             UNION ALL
 
-            -- Explicit access to projects via UserItemAccess table
-            SELECT uia.item_id, uia.item_type, uia.access_level
-            FROM "UserItemAccess" uia
-            LEFT JOIN "Project" p ON uia.item_type = 'project' AND uia.item_id = p.id
-            WHERE uia.user_id = $1
-              AND uia.item_type = 'project'
-              AND uia.item_id = ANY($4)
+            -- Projects the user has access to
+            SELECT ea.entity_id::text as item_id, ea.entity_type as item_type
+            FROM entity_access ea
+            LEFT JOIN "Project" p ON ea.entity_type = 'project' AND ea.entity_id::text = p.id
+            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+              AND ea.entity_type = 'project'
+              AND ea.entity_id::text = ANY($4)
               AND p."deletedAt" IS NULL
-
-            UNION ALL
-
-            -- Access to docs in visible projects (only filter by requested doc IDs)
-            SELECT
-                d.id AS item_id,
-                'document' AS item_type,
-                ph.access_level
-            FROM "Document" d
-            JOIN ProjectHierarchy ph ON d."projectId" = ph.id
-            WHERE d.id = ANY($2)
-              AND d."projectId" IS NOT NULL 
-              AND d."deletedAt" IS NULL
-
-            UNION ALL
-
-            -- Access to chats in visible projects (only filter by requested chat IDs)
-            SELECT
-                c.id AS item_id,
-                'chat' AS item_type,
-                ph.access_level
-            FROM "Chat" c
-            JOIN ProjectHierarchy ph ON c."projectId" = ph.id
-            WHERE c.id = ANY($3)
-              AND c."projectId" IS NOT NULL 
-              AND c."deletedAt" IS NULL
-
-            UNION ALL
-
-            -- Include the projects we found earlier (only filter by requested project IDs)
-            SELECT
-                ph.id AS item_id,
-                'project' AS item_type,
-                ph.access_level
-            FROM ProjectHierarchy ph
-            WHERE ph.id = ANY($4)
         ),
         UserAccessibleItems AS (
             SELECT
@@ -170,27 +125,27 @@ mod tests {
         // All accessible items
         let items: Vec<ShareableItem> = vec![
             ShareableItem {
-                item_id: "project-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0001".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "chat-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0002".to_string(),
                 item_type: ShareableItemType::Chat,
             },
             ShareableItem {
-                item_id: "doc-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0003".to_string(),
                 item_type: ShareableItemType::Document,
             },
             ShareableItem {
-                item_id: "project-shared".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0004".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "chat-shared".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0005".to_string(),
                 item_type: ShareableItemType::Chat,
             },
             ShareableItem {
-                item_id: "doc-shared".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0006".to_string(),
                 item_type: ShareableItemType::Document,
             },
         ];
@@ -198,12 +153,12 @@ mod tests {
             let items = validate_user_accessible_items(&pool, user_id, items).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
             let expected_ids: HashSet<String> = [
-                "project-owned",
-                "chat-owned",
-                "doc-owned",
-                "project-shared",
-                "chat-shared",
-                "doc-shared",
+                "a0000000-0000-0000-0000-0000000e0001",
+                "a0000000-0000-0000-0000-0000000e0002",
+                "a0000000-0000-0000-0000-0000000e0003",
+                "a0000000-0000-0000-0000-0000000e0004",
+                "a0000000-0000-0000-0000-0000000e0005",
+                "a0000000-0000-0000-0000-0000000e0006",
             ]
             .into_iter()
             .map(String::from)
@@ -214,25 +169,29 @@ mod tests {
         // Only includes what you pass in
         let items: Vec<ShareableItem> = vec![
             ShareableItem {
-                item_id: "project-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0001".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "chat-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0002".to_string(),
                 item_type: ShareableItemType::Chat,
             },
             ShareableItem {
-                item_id: "doc-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0003".to_string(),
                 item_type: ShareableItemType::Document,
             },
         ];
         {
             let items = validate_user_accessible_items(&pool, user_id, items).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = ["project-owned", "chat-owned", "doc-owned"]
-                .into_iter()
-                .map(String::from)
-                .collect();
+            let expected_ids: HashSet<String> = [
+                "a0000000-0000-0000-0000-0000000e0001",
+                "a0000000-0000-0000-0000-0000000e0002",
+                "a0000000-0000-0000-0000-0000000e0003",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect();
             assert_eq!(
                 item_ids, expected_ids,
                 "only include what you pass in failed"
@@ -242,11 +201,11 @@ mod tests {
         // Only test documents
         let items: Vec<ShareableItem> = vec![
             ShareableItem {
-                item_id: "doc-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0003".to_string(),
                 item_type: ShareableItemType::Document,
             },
             ShareableItem {
-                item_id: "doc-shared".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0006".to_string(),
                 item_type: ShareableItemType::Document,
             },
         ];
@@ -254,21 +213,24 @@ mod tests {
         {
             let items = validate_user_accessible_items(&pool, user_id, items).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = ["doc-owned", "doc-shared"]
-                .into_iter()
-                .map(String::from)
-                .collect();
+            let expected_ids: HashSet<String> = [
+                "a0000000-0000-0000-0000-0000000e0003",
+                "a0000000-0000-0000-0000-0000000e0006",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect();
             assert_eq!(item_ids, expected_ids, "only test documents failed");
         }
 
         // Only test chats
         let items: Vec<ShareableItem> = vec![
             ShareableItem {
-                item_id: "chat-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0002".to_string(),
                 item_type: ShareableItemType::Chat,
             },
             ShareableItem {
-                item_id: "chat-shared".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0005".to_string(),
                 item_type: ShareableItemType::Chat,
             },
         ];
@@ -276,21 +238,24 @@ mod tests {
         {
             let items = validate_user_accessible_items(&pool, user_id, items).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = ["chat-owned", "chat-shared"]
-                .into_iter()
-                .map(String::from)
-                .collect();
+            let expected_ids: HashSet<String> = [
+                "a0000000-0000-0000-0000-0000000e0002",
+                "a0000000-0000-0000-0000-0000000e0005",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect();
             assert_eq!(item_ids, expected_ids, "only test chats failed");
         }
 
         // Only test projects
         let items: Vec<ShareableItem> = vec![
             ShareableItem {
-                item_id: "project-owned".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0001".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "project-shared".to_string(),
+                item_id: "a0000000-0000-0000-0000-0000000e0004".to_string(),
                 item_type: ShareableItemType::Project,
             },
         ];
@@ -298,10 +263,13 @@ mod tests {
         {
             let items = validate_user_accessible_items(&pool, user_id, items).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = ["project-owned", "project-shared"]
-                .into_iter()
-                .map(String::from)
-                .collect();
+            let expected_ids: HashSet<String> = [
+                "a0000000-0000-0000-0000-0000000e0001",
+                "a0000000-0000-0000-0000-0000000e0004",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect();
             assert_eq!(item_ids, expected_ids, "only test projects failed");
         }
 
@@ -316,29 +284,34 @@ mod tests {
         // Since user-1 owns nothing, this should return all 4 accessible items.
         let items: Vec<ShareableItem> = vec![
             ShareableItem {
-                item_id: "project-A".to_string(),
+                item_id: "b0000000-0000-0000-0000-0000000e0001".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "project-B".to_string(),
+                item_id: "b0000000-0000-0000-0000-0000000e0002".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "chat-A".to_string(),
+                item_id: "b0000000-0000-0000-0000-0000000e0003".to_string(),
                 item_type: ShareableItemType::Chat,
             },
             ShareableItem {
-                item_id: "doc-A".to_string(),
+                item_id: "b0000000-0000-0000-0000-0000000e0004".to_string(),
                 item_type: ShareableItemType::Document,
             },
         ];
         {
             let items = validate_user_accessible_items(&pool, user_id, items).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> = ["project-A", "project-B", "chat-A", "doc-A"]
-                .into_iter()
-                .map(String::from)
-                .collect();
+            let expected_ids: HashSet<String> = [
+                "b0000000-0000-0000-0000-0000000e0001",
+                "b0000000-0000-0000-0000-0000000e0002",
+                "b0000000-0000-0000-0000-0000000e0003",
+                "b0000000-0000-0000-0000-0000000e0004",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect();
             assert_eq!(
                 item_ids, expected_ids,
                 "Core function (include owned) failed on hierarchical permissions"
@@ -355,34 +328,39 @@ mod tests {
         // --- Core Function: include_owned ---
         let items: Vec<ShareableItem> = vec![
             ShareableItem {
-                item_id: "project-A".to_string(),
+                item_id: "c0000000-0000-0000-0000-0000000e0001".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "project-B".to_string(),
+                item_id: "c0000000-0000-0000-0000-0000000e0002".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "project-C".to_string(),
+                item_id: "c0000000-0000-0000-0000-0000000e0003".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "chat-C".to_string(),
+                item_id: "c0000000-0000-0000-0000-0000000e0004".to_string(),
                 item_type: ShareableItemType::Chat,
             },
             ShareableItem {
-                item_id: "doc-C".to_string(),
+                item_id: "c0000000-0000-0000-0000-0000000e0005".to_string(),
                 item_type: ShareableItemType::Document,
             },
         ];
         {
             let items = validate_user_accessible_items(&pool, user_id, items).await?;
             let item_ids: HashSet<String> = items.into_iter().map(|item| item.item_id).collect();
-            let expected_ids: HashSet<String> =
-                ["project-A", "project-B", "project-C", "chat-C", "doc-C"]
-                    .into_iter()
-                    .map(String::from)
-                    .collect();
+            let expected_ids: HashSet<String> = [
+                "c0000000-0000-0000-0000-0000000e0001",
+                "c0000000-0000-0000-0000-0000000e0002",
+                "c0000000-0000-0000-0000-0000000e0003",
+                "c0000000-0000-0000-0000-0000000e0004",
+                "c0000000-0000-0000-0000-0000000e0005",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect();
             assert_eq!(
                 item_ids, expected_ids,
                 "Core function (include owned) failed on deep hierarchy"
@@ -403,19 +381,19 @@ mod tests {
         // --- Core Function: include_owned ---
         let items: Vec<ShareableItem> = vec![
             ShareableItem {
-                item_id: "project-A-iso".to_string(),
+                item_id: "d0000000-0000-0000-0000-0000000e0001".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "project-B-iso".to_string(),
+                item_id: "d0000000-0000-0000-0000-0000000e0002".to_string(),
                 item_type: ShareableItemType::Project,
             },
             ShareableItem {
-                item_id: "chat-A-iso".to_string(),
+                item_id: "d0000000-0000-0000-0000-0000000e0003".to_string(),
                 item_type: ShareableItemType::Chat,
             },
             ShareableItem {
-                item_id: "doc-B-iso".to_string(),
+                item_id: "d0000000-0000-0000-0000-0000000e0004".to_string(),
                 item_type: ShareableItemType::Document,
             },
         ];

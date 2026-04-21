@@ -94,14 +94,16 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
-        queries::insert_user_item_access::insert_user_item_access(
+        entity_access_db_utils::insert_entity_access_row(
             &mut tx,
-            user_id.copied(),
-            &chat_id,
-            AccessLevel::Owner,
+            &macro_uuid::string_to_uuid(&chat_id).unwrap(),
+            entity_access_db_utils::EntityType::Chat,
+            user_id.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
         )
         .await
-        .map_err(to_chat_err)?;
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "create_chat transaction error");
@@ -193,14 +195,16 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
-        queries::insert_user_item_access::insert_user_item_access(
+        entity_access_db_utils::insert_entity_access_row(
             &mut tx,
-            user_id.copied(),
-            &chat_id,
-            AccessLevel::Owner,
+            &macro_uuid::string_to_uuid(&chat_id).unwrap(),
+            entity_access_db_utils::EntityType::Chat,
+            user_id.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
         )
         .await
-        .map_err(to_chat_err)?;
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id)
             .await
@@ -293,20 +297,17 @@ impl ChatRepo for PgChatRepo {
             )
             .await
             .map_err(to_chat_err)?;
-
-            macro_share_permissions::user_item_access::update_user_item_access(
-                &mut tx,
-                user_id.as_ref(),
-                chat_id,
-                "chat",
-                share_permission,
-            )
-            .await
-            .map_err(to_chat_err)?;
         }
 
         tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_project_modified(&self, project_id: &str) -> Result<(), ChatErr> {
+        queries::update_project_modified::update_project_modified(&self.pool, project_id)
+            .await
+            .map_err(to_chat_err)
     }
 
     #[tracing::instrument(err, skip(self))]

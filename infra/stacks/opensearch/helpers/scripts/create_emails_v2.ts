@@ -6,6 +6,7 @@ import { IS_DRY_RUN, SHARD_SETTINGS } from '../constants';
 const EMAIL_INDEX_V2 = 'emails_v2';
 
 const EMAIL_MAPPINGS = {
+  dynamic: 'false' as const,
   properties: {
     entity_id: { type: 'keyword' as const },
     message_id: { type: 'keyword' as const },

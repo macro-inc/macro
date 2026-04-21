@@ -4,6 +4,7 @@ import { stripeServiceClient } from '@service-stripe/client';
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { PlanGrid } from '@app/component/paywall/PlanGrid';
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 
 function ChoosePlanContent(props: LessonContentProps) {
   onMount(() => props.onComplete());
@@ -15,20 +16,33 @@ function ChoosePlanContent(props: LessonContentProps) {
   );
 }
 
-function ChoosePlanDemo() {
+function ChoosePlanDemo(props: LessonContentProps) {
   const analytics = useAnalytics();
   const [loading, setLoading] = createSignal<string | null>(null);
 
   const handleCheckout = async (tier: string) => {
     if (loading()) return;
+    if (tier === 'free') {
+      analytics.track('subscription_start', { type: tier });
+      // Advance to the launch step rather than leaving onboarding.
+      props.advance();
+      return;
+    }
     setLoading(tier);
     try {
-      const url = await stripeServiceClient.createCheckoutSession(
-        '',
-        undefined,
-        tier
-      );
+      // Return to the onboarding (not /app) on success so the launch step renders.
+      // `subscriptionSuccess` triggers the `completeOnParam` hook on this lesson, which
+      // pre-marks choose-plan complete in the state machine — the user lands on launch.
+      const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
+      const url = await stripeServiceClient.createCheckoutSession({
+        tier,
+        successUrl,
+      });
       analytics.track('subscription_start', { type: tier });
+      // Fire the lesson's completion analytics before leaving so the paid path
+      // has parity with the free branch. `advance()` also bumps the state machine,
+      // but we're redirecting immediately — on return, `completeOnParam` takes over.
+      props.advance();
       window.location.href = url;
     } catch (error) {
       console.error('Checkout error:', error);
@@ -55,7 +69,11 @@ function ChoosePlanDemo() {
               'opacity-60': loading() !== null,
             }}
           >
-            {loading() === plan.tier ? 'Loading...' : `Get ${plan.name}`}
+            {loading() === plan.tier
+              ? 'Loading...'
+              : plan.tier === 'free'
+                ? 'Start free'
+                : 'Subscribe'}
           </button>
         )}
       />
@@ -70,4 +88,5 @@ export const choosePlanLesson: LessonDefinition = {
   demo: ChoosePlanDemo,
   order: 80,
   hideContinue: true,
+  completeOnParam: 'subscriptionSuccess',
 };

@@ -10,7 +10,7 @@ import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { createHeaderCollapser } from '../utils/createHeaderCollapser';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
-import { isListViewID } from '@app/constants/list-views';
+import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { isMobile } from '@core/mobile/isMobile';
 
 export type SplitPanelProps = {
@@ -48,7 +48,11 @@ export function SplitPanel(props: SplitPanelProps) {
     goBack: () => props.handle.goBack(),
     canGoForward: () => props.handle.canGoForward(),
     goForward: () => props.handle.goForward(),
-    replaceSplit: splitLayoutHelpers.replaceSplit,
+    goHome: () =>
+      props.handle.replace({
+        next: { type: 'component', id: LIST_VIEW_ID.inbox },
+        referredFrom: 'hotkey',
+      }),
     splitName: () => props.handle.displayName(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     isNotUnifiedList: () => {

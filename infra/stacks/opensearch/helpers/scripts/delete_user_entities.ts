@@ -99,7 +99,6 @@ async function deleteUserData() {
         `Found ${docCount} documents with user_id OR owner_id: ${userId} in ${index}`
       );
 
-      // even if no documents exist, still check the names index for any to delete
       if (docCount === 0) {
         console.log(`No documents to delete in ${index}`);
       } else {

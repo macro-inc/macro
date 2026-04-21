@@ -4,9 +4,9 @@
 
 import userEvent from '@testing-library/user-event';
 import { render, screen } from '@solidjs/testing-library';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-beforeAll(() => {
+vi.hoisted(() => {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({
@@ -90,6 +90,7 @@ vi.mock(
         namespace: () => builder,
         withMentions: () => builder,
         withEmojis: () => builder,
+        withActions: () => builder,
         withLinks: () => builder,
         withHistory: () => builder,
         withCode: () => builder,

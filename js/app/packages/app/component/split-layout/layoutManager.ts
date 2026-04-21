@@ -42,7 +42,7 @@ export type SplitContent =
   | {
       type: 'component';
       id: string;
-      params?: Record<string, string>;
+      params?: Record<string, unknown>;
     };
 
 export type SplitContentType = SplitContent['type'];
@@ -750,7 +750,15 @@ export function createSplitLayout(
     const s = () => findSplitById(id);
     const currentSplit = s();
     if (!currentSplit) return;
-    const content = () => s()!.content;
+    // s() can return undefined if this split is removed from state.splits before
+    // all reactive consumers have stopped reading it. lastKnownContent prevents
+    // this error and ensures consumers see the most recent content, not the initial one.
+    let lastKnownContent: SplitContent = currentSplit.content;
+    const content = () => {
+      const current = s()?.content;
+      if (current !== undefined) lastKnownContent = current;
+      return lastKnownContent;
+    };
 
     return {
       id: currentSplit.id,
@@ -920,19 +928,28 @@ export function createSplitLayout(
   }
 
   function reconcileSplits(newSplits: SplitContent[]) {
-    const currentKeys = state.splits.map(keyOfSplitState);
+    // URL segments are produced by getUrlSegments(), which excludes excluded splits.
+    const visibleSplits = state.splits.filter((s) => !isExcluded(s));
+    const currentKeys = visibleSplits.map(keyOfSplitState);
     const newKeys = newSplits.map(keyOfSplitContent);
     const changed = newKeys.join(',') !== currentKeys.join(',');
 
     if (!changed) return;
 
-    // Build the result array by position
+    // Build the result array by position, preserving excluded splits unchanged.
     const resultSplits: SplitState[] = [];
     const usedIds = new Set<SplitId>();
 
+    for (const split of state.splits) {
+      if (isExcluded(split)) {
+        resultSplits.push(split);
+        usedIds.add(split.id);
+      }
+    }
+
     for (let i = 0; i < newSplits.length; i++) {
       const newContent = newSplits[i];
-      const splitAtSameIndex = state.splits[i];
+      const splitAtSameIndex = visibleSplits[i];
 
       // Reuse split at same index if content matches
       if (
@@ -951,6 +968,12 @@ export function createSplitLayout(
         if (splitAtSameIndex) {
           newSplit.id = splitAtSameIndex.id;
           usedIds.add(splitAtSameIndex.id);
+          setSplitNamesById(
+            produce((map) => {
+              delete map[splitAtSameIndex.id];
+              return map;
+            })
+          );
         }
         resultSplits.push(newSplit);
       }

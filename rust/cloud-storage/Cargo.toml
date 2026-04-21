@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-  "ai",
+    "ai",
   "ai_format",
   "ai_tools",
   "ai_toolset",
@@ -47,6 +47,7 @@ members = [
   "email_utils",
   "email_validator",
   "entity_access",
+  "entity_access_db_utils",
   "entity_access_management",
   "frecency",
   "fusionauth",
@@ -70,7 +71,6 @@ members = [
   "macro_redis",
   "macro_service_client",
   "macro_sha_count_client",
-  "macro_share_permissions",
   "macro_uuid",
   "mcp_auth_proxy",
   "mcp_service",
@@ -90,6 +90,7 @@ members = [
   "models_sfs",
   "models_soup",
   "models_team",
+  "mobile_welcome_email_db_client",
   "name_search",
   "non_empty",
   "notification",
@@ -114,6 +115,7 @@ members = [
   "s3_client",
   "s3_key",
   "scribe",
+  "scheduled_action",
   "search_processing_service",
   "search_service",
   "search_service_client",

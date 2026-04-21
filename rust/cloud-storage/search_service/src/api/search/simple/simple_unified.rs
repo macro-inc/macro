@@ -266,21 +266,18 @@ pub(in crate::api::search) async fn perform_unified_search(
                 && !(filter_document_response.ids_only
                     && filter_document_response.document_ids.is_empty())
             {
-                indices.insert(models_opensearch::SearchEntityType::Documents);
+                indices.insert(models_opensearch::OpenSearchEntityType::Documents);
             }
             if should_include_chats
                 && !(filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty())
             {
-                indices.insert(models_opensearch::SearchEntityType::Chats);
+                indices.insert(models_opensearch::OpenSearchEntityType::Chats);
             }
             if should_include_emails {
-                indices.insert(models_opensearch::SearchEntityType::Emails);
+                indices.insert(models_opensearch::OpenSearchEntityType::Emails);
             }
             if should_include_channels && !filter_channel_response.channel_ids.is_empty() {
-                indices.insert(models_opensearch::SearchEntityType::Channels);
-            }
-            if should_include_projects {
-                indices.insert(models_opensearch::SearchEntityType::Projects);
+                indices.insert(models_opensearch::OpenSearchEntityType::Channels);
             }
             indices
         },
@@ -368,7 +365,7 @@ pub(in crate::api::search) async fn perform_unified_search(
             let mut args = unified_search_args;
             if matches!(search_on, SearchOn::Name) {
                 args.search_indices
-                    .retain(|i| *i == models_opensearch::SearchEntityType::Emails);
+                    .retain(|i| *i == models_opensearch::OpenSearchEntityType::Emails);
                 args.email_search_args.subject_only = true;
             }
             if args.search_indices.is_empty() {

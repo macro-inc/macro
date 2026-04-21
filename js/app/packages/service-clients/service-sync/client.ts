@@ -132,7 +132,7 @@ export const syncServiceClient = {
   },
   async exists(args: { documentId: string }) {
     const res = await syncFetch(`/document/${args.documentId}/exists`, {
-      method: 'GET',
+      method: 'HEAD',
     });
 
     if (isErr(res)) {

@@ -17,7 +17,8 @@ mock = []
 
 [dependencies]
 anyhow = { workspace = true }
-axum = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
+bytes = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }

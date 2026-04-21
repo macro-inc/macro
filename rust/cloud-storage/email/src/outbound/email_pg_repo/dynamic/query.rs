@@ -136,35 +136,32 @@ fn build_query(
     let mut builder = if needs_shared_cte {
         let mut b = sqlx::QueryBuilder::new(
             r#"
-        WITH RECURSIVE ProjectHierarchy AS (
-            SELECT p.id, uia.access_level
-            FROM "Project" p
-            JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
-            WHERE uia.user_id = "#,
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = "#,
         );
         b.push_bind(params.user_id.clone());
         b.push(
-            r#" AND p."deletedAt" IS NULL
+            r#" AND cp.left_at IS NULL
             UNION ALL
-            SELECT p.id, ph.access_level
-            FROM "Project" p
-            JOIN ProjectHierarchy ph ON p."parentId" = ph.id
-            WHERE p."deletedAt" IS NULL
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = "#,
+        );
+        b.push_bind(params.user_id.clone());
+        b.push(
+            r#"
+            UNION ALL
+            SELECT "#,
+        );
+        b.push_bind(params.user_id.clone());
+        b.push(
+            r#"
         ),
         SharedEmailThreads AS (
-            SELECT item_id::uuid AS thread_id
-            FROM "UserItemAccess"
-            WHERE user_id = "#,
-        );
-        b.push_bind(params.user_id.clone());
-        b.push(
-            r#" AND item_type = 'thread'
-            UNION
-            -- Find threads living in accessible projects.
-            -- project_id is text, ProjectHierarchy.id is uuid, so cast to text for comparison.
-            SELECT t.id AS thread_id
-            FROM email_threads t
-            WHERE t.project_id = ANY(ARRAY(SELECT id::text FROM ProjectHierarchy))
+            SELECT entity_id AS thread_id
+            FROM entity_access
+            WHERE source_id = ANY(SELECT source_id FROM user_source_ids)
+              AND entity_type = 'thread'
         )
         "#,
         );

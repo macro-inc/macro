@@ -1,5 +1,6 @@
 //! Edit share permissions for a chat.
 
+use model_entity::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
@@ -33,13 +34,14 @@ pub(crate) async fn edit_chat_permission(
     .fetch_one(tx.as_mut())
     .await?;
 
-    edit_share_permission(tx, &share_id, share_permission).await
+    edit_share_permission(tx, chat_id, &share_id, share_permission).await
 }
 
 /// Update a `SharePermission` row and its channel share permissions.
 #[tracing::instrument(err, skip(tx))]
 async fn edit_share_permission(
     tx: &mut Transaction<'_, Postgres>,
+    chat_id: &str,
     share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> anyhow::Result<()> {
@@ -100,6 +102,14 @@ async fn edit_share_permission(
 
     if let Some(channel_share_permissions) = share_permission.channel_share_permissions.as_ref() {
         edit_channel_share_permissions(tx, share_permission_id, channel_share_permissions).await?;
+
+        entity_access_db_utils::update_entity_access_channel_share_permissions(
+            tx,
+            &macro_uuid::string_to_uuid(chat_id).unwrap(),
+            EntityType::Chat,
+            channel_share_permissions,
+        )
+        .await?;
     }
 
     Ok(())

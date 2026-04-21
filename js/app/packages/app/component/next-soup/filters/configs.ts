@@ -37,6 +37,7 @@ import {
   notDoneFilter,
   peopleFilter,
   projectFilter,
+  automationFilter,
   taskFilter,
   teamsFilter,
   unreadFilter,
@@ -68,6 +69,12 @@ export const ENTITY_TYPE_FILTER_CONFIGS = [
     id: 'agent',
     label: 'Agents',
     predicate: agentFilter,
+    group: 'entity-type',
+  },
+  {
+    id: 'automation',
+    label: 'Scheduled',
+    predicate: automationFilter,
     group: 'entity-type',
   },
   {

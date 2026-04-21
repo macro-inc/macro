@@ -1,7 +1,11 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
+import { useBlockId } from '@core/block';
+import { Button } from '@ui/components/Button';
+import { SegmentedControl } from '@ui/components/SegmentedControl';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
+import { Dialog } from '@kobalte/core/dialog';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useUserId } from '@core/context/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -13,8 +17,8 @@ import {
   Index,
   Show,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { PROPERTY_STYLES } from '../../styles';
+
+import { usePropertiesContext } from '../../context/PropertiesContext';
 import {
   getPropertyDataTypeDropdownOptions,
   usePropertyNameFocus,
@@ -88,7 +92,7 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
               }}
               onKeyDown={(e) => handleKeyDown(e, option().id, option().value)}
               placeholder={props.placeholder}
-              class="flex-1 px-2 py-1 border border-edge text-sm"
+              class="flex-1 p-1.5 border border-edge-muted/50 text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
               data-option-id={option().id}
             />
             <button
@@ -113,12 +117,16 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
 interface CreatePropertyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPropertyCreated?: () => void;
+  onPropertyCreated?: (propertyDefinitionId?: string) => void;
+  autoPinOnCreate?: boolean;
 }
 
 export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   props
 ) => {
+  const blockId = useBlockId();
+  const { entityType } = usePropertiesContext();
+
   const [newPropertyName, setNewPropertyName] = createSignal('');
   const [selectedDataType, setSelectedDataType] =
     createSignal<DataTypeValue>('string');
@@ -131,11 +139,32 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   >([]);
   const [error, setError] = createSignal<string | null>(null);
 
+  const addMutation = useAddEntityPropertyMutation();
+
   const createPropertyMutation = useCreatePropertyDefinitionMutation({
-    onSuccess: () => {
-      resetCreateForm();
-      props.onPropertyCreated?.();
-      props.onClose();
+    onSuccess: async (propertyDefinition) => {
+      // Add the property to the current entity if autoPinOnCreate is true
+      if (props.autoPinOnCreate && blockId) {
+        try {
+          await addMutation.mutateAsync({
+            entityId: blockId,
+            entityType,
+            propertyDefinitionId: propertyDefinition.id,
+          });
+
+          resetCreateForm();
+          // Pass the property definition ID so parent can pin it after refresh
+          props.onPropertyCreated?.(propertyDefinition.id);
+          props.onClose();
+        } catch (error) {
+          console.error('Failed to add property to entity', error);
+          setError(ERROR_MESSAGES.PROPERTY_CREATE);
+        }
+      } else {
+        resetCreateForm();
+        props.onPropertyCreated?.();
+        props.onClose();
+      }
     },
     onError: () => {
       setError(ERROR_MESSAGES.PROPERTY_CREATE);
@@ -378,184 +407,178 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   );
 
   return (
-    <Portal>
-      <div
-        class="fixed inset-0 bg-overlay z-modal-overlay"
-        onClick={() => props.onClose()}
-        onKeyDown={(e) => e.key === 'Escape' && props.onClose()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div
-          class={`absolute bg-dialog border-3 border-edge shadow-xl w-full overflow-hidden font-mono max-w-lg max-h-[90vh] ${MODAL_VIEWPORT_CLASSES}`}
-          style={{
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-          }}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          role="document"
-        >
-          <div class="flex items-center justify-between p-4">
-            <h3 class="text-base font-semibold text-ink">
-              Create New Property
-            </h3>
-            <DeprecatedIconButton
-              icon={XIcon}
-              theme="clear"
-              size="sm"
-              onClick={() => props.onClose()}
-            />
-          </div>
+    <Dialog
+      open={props.isOpen}
+      onOpenChange={(open) => {
+        if (!open) props.onClose();
+      }}
+      modal={true}
+    >
+      <Dialog.Portal>
+        <DialogWrapper>
+          <div class="flex flex-col overflow-hidden bracket-never text-sm">
+            <div class="flex items-center justify-between gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+              <Dialog.Title class="pl-2 text-sm font-medium">
+                Create New Property
+              </Dialog.Title>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => props.onClose()}
+              >
+                <XIcon />
+              </Button>
+            </div>
 
-          <div class="px-4 pb-2 overflow-y-auto max-h-[70vh]">
-            <div class="space-y-3">
-              <Show when={error()}>
-                <div class="text-failure-ink text-sm p-2 bg-failure-bg">
-                  {error()}
+            <div class="min-h-0 overflow-y-auto scrollbar-hidden p-4">
+              <div class="space-y-3">
+                <Show when={error()}>
+                  <div class="text-failure-ink text-sm p-2 bg-failure-bg">
+                    {error()}
+                  </div>
+                </Show>
+
+                <div>
+                  <label
+                    for="property-name"
+                    class="block text-xs font-medium text-ink mb-1"
+                  >
+                    Property Name
+                  </label>
+                  <input
+                    id="property-name"
+                    ref={propertyNameInputRef}
+                    type="text"
+                    value={newPropertyName()}
+                    onInput={(e) => setNewPropertyName(e.currentTarget.value)}
+                    placeholder="Enter property name"
+                    class="w-full p-1.5 border border-edge-muted/50 text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
+                  />
                 </div>
-              </Show>
 
-              <div>
-                <label
-                  for="property-name"
-                  class="block text-xs font-medium text-ink mb-1"
-                >
-                  Property Name
-                </label>
-                <input
-                  id="property-name"
-                  ref={propertyNameInputRef}
-                  type="text"
-                  value={newPropertyName()}
-                  onInput={(e) => setNewPropertyName(e.currentTarget.value)}
-                  placeholder="Enter property name"
-                  class="w-full px-3 py-1.5 border border-edge text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
-                />
-              </div>
-
-              <div>
-                <label class="block text-xs font-medium text-ink mb-1">
-                  Data Type
-                </label>
-                <Dropdown
-                  value={selectedDataType()}
-                  options={dataTypeDropdownOptions}
-                  onChange={(value) => {
-                    setSelectedDataType(value);
-                    // Reset options when changing type
-                    setNewStringOptions([]);
-                    setNewNumberOptions([]);
-                    setIsMultiSelect(false);
-                  }}
-                  placeholder="Select type"
-                />
-              </div>
-
-              <Show when={shouldShowMultiSelect()}>
                 <div>
                   <label class="block text-xs font-medium text-ink mb-1">
-                    Selection Type
+                    Data Type
                   </label>
-                  <div class="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsMultiSelect(false)}
-                      class={`flex-1 px-3 py-1.5 text-sm border ${!isMultiSelect() ? 'border-accent bg-active text-accent-ink' : 'bg-button border-edge text-ink hover:bg-hover'}`}
-                    >
-                      Single Select
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsMultiSelect(true)}
-                      class={`flex-1 px-3 py-1.5 text-sm border ${isMultiSelect() ? 'border-accent bg-active text-accent-ink' : 'bg-button border-edge text-ink hover:bg-hover'}`}
-                    >
-                      Multi Select
-                    </button>
-                  </div>
+                  <Dropdown
+                    value={selectedDataType()}
+                    options={dataTypeDropdownOptions}
+                    onChange={(value) => {
+                      setSelectedDataType(value);
+                      setNewStringOptions([]);
+                      setNewNumberOptions([]);
+                      setIsMultiSelect(false);
+                    }}
+                    placeholder="Select type"
+                  />
                 </div>
-              </Show>
 
-              <Show when={shouldShowOptions()}>
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <label class="block text-xs font-medium text-ink">
-                      Options
+                <Show when={shouldShowMultiSelect()}>
+                  <div>
+                    <label class="block text-xs font-medium text-ink mb-1">
+                      Selection Type
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const { type } = parseDataTypeValue(selectedDataType());
-                        if (type === 'select_string') {
-                          addOption(newStringOptions, setNewStringOptions, '');
-                        } else {
-                          addOption(newNumberOptions, setNewNumberOptions, 0);
-                        }
-                      }}
-                      class="px-2 py-1 text-xs bg-accent text-ink hover:bg-accent/90"
-                    >
-                      + Add Option
-                    </button>
+                    <SegmentedControl
+                      value={isMultiSelect()}
+                      onChange={setIsMultiSelect}
+                      options={[
+                        { value: false, label: 'Single Select' },
+                        { value: true, label: 'Multi Select' },
+                      ]}
+                      aria-label="Selection type"
+                    />
                   </div>
-                  <Show
-                    when={selectedDataType() === 'select_string'}
-                    fallback={
+                </Show>
+
+                <Show when={shouldShowOptions()}>
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <label class="block text-xs font-medium text-ink">
+                        Options
+                      </label>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        class="rounded-xs"
+                        onClick={() => {
+                          const { type } = parseDataTypeValue(
+                            selectedDataType()
+                          );
+                          if (type === 'select_string') {
+                            addOption(
+                              newStringOptions,
+                              setNewStringOptions,
+                              ''
+                            );
+                          } else {
+                            addOption(newNumberOptions, setNewNumberOptions, 0);
+                          }
+                        }}
+                      >
+                        + Add Option
+                      </Button>
+                    </div>
+                    <Show
+                      when={selectedDataType() === 'select_string'}
+                      fallback={
+                        <OptionInput
+                          options={newNumberOptions}
+                          type="number"
+                          onAdd={() =>
+                            addOption(newNumberOptions, setNewNumberOptions, 0)
+                          }
+                          onRemove={(id) =>
+                            removeOption(
+                              newNumberOptions,
+                              setNewNumberOptions,
+                              id
+                            )
+                          }
+                          onUpdate={(id, value) =>
+                            updateOption(
+                              newNumberOptions,
+                              setNewNumberOptions,
+                              id,
+                              value as number
+                            )
+                          }
+                          placeholder="Enter number"
+                        />
+                      }
+                    >
                       <OptionInput
-                        options={newNumberOptions}
-                        type="number"
+                        options={newStringOptions}
+                        type="string"
                         onAdd={() =>
-                          addOption(newNumberOptions, setNewNumberOptions, 0)
+                          addOption(newStringOptions, setNewStringOptions, '')
                         }
                         onRemove={(id) =>
                           removeOption(
-                            newNumberOptions,
-                            setNewNumberOptions,
+                            newStringOptions,
+                            setNewStringOptions,
                             id
                           )
                         }
                         onUpdate={(id, value) =>
                           updateOption(
-                            newNumberOptions,
-                            setNewNumberOptions,
+                            newStringOptions,
+                            setNewStringOptions,
                             id,
-                            value as number
+                            value as string
                           )
                         }
-                        placeholder="Enter number"
+                        placeholder="Enter option value"
                       />
-                    }
-                  >
-                    <OptionInput
-                      options={newStringOptions}
-                      type="string"
-                      onAdd={() =>
-                        addOption(newStringOptions, setNewStringOptions, '')
-                      }
-                      onRemove={(id) =>
-                        removeOption(newStringOptions, setNewStringOptions, id)
-                      }
-                      onUpdate={(id, value) =>
-                        updateOption(
-                          newStringOptions,
-                          setNewStringOptions,
-                          id,
-                          value as string
-                        )
-                      }
-                      placeholder="Enter option value"
-                    />
-                  </Show>
-                </div>
-              </Show>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
             </div>
-          </div>
 
-          <div class="flex items-center justify-between p-4 pt-2">
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.secondary}`}
+            <div class="flex items-center justify-end gap-2 px-2 py-1.5 border-t border-edge-muted shrink-0">
+              <Button
+                variant="ghost"
+                class="rounded-xs"
                 onClick={() => {
                   resetCreateForm();
                   props.onClose();
@@ -563,33 +586,33 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 disabled={createPropertyMutation.isPending}
               >
                 Cancel
-              </button>
-            </div>
-            <button
-              type="button"
-              class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent} ${newPropertyName().trim() && !createPropertyMutation.isPending ? '' : 'cursor-not-allowed'}`}
-              onClick={handleCreateProperty}
-              disabled={
-                !newPropertyName().trim() || createPropertyMutation.isPending
-              }
-            >
-              <Show
-                when={!createPropertyMutation.isPending}
-                fallback={
-                  <div class="flex items-center gap-1.5">
-                    <div class="w-3 h-3 animate-spin">
-                      <LoadingSpinner />
-                    </div>
-                    Creating...
-                  </div>
+              </Button>
+              <Button
+                variant="secondary"
+                class="rounded-xs"
+                onClick={handleCreateProperty}
+                disabled={
+                  !newPropertyName().trim() || createPropertyMutation.isPending
                 }
               >
-                Create Property
-              </Show>
-            </button>
+                <Show
+                  when={!createPropertyMutation.isPending}
+                  fallback={
+                    <div class="flex items-center gap-1.5">
+                      <div class="w-3 h-3 animate-spin">
+                        <LoadingSpinner />
+                      </div>
+                      Creating...
+                    </div>
+                  }
+                >
+                  Create Property
+                </Show>
+              </Button>
+            </div>
           </div>
-        </div>
-      </div>
-    </Portal>
+        </DialogWrapper>
+      </Dialog.Portal>
+    </Dialog>
   );
 };

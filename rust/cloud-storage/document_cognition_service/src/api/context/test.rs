@@ -240,6 +240,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         s3_upload_adapter,
         ai_tools::NoOpTaskProperties,
         ai_tools::NoOpConnectionService,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
     );
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
@@ -290,6 +293,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
+        schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();

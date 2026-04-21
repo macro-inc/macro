@@ -1,51 +1,5 @@
-use anyhow::Context;
+use model_entity::EntityType;
 use sqlx::{Pool, Postgres, Transaction};
-
-/// Soft deletes a document from the database.
-/// Removing the history and pins for the document as well
-#[tracing::instrument(skip(db))]
-pub async fn soft_delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::Result<()> {
-    let mut transaction = db.begin().await?;
-    // Delete pins
-    sqlx::query!(
-        r#"
-        DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
-        "#,
-        document_id,
-        "document",
-    )
-    .execute(&mut *transaction)
-    .await?;
-
-    // Delete from history
-    sqlx::query!(
-        r#"
-        DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
-        "#,
-        document_id,
-        "document",
-    )
-    .execute(&mut *transaction)
-    .await?;
-
-    // Delete document
-    sqlx::query!(
-        r#"
-        UPDATE "Document"
-        SET "deletedAt" = NOW()
-        WHERE id = $1"#,
-        document_id
-    )
-    .execute(&mut *transaction)
-    .await?;
-
-    transaction
-        .commit()
-        .await
-        .context("unable to soft delete document")?;
-
-    Ok(())
-}
 
 /// Hard deletes a document from the database.
 /// Removing the history and pins for the document as well.
@@ -102,10 +56,10 @@ pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::
         .execute(&mut *transaction)
         .await?;
 
-    crate::item_access::delete::delete_user_item_access_by_item(
+    crate::item_access::delete::delete_user_entity_access_by_item(
         &mut transaction,
-        document_id,
-        "document",
+        &macro_uuid::string_to_uuid(document_id).unwrap(),
+        EntityType::Document,
     )
     .await?;
 
@@ -169,10 +123,13 @@ pub async fn delete_document_bulk_tsx(
     .execute(transaction.as_mut())
     .await?;
 
-    crate::item_access::delete::delete_user_item_access_bulk(
+    crate::item_access::delete::delete_user_entity_access_bulk(
         transaction,
-        &document_ids,
-        "document",
+        &document_ids
+            .iter()
+            .filter_map(|p| macro_uuid::string_to_uuid(p).ok())
+            .collect::<Vec<uuid::Uuid>>(),
+        EntityType::Document,
     )
     .await?;
 
@@ -255,48 +212,6 @@ pub async fn get_shas_for_deletion(
 mod tests {
     use super::*;
     use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
-    async fn test_soft_delete_document(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        soft_delete_document(&pool, "document-one").await?;
-
-        let deleted_at = sqlx::query!(
-            r#"
-            SELECT
-                d."createdAt"::timestamptz as deleted_at
-            FROM
-                "Document" d
-            WHERE
-                d.id = $1
-        "#,
-            "document-one"
-        )
-        .fetch_one(&pool)
-        .await?;
-
-        assert_eq!(deleted_at.deleted_at.is_some(), true);
-
-        // get pins
-        let pins = sqlx::query!(
-            r#"SELECT COUNT(*) as count FROM "Pin" WHERE "pinnedItemId"=$1"#,
-            "document-one"
-        )
-        .fetch_one(&pool)
-        .await?;
-
-        assert_eq!(pins.count.unwrap(), 0);
-
-        // get history
-        let history = sqlx::query!(
-            r#"SELECT COUNT(*) as count FROM "UserHistory" WHERE "itemId"=$1"#,
-            "document-one"
-        )
-        .fetch_one(&pool)
-        .await?;
-        assert_eq!(history.count.unwrap(), 0);
-
-        Ok(())
-    }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("docx_example")))]
     async fn test_get_shas_for_deletion(pool: Pool<Postgres>) {

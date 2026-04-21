@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
+use crate::domain::models::EditCallRecordRequest;
+
 use super::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
     GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
@@ -137,6 +139,7 @@ impl<
 #[derive(Serialize, Deserialize, Clone)]
 struct CallStartedNotification {
     sender_profile_picture_url: Option<String>,
+    channel_name: Option<String>,
 }
 
 impl Notification for CallStartedNotification {
@@ -159,7 +162,10 @@ impl NotificationExtIos for CallStartedNotification {
         Some(APNSPushNotification {
             aps: Aps {
                 alert: Some(Alert::Dictionary(AlertDictionary {
-                    title: Some("Incoming Call".to_string()),
+                    title: Some(match &self.channel_name {
+                        Some(name) => format!("Incoming Call in #{name}"),
+                        None => "Incoming Call".to_string(),
+                    }),
                     body: Some(format!(
                         "{} is calling you",
                         sender_id
@@ -287,48 +293,53 @@ impl<
                         .await;
 
                         // Send push notification to channel members (best-effort).
-                        let channel_id_str = channel_id.to_string();
-                        let recipient_ids: HashSet<MacroUserIdStr<'_>> = match self
-                            .entity_access_service
-                            .get_users_by_entity(&channel_id_str, EntityType::Channel)
-                            .await
-                        {
-                            Ok(users) => users
+                        let _: Result<(), anyhow::Error> = async {
+                            let channel_name = self
+                                .repo
+                                .resolve_channel_name(channel_id, user_id.copied())
+                                .await
+                                .map_err(Into::into)?;
+
+                            let channel_id_str = channel_id.to_string();
+                            let recipient_ids: HashSet<MacroUserIdStr<'_>> = self
+                                .entity_access_service
+                                .get_users_by_entity(&channel_id_str, EntityType::Channel)
+                                .await?
                                 .into_iter()
                                 .filter(|u| u.as_ref() != user_id.as_ref())
-                                .collect(),
-                            Err(e) => {
-                                tracing::error!(error=?e, "failed to fetch channel users for call notification");
-                                HashSet::new()
+                                .collect();
+
+                            let sender_profile_picture_url = self
+                                .repo
+                                .get_user_profile_picture(user_id.copied())
+                                .await
+                                .ok()
+                                .flatten();
+
+                            let req = SendNotificationRequestBuilder {
+                                notification_entity: EntityType::Channel
+                                    .with_entity_string(channel_id_str),
+                                notification: CallStartedNotification {
+                                    sender_profile_picture_url,
+                                    channel_name,
+                                },
+                                sender_id: Some(user_id.copied()),
+                                recipient_ids,
                             }
-                        };
+                            .into_request()
+                            .with_apns();
 
-                        let sender_profile_picture_url = self
-                            .repo
-                            .get_user_profile_picture(user_id.copied())
-                            .await
-                            .ok()
-                            .flatten();
+                            self.notification_ingress
+                                .send_notification(req)
+                                .await
+                                .map_err(|e| anyhow::anyhow!(e))?;
 
-                        let req = SendNotificationRequestBuilder {
-                            notification_entity: EntityType::Channel
-                                .with_entity_string(channel_id_str),
-                            notification: CallStartedNotification {
-                                sender_profile_picture_url,
-                            },
-                            sender_id: Some(user_id.copied()),
-                            recipient_ids,
+                            Ok(())
                         }
-                        .into_request()
-                        .with_apns();
-
-                        let _ = self
-                            .notification_ingress
-                            .send_notification(req)
-                            .await
-                            .inspect_err(|e| {
-                                tracing::error!(error=?e, "failed to send call started notification")
-                            });
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(error=?e, "failed to send call started notification");
+                        });
 
                         call
                     }
@@ -646,6 +657,40 @@ impl<
         Ok(record)
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> Result<(), CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+        let call_id = Uuid::parse_str(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
+
+        let recording_key = self
+            .repo
+            .delete_call_record(&call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        if let Some(key) = recording_key {
+            self.recording_storage
+                .delete_recording(&key)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, recording_key=%key, "failed to delete call recording from storage");
+                })
+                .ok();
+        }
+
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self, segment))]
     async fn ingest_transcript_segment(
         &self,
@@ -669,6 +714,51 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn edit_call_record(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        request: EditCallRecordRequest,
+    ) -> Result<(), CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+
+        self.repo
+            .patch_call_record(&call_id, &request)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn toggle_share_with_team(
+        &self,
+        receipt: EntityAccessReceipt<MemberParticipantRole>,
+    ) -> Result<bool, CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+
+        self.repo
+            .toggle_share_with_team(&call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
     }
 }
 

@@ -19,7 +19,7 @@ import { resetSandbox } from './sandbox/sandbox-store';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
-import { ContinueButton, SkipButton } from './components-lib';
+import { ContinueButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
@@ -27,10 +27,69 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useIsAuthenticated } from '@core/auth';
 import { fetchToken } from '@core/util/fetchWithToken';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import MobileWebWelcome from './MobileWebWelcome';
+import MobileWebSignupSent from './MobileWebSignupSent';
+import { useSendMobileWelcomeEmail } from '@queries/auth';
+import { isOk } from '@core/util/maybeResult';
+import { toast } from '@core/component/Toast/Toast';
 
 export default function InteractiveOnboarding() {
+  const isAuthenticated = useIsAuthenticated();
+  const [mobileWebStep, setMobileWebStep] = createSignal<
+    'welcome' | 'signup-sent'
+  >('welcome');
+  const sendMobileWelcomeEmail = useSendMobileWelcomeEmail();
+
+  // Mobile web users who aren't authenticated get a dedicated welcome screen
+  // with email signup instead of the full lesson flow.
+  const isMobileWeb = isTouchDevice() && !isNativeMobilePlatform();
+
+  const handleMobileSignUp = async (email: string) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.failure('Invalid email address.');
+      return;
+    }
+
+    const result = await sendMobileWelcomeEmail.mutateAsync(email);
+
+    if (isOk(result)) {
+      if (result[1].sent) {
+        setMobileWebStep('signup-sent');
+      } else {
+        toast.alert('Email already sent.');
+      }
+    } else {
+      const code = result[0]?.[0]?.code;
+      if (code === 'RATE_LIMITED') {
+        toast.failure('Rate limit exceeded.');
+      } else if (code === 'INVALID_EMAIL') {
+        toast.failure('Invalid email address.');
+      } else {
+        toast.failure('Internal error. Please try again.');
+      }
+    }
+  };
+
+  return (
+    <Show
+      when={!isMobileWeb || isAuthenticated() === true}
+      fallback={
+        <Show
+          when={mobileWebStep() === 'welcome'}
+          fallback={<MobileWebSignupSent />}
+        >
+          <MobileWebWelcome onSignUp={handleMobileSignUp} />
+        </Show>
+      }
+    >
+      <InteractiveOnboardingInner />
+    </Show>
+  );
+}
+
+function InteractiveOnboardingInner() {
   const analytics = useAnalytics();
 
   const splitPanel = useSplitPanel();
@@ -46,7 +105,6 @@ export default function InteractiveOnboarding() {
     if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
       return false;
     if (l.id === 'about-us' && isAuthenticated()) return false;
-    if (l.id === 'launch' && !isMobile()) return false;
     return true;
   });
   const lessons = isTouch
@@ -54,7 +112,6 @@ export default function InteractiveOnboarding() {
         (l) =>
           l.id === 'welcome' ||
           l.id === 'about-us' ||
-          l.id === 'email-invite' ||
           l.id === 'choose-plan' ||
           l.id === 'launch'
       )
@@ -134,6 +191,25 @@ export default function InteractiveOnboarding() {
     }
   };
 
+  // Programmatic advance for lessons that progress on their own interaction
+  // (e.g. clicking a plan card) rather than the Continue button.
+  const advanceLesson = () => {
+    const current = state.currentLesson();
+    if (!current) return;
+    analytics.track(
+      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
+      {
+        id: current.definition.id,
+        index: current.index,
+        state: 'completed',
+      }
+    );
+    state.completeLesson(current.definition.id);
+    setReadyToContinue(false);
+    setContinueLabel(undefined);
+    setLessonKey((k) => k + 1);
+  };
+
   const handleContinue = () => {
     const current = state.currentLesson();
     if (!current || !readyToContinue()) return;
@@ -165,26 +241,6 @@ export default function InteractiveOnboarding() {
     }
 
     state.completeLesson(current.definition.id);
-    setReadyToContinue(false);
-    setContinueLabel(undefined);
-    setLessonKey((k) => k + 1);
-  };
-
-  const handleSkip = () => {
-    const current = state.currentLesson();
-
-    if (!current) return;
-
-    analytics.track(
-      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
-      {
-        id: current.definition.id,
-        index: current.index,
-        state: 'skipped',
-      }
-    );
-
-    state.skipLesson(current.definition.id);
     setReadyToContinue(false);
     setContinueLabel(undefined);
     setLessonKey((k) => k + 1);
@@ -236,18 +292,6 @@ export default function InteractiveOnboarding() {
     },
   });
 
-  const skipReg = registerHotkey({
-    scopeId,
-    hotkey: 'escape',
-    description: 'Skip',
-    runWithInputFocused: true,
-    keyDownHandler: () => {
-      if (!state.currentLesson()?.definition.skippable) return false;
-      handleSkip();
-      return true;
-    },
-  });
-
   // Block global cmd+k during the entire tutorial.
   // On the command-k lesson slide this opens/closes the sandbox command menu.
   const cmdkReg = registerHotkey({
@@ -286,7 +330,6 @@ export default function InteractiveOnboarding() {
     CommandState.close = origClose;
   });
   onCleanup(() => reg.dispose());
-  onCleanup(() => skipReg.dispose());
   onCleanup(() => cmdkReg.dispose());
   onCleanup(() => resetSandbox());
 
@@ -300,25 +343,16 @@ export default function InteractiveOnboarding() {
     })
   );
 
-  // Mark tutorial complete on the backend once the email-invite lesson is
-  // completed or skipped — before the paywall step. On touch devices there is
-  // no email-invite step, so we complete after the about-us lesson instead.
+  // Mark tutorial complete on the backend the moment the user lands on the
+  // Launch screen — the semantic end of the onboarding experience. Guarded so
+  // the effect fires the mutation at most once.
+  let tutorialMarkedComplete = false;
   createEffect(() => {
-    if (testMode) return;
-    if (isTouch) {
-      const aboutUs = state
-        .lessons()
-        .find((l) => l.definition.id === 'about-us');
-      if (aboutUs && (aboutUs.completed || aboutUs.skipped)) {
-        completeTutorial.mutate(undefined);
-      }
-    } else {
-      const invite = state
-        .lessons()
-        .find((l) => l.definition.id === 'email-invite');
-      if (invite && (invite.completed || invite.skipped)) {
-        completeTutorial.mutate(undefined);
-      }
+    if (testMode || tutorialMarkedComplete) return;
+    const current = state.currentLesson();
+    if (current?.definition.id === 'launch') {
+      tutorialMarkedComplete = true;
+      completeTutorial.mutate(undefined);
     }
   });
 
@@ -337,7 +371,12 @@ export default function InteractiveOnboarding() {
   onMount(() => {
     if (state.currentIndex() > 0) return;
 
-    analytics.track('onboarding_start');
+    analytics.track('onboarding_start', {
+      source:
+        params.get('mobile_welcome_email') === 'true'
+          ? 'mobile_welcome_email'
+          : undefined,
+    });
   });
 
   createEffect(
@@ -477,23 +516,18 @@ export default function InteractiveOnboarding() {
                           <Dynamic
                             component={lesson().definition.content}
                             onComplete={handleLessonComplete}
+                            advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}
                           />
                         </div>
-                        {/* Show demo inline on touch — skip email-invite's MockAppChrome */}
-                        <Show
-                          when={
-                            lesson().definition.id !== 'email-invite'
-                              ? lesson().definition.demo
-                              : undefined
-                          }
-                        >
+                        <Show when={lesson().definition.demo}>
                           {(Demo) => (
                             <div class="w-full">
                               <Dynamic
                                 component={Demo()}
                                 onComplete={handleLessonComplete}
+                                advance={advanceLesson}
                                 isActive={true}
                                 scopeId={scopeId}
                               />
@@ -511,9 +545,6 @@ export default function InteractiveOnboarding() {
                               disabled={!readyToContinue()}
                               centered={lesson().definition.centeredButton}
                             />
-                            <Show when={lesson().definition.skippable}>
-                              <SkipButton onClick={handleSkip} />
-                            </Show>
                             <Show when={lesson().definition.secondaryAction}>
                               {(Action) => <Dynamic component={Action()} />}
                             </Show>
@@ -548,6 +579,7 @@ export default function InteractiveOnboarding() {
                         <Dynamic
                           component={lesson().definition.content}
                           onComplete={handleLessonComplete}
+                          advance={advanceLesson}
                           isActive={true}
                           scopeId={scopeId}
                         />
@@ -563,9 +595,6 @@ export default function InteractiveOnboarding() {
                             disabled={!readyToContinue()}
                             centered={lesson().definition.centeredButton}
                           />
-                          <Show when={lesson().definition.skippable}>
-                            <SkipButton onClick={handleSkip} />
-                          </Show>
                           <Show when={lesson().definition.secondaryAction}>
                             {(Action) => <Dynamic component={Action()} />}
                           </Show>
@@ -604,6 +633,7 @@ export default function InteractiveOnboarding() {
                           <Dynamic
                             component={Demo()}
                             onComplete={handleLessonComplete}
+                            advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}
                           />

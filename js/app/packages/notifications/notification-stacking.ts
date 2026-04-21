@@ -28,17 +28,29 @@ export function getAllNotificationsFromGroup(
 }
 
 /**
- * Gets the threadId from a replies stack
+ * Gets the threadId from a thread stack (replies, thread-mentions, or absorbed root sends)
  */
 export function getThreadId(group: NotificationStack): string {
-  const notification = group.notifications[0];
-  return match(notification.notification_metadata)
-    .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
-    .otherwise(() => '');
+  for (const notification of group.notifications) {
+    const threadId = match(notification.notification_metadata)
+      .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
+      .with({ tag: 'channel_mention' }, (m) => m.content.threadId ?? '')
+      .otherwise(() => '');
+    if (threadId) return threadId;
+  }
+  return '';
 }
 
 /**
  * Stacks notifications by type for unrolled notification display.
+ *
+ * Stacking rules:
+ * - Replies, thread-mentions (channel_mention with threadId), and the root send
+ *   for a thread all group into a single thread stack.
+ * - Root-level new message notifications are grouped into a single stack.
+ * - Root mentions (channel_mention without threadId) each form their own stack.
+ * - Any send/reply whose messageId matches a mention's messageId is shadowed
+ *   (the mention is more informative).
  */
 export function stackNotifications(
   notifications: UnifiedNotification[]
@@ -48,16 +60,29 @@ export function stackNotifications(
   const byTag = (tag: string) => (n: UnifiedNotification) =>
     n.notification_metadata.tag === tag;
 
-  // Collect mention messageIds for shadowing
+  const allMentions = filteredNotifications.filter(byTag('channel_mention'));
+
+  // Thread mentions have a threadId; root mentions don't
+  const rootMentions = allMentions.filter((n) =>
+    match(n.notification_metadata)
+      .with({ tag: 'channel_mention' }, (m) => !m.content.threadId)
+      .otherwise(() => false)
+  );
+  const threadMentions = allMentions.filter((n) =>
+    match(n.notification_metadata)
+      .with({ tag: 'channel_mention' }, (m) => !!m.content.threadId)
+      .otherwise(() => false)
+  );
+
+  // All mention messageIds for shadowing sends/replies
   const mentionedMsgIds = new Set(
-    filteredNotifications
-      .filter(byTag('channel_mention'))
+    allMentions
       .map((n) =>
         match(n.notification_metadata)
           .with({ tag: 'channel_mention' }, (m) => m.content.messageId)
           .otherwise(() => undefined)
       )
-      .filter(Boolean)
+      .filter((id): id is string => id !== undefined)
   );
 
   const isShadowed = (n: UnifiedNotification) =>
@@ -69,22 +94,74 @@ export function stackNotifications(
       )
       .otherwise(() => false);
 
-  const mentions = filteredNotifications.filter(byTag('channel_mention'));
-  const newMsgs = filteredNotifications
-    .filter(byTag('channel_message_send'))
-    .filter((n) => !isShadowed(n));
+  const activeThreadIds = new Set(
+    filteredNotifications
+      .map((n) =>
+        match(n.notification_metadata)
+          .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId)
+          .with(
+            { tag: 'channel_mention' },
+            (m) => m.content.threadId ?? undefined
+          )
+          .otherwise(() => undefined)
+      )
+      .filter((id): id is string => id !== undefined)
+  );
+
   const replies = filteredNotifications
     .filter(byTag('channel_message_reply'))
     .filter((n) => !isShadowed(n));
+
+  const allSends = filteredNotifications.filter(byTag('channel_message_send'));
+
+  const isAbsorbedIntoThread = (n: UnifiedNotification) =>
+    match(n.notification_metadata)
+      .with({ tag: 'channel_message_send' }, (m) =>
+        activeThreadIds.has(m.content.messageId)
+      )
+      .otherwise(() => false);
+
+  // Unshadowed sends not belonging to a thread → "new messages" stack
+  const newMsgs = allSends.filter(
+    (n) => !isShadowed(n) && !isAbsorbedIntoThread(n)
+  );
+  // Unshadowed sends whose messageId is a known threadId → join thread stack
+  const absorbedSends = allSends.filter(
+    (n) => !isShadowed(n) && isAbsorbedIntoThread(n)
+  );
+
+  // Root mentions whose messageId is a known threadId → join that thread stack
+  const absorbedRootMentions = rootMentions.filter((n) =>
+    match(n.notification_metadata)
+      .with({ tag: 'channel_mention' }, (m) =>
+        activeThreadIds.has(m.content.messageId)
+      )
+      .otherwise(() => false)
+  );
+  // Root mentions with no matching thread → remain as individual stacks
+  const orphanRootMentions = rootMentions.filter((n) =>
+    match(n.notification_metadata)
+      .with(
+        { tag: 'channel_mention' },
+        (m) => !activeThreadIds.has(m.content.messageId)
+      )
+      .otherwise(() => false)
+  );
+
   const docMentions = notifications.filter(byTag('document_mention'));
   const others = notifications.filter(
     (n) => !isChannelNotification(n) && !byTag('document_mention')(n)
   );
 
   const groups: NotificationStack[] = [
-    ...mentions.flatMap((n) => makeStack('channel_mention', [n])),
+    ...orphanRootMentions.flatMap((n) => makeStack('channel_mention', [n])),
     ...makeStack('channel_message_send', newMsgs),
-    ...makeReplyStacks(replies),
+    ...makeThreadStacks(
+      replies,
+      threadMentions,
+      absorbedSends,
+      absorbedRootMentions
+    ),
     ...makeStack('document_mention', docMentions),
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),
   ];
@@ -125,12 +202,29 @@ function makeStack(
   return [{ type, notifications: sortByRecency(notifications) }];
 }
 
-function makeReplyStacks(replies: UnifiedNotification[]): NotificationStack[] {
-  const byThread = groupBy(replies, (r) =>
-    match(r.notification_metadata)
+function makeThreadStacks(
+  replies: UnifiedNotification[],
+  threadMentions: UnifiedNotification[],
+  absorbedSends: UnifiedNotification[],
+  absorbedRootMentions: UnifiedNotification[]
+): NotificationStack[] {
+  // Key each notification by its threadId. For absorbed root sends and root
+  // mentions, their messageId IS the threadId (they are the thread root).
+  const keyOf = (n: UnifiedNotification): string =>
+    match(n.notification_metadata)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
-      .otherwise(() => '')
+      .with(
+        { tag: 'channel_mention' },
+        (m) => m.content.threadId ?? m.content.messageId
+      )
+      .with({ tag: 'channel_message_send' }, (m) => m.content.messageId)
+      .otherwise(() => '');
+
+  const byThread = groupBy(
+    [...replies, ...threadMentions, ...absorbedSends, ...absorbedRootMentions],
+    keyOf
   );
+
   return [...byThread.entries()]
     .filter(([threadId]) => threadId !== '')
     .map(([, group]) => ({

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM \"ChannelSharePermission\"\n            WHERE \"share_permission_id\" = $1\n            AND \"channel_id\" = ANY($2)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b46b2b51f07ec4fc65cd158b210ce262e9ab44f10825969072c01a8fe3022a23"
+}
