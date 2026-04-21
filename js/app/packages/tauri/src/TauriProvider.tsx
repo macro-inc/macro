@@ -54,6 +54,18 @@ function TauriProvider(props: { children: JSX.Element }) {
     bundleUpdateStatus,
   };
 
+  // Auto-approve download when an update is found so the user only
+  // needs to confirm the final "Update" step.
+  createEffect(() => {
+    const status = bundleUpdateStatus();
+    if (status.status === 'UpdateFound') {
+      console.info('[bundle-update] update found, auto-approving download');
+      invoke('grant_bundle_update', { approved: true }).catch((e) =>
+        console.error('[bundle-update] grant_bundle_update failed', e)
+      );
+    }
+  });
+
   onMount(() => {
     console.info('[bundle-update] registering listener');
     const unlistenPromise = listen<BundleUpdateStatus>(
@@ -70,16 +82,6 @@ function TauriProvider(props: { children: JSX.Element }) {
     });
     onCleanup(() => {
       unlistenPromise.then((unlisten) => unlisten());
-    });
-
-    // Auto-approve download when an update is found so the user only
-    // needs to confirm the final "Update" step.
-    createEffect(() => {
-      const status = bundleUpdateStatus();
-      if (status.status === 'UpdateFound') {
-        console.info('[bundle-update] update found, auto-approving download');
-        invoke('grant_bundle_update', { approved: true });
-      }
     });
 
     if (value.os === 'android') {
