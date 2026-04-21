@@ -1,4 +1,4 @@
-import { ChannelInput } from '@channel/Input/ChannelInput';
+import { DiscussionInput } from './DiscussionInput';
 import type { InputSnapshot } from '@channel/Input/types';
 import { Message } from '@channel/Message/Message';
 import type { MessageActions } from '@channel/Message/types';
@@ -12,6 +12,7 @@ import { useCanEdit } from '@core/signal/permissions';
 import { tryMacroId, useDisplayName } from '@core/user';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { Comment } from '@service-storage/generated/schemas/comment';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
@@ -29,9 +30,6 @@ import {
   useEditDiscussionComment,
 } from '../comments/discussionResource';
 
-/**
- * Converts ItemMention[] from InputSnapshot to API format for comment mentions
- */
 function buildCommentMentions(
   mentions: ItemMention[]
 ): CreateCommentRequestMentions | undefined {
@@ -88,26 +86,28 @@ export function TaskDiscussion() {
       </div>
 
       <Show when={isExpanded()}>
-        <div class="py-2 text-xs">
-          <div>
-            <For each={discussionThreads() ?? []}>
-              {(thread) => <DiscussionThread thread={thread} />}
-            </For>
-          </div>
-
-          <Show when={canEdit()}>
+        <StaticMarkdownContext>
+          <div class="py-2 text-xs">
             <div>
-              <ChannelInput
-                input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
-                onSend={handleCreateThread}
-                onReady={(handle) => {
-                  newThreadInputHandle = handle;
-                }}
-                autofocus={false}
-              />
+              <For each={discussionThreads() ?? []}>
+                {(thread) => <DiscussionThread thread={thread} />}
+              </For>
             </div>
-          </Show>
-        </div>
+
+            <Show when={canEdit()}>
+              <div>
+                <DiscussionInput
+                  input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
+                  onSend={handleCreateThread}
+                  onReady={(handle) => {
+                    newThreadInputHandle = handle;
+                  }}
+                  autofocus={false}
+                />
+              </div>
+            </Show>
+          </div>
+        </StaticMarkdownContext>
       </Show>
     </section>
   );
@@ -233,7 +233,7 @@ function DiscussionThread(props: { thread: CommentThread }) {
                           style={{ 'margin-left': replyInputOffsetX }}
                         >
                           <ThreadReplyInputConnector />
-                          <ChannelInput
+                          <DiscussionInput
                             input={{ mode: 'reply', placeholder: 'Reply...' }}
                             onSend={handleReply}
                             onClose={() => {
@@ -285,7 +285,7 @@ function DiscussionMessage(props: {
     <Show
       when={!isEditing()}
       fallback={
-        <ChannelInput
+        <DiscussionInput
           input={{
             mode: 'reply',
             placeholder: 'Edit comment...',
