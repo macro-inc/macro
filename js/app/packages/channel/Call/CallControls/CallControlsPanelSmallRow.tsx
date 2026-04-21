@@ -63,9 +63,10 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
           <DropdownMenuContent class="mb-2 z-modal" width="lg">
             <DropdownMenu.Item
               class={menuItemClass}
+              closeOnSelect={false}
               onSelect={() => void callCtx.toggleAudio()}
             >
-              <div class="flex min-w-0 flex-1 items-baseline gap-2">
+              <div class="flex min-w-0 flex-1 items-center gap-2">
                 <Show
                   when={!callCtx.isAudioMuted()}
                   fallback={<MicrophoneSlash class="h-4 w-4 shrink-0" />}
@@ -91,6 +92,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
                 {(device) => (
                   <DropdownMenu.Item
                     class={menuItemClass}
+                    closeOnSelect={false}
                     onSelect={() => void callCtx.switchAudioInput(device.deviceId)}
                   >
                     <div class="flex min-w-0 flex-1 items-baseline gap-2">
@@ -121,6 +123,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
                   {(device) => (
                     <DropdownMenu.Item
                       class={menuItemClass}
+                      closeOnSelect={false}
                       onSelect={() =>
                         void callCtx.switchAudioOutput(device.deviceId)
                       }
@@ -150,6 +153,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
 
             <DropdownMenu.Item
               class={menuItemClass}
+              closeOnSelect={false}
               onSelect={() => void callCtx.toggleVideo()}
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">
@@ -177,6 +181,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
                 {(device) => (
                   <DropdownMenu.Item
                     class={menuItemClass}
+                    closeOnSelect={false}
                     onSelect={() => void callCtx.switchVideoInput(device.deviceId)}
                   >
                     <div class="flex min-w-0 flex-1 items-baseline gap-2">
@@ -201,6 +206,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
 
             <DropdownMenu.Item
               class={menuItemClass}
+              closeOnSelect={false}
               onSelect={() => void callCtx.toggleScreenShare()}
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">

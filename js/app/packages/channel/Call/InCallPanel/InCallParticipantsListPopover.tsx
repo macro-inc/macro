@@ -131,7 +131,7 @@ export function InCallParticipantsListPopover(
           <div class="rounded-t-md border-b border-edge px-2 py-2.5 text-xs font-medium text-accent ">
             In this call
           </div>
-          <div class="px-1 pb-1 max-h-64 overflow-y-auto">
+          <div class="p-1 max-h-64 overflow-y-auto">
             <Show
               when={members().length > 0}
               fallback={
