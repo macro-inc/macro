@@ -8,6 +8,7 @@ use crate::domain::{
 use rootcause::{Report, prelude::ResultExt, report};
 use std::path::{Path, PathBuf};
 
+/// Manages the update worker and the active bundle root.
 pub struct Service {
     handle: WorkerHandle,
     bundle_root: BundleRoot,
@@ -275,6 +276,8 @@ fn find_cached_bundle(
 }
 
 /// Remove all numeric bundle subdirectories under `dir` except `keep`.
+///
+/// Called after a successful update to free disk space from prior bundles.
 pub fn cleanup_old_bundles(fs: &impl FsRepo, dir: &std::path::Path, keep: &std::path::Path) {
     for name in fs.list_dir_names(dir) {
         if name.parse::<u64>().is_err() {
@@ -308,6 +311,7 @@ async fn glue_channels<F>(
 }
 
 impl Service {
+    /// Create a new service, spawning the background update worker.
     pub fn new<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery>(
         update_repo: U,
         fs_repo: Fs,

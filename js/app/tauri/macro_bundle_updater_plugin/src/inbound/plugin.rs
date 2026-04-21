@@ -16,24 +16,38 @@ use crate::{
 
 const EVENT_NAME: &str = "bundle-update-status";
 
+/// Serializable event emitted to the frontend via Tauri's event system.
 #[derive(Clone, Serialize)]
 #[serde(tag = "status", content = "data")]
 pub enum BundleUpdateEvent {
+    /// No update activity.
     Idle,
+    /// Checking the server for updates.
     CheckingForUpdate,
+    /// An update is available.
     UpdateFound {
+        /// The new version string.
         version: String,
+        /// Optional release notes.
         notes: Option<String>,
     },
+    /// Already on the latest version.
     NoUpdateNeeded,
+    /// Bundle download in progress.
     Downloading {
+        /// Download progress percentage (0–100).
         progress: f64,
     },
+    /// Bundle extraction in progress.
     Unzipping {
+        /// Extraction progress percentage (0–100).
         progress: f64,
     },
+    /// Update applied successfully.
     Completed,
+    /// An error occurred during the update.
     Error {
+        /// Human-readable error message.
         message: String,
     },
 }
@@ -62,16 +76,19 @@ impl BundleUpdateEvent {
     }
 }
 
+/// Tauri plugin that manages OTA bundle updates.
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
 }
 
 impl MacroBundleUpdaterPlugin {
+    /// Create the plugin targeting the given update server URL.
     pub fn new(base_url: Url) -> Self {
         Self { base_url }
     }
 }
 
+/// Approve or deny a pending bundle update.
 #[tauri::command]
 pub fn grant_bundle_update(
     service: tauri::State<'_, Mutex<Service>>,
@@ -89,6 +106,7 @@ pub fn grant_bundle_update(
         .map_err(|_| "Worker dropped the grant receiver".to_string())
 }
 
+/// Apply a completed bundle update: set the bundle root and navigate to it.
 #[tauri::command]
 #[tracing::instrument(err, skip(service, app_handle))]
 pub fn perform_update<R: Runtime>(
@@ -133,12 +151,14 @@ pub fn perform_update<R: Runtime>(
     Ok(())
 }
 
+/// Trigger a manual check for bundle updates.
 #[tauri::command]
 pub fn check_for_update(service: tauri::State<'_, Mutex<Service>>) -> Result<(), String> {
     let service = service.lock().unwrap();
     service.start().map_err(|e| e.to_string())
 }
 
+/// Return the current bundle update status as a serializable event.
 #[tauri::command]
 pub fn get_bundle_update_status(
     service: tauri::State<'_, Mutex<Service>>,

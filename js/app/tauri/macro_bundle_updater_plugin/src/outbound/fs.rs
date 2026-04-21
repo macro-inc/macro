@@ -7,6 +7,7 @@ use sha2::Sha256;
 use std::path::PathBuf;
 use zip::{read::root_dir_common_filter, result::ZipError};
 
+/// Real filesystem implementation of [`FsRepo`](crate::domain::ports::FsRepo).
 pub struct FileSystem;
 
 fn map_zip_err(err: ZipError) -> UnzipError {
