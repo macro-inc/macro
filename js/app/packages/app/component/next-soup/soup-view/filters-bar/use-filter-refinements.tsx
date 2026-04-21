@@ -3,8 +3,7 @@ import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
-import type { FilterContext } from '@app/component/next-soup/filters/configs';
+import type { FilterID, FilterContext } from '@app/component/next-soup/filters';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 
 const NIL = '00000000-0000-0000-0000-000000000000';
@@ -158,23 +157,23 @@ export function useFilterRefinements() {
     return `${firstLabel} and ${rest.length} ${rest.length === 1 ? 'other' : 'others'}`;
   };
 
-  const setChannelIds = (ids: string[]) =>
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        channel_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
+  const setChannelIds = (ids: string[]) => {
+    const current = filterData().include.channelId ?? [];
+    if (ids.length > 0) {
+      queryFilters.add({ include: { channelId: ids } });
+    } else {
+      queryFilters.remove({ include: { channelId: current } });
+    }
+  };
 
-  const setSenderIds = (ids: string[]) =>
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        sender_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
+  const setSenderIds = (ids: string[]) => {
+    const current = filterData().include.channelSenderId ?? [];
+    if (ids.length > 0) {
+      queryFilters.add({ include: { channelSenderId: ids } });
+    } else {
+      queryFilters.remove({ include: { channelSenderId: current } });
+    }
+  };
 
   /**
    * Cache of chip objects keyed by a stable id derived from the chip's category
@@ -246,15 +245,19 @@ export function useFilterRefinements() {
       ) {
         continue;
       }
-      const key = `Type|${option.id}`;
+      const key = `Type|${option.value}`;
       seenKeys.add(key);
       filters.push(
         getOrCreateChip(key, () => ({
           categoryLabel: 'Type',
-          optionId: () => option.id,
+          optionId: () => option.value,
           optionLabel: () => option.label,
           icon: option.icon,
-          categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
+          categoryOptions: INDEX_OPTIONS.map((o) => ({
+            id: o.value,
+            label: o.label,
+            icon: o.icon,
+          })) as ActiveFilter['categoryOptions'],
           multiple: false,
           onRemove: () => changeIndex('all'),
           onReplace: (newOptionId) => changeIndex(newOptionId),
@@ -293,9 +296,9 @@ export function useFilterRefinements() {
     }
 
     // Search operator filters: in: (channel_ids)
-    const channelIds = (
-      queryFilters().channel_filters?.channel_ids ?? []
-    ).filter((id) => id !== NIL_UUID);
+    const channelIds = (filterData().include.channelId ?? []).filter(
+      (id) => id !== NIL
+    );
     // Keep the chip alive while its popup is still open, even if the user
     // toggled every option off — they may be mid-way through swapping A→B
     // and closing the menu on them would be jarring.
@@ -309,22 +312,20 @@ export function useFilterRefinements() {
           return {
             categoryLabel: 'In',
             optionId: () => {
-              const ids = (
-                queryFilters().channel_filters?.channel_ids ?? []
-              ).filter((id) => id !== NIL_UUID);
+              const ids = (filterData().include.channelId ?? []).filter(
+                (id) => id !== NIL
+              );
               return `in:${ids.join(',')}`;
             },
             optionLabel: () => {
-              const ids = (
-                queryFilters().channel_filters?.channel_ids ?? []
-              ).filter((id) => id !== NIL_UUID);
+              const ids = (filterData().include.channelId ?? []).filter(
+                (id) => id !== NIL
+              );
               return labelForIds(ids, channelLabelMap());
             },
             searchableOptions: channelOptions,
             activeSearchableIds: () =>
-              (queryFilters().channel_filters?.channel_ids ?? []).filter(
-                (id) => id !== NIL_UUID
-              ),
+              (filterData().include.channelId ?? []).filter((id) => id !== NIL),
             onSearchableChange: setChannelIds,
             searchPlaceholder: 'Search channels...',
             onRemove: () => setChannelIds([]),
@@ -336,7 +337,7 @@ export function useFilterRefinements() {
     }
 
     // Search operator filters: from: (sender_ids)
-    const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
+    const senderIds = filterData().include.channelSenderId ?? [];
     const fromChipOpen = chipCache.get('From')?.isPopupOpen?.() ?? false;
     if (senderIds.length > 0 || fromChipOpen) {
       const key = 'From';
@@ -347,16 +348,16 @@ export function useFilterRefinements() {
           return {
             categoryLabel: 'From',
             optionId: () => {
-              const ids = queryFilters().channel_filters?.sender_ids ?? [];
+              const ids = filterData().include.channelSenderId ?? [];
               return `from:${ids.join(',')}`;
             },
             optionLabel: () => {
-              const ids = queryFilters().channel_filters?.sender_ids ?? [];
+              const ids = filterData().include.channelSenderId ?? [];
               return labelForIds(ids, senderLabelMap());
             },
             searchableOptions: senderOptions,
             activeSearchableIds: () =>
-              queryFilters().channel_filters?.sender_ids ?? [],
+              filterData().include.channelSenderId ?? [],
             onSearchableChange: setSenderIds,
             searchPlaceholder: 'Search senders...',
             onRemove: () => setSenderIds([]),
@@ -380,11 +381,11 @@ export function useFilterRefinements() {
           getOrCreateChip(key, () => ({
             categoryLabel: 'Importance',
             optionId: () =>
-              queryFilters().email_filters?.importance
+              filterData().include.emailImportance
                 ? IMPORTANCE_SIGNAL
                 : IMPORTANCE_NOISE,
             optionLabel: () =>
-              queryFilters().email_filters?.importance ? 'Signal' : 'Noise',
+              filterData().include.emailImportance ? 'Signal' : 'Noise',
             categoryOptions: [
               { id: IMPORTANCE_SIGNAL, label: 'Signal' },
               { id: IMPORTANCE_NOISE, label: 'Noise' },
@@ -392,7 +393,7 @@ export function useFilterRefinements() {
             multiple: false,
             isOptionActive: (optionId) =>
               optionId ===
-              (queryFilters().email_filters?.importance
+              (filterData().include.emailImportance
                 ? IMPORTANCE_SIGNAL
                 : IMPORTANCE_NOISE),
             onRemove: () =>
@@ -459,10 +460,7 @@ export function useFilterRefinements() {
 
     batch(() => {
       soup.predicates.set(preset.clientFilters);
-      queryFilters.clear();
-      if (preset.filters) {
-        queryFilters.add(preset.filters);
-      }
+      queryFilters.set(preset.filters ?? null);
       setAssigneeFilter([]);
     });
   };

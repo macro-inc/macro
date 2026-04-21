@@ -130,7 +130,7 @@ registerComponent(
       <SoupView
         viewName="Agents"
         initialFilters={preset?.filters}
-        initialClientFilters={preset.clientFilters}
+        initialClientFilters={preset?.clientFilters}
         additionalEntities={automationEntities}
       />
     );
@@ -233,7 +233,7 @@ registerComponent(
       <SoupView
         viewName="Folders"
         initialFilters={preset?.filters}
-        initialClientFilters={preset.clientFilters}
+        initialClientFilters={preset?.clientFilters}
       />
     );
   })

@@ -43,6 +43,7 @@ export type ScalarFieldFilters = {
   chatDone?: boolean;
   folderSeen?: boolean;
   folderDone?: boolean;
+  callAttended?: boolean;
 };
 
 export type FieldFilters = ArrayFieldFilters & ScalarFieldFilters;

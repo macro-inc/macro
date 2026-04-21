@@ -206,8 +206,7 @@ export function useSearchIndexController() {
 
       if (newValue === 'all') {
         cacheChannelSubFilters(contentId, {});
-        queryFilters.clear();
-        queryFilters.add({ include: { emailImportance: true } });
+        queryFilters.set({ include: { emailImportance: true } });
         return;
       }
 
@@ -217,32 +216,32 @@ export function useSearchIndexController() {
 
       if (opt.value === 'channels') {
         const cached = getCachedChannelSubFilters(contentId);
-        queryFilters.clear();
-        queryFilters.add(opt.filterData);
-        if (cached.channel_ids?.length) {
-          queryFilters.add({
-            include: { channelId: cached.channel_ids },
-          });
-        }
-        if (cached.sender_ids?.length) {
-          queryFilters.add({
-            include: { channelSenderId: cached.sender_ids },
-          });
-        }
+        queryFilters.set({
+          include: {
+            ...opt.filterData.include,
+            channelId: cached.channel_ids,
+            channelSenderId: cached.sender_ids,
+          },
+          exclude: opt.filterData.exclude,
+        });
       } else if (opt.value === 'email') {
         const cached = getCachedEmailSubFilters(contentId);
         const importance =
           'importance' in cached
             ? (cached.importance ?? undefined)
             : opt.filterData.include?.emailImportance;
-        queryFilters.clear();
-        queryFilters.add(opt.filterData);
-        if (importance !== undefined) {
-          queryFilters.add({ include: { emailImportance: importance } });
-        }
+        queryFilters.set({
+          include: {
+            ...opt.filterData.include,
+            emailImportance: importance,
+          },
+          exclude: opt.filterData.exclude,
+        });
       } else {
-        queryFilters.clear();
-        queryFilters.add(opt.filterData);
+        queryFilters.set({
+          include: opt.filterData.include,
+          exclude: opt.filterData.exclude,
+        });
       }
     });
   };

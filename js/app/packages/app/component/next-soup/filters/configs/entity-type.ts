@@ -5,6 +5,7 @@ import {
   peopleFilter as peoplePredicate,
   teamsFilter as teamsPredicate,
   agentFilter as agentPredicate,
+  automationFilter as automationPredicate,
   fileFilter as filePredicate,
 } from '../predicates';
 import { config, isAgent, isEmail, isTask } from './base';
@@ -24,6 +25,13 @@ export const agentFilter = config({
   group: 'entity-type',
   predicate: agentPredicate,
   query: isAgent,
+});
+
+export const automationFilter = config({
+  id: 'automation',
+  group: 'entity-type',
+  predicate: automationPredicate,
+  query: {}, // No server query - automations are merged client-side via additionalEntities
 });
 
 export const peopleFilter = config({
@@ -76,6 +84,7 @@ export const recentChannelsFilter = config({
 export const ENTITY_TYPE_FILTERS = [
   documentFilter,
   agentFilter,
+  automationFilter,
   peopleFilter,
   teamsFilter,
   taskFilter,

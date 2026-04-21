@@ -5,7 +5,7 @@ import {
   removeFieldValues,
   hasFieldValues,
 } from './field-values';
-import type { QueryState, Query } from './types';
+import type { FieldFilters, QueryState, Query } from './types';
 
 export type { TargetAstMap } from './compile';
 export type { FieldFilters, QueryState, Query, EmailView } from './types';
@@ -19,6 +19,17 @@ const emptyQueryState = (): QueryState => ({
   exclude: {},
   emailView: undefined,
 });
+
+const filterEmpty = (obj: FieldFilters | undefined): FieldFilters => {
+  if (!obj) return {};
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    result[key] = value;
+  }
+  return result as FieldFilters;
+};
 
 const mergeQuery = (base: QueryState, query: Query): QueryState => ({
   include: addFieldValues(base.include, query.include),
@@ -50,8 +61,16 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
     }));
   };
 
-  const clear = () => {
-    setState(emptyQueryState());
+  const set = (query: Query | null) => {
+    if (query === null) {
+      setState(emptyQueryState());
+      return;
+    }
+    setState({
+      include: filterEmpty(query.include),
+      exclude: filterEmpty(query.exclude),
+      emailView: query.emailView,
+    });
   };
 
   const compile = (): TargetAstMap => compileToAst(state);
@@ -69,11 +88,10 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
 
   return {
     state,
-    set: setState,
+    set,
     add,
     remove,
     has,
-    clear,
     compile,
   };
 }

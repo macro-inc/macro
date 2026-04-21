@@ -120,7 +120,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       automations: () => ({
         // Server returns nothing useful here — automations are merged
         // into the soup client-side via `additionalEntities`.
-        queryFilters: QUERY_FILTERS.agent,
+        filters: defineQueryFilters({}),
         clientFilters: { and: ['automation'] },
       }),
     },
@@ -296,10 +296,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         clientFilters: { and: ['calls'] },
       }),
       unattended: () => ({
-        queryFilters: {
-          ...QUERY_FILTERS.calls,
-          call_filters: { attended: false },
-        },
+        filters: defineQueryFilters({
+          exclude: { callChannelId: [NIL] },
+          include: { callAttended: false },
+        }),
         clientFilters: { and: ['calls'] },
       }),
     },

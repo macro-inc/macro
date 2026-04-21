@@ -481,8 +481,7 @@ export const UnifiedFilterDropdown = () => {
     ];
   });
 
-<<<<<<< HEAD
-  const toggleAssignee = (id: string) => {
+const toggleAssignee = (id: string) => {
     const current = assigneeFilter();
     const wasActive = current.includes(id);
     const updated = wasActive
@@ -504,8 +503,6 @@ export const UnifiedFilterDropdown = () => {
     }
   };
 
-=======
->>>>>>> 9c7188e10c39233b09cd352fe15f4dee061de64d
   const isTasksView = () => currentView() === 'tasks';
   const isSearchView = () => currentView() === 'search';
   const isChannelsIndexActive = () => soup.predicates.isActive('channels');
@@ -541,25 +538,12 @@ export const UnifiedFilterDropdown = () => {
   const setChannelIds = (ids: string[]) => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
-<<<<<<< HEAD
       const current = filters().include.channelId ?? [];
-      const nextIds = current.includes(id)
-        ? current.filter((cid) => cid !== id)
-        : [...current, id];
-      if (nextIds.length > 0) {
-        queryFilters.add({ include: { channelId: nextIds } });
+      if (ids.length > 0) {
+        queryFilters.add({ include: { channelId: ids } });
       } else {
         queryFilters.remove({ include: { channelId: current } });
       }
-=======
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: {
-          ...prev.channel_filters,
-          channel_ids: ids.length > 0 ? ids : undefined,
-        },
-      }));
->>>>>>> 9c7188e10c39233b09cd352fe15f4dee061de64d
     });
   };
 
@@ -570,25 +554,12 @@ export const UnifiedFilterDropdown = () => {
   const setSenderIds = (ids: string[]) => {
     batch(() => {
       if (!isChannelsIndexActive()) handleIndexChange('channels');
-<<<<<<< HEAD
       const current = filters().include.channelSenderId ?? [];
-      const nextIds = current.includes(id)
-        ? current.filter((sid) => sid !== id)
-        : [...current, id];
-      if (nextIds.length > 0) {
-        queryFilters.add({ include: { channelSenderId: nextIds } });
+      if (ids.length > 0) {
+        queryFilters.add({ include: { channelSenderId: ids } });
       } else {
         queryFilters.remove({ include: { channelSenderId: current } });
       }
-=======
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: {
-          ...prev.channel_filters,
-          sender_ids: ids.length > 0 ? ids : undefined,
-        },
-      }));
->>>>>>> 9c7188e10c39233b09cd352fe15f4dee061de64d
     });
   };
 

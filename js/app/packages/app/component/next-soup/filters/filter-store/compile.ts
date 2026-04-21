@@ -73,6 +73,7 @@ const FIELD_CONFIG: Record<
   folderSeen: { target: 'pf', field: 'NotificationSeen' },
   folderDone: { target: 'pf', field: 'NotificationDone' },
   callChannelId: { target: 'callf', field: 'ChannelId' },
+  callAttended: { target: 'callf', field: 'Attended' },
 };
 
 const propertyToAst = (p: PropertyFilter): BackendAst =>
