@@ -1,7 +1,5 @@
 import type { ApiChannelMessage } from '@service-comms/client';
-import { Root } from './Root';
-import { ParentMessage } from './ParentMessage';
-import { Replies } from './Replies';
+import { StandaloneThread } from './StandaloneThread';
 
 type ReadonlyThreadProps = {
   channelId: string;
@@ -12,23 +10,23 @@ type ReadonlyThreadProps = {
 
 export function ReadonlyThread(props: ReadonlyThreadProps) {
   return (
-    <Root
+    <StandaloneThread.Root
       channelId={props.channelId}
       messageId={props.messageId}
       data={props.data}
     >
-      <ParentMessage
+      <StandaloneThread.ParentMessage
         onClickMessage={props.onClickMessage}
         class={
           props.onClickMessage ? 'cursor-pointer hover:bg-hover' : undefined
         }
       />
-      <Replies
+      <StandaloneThread.Replies
         onClickMessage={props.onClickMessage}
         class={
           props.onClickMessage ? 'cursor-pointer hover:bg-hover' : undefined
         }
       />
-    </Root>
+    </StandaloneThread.Root>
   );
 }

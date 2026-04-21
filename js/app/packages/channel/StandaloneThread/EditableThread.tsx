@@ -9,9 +9,7 @@ import {
 import { createChannelMessageActions } from '../Channel/create-channel-message-actions';
 import { Thread } from '../Thread';
 import type { InputSnapshot } from '../Input';
-import { Root } from './Root';
-import { ParentMessage } from './ParentMessage';
-import { Replies } from './Replies';
+import { StandaloneThread } from './StandaloneThread';
 import { useStandaloneThread } from './context';
 
 type EditableThreadProps = {
@@ -47,13 +45,16 @@ export function EditableThread(props: EditableThreadProps) {
   };
 
   return (
-    <Root
+    <StandaloneThread.Root
       channelId={props.channelId}
       messageId={props.messageId}
       data={props.data}
     >
-      <ParentMessage actions={parentActions()} />
-      <Replies getMessageActions={getMessageActions} showReplyButton />
+      <StandaloneThread.ParentMessage actions={parentActions()} />
+      <StandaloneThread.Replies
+        getMessageActions={getMessageActions}
+        showReplyButton
+      />
       <Show when={ctx.isReplying()}>
         <Thread.ReplyInput
           channelId={ctx.channelId()}
@@ -63,6 +64,6 @@ export function EditableThread(props: EditableThreadProps) {
           setIsReplying={ctx.setIsReplying}
         />
       </Show>
-    </Root>
+    </StandaloneThread.Root>
   );
 }
