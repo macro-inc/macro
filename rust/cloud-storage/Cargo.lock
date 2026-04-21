@@ -1466,12 +1466,9 @@ name = "backfill_entity_access"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "futures",
  "macro_entrypoint",
  "macro_env_var",
  "macro_uuid",
- "models_entity_access_management",
- "models_permissions",
  "sqlx",
  "tokio",
  "tracing",
