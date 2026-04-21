@@ -67,6 +67,31 @@ interface PageViewOptions {
 
 const GA_ID = 'G-52HPEL3FTV';
 
+// Meta Pixel distinguishes standard events (fbq('track', ...)) from custom
+// events (fbq('trackCustom', ...)). Calling `track` with a non-standard name
+// works but triggers Pixel Helper warnings and may affect Ads Manager
+// categorization. https://developers.facebook.com/docs/meta-pixel/reference
+const META_STANDARD_EVENTS = new Set([
+  'AddPaymentInfo',
+  'AddToCart',
+  'AddToWishlist',
+  'CompleteRegistration',
+  'Contact',
+  'CustomizeProduct',
+  'Donate',
+  'FindLocation',
+  'InitiateCheckout',
+  'Lead',
+  'PageView',
+  'Purchase',
+  'Schedule',
+  'Search',
+  'StartTrial',
+  'SubmitApplication',
+  'Subscribe',
+  'ViewContent',
+]);
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -120,7 +145,8 @@ export const createAnalytics = () => {
           gtag('event', event, enriched);
         })
         .with('meta-pixel', () => {
-          fbq('track', event, enriched);
+          const fbqMethod = META_STANDARD_EVENTS.has(event) ? 'track' : 'trackCustom';
+          fbq(fbqMethod, event, enriched);
         })
         .with('posthog', () => {
           posthog.capture(event, enriched);
