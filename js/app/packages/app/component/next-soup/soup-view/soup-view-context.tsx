@@ -31,7 +31,6 @@ import type { FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
   createQueryStore,
   type Query,
-  type QueryState,
   type QueryStore,
 } from '@app/component/next-soup/filters/filter-store/query-store';
 import { useUserId } from '@core/context/user';

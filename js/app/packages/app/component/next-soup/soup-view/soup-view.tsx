@@ -69,7 +69,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-import { createStore, reconcile, unwrap } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useUserId } from '@core/context/user';

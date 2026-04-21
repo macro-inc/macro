@@ -36,7 +36,11 @@ const statusFilter = <TId extends string>(
   config({
     id,
     predicate,
-    query: { include: { properties: [propFilter(SYSTEM_PROPERTY_IDS.STATUS, 'select', status)] } },
+    query: {
+      include: {
+        properties: [propFilter(SYSTEM_PROPERTY_IDS.STATUS, 'select', status)],
+      },
+    },
   });
 
 const priorityFilter = <TId extends string>(
@@ -47,7 +51,13 @@ const priorityFilter = <TId extends string>(
   config({
     id,
     predicate,
-    query: { include: { properties: [propFilter(SYSTEM_PROPERTY_IDS.PRIORITY, 'select', priority)] } },
+    query: {
+      include: {
+        properties: [
+          propFilter(SYSTEM_PROPERTY_IDS.PRIORITY, 'select', priority),
+        ],
+      },
+    },
   });
 
 export const taskNotStartedFilter = statusFilter(
@@ -87,8 +97,16 @@ export const activeTaskFilter = config({
     include: { subType: ['task'] },
     exclude: {
       properties: [
-        propFilter(SYSTEM_PROPERTY_IDS.STATUS, 'select', PROPERTY_OPTION_IDS.STATUS.COMPLETED),
-        propFilter(SYSTEM_PROPERTY_IDS.STATUS, 'select', PROPERTY_OPTION_IDS.STATUS.CANCELED),
+        propFilter(
+          SYSTEM_PROPERTY_IDS.STATUS,
+          'select',
+          PROPERTY_OPTION_IDS.STATUS.COMPLETED
+        ),
+        propFilter(
+          SYSTEM_PROPERTY_IDS.STATUS,
+          'select',
+          PROPERTY_OPTION_IDS.STATUS.CANCELED
+        ),
       ],
     },
   },
@@ -144,7 +162,11 @@ export const assignedToMeFilter = config({
   id: 'assigned-to',
   predicate: (e, ctx) => taskAssignedToUserPredicate(() => ctx.userId)(e),
   query: (ctx) => ({
-    include: { properties: [propFilter(SYSTEM_PROPERTY_IDS.ASSIGNEES, 'entity', ctx.userId ?? '')] },
+    include: {
+      properties: [
+        propFilter(SYSTEM_PROPERTY_IDS.ASSIGNEES, 'entity', ctx.userId ?? ''),
+      ],
+    },
   }),
 });
 
@@ -163,7 +185,11 @@ export const assigneeFilter = config({
     if (userIds.length === 0) return isTask;
     return {
       ...isTask,
-      include: { properties: userIds.map((id: string) => propFilter(SYSTEM_PROPERTY_IDS.ASSIGNEES, 'entity', id)) },
+      include: {
+        properties: userIds.map((id: string) =>
+          propFilter(SYSTEM_PROPERTY_IDS.ASSIGNEES, 'entity', id)
+        ),
+      },
     };
   },
 });

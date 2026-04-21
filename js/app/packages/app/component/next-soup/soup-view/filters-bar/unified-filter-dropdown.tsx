@@ -481,26 +481,25 @@ export const UnifiedFilterDropdown = () => {
     ];
   });
 
-const toggleAssignee = (id: string) => {
+  const handleAssigneeChange = (ids: string[]) => {
     const current = assigneeFilter();
-    const wasActive = current.includes(id);
-    const updated = wasActive
-      ? current.filter((a) => a !== id)
-      : [...current, id];
-    setAssigneeFilter(updated);
+    const toAdd = ids.filter((id) => !current.includes(id));
+    const toRemove = current.filter((id) => !ids.includes(id));
 
-    const assigneeProp: PropertyFilter = {
-      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-      type: 'entity',
-      value: id,
-    };
+    const toProps = (list: string[]): PropertyFilter[] =>
+      list.map((id) => ({
+        propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+        type: 'entity',
+        value: id,
+      }));
 
-    const query = { include: { properties: [assigneeProp] } };
-    if (wasActive) {
-      queryFilters.remove(query);
-    } else {
-      queryFilters.add(query);
-    }
+    batch(() => {
+      setAssigneeFilter(ids);
+      if (toRemove.length)
+        queryFilters.remove({ include: { properties: toProps(toRemove) } });
+      if (toAdd.length)
+        queryFilters.add({ include: { properties: toProps(toAdd) } });
+    });
   };
 
   const isTasksView = () => currentView() === 'tasks';
@@ -569,12 +568,18 @@ const toggleAssignee = (id: string) => {
       if (val !== undefined) {
         queryFilters.add({ include: { emailImportance: val } });
       } else {
-        queryFilters.remove({ include: { emailImportance: queryFilters.state.include.emailImportance } });
+        queryFilters.remove({
+          include: {
+            emailImportance: queryFilters.state.include.emailImportance,
+          },
+        });
       }
     });
   };
 
-  const importance = createMemo(() => queryFilters.state.include.emailImportance);
+  const importance = createMemo(
+    () => queryFilters.state.include.emailImportance
+  );
 
   const [openChannelSub, setOpenChannelSub] = createSignal<
     'in' | 'from' | null
@@ -677,7 +682,7 @@ const toggleAssignee = (id: string) => {
                       label="Assignee"
                       options={assigneeOptions}
                       activeIds={assigneeFilter}
-                      onChange={setAssigneeFilter}
+                      onChange={handleAssigneeChange}
                       placeholder="Search assignees..."
                     />
                   </Show>
