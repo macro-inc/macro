@@ -616,79 +616,156 @@ export async function markEntitiesDone(args: {
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
   ]);
 
-  const previousEmail = queryClient.getQueriesData<{
-    pages: { items: EntityData[] }[];
-  }>({
-    queryKey: queryKeys.all.email,
-  });
+  // Track the actual email objects we filter out, keyed by cache query, so
+  // we can restore just those items without clobbering emails that arrived
+  // concurrently during the undo window.
+  type EmailQueryKey = readonly unknown[];
+  type EmailCacheData = { pages: { items: EntityData[] }[] };
+  const removedEmails = new Map<EmailQueryKey, Map<string, EntityData>>();
 
-  const filterEmailCache = () => {
-    for (const [key, data] of previousEmail) {
+  const filterEmailCache = (ids: Set<string>) => {
+    if (ids.size === 0) return;
+    for (const [key, data] of queryClient.getQueriesData<EmailCacheData>({
+      queryKey: queryKeys.all.email,
+    })) {
       if (!data) continue;
-      queryClient.setQueryData(key, {
-        ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          items: page.items.filter((item) => !emailIdSet.has(item.id)),
-        })),
+      const bucket = removedEmails.get(key) ?? new Map<string, EntityData>();
+      let mutated = false;
+      const pages = data.pages.map((page) => {
+        const items: EntityData[] = [];
+        for (const item of page.items) {
+          if (ids.has(item.id)) {
+            bucket.set(item.id, item);
+            mutated = true;
+          } else {
+            items.push(item);
+          }
+        }
+        return mutated && items.length !== page.items.length
+          ? { ...page, items }
+          : page;
       });
+      if (mutated) {
+        removedEmails.set(key, bucket);
+        queryClient.setQueryData(key, { ...data, pages });
+      }
     }
   };
 
-  const restoreEmailCache = () => {
-    for (const [key, data] of previousEmail) {
-      queryClient.setQueryData(key, data);
+  const restoreEmailCache = (ids: Set<string>) => {
+    if (ids.size === 0) return;
+    for (const [key, bucket] of removedEmails) {
+      const toRestore: EntityData[] = [];
+      for (const id of ids) {
+        const item = bucket.get(id);
+        if (item) {
+          toRestore.push(item);
+          bucket.delete(id);
+        }
+      }
+      if (toRestore.length === 0) continue;
+      queryClient.setQueryData<EmailCacheData>(key, (current) => {
+        if (!current) return current;
+        const restoredIds = new Set(toRestore.map((e) => e.id));
+        return {
+          ...current,
+          pages: current.pages.map((page, idx) => {
+            const filtered = page.items.filter((i) => !restoredIds.has(i.id));
+            return idx === 0
+              ? { ...page, items: [...toRestore, ...filtered] }
+              : filtered.length === page.items.length
+                ? page
+                : { ...page, items: filtered };
+          }),
+        };
+      });
     }
   };
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
   const applyOptimistic = () => {
     soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
-    filterEmailCache();
+    filterEmailCache(emailIdSet);
     setDoneOverride(notificationIds, true);
   };
 
-  const rollback = () => {
-    soupTxn?.rollback();
-    soupTxn = null;
-    restoreEmailCache();
-    setDoneOverride(notificationIds, undefined);
+  const rollback = (opts?: {
+    emailIds?: string[];
+    notificationIds?: string[];
+  }) => {
+    const emailsToRoll = opts?.emailIds ?? emailIds;
+    const notificationsToRoll = opts?.notificationIds ?? notificationIds;
+    // `removeSoupEntities` returns one transaction for all ids; if a partial
+    // rollback is requested we still roll back the whole batch and rely on
+    // soup re-sync to reconcile from server state.
+    if (soupTxn && emailsToRoll.length > 0) {
+      soupTxn.rollback();
+      soupTxn = null;
+    }
+    restoreEmailCache(new Set(emailsToRoll));
+    setDoneOverride(notificationsToRoll, undefined);
   };
 
   applyOptimistic();
 
+  const reconcile = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
+      ...emailIds.map((id) => invalidateSoupEntity(id)),
+    ]);
+
   const done = (async () => {
-    try {
-      await Promise.all([
-        ...emailIds.map((id) =>
-          throwOnErr(
-            async () => await emailClient.flagArchived({ value: true, id })
+    const results = await Promise.allSettled([
+      ...emailIds.map((id) =>
+        throwOnErr(
+          async () => await emailClient.flagArchived({ value: true, id })
+        )
+      ),
+      notificationIds.length > 0
+        ? throwOnErr(
+            async () =>
+              await notificationServiceClient.bulkMarkNotificationAsDone({
+                notificationIds,
+              })
           )
-        ),
-        notificationIds.length > 0
-          ? throwOnErr(
-              async () =>
-                await notificationServiceClient.bulkMarkNotificationAsDone({
-                  notificationIds,
-                })
-            )
-          : Promise.resolve(),
-      ]);
-    } catch (err) {
-      rollback();
-      throw err;
+        : Promise.resolve(),
+    ]);
+
+    const failedEmailIds = emailIds.filter(
+      (_, i) => results[i]?.status === 'rejected'
+    );
+    const notificationsFailed = results[emailIds.length]?.status === 'rejected';
+    const anyFailed = failedEmailIds.length > 0 || notificationsFailed;
+
+    try {
+      if (anyFailed) {
+        rollback({
+          emailIds: failedEmailIds,
+          notificationIds: notificationsFailed ? notificationIds : [],
+        });
+        // Partial failures need a real refetch to reconcile server state
+        // with our now-partially-rolled-back UI.
+        await reconcile();
+        const firstErr = results.find(
+          (r): r is PromiseRejectedResult => r.status === 'rejected'
+        )?.reason;
+        throw firstErr ?? new Error('Failed to mark as done');
+      }
     } finally {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.all.email,
-          refetchType: 'none',
-        }),
-        queryClient.invalidateQueries({
-          queryKey: notificationKeys.user._def,
-          refetchType: 'none',
-        }),
-        ...emailIds.map((id) => invalidateSoupEntity(id)),
-      ]);
+      if (!anyFailed) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.email,
+            refetchType: 'none',
+          }),
+          queryClient.invalidateQueries({
+            queryKey: notificationKeys.user._def,
+            refetchType: 'none',
+          }),
+          ...emailIds.map((id) => invalidateSoupEntity(id)),
+        ]);
+      }
     }
   })();
 
@@ -708,36 +785,59 @@ export async function markEntitiesDone(args: {
 
       rollback();
 
-      try {
-        await Promise.all([
-          ...emailIds.map((id) =>
-            throwOnErr(
-              async () => await emailClient.flagArchived({ value: false, id })
+      const results = await Promise.allSettled([
+        ...emailIds.map((id) =>
+          throwOnErr(
+            async () => await emailClient.flagArchived({ value: false, id })
+          )
+        ),
+        notificationIds.length > 0
+          ? throwOnErr(
+              async () =>
+                await notificationServiceClient.bulkMarkNotificationAsUndone({
+                  notificationIds,
+                })
             )
-          ),
-          notificationIds.length > 0
-            ? throwOnErr(
-                async () =>
-                  await notificationServiceClient.bulkMarkNotificationAsUndone({
-                    notificationIds,
-                  })
-              )
-            : Promise.resolve(),
-        ]);
-      } catch (err) {
-        applyOptimistic();
-        throw err;
+          : Promise.resolve(),
+      ]);
+
+      const failedEmailIds = emailIds.filter(
+        (_, i) => results[i]?.status === 'rejected'
+      );
+      const notificationsFailed =
+        results[emailIds.length]?.status === 'rejected';
+      const anyFailed = failedEmailIds.length > 0 || notificationsFailed;
+
+      try {
+        if (anyFailed) {
+          // Re-apply the mark-done state only for the items whose undo
+          // failed. Items whose undo succeeded stay restored.
+          if (failedEmailIds.length > 0) {
+            soupTxn = removeSoupEntities(new Set(failedEmailIds));
+            filterEmailCache(new Set(failedEmailIds));
+          }
+          if (notificationsFailed) {
+            setDoneOverride(notificationIds, true);
+          }
+          await reconcile();
+          const firstErr = results.find(
+            (r): r is PromiseRejectedResult => r.status === 'rejected'
+          )?.reason;
+          throw firstErr ?? new Error('Failed to undo');
+        }
       } finally {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.all.email,
-            refetchType: 'none',
-          }),
-          queryClient.invalidateQueries({
-            queryKey: notificationKeys.user._def,
-            refetchType: 'none',
-          }),
-        ]);
+        if (!anyFailed) {
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.all.email,
+              refetchType: 'none',
+            }),
+            queryClient.invalidateQueries({
+              queryKey: notificationKeys.user._def,
+              refetchType: 'none',
+            }),
+          ]);
+        }
       }
     },
   };
