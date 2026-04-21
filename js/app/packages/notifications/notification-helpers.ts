@@ -205,75 +205,60 @@ export function useNotificationsMutedForEntity(
   );
 }
 
-export type MarkNotificationsDoneHandle = {
-  /** Fire-and-forget promise for the API call. Rejects on failure (rolls back optimistic update). */
-  done: Promise<void>;
-  /** Restores the notification cache and calls the undone API. */
-  undo: () => Promise<void>;
-};
+/**
+ * Optimistically flips the `done` override to `true` for these ids, fires the
+ * bulk-done API, and rolls the override back on failure. Used as a mutation's
+ * mutationFn / redoFn.
+ */
+export async function executeMarkNotificationsDone(
+  notificationIds: string[]
+): Promise<void> {
+  setDoneOverride(notificationIds, true);
+  await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
+  try {
+    await throwOnErr(
+      async () =>
+        await notificationServiceClient.bulkMarkNotificationAsDone({
+          notificationIds,
+        })
+    );
+  } catch (err) {
+    setDoneOverride(notificationIds, false);
+    throw err;
+  } finally {
+    await queryClient.invalidateQueries({
+      queryKey: notificationKeys.user._def,
+      refetchType: 'none',
+    });
+  }
+}
 
 /**
- * Optimistically marks notifications as done in the cache and fires the API
- * call in the background. Returns synchronously so the caller can show an
- * undo toast immediately.
+ * Optimistically flips the override to `false` and fires the bulk-undone API.
+ * On failure the override is re-applied so the UI stays consistent with the
+ * server. Used as a mutation's undoFn.
  */
-export function markNotificationsDone(
+export async function executeMarkNotificationsUndone(
   notificationIds: string[]
-): MarkNotificationsDoneHandle {
-  // Override lives outside the cache so an in-flight page fetch that lands
-  // after this flip cannot revert it. The notifications memo applies the
-  // override when reading cache data.
-  setDoneOverride(notificationIds, true);
-
-  const done = (async () => {
-    await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
-    try {
-      await throwOnErr(
-        async () =>
-          await notificationServiceClient.bulkMarkNotificationAsDone({
-            notificationIds,
-          })
-      );
-    } catch (err) {
-      setDoneOverride(notificationIds, undefined);
-      throw err;
-    } finally {
-      await queryClient.invalidateQueries({
-        queryKey: notificationKeys.user._def,
-        refetchType: 'none',
-      });
-    }
-  })();
-
-  return {
-    done,
-    undo: async () => {
-      try {
-        await done;
-      } catch {
-        return;
-      }
-
-      setDoneOverride(notificationIds, false);
-
-      try {
-        await throwOnErr(
-          async () =>
-            await notificationServiceClient.bulkMarkNotificationAsUndone({
-              notificationIds,
-            })
-        );
-      } catch (err) {
-        setDoneOverride(notificationIds, true);
-        throw err;
-      } finally {
-        await queryClient.invalidateQueries({
-          queryKey: notificationKeys.user._def,
-          refetchType: 'none',
-        });
-      }
-    },
-  };
+): Promise<void> {
+  setDoneOverride(notificationIds, false);
+  await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
+  try {
+    await throwOnErr(
+      async () =>
+        await notificationServiceClient.bulkMarkNotificationAsUndone({
+          notificationIds,
+        })
+    );
+  } catch (err) {
+    setDoneOverride(notificationIds, true);
+    throw err;
+  } finally {
+    await queryClient.invalidateQueries({
+      queryKey: notificationKeys.user._def,
+      refetchType: 'none',
+    });
+  }
 }
 
 export function createEffectOnEntityTypeNotification(

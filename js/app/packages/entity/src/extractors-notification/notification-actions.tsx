@@ -1,13 +1,10 @@
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { toast } from '@core/component/Toast/Toast';
-import type {
-  MarkNotificationsDoneHandle,
-  NotificationStack,
-  UnifiedNotification,
-} from '@notifications';
+import type { NotificationStack, UnifiedNotification } from '@notifications';
 import {
+  executeMarkNotificationsDone,
+  executeMarkNotificationsUndone,
   getAllNotificationsFromGroup,
-  markNotificationsDone,
 } from '@notifications';
 import { useUndoableMutation } from '@queries/undo';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
@@ -25,34 +22,16 @@ interface SingleNotificationActionsProps {
   onMarkAsRead?: () => void;
 }
 
-type MarkStackDoneContext = {
-  handle: MarkNotificationsDoneHandle;
-  setSuccessToastId: (id: number | undefined) => void;
-};
+type MarkStackDoneVariables = { notificationIds: string[] };
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
 
-  const mutation = useUndoableMutation<void, Error, void, MarkStackDoneContext>(
+  const mutation = useUndoableMutation<void, Error, MarkStackDoneVariables>(
     () => ({
-      mutationFn: async () => {},
-      onMutate: async () => {
-        const notifications = getAllNotificationsFromGroup(props.stack);
-        const handle = markNotificationsDone(notifications.map((n) => n.id));
-        let successToastId: number | undefined;
-        handle.done.catch(() => {
-          if (successToastId != null) toast.dismiss(successToastId);
-          toast.failure('Failed to mark as done');
-        });
-        return {
-          handle,
-          setSuccessToastId: (id) => {
-            successToastId = id;
-          },
-        };
-      },
-      onSuccess: (_data, _variables, context) => {
-        const handle = context?.handle;
+      mutationFn: async (vars) =>
+        await executeMarkNotificationsDone(vars.notificationIds),
+      onSuccess: (_data, vars) => {
         const toastId = toast.success(
           'Marked as done',
           undefined,
@@ -62,7 +41,9 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
               icon: ArrowCounterClockwise,
               onClick: () => {
                 if (toastId != null) toast.dismiss(toastId);
-                handle?.undo().catch(() => toast.failure('Failed to undo'));
+                executeMarkNotificationsUndone(vars.notificationIds).catch(() =>
+                  toast.failure('Failed to undo')
+                );
                 restoreSoupFocus();
               },
             },
@@ -70,21 +51,22 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
           10_000,
           true
         );
-        context?.setSuccessToastId(toastId);
         props.onMarkAsDone?.();
       },
       onError: () => {
         toast.failure('Failed to mark as done');
       },
-      undoFn: async (_variables, context) => {
-        await context?.handle.undo();
-      },
+      undoFn: async (vars) =>
+        await executeMarkNotificationsUndone(vars.notificationIds),
+      redoFn: async (vars) =>
+        await executeMarkNotificationsDone(vars.notificationIds),
       undoLabel: 'Mark Done',
     })
   );
 
   const markStackAsDone = () => {
-    mutation.mutate();
+    const notifications = getAllNotificationsFromGroup(props.stack);
+    mutation.mutate({ notificationIds: notifications.map((n) => n.id) });
   };
 
   const markStackAsRead = async () => {

@@ -20,8 +20,9 @@ export { createTabLeaderSignal } from './notification-election';
 export {
   createEffectOnEntityTypeNotification,
   entityHasUnreadNotifications,
+  executeMarkNotificationsDone,
+  executeMarkNotificationsUndone,
   markNotificationForEntityIdAsRead,
-  markNotificationsDone,
   markNotificationsForEntityAsDone,
   markNotificationsForEntityAsRead,
   notificationIsOfEntity,
@@ -34,7 +35,6 @@ export {
   useUnreadEntityTypeNotifications,
   useUnreadNotifications,
 } from './notification-helpers';
-export type { MarkNotificationsDoneHandle } from './notification-helpers';
 export {
   getNotificationAction,
   getNotificationContent,

@@ -4,8 +4,11 @@ import { type EntityData, isTaskEntity } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { useUndoableMutation } from '@queries/undo';
 import {
-  type MarkDoneHandle,
-  markEntitiesDone,
+  applyEntitiesDoneOptimistic,
+  executeMarkEntitiesDone,
+  executeMarkEntitiesUndone,
+  type MarkEntitiesDoneContext,
+  resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/component/next-soup/utils';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
@@ -16,10 +19,10 @@ type MakeMarkDoneOptions = {
   notificationSource: () => NotificationSource;
 };
 
-type MarkDoneVariables = { entities: EntityData[] };
-type MarkDoneContext = {
-  handle: MarkDoneHandle;
-  setSuccessToastId: (id: number | undefined) => void;
+type MarkDoneVariables = {
+  entities: EntityData[];
+  emailIds: string[];
+  notificationIds: string[];
 };
 
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
@@ -32,29 +35,20 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     void,
     Error,
     MarkDoneVariables,
-    MarkDoneContext
+    MarkEntitiesDoneContext
   >(() => ({
-    mutationFn: async () => {},
-    onMutate: async (variables) => {
-      const handle = await markEntitiesDone({
-        entities: variables.entities,
-        notificationSource: notificationSource(),
-      });
-      let successToastId: number | undefined;
-      handle.done.catch(() => {
-        if (successToastId != null) toast.dismiss(successToastId);
-        toast.failure('Failed to mark as done');
-      });
-      return {
-        handle,
-        setSuccessToastId: (id) => {
-          successToastId = id;
-        },
-      };
-    },
+    onMutate: (variables) =>
+      applyEntitiesDoneOptimistic({
+        emailIds: variables.emailIds,
+        notificationIds: variables.notificationIds,
+      }),
+    mutationFn: async (variables) =>
+      await executeMarkEntitiesDone({
+        emailIds: variables.emailIds,
+        notificationIds: variables.notificationIds,
+      }),
     onSuccess: (_data, variables, context) => {
       const count = variables.entities.length;
-      const handle = context?.handle;
       const firstEntityId = variables.entities[0]?.id;
       const toastId = toast.success(
         count > 1 ? `Marked ${count} items as done` : 'Marked as done',
@@ -63,9 +57,18 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           {
             label: 'Undo',
             icon: ArrowCounterClockwise,
-            onClick: () => {
+            onClick: async () => {
               if (toastId != null) toast.dismiss(toastId);
-              handle?.undo().catch(() => toast.failure('Failed to undo'));
+              context?.rollback();
+              try {
+                await executeMarkEntitiesUndone({
+                  emailIds: variables.emailIds,
+                  notificationIds: variables.notificationIds,
+                });
+              } catch {
+                context?.reapply();
+                toast.failure('Failed to undo');
+              }
               restoreSoupFocus(firstEntityId, inPreview);
             },
           },
@@ -73,13 +76,34 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         10_000,
         true
       );
-      context?.setSuccessToastId(toastId);
     },
-    onError: () => {
+    onError: (_err, _variables, context) => {
+      context?.rollback();
       toast.failure('Failed to mark as done');
     },
-    undoFn: async (_variables, context) => {
-      await context?.handle.undo();
+    undoFn: async (variables, context) => {
+      context?.rollback();
+      try {
+        await executeMarkEntitiesUndone({
+          emailIds: variables.emailIds,
+          notificationIds: variables.notificationIds,
+        });
+      } catch (err) {
+        context?.reapply();
+        throw err;
+      }
+    },
+    redoFn: async (variables, context) => {
+      context?.reapply();
+      try {
+        await executeMarkEntitiesDone({
+          emailIds: variables.emailIds,
+          notificationIds: variables.notificationIds,
+        });
+      } catch (err) {
+        context?.rollback();
+        throw err;
+      }
     },
     undoLabel: 'Mark Done',
   }));
@@ -101,7 +125,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   };
 
   const execute = async (entities: EntityData[]) => {
-    await mutation.mutateAsync({ entities });
+    const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
+      entities,
+      notificationSource: notificationSource(),
+    });
+    await mutation.mutateAsync({ entities, emailIds, notificationIds });
   };
 
   const executeWithSoup = async (

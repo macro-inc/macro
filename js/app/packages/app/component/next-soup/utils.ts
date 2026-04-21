@@ -584,48 +584,50 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
   };
 }
 
-export type MarkDoneHandle = {
-  /** Fire-and-forget promise for the API calls. Rejects on failure (rolls back optimistic update). */
-  done: Promise<void>;
-  /** Reverses the mark-done: restores caches and calls the undone APIs. */
-  undo: () => Promise<void>;
+export type MarkEntitiesDoneContext = {
+  /** Reverses the optimistic cache writes. Safe to call multiple times. */
+  rollback: () => void;
+  /** Re-applies the optimistic cache writes with a fresh soup transaction. */
+  reapply: () => void;
 };
 
 /**
- * Optimistically marks entities as done (archives emails, clears notifications),
- * then fires the API calls in the background. Awaits `cancelQueries` so a stale
- * in-flight fetch can't clobber the email/soup cache writes before returning
- * the handle the caller uses for the undo toast.
+ * Extract the email ids and notification ids targeted by a mark-done on these
+ * entities. The ids are snapshotted here so mutationFn/undoFn/redoFn operate
+ * on the set that existed at mutation time.
  */
-export async function markEntitiesDone(args: {
+export function resolveMarkEntitiesDoneVariables(args: {
   entities: EntityData[];
   notificationSource: NotificationSource;
-}): Promise<MarkDoneHandle> {
+}): { emailIds: string[]; notificationIds: string[] } {
   const { entities, notificationSource } = args;
-
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
-  const emailIdSet = new Set(emailIds);
-
   const notificationIds = entities.flatMap((entity) =>
     (
       notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
     ).map((n) => n.id)
   );
+  return { emailIds, notificationIds };
+}
 
-  await Promise.all([
-    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
-  ]);
+/**
+ * Applies the optimistic UI state for marking entities as done — removes
+ * emails from the soup + email caches and flips the notification `done`
+ * override. Returns a context the mutation uses for rollback / reapply.
+ */
+export function applyEntitiesDoneOptimistic(args: {
+  emailIds: string[];
+  notificationIds: string[];
+}): MarkEntitiesDoneContext {
+  const { emailIds, notificationIds } = args;
+  const emailIdSet = new Set(emailIds);
 
-  // Track the actual email objects we filter out, keyed by cache query, so
-  // we can restore just those items without clobbering emails that arrived
-  // concurrently during the undo window.
   type EmailQueryKey = readonly unknown[];
   type EmailCacheData = { pages: { items: EntityData[] }[] };
   const removedEmails = new Map<EmailQueryKey, Map<string, EntityData>>();
 
-  const filterEmailCache = (ids: Set<string>) => {
-    if (ids.size === 0) return;
+  const filterEmailCache = () => {
+    if (emailIdSet.size === 0) return;
     for (const [key, data] of queryClient.getQueriesData<EmailCacheData>({
       queryKey: queryKeys.all.email,
     })) {
@@ -635,7 +637,7 @@ export async function markEntitiesDone(args: {
       const pages = data.pages.map((page) => {
         const items: EntityData[] = [];
         for (const item of page.items) {
-          if (ids.has(item.id)) {
+          if (emailIdSet.has(item.id)) {
             bucket.set(item.id, item);
             mutated = true;
           } else {
@@ -653,18 +655,11 @@ export async function markEntitiesDone(args: {
     }
   };
 
-  const restoreEmailCache = (ids: Set<string>) => {
-    if (ids.size === 0) return;
+  const restoreEmailCache = () => {
     for (const [key, bucket] of removedEmails) {
-      const toRestore: EntityData[] = [];
-      for (const id of ids) {
-        const item = bucket.get(id);
-        if (item) {
-          toRestore.push(item);
-          bucket.delete(id);
-        }
-      }
-      if (toRestore.length === 0) continue;
+      if (bucket.size === 0) continue;
+      const toRestore = [...bucket.values()];
+      bucket.clear();
       queryClient.setQueryData<EmailCacheData>(key, (current) => {
         if (!current) return current;
         const restoredIds = new Set(toRestore.map((e) => e.id));
@@ -686,162 +681,134 @@ export async function markEntitiesDone(args: {
   };
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
-  const applyOptimistic = () => {
+
+  const reapply = () => {
     soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
-    filterEmailCache(emailIdSet);
+    filterEmailCache();
     setDoneOverride(notificationIds, true);
   };
 
-  const rollback = (opts?: {
-    emailIds?: string[];
-    notificationIds?: string[];
-  }) => {
-    const emailsToRoll = opts?.emailIds ?? emailIds;
-    const notificationsToRoll = opts?.notificationIds ?? notificationIds;
-    // `removeSoupEntities` returns one transaction for all ids; if a partial
-    // rollback is requested we still roll back the whole batch and rely on
-    // soup re-sync to reconcile from server state.
-    if (soupTxn && emailsToRoll.length > 0) {
-      soupTxn.rollback();
-      soupTxn = null;
-    }
-    restoreEmailCache(new Set(emailsToRoll));
-    setDoneOverride(notificationsToRoll, undefined);
+  const rollback = () => {
+    soupTxn?.rollback();
+    soupTxn = null;
+    restoreEmailCache();
+    setDoneOverride(notificationIds, undefined);
   };
 
-  applyOptimistic();
+  reapply();
 
-  const reconcile = () =>
-    Promise.all([
+  return { rollback, reapply };
+}
+
+/**
+ * Fires the archive + bulk-done APIs for the given ids. Throws on any
+ * failure; caller is responsible for rollback via the context returned by
+ * `applyEntitiesDoneOptimistic`.
+ */
+export async function executeMarkEntitiesDone(args: {
+  emailIds: string[];
+  notificationIds: string[];
+}): Promise<void> {
+  const { emailIds, notificationIds } = args;
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+  ]);
+
+  const results = await Promise.allSettled([
+    ...emailIds.map((id) =>
+      throwOnErr(
+        async () => await emailClient.flagArchived({ value: true, id })
+      )
+    ),
+    notificationIds.length > 0
+      ? throwOnErr(
+          async () =>
+            await notificationServiceClient.bulkMarkNotificationAsDone({
+              notificationIds,
+            })
+        )
+      : Promise.resolve(),
+  ]);
+
+  const rejected = results.find(
+    (r): r is PromiseRejectedResult => r.status === 'rejected'
+  );
+
+  if (rejected) {
+    // Real refetch to reconcile server state with the UI after the caller
+    // rolls back its optimistic cache writes.
+    await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
       ...emailIds.map((id) => invalidateSoupEntity(id)),
     ]);
+    throw rejected.reason ?? new Error('Failed to mark as done');
+  }
 
-  const done = (async () => {
-    const results = await Promise.allSettled([
-      ...emailIds.map((id) =>
-        throwOnErr(
-          async () => await emailClient.flagArchived({ value: true, id })
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.all.email,
+      refetchType: 'none',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: notificationKeys.user._def,
+      refetchType: 'none',
+    }),
+    ...emailIds.map((id) => invalidateSoupEntity(id)),
+  ]);
+}
+
+/**
+ * Fires the unarchive + bulk-undone APIs for the given ids. Throws on any
+ * failure; caller is responsible for re-applying optimistic state.
+ */
+export async function executeMarkEntitiesUndone(args: {
+  emailIds: string[];
+  notificationIds: string[];
+}): Promise<void> {
+  const { emailIds, notificationIds } = args;
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+  ]);
+
+  const results = await Promise.allSettled([
+    ...emailIds.map((id) =>
+      throwOnErr(
+        async () => await emailClient.flagArchived({ value: false, id })
+      )
+    ),
+    notificationIds.length > 0
+      ? throwOnErr(
+          async () =>
+            await notificationServiceClient.bulkMarkNotificationAsUndone({
+              notificationIds,
+            })
         )
-      ),
-      notificationIds.length > 0
-        ? throwOnErr(
-            async () =>
-              await notificationServiceClient.bulkMarkNotificationAsDone({
-                notificationIds,
-              })
-          )
-        : Promise.resolve(),
+      : Promise.resolve(),
+  ]);
+
+  const rejected = results.find(
+    (r): r is PromiseRejectedResult => r.status === 'rejected'
+  );
+
+  if (rejected) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
     ]);
+    throw rejected.reason ?? new Error('Failed to undo');
+  }
 
-    const failedEmailIds = emailIds.filter(
-      (_, i) => results[i]?.status === 'rejected'
-    );
-    const notificationsFailed = results[emailIds.length]?.status === 'rejected';
-    const anyFailed = failedEmailIds.length > 0 || notificationsFailed;
-
-    try {
-      if (anyFailed) {
-        rollback({
-          emailIds: failedEmailIds,
-          notificationIds: notificationsFailed ? notificationIds : [],
-        });
-        // Partial failures need a real refetch to reconcile server state
-        // with our now-partially-rolled-back UI.
-        await reconcile();
-        const firstErr = results.find(
-          (r): r is PromiseRejectedResult => r.status === 'rejected'
-        )?.reason;
-        throw firstErr ?? new Error('Failed to mark as done');
-      }
-    } finally {
-      if (!anyFailed) {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.all.email,
-            refetchType: 'none',
-          }),
-          queryClient.invalidateQueries({
-            queryKey: notificationKeys.user._def,
-            refetchType: 'none',
-          }),
-          ...emailIds.map((id) => invalidateSoupEntity(id)),
-        ]);
-      }
-    }
-  })();
-
-  return {
-    done,
-    undo: async () => {
-      try {
-        await done;
-      } catch {
-        return;
-      }
-
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-        queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
-      ]);
-
-      rollback();
-
-      const results = await Promise.allSettled([
-        ...emailIds.map((id) =>
-          throwOnErr(
-            async () => await emailClient.flagArchived({ value: false, id })
-          )
-        ),
-        notificationIds.length > 0
-          ? throwOnErr(
-              async () =>
-                await notificationServiceClient.bulkMarkNotificationAsUndone({
-                  notificationIds,
-                })
-            )
-          : Promise.resolve(),
-      ]);
-
-      const failedEmailIds = emailIds.filter(
-        (_, i) => results[i]?.status === 'rejected'
-      );
-      const notificationsFailed =
-        results[emailIds.length]?.status === 'rejected';
-      const anyFailed = failedEmailIds.length > 0 || notificationsFailed;
-
-      try {
-        if (anyFailed) {
-          // Re-apply the mark-done state only for the items whose undo
-          // failed. Items whose undo succeeded stay restored.
-          if (failedEmailIds.length > 0) {
-            soupTxn = removeSoupEntities(new Set(failedEmailIds));
-            filterEmailCache(new Set(failedEmailIds));
-          }
-          if (notificationsFailed) {
-            setDoneOverride(notificationIds, true);
-          }
-          await reconcile();
-          const firstErr = results.find(
-            (r): r is PromiseRejectedResult => r.status === 'rejected'
-          )?.reason;
-          throw firstErr ?? new Error('Failed to undo');
-        }
-      } finally {
-        if (!anyFailed) {
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: queryKeys.all.email,
-              refetchType: 'none',
-            }),
-            queryClient.invalidateQueries({
-              queryKey: notificationKeys.user._def,
-              refetchType: 'none',
-            }),
-          ]);
-        }
-      }
-    },
-  };
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.all.email,
+      refetchType: 'none',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: notificationKeys.user._def,
+      refetchType: 'none',
+    }),
+  ]);
 }
