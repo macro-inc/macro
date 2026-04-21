@@ -6,7 +6,9 @@ import { useUndoableMutation } from '@queries/undo';
 import {
   type MarkDoneHandle,
   markEntitiesDone,
+  restoreSoupFocus,
 } from '@app/component/next-soup/utils';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import type { SoupState } from '../create-soup-state';
 
 type MakeMarkDoneOptions = {
@@ -23,6 +25,8 @@ type MarkDoneContext = {
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
+  const previewPanel = useMaybePreviewPanel();
+  const inPreview = previewPanel !== undefined;
 
   const mutation = useUndoableMutation<
     void,
@@ -51,6 +55,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     onSuccess: (_data, variables, context) => {
       const count = variables.entities.length;
       const handle = context?.handle;
+      const firstEntityId = variables.entities[0]?.id;
       const toastId = toast.success(
         count > 1 ? `Marked ${count} items as done` : 'Marked as done',
         undefined,
@@ -61,6 +66,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             onClick: () => {
               if (toastId != null) toast.dismiss(toastId);
               handle?.undo().catch(() => toast.failure('Failed to undo'));
+              restoreSoupFocus(firstEntityId, inPreview);
             },
           },
         ],

@@ -11,6 +11,7 @@ import {
 } from '@notifications';
 import { useUndoableMutation } from '@queries/undo';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { restoreSoupFocus } from '@app/component/next-soup/utils';
 
 interface NotificationActionsProps {
   stack: NotificationStack;
@@ -64,6 +65,7 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
               onClick: () => {
                 if (toastId != null) toast.dismiss(toastId);
                 handle?.undo().catch(() => toast.failure('Failed to undo'));
+                restoreSoupFocus();
               },
             },
           ],
