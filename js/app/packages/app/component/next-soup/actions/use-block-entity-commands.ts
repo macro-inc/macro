@@ -18,7 +18,6 @@ import { createEffect, onCleanup } from 'solid-js';
 import {
   makeCopyAction,
   makeCopyBranchNameAction,
-  makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeDeleteAction,
   makeMarkDoneAction,
@@ -49,7 +48,6 @@ export const useBlockEntityCommands = () => {
   const moveToProjectAction = makeMoveToProjectAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
-  const copyEntityIdAction = makeCopyEntityIdAction();
 
   const allProperties = useAllProperties();
 
@@ -216,27 +214,6 @@ export const useBlockEntityCommands = () => {
       condition: () => {
         const entity = getEntity();
         return entity !== undefined && copyBranchNameAction.canExecute(entity);
-      },
-      displayPriority: 10,
-      tags: [HotkeyTags.SelectionModification],
-    }).withGroup(group);
-
-    // Copy entity id - 'shift+cmd+i'
-    registerHotkey({
-      hotkey: ['shift+cmd+i'],
-      hotkeyToken: TOKENS.entity.action.copyEntityId,
-      scopeId,
-      description: 'Copy ID',
-      keyDownHandler: () => {
-        const entity = getEntity();
-        if (!entity) return false;
-        if (!copyEntityIdAction.canExecute(entity)) return false;
-        copyEntityIdAction.execute([entity]);
-        return true;
-      },
-      condition: () => {
-        const entity = getEntity();
-        return entity !== undefined && copyEntityIdAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
