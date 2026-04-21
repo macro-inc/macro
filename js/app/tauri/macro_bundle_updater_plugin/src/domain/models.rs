@@ -69,6 +69,11 @@ impl BundleRoot {
         self.0 = Some(path);
     }
 
+    /// Clear the bundle root, reverting to the built-in assets.
+    pub(crate) fn clear(&mut self) {
+        self.0 = None;
+    }
+
     /// Read the bundle version from `semver.txt` inside the bundle root.
     pub(crate) fn version(&self, fs: &impl FsRepo) -> Option<semver::Version> {
         let semver_path = self.0.as_ref()?.join("semver.txt");

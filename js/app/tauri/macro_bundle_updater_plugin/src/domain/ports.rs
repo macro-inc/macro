@@ -22,7 +22,7 @@ pub trait UpdateRepo: Send + Sync + 'static {
 }
 
 /// Port for filesystem operations (checksum, extract, I/O).
-pub trait FsRepo: Send + Sync + 'static {
+pub trait FsRepo: Clone + Send + Sync + 'static {
     /// Verify that the file at `path` has the expected SHA-256 hex digest.
     fn verify_checksum<P: AsRef<Path> + Send>(
         &self,

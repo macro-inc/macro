@@ -14,6 +14,9 @@ use crate::{
     outbound::{api_client::BundleClient, fs::FileSystem, system_info::SystemInfo},
 };
 
+/// Concrete service type used by the plugin commands.
+pub type PluginService = Service<FileSystem>;
+
 const EVENT_NAME: &str = "bundle-update-status";
 
 /// Serializable event emitted to the frontend via Tauri's event system.
@@ -91,7 +94,7 @@ impl MacroBundleUpdaterPlugin {
 /// Approve or deny a pending bundle update.
 #[tauri::command]
 pub fn grant_bundle_update(
-    service: tauri::State<'_, Mutex<Service>>,
+    service: tauri::State<'_, Mutex<PluginService>>,
     approved: bool,
 ) -> Result<(), String> {
     let mut service = service.lock().unwrap();
@@ -110,7 +113,7 @@ pub fn grant_bundle_update(
 #[tauri::command]
 #[tracing::instrument(err, skip(service, app_handle))]
 pub fn perform_update<R: Runtime>(
-    service: tauri::State<'_, Mutex<Service>>,
+    service: tauri::State<'_, Mutex<PluginService>>,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<(), String> {
     let mut service = service.lock().map_err(|e| e.to_string())?;
@@ -135,7 +138,7 @@ pub fn perform_update<R: Runtime>(
 
     tracing::info!("Setting bundle root to {bundle_dir:?}");
     service
-        .set_bundle_root(bundle_dir.clone(), &cache_dir, &FileSystem)
+        .set_bundle_root(bundle_dir.clone(), &cache_dir)
         .map_err(|e| e.to_string())?;
 
     // Remove old bundle directories now that we've switched to the new one
@@ -153,7 +156,7 @@ pub fn perform_update<R: Runtime>(
 
 /// Trigger a manual check for bundle updates.
 #[tauri::command]
-pub fn check_for_update(service: tauri::State<'_, Mutex<Service>>) -> Result<(), String> {
+pub fn check_for_update(service: tauri::State<'_, Mutex<PluginService>>) -> Result<(), String> {
     let service = service.lock().unwrap();
     service.start().map_err(|e| e.to_string())
 }
@@ -161,11 +164,36 @@ pub fn check_for_update(service: tauri::State<'_, Mutex<Service>>) -> Result<(),
 /// Return the current bundle update status as a serializable event.
 #[tauri::command]
 pub fn get_bundle_update_status(
-    service: tauri::State<'_, Mutex<Service>>,
+    service: tauri::State<'_, Mutex<PluginService>>,
 ) -> Result<BundleUpdateEvent, String> {
     let service = service.lock().unwrap();
     let status = service.status().borrow();
     Ok(BundleUpdateEvent::new(&status))
+}
+
+/// Clear the downloaded bundle and revert to built-in assets.
+#[tauri::command]
+pub fn clear_bundle<R: Runtime>(
+    service: tauri::State<'_, Mutex<PluginService>>,
+    app_handle: tauri::AppHandle<R>,
+) -> Result<(), String> {
+    let mut service = service.lock().map_err(|e| e.to_string())?;
+    let cache_dir = app_handle
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?;
+
+    service
+        .clear_bundle_root(&cache_dir)
+        .map_err(|e| e.to_string())?;
+
+    tracing::info!("Bundle cleared, navigating to built-in assets");
+    if let Some(webview) = app_handle.webview_windows().values().next() {
+        let _ = webview.eval(
+            "window.location.href = 'tauri://localhost/app/index.html' + window.location.hash;",
+        );
+    }
+    Ok(())
 }
 
 impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {

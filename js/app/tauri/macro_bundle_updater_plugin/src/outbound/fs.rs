@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use zip::{read::root_dir_common_filter, result::ZipError};
 
 /// Real filesystem implementation of [`FsRepo`](crate::domain::ports::FsRepo).
+#[derive(Clone)]
 pub struct FileSystem;
 
 fn map_zip_err(err: ZipError) -> UnzipError {

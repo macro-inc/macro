@@ -1,6 +1,5 @@
 use logger::Logger;
-use macro_bundle_updater_plugin::domain::service::Service;
-use macro_bundle_updater_plugin::outbound::fs::FileSystem;
+use macro_bundle_updater_plugin::inbound::plugin::PluginService;
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
@@ -8,7 +7,7 @@ use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
 use tauri::http::{HeaderMap, HeaderValue};
-use tauri::{Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 mod tauri_protocol;
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
@@ -159,9 +158,9 @@ pub fn run() {
                     let app = ctx.app_handle();
                     if let Ok(cache_dir) = app.path().app_cache_dir() {
                         tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
-                        if let Some(s) = app.try_state::<std::sync::Mutex<Service>>() {
+                        if let Some(s) = app.try_state::<std::sync::Mutex<PluginService>>() {
                             if let Ok(mut service) = s.lock() {
-                                service.load_bundle_root(&cache_dir, &FileSystem);
+                                service.load_bundle_root(&cache_dir);
                             }
                         }
                     }
@@ -174,15 +173,19 @@ pub fn run() {
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
-            macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status
+            macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
+            macro_bundle_updater_plugin::inbound::plugin::clear_bundle
         ])
         .setup(|app| {
             // Restore persisted bundle root on startup
             if let Ok(cache_dir) = app.path().app_cache_dir() {
-                if let Some(s) = app.try_state::<std::sync::Mutex<Service>>() {
+                if let Some(s) = app.try_state::<std::sync::Mutex<PluginService>>() {
                     if let Ok(mut service) = s.lock() {
-                        service.load_bundle_root(&cache_dir, &FileSystem);
-                        tracing::info!("Setup: restored bundle root to {:?}", service.bundle_root_path());
+                        service.load_bundle_root(&cache_dir);
+                        tracing::info!(
+                            "Setup: restored bundle root to {:?}",
+                            service.bundle_root_path()
+                        );
                     }
                 }
             }

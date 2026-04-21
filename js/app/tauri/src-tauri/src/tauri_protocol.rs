@@ -11,7 +11,7 @@
 use http::{Response as HttpResponse, StatusCode, header::CONTENT_TYPE};
 use tauri::{Manager, Runtime, UriSchemeResponder};
 
-use macro_bundle_updater_plugin::domain::service::Service;
+use macro_bundle_updater_plugin::inbound::plugin::PluginService;
 use std::sync::Mutex;
 
 type ProtocolHandler = Box<dyn Fn(&str, http::Request<Vec<u8>>, UriSchemeResponder) + Send + Sync>;
@@ -59,7 +59,7 @@ pub fn get<R: Runtime>(app_handle: tauri::AppHandle<R>, window_origin: &str) -> 
     let origin = window_origin.to_string();
 
     Box::new(move |webview_id, request, responder| {
-        let service = app_handle.try_state::<Mutex<Service>>();
+        let service = app_handle.try_state::<Mutex<PluginService>>();
         let root_dir_owned = service
             .as_ref()
             .and_then(|s| s.lock().ok())

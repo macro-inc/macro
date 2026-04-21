@@ -9,8 +9,9 @@ use rootcause::{Report, prelude::ResultExt, report};
 use std::path::{Path, PathBuf};
 
 /// Manages the update worker and the active bundle root.
-pub struct Service {
+pub struct Service<Fs: FsRepo> {
     handle: WorkerHandle,
+    fs_repo: Fs,
     bundle_root: BundleRoot,
 }
 
@@ -310,23 +311,24 @@ async fn glue_channels<F>(
     }
 }
 
-impl Service {
+impl<Fs: FsRepo> Service<Fs> {
     /// Create a new service, spawning the background update worker.
-    pub fn new<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery>(
+    pub fn new<U: UpdateRepo, Q: SystemQuery>(
         update_repo: U,
         fs_repo: Fs,
         system_query: Q,
     ) -> Self {
-        let handle = Worker::new_handle(update_repo, fs_repo, system_query);
+        let handle = Worker::new_handle(update_repo, fs_repo.clone(), system_query);
         Service {
             handle,
+            fs_repo,
             bundle_root: BundleRoot::new(),
         }
     }
 
     /// Load persisted bundle root from the given cache directory.
-    pub fn load_bundle_root(&mut self, cache_dir: &Path, fs: &impl FsRepo) {
-        self.bundle_root = BundleRoot::load(cache_dir, fs);
+    pub fn load_bundle_root(&mut self, cache_dir: &Path) {
+        self.bundle_root = BundleRoot::load(cache_dir, &self.fs_repo);
     }
 
     /// Get the current bundle root path, if an OTA update has been applied.
@@ -339,19 +341,29 @@ impl Service {
         &mut self,
         path: PathBuf,
         cache_dir: &Path,
-        fs: &impl FsRepo,
     ) -> Result<(), std::io::Error> {
         self.bundle_root.set(path);
-        self.bundle_root.persist(cache_dir, fs)
+        self.bundle_root.persist(cache_dir, &self.fs_repo)
+    }
+
+    /// Clear the bundle root and remove all downloaded bundles.
+    pub fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
+        for name in self.fs_repo.list_dir_names(cache_dir) {
+            if name.parse::<u64>().is_ok() {
+                let _ = self.fs_repo.remove_dir_all(&cache_dir.join(&name));
+            }
+        }
+        self.bundle_root.clear();
+        self.bundle_root.persist(cache_dir, &self.fs_repo)
     }
 
     /// Read the bundle version from `semver.txt` inside the current bundle root.
-    pub fn bundle_version(&self, fs: &impl FsRepo) -> Option<semver::Version> {
-        self.bundle_root.version(fs)
+    pub fn bundle_version(&self) -> Option<semver::Version> {
+        self.bundle_root.version(&self.fs_repo)
     }
 }
 
-impl AutoUpdateService for Service {
+impl<Fs: FsRepo> AutoUpdateService for Service<Fs> {
     fn status(&self) -> &tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>> {
         &self.handle.status_rx
     }
