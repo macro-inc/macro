@@ -1,13 +1,19 @@
-use std::{ops::Deref, sync::LazyLock};
+use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
 use crate::domain::models::TranscriptSegmentRequest;
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use chrono::Utc;
+use filter_ast::Expr;
+use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
+
+fn attended_filter(b: bool) -> LiteralTree<CallLiteral> {
+    Some(Arc::new(Expr::Literal(CallLiteral::Attended(b))))
+}
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
@@ -646,6 +652,82 @@ async fn get_call_records_by_user_includes_channel_member_not_in_call(
             .iter()
             .any(|r| r.call_id == CALL_ARCHIVED && !r.is_active)
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_attended_true_returns_only_joined(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let filter = attended_filter(true);
+
+    // user-a is a participant in both CALL1 and CALL_ARCHIVED.
+    let user_a_records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &filter)
+        .await?;
+    assert_eq!(user_a_records.len(), 2);
+    assert!(user_a_records.iter().any(|r| r.call_id == CALL1));
+    assert!(user_a_records.iter().any(|r| r.call_id == CALL_ARCHIVED));
+
+    // user-c is a channel member but did not join any call.
+    let user_c_records = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &filter)
+        .await?;
+    assert!(
+        user_c_records.is_empty(),
+        "user-c attended none of the calls"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_attended_false_returns_only_not_joined(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let filter = attended_filter(false);
+
+    // user-a joined every call, so attended=false should return nothing.
+    let user_a_records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &filter)
+        .await?;
+    assert!(
+        user_a_records.is_empty(),
+        "user-a attended every fixture call"
+    );
+
+    // user-c joined none of the calls, so both should appear.
+    let user_c_records = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &filter)
+        .await?;
+    assert_eq!(user_c_records.len(), 2);
+    assert!(user_c_records.iter().any(|r| r.call_id == CALL1));
+    assert!(user_c_records.iter().any(|r| r.call_id == CALL_ARCHIVED));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_attended_none_returns_all(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // Sanity-check the default path: without the attended filter, the query
+    // still returns every call the channel member can see.
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
+        .await?;
+    assert_eq!(records.len(), 2);
     Ok(())
 }
 

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE project_hierarchy AS (\n            SELECT p.id as project_id\n            FROM \"Chat\" c\n            JOIN \"Project\" p ON c.\"projectId\" = p.id AND p.\"deletedAt\" IS NULL\n            WHERE c.id = $1 AND c.\"deletedAt\" IS NULL\n            UNION ALL\n            SELECT parent.id as project_id\n            FROM project_hierarchy ph\n            JOIN \"Project\" parent ON parent.id = (\n                SELECT \"parentId\" FROM \"Project\" WHERE id = ph.project_id AND \"parentId\" IS NOT NULL AND \"deletedAt\" IS NULL\n            )\n        )\n        SELECT DISTINCT user_id FROM \"UserItemAccess\"\n        WHERE item_id IN (\n            SELECT $1\n            UNION\n            SELECT project_id FROM project_hierarchy\n        )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "54e3755d63a676a7fa70da77321e618032f0130c73eb6b0ae985f07c5c6c448b"
+}

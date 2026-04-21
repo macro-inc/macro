@@ -364,14 +364,16 @@ where
             return Ok(Either::Left(None.into_iter()));
         };
 
+        let user_id = req.user_id.as_ref().to_string();
+
         Ok(Either::Right(
             self.call_record_service
                 .get_user_call_records(req)
                 .await
                 .map_err(|_| SoupErr::CallErr)
                 .map(|records| {
-                    records.into_iter().map(|record| {
-                        let soup_record = SoupCallRecord::from(record);
+                    records.into_iter().map(move |record| {
+                        let soup_record = SoupCallRecord::from_record_for_user(record, &user_id);
                         FrecencySoupItem {
                             item: SoupItem::CallRecord(soup_record),
                             frecency_score: None,

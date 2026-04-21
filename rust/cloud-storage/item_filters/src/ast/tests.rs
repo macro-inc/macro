@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::PropertyFilter;
+use crate::{CallFilters, PropertyFilter};
 use cool_asserts::assert_matches;
 use model_file_type::FileType;
 use serde_json::json;
@@ -797,4 +797,55 @@ fn entity_type_ast_deserialization_rejects_invalid() {
         result.is_err(),
         "direct AST deserialization should reject invalid entity type"
     );
+}
+
+#[test]
+fn it_expands_call_filter_with_attended_only() {
+    let f = CallFilters {
+        channel_ids: vec![],
+        attended: Some(true),
+    };
+    let ast = CallFilters::expand_ast(f)
+        .unwrap()
+        .expect("attended filter should expand to a literal");
+    let json = serde_json::to_value(&ast).unwrap();
+    let exp = json!({ "l": { "Attended": true } });
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_call_filter_with_attended_false() {
+    let f = CallFilters {
+        channel_ids: vec![],
+        attended: Some(false),
+    };
+    let ast = CallFilters::expand_ast(f).unwrap().unwrap();
+    let json = serde_json::to_value(&ast).unwrap();
+    let exp = json!({ "l": { "Attended": false } });
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_call_filter_with_channel_and_attended_as_and() {
+    let channel_id = Uuid::new_v4();
+    let f = CallFilters {
+        channel_ids: vec![channel_id.to_string()],
+        attended: Some(true),
+    };
+    let ast = CallFilters::expand_ast(f).unwrap().unwrap();
+    let json = serde_json::to_value(&ast).unwrap();
+    let exp = json!({
+        "&": [
+            { "l": { "ChannelId": channel_id } },
+            { "l": { "Attended": true } }
+        ]
+    });
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_call_filter_without_attended_is_none_when_empty() {
+    let f = CallFilters::default();
+    let ast = CallFilters::expand_ast(f).unwrap();
+    assert!(ast.is_none(), "empty filter should expand to None");
 }

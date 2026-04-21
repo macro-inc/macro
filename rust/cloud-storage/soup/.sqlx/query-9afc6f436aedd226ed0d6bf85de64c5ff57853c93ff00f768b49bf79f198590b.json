@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            a.id as \"id!: Uuid\",\n            a.user_id as \"user_id!: String\",\n            a.channel_id as \"channel_id!: Uuid\",\n            a.viewed_at as \"viewed_at?: DateTime<Utc>\",\n            a.interacted_at as \"interacted_at?: DateTime<Utc>\",\n            a.created_at as \"created_at!: DateTime<Utc>\",\n            a.updated_at as \"updated_at!: DateTime<Utc>\"\n        FROM comms_activity a\n        WHERE a.user_id = $1\n        ORDER BY \n            GREATEST(\n                COALESCE(a.viewed_at, '1970-01-01'::timestamp),\n                COALESCE(a.interacted_at, '1970-01-01'::timestamp)\n            ) DESC,\n            a.created_at DESC\n        LIMIT 100\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "viewed_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "interacted_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "9afc6f436aedd226ed0d6bf85de64c5ff57853c93ff00f768b49bf79f198590b"
+}

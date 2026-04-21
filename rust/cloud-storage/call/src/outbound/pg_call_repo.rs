@@ -35,11 +35,30 @@ fn extract_channel_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
 fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
+        Expr::Literal(CallLiteral::Attended(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_channel_ids(a, ids);
             collect_channel_ids(b, ids);
         }
         Expr::Not(inner) => collect_channel_ids(inner, ids),
+    }
+}
+
+/// Extract the `attended` literal from a call filter AST, if any.
+///
+/// `ExpandFrame::expand_ast` only emits at most one `Attended` literal, so we
+/// return the first one we find during a simple traversal.
+fn extract_attended(filter: &LiteralTree<CallLiteral>) -> Option<bool> {
+    let expr = filter.as_ref()?;
+    find_attended(expr)
+}
+
+fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
+    match expr {
+        Expr::Literal(CallLiteral::Attended(b)) => Some(*b),
+        Expr::Literal(CallLiteral::ChannelId(_)) => None,
+        Expr::And(a, b) | Expr::Or(a, b) => find_attended(a).or_else(|| find_attended(b)),
+        Expr::Not(inner) => find_attended(inner),
     }
 }
 
@@ -686,6 +705,7 @@ impl CallRepository for PgCallRepo {
         // large for the soup feed).
         let channel_ids = extract_channel_ids(filter);
         let has_channel_filter = !channel_ids.is_empty();
+        let attended = extract_attended(filter);
 
         let rows = sqlx::query!(
             r#"
@@ -708,6 +728,10 @@ impl CallRepository for PgCallRepo {
                   AND ccp.left_at IS NULL
             )
             AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
+            AND ($5::bool IS NULL OR EXISTS (
+                SELECT 1 FROM call_participants cp
+                WHERE cp.call_id = c.id AND cp.user_id = $1
+            ) = $5)
             UNION ALL
             SELECT
                 id as "call_id!",
@@ -728,6 +752,10 @@ impl CallRepository for PgCallRepo {
                   AND ccp.left_at IS NULL
             )
             AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
+            AND ($5::bool IS NULL OR EXISTS (
+                SELECT 1 FROM call_record_participants crp
+                WHERE crp.call_record_id = cr.id AND crp.user_id = $1
+            ) = $5)
             ORDER BY "started_at!" DESC
             LIMIT $2
             "#,
@@ -735,6 +763,7 @@ impl CallRepository for PgCallRepo {
             limit as i64,
             has_channel_filter,
             &channel_ids,
+            attended,
         )
         .fetch_all(&self.pool)
         .await?;
