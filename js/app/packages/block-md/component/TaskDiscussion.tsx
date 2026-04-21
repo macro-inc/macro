@@ -70,7 +70,6 @@ export function TaskDiscussion() {
 
   return (
     <section class="mt-8 pb-12">
-      {/* Collapsible header with horizontal line */}
       <div class="flex items-center gap-2 pt-2">
         <div class="w-6 border-t border-edge-muted" />
         <button
@@ -83,12 +82,11 @@ export function TaskDiscussion() {
           ) : (
             <CaretRight class="w-3 h-3" />
           )}
-          <span class="text-xs">Activity</span>
+          <span class="text-xs">Discussion</span>
         </button>
         <div class="flex-1 border-t border-edge-muted" />
       </div>
 
-      {/* Collapsible content */}
       <Show when={isExpanded()}>
         <div class="py-2 text-xs">
           <div>
@@ -199,13 +197,6 @@ function DiscussionThread(props: { thread: CommentThread }) {
 
               <Show when={hasReplies() || isReplying()}>
                 <div class="relative w-full">
-                  {/*
-										ThreadReplyRailDecorations renders the curved connector from the root message to the reply thread.
-										If rails are misaligned, check:
-										1. CSS variables (--left-of-connector, --thread-shift, --user-icon-width) are defined
-										2. ThreadRepliesContainer padding-left matches threadOffsetX calculation
-										3. Message.Layout padding matches expectations
-									*/}
                   <Thread.ReplyRailDecorations
                     isReplying={isReplying}
                     firstThreadReplyNewMessage={false}
