@@ -78,4 +78,21 @@ impl FsRepo for FileSystem {
     ) -> impl Future<Output = Result<(), std::io::Error>> + Send {
         tokio::fs::create_dir_all(path)
     }
+
+    fn list_dir_names(&self, dir: &std::path::Path) -> Vec<String> {
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .collect()
+    }
+
+    fn remove_dir_all(&self, dir: &std::path::Path) -> Result<(), std::io::Error> {
+        std::fs::remove_dir_all(dir)
+    }
+
+    fn read_to_string(&self, path: &std::path::Path) -> Result<String, std::io::Error> {
+        std::fs::read_to_string(path)
+    }
 }

@@ -6,7 +6,6 @@ use crate::domain::{
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
 use rootcause::{Report, prelude::ResultExt, report};
-use semver::Version;
 use std::path::PathBuf;
 
 pub struct Service {
@@ -156,7 +155,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .context(UpdateError::IoErr)?;
 
                 let download_filename = self
-                    .create_download_directory(update_dir, &status.update.version)
+                    .create_download_directory(update_dir)
                     .await
                     .context(UpdateError::IoErr)?;
 
@@ -213,18 +212,42 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         }
     }
 
-    /// given an input directory and a semver, create a folder for the semver and return the path
-    /// that the download should be placed at
+    /// Create a monotonically increasing download directory and return the
+    /// path where the zip should be placed.
     async fn create_download_directory(
         &self,
         mut bundle: PathBuf,
-        version: &Version,
     ) -> Result<PathBuf, std::io::Error> {
-        let version_str = version.to_string().to_lowercase();
-        bundle.push(PathBuf::from(version_str));
+        let next = next_bundle_index(&self.fs_repo.list_dir_names(&bundle));
+        bundle.push(next.to_string());
         self.fs_repo.create_dir_all(&bundle).await?;
         bundle.push("bundle.zip");
         Ok(bundle)
+    }
+}
+
+/// Determine the next monotonic bundle index from a list of directory names.
+pub(crate) fn next_bundle_index(names: &[String]) -> u64 {
+    names
+        .iter()
+        .filter_map(|n| n.parse::<u64>().ok())
+        .max()
+        .map_or(0, |m| m + 1)
+}
+
+/// Remove all numeric bundle subdirectories under `dir` except `keep`.
+pub fn cleanup_old_bundles(fs: &impl FsRepo, dir: &std::path::Path, keep: &std::path::Path) {
+    for name in fs.list_dir_names(dir) {
+        if name.parse::<u64>().is_err() {
+            continue;
+        }
+        let path = dir.join(&name);
+        if path == keep {
+            continue;
+        }
+        if let Err(e) = fs.remove_dir_all(&path) {
+            tracing::warn!(error=?e, "Failed to remove old bundle directory {path:?}");
+        }
     }
 }
 

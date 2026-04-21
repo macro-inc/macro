@@ -8,7 +8,7 @@ use url::Url;
 use crate::{
     domain::{
         models::{UpdateApproval, UpdateDenied, UpdateError, UpdateGranted, UpdateStatus},
-        ports::AutoUpdateService,
+        ports::{AutoUpdateService, FsRepo},
         service::Service,
     },
     outbound::{api_client::BundleClient, fs::FileSystem, system_info::SystemInfo},
@@ -121,6 +121,9 @@ pub fn perform_update<R: Runtime>(
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
     bundle_root.persist(&cache_dir).map_err(|e| e.to_string())?;
+
+    // Remove old bundle directories now that we've switched to the new one
+    crate::domain::service::cleanup_old_bundles(&FileSystem, &cache_dir, &bundle_dir);
 
     // Navigate to the updated bundle, preserving the current hash route.
     if let Some(webview) = app_handle.webview_windows().values().next() {

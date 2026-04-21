@@ -34,6 +34,15 @@ pub trait FsRepo: Send + Sync + 'static {
         &self,
         path: P,
     ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
+
+    /// List the names of immediate children in `dir`.
+    fn list_dir_names(&self, dir: &Path) -> Vec<String>;
+
+    /// Recursively remove a directory.
+    fn remove_dir_all(&self, dir: &Path) -> Result<(), std::io::Error>;
+
+    /// Read a file's contents as a string.
+    fn read_to_string(&self, path: &Path) -> Result<String, std::io::Error>;
 }
 
 pub trait SystemQuery: Send + Sync + 'static {

@@ -62,4 +62,17 @@ impl BundleRoot {
             }
         }
     }
+
+    /// Read the bundle version from `semver.txt` inside the bundle root.
+    ///
+    /// The JS build writes this file via the `postbuild:semver` script, and it
+    /// is included in the bundle archive. After an OTA update extracts the zip,
+    /// `semver.txt` lives alongside `index.html` in the bundle root.
+    pub fn version(&self, fs: &impl domain::ports::FsRepo) -> Option<semver::Version> {
+        let root = self.0.read().ok()?;
+        let semver_path = root.as_ref()?.join("semver.txt");
+        fs.read_to_string(&semver_path)
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+    }
 }

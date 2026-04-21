@@ -27,6 +27,15 @@ impl<R: Runtime> SystemInfo<R> {
     }
 
     fn get_version(&self) -> Version {
+        // If an OTA update has been applied, read the version from semver.txt
+        // in the bundle root so the server can compare build metadata accurately.
+        if let Some(v) = self
+            .app_handle
+            .try_state::<crate::BundleRoot>()
+            .and_then(|br| br.version(&crate::outbound::fs::FileSystem))
+        {
+            return v;
+        }
         self.app_handle.package_info().version.clone()
     }
 
