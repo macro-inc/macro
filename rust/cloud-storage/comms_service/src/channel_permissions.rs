@@ -111,5 +111,7 @@ pub async fn update_channel_share_permission(
     )
     .await?;
 
+    transaction.commit().await?;
+
     Ok(())
 }
