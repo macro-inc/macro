@@ -913,6 +913,33 @@ async fn post_messages_forwards_message_ids_filter() {
 }
 
 #[tokio::test]
+async fn post_messages_rejects_oversized_filter_list() {
+    let router = channels_router(ChannelsRouterState::new(
+        MockService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let ids: Vec<Uuid> = (0..101).map(|_| Uuid::new_v4()).collect();
+    let body = serde_json::json!({ "message_ids": ids }).to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["message"], "too many message_ids");
+}
+
+#[tokio::test]
 async fn thread_replies_returns_empty_list() {
     let router = mock_router();
     let channel_id = Uuid::new_v4();

@@ -71,6 +71,8 @@ fn channel_id_from_receipt<T: RequiredPermission>(
         .map_err(|_| ChannelsHandlerErr::BadRequest("Invalid channel_id"))
 }
 
+const MAX_MESSAGE_ID_FILTERS: usize = 100;
+
 /// Query parameters for the messages endpoint.
 #[derive(Debug, Default, Deserialize)]
 pub struct Params {
@@ -243,6 +245,9 @@ pub async fn post_channel_messages_handler<S: ChannelMessagesService, Svc: Entit
     Json(filters): Json<ChannelMessageFilters>,
 ) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    if filters.message_ids.len() > MAX_MESSAGE_ID_FILTERS {
+        return Err(ChannelsHandlerErr::BadRequest("too many message_ids"));
+    }
     channel_messages_response(&state, params, cursor, channel_id, &filters).await
 }
 
