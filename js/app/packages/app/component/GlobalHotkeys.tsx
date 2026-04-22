@@ -37,6 +37,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { debounce } from '@solid-primitives/scheduled';
 import IconGear from '@macro-icons/macro-gear.svg';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { openMacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 
 function useHotkeyAnalytics(): void {
@@ -368,6 +369,26 @@ export default function GlobalShortcuts() {
       return true;
     },
   });
+
+  if (LOCAL_ONLY) {
+    registerHotkey({
+      scopeId: 'global',
+      description: 'Open hotkey debugger',
+      tags: ['debug', 'dev', 'hotkey'],
+      keyDownHandler: () => {
+        openWithSplit(
+          { type: 'component', id: 'hotkey-debugger' },
+          {
+            referredFrom: 'hotkey',
+            allowDuplicate: true,
+            preferNewSplit: true,
+          }
+        );
+        return true;
+      },
+      runWithInputFocused: true,
+    });
+  }
 
   registerHotkey({
     scopeId: 'global',
