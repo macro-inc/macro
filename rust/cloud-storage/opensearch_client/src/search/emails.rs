@@ -74,9 +74,7 @@ fn build_text_query_string(terms: &[String]) -> String {
         .map(|term| {
             if term.contains('@') {
                 format!("\"{}\"", term)
-            } else if term.contains(' ') {
-                format!("({})", term)
-            } else if term.chars().count() < MIN_PREFIX_LEN {
+            } else if term.contains(' ') || term.chars().count() < MIN_PREFIX_LEN {
                 format!("({})", term)
             } else {
                 format!("{}*", term)

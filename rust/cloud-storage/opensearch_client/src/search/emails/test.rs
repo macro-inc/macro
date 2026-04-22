@@ -39,7 +39,8 @@ fn test_build_keyword_query_string_email_term_uses_phrase() {
 
 #[test]
 fn test_build_keyword_query_string_email_term_mixed_with_word() {
-    let result = build_keyword_query_string(&["alice@example.com".to_string(), "review".to_string()]);
+    let result =
+        build_keyword_query_string(&["alice@example.com".to_string(), "review".to_string()]);
     assert_eq!(result, "\"alice@example.com\" + (review | review@*)");
 }
 
