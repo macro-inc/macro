@@ -133,8 +133,8 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
             SELECT source_id::uuid FROM entity_access
             WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'team'
         )
-    )
-      
+    ) AS combined_users
+
     "#,
         entity_id,
         entity_type.as_ref(),
