@@ -95,6 +95,7 @@ export interface EditorControls {
   getState: () => SerializedEditorState;
   setState: (state: SerializedEditorState) => void;
   getLexical: () => LexicalEditor;
+  /** Signal that is true when either the MentionsMenu, EmojiMenu, or ActionMenu is open in this Editor. */
   isInlineMenuOpen: () => boolean;
 }
 
