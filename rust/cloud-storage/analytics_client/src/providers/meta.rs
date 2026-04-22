@@ -32,6 +32,12 @@ pub struct MetaUserData {
     pub fbc: Option<String>,
     /// Facebook browser ID from `_fbp` cookie
     pub fbp: Option<String>,
+    /// User agent of the browser session that triggered the conversion.
+    /// Sent raw (not hashed) per Meta's spec.
+    pub client_user_agent: Option<String>,
+    /// IP address of the browser session that triggered the conversion.
+    /// Sent raw (not hashed) per Meta's spec.
+    pub client_ip_address: Option<String>,
 }
 
 impl MetaUserData {
@@ -46,7 +52,7 @@ impl MetaUserData {
     fn to_json(&self) -> serde_json::Value {
         let mut data = serde_json::Map::new();
 
-        if let Some(ref email) = self.email {
+        if let Some(email) = self.email.as_deref().filter(|s| !s.trim().is_empty()) {
             data.insert("em".to_string(), serde_json::json!([hash_sha256(email)]));
         }
         if let Some(ref fbc) = self.fbc {
@@ -54,6 +60,12 @@ impl MetaUserData {
         }
         if let Some(ref fbp) = self.fbp {
             data.insert("fbp".to_string(), serde_json::json!(fbp));
+        }
+        if let Some(ref ua) = self.client_user_agent {
+            data.insert("client_user_agent".to_string(), serde_json::json!(ua));
+        }
+        if let Some(ref ip) = self.client_ip_address {
+            data.insert("client_ip_address".to_string(), serde_json::json!(ip));
         }
 
         serde_json::Value::Object(data)
@@ -93,7 +105,7 @@ impl MetaProvider {
     /// - `action_source`: Where the conversion originated
     /// - `event_id`: Optional deduplication ID (recommended for server events)
     /// - `custom_data`: Additional event data (will be serialized to JSON)
-    #[tracing::instrument(skip(self, user_data, custom_data), err)]
+    #[tracing::instrument(skip(self, user_data, custom_data), err, fields(pixel_id = %self.pixel_id))]
     pub async fn track(
         &self,
         event_name: &str,
@@ -119,6 +131,22 @@ impl MetaProvider {
             event["event_id"] = serde_json::json!(id);
         }
 
+        // Debug log of the payload bound for Meta. `access_token` is never
+        // included — it's attached only when the real payload is built
+        // below. `user_data.em` is already SHA-256 hashed by `to_json`.
+        // Enable with `RUST_LOG=analytics_client=debug` when debugging
+        // match quality or response errors.
+        tracing::debug!(
+            pixel_id = %self.pixel_id,
+            url = %url,
+            test_event_code = ?self.test_event_code,
+            event_name = %event_name,
+            event_id = ?event_id,
+            action_source = %action_source.as_str(),
+            event = %event,
+            "sending event to meta conversions api"
+        );
+
         let mut payload = serde_json::json!({
             "data": [event],
             "access_token": self.access_token,
@@ -128,12 +156,26 @@ impl MetaProvider {
             payload["test_event_code"] = serde_json::json!(test_code);
         }
 
-        self.client
-            .post(&url)
-            .json(&payload)
-            .send()
-            .await?
-            .error_for_status()?;
+        let response = self.client.post(&url).json(&payload).send().await?;
+        let status = response.status();
+        // Grab the status-based error while the response is still owned; then
+        // consume the body for logging.
+        let status_error = response.error_for_status_ref().err();
+        let body = response.text().await.unwrap_or_default();
+
+        // Meta returns interesting JSON in the body on 2xx too — e.g.
+        // `events_received`, `fbtrace_id`, and warnings about match quality
+        // or missing fields. Kept at debug so production logs don't carry
+        // the full body on every Lead fire.
+        tracing::debug!(
+            status = %status,
+            body = %body,
+            "meta conversions api response"
+        );
+
+        if let Some(e) = status_error {
+            return Err(e);
+        }
 
         Ok(())
     }
