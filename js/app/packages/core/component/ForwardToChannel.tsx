@@ -74,7 +74,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   const [markdown, setMarkdown] = createSignal('');
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: 'forward-to-channel-markdown',
-    enableMentions: false,
+    enableMentions: true,
     onChange: setMarkdown,
     onEnter: (e) => {
       handleSubmit();
@@ -82,6 +82,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       return true;
     },
   });
+  markdownEditor.buildHandle();
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
 
