@@ -101,11 +101,7 @@ export const useApplyPreset = () => {
 
     batch(() => {
       setActiveTab(tabId);
-      queryFilters.set({
-        include: preset.filters.include,
-        exclude: preset.filters.exclude,
-        emailView: preset.filters.emailView,
-      });
+      queryFilters.set(preset.filters);
       soup.predicates.set(preset.clientFilters);
     });
     return true;

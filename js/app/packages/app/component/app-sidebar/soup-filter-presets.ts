@@ -35,7 +35,7 @@ export type ViewTabConfig = {
 };
 
 /** Filters for inbox/signal: not done, importance=true for emails */
-const INBOX_SIGNAL_FILTERS: Query = {
+const INBOX_SIGNAL_FILTERS = defineQueryFilters({
   include: {
     documentDone: false,
     emailDone: false,
@@ -45,10 +45,10 @@ const INBOX_SIGNAL_FILTERS: Query = {
     folderDone: false,
   },
   emailView: 'inbox',
-};
+});
 
 /** Filters for inbox/noise: not done, importance=false for emails */
-const INBOX_NOISE_FILTERS: Query = {
+const INBOX_NOISE_FILTERS = defineQueryFilters({
   include: {
     documentDone: false,
     emailDone: false,
@@ -58,7 +58,7 @@ const INBOX_NOISE_FILTERS: Query = {
     folderDone: false,
   },
   emailView: 'inbox',
-};
+});
 
 export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   inbox: {

@@ -1,4 +1,7 @@
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 import {
   type TaskEntityWithProperties,
   isTaskEntity,
@@ -19,7 +22,6 @@ import {
   taskFilter as taskPredicate,
   taskAssignedToUserFilter as taskAssignedToUserPredicate,
 } from '../predicates';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import {
   config,
   propFilter,
