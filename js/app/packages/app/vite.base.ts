@@ -38,8 +38,17 @@ function gitBranchHmrPlugin(): Plugin {
       const watcher = chokidar.watch(headPath, {
         ignoreInitial: true,
         persistent: false,
+        usePolling: true,
+        interval: 100,
       });
       watcher.on('all', () => {
+        server.ws.send({
+          type: 'custom',
+          event: 'git-branch:update',
+          data: readGitBranch(),
+        });
+      });
+      server.ws.on('connection', () => {
         server.ws.send({
           type: 'custom',
           event: 'git-branch:update',
