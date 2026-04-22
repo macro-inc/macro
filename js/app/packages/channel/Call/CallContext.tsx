@@ -20,6 +20,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { CallTokenResponse } from '@service-call/client';
+import { CallAudioSink } from './CallAudioSink';
 
 export type CallParticipantInfo = {
   identity: string;
@@ -640,6 +641,9 @@ export function CallProvider(props: ParentProps) {
   const state = createCallState();
 
   return (
-    <CallContext.Provider value={state}>{props.children}</CallContext.Provider>
+    <CallContext.Provider value={state}>
+      {props.children}
+      <CallAudioSink />
+    </CallContext.Provider>
   );
 }

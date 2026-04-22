@@ -41,7 +41,6 @@ import {
   SidebarVisibilityContext,
   isSidebarVisible,
 } from '@app/component/sidebarVisibility';
-import { CallAudioSink } from '@channel/Call/CallAudioSink';
 export { SidebarVisibilityContext, isSidebarVisible };
 
 const AUTH_URLS = [
@@ -136,7 +135,6 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalBulkEditEntityModal />
           <GlobalShareModal />
           <MacroMcpSetupModal />
-          <CallAudioSink />
         </Show>
         <Show
           when={
