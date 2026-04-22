@@ -1,4 +1,4 @@
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { usePermissions } from '@core/context/user';
@@ -168,17 +168,19 @@ export function SettingsPanel(props: SettingsPanelProps) {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm p-1">
-          {settingsTabs().map((item) => (
-            <DropdownMenu.Item
-              class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-              classList={{
-                'font-semibold': activeTabId() === item.value,
-              }}
-              onSelect={() => handleTabChange(item.value)}
-            >
-              {item.label}
-            </DropdownMenu.Item>
-          ))}
+          <For each={settingsTabs()}>
+            {(item) => (
+              <DropdownMenu.Item
+                class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                classList={{
+                  'font-semibold': activeTabId() === item.value,
+                }}
+                onSelect={() => handleTabChange(item.value)}
+              >
+                {item.label}
+              </DropdownMenu.Item>
+            )}
+          </For>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu>
