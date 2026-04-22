@@ -4,7 +4,7 @@ import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { usePermissions } from '@core/context/user';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
@@ -71,7 +71,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     }
 
     if(permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
-    if(!isNativeMobilePlatform()){tabs.push({ value: 'Mobile App', label: 'Mobile App' })}
+    if(ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()){tabs.push({ value: 'Mobile App', label: 'Mobile App' })}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
 
     return tabs;
@@ -249,7 +249,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Tabs.Content value="Shortcuts" class="absolute inset-0">
                   <Shortcuts />
                 </Tabs.Content>
-                <Show when={!isNativeMobilePlatform()}>
+                <Show when={ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()}>
                   <Tabs.Content value="Mobile App" class="absolute inset-0">
                     <MobileApp />
                   </Tabs.Content>
