@@ -59,5 +59,5 @@ export async function navigateToChannelMessage(
   }
 
   const handle = await orchestrator.getBlockHandle(channelId, 'channel');
-  handle?.goToLocationFromParams(params);
+  await handle?.goToLocationFromParams(params);
 }
