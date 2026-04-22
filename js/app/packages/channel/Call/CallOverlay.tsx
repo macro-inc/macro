@@ -37,7 +37,6 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
       classList={{ 'ring-2 ring-accent-2': isSpeaking() }}
     >
-      {/* Remote mic audio is attached by <CallAudioSink /> so playback survives tab switches. */}
       <Show
         when={cameraTrack()}
         fallback={

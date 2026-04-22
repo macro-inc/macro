@@ -266,16 +266,17 @@ export const registerSidebarHotkeys = ({
         }
       }
 
-      const resolvedContent =
-        link.id === 'calls' && callCtx?.isInCall() && callCtx.activeChannelId()
-          ? ({ type: 'channel', id: callCtx.activeChannelId()! } as const)
-          : ({ type: 'component', id: link.id } as const);
-
-      openWithSplit(resolvedContent, {
-        preferNewSplit: e?.shiftKey,
-        mergeHistory: false,
-        allowDuplicate: true,
-      });
+      openWithSplit(
+        {
+          type: 'component',
+          id: link.id,
+        },
+        {
+          preferNewSplit: e?.shiftKey,
+          mergeHistory: false,
+          allowDuplicate: true,
+        }
+      );
       return true;
     };
 
@@ -609,15 +610,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
     return activeContent?.id === props.id;
   };
 
-  const content = () => {
-    if (props.id === 'calls') {
-      const channelId = callCtx?.activeChannelId();
-      if (callCtx?.isInCall() && channelId) {
-        return { type: 'channel' as const, id: channelId };
-      }
-    }
-    return { type: 'component' as const, id: props.id };
-  };
+  const content = () =>
+    ({
+      type: 'component',
+      id: props.id,
+    }) as const;
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? true;
