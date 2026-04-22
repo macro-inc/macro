@@ -6,7 +6,7 @@ import { Match, Show, Switch } from 'solid-js';
 import { CallTranscript } from './CallTranscript';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { format } from 'date-fns';
-import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
+import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import { formatCallDuration } from '../utils';
 
 function isUnauthorized(error: Error | null): boolean {

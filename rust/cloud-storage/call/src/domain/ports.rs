@@ -5,11 +5,13 @@
 use std::fmt::Debug;
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use item_filters::ast::{LiteralTree, call::CallLiteral};
+
+use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
     Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallTokenResponse,
@@ -94,6 +96,12 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Flip the `share_with_team` flag on an active call. Returns the new value.
+    fn toggle_share_with_team(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
     /// Returns the new `call_records` id.
@@ -172,6 +180,13 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_record_id: &Uuid,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Patches a call record.
+    fn patch_call_record(
+        &self,
+        call_record_id: &Uuid,
+        request: &EditCallRecordRequest,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
@@ -306,7 +321,7 @@ pub trait CallService: Send + Sync + 'static {
     /// `EntityType::Call` and its `entity_id` must be the call's UUID.
     fn get_call_record(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
 
     /// Delete a [`CallRecord`] the caller has channel-member access to.
@@ -318,8 +333,25 @@ pub trait CallService: Send + Sync + 'static {
     /// table are untouched. Idempotent.
     fn delete_call_record(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Edits a [`CallRecord`].
+    fn edit_call_record(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        request: EditCallRecordRequest,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Toggle the `share_with_team` flag on the active call identified by the
+    /// receipt. Authorization is carried in the receipt produced by
+    /// `CallAccessLevelExtractor`; the entity on the receipt must be
+    /// `EntityType::Call` and its `entity_id` must be the call's UUID.
+    /// Returns the new value.
+    fn toggle_share_with_team(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.

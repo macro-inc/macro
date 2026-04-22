@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO macro_user_info (macro_user_id, industry, title, first_name, last_name, profile_picture, profile_picture_hash)\n        VALUES ($1, $2, $3, $4, $5, $6, $7)\n        ON CONFLICT (macro_user_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6405181c054f5b865e4dafb1a665d33e0f3cdd3a3bab22f0fd1eb5e71c46a935"
+}

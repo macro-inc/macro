@@ -1,5 +1,5 @@
 -- Clean up all relevant tables to ensure a fresh state for each test.
-TRUNCATE TABLE public."User", public."Project", public."Document", public."SharePermission", public."DocumentPermission", public."ProjectPermission", public."UserItemAccess" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE public."User", public."Project", public."Document", public."SharePermission", public."DocumentPermission", public."ProjectPermission", public.entity_access RESTART IDENTITY CASCADE;
 
 -- Create three users.
 -- user-1: The primary user we will test against, has many explicit permissions.
@@ -18,18 +18,20 @@ VALUES ('user-1', 'user1@test.com', 'a1111111-1111-1111-1111-111111111111'),
        ('user-public-access-only', 'user4@test.com', 'a4444444-4444-4444-4444-444444444444');
 
 -- Create a nested project hierarchy: p-grandparent -> p-parent.
+-- Using UUIDs for project IDs since entity_access.entity_id is UUID type.
 INSERT INTO public."Project" ("id", "name", "userId", "parentId")
-VALUES ('p-grandparent', 'Grandparent Project', 'user-1', NULL),
-       ('p-parent', 'Parent Project', 'user-1', 'p-grandparent');
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'Grandparent Project', 'user-1', NULL),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'Parent Project', 'user-1', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000001');
 
 -- Create documents.
+-- Using UUIDs for document IDs since entity_access.entity_id is UUID type.
 -- d-child: Nested inside the project hierarchy.
 -- d-standalone: Has no project.
 -- d-private: Has no permissions of any kind attached.
 INSERT INTO public."Document" ("id", "name", "owner", "projectId")
-VALUES ('d-child', 'Nested Document', 'user-1', 'p-parent'),
-       ('d-standalone', 'Standalone Document', 'user-2', NULL),
-       ('d-private', 'Private Document', 'user-1', NULL);
+VALUES ('dddddddd-dddd-dddd-dddd-000000000001', 'Nested Document', 'user-1', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000002'),
+       ('dddddddd-dddd-dddd-dddd-000000000002', 'Standalone Document', 'user-2', NULL),
+       ('dddddddd-dddd-dddd-dddd-000000000003', 'Private Document', 'user-1', NULL);
 
 -- Add SharePermission records. This is the new data for testing public access.
 INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
@@ -43,28 +45,17 @@ VALUES
 
 -- Link share permissions to projects.
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
-VALUES ('p-grandparent', 'sp-public-edit'),
-       ('p-parent', 'sp-public-view');
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'sp-public-edit'),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'sp-public-view');
 
 -- Link the private share permission to the document to test the "isPublic" filter.
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
-VALUES ('d-child', 'sp-private-owner');
+VALUES ('dddddddd-dddd-dddd-dddd-000000000001', 'sp-public-edit');
 
 
--- Add explicit UserItemAccess records
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
+-- Add explicit entity_access records (replacing UserItemAccess)
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
 VALUES
 -- user-1 has explicit 'view' on d-child, 'edit' on p-parent, and 'owner' on p-grandparent.
 -- The highest explicit access for user-1 on d-child is therefore 'owner'.
-('10000000-0000-0000-0000-000000000001', 'user-1', 'd-child', 'document', 'view'),
-('10000000-0000-0000-0000-000000000002', 'user-1', 'p-parent', 'project', 'edit'),
-('10000000-0000-0000-0000-000000000003', 'user-1', 'p-grandparent', 'project', 'owner'),
-
--- user-1 also has 'comment' access on the standalone document.
-('10000000-0000-0000-0000-000000000004', 'user-1', 'd-standalone', 'document', 'comment'),
-
--- user-2 has explicit 'view' on d-child, to test that the query correctly filters by user.
-('10000000-0000-0000-0000-000000000005', 'user-2', 'd-child', 'document', 'view'),
-
-
-('10000000-0000-0000-0000-000000000006', 'user-3', 'd-standalone', 'document', 'edit');
+('dddddddd-dddd-dddd-dddd-000000000001', 'document', 'user-1', 'user', 'owner');

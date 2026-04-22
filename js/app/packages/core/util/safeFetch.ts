@@ -175,6 +175,7 @@ export async function safeFetch<
         ...fetchInit,
         headers: {
           ...(fetchInit?.method !== 'GET' &&
+            fetchInit?.method !== 'HEAD' &&
             !(fetchInit?.body instanceof FormData) && {
               'Content-Type':
                 (fetchInit?.headers as Record<string, string> | undefined)?.[
@@ -207,6 +208,8 @@ export async function safeFetch<
             return err('HTTP_ERROR', `HTTP error! status: ${response.status}`);
         }
       } else {
+        if (fetchInit.method === 'HEAD') return ok({} as T);
+
         const contentType = response.headers.get('Content-Type');
         if (!contentType) return ok({} as T);
 

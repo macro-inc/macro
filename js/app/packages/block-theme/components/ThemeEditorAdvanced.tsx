@@ -45,7 +45,7 @@ export function ThemeEditorAdvanced(){
       <div
         style="
         background-color: var(--b1);
-        font-family: var(--font-mono);
+        font-family: var(--font-sans);
         scrollbar-width: none;
         position: relative;
         overflow: hidden;
@@ -122,8 +122,8 @@ export function ThemeEditorAdvanced(){
                   <div style="background-color: var(--b1);">
                     <div
                       style="
-                      grid-template-columns: min-content 1fr min-content;
                       background-color: var(--color-edge-muted);
+                      grid-template-columns: 140px 1fr 80px;
                       align-items: center;
                       display: grid;
                       height: 41px;

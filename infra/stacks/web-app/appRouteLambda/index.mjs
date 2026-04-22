@@ -8,6 +8,13 @@ const __dirname = dirname(__filename);
 const template = readFileSync(join(__dirname, 'index.html'), 'utf-8');
 const PREVIEW_URL = process.env.PREVIEW_URL;
 
+function escapeHtmlText(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export const handler = async (event) => {
   const rawPath = event.rawPath;
   const fileName = rawPath.split('/').pop();
@@ -51,7 +58,7 @@ export const handler = async (event) => {
     // Update the html page title with the document name
     const body = template.replace(
       /<head[^>]*>/i,
-      `<head><title>Macro - ${documentTitle}</title>`
+      `<head><title data-sm="">Macro - ${escapeHtmlText(documentTitle)}</title>`
     );
 
     // Return the response

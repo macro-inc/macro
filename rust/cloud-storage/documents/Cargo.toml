@@ -26,8 +26,15 @@ axum = [
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = ["dep:aws-sdk-s3", "dep:base64", "dep:hex", "dep:sqlx", "ports"]
-ports = ["dep:tokio"]
+outbound = [
+  "dep:aws-sdk-s3",
+  "dep:base64",
+  "dep:entity_access_db_utils",
+  "dep:hex",
+  "dep:sqlx",
+  "ports",
+]
+ports = ["dep:entity_access_management", "dep:tokio"]
 
 [dependencies]
 # Core
@@ -46,13 +53,18 @@ connection = { path = "../connection", default-features = false, features = [
 ] }
 document_sub_type = { path = "../document_sub_type" }
 entity_access = { path = "../entity_access" }
+entity_access_management = { path = "../entity_access_management", default-features = false, features = [
+  "outbound",
+  "ports",
+], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
-s3_key = { path = "../s3_key" }
+model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
+s3_key = { path = "../s3_key" }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
@@ -68,6 +80,7 @@ utoipa = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 futures = { workspace = true }
 hex = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }

@@ -60,3 +60,13 @@ INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, con
    '2024-01-01 10:00:05+00', '2024-01-01 10:00:07+00', 1),
   ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-2', 'macro|user-b@test.com', 'archived reply',
    '2024-01-01 10:00:08+00', '2024-01-01 10:00:10+00', 2);
+
+-- entity_access grants for the active call (owner + channel view).
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES
+  ('00000000-0000-0000-0000-0000000ca110', 'call', 'macro|user-a@test.com', 'user',    'owner'),
+  ('00000000-0000-0000-0000-0000000ca110', 'call', '00000000-0000-0000-0000-000000000c01', 'channel', 'view');
+
+-- entity_access grants for the archived call (owner + channel view).
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES
+  ('00000000-0000-0000-0000-0000000ca2ed', 'call', 'macro|user-a@test.com', 'user',    'owner'),
+  ('00000000-0000-0000-0000-0000000ca2ed', 'call', '00000000-0000-0000-0000-000000000c01', 'channel', 'view');

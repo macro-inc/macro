@@ -13,7 +13,6 @@ from livekit.agents import (
     AutoSubscribe,
     JobContext,
     JobProcess,
-    RoomIO,
     StopResponse,
     cli,
     inference,
@@ -44,7 +43,21 @@ class Transcriber(Agent):
     ):
         super().__init__(
             instructions="Transcribe user speech.",
-            stt=inference.STT("deepgram/nova-3"),
+            stt=inference.STT(
+                "deepgram/nova-3",
+                language="en-US",
+                extra_kwargs={
+                    # ms of silence before Deepgram finalizes an utterance.
+                    # Library default is 25ms, which cuts hesitant speakers mid-thought.
+                    "endpointing": 400,
+                    "smart_format": False,
+                    "punctuate": True,
+                    "filler_words": True,
+                    "numerals": True,
+                    "interim_results": True,
+                    "no_delay": True,
+                },
+            ),
         )
         self.participant_identity = participant_identity
         self.channel_id = channel_id
@@ -182,29 +195,20 @@ class MultiUserTranscriber:
         self, participant: rtc.RemoteParticipant
     ) -> AgentSession:
         session = AgentSession(vad=self.ctx.proc.userdata["vad"])
-
-        # The room name is the channel_id.
-        channel_id = self.ctx.room.name
-
-        # Create RoomIO per participant to avoid handler conflicts
-        # when multiple sessions share the same room.
-        rio = RoomIO(
-            agent_session=session,
-            room=self.ctx.room,
-            participant=participant,
-            options=room_io.RoomOptions(
-                text_input=False,
-                text_output=True,
-                audio_output=False,
-            ),
-        )
-        await rio.start()
         is_first = len(self._sessions) == 0
         await session.start(
             agent=Transcriber(
                 participant_identity=participant.identity,
-                channel_id=channel_id,
+                channel_id=self.ctx.room.name,
                 http_client=self.http_client,
+            ),
+            room=self.ctx.room,
+            room_options=room_io.RoomOptions(
+                audio_input=True,
+                text_input=False,
+                text_output=True,
+                audio_output=False,
+                participant_identity=participant.identity,
             ),
             record=is_first,
         )

@@ -138,7 +138,8 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
     }
   }
 
-  const nameHighlight = data.results.at(0)?.highlight.name ?? null;
+  const nameHighlight =
+    data.results.find((r) => r.highlight.name)?.highlight.name ?? null;
 
   let senderHighlightTerms: string[] | null = null;
   if (data.type === 'email') {
@@ -456,6 +457,7 @@ export const mapSoupPageToEntityList: (
             updatedAt: item.data.endedAt ?? item.data.startedAt,
             sortTs: item.data.endedAt ?? item.data.startedAt,
             isActive: item.data.isActive,
+            attended: item.data.attended,
             durationMs: item.data.durationMs ?? undefined,
             participantIds: item.data.participants.map((p) => p.userId),
           } satisfies CallEntity;

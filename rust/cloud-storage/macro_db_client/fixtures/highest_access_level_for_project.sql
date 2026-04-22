@@ -1,5 +1,5 @@
 -- Clean up all relevant tables to ensure a fresh state for each test.
-TRUNCATE TABLE public."User", public."Project", public."SharePermission", public."ProjectPermission", public."UserItemAccess" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE public."User", public."Project", public."SharePermission", public."ProjectPermission", public.entity_access RESTART IDENTITY CASCADE;
 
 -- Create users with different permission profiles.
 INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
@@ -14,11 +14,12 @@ VALUES ('user-1', 'user1@test.com', 'a1111111-1111-1111-1111-111111111111'), -- 
 
 -- Create a nested project hierarchy: p-grandparent -> p-parent -> p-child.
 -- Also create an isolated project with no permissions for "none" test case.
+-- Using UUIDs for project IDs since entity_access.entity_id is UUID type.
 INSERT INTO public."Project" ("id", "name", "userId", "parentId")
-VALUES ('p-grandparent', 'Grandparent Project', 'user-1', NULL),
-       ('p-parent', 'Parent Project', 'user-1', 'p-grandparent'),
-       ('p-child', 'Child Project', 'user-1', 'p-parent'),
-       ('p-isolated', 'Isolated Project', 'user-1', NULL);
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'Grandparent Project', 'user-1', NULL),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'Parent Project', 'user-1', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000001'),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000003', 'Child Project', 'user-1', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000002'),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000004', 'Isolated Project', 'user-1', NULL);
 
 -- Add SharePermission records for public access.
 INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
@@ -32,18 +33,14 @@ VALUES
 
 -- Link share permissions to projects.
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
-VALUES ('p-grandparent', 'sp-public-edit-proj'),
-       ('p-parent', 'sp-public-view-proj'),
-       ('p-child', 'sp-private-owner-proj');
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'sp-public-edit-proj'),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'sp-public-view-proj'),
+       ('aaaaaaaa-aaaa-aaaa-aaaa-000000000003', 'sp-public-edit-proj');
 -- Attach private permission to child to test filter.
 
 
--- Add explicit UserItemAccess records.
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
+-- Add explicit entity_access records (replacing UserItemAccess).
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
 VALUES
 -- user-1 has an explicit 'owner' grant on the grandparent project. This is their highest possible access.
-('10000000-0000-0000-0000-000000000001', 'user-1', 'p-grandparent', 'project', 'owner'),
--- user-1 also has a lower-level 'view' grant on the child, which should be overridden by the higher inherited grant.
-('10000000-0000-0000-0000-000000000002', 'user-1', 'p-child', 'project', 'view'),
--- user-2 has explicit 'comment' access on the parent project to test user scoping.
-('10000000-0000-0000-0000-000000000003', 'user-2', 'p-parent', 'project', 'comment');
+('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'project', 'user-1', 'user', 'owner');

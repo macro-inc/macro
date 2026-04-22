@@ -9,7 +9,7 @@ use super::*;
 
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new(), HashMap::new());
+    let result = construct_search_result(vec![], HashMap::new(), HashMap::new(), None);
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -55,7 +55,7 @@ fn test_construct_search_result_single_document() {
     );
 
     let result =
-        construct_search_result(search_results, document_histories, HashMap::new()).unwrap();
+        construct_search_result(search_results, document_histories, HashMap::new(), None).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -146,7 +146,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
     );
 
     let result =
-        construct_search_result(search_results, document_histories, HashMap::new()).unwrap();
+        construct_search_result(search_results, document_histories, HashMap::new(), None).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -222,7 +222,7 @@ fn test_document_history_timestamps() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new(), None).unwrap();
 
     // Verify that timestamps were copied from the document history
     assert_eq!(result.len(), 1);
@@ -256,7 +256,7 @@ fn test_document_history_missing_entry() {
     document_histories.insert("22222222-2222-2222-2222-222222222222".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new(), None).unwrap();
 
     // Documents without history info should not return
     assert_eq!(result.len(), 0);
@@ -287,7 +287,7 @@ fn test_document_history_null_viewed_at() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new(), None).unwrap();
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
@@ -339,7 +339,7 @@ fn test_document_history_multiple_documents() {
     document_histories.insert("22222222-2222-2222-2222-222222222222".to_string(), history2);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new(), None).unwrap();
 
     // Verify that timestamps were copied correctly for both documents
     assert_eq!(result.len(), 2);
@@ -397,7 +397,7 @@ fn test_document_history_partial_missing_entries() {
     document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new(), None).unwrap();
 
     // We should have 2 results - one with real data, one not found
     assert_eq!(result.len(), 1);
@@ -443,7 +443,7 @@ fn test_document_history_deleted() {
     );
 
     let result =
-        construct_search_result(input_deleted, document_histories, HashMap::new()).unwrap();
+        construct_search_result(input_deleted, document_histories, HashMap::new(), None).unwrap();
 
     // Deleted document should be returned with metadata including deleted_at
     assert_eq!(result.len(), 1);
@@ -465,6 +465,7 @@ fn test_document_history_deleted() {
         input_not_found,
         document_histories_not_found,
         HashMap::new(),
+        None,
     )
     .unwrap();
 
@@ -598,12 +599,27 @@ fn test_sort_stability() {
         );
     }
 
-    let result1 =
-        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
-    let result2 =
-        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
-    let result3 =
-        construct_search_result(input.clone(), document_histories.clone(), HashMap::new()).unwrap();
+    let result1 = construct_search_result(
+        input.clone(),
+        document_histories.clone(),
+        HashMap::new(),
+        None,
+    )
+    .unwrap();
+    let result2 = construct_search_result(
+        input.clone(),
+        document_histories.clone(),
+        HashMap::new(),
+        None,
+    )
+    .unwrap();
+    let result3 = construct_search_result(
+        input.clone(),
+        document_histories.clone(),
+        HashMap::new(),
+        None,
+    )
+    .unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);
@@ -676,7 +692,7 @@ fn test_properties_enrichment_with_properties() {
         vec![make_test_soup_property("Assignees")],
     );
 
-    let result = construct_search_result(input, document_histories, properties_map).unwrap();
+    let result = construct_search_result(input, document_histories, properties_map, None).unwrap();
 
     assert_eq!(result.len(), 1);
     let props = result[0]
@@ -710,8 +726,125 @@ fn test_properties_enrichment_empty_map() {
         },
     );
 
-    let result = construct_search_result(input, document_histories, HashMap::new()).unwrap();
+    let result = construct_search_result(input, document_histories, HashMap::new(), None).unwrap();
 
     assert_eq!(result.len(), 1);
     assert!(result[0].properties.is_none());
+}
+
+fn make_history(doc_id: &str, file_name: &str) -> DocumentHistoryInfo {
+    let now = chrono::Utc::now();
+    DocumentHistoryInfo {
+        item_id: doc_id.to_string(),
+        created_at: now,
+        updated_at: now,
+        viewed_at: None,
+        project_id: None,
+        file_type: Some("md".to_string()),
+        file_name: file_name.to_string(),
+        owner: "user1".to_string(),
+        deleted_at: None,
+        sub_type: None,
+    }
+}
+
+#[test]
+fn test_synthesizes_name_highlight_for_content_only_hit() {
+    let doc_id = "11111111-1111-1111-1111-111111111111";
+    let input = vec![create_test_document_response(
+        doc_id,
+        "node_1",
+        Some(vec!["<macro_em>test</macro_em>ing body".to_string()]),
+    )];
+
+    let mut document_histories = HashMap::new();
+    document_histories.insert(doc_id.to_string(), make_history(doc_id, "testingfoop"));
+
+    let result =
+        construct_search_result(input, document_histories, HashMap::new(), Some("test")).unwrap();
+
+    assert_eq!(result.len(), 1);
+    let hits = &result[0].extra.document_search_results;
+    assert_eq!(hits.len(), 2, "original content hit + synthesized name hit");
+
+    let name_hit = hits
+        .iter()
+        .find(|h| h.highlight.name.is_some())
+        .expect("synthesized name hit should exist");
+    assert_eq!(
+        name_hit.highlight.name.as_deref(),
+        Some("<macro_em>test</macro_em>ingfoop")
+    );
+    assert!(name_hit.node_id.is_none());
+    assert!(name_hit.raw_content.is_none());
+}
+
+#[test]
+fn test_does_not_synthesize_when_name_hit_already_present() {
+    let doc_id = "11111111-1111-1111-1111-111111111111";
+    let input = vec![opensearch_client::search::model::SearchHit {
+        entity_id: doc_id.parse().unwrap(),
+        entity_type: SearchEntityType::Documents,
+        goto: None,
+        score: None,
+        highlight: Highlight {
+            name: Some("<macro_em>test</macro_em> doc".to_string()),
+            ..Default::default()
+        },
+        updated_at: None,
+    }];
+
+    let mut document_histories = HashMap::new();
+    document_histories.insert(doc_id.to_string(), make_history(doc_id, "test doc"));
+
+    let result =
+        construct_search_result(input, document_histories, HashMap::new(), Some("test")).unwrap();
+
+    assert_eq!(result[0].extra.document_search_results.len(), 1);
+    assert_eq!(
+        result[0].extra.document_search_results[0]
+            .highlight
+            .name
+            .as_deref(),
+        Some("<macro_em>test</macro_em> doc")
+    );
+}
+
+#[test]
+fn test_does_not_synthesize_when_name_does_not_match() {
+    let doc_id = "11111111-1111-1111-1111-111111111111";
+    let input = vec![create_test_document_response(
+        doc_id,
+        "node_1",
+        Some(vec!["body matches test".to_string()]),
+    )];
+
+    let mut document_histories = HashMap::new();
+    document_histories.insert(doc_id.to_string(), make_history(doc_id, "unrelated name"));
+
+    let result =
+        construct_search_result(input, document_histories, HashMap::new(), Some("test")).unwrap();
+
+    let hits = &result[0].extra.document_search_results;
+    assert_eq!(hits.len(), 1);
+    assert!(hits[0].highlight.name.is_none());
+}
+
+#[test]
+fn test_does_not_synthesize_when_search_term_is_none() {
+    let doc_id = "11111111-1111-1111-1111-111111111111";
+    let input = vec![create_test_document_response(
+        doc_id,
+        "node_1",
+        Some(vec!["body".to_string()]),
+    )];
+
+    let mut document_histories = HashMap::new();
+    document_histories.insert(doc_id.to_string(), make_history(doc_id, "testingfoop"));
+
+    let result = construct_search_result(input, document_histories, HashMap::new(), None).unwrap();
+
+    let hits = &result[0].extra.document_search_results;
+    assert_eq!(hits.len(), 1);
+    assert!(hits[0].highlight.name.is_none());
 }

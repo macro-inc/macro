@@ -56,9 +56,11 @@ import {
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
+import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import BellIcon from '@icon/regular/bell.svg';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call';
+import { useNotificationSettings } from '@notifications';
 
 interface SidebarItem {
   id: ListView;
@@ -358,7 +360,7 @@ const CALLS_LINK: SidebarItem = {
   id: 'calls',
   label: 'Calls',
   href: LIST_VIEW_PATHS.calls,
-  icon: PhoneCallIcon,
+  icon: AnimatedCallIcon,
   hotkey: 'l',
 };
 
@@ -367,6 +369,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
   const callCtx = useCallContextOptional();
+  const notificationSettings = useNotificationSettings();
+
+  const showEnableNotifications = () =>
+    notificationSettings.isSupported && notificationSettings.canPrompt();
+
+  const handleEnableNotifications = async () => {
+    if (!notificationSettings.isSupported) return;
+    try {
+      await notificationSettings.toggle(true);
+    } catch (error) {
+      console.error('Failed to enable notifications:', error);
+    }
+  };
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
@@ -543,6 +558,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="w-full px-2 flex flex-col">
+        <Show when={showEnableNotifications()}>
+          <SidebarActionButton
+            label="Enable Notifications"
+            isSlim={isSlim}
+            onClick={handleEnableNotifications}
+            icon={() => <BellIcon class="size-4" />}
+          />
+        </Show>
         <SidebarActionButton
           label="Invite"
           isSlim={isSlim}
@@ -699,9 +722,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
             </div>
           </Show>
 
-          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-            {props.label}            
-          </span>
+          <div class="flex items-center gap-1">
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+              {props.label}
+            </span>
+          </div>
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
@@ -710,7 +735,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
                   <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={GO_TO_LEADER_KEY} />
                   </div>
-                  then
                   <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>

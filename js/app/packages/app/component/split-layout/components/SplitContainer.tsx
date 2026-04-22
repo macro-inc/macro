@@ -1,13 +1,11 @@
 import MacroJump from '@app/component/MacroJump';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
   on,
   type ParentProps,
-  type Setter,
   Show,
 } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
@@ -127,49 +125,6 @@ export function SplitContainer(
               </Show>
             </div>
           </MaybeClippedPanel>
-        </div>
-      </SplitDrawerGroup>
-    </SplitModalProvider>
-  );
-}
-
-export function SplitlikeContainer(
-  props: ParentProps<{
-    setSpotlight: Setter<boolean>;
-    spotlight: Accessor<boolean>;
-    active?: boolean;
-    tl?: boolean;
-    tr?: boolean;
-    br?: boolean;
-    bl?: boolean;
-  }>
-) {
-  const [panel, setPanel] = createSignal<HTMLDivElement | null>(null);
-  const panelSize = createElementSize(panel);
-
-  return (
-    <SplitModalProvider>
-      <SplitDrawerGroup panelSize={panelSize} contentOffsetTop={() => 0}>
-        <Show when={props.spotlight()}>
-          <MacroJump tabbableParent={() => panel() ?? undefined} />
-          <div
-            class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-            onClick={() => props.setSpotlight(false)}
-          />
-          <div class="fixed inset-[4rem] bg-panel shadow-xl" />
-        </Show>
-
-        <div
-          class="@container/split flex flex-col min-h-0 bracket-never bg-panel rounded-sm overflow-hidden"
-          classList={{
-            'fixed inset-[4rem] z-modal isolate': props.spotlight(),
-            'size-full': !props.spotlight(),
-          }}
-          data-split-container
-          tabindex={-1}
-          ref={setPanel}
-        >
-          <div class="size-full">{props.children}</div>
         </div>
       </SplitDrawerGroup>
     </SplitModalProvider>

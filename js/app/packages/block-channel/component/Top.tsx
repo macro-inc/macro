@@ -8,7 +8,7 @@ import HashIcon from '@icon/regular/hash.svg';
 import ChatTextIcon from '@icon/regular/chat-text.svg';
 import PaperclipIcon from '@icon/regular/paperclip.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import PhoneIcon from '@icon/regular/phone.svg';
+import PhoneIcon from '@macro-icons/wide/call.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';

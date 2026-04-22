@@ -2,10 +2,12 @@ use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use models_opensearch::SearchEntityType;
 use models_properties::{EntityReference, EntityType};
+use models_search::SearchHighlight;
 use models_search::document::{
     DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata, DocumentSearchResult,
 };
 use models_soup::SoupProperty;
+use name_search::highlight_name;
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
@@ -18,6 +20,7 @@ pub(in crate::api::search) async fn enrich_documents(
     ctx: &SearchHandlerState,
     user_id: &str,
     results: Vec<opensearch_client::search::model::SearchHit>,
+    search_term: Option<&str>,
 ) -> Result<Vec<DocumentSearchResponseItemWithMetadata>, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
@@ -77,8 +80,9 @@ pub(in crate::api::search) async fn enrich_documents(
     };
 
     // Construct enriched results
-    let enriched_results = construct_search_result(results, document_histories, properties_map)
-        .map_err(SearchError::InternalError)?;
+    let enriched_results =
+        construct_search_result(results, document_histories, properties_map, search_term)
+            .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -90,9 +94,10 @@ pub fn construct_search_result(
         macro_db_client::document::get_document_history::DocumentHistoryInfo,
     >,
     properties_map: HashMap<String, Vec<SoupProperty>>,
+    search_term: Option<&str>,
 ) -> anyhow::Result<Vec<DocumentSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
-    let entity_id_hit_map: IndexMap<Uuid, Vec<DocumentSearchResult>> = search_results
+    let mut entity_id_hit_map: IndexMap<Uuid, Vec<DocumentSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = if let Some(SearchGotoContent::Documents(goto)) = hit.goto {
@@ -117,6 +122,33 @@ pub fn construct_search_result(
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
             map
         });
+
+    // Docs that appear via content hits may still have a name that matches the
+    // query, but the OpenSearch content query does not search the name field so
+    // no `highlight.name` comes back. Synthesize one from the doc's name so the
+    // sidebar can render the name highlight for those rows too.
+    if let Some(term) = search_term {
+        for (entity_id, hits) in entity_id_hit_map.iter_mut() {
+            if hits.iter().any(|h| h.highlight.name.is_some()) {
+                continue;
+            }
+            let Some(info) = document_histories.get(&entity_id.to_string()) else {
+                continue;
+            };
+            let Some(highlighted) = highlight_name(&info.file_name, term) else {
+                continue;
+            };
+            hits.push(DocumentSearchResult {
+                node_id: None,
+                highlight: SearchHighlight {
+                    name: Some(highlighted),
+                    ..Default::default()
+                },
+                raw_content: None,
+                score: None,
+            });
+        }
+    }
 
     // now construct the search results in the original search result order
     let result: Vec<DocumentSearchResponseItemWithMetadata> = entity_id_hit_map

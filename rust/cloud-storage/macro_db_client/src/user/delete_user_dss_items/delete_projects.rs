@@ -1,3 +1,5 @@
+use model_entity::EntityType;
+
 /// Deletes all projects for a user
 /// Does not commit the transaction
 #[tracing::instrument(skip(transaction))]
@@ -52,10 +54,13 @@ pub async fn delete_user_projects(
     .execute(transaction.as_mut())
     .await?;
 
-    crate::item_access::delete::delete_user_item_access_bulk(
+    crate::item_access::delete::delete_user_entity_access_bulk(
         transaction,
-        &user_projects,
-        "project",
+        &user_projects
+            .iter()
+            .filter_map(|p| macro_uuid::string_to_uuid(p).ok())
+            .collect::<Vec<uuid::Uuid>>(),
+        EntityType::Project,
     )
     .await?;
 

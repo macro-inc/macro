@@ -1,15 +1,15 @@
-import { Match, Show, Switch, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
-import type { MessageActions, MessageData } from './types';
-import { Message } from './Message';
-import type { ChannelMessageListMeta } from './list-meta';
-import { useMessage, MessageSelectionProvider } from './context';
-import type { MessageSelectionState } from './context';
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
-import type { MessageEditor } from '../Channel/create-message-editor';
-import { MessageEditorContent } from '../Channel/InlineMessageEditor';
 import { longPressHighlight } from '@core/directive/longPressHighlight';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { cn } from '@ui/utils/classname';
+import { type JSX, Match, Show, Switch } from 'solid-js';
+import type { MessageEditor } from '../Channel/create-message-editor';
+import { MessageEditorContent } from '../Channel/InlineMessageEditor';
+import type { MessageSelectionState } from './context';
+import { MessageSelectionProvider, useMessage } from './context';
+import type { ChannelMessageListMeta } from './list-meta';
+import { Message } from './Message';
+import type { MessageActions, MessageData } from './types';
 
 type ChannelMessageProps = {
   channelId: string;

@@ -9,20 +9,27 @@ use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use url::Url;
 
+/// HTTP client for checking and downloading bundle updates.
 pub struct BundleClient {
+    /// Reusable HTTP client.
     client: reqwest::Client,
+    /// Base URL of the update server.
     base: Url,
 }
 
+/// Errors returned by [`BundleClient`].
 #[derive(Debug, Error)]
 pub enum BundleClientErr {
+    /// An HTTP request failed.
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
+    /// The provided URL cannot be used as a base for path segments.
     #[error("Url {0} cannot be a base")]
     CannotBeABase(Url),
 }
 
 impl BundleClient {
+    /// Create a new client pointing at the given base URL.
     pub fn new(mut base: Url) -> Self {
         base.set_path("");
         let client = reqwest::Client::new();
