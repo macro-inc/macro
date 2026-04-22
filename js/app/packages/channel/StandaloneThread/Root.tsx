@@ -2,9 +2,10 @@ import { useChannelMessagesByIdsQuery } from '@queries/channel/channel-messages'
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import { DEFAULT_VISIBLE_REPLY_COUNT } from '../Thread/utils/thread-reply-indicator-helpers';
 import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
-import { createSignal, Show, type ParentProps, Suspense } from 'solid-js';
+import { createSignal, Show, type ParentProps } from 'solid-js';
 import { ThreadRail } from '../Thread/ThreadRail';
 import { StandaloneThreadContext } from './context';
+import { DebugSuspense } from '@channel/DebugSuspense';
 
 type RootProps = ParentProps<{
   channelId: string;
@@ -14,9 +15,9 @@ type RootProps = ParentProps<{
 
 export function Root(props: RootProps) {
   return (
-    <Suspense>
+    <DebugSuspense name="StandaloneThread.Root">
       <RootInner {...props} />
-    </Suspense>
+    </DebugSuspense>
   );
 }
 

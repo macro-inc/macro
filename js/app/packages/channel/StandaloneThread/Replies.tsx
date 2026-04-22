@@ -114,7 +114,6 @@ export function Replies(props: RepliesProps) {
               );
             }}
           </For>
-
           <Show
             when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
           >
