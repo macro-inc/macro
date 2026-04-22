@@ -291,10 +291,9 @@ const calWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
 const CAL_EVENT_TYPE_CONTENT_NAMES_KEY = config.require(
   'cal_event_type_content_names_key'
 );
-const calEventTypeContentNamesKeyArn: pulumi.Output<string> =
-  aws.secretsmanager
-    .getSecretVersionOutput({ secretId: CAL_EVENT_TYPE_CONTENT_NAMES_KEY })
-    .apply((secret) => secret.arn);
+const calEventTypeContentNamesKeyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: CAL_EVENT_TYPE_CONTENT_NAMES_KEY })
+  .apply((secret) => secret.arn);
 
 // Meta Conversions API — feeds cal → Meta "Lead" events.
 const META_PIXEL_ID = config.require('meta_pixel_id');
