@@ -2,8 +2,9 @@ import { createEffect, For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { usePermissions } from '@core/context/user';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 import { Subscription } from './Subscription';
+import { MobileApp } from './MobileApp';
 import { Appearance } from './Appearance';
 import { Tabs } from '@core/component/Tabs';
 import { Account } from './Account';
@@ -60,6 +61,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
     if (!isMobile()) { tabs.push({ value: 'Shortcuts', label: 'Shortcuts' }) }
     if (permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()) { tabs.push({ value: 'Subscription', label: 'Subscription' }) }
+    if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'Mobile App' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
     return tabs;
   };
@@ -141,7 +143,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   const handleTabChange = (value: string) => {
-    if (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts') {
+    if (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts' || value === 'Mobile App') {
       setActiveTabId(value as SettingsTab);
     }
   };
@@ -248,6 +250,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={activeTabId() === 'Shortcuts'}>
           <div class="size-full">
             <Shortcuts />
+          </div>
+        </Show>
+        <Show when={activeTabId() === 'Mobile App' && ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()}>
+          <div class="size-full">
+            <MobileApp />
           </div>
         </Show>
       </div>
