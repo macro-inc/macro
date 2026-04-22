@@ -6,8 +6,13 @@ version = "0.1.0"
 
 [features]
 default = ["outbound", "ports"]
-outbound = ["dep:sqlx", "ports"]
-ports = ["dep:tokio"]
+outbound = [
+  "dep:entity_access_db_utils",
+  "dep:sqlx",
+  "models_entity_access_management/db",
+  "ports",
+]
+ports = []
 
 [dependencies]
 # Core
@@ -21,12 +26,11 @@ uuid = { workspace = true }
 # Domain models (always included)
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
 models_permissions = { path = "../models_permissions" }
 
-# Async runtime (for ports)
-tokio = { workspace = true, optional = true }
-
 # Database
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]

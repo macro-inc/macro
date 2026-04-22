@@ -180,7 +180,7 @@ export function ActionMenu(props: {
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
-    'start' | 'single' | 'double' | null
+    'start' | 'single' | null
   >('start');
   createEffect(() => {
     if (!isOpen()) {
@@ -229,13 +229,10 @@ export function ActionMenu(props: {
     onClose: closeMenu,
     onSpace: () => {
       switch (escapeSpaceState()) {
-        case 'double':
+        case 'single':
         case 'start':
           closeMenu();
           return true;
-        case 'single':
-          setEscapeSpaceState('double');
-          return false;
         case null:
           setEscapeSpaceState('single');
           return false;

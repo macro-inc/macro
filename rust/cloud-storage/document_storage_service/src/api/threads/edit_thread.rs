@@ -8,12 +8,10 @@ use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
 use macro_db_client::share_permission::edit::edit_thread_permission;
-use macro_share_permissions::user_item_access::update_user_item_access;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericSuccessResponse, SuccessResponse,
 };
 use model::thread::EmailThreadPermission;
-use model::thread::request::PatchThreadRequestV2;
 use model::user::UserContext;
 use models_permissions::share_permission::access_level::{
     AccessLevel, EditAccessLevel, OwnerAccessLevel,
@@ -24,12 +22,22 @@ pub struct ThreadParams {
     pub thread_id: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchThreadRequestV2 {
+    /// The new project that the thread will belong to.
+    pub project_id: Option<String>,
+    /// The share permissions for the thread.
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+}
+
 /// Edits the share permissions of a thread.
 #[utoipa::path(
     tag = "threads",
     patch,
     operation_id="edit_thread_v2",
-    path = "/v2/threads/{thread_id}",
+    path = "/threads/{thread_id}",
     params(
             ("thread_id" = String, Path, description = "thread ID")
     ),
@@ -94,8 +102,9 @@ pub async fn edit_thread_handler(
 
         edit_thread_permission(
             &mut tx,
-            &share_permission,
+            &macro_uuid::string_to_uuid(&thread_id).unwrap(),
             &thread_context.share_permission_id,
+            &share_permission,
         )
         .await
         .map_err(|e| {
@@ -104,25 +113,6 @@ pub async fn edit_thread_handler(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "unable to update thread share permissions".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-        update_user_item_access(
-            &mut tx,
-            &user_context.user_id,
-            &thread_id,
-            "thread",
-            &share_permission,
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to update user item access");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to update user item access".into(),
                 }),
             )
                 .into_response()

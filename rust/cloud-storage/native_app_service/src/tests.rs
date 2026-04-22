@@ -5,7 +5,7 @@ use crate::{
             AllTargets, Arch, BundleUpdate, DesktopTarget, MobileTarget, PlatformData, UpdateErr,
         },
         ports::{GetJsBundleSemver, NativeAppService},
-        service::NativeAppServiceImpl,
+        service::{self, NativeAppServiceImpl},
     },
     outbound::DefaultBundleFetcher,
 };
@@ -165,4 +165,117 @@ async fn it_should_upgrade_desktop() {
             }
         );
     }
+}
+
+#[test]
+fn needs_update_higher_version() {
+    let latest: Version = "2.0.0".parse().unwrap();
+    let current: Version = "1.0.0".parse().unwrap();
+    assert!(service::needs_update(&latest, &current));
+}
+
+#[test]
+fn needs_update_same_version_no_metadata() {
+    let latest: Version = "1.0.0".parse().unwrap();
+    let current: Version = "1.0.0".parse().unwrap();
+    assert!(!service::needs_update(&latest, &current));
+}
+
+#[test]
+fn needs_update_same_version_different_build_metadata() {
+    let latest: Version = "1.0.0+abc1234".parse().unwrap();
+    let current: Version = "1.0.0+def5678".parse().unwrap();
+    assert!(service::needs_update(&latest, &current));
+}
+
+#[test]
+fn needs_update_same_version_same_build_metadata() {
+    let latest: Version = "1.0.0+abc1234".parse().unwrap();
+    let current: Version = "1.0.0+abc1234".parse().unwrap();
+    assert!(!service::needs_update(&latest, &current));
+}
+
+#[test]
+fn needs_update_latest_has_metadata_current_does_not() {
+    let latest: Version = "1.0.0+abc1234".parse().unwrap();
+    let current: Version = "1.0.0".parse().unwrap();
+    assert!(service::needs_update(&latest, &current));
+}
+
+#[test]
+fn needs_update_build_metadata_order_does_not_matter() {
+    let a: Version = "1.0.0+aaaa".parse().unwrap();
+    let z: Version = "1.0.0+zzzz".parse().unwrap();
+    assert!(service::needs_update(&a, &z));
+    assert!(service::needs_update(&z, &a));
+}
+
+#[test]
+fn needs_update_should_not_downgrade() {
+    let latest: Version = "1.0.0+abc1234".parse().unwrap();
+    let current: Version = "2.0.0".parse().unwrap();
+    assert!(!service::needs_update(&latest, &current));
+}
+
+struct MockBundleFetcherWithBuild;
+
+impl GetJsBundleSemver for MockBundleFetcherWithBuild {
+    async fn get_app_semver(&self) -> Result<semver::Version, UpdateErr> {
+        Ok("1.1.1+abc1234".parse().unwrap())
+    }
+
+    fn get_app_bundle_path(&self) -> Url {
+        "https://example.com".parse().unwrap()
+    }
+
+    async fn get_app_bundle_checksum(
+        &self,
+        _version: &semver::Version,
+    ) -> Result<String, UpdateErr> {
+        Ok("abc123".to_string())
+    }
+}
+
+#[tokio::test]
+async fn it_should_upgrade_when_build_metadata_differs() {
+    let semver: Version = "1.1.1+old5678".parse().unwrap();
+
+    let service = NativeAppServiceImpl {
+        bundle_fetcher: MockBundleFetcherWithBuild,
+        platform_data: mock_platform_data(),
+    };
+
+    assert_matches!(
+        service
+            .get_bundle_update(domain::models::BundleUpdateRequest {
+                target: AllTargets::Desktop(DesktopTarget::Darwin),
+                arch: Arch::Aarch64,
+                semver,
+            })
+            .await,
+        Ok(Some(BundleUpdate { version, .. })) => {
+            assert_eq!(version.to_string(), "1.1.1+abc1234");
+        }
+    );
+}
+
+#[tokio::test]
+async fn it_should_not_upgrade_when_build_metadata_matches() {
+    let semver: Version = "1.1.1+abc1234".parse().unwrap();
+
+    let service = NativeAppServiceImpl {
+        bundle_fetcher: MockBundleFetcherWithBuild,
+        platform_data: mock_platform_data(),
+    };
+
+    assert_matches!(
+        service
+            .get_bundle_update(domain::models::BundleUpdateRequest {
+                target: AllTargets::Desktop(DesktopTarget::Darwin),
+                arch: Arch::Aarch64,
+                semver,
+            })
+            .await,
+        Ok(None)
+    );
 }

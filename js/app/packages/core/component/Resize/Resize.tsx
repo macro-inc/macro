@@ -178,7 +178,7 @@ function Zone(props: ParentProps<ZoneProps>) {
  * @property hidden - Accessor that returns whether the panel should be hidden (temporarily
  *     removed from layout but still registered). When hidden, other panels flow around it.
  * @property persistent - When true, panel stays registered even when hidden (for singleton panels
- *     like settings/rightbar). When false or undefined, hidden panels unregister (default behavior).
+ *     like settings). When false or undefined, hidden panels unregister (default behavior).
  */
 type PanelProps = {
   id: PanelId;

@@ -123,6 +123,7 @@ export type CallEntity = EntityBase & {
   channelId: string;
   channelName?: string;
   isActive: boolean;
+  attended: boolean;
   durationMs?: number;
   participantIds: string[];
 };

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id\n            FROM \"Chat\" c\n            WHERE c.\"deletedAt\" IS NOT NULL AND c.\"deletedAt\" <= $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8da326cb4addb18bca0e08c8728c86a1aa898bcf344fe913db7ee5c47dfde47c"
+}

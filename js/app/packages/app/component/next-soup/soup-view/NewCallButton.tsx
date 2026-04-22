@@ -7,7 +7,7 @@ import { isErr } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 import { commsServiceClient } from '@service-comms/client';
 import { DialogWrapper } from '@core/component/DialogWrapper';
-import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
+import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { createSignal } from 'solid-js';

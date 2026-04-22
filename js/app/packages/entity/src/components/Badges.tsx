@@ -36,3 +36,17 @@ export function ImportantBadge() {
     </Badge>
   );
 }
+
+export function AttendanceBadge(props: { attended: boolean }) {
+  return (
+    <Badge
+      class={
+        props.attended
+          ? 'text-ink-extra-muted border-edge-muted px-2'
+          : 'text-accent-30 border-edge-muted px-2'
+      }
+    >
+      {props.attended ? 'attended' : 'unattended'}
+    </Badge>
+  );
+}

@@ -6,13 +6,14 @@ version = "0.1.0"
 
 [features]
 default = ["inbound", "outbound", "ports"]
-inbound = ["dep:axum", "dep:model_user", "dep:roles_and_permissions", "entity_access/inbound", "ports"]
-outbound = [
-  "dep:macro_share_permissions",
-  "dep:macro_uuid",
-  "dep:sqlx",
+inbound = [
+  "dep:axum",
+  "dep:model_user",
+  "dep:roles_and_permissions",
+  "entity_access/inbound",
   "ports",
 ]
+outbound = ["dep:entity_access_db_utils", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = []
 
 [dependencies]
@@ -22,8 +23,14 @@ ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_access_management = { path = "../entity_access_management", default-features = false, features = [
+  "ports",
+] }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }
+models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
 models_permissions = { path = "../models_permissions" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -31,6 +38,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 unicode-segmentation = { workspace = true }
+uuid = { workspace = true }
 
 # Inbound (HTTP handlers)
 axum = { workspace = true, optional = true }
@@ -39,7 +47,6 @@ roles_and_permissions = { path = "../roles_and_permissions", optional = true, de
 utoipa = { workspace = true }
 
 # Outbound (database adapters)
-macro_share_permissions = { path = "../macro_share_permissions", optional = true }
 sqlx = { workspace = true, optional = true }
 
 macro_uuid = { path = "../macro_uuid", optional = true }

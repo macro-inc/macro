@@ -203,6 +203,10 @@ export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
+  createEffect(() => {
+    panel.handle.setDisplayName(props.viewName);
+  });
+
   useSoupNotificationInvalidators();
 
   const component = createMemo(() => {

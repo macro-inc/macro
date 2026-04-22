@@ -318,6 +318,11 @@ async fn main() -> anyhow::Result<()> {
     let connection_service =
         ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
 
+    let entity_access_management_service =
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        );
+
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -328,6 +333,7 @@ async fn main() -> anyhow::Result<()> {
             properties: properties_service.clone(),
         },
         connection_service,
+        entity_access_management_service.clone(),
     ));
 
     let github_webhook_secret = secretsmanager_client
@@ -471,6 +477,7 @@ async fn main() -> anyhow::Result<()> {
         call_state,
         call_webhook_state,
         call_internal_state,
+        entity_access_management_service,
     };
 
     // Spawn the delete document worker

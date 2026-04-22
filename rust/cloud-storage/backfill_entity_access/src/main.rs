@@ -2,31 +2,22 @@
 
 mod config;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use anyhow::Context;
 use config::EnvVars;
-use futures::stream::{self, StreamExt};
 use macro_entrypoint::MacroEntrypoint;
-use models_permissions::share_permission::access_level::AccessLevel;
-use sqlx::QueryBuilder;
+use macro_uuid::Uuid;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
 
-/// Max rows per INSERT statement to stay well within Postgres bind parameter limits.
-const WRITE_BATCH_SIZE: usize = 1000;
+/// Rows of `UserItemAccess` consumed per SQL statement for the 1:1 phases
+/// (owned items, channel/team shares on non-project items). Each batch is a
+/// single `INSERT ... SELECT` in its own autocommit transaction, so lock
+/// windows and WAL size stay bounded.
+const BATCH_SIZE: i64 = 5_000;
 
-/// Max concurrent write tasks.
-const WRITE_CONCURRENCY: usize = 10;
-
-#[derive(Debug, Clone, Copy, sqlx::Type)]
-#[sqlx(type_name = "\"entity_access_source_type\"", rename_all = "lowercase")]
-/// Ordered from least to most access top -> bottom
-pub enum SourceEntityType {
-    Channel,
-    Team,
-    User,
-}
+/// Smaller batch for the project phase, because each `UserItemAccess` row
+/// fans out to every descendant of the shared project tree.
+const PROJECT_BATCH_SIZE: i64 = 500;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -40,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
 
     let db = PgPoolOptions::new()
         .min_connections(1)
-        .max_connections(50)
+        .max_connections(4)
         .connect(&env_vars.database_url)
         .await
         .context("could not connect to db")?;
@@ -49,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
         "backfill" => {
             println!("Starting backfill...");
 
-            backfill_non_projects_channels_and_teams(&db).await?;
+            backfill_non_project_channels_and_teams(&db).await?;
             backfill_owned_items(&db).await?;
             backfill_project_items(&db).await?;
 
@@ -70,330 +61,283 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Inserts rows into `entity_access` in chunks, running up to [`WRITE_CONCURRENCY`] inserts concurrently.
-async fn bulk_upsert(
+/// Drives a keyset-paginated loop. `sql` must bind `$1 = cursor uuid` and
+/// `$2 = batch_size bigint`, and must return exactly one row
+/// `(Option<Uuid>, i64)` — the maximum `UserItemAccess.id` processed in this
+/// batch (NULL when empty = termination), and the number of source rows
+/// considered in the batch.
+async fn run_keyset(
     db: &Pool<Postgres>,
     label: &str,
-    inserts: Vec<(
-        macro_uuid::Uuid,
-        String,
-        String,
-        SourceEntityType,
-        AccessLevel,
-    )>,
+    sql: &str,
+    batch_size: i64,
 ) -> anyhow::Result<()> {
-    if inserts.is_empty() {
-        return Ok(());
-    }
-
-    let total = inserts.len();
-    let chunks: Vec<_> = inserts
-        .chunks(WRITE_BATCH_SIZE)
-        .map(|c| c.to_vec())
-        .collect();
-    let num_chunks = chunks.len();
-    println!("[{label}] writing {total} rows in {num_chunks} chunks");
-
-    stream::iter(chunks)
-        .map(|chunk| async move {
-            let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
-                r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) "#,
-            );
-
-            qb.push_values(&chunk, |mut b, row| {
-                b.push_bind(row.0)
-                    .push_bind(&row.1)
-                    .push_bind(&row.2)
-                    .push_bind(row.3)
-                    .push_bind(row.4);
-            });
-
-            qb.push(" ON CONFLICT DO NOTHING");
-            qb.build().execute(db).await?;
-
-            Ok::<_, anyhow::Error>(())
-        })
-        .buffer_unordered(WRITE_CONCURRENCY)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
-
-    println!("[{label}] write complete ({total} rows)");
-
-    Ok(())
-}
-
-async fn backfill_owned_items(db: &Pool<Postgres>) -> anyhow::Result<()> {
-    let limit = 10000_i64;
-    let mut offset = 0_i64;
-
-    println!("[owned_items] STARTING");
-
+    let start = std::time::Instant::now();
+    let mut cursor: Uuid = Uuid::nil();
+    let mut batches: u64 = 0;
+    let mut total_rows: i64 = 0;
     loop {
-        println!("[owned_items] BATCH offset={offset}");
+        let (next_cursor, batch_rows): (Option<Uuid>, i64) = sqlx::query_as(sql)
+            .bind(cursor)
+            .bind(batch_size)
+            .fetch_one(db)
+            .await
+            .with_context(|| format!("[{label}] batch {batches} failed at cursor={cursor}"))?;
 
-        let batch = sqlx::query!(
-            r#"
-            SELECT DISTINCT
-                "item_id",
-                "item_type",
-                "user_id",
-                access_level AS "access_level: AccessLevel",
-                "created_at"
-            FROM "UserItemAccess"
-            WHERE "granted_from_channel_id" IS NULL
-            AND "granted_from_team_id" IS NULL
-            ORDER BY created_at ASC
-            LIMIT $1
-            OFFSET $2
-            "#,
-            limit,
-            offset
-        )
-        .fetch_all(db)
-        .await?;
-
-        if batch.is_empty() {
-            break;
+        match next_cursor {
+            Some(max_id) => {
+                batches += 1;
+                total_rows += batch_rows;
+                cursor = max_id;
+                if batches.is_multiple_of(50) {
+                    println!(
+                        "[{label}] {batches} batches, {total_rows} rows, cursor={cursor}, elapsed={:?}",
+                        start.elapsed()
+                    );
+                }
+            }
+            None => {
+                println!(
+                    "[{label}] DONE: {batches} batches, {total_rows} source rows in {:?}",
+                    start.elapsed()
+                );
+                return Ok(());
+            }
         }
-
-        println!("[owned_items] read {} rows", batch.len());
-
-        let inserts: Vec<_> = batch
-            .iter()
-            .map(|item| {
-                let item_type = if item.item_type.eq("thread") {
-                    "email_thread".to_string()
-                } else {
-                    item.item_type.to_string()
-                };
-                (
-                    item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
-                    item_type,
-                    item.user_id.to_string(),
-                    SourceEntityType::User,
-                    item.access_level,
-                )
-            })
-            .collect();
-
-        bulk_upsert(db, "owned_items", inserts).await?;
-
-        offset += limit;
     }
+}
 
+/// Phase 1: user-owned items — direct grants with `source_type = 'user'`
+/// and `granted_from_project_id IS NULL`.
+async fn backfill_owned_items(db: &Pool<Postgres>) -> anyhow::Result<()> {
+    println!("[owned_items] STARTING");
+    run_keyset(
+        db,
+        "owned_items",
+        r#"
+        WITH batch AS (
+            SELECT uia.id, uia.item_id, uia.item_type, uia.user_id, uia.access_level
+            FROM "UserItemAccess" uia
+            WHERE uia.id > $1
+              AND uia.granted_from_channel_id IS NULL
+              AND uia.granted_from_team_id IS NULL
+            ORDER BY uia.id
+            LIMIT $2
+        ),
+        ins AS (
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            SELECT DISTINCT ON (entity_id, entity_type, source_id, source_type)
+                b.item_id::uuid AS entity_id,
+                CASE WHEN b.item_type = 'thread' THEN 'email_thread' ELSE b.item_type END AS entity_type,
+                b.user_id AS source_id,
+                'user'::entity_access_source_type AS source_type,
+                b.access_level
+            FROM batch b
+            ORDER BY entity_id, entity_type, source_id, source_type, b.access_level DESC
+            ON CONFLICT (entity_id, entity_type, source_id, source_type)
+              WHERE granted_from_project_id IS NULL
+              DO NOTHING
+            RETURNING 1
+        )
+        SELECT
+            (SELECT id FROM batch ORDER BY id DESC LIMIT 1),
+            (SELECT COUNT(*)::bigint FROM batch)
+        "#,
+        BATCH_SIZE,
+    )
+    .await?;
     println!("[owned_items] COMPLETED");
-
     Ok(())
 }
 
-/// Handles backfilling non-project items for channels and teams
-async fn backfill_non_projects_channels_and_teams(db: &Pool<Postgres>) -> anyhow::Result<()> {
-    let limit = 10000_i64;
-    let mut offset = 0_i64;
-
+/// Phase 2: non-project items shared via a channel or a team — direct grants
+/// with `source_type = 'channel'` or `'team'` and
+/// `granted_from_project_id IS NULL`.
+async fn backfill_non_project_channels_and_teams(db: &Pool<Postgres>) -> anyhow::Result<()> {
     println!("[channels_and_teams] STARTING");
 
-    loop {
-        println!("[channels_and_teams] BATCH offset={offset}");
-
-        let batch = sqlx::query!(
-            r#"
-            SELECT DISTINCT
-                "item_id",
-                "item_type",
-                "user_id",
-                "granted_from_channel_id",
-                "granted_from_team_id",
-                access_level AS "access_level: AccessLevel",
-                "created_at"
-            FROM "UserItemAccess"
-            WHERE "item_type" != 'project'
-            AND ("granted_from_channel_id" IS NOT NULL OR "granted_from_team_id" IS NOT NULL)
-            ORDER BY created_at ASC
-            LIMIT $1
-            OFFSET $2
-            "#,
-            limit,
-            offset
+    run_keyset(
+        db,
+        "channels_and_teams:channels",
+        r#"
+        WITH batch AS (
+            SELECT uia.id, uia.item_id, uia.item_type, uia.granted_from_channel_id, uia.access_level
+            FROM "UserItemAccess" uia
+            WHERE uia.id > $1
+              AND uia.item_type <> 'project'
+              AND uia.granted_from_channel_id IS NOT NULL
+            ORDER BY uia.id
+            LIMIT $2
+        ),
+        ins AS (
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            SELECT DISTINCT ON (entity_id, entity_type, source_id, source_type)
+                b.item_id::uuid AS entity_id,
+                CASE WHEN b.item_type = 'thread' THEN 'email_thread' ELSE b.item_type END AS entity_type,
+                b.granted_from_channel_id::text AS source_id,
+                'channel'::entity_access_source_type AS source_type,
+                b.access_level
+            FROM batch b
+            ORDER BY entity_id, entity_type, source_id, source_type, b.access_level DESC
+            ON CONFLICT (entity_id, entity_type, source_id, source_type)
+              WHERE granted_from_project_id IS NULL
+              DO NOTHING
+            RETURNING 1
         )
-        .fetch_all(db)
-        .await?;
+        SELECT
+            (SELECT id FROM batch ORDER BY id DESC LIMIT 1),
+            (SELECT COUNT(*)::bigint FROM batch)
+        "#,
+        BATCH_SIZE,
+    )
+    .await?;
 
-        if batch.is_empty() {
-            break;
-        }
-
-        println!("[channels_and_teams] read {} rows", batch.len());
-
-        let mut inserts = Vec::new();
-
-        for item in &batch {
-            let item_type = if item.item_type.eq("thread") {
-                "email_thread".to_string()
-            } else {
-                item.item_type.to_string()
-            };
-            if let Some(channel_id) = &item.granted_from_channel_id {
-                inserts.push((
-                    item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
-                    item_type.clone(),
-                    channel_id.to_string(),
-                    SourceEntityType::Channel,
-                    item.access_level,
-                ));
-            }
-            if let Some(team_id) = &item.granted_from_team_id {
-                inserts.push((
-                    item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
-                    item_type.clone(),
-                    team_id.to_string(),
-                    SourceEntityType::Team,
-                    item.access_level,
-                ));
-            }
-        }
-
-        bulk_upsert(db, "channels_and_teams", inserts).await?;
-
-        offset += limit;
-    }
+    run_keyset(
+        db,
+        "channels_and_teams:teams",
+        r#"
+        WITH batch AS (
+            SELECT uia.id, uia.item_id, uia.item_type, uia.granted_from_team_id, uia.access_level
+            FROM "UserItemAccess" uia
+            WHERE uia.id > $1
+              AND uia.item_type <> 'project'
+              AND uia.granted_from_team_id IS NOT NULL
+            ORDER BY uia.id
+            LIMIT $2
+        ),
+        ins AS (
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            SELECT DISTINCT ON (entity_id, entity_type, source_id, source_type)
+                b.item_id::uuid AS entity_id,
+                CASE WHEN b.item_type = 'thread' THEN 'email_thread' ELSE b.item_type END AS entity_type,
+                b.granted_from_team_id::text AS source_id,
+                'team'::entity_access_source_type AS source_type,
+                b.access_level
+            FROM batch b
+            ORDER BY entity_id, entity_type, source_id, source_type, b.access_level DESC
+            ON CONFLICT (entity_id, entity_type, source_id, source_type)
+              WHERE granted_from_project_id IS NULL
+              DO NOTHING
+            RETURNING 1
+        )
+        SELECT
+            (SELECT id FROM batch ORDER BY id DESC LIMIT 1),
+            (SELECT COUNT(*)::bigint FROM batch)
+        "#,
+        BATCH_SIZE,
+    )
+    .await?;
 
     println!("[channels_and_teams] COMPLETED");
-
     Ok(())
 }
 
-/// Backfills project shares
+/// Phase 3: project shares — direct grant on the shared project itself, plus
+/// inherited grants on every descendant (child projects, docs, chats, email
+/// threads) keyed to the shared project via `granted_from_project_id`.
+/// Mirrors `entity_access_db_utils::update_entity_access_channel_share_permissions`.
+///
+/// Team-shared projects are intentionally skipped: the product does not
+/// support sharing a project directly with a team.
+///
+/// Both direct and inherited inserts happen in one statement per batch via
+/// two data-modifying CTEs; they target different partial unique indexes, so
+/// they do not compete for locks.
 async fn backfill_project_items(db: &Pool<Postgres>) -> anyhow::Result<()> {
-    let limit = 500_i64;
-    let mut offset = 0_i64;
-
     println!("[project_items] STARTING");
-
-    loop {
-        println!("[project_items] BATCH offset={offset}");
-
-        let project_batch = sqlx::query!(
-            r#"
-            SELECT DISTINCT
-                uia."item_id",
-                uia."item_type",
-                uia."granted_from_channel_id",
-                uia.access_level AS "access_level: AccessLevel",
-                uia."created_at",
-                p."userId" as project_owner -- project owner
+    run_keyset(
+        db,
+        "project_items",
+        r#"
+        WITH RECURSIVE batch AS (
+            SELECT uia.id, uia.item_id, uia.granted_from_channel_id, uia.access_level
             FROM "UserItemAccess" uia
-            JOIN "Project" p ON p.id = uia.item_id
-            WHERE item_type = 'project'
-            ORDER BY created_at ASC
-            LIMIT $1
-            OFFSET $2
-            "#,
-            limit,
-            offset
+            WHERE uia.id > $1
+              AND uia.item_type = 'project'
+              AND uia.granted_from_team_id IS NULL
+            ORDER BY uia.id
+            LIMIT $2
+        ),
+        share_sources AS (
+            SELECT DISTINCT ON (project_id, source_id, source_type)
+                b.item_id AS project_id,
+                COALESCE(b.granted_from_channel_id::text, p."userId") AS source_id,
+                CASE WHEN b.granted_from_channel_id IS NOT NULL
+                     THEN 'channel' ELSE 'user' END::entity_access_source_type AS source_type,
+                b.access_level
+            FROM batch b
+            JOIN "Project" p ON p.id = b.item_id
+            ORDER BY project_id, source_id, source_type, b.access_level DESC
+        ),
+        direct_ins AS (
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            SELECT DISTINCT ON (entity_id, source_id, source_type)
+                ss.project_id::uuid AS entity_id,
+                'project' AS entity_type,
+                ss.source_id,
+                ss.source_type,
+                ss.access_level
+            FROM share_sources ss
+            ORDER BY entity_id, source_id, source_type, ss.access_level DESC
+            ON CONFLICT (entity_id, entity_type, source_id, source_type)
+              WHERE granted_from_project_id IS NULL
+              DO NOTHING
+            RETURNING 1
+        ),
+        descendant_projects AS (
+            SELECT ss.project_id AS root_project_id, ss.project_id AS id
+            FROM share_sources ss
+            UNION ALL
+            SELECT dp.root_project_id, p.id
+            FROM "Project" p
+            JOIN descendant_projects dp ON p."parentId" = dp.id
+        ),
+        descendants AS (
+            SELECT dp.root_project_id, dp.id::uuid AS entity_id, 'project' AS entity_type
+            FROM descendant_projects dp
+            WHERE dp.id <> dp.root_project_id
+
+            UNION ALL
+            SELECT dp.root_project_id, d.id::uuid, 'document'
+            FROM "Document" d
+            JOIN descendant_projects dp ON d."projectId" = dp.id
+
+            UNION ALL
+            SELECT dp.root_project_id, c.id::uuid, 'chat'
+            FROM "Chat" c
+            JOIN descendant_projects dp ON c."projectId" = dp.id
+
+            UNION ALL
+            SELECT dp.root_project_id, et.id::uuid, 'email_thread'
+            FROM email_threads et
+            JOIN descendant_projects dp ON et.project_id = dp.id
+        ),
+        inherited_ins AS (
+            INSERT INTO entity_access
+                (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+            SELECT DISTINCT ON (entity_id, entity_type, source_id, source_type, granted_from_project_id)
+                d.entity_id,
+                d.entity_type,
+                ss.source_id,
+                ss.source_type,
+                ss.access_level,
+                d.root_project_id AS granted_from_project_id
+            FROM descendants d
+            JOIN share_sources ss ON ss.project_id = d.root_project_id
+            ORDER BY entity_id, entity_type, source_id, source_type, granted_from_project_id, ss.access_level DESC
+            ON CONFLICT (entity_id, entity_type, source_id, source_type, granted_from_project_id)
+              WHERE granted_from_project_id IS NOT NULL
+              DO NOTHING
+            RETURNING 1
         )
-        .fetch_all(db)
-        .await?;
-
-        if project_batch.is_empty() {
-            break;
-        }
-
-        let batch_size = project_batch.len();
-        println!("[project_items] read {batch_size} projects");
-
-        let processed = AtomicUsize::new(0);
-
-        // Process projects concurrently
-        stream::iter(project_batch)
-            .map(|project| {
-                let processed = &processed;
-                async move {
-                    let item_ids = sqlx::query!(
-                        r#"
-                        WITH RECURSIVE project_tree AS (
-                            SELECT id FROM "Project" WHERE id = $1
-                            UNION ALL
-                            SELECT p.id
-                            FROM "Project" p
-                            JOIN project_tree pt ON p."parentId" = pt.id
-                        )
-                        SELECT id AS "item_id!", 'project' AS "item_type!" FROM project_tree
-
-                        UNION ALL
-
-                        SELECT d.id, 'document' FROM "Document" d
-                        WHERE d."projectId" IN (SELECT id FROM project_tree)
-
-                        UNION ALL
-
-                        SELECT c.id, 'chat' FROM "Chat" c
-                        WHERE c."projectId" IN (SELECT id FROM project_tree)
-
-                        UNION ALL
-
-                        SELECT et.id::text, 'thread' FROM "email_threads" et
-                        WHERE et.project_id IN (SELECT id FROM project_tree);
-                        "#,
-                        project.item_id
-                    )
-                    .fetch_all(db)
-                    .await?;
-
-                    let (source_id, source_entity_type) =
-                        if let Some(granted_from_channel_id) = project.granted_from_channel_id {
-                            (
-                                granted_from_channel_id.to_string(),
-                                SourceEntityType::Channel,
-                            )
-                        } else {
-                            (project.project_owner, SourceEntityType::User)
-                        };
-
-                    let inserts: Vec<_> = item_ids
-                        .iter()
-                        .map(|item| {
-                            let item_type = if item.item_type.eq("thread") {
-                                "email_thread".to_string()
-                            } else {
-                                item.item_type.to_string()
-                            };
-                            (
-                                item.item_id.parse::<macro_uuid::Uuid>().unwrap(),
-                                item_type,
-                                source_id.clone(),
-                                source_entity_type,
-                                project.access_level,
-                            )
-                        })
-                        .collect();
-
-                    let sub_items = inserts.len();
-                    bulk_upsert(db, "project_items", inserts).await?;
-
-                    let done = processed.fetch_add(1, Ordering::Relaxed) + 1;
-                    println!(
-                        "[project_items] processed {done}/{batch_size} projects \
-                         (project {} had {sub_items} sub-items)",
-                        project.item_id
-                    );
-
-                    Ok::<_, anyhow::Error>(())
-                }
-            })
-            .buffer_unordered(WRITE_CONCURRENCY)
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-
-        offset += limit;
-    }
-
+        SELECT
+            (SELECT id FROM batch ORDER BY id DESC LIMIT 1),
+            (SELECT COUNT(*)::bigint FROM batch)
+        "#,
+        PROJECT_BATCH_SIZE,
+    )
+    .await?;
     println!("[project_items] COMPLETED");
-
     Ok(())
 }
 
@@ -442,11 +386,11 @@ pub async fn get_legacy_user_items(
                   (uia.item_type = 'chat' AND c."deletedAt" IS NULL) OR
                   (uia.item_type = 'project' AND p."deletedAt" IS NULL)
               )
-              
+
             -- The rest of the unions are to get implicit access to items via project access
             UNION ALL
 
-            -- Access to docs in visible projects 
+            -- Access to docs in visible projects
             SELECT
                 d.id AS item_id,
                 'document' AS item_type,

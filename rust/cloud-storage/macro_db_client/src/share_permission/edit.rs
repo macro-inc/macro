@@ -1,4 +1,5 @@
 use crate::Parameters;
+use model_entity::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::{Postgres, Transaction};
 
@@ -7,6 +8,8 @@ use super::channel_permission::edit::edit_channel_share_permission;
 #[tracing::instrument(skip(transaction))]
 pub async fn edit_share_permission(
     transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &uuid::Uuid,
+    entity_type: EntityType,
     share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> anyhow::Result<()> {
@@ -77,31 +80,34 @@ pub async fn edit_share_permission(
     if let Some(channel_share_permissions) = share_permission.channel_share_permissions.as_ref() {
         edit_channel_share_permission(transaction, share_permission_id, channel_share_permissions)
             .await?;
+
+        entity_access_db_utils::update_entity_access_channel_share_permissions(
+            transaction,
+            entity_id,
+            entity_type,
+            channel_share_permissions,
+        )
+        .await?;
     }
 
     Ok(())
 }
 
 #[tracing::instrument(skip(transaction))]
-pub async fn edit_document_permission(
+pub async fn edit_thread_permission(
     transaction: &mut Transaction<'_, Postgres>,
-    document_id: &str,
+    thread_id: &uuid::Uuid,
+    share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> anyhow::Result<()> {
-    let share_id: String = sqlx::query!(
-        r#"
-        SELECT
-            dp."sharePermissionId" as share_permission_id
-        FROM "DocumentPermission" dp
-        WHERE dp."documentId" = $1
-        "#,
-        document_id
+    edit_share_permission(
+        transaction,
+        thread_id,
+        EntityType::EmailThread,
+        share_permission_id,
+        share_permission,
     )
-    .map(|row| row.share_permission_id)
-    .fetch_one(transaction.as_mut())
-    .await?;
-
-    edit_share_permission(transaction, &share_id, share_permission).await
+    .await
 }
 
 #[tracing::instrument(skip(transaction))]
@@ -123,182 +129,12 @@ pub async fn edit_project_permission(
     .fetch_one(transaction.as_mut())
     .await?;
 
-    edit_share_permission(transaction, &share_id, share_permission).await
-}
-
-#[tracing::instrument(skip(transaction))]
-pub async fn edit_chat_permission(
-    transaction: &mut Transaction<'_, Postgres>,
-    chat_id: &str,
-    share_permission: &UpdateSharePermissionRequestV2,
-) -> anyhow::Result<()> {
-    let share_id: String = sqlx::query!(
-        r#"
-        SELECT
-            cp."sharePermissionId" as share_permission_id
-        FROM "ChatPermission" cp
-        WHERE cp."chatId" = $1
-        "#,
-        chat_id
+    edit_share_permission(
+        transaction,
+        &macro_uuid::string_to_uuid(project_id).unwrap(),
+        EntityType::Project,
+        &share_id,
+        share_permission,
     )
-    .map(|row| row.share_permission_id)
-    .fetch_one(transaction.as_mut())
-    .await?;
-
-    edit_share_permission(transaction, &share_id, share_permission).await
-}
-
-#[tracing::instrument(skip(transaction))]
-pub async fn edit_thread_permission(
-    transaction: &mut Transaction<'_, Postgres>,
-    share_permission: &UpdateSharePermissionRequestV2,
-    share_permission_id: &str,
-) -> anyhow::Result<()> {
-    // at this time the share permission of a thread can't be updated. threads cannot be public.
-    // only the channel share permissions within can be modified.
-
-    if let Some(channel_share_permissions) = &share_permission.channel_share_permissions {
-        edit_channel_share_permission(transaction, share_permission_id, channel_share_permissions)
-            .await?;
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use models_permissions::share_permission::channel_share_permission::{
-        ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
-    };
-
-    use super::*;
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("document_permissions")))]
-    async fn test_edit_document_permission(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let mut transaction = pool.begin().await?;
-        let share_permission = UpdateSharePermissionRequestV2 {
-            is_public: None,
-            public_access_level: Some(AccessLevel::Edit),
-            channel_share_permissions: None,
-        };
-
-        edit_document_permission(&mut transaction, "document-one", &share_permission).await?;
-
-        let result = sqlx::query!(
-            r#"
-            SELECT
-                sp.id as id,
-                sp."isPublic" as is_public,
-                sp."publicAccessLevel" as "public_access_level?"
-            FROM
-            "SharePermission" sp
-            WHERE
-                sp.id = $1
-            "#,
-            "sp-1"
-        )
-        .fetch_one(&mut *transaction)
-        .await?;
-
-        assert!(result.is_public);
-        assert_eq!(result.public_access_level, Some("edit".to_string()));
-
-        let share_permission = UpdateSharePermissionRequestV2 {
-            is_public: Some(false),
-            public_access_level: None,
-            channel_share_permissions: None,
-        };
-        edit_document_permission(&mut transaction, "document-one", &share_permission).await?;
-        let result = sqlx::query!(
-            r#"
-            SELECT
-                sp.id as id,
-                sp."isPublic" as is_public,
-                sp."publicAccessLevel" as "public_access_level?"
-            FROM
-            "SharePermission" sp
-            WHERE
-                sp.id = $1
-            "#,
-            "sp-1"
-        )
-        .fetch_one(&mut *transaction)
-        .await?;
-
-        assert!(!result.is_public);
-        assert!(result.public_access_level.is_none());
-
-        transaction.commit().await?;
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("document_permissions")))]
-    async fn test_edit_document_permission_document_channel_updates(
-        pool: Pool<Postgres>,
-    ) -> anyhow::Result<()> {
-        let mut transaction = pool.begin().await?;
-        let share_permission = UpdateSharePermissionRequestV2 {
-            is_public: None,
-            public_access_level: None,
-            channel_share_permissions: Some(vec![
-                // Add new
-                UpdateChannelSharePermission {
-                    channel_id: "channel-three".to_string(),
-                    access_level: Some(AccessLevel::Edit),
-                    operation: UpdateOperation::Add,
-                },
-                // Replace existing
-                UpdateChannelSharePermission {
-                    channel_id: "channel-one".to_string(),
-                    access_level: Some(AccessLevel::Owner),
-                    operation: UpdateOperation::Replace,
-                },
-                // Remove existing
-                UpdateChannelSharePermission {
-                    channel_id: "channel-two".to_string(),
-                    access_level: None,
-                    operation: UpdateOperation::Remove,
-                },
-            ]),
-        };
-        edit_document_permission(&mut transaction, "document-one", &share_permission).await?;
-        transaction.commit().await?;
-
-        let channel_share_permissions: Vec<ChannelSharePermission> = sqlx::query_as!(
-            ChannelSharePermission,
-            r#"
-            SELECT
-                csp."channel_id",
-                csp."access_level" as "access_level:AccessLevel"
-            FROM
-            "ChannelSharePermission" csp
-            WHERE
-                csp."share_permission_id" = $1
-            ORDER BY
-                csp."channel_id"
-            "#,
-            "sp-1"
-        )
-        .fetch_all(&pool)
-        .await?;
-
-        assert_eq!(channel_share_permissions.len(), 2);
-        assert_eq!(
-            channel_share_permissions[0].channel_id,
-            "channel-one".to_string()
-        );
-        assert_eq!(
-            channel_share_permissions[0].access_level,
-            AccessLevel::Owner
-        );
-        assert_eq!(
-            channel_share_permissions[1].channel_id,
-            "channel-three".to_string()
-        );
-        assert_eq!(channel_share_permissions[1].access_level, AccessLevel::Edit);
-
-        Ok(())
-    }
+    .await
 }

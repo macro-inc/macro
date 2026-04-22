@@ -19,10 +19,11 @@ pub async fn enrich_search_response(
     user_id: &str,
     results: Vec<SearchHit>,
     entity_type: SearchEntityType,
+    search_term: Option<&str>,
 ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
     match entity_type {
         SearchEntityType::Documents => {
-            let response = enrich_documents(ctx, user_id, results).await?;
+            let response = enrich_documents(ctx, user_id, results, search_term).await?;
             Ok(response
                 .into_iter()
                 .map(UnifiedSearchResponseItem::Document)

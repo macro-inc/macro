@@ -3,6 +3,7 @@ use crate::history::{upsert_item_last_accessed, upsert_user_history};
 use ai::types::Model;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{IDWithTimeStamps, chat::NewChatAttachment};
+use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
@@ -66,13 +67,13 @@ pub async fn create_chat_v2(
         append_attachment_to_chat(&mut transaction, attachment).await?;
     }
 
-    crate::item_access::insert::insert_user_item_access(
+    entity_access_db_utils::insert_entity_access_row(
         &mut transaction,
-        user_id.copied(),
-        &chat.id,
-        "chat",
+        &macro_uuid::string_to_uuid(&chat.id).unwrap(),
+        EntityType::Chat,
+        user_id.as_ref(),
+        entity_access_db_utils::EntityAccessSourceType::User,
         AccessLevel::Owner,
-        None,
     )
     .await?;
 

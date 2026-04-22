@@ -304,6 +304,13 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         queryFilters: QUERY_FILTERS.calls,
         clientFilters: { and: ['calls'] },
       }),
+      unattended: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.calls,
+          call_filters: { attended: false },
+        },
+        clientFilters: { and: ['calls'] },
+      }),
     },
   },
   folders: {

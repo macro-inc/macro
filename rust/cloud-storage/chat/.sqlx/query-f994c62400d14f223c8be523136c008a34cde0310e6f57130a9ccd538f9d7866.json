@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            e.source_entity_id::uuid as \"message_id!: uuid::Uuid\",\n            e.entity_type as \"entity_type!\",\n            e.entity_id as \"entity_id!\",\n            e.created_at as \"created_at!\"\n        FROM comms_entity_mentions e\n        JOIN comms_messages m ON e.source_entity_id = m.id::text\n        WHERE e.source_entity_type = 'message'\n          AND m.channel_id = $1\n          AND m.deleted_at IS NULL\n        ORDER BY e.created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f994c62400d14f223c8be523136c008a34cde0310e6f57130a9ccd538f9d7866"
+}

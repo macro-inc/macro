@@ -11,7 +11,7 @@ use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor,
 };
-use macro_share_permissions::user_item_access::update_user_item_access;
+use entity_access_management::domain::ports::EntityAccessManagementService;
 use model::response::{GenericErrorResponse, SuccessResponse};
 use model::{project::BasicProject, response::GenericSuccessResponse};
 use model::{project::request::PatchProjectRequestV2, response::ErrorResponse, user::UserContext};
@@ -194,6 +194,23 @@ async fn edit_project_v2(
     )
     .await;
 
+    let _ = ctx
+        .entity_access_management_service
+        .move_project(
+            &macro_uuid::string_to_uuid(&id).unwrap(),
+            project_context
+                .parent_id
+                .as_ref()
+                .map(|p| macro_uuid::string_to_uuid(p).unwrap())
+                .as_ref(),
+            req.project_parent_id
+                .as_ref()
+                .map(|p| macro_uuid::string_to_uuid(p).unwrap())
+                .as_ref(),
+        )
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "unable to update entity access for project"));
+
     // Update the project you moved from and moved to
     macro_project_utils::update_project_modified(
         &ctx.db,
@@ -235,19 +252,6 @@ async fn patch_project_transaction(
     )
     .await
     .context("failed to patch project")?;
-
-    // Update user access if share permissions are provided
-    if let Some(share_permission) = share_permission {
-        update_user_item_access(
-            &mut transaction,
-            &user_context.user_id,
-            &project_context.id,
-            "project",
-            share_permission,
-        )
-        .await
-        .context("failed to update user item access")?;
-    }
 
     transaction
         .commit()

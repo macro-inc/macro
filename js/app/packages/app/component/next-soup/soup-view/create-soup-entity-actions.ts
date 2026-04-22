@@ -6,6 +6,7 @@ import {
   makeBlockSenderAction,
   makeCopyAction,
   makeCopyBranchNameAction,
+  makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeDeleteAction,
   makeMarkDoneAction,
@@ -67,6 +68,7 @@ export function createSoupEntityActions(): {
   const moveToProjectAction = makeMoveToProjectAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
+  const copyEntityIdAction = makeCopyEntityIdAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
@@ -207,6 +209,12 @@ export function createSoupEntityActions(): {
           onClick: handle(copyBranchNameAction.executeWithSoup),
         });
       }
+
+      middleItems.push({
+        id: 'copy-entity-id',
+        label: 'Copy ID',
+        onClick: handle(copyEntityIdAction.executeWithSoup),
+      });
 
       if (shareAction.canExecute(entities[0])) {
         middleItems.push({

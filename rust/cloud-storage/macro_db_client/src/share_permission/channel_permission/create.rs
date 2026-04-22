@@ -1,6 +1,6 @@
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-use sqlx::{Postgres, Transaction};
+use sqlx::{Executor, Postgres, Transaction};
 
 use super::ChannelSharePermissionParamaters;
 
@@ -56,13 +56,16 @@ pub async fn create_channel_share_permissions(
 
 /// Attempts to insert a channel share permission
 /// If there is a conflict this will error
-#[tracing::instrument(skip(db))]
-pub async fn insert_channel_share_permission(
-    db: &sqlx::Pool<sqlx::Postgres>,
+#[tracing::instrument(skip(executor))]
+pub async fn insert_channel_share_permission<'e, E>(
+    executor: E,
     share_permission_id: &str,
     channel_id: &str,
     access_level: &AccessLevel,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    E: Executor<'e, Database = Postgres>,
+{
     sqlx::query!(
         r#"
             INSERT INTO "ChannelSharePermission" ("share_permission_id", "channel_id", "access_level")
@@ -72,7 +75,7 @@ pub async fn insert_channel_share_permission(
         channel_id,
         access_level as _,
     )
-    .execute(db)
+    .execute(executor)
     .await.map_err(|e| {
             if e.to_string().contains("duplicate key value violates unique constraint") {
                 anyhow::anyhow!("channel permission already exists")

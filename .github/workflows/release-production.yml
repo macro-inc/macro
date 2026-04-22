@@ -9,7 +9,6 @@ concurrency:
 
 env:
   MODE: "production"
-  WEB_APP_VERSION: ${{ github.ref_name }}
 
 jobs:
   migrate-db:
@@ -126,8 +125,8 @@ jobs:
           name: web-app-prod-build
           path: js/app/packages/app/dist
       - name: Create Web App Artifact
-        run: tar -czf web-app-${{ env.WEB_APP_VERSION }}.tar.gz -C js/app/packages/app/dist .
+        run: tar -czf web-app-${{ github.ref_name }}.tar.gz -C js/app/packages/app/dist .
       - name: Upload Release Artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: web-app-${{ env.WEB_APP_VERSION }}.tar.gz
+          files: web-app-${{ github.ref_name }}.tar.gz

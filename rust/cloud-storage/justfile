@@ -91,6 +91,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./backfill_entity_access/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./entity_access_management/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./mobile_welcome_email_db_client/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./entity_access_db_utils/.env
 
 setup_macrodb:
     just macro_db_client/create_db
