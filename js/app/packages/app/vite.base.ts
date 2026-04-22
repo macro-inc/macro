@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
@@ -9,6 +10,9 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 
 // @ts-ignore
 import { version } from './package.json';
+
+const shortSha = execSync('git rev-parse --short HEAD').toString().trim();
+const appVersion = `${version}+${shortSha}`;
 
 const PLATFORMS = ['web', 'desktop', 'ios', 'android'] as const;
 
@@ -167,9 +171,7 @@ function getAssetsPath(mode: string, command: string): string {
 
 function defineEnv(mode: string, command: string, platform: AppPlatform) {
   return {
-    'import.meta.env.__APP_VERSION__': JSON.stringify(
-      process.env.WEB_APP_VERSION || version
-    ),
+    'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
     'import.meta.env.VITE_PLATFORM': JSON.stringify(platform),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',

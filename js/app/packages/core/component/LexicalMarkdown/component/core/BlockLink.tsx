@@ -11,6 +11,7 @@ export const blockNamesWithLocations = [
   'canvas',
   'channel',
   'md',
+  'task',
   'email',
   'chat',
   'task',

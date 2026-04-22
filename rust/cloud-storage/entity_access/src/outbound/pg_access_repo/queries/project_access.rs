@@ -46,14 +46,14 @@ pub async fn get_project_access(
             UNION ALL
             -- Source 2: items share permission
             SELECT
-                "publicAccessLevel" as "access_level!"
+                "publicAccessLevel"::text AS access_level
             FROM "SharePermission"
             WHERE "isPublic" = true
             AND "publicAccessLevel" IS NOT NULL
             AND id IN (
                 SELECT "sharePermissionId" FROM "ProjectPermission" WHERE "projectId" = $3
             )
-        )
+        ) AS combined_access
         "#,
         project_id,
         &source_ids.0,

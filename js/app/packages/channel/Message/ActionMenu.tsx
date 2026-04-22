@@ -6,7 +6,7 @@ import TrashIcon from '@macro-icons/square/trash.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
-import { useMessage, useMessageActions, useMessageSelection } from './context';
+import { useMessage, useMessageActions } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
 import { renderIcon } from './render-icon';
@@ -55,7 +55,6 @@ function ActionButton(props: {
 export function ActionMenu(props: ActionMenuProps) {
   const message = useMessage();
   const actions = useMessageActions();
-  const selection = useMessageSelection();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
@@ -110,10 +109,7 @@ export function ActionMenu(props: ActionMenuProps) {
 
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
-      <HoverActions
-        class={props.class}
-        persistentVisible={emojiMenuOpen() || !!selection?.isSelected}
-      >
+      <HoverActions class={props.class} persistentVisible={emojiMenuOpen()}>
         <div
           class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets -space-x-1"
           onClick={(e) => e.stopPropagation()}

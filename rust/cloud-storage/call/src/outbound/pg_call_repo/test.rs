@@ -957,6 +957,7 @@ async fn patch_call_record_sets_is_public_true_defaults_view(
                 public_access_level: None,
                 channel_share_permissions: None,
             }),
+            share_with_team: None,
         },
     )
     .await?;
@@ -1002,6 +1003,7 @@ async fn patch_call_record_sets_is_public_false_clears_public_access_level(
                 public_access_level: Some(AccessLevel::Edit),
                 channel_share_permissions: None,
             }),
+            share_with_team: None,
         },
     )
     .await?;
@@ -1037,6 +1039,7 @@ async fn patch_call_record_sets_public_access_level(pool: Pool<Postgres>) -> any
                 public_access_level: Some(AccessLevel::Edit),
                 channel_share_permissions: None,
             }),
+            share_with_team: None,
         },
     )
     .await?;
@@ -1078,6 +1081,7 @@ async fn patch_call_record_adds_channel_share_permission(
                     access_level: Some(AccessLevel::View),
                 }]),
             }),
+            share_with_team: None,
         },
     )
     .await?;
@@ -1151,6 +1155,7 @@ async fn patch_call_record_removes_channel_share_permission(
                     access_level: None,
                 }]),
             }),
+            share_with_team: None,
         },
     )
     .await?;
@@ -1192,6 +1197,7 @@ async fn patch_call_record_none_is_noop(pool: Pool<Postgres>) -> anyhow::Result<
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: None,
+            share_with_team: None,
         },
     )
     .await?;
@@ -1209,5 +1215,242 @@ async fn patch_call_record_none_is_noop(pool: Pool<Postgres>) -> anyhow::Result<
 
     assert_eq!(before.is_public, after.is_public);
     assert_eq!(before.public_access_level, after.public_access_level);
+    Ok(())
+}
+
+// -- patch_call_record: share_with_team ---------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_share_with_team_true_grants_team_access_on_active_call(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa001);
+
+    // The active call's created_by is USER_A — that's the team we should grant.
+    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
+
+    repo.patch_call_record(
+        &CALL1,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: Some(true),
+        },
+    )
+    .await?;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT source_id, access_level::text as "access_level"
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'call' AND source_type = 'team'
+        "#,
+        CALL1,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(row.source_id, team_id.to_string());
+    assert_eq!(row.access_level.as_deref(), Some("view"));
+
+    let flag = sqlx::query_scalar!(r#"SELECT share_with_team FROM calls WHERE id = $1"#, CALL1,)
+        .fetch_one(&pool)
+        .await?;
+    assert!(flag);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_share_with_team_false_removes_team_access(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa002);
+
+    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
+
+    // Pre-seed a team entity_access row so we can observe the deletion.
+    sqlx::query(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           VALUES ($1, 'call', $2, 'team', 'view')"#,
+    )
+    .bind(CALL1)
+    .bind(team_id.to_string())
+    .execute(&pool)
+    .await?;
+
+    repo.patch_call_record(
+        &CALL1,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: Some(false),
+        },
+    )
+    .await?;
+
+    let count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM entity_access
+           WHERE entity_id = $1 AND source_type = 'team'"#,
+        CALL1,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(count, 0);
+
+    let flag = sqlx::query_scalar!(r#"SELECT share_with_team FROM calls WHERE id = $1"#, CALL1,)
+        .fetch_one(&pool)
+        .await?;
+    assert!(!flag);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_share_with_team_works_on_archived_record(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa003);
+
+    // CALL_ARCHIVED was created by USER_A; its team should get View.
+    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: Some(true),
+        },
+    )
+    .await?;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT source_id, access_level::text as "access_level"
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'call' AND source_type = 'team'
+        "#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(row.source_id, team_id.to_string());
+    assert_eq!(row.access_level.as_deref(), Some("view"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_share_with_team_ignores_non_creator_teams(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let creator_team: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaa004);
+    let other_team: Uuid = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbb004);
+    let other_macro_user_id = Uuid::now_v7();
+
+    // USER_A (the call creator) is on `creator_team`.
+    give_user_a_team(&pool, USER_A.as_ref(), &creator_team).await?;
+
+    // Seed a second team whose owner is a different user (USER_B). The repo
+    // must not grant access to this team — the lookup keys off the call's
+    // created_by (USER_A), not off any other user's team membership.
+    sqlx::query(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $3, $4)"#,
+    )
+    .bind(other_macro_user_id)
+    .bind(USER_B.as_ref())
+    .bind("user-b@test.com")
+    .bind("cus_other")
+    .execute(&pool)
+    .await?;
+    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#)
+        .bind(USER_B.as_ref())
+        .bind("user-b@test.com")
+        .bind(other_macro_user_id)
+        .execute(&pool)
+        .await?;
+    sqlx::query(r#"INSERT INTO team (id, name, owner_id) VALUES ($1, $2, $3)"#)
+        .bind(other_team)
+        .bind("unrelated team")
+        .bind(USER_B.as_ref())
+        .execute(&pool)
+        .await?;
+    sqlx::query(r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'owner')"#)
+        .bind(USER_B.as_ref())
+        .bind(other_team)
+        .execute(&pool)
+        .await?;
+
+    repo.patch_call_record(
+        &CALL1,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: Some(true),
+        },
+    )
+    .await?;
+
+    let source_ids: Vec<String> = sqlx::query_scalar!(
+        r#"SELECT source_id FROM entity_access
+           WHERE entity_id = $1 AND source_type = 'team'"#,
+        CALL1,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    assert_eq!(source_ids, vec![creator_team.to_string()]);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_share_with_team_true_noop_when_creator_has_no_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // USER_A is the creator and has no team — the call should succeed but
+    // not create any team entity_access rows.
+    repo.patch_call_record(
+        &CALL1,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: Some(true),
+        },
+    )
+    .await?;
+
+    let count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM entity_access
+           WHERE entity_id = $1 AND source_type = 'team'"#,
+        CALL1,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(count, 0);
+
+    let flag = sqlx::query_scalar!(r#"SELECT share_with_team FROM calls WHERE id = $1"#, CALL1,)
+        .fetch_one(&pool)
+        .await?;
+    assert!(flag);
+
     Ok(())
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n            VALUES ($1, $2, $3, $4, $5)\n        ",
+  "query": "\n            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT DO NOTHING\n            ",
   "describe": {
     "columns": [],
     "parameters": {
@@ -37,5 +37,5 @@
     },
     "nullable": []
   },
-  "hash": "41de07226ced9b95c7419c9e6d5d9bd9c5890cf1c144f0f8905664cd72c7f132"
+  "hash": "44cc40d5175302af5445a34d4add1e7dc2d0cea3efa5b87c16cb2416b43fc098"
 }

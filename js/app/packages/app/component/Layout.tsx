@@ -21,6 +21,7 @@ import {
   Suspense,
 } from 'solid-js';
 import Banner from './banner/Banner';
+import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
@@ -137,6 +138,7 @@ function LayoutInner(props: RouteSectionProps) {
         }
       )}
     >
+      <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
           <GlobalShortcuts />

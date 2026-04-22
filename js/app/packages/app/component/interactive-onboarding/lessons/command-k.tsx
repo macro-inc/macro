@@ -63,7 +63,7 @@ function CommandKContent(_props: LessonContentProps) {
       </div>
       <ClickCallout
         icon={AnimatedCommandIcon}
-        label="in the sidebar"
+        label="in the sidebar (bottom)"
         completed={completed()}
       />
     </div>
@@ -189,5 +189,5 @@ export const commandKLesson: LessonDefinition = {
   title: 'Command Menu',
   content: CommandKContent,
   demo: CommandKDemo,
-  order: 40,
+  order: 45,
 };

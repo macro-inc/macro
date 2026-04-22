@@ -193,6 +193,8 @@ const DEBUG = LOCAL_ONLY;
 // and add a new line. This constant is the minimum height of that element (in pixels)
 // once the editor has at least one full page of content.
 const EDITOR_PADDING_BOTTOM = 200;
+// For tasks, the click target is a small fixed pad so the activity section stays visible.
+const TASK_EDITOR_PADDING_BOTTOM = 48;
 
 export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const blockData = blockDataSignal.get;
@@ -651,7 +653,13 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     })
   );
 
+  const isTask = blockName === 'task';
+
   const observeClickTargetHeight = () => {
+    if (isTask) {
+      setClickTargetHeight(TASK_EDITOR_PADDING_BOTTOM);
+      return;
+    }
     const blockEl = blockElement();
     const rootEl = editor.getRootElement();
     if (!blockEl || !rootEl) {
@@ -941,6 +949,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           classList={{
             'select-auto': !canEdit(),
             'md-no-comments': !ENABLE_MARKDOWN_COMMENTS,
+            'min-h-52': isTask,
           }}
         />
 

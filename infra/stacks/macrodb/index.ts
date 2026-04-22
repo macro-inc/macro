@@ -51,6 +51,8 @@ const parameterGroup = new aws.rds.ParameterGroup(
 
 export const parameterGroupArn = parameterGroup.arn;
 
+const MAINTANENCE_WINDOW = 'sun:04:00-sun:05:00'; // SUNDAY 0000 to 0100 EST
+
 const database = new aws.rds.Instance(
   'database',
   {
@@ -91,8 +93,9 @@ const database = new aws.rds.Instance(
     multiAz: stack === 'prod',
     storageEncrypted: true,
     backupRetentionPeriod: config.requireNumber('backup_retention_days'),
-    backupWindow: '04:24-04:54',
-    maintenanceWindow: 'sun:05:00-sun:05:30',
+    backupWindow: '03:00-03:30',
+    maintenanceWindow: MAINTANENCE_WINDOW,
+    allowMajorVersionUpgrade: true,
     tags,
   },
   { protect: true }
@@ -102,45 +105,41 @@ export const endpoint = database.endpoint;
 
 // ---- Read Replica ----
 
-const enableReadReplica = config.getBoolean('read_replica_enabled') ?? false;
-
-const readReplica = enableReadReplica
-  ? new aws.rds.Instance(
-      'read-replica',
-      {
-        applyImmediately: stack !== 'prod',
-        identifier: `macro-db-${stack}-read-replica`,
-        replicateSourceDb: database.identifier,
-        instanceClass: config.require('read_replica_instance_size'),
-        storageType: config.require('storage_type'),
-        iops: config.getNumber('storage_iops'),
-        storageThroughput: config.getNumber('storage_throughput'),
-        caCertIdentifier: config.require('ca_cert_identifier'),
-        kmsKeyId: config.require('kms_key_id'),
-        storageEncrypted: true,
-        performanceInsightsEnabled: true,
-        performanceInsightsRetentionPeriod: config.requireNumber(
-          'performance_insights_retention_days'
-        ),
-        performanceInsightsKmsKeyId: config.require(
-          'performance_insights_kms_key_id'
-        ),
-        publiclyAccessible: true,
-        vpcSecurityGroupIds: [
-          ...config.require('security_group_ids').split(','),
-        ],
-        parameterGroupName: pulumi.interpolate`${parameterGroup.name}`,
-        enabledCloudwatchLogsExports:
-          stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
-        skipFinalSnapshot: true,
-        deletionProtection: stack === 'prod',
-        tags: {
-          ...tags,
-          role: 'read-replica',
-        },
-      },
-      { dependsOn: [database] }
-    )
-  : undefined;
+const readReplica = new aws.rds.Instance(
+  'read-replica',
+  {
+    applyImmediately: stack !== 'prod',
+    identifier: `macro-db-${stack}-read-replica`,
+    replicateSourceDb: database.identifier,
+    instanceClass: config.require('read_replica_instance_size'),
+    storageType: config.require('storage_type'),
+    iops: config.getNumber('storage_iops'),
+    storageThroughput: config.getNumber('storage_throughput'),
+    caCertIdentifier: config.require('ca_cert_identifier'),
+    kmsKeyId: config.require('kms_key_id'),
+    storageEncrypted: true,
+    performanceInsightsEnabled: true,
+    performanceInsightsRetentionPeriod: config.requireNumber(
+      'performance_insights_retention_days'
+    ),
+    performanceInsightsKmsKeyId: config.require(
+      'performance_insights_kms_key_id'
+    ),
+    publiclyAccessible: true,
+    vpcSecurityGroupIds: [...config.require('security_group_ids').split(',')],
+    parameterGroupName: pulumi.interpolate`${parameterGroup.name}`,
+    enabledCloudwatchLogsExports:
+      stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
+    skipFinalSnapshot: true,
+    deletionProtection: stack === 'prod',
+    maintenanceWindow: MAINTANENCE_WINDOW,
+    allowMajorVersionUpgrade: true,
+    tags: {
+      ...tags,
+      role: 'read-replica',
+    },
+  },
+  { dependsOn: [database] }
+);
 
 export const readReplicaEndpoint = readReplica?.endpoint;

@@ -7000,6 +7000,7 @@ dependencies = [
  "models_opensearch",
  "models_search_cursor",
  "non_empty",
+ "regex",
  "serde",
  "sqlx",
  "thiserror 2.0.17",

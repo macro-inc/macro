@@ -5,6 +5,7 @@ import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
   type Accessor,
   createContext,
+  createEffect,
   createSignal,
   type JSX,
   onCleanup,
@@ -14,7 +15,6 @@ import {
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { listenForHeartbeat } from './heartbeat';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 
@@ -54,8 +54,19 @@ function TauriProvider(props: { children: JSX.Element }) {
     bundleUpdateStatus,
   };
 
+  // Auto-approve download when an update is found so the user only
+  // needs to confirm the final "Update" step.
+  createEffect(() => {
+    const status = bundleUpdateStatus();
+    if (status.status === 'UpdateFound') {
+      console.info('[bundle-update] update found, auto-approving download');
+      invoke('grant_bundle_update', { approved: true }).catch((e) =>
+        console.error('[bundle-update] grant_bundle_update failed', e)
+      );
+    }
+  });
+
   onMount(() => {
-    listenForHeartbeat();
     console.info('[bundle-update] registering listener');
     const unlistenPromise = listen<BundleUpdateStatus>(
       'bundle-update-status',

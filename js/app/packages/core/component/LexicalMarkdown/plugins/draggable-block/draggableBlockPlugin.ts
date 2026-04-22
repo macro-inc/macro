@@ -519,8 +519,6 @@ function registerDraggableBlock(
     });
   }
 
-  // -- Listener management -------------------------------------------------
-
   function attachDragListeners(elem: HTMLElement) {
     elem.addEventListener('dragover', handleDragOver, true);
     elem.addEventListener('drop', handleDrop, true);

@@ -309,7 +309,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
-    'start' | 'single' | 'double' | null
+    'start' | 'single' | null
   >('start');
 
   createEffect(() => {
@@ -399,13 +399,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     },
     onSpace: () => {
       switch (escapeSpaceState()) {
-        case 'double':
+        case 'single':
         case 'start':
           closeMenu();
           return true;
-        case 'single':
-          setEscapeSpaceState('double');
-          return false;
         case null:
           setEscapeSpaceState('single');
           return false;

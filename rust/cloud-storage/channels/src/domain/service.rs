@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        ChannelMessage, ChannelParticipant, MessagePageDirection, ThreadInfo, ThreadReply,
-        TopLevelMessageRow,
+        ChannelMessage, ChannelMessageFilters, ChannelParticipant, MessagePageDirection,
+        ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
         ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage,
@@ -161,12 +161,13 @@ where
         query: Query<Uuid, CreatedAt, ()>,
         direction: MessagePageDirection,
         limit: u16,
+        filters: &ChannelMessageFilters,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 
         let rows_result = self
             .repo
-            .get_top_level_messages(channel_id, &query, direction, limit)
+            .get_top_level_messages(channel_id, &query, direction, limit, filters)
             .await
             .map_err(anyhow::Error::from)?;
 

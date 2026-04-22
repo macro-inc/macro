@@ -18,5 +18,4 @@ config:
   macrodb:monitoring_interval: 60
   macrodb:rds_monitoring_role_arn: arn:aws:iam::569036502058:role/rds-monitoring-role
   macrodb:backup_retention_days: 6
-  macrodb:read_replica_enabled: true
   macrodb:read_replica_instance_size: db.t4g.xlarge

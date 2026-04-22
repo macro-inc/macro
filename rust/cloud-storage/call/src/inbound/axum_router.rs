@@ -18,8 +18,10 @@ use axum::{
     routing::{get, post},
 };
 use entity_access::{
-    domain::models::MemberParticipantRole,
-    domain::ports::EntityAccessService,
+    domain::{
+        models::{MemberParticipantRole, ViewAccessLevel},
+        ports::EntityAccessService,
+    },
     inbound::axum_extractors::{
         CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor,
         ChannelAccessLevelExtractor,
@@ -318,7 +320,7 @@ pub async fn check_active_call_handler<S: CallService, Svc: EntityAccessService>
 #[tracing::instrument(err, skip_all)]
 pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<MemberParticipantRole, Svc>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
 ) -> Result<Json<CallRecord>, CallError> {
     let record = state
         .service
@@ -348,7 +350,7 @@ pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<MemberParticipantRole, Svc>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
 ) -> Result<StatusCode, CallError> {
     state
         .service
@@ -379,7 +381,7 @@ pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService
 #[tracing::instrument(err, skip_all)]
 pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<MemberParticipantRole, Svc>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
     Json(request): Json<EditCallRecordRequest>,
 ) -> Result<StatusCode, CallError> {
     state
@@ -410,7 +412,7 @@ pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<MemberParticipantRole, Svc>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
 ) -> Result<Json<bool>, CallError> {
     let new_value = state
         .service

@@ -11,7 +11,7 @@ function ChoosePlanContent(props: LessonContentProps) {
 
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
-      <p>Pick the plan that works best for your team.</p>
+      <p>Pick the plan that matches how you want to use Macro.</p>
     </div>
   );
 }
@@ -23,7 +23,10 @@ function ChoosePlanDemo(props: LessonContentProps) {
   const handleCheckout = async (tier: string) => {
     if (loading()) return;
     if (tier === 'free') {
-      analytics.track('subscription_start', { type: tier });
+      // Free bypasses Stripe, so fire subscription_success directly here to
+      // stay symmetric with the paid path (which fires it on Stripe return
+      // via Root.tsx's ?subscriptionSuccess handler).
+      analytics.track('subscription_success', { type: tier });
       // Advance to the launch step rather than leaving onboarding.
       props.advance();
       return;

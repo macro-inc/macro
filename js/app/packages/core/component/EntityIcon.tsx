@@ -21,7 +21,7 @@ import FileMd from '@icon/duotone/file-md-duotone.svg';
 import FilePdf from '@icon/duotone/file-pdf-duotone.svg';
 import FileVideo from '@icon/duotone/file-video-duotone.svg';
 import FileImage from '@icon/duotone/image-duotone.svg';
-import PhoneCall from '@icon/duotone/phone-call-duotone.svg';
+import PhoneCall from '@macro-icons/wide/call.svg';
 import Canvas from '@icon/duotone/pencil-circle-duotone.svg';
 import Robot from '@icon/duotone/robot-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
