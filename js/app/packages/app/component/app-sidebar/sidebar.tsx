@@ -23,7 +23,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { Hotkey } from '@core/component/Hotkey';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { ENABLE_CALLS, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
@@ -578,26 +578,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
           icon={AnimatedGearIcon}
         />
 
-        <Show when={import.meta.env.DEV && gitBranch()}>
-          {(branch) => (
-            <Button
-              class={cn(
-                'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1 min-w-0',
-                devStatusBarOpen() && 'bg-ink/10 text-ink'
-              )}
-              variant="ghost"
-              tooltipPlacement="right"
-              tooltip={`Toggle Dev Toolbar: ${branch()}`}
-              onClick={() => setDevStatusBarOpen((v) => !v)}
-            >
-              <div class="size-4 shrink-0">
-                <TerminalIcon class="size-4" />
-              </div>
-              <span class="truncate min-w-0 group-data-[slim=true]/sidebar:invisible">
-                {branch()}
-              </span>
-            </Button>
-          )}
+        <Show when={LOCAL_ONLY && gitBranch()}>
+          <SidebarActionButton
+            label="Dev Toolbar"
+            isSlim={isSlim}
+            onClick={() => setDevStatusBarOpen((v) => !v)}
+            icon={TerminalIcon}
+          />
         </Show>
       </div>
       <InviteModal />
