@@ -31,6 +31,9 @@ import {
   usePlatformNotificationState,
 } from './PlatformNotificationProvider';
 
+const PLAYGROUND_INITIAL_VALUE =
+  "Hey! Check out this **cool feature** we just shipped.\n\nHere's a code example:\n```typescript\nconst notify = () => {\n  console.log('Hello!');\n};\n```\n\nLet me know what you think!";
+
 type NotificationsByType = Map<string, UnifiedNotification[]>;
 
 function groupNotificationsByType(
@@ -270,7 +273,7 @@ function CustomBuilder(props: {
             <MarkdownShell
               config={props.markdownEditor}
               placeholder="Type your markdown message here... (use @ for mentions)"
-              initialValue="Hey! Check out this **cool feature** we just shipped.\n\nHere's a code example:\n```typescript\nconst notify = () => {\n  console.log('Hello!');\n};\n```\n\nLet me know what you think!"
+              initialValue={PLAYGROUND_INITIAL_VALUE}
             />
           </div>
           <p class="text-xs text-ink-muted mt-2">
@@ -454,13 +457,14 @@ function EmptyState(props: { title: string; description: string }) {
 function PlaygroundContent() {
   const { ws } = createMockWebsocket();
   const platformNotif = usePlatformNotificationState();
-  const [markdown, setMarkdown] = createSignal('');
+  const [markdown, setMarkdown] = createSignal(PLAYGROUND_INITIAL_VALUE);
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: 'notifications-playground-markdown',
     enableMentions: true,
     users: () => [],
     onChange: setMarkdown,
   });
+  markdownEditor.buildHandle();
 
   const notificationSource = createNotificationSource(ws);
 

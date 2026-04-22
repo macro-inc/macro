@@ -128,10 +128,12 @@ export function NewMessage(props: NewMessageProps) {
     onMentionRemove: mentionsTracker.onMentionRemove,
     onChange: setMarkdown,
     onEnter: (e) => {
+      handleSubmit();
       e.preventDefault();
       return true;
     },
   });
+  markdownEditor.buildHandle();
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const asAttachment =
