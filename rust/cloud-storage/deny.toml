@@ -77,6 +77,8 @@ ignore = [
   { id = "RUSTSEC-2025-0057", reason = "We should switch to rustc-hash, but haven't got to that yet" },
   { id = "RUSTSEC-2026-0098", reason = "rustls-webpki 0.101.7 pinned by AWS SDK via rustls 0.21" },
   { id = "RUSTSEC-2026-0099", reason = "rustls-webpki 0.101.7 pinned by AWS SDK via rustls 0.21" },
+  { id = "RUSTSEC-2026-0104", reason = "rustls-webpki 0.101.7 pinned by AWS SDK via rustls 0.21" },
+  { id = "RUSTSEC-2026-0105", reason = "core2 yanked/unmaintained, transitive via pdfium-render deps" },
   #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
   #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
   #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },

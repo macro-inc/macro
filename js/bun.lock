@@ -128,7 +128,7 @@
         "concurrently": "^9.2.1",
         "json-refs": "^3.0.15",
         "json-schema-to-typescript": "^15.0.4",
-        "json-schema-to-zod": "^2.6.1",
+        "json-schema-to-zod": "2.6.1",
         "knip": "^6.0.4",
         "lightningcss": "^1.30.2",
         "openai": "^6.25.0",
@@ -318,12 +318,12 @@
     "esbuild",
   ],
   "patchedDependencies": {
-    "@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch",
-    "solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
     "@kobalte/core@0.13.11": "app/patches/@kobalte%2Fcore@0.13.11.patch",
     "virtua@0.48.8": "app/patches/virtua@0.48.8.patch",
+    "@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch",
     "@thisbeyond/solid-dnd@0.7.5": "app/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
     "@lexical/markdown@0.32.1": "app/patches/@lexical%2Fmarkdown@0.32.1.patch",
+    "solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
   },
   "overrides": {
     "ajv": ">=6.14.0",
@@ -2162,7 +2162,7 @@
 
     "json-schema-to-typescript": ["json-schema-to-typescript@15.0.4", "", { "dependencies": { "@apidevtools/json-schema-ref-parser": "^11.5.5", "@types/json-schema": "^7.0.15", "@types/lodash": "^4.17.7", "is-glob": "^4.0.3", "js-yaml": "^4.1.0", "lodash": "^4.17.21", "minimist": "^1.2.8", "prettier": "^3.2.5", "tinyglobby": "^0.2.9" }, "bin": { "json2ts": "dist/src/cli.js" } }, "sha512-Su9oK8DR4xCmDsLlyvadkXzX6+GGXJpbhwoLtOGArAG61dvbW4YQmSEno2y66ahpIdmLMg6YUf/QHLgiwvkrHQ=="],
 
-    "json-schema-to-zod": ["json-schema-to-zod@2.8.1", "", { "bin": { "json-schema-to-zod": "dist/cjs/cli.js" } }, "sha512-fRr1mHgZ7hboLKBUdR428gd9dIHUFGivUqOeiDcSmyXkNZCtB1uGaZLvsjZ4GaN5pwBIs+TGIOf6s+Rp5/R/zA=="],
+    "json-schema-to-zod": ["json-schema-to-zod@2.6.1", "", { "bin": { "json-schema-to-zod": "dist/cjs/cli.js" } }, "sha512-uiHmWH21h9FjKJkRBntfVGTLpYlCZ1n98D0izIlByqQLqpmkQpNTBtfbdP04Na6+43lgsvrShFh2uWLkQDKJuQ=="],
 
     "json-schema-traverse": ["json-schema-traverse@1.0.0", "", {}, "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug=="],
 

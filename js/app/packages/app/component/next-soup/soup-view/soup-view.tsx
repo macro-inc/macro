@@ -434,8 +434,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
   let initialLoad = true;
 
   // Initial load: focus first entity once rows arrive
+  // There can be a case where the data may have arrived but the focusEffectsEnabled
+  // and moveInitialFocus were not set correctly by the methods below. So
+  // we need to also use them as deps for this effect. `initialLoad` should
+  // handle not running after the initial load
   createEffect(
-    on(rows, () => {
+    on([rows, focusEffectsEnabled, moveInitialFocus], () => {
       if (!focusEffectsEnabled() || !moveInitialFocus()) return;
       if (!initialLoad || source.isLoading()) return;
       focusFirstEntity();

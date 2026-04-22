@@ -137,7 +137,7 @@
 		"concurrently": "^9.2.1",
 		"json-refs": "^3.0.15",
 		"json-schema-to-typescript": "^15.0.4",
-		"json-schema-to-zod": "^2.6.1",
+		"json-schema-to-zod": "2.6.1",
 		"knip": "^6.0.4",
 		"lightningcss": "^1.30.2",
 		"openai": "^6.25.0",
