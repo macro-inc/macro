@@ -3,7 +3,6 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { setPersistedLayoutSizes } from '@core/signal/layout';
 import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
@@ -107,18 +106,6 @@ function LayoutInner(props: RouteSectionProps) {
       sessionStorage.removeItem('showUpgradeModal');
     }
   });
-
-  // This effect is to handle moving from unauthenticated to authenticated
-  createEffect((prevAuth: boolean | undefined) => {
-    const currentAuth = isAuthenticated();
-    if (prevAuth === false && currentAuth === true) {
-      setPersistedLayoutSizes([1, 0]);
-    }
-    if (currentAuth === false) {
-      setPersistedLayoutSizes([1, 0]);
-    }
-    return currentAuth;
-  }, isAuthenticated());
 
   mountGlobalFocusListener();
 

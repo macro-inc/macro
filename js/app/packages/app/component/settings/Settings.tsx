@@ -1,10 +1,8 @@
 import { createEffect, createMemo, For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { usePermissions } from '@core/context/user';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
@@ -168,19 +166,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
             >
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
-                <div class="flex items-center pl-2 pr-3 gap-2">
-                  <Show when={!isMobile()}>
-                    <DeprecatedIconButton
-                      icon={CloseIcon}
-                      onClick={closeSettings}
-                      tooltip={{ label: 'Close Settings' }}
-                      theme="clear"
-                      size="sm"
-                    />
-                  </Show>
-
+                <div class="flex items-center justify-center px-3">
                   <Tabs.List
-                    class="flex flex-1 items-center justify-center py-2"
+                    class="flex items-center justify-center py-2"
                     as="div"
                   >
                     <div class="border border-edge-muted rounded-xs inline-flex overflow-hidden">
