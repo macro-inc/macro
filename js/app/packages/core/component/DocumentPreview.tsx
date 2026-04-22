@@ -10,6 +10,7 @@ import {
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
+import { itemToBlockName } from '@core/constant/allBlocks';
 // Components
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { toast } from '@core/component/Toast/Toast';
@@ -442,6 +443,17 @@ export function PopupPreview(props: {
 
   const { item, ItemEntityIcon } = useItemPreviewData(itemPreviewEntity);
 
+  // Resolve the caller-provided type against the item's actual subType so
+  // that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
+  // 'task' block alias instead of raw 'md'. Mirrors BlockLink/EntityMention.
+  const targetBlockType = createMemo<BlockName | BlockAlias>(() => {
+    const i = item();
+    if (isAccessiblePreviewItem(i)) {
+      return itemToBlockName(i);
+    }
+    return props.documentInfo.type;
+  });
+
   // Derived state
   const canOpenInChat = createCallback(() => {
     if (blockName && ['chat'].includes(blockName)) {
@@ -464,10 +476,11 @@ export function PopupPreview(props: {
   };
 
   const openDocument = createCallback(async () => {
+    const type = targetBlockType();
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.warn('No split manager found');
-      let link = `/${props.documentInfo.type}/${props.documentInfo.id}`;
+      let link = `/${type}/${props.documentInfo.id}`;
       if (props.documentInfo.params) {
         const queryParams = new URLSearchParams(
           props.documentInfo.params
@@ -479,7 +492,7 @@ export function PopupPreview(props: {
     }
 
     splitManager.replaceAllSplits({
-      type: props.documentInfo.type,
+      type,
       id: props.documentInfo.id,
       params: props.documentInfo.params,
     });
@@ -501,7 +514,7 @@ export function PopupPreview(props: {
       if (hostname === 'localhost') {
         hostname = 'dev.macro.com';
       }
-      let link = `https://${hostname}/app/${props.documentInfo.type}/${props.documentInfo.id}`;
+      let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
 
       if (
         props.documentInfo.params &&
@@ -532,7 +545,7 @@ export function PopupPreview(props: {
     const splitManager = globalSplitManager();
     if (!splitManager) return false;
     return !!splitManager.getSplitByContent(
-      props.documentInfo.type,
+      targetBlockType(),
       props.documentInfo.id
     );
   };
@@ -541,8 +554,9 @@ export function PopupPreview(props: {
     const splitManager = globalSplitManager();
     if (!splitManager) return;
 
+    const type = targetBlockType();
     const existing = splitManager.getSplitByContent(
-      props.documentInfo.type,
+      type,
       props.documentInfo.id
     );
     if (existing) {
@@ -550,7 +564,7 @@ export function PopupPreview(props: {
     } else {
       splitManager.createNewSplit({
         content: {
-          type: props.documentInfo.type,
+          type,
           id: props.documentInfo.id,
           params: props.documentInfo.params,
         },
@@ -558,12 +572,12 @@ export function PopupPreview(props: {
       });
     }
 
-    if (!isBlockNameWithLocation(props.documentInfo.type)) return;
+    if (!isBlockNameWithLocation(type)) return;
 
     const orchestrator = splitManager.getOrchestrator();
     const handle = await orchestrator.getBlockHandle(
       props.documentInfo.id,
-      props.documentInfo.type
+      type
     );
 
     await handle?.goToLocationFromParams(props.documentInfo.params);
