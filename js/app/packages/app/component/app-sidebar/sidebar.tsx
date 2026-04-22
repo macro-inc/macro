@@ -56,7 +56,15 @@ import {
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
 import BellIcon from '@icon/regular/bell.svg';
+import GitBranchIcon from '@icon/regular/git-branch.svg';
 import { useNotificationSettings } from '@notifications';
+
+const [gitBranch, setGitBranch] = createSignal<string>(
+  import.meta.env.__GIT_BRANCH__ ?? ''
+);
+if (import.meta.env.DEV && import.meta.hot) {
+  import.meta.hot.on('git-branch:update', (data: string) => setGitBranch(data));
+}
 
 interface SidebarItem {
   id: ListView;
@@ -571,6 +579,24 @@ export const AppSidebar = (props: AppSidebarProps) => {
           onClick={toggleSettings}
           icon={AnimatedGearIcon}
         />
+
+        <Show when={import.meta.env.DEV && gitBranch()}>
+          {(branch) => (
+            <Button
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1 min-w-0"
+              variant="ghost"
+              tooltipPlacement="right"
+              tooltip={branch()}
+            >
+              <div class="size-4 shrink-0">
+                <GitBranchIcon class="size-4" />
+              </div>
+              <span class="truncate min-w-0 group-data-[slim=true]/sidebar:invisible">
+                {branch()}
+              </span>
+            </Button>
+          )}
+        </Show>
       </div>
       <InviteModal />
     </div>
