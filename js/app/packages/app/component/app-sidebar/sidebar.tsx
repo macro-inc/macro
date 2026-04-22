@@ -56,7 +56,6 @@ import {
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
 import BellIcon from '@icon/regular/bell.svg';
-import { useCallContextOptional } from '@channel/Call/CallContext';
 import { useNotificationSettings } from '@notifications';
 
 interface SidebarItem {
@@ -145,7 +144,6 @@ type SidebarHotkeyDeps = {
   isSlim: () => boolean;
   onOpenChange: (open: boolean) => void;
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
-  callCtx?: ReturnType<typeof useCallContextOptional>;
 };
 
 export const registerSidebarHotkeys = ({
@@ -156,7 +154,6 @@ export const registerSidebarHotkeys = ({
   hotkeyVisible,
   setHotkeyVisible,
   resetHotkeysState,
-  callCtx,
 }: SidebarHotkeyDeps) => {
   const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
   const debounceSetHotkeyVisible = debounce(() => setHotkeyVisible(true), 200);
@@ -366,7 +363,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
-  const callCtx = useCallContextOptional();
   const notificationSettings = useNotificationSettings();
 
   const showEnableNotifications = () =>
@@ -448,7 +444,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     isSlim,
     onOpenChange: props.onOpenChange,
     openWithSplit: layout.openWithSplit,
-    callCtx,
   });
 
   return (
@@ -593,7 +588,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
-  const callCtx = useCallContextOptional();
 
   const location = useLocation();
 
@@ -711,7 +705,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
                   <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={GO_TO_LEADER_KEY} />
                   </div>
-                  then
                   <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
