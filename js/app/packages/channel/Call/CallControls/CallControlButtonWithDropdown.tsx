@@ -4,6 +4,18 @@ import CaretDown from '@icon/regular/caret-down.svg';
 import { createMemo, createSignal, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import type { CallControlVariant } from './CallControlButton';
+import {
+  callControlDefaultActive,
+  callControlDefaultDanger,
+  callControlDefaultIdle,
+  callControlDefaultSize,
+  callControlPanelActive,
+  callControlPanelDanger,
+  callControlPanelFlat,
+  callControlPanelHoverBg,
+  callControlPanelIdle,
+  callControlPressable,
+} from './callControlButtonShared';
 
 /**
  * Call control with a chevron that opens device selection (mic / camera).
@@ -11,6 +23,7 @@ import type { CallControlVariant } from './CallControlButton';
 export function CallControlButtonWithDropdown(props: {
   onClick: () => Promise<void> | void;
   active?: boolean;
+  danger?: boolean;
   children?: JSX.Element;
   /** Render prop: menu content must be created under this `DropdownMenu` root. */
   dropdownContent: () => JSX.Element;
@@ -35,8 +48,18 @@ export function CallControlButtonWithDropdown(props: {
   };
 
   const resolvedVariant = () => props.variant ?? 'default';
+
+  const defaultVariant = createMemo(() => {
+    return resolvedVariant() === 'default';
+  });
+
+  const defaultActive = createMemo(() => {
+    return defaultVariant() && props.active;
+  });
+
   const isPanelVariant = () => {
     const v = resolvedVariant();
+
     return v === 'panel' || v === 'panel-small';
   };
 
@@ -44,34 +67,66 @@ export function CallControlButtonWithDropdown(props: {
     <div
       class={cn(
         'isolate flex items-center transition-colors',
-        resolvedVariant() === 'default' &&
-          'before:pointer-events-none outline-1 outline-task/50 rounded-lg gap-1 pr-2',
+        defaultVariant() &&
+          cn(
+            'rounded-lg gap-1 pr-2',
+            interactionDisabled() &&
+              'opacity-50 pointer-events-none border border-edge-muted',
+            !interactionDisabled() &&
+              props.danger &&
+              callControlDefaultDanger,
+            !interactionDisabled() &&
+              !props.danger &&
+              defaultActive() &&
+              callControlDefaultActive,
+            !interactionDisabled() &&
+              !props.danger &&
+              !defaultActive() &&
+              callControlDefaultIdle
+          ),
         isPanelVariant() &&
-          'gap-0.5 border-0 bg-transparent pr-1 outline-none shadow-none hover:bg-hover',
-        resolvedVariant() === 'default' && props.active && 'bg-task/30',
-        interactionDisabled() && 'opacity-50 pointer-events-none',
-        resolvedVariant() === 'default' &&
-          !interactionDisabled() &&
-          'text-ink hover:bg-task/40',
-        isPanelVariant() &&
-          !interactionDisabled() &&
-          !props.active &&
-          'text-ink',
-        isPanelVariant() &&
-          !interactionDisabled() &&
-          props.active &&
-          'text-accent-2'
+          cn(
+            'gap-0.5 border-0 bg-transparent pr-1 shadow-none outline-none',
+            !interactionDisabled() &&
+              props.danger &&
+              callControlPanelDanger,
+            !interactionDisabled() &&
+              !props.danger &&
+              !props.active &&
+              callControlPanelIdle,
+            !interactionDisabled() &&
+              !props.danger &&
+              props.active &&
+              callControlPanelActive
+          ),
+        interactionDisabled() &&
+          !defaultVariant() &&
+          'opacity-50 pointer-events-none',
       )}
     >
       <button
         onClick={handleClick}
         disabled={interactionDisabled()}
         class={cn(
-          'relative isolate z-0 flex items-center justify-center transition-colors cursor-pointer',
-          resolvedVariant() === 'default' &&
-            `before:pointer-events-none before:absolute before:right-0 before:top-2 before:bottom-2 before:h-auto before:w-[2px] before:bg-task/30 before:content-[''] w-10 h-10 -translate-x-[3px] rounded-lg`,
+          'relative isolate z-0',
+          defaultVariant() &&
+            cn(
+              callControlPressable,
+              callControlDefaultSize,
+              callControlPanelFlat,
+              'hover:bg-transparent',
+              "before:pointer-events-none before:absolute before:right-0 before:top-2 before:bottom-2 before:h-auto before:w-[1px] before:bg-ink-extra-muted/40 before:content-['']",
+              '-translate-x-[3px]',
+              defaultActive() && 'before:bg-accent-2'
+            ),
           isPanelVariant() &&
-            'w-5 h-8 rounded-md border-0 bg-transparent shadow-none'
+            cn(
+              callControlPressable,
+              'h-8 w-5 rounded-md',
+              callControlPanelFlat,
+              callControlPanelHoverBg,
+              'text-inherit'
+            )
         )}
       >
         <span class="relative z-10 flex items-center justify-center">
@@ -80,7 +135,13 @@ export function CallControlButtonWithDropdown(props: {
       </button>
 
       <DropdownMenu>
-        <DropdownMenu.Trigger class="cursor-pointer flex items-center justify-center text-inherit">
+        <DropdownMenu.Trigger
+          class={cn(
+            callControlPressable,
+            'text-inherit',
+            isPanelVariant() && callControlPanelHoverBg
+          )}
+        >
           <CaretDown
             class={
               isPanelVariant()

@@ -5,6 +5,18 @@ import {
   type JSX,
 } from 'solid-js';
 import { cn } from '@ui/utils/classname';
+import {
+  callControlDefaultActive,
+  callControlDefaultDanger,
+  callControlDefaultIdle,
+  callControlDefaultSize,
+  callControlPanelActive,
+  callControlPanelDanger,
+  callControlPanelFlat,
+  callControlPanelHoverBg,
+  callControlPanelIdle,
+  callControlPressable,
+} from './callControlButtonShared';
 
 export type CallControlVariant = 'default' | 'panel' | 'panel-small';
 
@@ -12,13 +24,6 @@ export const CallControlButton: Component<{
   onClick: () => Promise<void> | void;
   active?: boolean;
   danger?: boolean;
-  /**
-   * Same layout as `danger`, but accent tokens: `default` pill uses
-   * `border-accent-2/50 bg-accent-2/10 hover:bg-accent-2/40` (mirrors
-   * `failure/50`, `/10`, `/40`); `panel` uses `text-accent` like `text-failure`
-   * on `danger`.
-   */
-  accent?: boolean;
   children?: JSX.Element;
   disabled?: boolean;
   /** `default`: bordered pill. `panel`: flat; icon `text-*` matches default border/bg tokens. */
@@ -53,49 +58,40 @@ export const CallControlButton: Component<{
       onClick={handleClick}
       disabled={interactionDisabled()}
       class={cn(
-        'flex items-center justify-center transition-colors cursor-pointer',
-        interactionDisabled() && 'opacity-50 pointer-events-none border border-edge-muted',
+        callControlPressable,
+        interactionDisabled() &&
+          'opacity-50 pointer-events-none border border-edge-muted',
         resolvedVariant() === 'default' &&
           cn(
-            'w-10 h-10 rounded-lg',
+            callControlDefaultSize,
             !interactionDisabled() &&
               props.danger &&
-              'border border-failure/50 bg-failure/10 hover:bg-failure/40',
-            !interactionDisabled() &&
-              props.accent &&
-              !props.danger &&
-              !props.active &&
-              'border border-accent/50 bg-accent/10 hover:bg-accent/40',
+              callControlDefaultDanger,
             !interactionDisabled() &&
               !props.danger &&
               props.active &&
-              'border border-accent-2 bg-accent-2/20 hover:bg-accent-2/40',
+              callControlDefaultActive,
             !interactionDisabled() &&
               !props.danger &&
               !props.active &&
-              !props.accent &&
-              'border border-edge-muted bg-surface-2/70 hover:bg-surface-2/40'
+              callControlDefaultIdle
           ),
         isPanelVariant() &&
           cn(
-            'w-8 h-8 border-0 bg-transparent shadow-none hover:bg-hover',
+            'h-8 w-8',
+            callControlPanelFlat,
+            callControlPanelHoverBg,
             !interactionDisabled() &&
               props.danger &&
-              'text-failure hover:text-failure/90',
-            !interactionDisabled() &&
-              props.accent &&
-              !props.danger &&
-              !props.active &&
-              'text-accent hover:text-accent/90',
+              callControlPanelDanger,
             !interactionDisabled() &&
               !props.danger &&
-              !props.accent &&
               !props.active &&
-              'text-ink',
+              callControlPanelIdle,
             !interactionDisabled() &&
               !props.danger &&
               props.active &&
-              'text-accent-2'
+              callControlPanelActive
           )
       )}
     >
