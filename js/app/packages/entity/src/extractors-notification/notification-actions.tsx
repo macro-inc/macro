@@ -6,7 +6,8 @@ import {
   executeMarkNotificationsUndone,
   getAllNotificationsFromGroup,
 } from '@notifications';
-import { useMutationUndoContext, useUndoableMutation } from '@queries/undo';
+import { useMutation } from '@tanstack/solid-query';
+import { type UndoHandle, useMutationUndoContext } from '@queries/undo';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { restoreSoupFocus } from '@app/component/next-soup/utils';
 
@@ -23,75 +24,54 @@ interface SingleNotificationActionsProps {
 }
 
 type MarkStackDoneVariables = { notificationIds: string[] };
-type MarkStackDoneContext = { toastId?: number };
-
-// Only one notification mark-done toast may be visible at a time — an older
-// toast's Undo button would otherwise invoke the LIFO undo stack and pop the
-// newer entry.
-let visibleMarkDoneToastId: number | undefined;
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
-  const undoCtx = useMutationUndoContext();
+  const { pushUndo } = useMutationUndoContext();
 
-  const showMarkDoneToast = (): number | undefined => {
-    if (visibleMarkDoneToastId !== undefined) {
-      toast.dismiss(visibleMarkDoneToastId);
-    }
-    const id = toast.success(
-      'Marked as done',
-      undefined,
-      [
-        {
-          label: 'Undo',
-          icon: ArrowCounterClockwise,
-          onClick: () => {
-            undoCtx.undo({
-              onError: () => toast.failure('Failed to undo'),
-            });
-            restoreSoupFocus();
-          },
-        },
-      ],
-      10_000,
-      true
-    );
-    visibleMarkDoneToastId = id;
-    return id;
-  };
-
-  const mutation = useUndoableMutation<
-    void,
-    Error,
-    MarkStackDoneVariables,
-    MarkStackDoneContext
-  >(() => ({
-    onMutate: () => ({}),
-    mutationFn: async (vars) =>
-      await executeMarkNotificationsDone(vars.notificationIds),
-    onSuccess: (_data, _variables, context) => {
-      const toastId = showMarkDoneToast();
-      if (context && toastId !== undefined) context.toastId = toastId;
-      props.onMarkAsDone?.();
-    },
+  const mutation = useMutation<void, Error, MarkStackDoneVariables>(() => ({
+    mutationFn: (vars) => executeMarkNotificationsDone(vars.notificationIds),
     onError: () => {
       toast.failure('Failed to mark as done');
     },
-    undoFn: async (vars, context) => {
-      if (context?.toastId !== undefined) {
-        toast.dismiss(context.toastId);
-        if (visibleMarkDoneToastId === context.toastId) {
-          visibleMarkDoneToastId = undefined;
-        }
-      }
-      await executeMarkNotificationsUndone(vars.notificationIds);
+    onSuccess: (_data, variables) => {
+      const toastRef = { id: undefined as number | undefined };
+      let handle: UndoHandle;
+
+      const showToast = () => {
+        toastRef.id = toast.success(
+          'Marked as done',
+          undefined,
+          [
+            {
+              label: 'Undo',
+              icon: ArrowCounterClockwise,
+              onClick: () => {
+                handle.undo({
+                  onError: () => toast.failure('Failed to undo'),
+                });
+                restoreSoupFocus();
+              },
+            },
+          ],
+          10_000,
+          true
+        );
+      };
+
+      handle = pushUndo({
+        undo: () => executeMarkNotificationsUndone(variables.notificationIds),
+        redo: () => executeMarkNotificationsDone(variables.notificationIds),
+        onUndone: () => {
+          if (toastRef.id !== undefined) toast.dismiss(toastRef.id);
+        },
+        onRedone: showToast,
+        label: 'Mark Done',
+      });
+
+      showToast();
+      props.onMarkAsDone?.();
     },
-    redoFn: async (vars, context) => {
-      await executeMarkNotificationsDone(vars.notificationIds);
-      const toastId = showMarkDoneToast();
-      if (context && toastId !== undefined) context.toastId = toastId;
-    },
-    undoLabel: 'Mark Done',
   }));
 
   const markStackAsDone = () => {
