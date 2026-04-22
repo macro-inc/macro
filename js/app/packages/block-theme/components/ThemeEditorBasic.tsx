@@ -276,7 +276,7 @@ export function ThemeEditorBasic(){
 
       <div
         style="
-        font-family: var(--font-mono);
+        font-family: var(--font-sans);
         background-color: var(--b1);
         box-sizing: border-box;
         height: min-content;
@@ -356,6 +356,7 @@ export function ThemeEditorBasic(){
                 border: 1px solid var(--color-edge-muted);
                 transform: translate(-50%, -50%);
                 box-sizing: border-box;
+                border-radius: 2px;
                 position: absolute;
                 height: 10px;
                 width: 100%;
@@ -371,7 +372,7 @@ export function ThemeEditorBasic(){
                 'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--a0)',
                 'box-sizing': 'border-box',
-                'border-radius': '0px',
+                'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
                 'width': '18px',
@@ -391,7 +392,7 @@ export function ThemeEditorBasic(){
                 cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
-                border-radius: 0px;
+                border-radius: 2px;
                 position: absolute;
                 background: #0000;
                 outline: none;
@@ -434,7 +435,9 @@ export function ThemeEditorBasic(){
                 border: 1px solid var(--color-edge-muted);
                 transform: translate(-50%, -50%);
                 box-sizing: border-box;
+                border-radius: 2px;
                 position: absolute;
+                overflow: clip;
                 display: grid;
                 height: 10px;
                 width: 100%;
@@ -462,7 +465,7 @@ export function ThemeEditorBasic(){
                 'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--b1)',
                 'box-sizing': 'border-box',
-                'border-radius': '0px',
+                'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
                 'width': '18px',
@@ -481,7 +484,7 @@ export function ThemeEditorBasic(){
                 cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
-                border-radius: 0px;
+                border-radius: 2px;
                 position: absolute;
                 background: #0000;
                 outline: none;
@@ -526,7 +529,9 @@ export function ThemeEditorBasic(){
                 border: 1px solid var(--color-edge-muted);
                 transform: translate(-50%, -50%);
                 box-sizing: border-box;
+                border-radius: 2px;
                 position: absolute;
+                overflow: clip;
                 display: grid;
                 height: 10px;
                 width: 100%;
@@ -558,7 +563,7 @@ export function ThemeEditorBasic(){
                 'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--b1)',
                 'box-sizing': 'border-box',
-                'border-radius': '0px',
+                'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
                 'width': '18px',
@@ -577,7 +582,7 @@ export function ThemeEditorBasic(){
                 cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
-                border-radius: 0px;
+                border-radius: 2px;
                 position: absolute;
                 background: #0000;
                 outline: none;

@@ -7,6 +7,7 @@ use axum::response::Response;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::thread::EmailThreadPermission;
+use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::Deserialize;
@@ -84,17 +85,17 @@ pub async fn insert_thread_share_permissions(
     .await
     .context("failed to create thread permission")?;
 
-    // insert UserItemAccess for owner
-    macro_db_client::item_access::insert::insert_user_item_access(
+    // insert entity_access row for owner
+    entity_access_db_utils::insert_entity_access_row(
         &mut tx,
-        owner_id,
-        thread_id,
-        "thread",
+        &macro_uuid::string_to_uuid(thread_id).unwrap(),
+        EntityType::EmailThread,
+        owner_id.as_ref(),
+        entity_access_db_utils::EntityAccessSourceType::User,
         AccessLevel::Owner,
-        None,
     )
     .await
-    .context("failed to insert UserItemAccess row for owner")?;
+    .context("failed to insert entity_access row for owner")?;
 
     tx.commit().await.context("failed to commit transaction")?;
 

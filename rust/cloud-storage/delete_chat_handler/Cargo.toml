@@ -9,6 +9,7 @@ anyhow = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["sqs"] }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_uuid = { path = "../macro_uuid" }
 openssl = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

@@ -152,11 +152,17 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     }
 }
 
+pub(crate) type EntityAccessManagementService =
+    entity_access_management::domain::service::EntityAccessManagementServiceImpl<
+        entity_access_management::outbound::PgRepository,
+    >;
+
 pub(crate) type DocumentService = DocumentServiceImpl<
     PgDocumentRepo,
     S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
+    EntityAccessManagementService,
 >;
 
 /// Type alias for the documents router state.
@@ -231,6 +237,7 @@ pub(crate) struct ApiContext {
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub call_internal_state: DssCallInternalState,
+    pub entity_access_management_service: EntityAccessManagementService,
 }
 
 env_var! {

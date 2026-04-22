@@ -4,7 +4,7 @@
 
 TRUNCATE TABLE public."User", public."Project", public."Document", public."SharePermission",
     public."DocumentPermission", public."ProjectPermission", public."EmailThreadPermission",
-    public."UserItemAccess", public.email_links, public.email_threads, public.email_messages,
+    public.entity_access, public.email_links, public.email_threads, public.email_messages,
     public.email_attachments, public.document_email RESTART IDENTITY CASCADE;
 
 ------------------------------------------------------------
@@ -48,14 +48,14 @@ VALUES ('a0000000-0000-0000-0000-000000001000', 'a0000000-0000-0000-0000-0000000
 -- d-attachment-with-direct: linked to thread 2 via email attachment, also has direct access
 -- d-not-attachment: regular document, not linked to any email
 INSERT INTO public."Document" ("id", "name", "owner")
-VALUES ('d-attachment', 'Email Attachment Doc', 'user-thread-access'),
-       ('d-attachment-with-direct', 'Email Attachment With Direct Access', 'user-both-access'),
-       ('d-not-attachment', 'Regular Document', 'user-no-access');
+VALUES ('dddddddd-dddd-dddd-dddd-100000000001', 'Email Attachment Doc', 'user-thread-access'),
+       ('dddddddd-dddd-dddd-dddd-100000000002', 'Email Attachment With Direct Access', 'user-both-access'),
+       ('dddddddd-dddd-dddd-dddd-100000000003', 'Regular Document', 'user-no-access');
 
 -- Link documents to email attachments
 INSERT INTO document_email (document_id, email_attachment_id)
-VALUES ('d-attachment', 'a0000000-0000-0000-0000-000000001000'),
-       ('d-attachment-with-direct', 'a0000000-0000-0000-0000-000000002000');
+VALUES ('dddddddd-dddd-dddd-dddd-100000000001', 'a0000000-0000-0000-0000-000000001000'),
+       ('dddddddd-dddd-dddd-dddd-100000000002', 'a0000000-0000-0000-0000-000000002000');
 
 ------------------------------------------------------------
 -- Thread permissions (via EmailThreadPermission + SharePermission)
@@ -70,9 +70,9 @@ VALUES ('a0000000-0000-0000-0000-000000000010', 'sp-thread-1', 'user-thread-acce
 
 -- user-thread-access has view on thread 1 (so should get view on d-attachment)
 -- user-both-access has edit on thread 2
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
+INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
 VALUES
-    ('b0000000-0000-0000-0000-000000000001', 'user-thread-access', 'a0000000-0000-0000-0000-000000000010', 'thread', 'view'),
-    ('b0000000-0000-0000-0000-000000000002', 'user-both-access', 'a0000000-0000-0000-0000-000000000020', 'thread', 'edit'),
+    ('a0000000-0000-0000-0000-000000000010', 'thread', 'user-thread-access', 'user', 'view'),
+    ('a0000000-0000-0000-0000-000000000020', 'thread', 'user-both-access', 'user', 'edit'),
     -- user-both-access also has direct view on d-attachment-with-direct (thread gives edit, so edit should win)
-    ('b0000000-0000-0000-0000-000000000003', 'user-both-access', 'd-attachment-with-direct', 'document', 'view');
+    ('dddddddd-dddd-dddd-dddd-100000000002', 'document', 'user-both-access', 'user', 'view');

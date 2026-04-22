@@ -2,7 +2,6 @@ use crate::{history::upsert_user_history, share_permission};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::project::Project;
 use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
 
 #[tracing::instrument(skip(db))]
@@ -39,13 +38,16 @@ pub async fn create_project_v2(
 
     upsert_user_history(&mut transaction, user_id.copied(), &project.id, "project").await?;
 
-    crate::item_access::insert::insert_user_item_access(
+    // SAFETY: this is a UUID
+    let project_id = macro_uuid::string_to_uuid(&project.id).unwrap();
+
+    entity_access_db_utils::insert_entity_access_row(
         &mut transaction,
-        user_id,
-        &project.id,
-        "project",
-        AccessLevel::Owner,
-        None,
+        &project_id,
+        entity_access_db_utils::EntityType::Project,
+        user_id.as_ref(),
+        entity_access_db_utils::EntityAccessSourceType::User,
+        entity_access_db_utils::AccessLevel::Owner,
     )
     .await?;
 

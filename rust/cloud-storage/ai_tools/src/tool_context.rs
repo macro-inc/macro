@@ -88,12 +88,19 @@ impl ConnectionService for NoOpConnectionService {
     }
 }
 
+/// Type alias for the entity access management service implementation used by AI tools
+pub type ToolEntityAccessManagementService =
+    entity_access_management::domain::service::EntityAccessManagementServiceImpl<
+        entity_access_management::outbound::PgRepository,
+    >;
+
 /// Type alias for the document service implementation used by AI tools
 pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     documents::outbound::pg_document_repo::PgDocumentRepo,
     documents::outbound::s3_upload_url::S3UploadUrlAdapter,
     NoOpTaskProperties,
     NoOpConnectionService,
+    ToolEntityAccessManagementService,
 >;
 
 /// Type alias for the entity access service implementation

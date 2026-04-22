@@ -176,6 +176,7 @@ pub enum ShareableItemType {
     Chat,
     Project,
     Thread,
+    Call,
 }
 
 /// represents a shareable item with its id and type

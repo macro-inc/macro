@@ -65,7 +65,7 @@ use crate::{
 use channels::inbound::axum_router::{
     ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
     ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
-    ApiThreadInfo, ApiThreadReply,
+    ApiThreadInfo, ApiThreadReply, ChannelMessageFilters,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::ShortIdResponse;
@@ -187,6 +187,7 @@ use utoipa::OpenApi;
 
         // channels
         channels::inbound::axum_router::get_channel_messages_handler,
+        channels::inbound::axum_router::post_channel_messages_handler,
         channels::inbound::axum_router::get_thread_replies_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
@@ -196,7 +197,9 @@ use utoipa::OpenApi;
         call::inbound::axum_router::check_active_call_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
         call::inbound::axum_router::get_call_record_handler,
+        call::inbound::axum_router::edit_call_record_handler,
         call::inbound::axum_router::delete_call_record_handler,
+        call::inbound::axum_router::toggle_share_with_team_handler,
         call::inbound::axum_router::webhook_handler,
         call::inbound::axum_router::transcript_handler,
 
@@ -222,10 +225,10 @@ use utoipa::OpenApi;
         projects::get_project::get_project_handler,
         projects::revert_delete_project::handler,
 
+        entity::get_entity_permission::handler,
+
         // threads
         threads::edit_thread::edit_thread_handler,
-
-        entity::get_entity_permission::handler,
 
         // /recents
         recents::recently_deleted::handler,
@@ -336,6 +339,7 @@ use utoipa::OpenApi;
             ApiChannelAttachment,
             ApiChannelParticipant,
             ApiParticipantRole,
+            ChannelMessageFilters,
 
             // Calls
             call::domain::models::CallTokenResponse,
@@ -345,6 +349,7 @@ use utoipa::OpenApi;
             call::domain::models::CallRecord,
             call::domain::models::CallRecordParticipant,
             call::domain::models::CallRecordTranscriptSegment,
+            call::domain::models::EditCallRecordRequest,
             SoupCallRecord,
             SoupCallRecordParticipant,
 

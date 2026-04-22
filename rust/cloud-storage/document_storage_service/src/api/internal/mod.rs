@@ -2,7 +2,6 @@ use super::{
     context::{ApiContext, EntityAccessService},
     documents::{export_document, get_document_version},
     history::upsert_history,
-    permissions,
     projects::upload_folder,
 };
 use super::{documents::get_document_access_level, user::delete_user_items};
@@ -38,10 +37,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
 
     Router::new()
         // User routes
-        .route(
-            "/channel/update_user_channel_permissions",
-            post(permissions::update_user_channel_permissions::handler),
-        )
         .route(
             "/users/{user_id}",
             delete(delete_user_items::delete_user_items_handler),

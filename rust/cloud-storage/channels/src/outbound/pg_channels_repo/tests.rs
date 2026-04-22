@@ -1,10 +1,15 @@
-use crate::domain::models::{MessagePageDirection, ParticipantRole};
+use crate::domain::models::{ChannelMessageFilters, MessagePageDirection, ParticipantRole};
 use crate::domain::ports::ChannelMessagesRepo;
 use crate::outbound::pg_channels_repo::PgChannelMessagesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_pagination::{CreatedAt, Cursor, CursorVal, Query};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
+
+const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
+    message_ids: Vec::new(),
+    last_activity: None,
+};
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
@@ -33,6 +38,7 @@ async fn top_level_excludes_thread_replies_and_fully_deleted(
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?;
     let rows = result.rows;
@@ -61,6 +67,7 @@ async fn top_level_ordered_newest_first(pool: Pool<Postgres>) -> anyhow::Result<
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?;
     let rows = result.rows;
@@ -83,6 +90,7 @@ async fn top_level_cursor_skips_earlier_messages(pool: Pool<Postgres>) -> anyhow
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?
         .rows;
@@ -99,7 +107,7 @@ async fn top_level_cursor_skips_earlier_messages(pool: Pool<Postgres>) -> anyhow
         filter: (),
     });
     let page2 = repo
-        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Older, 50)
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Older, 50, &NO_FILTERS)
         .await?
         .rows;
     let ids: Vec<Uuid> = page2.iter().map(|r| r.id).collect();
@@ -121,6 +129,7 @@ async fn top_level_newer_direction_returns_nearest_newer_page(
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?
         .rows;
@@ -136,7 +145,7 @@ async fn top_level_newer_direction_returns_nearest_newer_page(
         filter: (),
     });
     let page = repo
-        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 2)
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 2, &NO_FILTERS)
         .await?;
 
     let ids: Vec<Uuid> = page.rows.iter().map(|r| r.id).collect();
@@ -159,6 +168,7 @@ async fn top_level_newer_direction_sets_has_more_newer_with_overfetch(
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?
         .rows;
@@ -174,7 +184,7 @@ async fn top_level_newer_direction_sets_has_more_newer_with_overfetch(
         filter: (),
     });
     let page = repo
-        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 1)
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 1, &NO_FILTERS)
         .await?;
 
     let ids: Vec<Uuid> = page.rows.iter().map(|r| r.id).collect();
@@ -195,6 +205,7 @@ async fn top_level_limit_is_respected(pool: Pool<Postgres>) -> anyhow::Result<()
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             2,
+            &NO_FILTERS,
         )
         .await?;
     let rows = result.rows;
@@ -218,12 +229,38 @@ async fn top_level_scoped_to_channel(pool: Pool<Postgres>) -> anyhow::Result<()>
             &Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &NO_FILTERS,
         )
         .await?;
     let rows = result.rows;
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].content, "other channel msg");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn top_level_message_ids_filter_limits_to_subset(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let filters = ChannelMessageFilters {
+        message_ids: vec![MSG1, MSG3],
+        ..Default::default()
+    };
+    let result = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+        )
+        .await?;
+
+    let ids: Vec<Uuid> = result.rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec![MSG3, MSG1]);
     Ok(())
 }
 
@@ -663,5 +700,103 @@ async fn around_newest_message_has_no_after(pool: Pool<Postgres>) -> anyhow::Res
     let before_ids: Vec<Uuid> = before.iter().map(|r| r.id).collect();
     assert_eq!(before_ids, vec![MSG2, MSG1]);
     assert!(after.is_empty(), "nothing newer than MSG3");
+    Ok(())
+}
+
+// -- last_activity filter -----------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn last_activity_filters_by_message_created_at(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // msg3 created at 12:00 — only it was created after 11:30
+    let filters = ChannelMessageFilters {
+        last_activity: Some(
+            chrono::DateTime::parse_from_rfc3339("2024-01-01T11:30:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ),
+        ..Default::default()
+    };
+    let result = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+        )
+        .await?;
+
+    let ids: Vec<Uuid> = result.rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec![MSG3]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn last_activity_includes_messages_with_recent_thread_replies(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // msg1 created at 10:00 but has replies up to 10:04.
+    // msg2 (deleted) has reply at 11:01.
+    // msg3 created at 12:00.
+    // last_activity = 10:05 excludes msg1 (created 10:00, last reply 10:04),
+    // but includes msg2 (reply at 11:01) and msg3 (created 12:00).
+    let filters = ChannelMessageFilters {
+        last_activity: Some(
+            chrono::DateTime::parse_from_rfc3339("2024-01-01T10:05:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ),
+        ..Default::default()
+    };
+    let result = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+        )
+        .await?;
+
+    let ids: Vec<Uuid> = result.rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec![MSG3, MSG2]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn last_activity_combined_with_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // Ask for msg1 and msg3, but with last_activity that excludes msg1
+    let filters = ChannelMessageFilters {
+        message_ids: vec![MSG1, MSG3],
+        last_activity: Some(
+            chrono::DateTime::parse_from_rfc3339("2024-01-01T11:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ),
+    };
+    let result = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+        )
+        .await?;
+
+    let ids: Vec<Uuid> = result.rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec![MSG3]);
     Ok(())
 }

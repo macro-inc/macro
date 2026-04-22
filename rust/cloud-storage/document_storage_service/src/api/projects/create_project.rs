@@ -6,11 +6,13 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
+use entity_access_management::domain::ports::EntityAccessManagementService;
 use model::{
     project::{Project, request::CreateProjectRequest, response::CreateProjectResponse},
     response::{GenericErrorResponse, GenericResponse},
     user::axum_extractor::MacroUserExtractor,
 };
+use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 use unicode_segmentation::UnicodeSegmentation;
@@ -75,7 +77,7 @@ async fn create_project_v2(
         ctx.db.clone(),
         user_context.macro_user_id.clone(),
         &req.name,
-        req.project_parent_id.clone(),
+        req.project_parent_id.map(|p| p.to_string()),
         &share_permission,
     )
     .await
@@ -90,11 +92,22 @@ async fn create_project_v2(
     // update project modified if necessary
     if let Some(project_id) = req.project_parent_id {
         tracing::trace!("updating project modified date");
+        // SAFETY: this is a uuid.
+        let entity_id = macro_uuid::string_to_uuid(&project.id).unwrap();
+
+        let _ = ctx
+            .entity_access_management_service
+            .add_entity_to_project(&entity_id, EntityType::Project, &project_id)
+            .await
+            .inspect_err(
+                |e| tracing::error!(error=?e, entity_id=?entity_id, project_id=?project_id, "unable to update entity access for project"),
+            );
+
         macro_project_utils::update_project_modified(
             &ctx.db,
             macro_project_utils::ProjectModifiedArgs {
-                project_id: None,
-                old_project_id: Some(project_id.to_string()),
+                project_id: Some(project_id.to_string()),
+                old_project_id: None,
                 user_id: user_context.user_context.user_id.clone(),
             },
         )

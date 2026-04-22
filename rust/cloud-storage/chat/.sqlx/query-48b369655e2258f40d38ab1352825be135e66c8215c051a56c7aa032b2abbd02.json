@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    INSERT INTO \"ThreadAnchor\" (\"threadId\", \"anchorId\", \"anchorTableName\")\n    VALUES ($1, $2, $3::\"anchor_table_name\")\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "anchor_table_name",
+            "kind": {
+              "Enum": [
+                "PdfPlaceableCommentAnchor",
+                "PdfHighlightAnchor"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48b369655e2258f40d38ab1352825be135e66c8215c051a56c7aa032b2abbd02"
+}

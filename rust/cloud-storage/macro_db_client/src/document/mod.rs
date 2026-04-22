@@ -8,8 +8,6 @@ mod list_documents_with_access;
 mod save_document;
 pub mod v2;
 
-pub mod copy_document;
-pub mod document_bom;
 pub use delete_document::*;
 pub use get_document::*;
 pub use get_document_list::*;

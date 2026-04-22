@@ -1,8 +1,9 @@
-import { For } from 'solid-js';
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
+import { useAnalytics } from 'app/component/analytics-context';
 import { applyTheme } from '../utils/themeUtils';
 import { ColorSwatch } from './ColorSwatch';
-import { useAnalytics } from 'app/component/analytics-context';
+
+import { For } from 'solid-js';
 
 export function ThemeList() {
   const analytics = useAnalytics()
@@ -55,7 +56,7 @@ export function ThemeList() {
 
       <div
         style="
-          font-family: var(--font-mono);
+          font-family: var(--font-sans);
           background-color: var(--b1);
           scrollbar-width: none;
           position: relative;

@@ -1,3 +1,4 @@
+use model_entity::EntityType;
 use sqlx::{Postgres, Transaction};
 
 /// Soft deletes a chat
@@ -87,7 +88,15 @@ pub async fn delete_chat_bulk_tsx(
     .execute(transaction.as_mut())
     .await?;
 
-    crate::item_access::delete::delete_user_item_access_bulk(transaction, chat_ids, "chat").await?;
+    crate::item_access::delete::delete_user_entity_access_bulk(
+        transaction,
+        &chat_ids
+            .iter()
+            .filter_map(|p| macro_uuid::string_to_uuid(p).ok())
+            .collect::<Vec<uuid::Uuid>>(),
+        EntityType::Chat,
+    )
+    .await?;
 
     sqlx::query!(
         r#"
@@ -151,8 +160,12 @@ pub async fn delete_chat(db: &sqlx::Pool<sqlx::Postgres>, chat_id: &str) -> anyh
         .await?;
     }
 
-    crate::item_access::delete::delete_user_item_access_by_item(&mut transaction, chat_id, "chat")
-        .await?;
+    crate::item_access::delete::delete_user_entity_access_by_item(
+        &mut transaction,
+        &macro_uuid::string_to_uuid(chat_id).unwrap(),
+        EntityType::Chat,
+    )
+    .await?;
 
     sqlx::query!(
         r#"

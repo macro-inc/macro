@@ -1,7 +1,7 @@
 import { Track, type RemoteParticipant } from 'livekit-client';
 import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
 import { TrackView } from './TrackView';
-import PhoneDisconnect from '@icon/regular/phone-disconnect.svg';
+import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';

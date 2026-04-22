@@ -11,7 +11,8 @@
 use http::{Response as HttpResponse, StatusCode, header::CONTENT_TYPE};
 use tauri::{Manager, Runtime, UriSchemeResponder};
 
-use macro_bundle_updater_plugin::BundleRoot;
+use macro_bundle_updater_plugin::inbound::plugin::PluginService;
+use tokio::sync::Mutex;
 
 type ProtocolHandler = Box<dyn Fn(&str, http::Request<Vec<u8>>, UriSchemeResponder) + Send + Sync>;
 
@@ -58,15 +59,13 @@ pub fn get<R: Runtime>(app_handle: tauri::AppHandle<R>, window_origin: &str) -> 
     let origin = window_origin.to_string();
 
     Box::new(move |webview_id, request, responder| {
-        let bundle_root = app_handle.try_state::<BundleRoot>();
-        let has_bundle = bundle_root
+        let service = app_handle.try_state::<Mutex<PluginService>>();
+        let root_dir_owned = service
             .as_ref()
-            .and_then(|br| br.0.read().ok())
-            .as_ref()
-            .and_then(|guard| guard.as_ref())
-            .is_some();
+            .and_then(|s| s.try_lock().ok())
+            .and_then(|s| s.bundle_root_path().map(|p| p.to_path_buf()));
 
-        if has_bundle {
+        if let Some(ref root_dir) = root_dir_owned {
             // Serve from the OTA bundle directory on disk
             let raw_path = request
                 .uri()
@@ -87,10 +86,6 @@ pub fn get<R: Runtime>(app_handle: tauri::AppHandle<R>, window_origin: &str) -> 
                 "" | "/" => "index.html",
                 p => p.strip_prefix('/').unwrap_or(p),
             };
-
-            let br = bundle_root.unwrap();
-            let guard = br.0.read().unwrap();
-            let root_dir = guard.as_ref().unwrap();
 
             // Prevent path traversal: canonicalize both paths and verify
             // the resolved file stays within the bundle root.

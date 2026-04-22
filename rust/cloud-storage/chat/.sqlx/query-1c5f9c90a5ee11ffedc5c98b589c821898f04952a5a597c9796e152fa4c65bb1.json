@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    e.subject,\n                    l.macro_id\n                FROM\n                    \"email_messages\" e\n                JOIN email_links l ON l.id = e.link_id\n                WHERE\n                    e.thread_id = $1\n                LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "1c5f9c90a5ee11ffedc5c98b589c821898f04952a5a597c9796e152fa4c65bb1"
+}

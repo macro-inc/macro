@@ -128,14 +128,7 @@ INSERT INTO public."Pin" ("userId", "pinnedItemId", "pinnedItemType", "pinIndex"
 INSERT INTO public."Pin" ("userId", "pinnedItemId", "pinnedItemType", "pinIndex", "createdAt", "updatedAt")
 (SELECT 'macro|user@user.com', 'project-one', 'project', 0, '2019-10-16 01:00:00', '2019-10-16 01:00:00');
 
--- Add UserItemAccess entries for documents owned by the user
-INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level")
-VALUES 
-    ('10000000-0000-0000-0000-000000000001', 'macro|user@user.com', 'document-one', 'document', 'owner'),
-    ('10000000-0000-0000-0000-000000000002', 'macro|user@user.com', 'document-two', 'document', 'owner'),
-    ('10000000-0000-0000-0000-000000000003', 'macro|user@user.com', 'document-three', 'document', 'owner'),
-    ('10000000-0000-0000-0000-000000000004', 'macro|user@user.com', 'document-four', 'document', 'owner'),
-    ('10000000-0000-0000-0000-000000000005', 'macro|user@user.com', 'document-five', 'document', 'owner'),
-    ('10000000-0000-0000-0000-000000000006', 'macro|user@user.com', 'document-six', 'document', 'owner'),
-    ('10000000-0000-0000-0000-000000000007', 'macro|user@user.com', 'document-seven', 'document', 'owner'),
-    ('10000000-0000-0000-0000-000000000008', 'macro|user@user.com', 'project-one', 'project', 'owner');
+-- Access entries were previously here but have been removed.
+-- This fixture uses non-UUID text document IDs which cannot be stored in
+-- the entity_access.entity_id UUID column.
+-- Tests that need entity_access should use the list_documents_with_access fixture instead.

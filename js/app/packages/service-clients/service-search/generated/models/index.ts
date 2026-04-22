@@ -6,6 +6,7 @@
  */
 
 export * from './callFilters';
+export * from './callFiltersAttended';
 export * from './channelFilters';
 export * from './channelFiltersImportance';
 export * from './channelFiltersOrgId';

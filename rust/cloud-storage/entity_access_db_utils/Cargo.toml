@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "entity_access_db_utils"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
+serde = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+models_entity_access_management = { path = "../models_entity_access_management", features = [
+  "db",
+] }
+models_permissions = { path = "../models_permissions" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
