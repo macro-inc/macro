@@ -171,6 +171,11 @@ export const [MutationUndoProvider, useMutationUndoContext] =
     }
   );
 
+export type UndoLifecycle = {
+  onUndone?: () => void;
+  onRedone?: () => void;
+};
+
 export function useUndoableMutation<
   TData = unknown,
   TError = Error,
@@ -181,21 +186,36 @@ export function useUndoableMutation<
     undoFn?: UndoHandler<TVariables, TContext>;
     redoFn?: UndoHandler<TVariables, TContext>;
     undoLabel?: string;
+    /** Fires after the entry is pushed onto the undo stack. Returned
+     *  lifecycle hooks (onUndone/onRedone) will run on this specific
+     *  entry — regardless of whether it is undone via the returned
+     *  handle, the global LIFO `ctx.undo()`, or by a later `ctx.redo()`. */
+    onPushed?: (
+      handle: UndoHandle,
+      variables: TVariables,
+      context: TContext | undefined
+    ) => UndoLifecycle | void;
   }
 ) {
   const { pushUndo } = useMutationUndoContext();
 
   return useMutation(() => {
-    const { undoFn, redoFn, undoLabel, onSuccess, ...opts } = options();
+    const { undoFn, redoFn, undoLabel, onPushed, onSuccess, ...opts } =
+      options();
     return {
       ...opts,
       onSuccess: (data, variables, context, mutation) => {
         if (undoFn) {
-          pushUndo({
+          const lifecycleRef: { current?: UndoLifecycle } = {};
+          const handle = pushUndo({
             undo: () => undoFn(variables, context),
             redo: redoFn ? () => redoFn(variables, context) : undefined,
             label: undoLabel,
+            onUndone: () => lifecycleRef.current?.onUndone?.(),
+            onRedone: () => lifecycleRef.current?.onRedone?.(),
           });
+          lifecycleRef.current =
+            onPushed?.(handle, variables, context) ?? undefined;
         }
         onSuccess?.(data, variables, context, mutation);
       },

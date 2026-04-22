@@ -6,8 +6,7 @@ import {
   executeMarkNotificationsUndone,
   getAllNotificationsFromGroup,
 } from '@notifications';
-import { useMutation } from '@tanstack/solid-query';
-import { type UndoHandle, useMutationUndoContext } from '@queries/undo';
+import { useUndoableMutation } from '@queries/undo';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { restoreSoupFocus } from '@app/component/next-soup/utils';
 
@@ -27,52 +26,52 @@ type MarkStackDoneVariables = { notificationIds: string[] };
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
-  const { pushUndo } = useMutationUndoContext();
 
-  const mutation = useMutation<void, Error, MarkStackDoneVariables>(() => ({
-    mutationFn: (vars) => executeMarkNotificationsDone(vars.notificationIds),
-    onError: () => {
-      toast.failure('Failed to mark as done');
-    },
-    onSuccess: (_data, variables) => {
-      const toastRef = { id: undefined as number | undefined };
-      let handle: UndoHandle;
+  const mutation = useUndoableMutation<void, Error, MarkStackDoneVariables>(
+    () => ({
+      mutationFn: (vars) => executeMarkNotificationsDone(vars.notificationIds),
+      onError: () => {
+        toast.failure('Failed to mark as done');
+      },
+      undoFn: (vars) => executeMarkNotificationsUndone(vars.notificationIds),
+      redoFn: (vars) => executeMarkNotificationsDone(vars.notificationIds),
+      undoLabel: 'Mark Done',
+      onPushed: (handle) => {
+        let toastId: number | undefined;
 
-      const showToast = () => {
-        toastRef.id = toast.success(
-          'Marked as done',
-          undefined,
-          [
-            {
-              label: 'Undo',
-              icon: ArrowCounterClockwise,
-              onClick: () => {
-                handle.undo({
-                  onError: () => toast.failure('Failed to undo'),
-                });
-                restoreSoupFocus();
+        const showToast = () => {
+          toastId = toast.success(
+            'Marked as done',
+            undefined,
+            [
+              {
+                label: 'Undo',
+                icon: ArrowCounterClockwise,
+                onClick: () => {
+                  handle.undo({
+                    onError: () => toast.failure('Failed to undo'),
+                  });
+                  restoreSoupFocus();
+                },
               },
-            },
-          ],
-          10_000,
-          true
-        );
-      };
+            ],
+            10_000,
+            true
+          );
+        };
 
-      handle = pushUndo({
-        undo: () => executeMarkNotificationsUndone(variables.notificationIds),
-        redo: () => executeMarkNotificationsDone(variables.notificationIds),
-        onUndone: () => {
-          if (toastRef.id !== undefined) toast.dismiss(toastRef.id);
-        },
-        onRedone: showToast,
-        label: 'Mark Done',
-      });
+        showToast();
+        props.onMarkAsDone?.();
 
-      showToast();
-      props.onMarkAsDone?.();
-    },
-  }));
+        return {
+          onUndone: () => {
+            if (toastId !== undefined) toast.dismiss(toastId);
+          },
+          onRedone: showToast,
+        };
+      },
+    })
+  );
 
   const markStackAsDone = () => {
     const notifications = getAllNotificationsFromGroup(props.stack);

@@ -2,8 +2,7 @@ import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-cl
 import { toast } from '@core/component/Toast/Toast';
 import { type EntityData, isTaskEntity } from '@entity';
 import type { NotificationSource } from '@notifications';
-import { useMutation } from '@tanstack/solid-query';
-import { type UndoHandle, useMutationUndoContext } from '@queries/undo';
+import { useUndoableMutation } from '@queries/undo';
 import {
   applyEntitiesDoneOptimistic,
   executeMarkEntitiesDone,
@@ -31,9 +30,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
   const previewPanel = useMaybePreviewPanel();
   const inPreview = previewPanel !== undefined;
-  const { pushUndo } = useMutationUndoContext();
 
-  const mutation = useMutation<
+  const mutation = useUndoableMutation<
     void,
     Error,
     MarkDoneVariables,
@@ -53,16 +51,40 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       context?.rollback();
       toast.failure('Failed to mark as done');
     },
-    onSuccess: (_data, variables, context) => {
+    undoFn: async (variables, context) => {
+      context?.applyUndone();
+      try {
+        await executeMarkEntitiesUndone({
+          emailIds: variables.emailIds,
+          notificationIds: variables.notificationIds,
+        });
+      } catch (err) {
+        context?.reapply();
+        throw err;
+      }
+    },
+    redoFn: async (variables, context) => {
+      context?.reapply();
+      try {
+        await executeMarkEntitiesDone({
+          emailIds: variables.emailIds,
+          notificationIds: variables.notificationIds,
+        });
+      } catch (err) {
+        context?.applyUndone();
+        throw err;
+      }
+    },
+    undoLabel: 'Mark Done',
+    onPushed: (handle, variables) => {
       const firstEntityId = variables.entities[0]?.id;
       const count = variables.entities.length;
       const message =
         count > 1 ? `Marked ${count} items as done` : 'Marked as done';
-      const toastRef = { id: undefined as number | undefined };
-      let handle: UndoHandle;
+      let toastId: number | undefined;
 
       const showToast = () => {
-        toastRef.id = toast.success(
+        toastId = toast.success(
           message,
           undefined,
           [
@@ -82,39 +104,14 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         );
       };
 
-      handle = pushUndo({
-        undo: async () => {
-          context?.applyUndone();
-          try {
-            await executeMarkEntitiesUndone({
-              emailIds: variables.emailIds,
-              notificationIds: variables.notificationIds,
-            });
-          } catch (err) {
-            context?.reapply();
-            throw err;
-          }
-        },
-        redo: async () => {
-          context?.reapply();
-          try {
-            await executeMarkEntitiesDone({
-              emailIds: variables.emailIds,
-              notificationIds: variables.notificationIds,
-            });
-          } catch (err) {
-            context?.applyUndone();
-            throw err;
-          }
-        },
+      showToast();
+
+      return {
         onUndone: () => {
-          if (toastRef.id !== undefined) toast.dismiss(toastRef.id);
+          if (toastId !== undefined) toast.dismiss(toastId);
         },
         onRedone: showToast,
-        label: 'Mark Done',
-      });
-
-      showToast();
+      };
     },
   }));
 
