@@ -23,47 +23,60 @@ interface SingleNotificationActionsProps {
 }
 
 type MarkStackDoneVariables = { notificationIds: string[] };
+type MarkStackDoneContext = { toastId?: number };
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
   const undoCtx = useMutationUndoContext();
 
-  const mutation = useUndoableMutation<void, Error, MarkStackDoneVariables>(
-    () => ({
-      mutationFn: async (vars) =>
-        await executeMarkNotificationsDone(vars.notificationIds),
-      onSuccess: () => {
-        const toastId = toast.success(
-          'Marked as done',
-          undefined,
-          [
-            {
-              label: 'Undo',
-              icon: ArrowCounterClockwise,
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                undoCtx.undo({
-                  onError: () => toast.failure('Failed to undo'),
-                });
-                restoreSoupFocus();
-              },
-            },
-          ],
-          10_000,
-          true
-        );
-        props.onMarkAsDone?.();
-      },
-      onError: () => {
-        toast.failure('Failed to mark as done');
-      },
-      undoFn: async (vars) =>
-        await executeMarkNotificationsUndone(vars.notificationIds),
-      redoFn: async (vars) =>
-        await executeMarkNotificationsDone(vars.notificationIds),
-      undoLabel: 'Mark Done',
-    })
-  );
+  const showMarkDoneToast = (): number | undefined =>
+    toast.success(
+      'Marked as done',
+      undefined,
+      [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            undoCtx.undo({
+              onError: () => toast.failure('Failed to undo'),
+            });
+            restoreSoupFocus();
+          },
+        },
+      ],
+      10_000,
+      true
+    );
+
+  const mutation = useUndoableMutation<
+    void,
+    Error,
+    MarkStackDoneVariables,
+    MarkStackDoneContext
+  >(() => ({
+    onMutate: () => ({}),
+    mutationFn: async (vars) =>
+      await executeMarkNotificationsDone(vars.notificationIds),
+    onSuccess: (_data, _variables, context) => {
+      const toastId = showMarkDoneToast();
+      if (context && toastId !== undefined) context.toastId = toastId;
+      props.onMarkAsDone?.();
+    },
+    onError: () => {
+      toast.failure('Failed to mark as done');
+    },
+    undoFn: async (vars, context) => {
+      if (context?.toastId !== undefined) toast.dismiss(context.toastId);
+      await executeMarkNotificationsUndone(vars.notificationIds);
+    },
+    redoFn: async (vars, context) => {
+      await executeMarkNotificationsDone(vars.notificationIds);
+      const toastId = showMarkDoneToast();
+      if (context && toastId !== undefined) context.toastId = toastId;
+    },
+    undoLabel: 'Mark Done',
+  }));
 
   const markStackAsDone = () => {
     const notifications = getAllNotificationsFromGroup(props.stack);

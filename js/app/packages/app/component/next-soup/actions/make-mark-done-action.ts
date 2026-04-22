@@ -25,6 +25,8 @@ type MarkDoneVariables = {
   notificationIds: string[];
 };
 
+type MarkDoneContext = MarkEntitiesDoneContext & { toastId?: number };
+
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
@@ -32,11 +34,36 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const inPreview = previewPanel !== undefined;
   const undoCtx = useMutationUndoContext();
 
+  const showMarkDoneToast = (
+    variables: MarkDoneVariables
+  ): number | undefined => {
+    const count = variables.entities.length;
+    const firstEntityId = variables.entities[0]?.id;
+    return toast.success(
+      count > 1 ? `Marked ${count} items as done` : 'Marked as done',
+      undefined,
+      [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            undoCtx.undo({
+              onError: () => toast.failure('Failed to undo'),
+            });
+            restoreSoupFocus(firstEntityId, inPreview);
+          },
+        },
+      ],
+      10_000,
+      true
+    );
+  };
+
   const mutation = useUndoableMutation<
     void,
     Error,
     MarkDoneVariables,
-    MarkEntitiesDoneContext
+    MarkDoneContext
   >(() => ({
     onMutate: (variables) =>
       applyEntitiesDoneOptimistic({
@@ -48,36 +75,16 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         emailIds: variables.emailIds,
         notificationIds: variables.notificationIds,
       }),
-    onSuccess: (_data, variables) => {
-      const count = variables.entities.length;
-      const firstEntityId = variables.entities[0]?.id;
-      const toastId = toast.success(
-        count > 1 ? `Marked ${count} items as done` : 'Marked as done',
-        undefined,
-        [
-          {
-            label: 'Undo',
-            icon: ArrowCounterClockwise,
-            onClick: () => {
-              if (toastId != null) toast.dismiss(toastId);
-              // Route through the undo stack so the entry is popped and
-              // Cmd+Z / shift+Cmd+Z stay in sync with the toast action.
-              undoCtx.undo({
-                onError: () => toast.failure('Failed to undo'),
-              });
-              restoreSoupFocus(firstEntityId, inPreview);
-            },
-          },
-        ],
-        10_000,
-        true
-      );
+    onSuccess: (_data, variables, context) => {
+      const toastId = showMarkDoneToast(variables);
+      if (context && toastId !== undefined) context.toastId = toastId;
     },
     onError: (_err, _variables, context) => {
       context?.rollback();
       toast.failure('Failed to mark as done');
     },
     undoFn: async (variables, context) => {
+      if (context?.toastId !== undefined) toast.dismiss(context.toastId);
       context?.applyUndone();
       try {
         await executeMarkEntitiesUndone({
@@ -96,6 +103,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           emailIds: variables.emailIds,
           notificationIds: variables.notificationIds,
         });
+        const toastId = showMarkDoneToast(variables);
+        if (context && toastId !== undefined) context.toastId = toastId;
       } catch (err) {
         context?.applyUndone();
         throw err;
