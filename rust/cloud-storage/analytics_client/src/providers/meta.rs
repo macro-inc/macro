@@ -131,19 +131,28 @@ impl MetaProvider {
             event["event_id"] = serde_json::json!(id);
         }
 
-        // Debug log of the payload bound for Meta. `access_token` is never
-        // included — it's attached only when the real payload is built
-        // below. `user_data.em` is already SHA-256 hashed by `to_json`.
-        // Enable with `RUST_LOG=analytics_client=debug` when debugging
-        // match quality or response errors.
+        // Debug log of the outgoing event — only non-sensitive metadata and
+        // presence summaries. The full `event` payload is not logged
+        // because it can carry attribution cookies, IP, user_agent, and
+        // hashed PII that do not belong in centralized logs. Enable with
+        // `RUST_LOG=analytics_client=debug` to diagnose match quality.
+        let user_data_keys = event
+            .get("user_data")
+            .and_then(|v| v.as_object())
+            .map(|obj| obj.keys().cloned().collect::<Vec<_>>());
+        let custom_data_keys = event
+            .get("custom_data")
+            .and_then(|v| v.as_object())
+            .map(|obj| obj.keys().cloned().collect::<Vec<_>>());
         tracing::debug!(
             pixel_id = %self.pixel_id,
             url = %url,
-            test_event_code = ?self.test_event_code,
+            has_test_event_code = self.test_event_code.is_some(),
             event_name = %event_name,
             event_id = ?event_id,
             action_source = %action_source.as_str(),
-            event = %event,
+            user_data_keys = ?user_data_keys,
+            custom_data_keys = ?custom_data_keys,
             "sending event to meta conversions api"
         );
 

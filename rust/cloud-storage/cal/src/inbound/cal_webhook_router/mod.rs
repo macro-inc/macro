@@ -16,6 +16,12 @@ use axum::{
 
 use crate::domain::{models::CalError, ports::CalWebhookService};
 
+/// Maximum accepted cal.com webhook body size. Cal payloads carrying a full
+/// booking event are comfortably under this; the cap exists so an
+/// unauthenticated caller with any signature header cannot force the service
+/// to buffer arbitrary bytes before signature verification happens.
+const MAX_CAL_WEBHOOK_BODY_BYTES: usize = 1024 * 1024;
+
 /// Shared state passed to cal webhook handlers.
 pub struct CalWebhookRouterState<S> {
     /// The webhook service implementation.
@@ -73,9 +79,9 @@ where
             .and_then(|v| v.to_str().ok())
             .ok_or(CalError::InvalidWebhookSignature)?;
 
-        let body = axum::body::to_bytes(body, usize::MAX)
+        let body = axum::body::to_bytes(body, MAX_CAL_WEBHOOK_BODY_BYTES)
             .await
-            .map_err(|e| CalError::Internal(rootcause::report!("failed to read body: {e}")))?;
+            .map_err(|_| CalError::InvalidPayload)?;
 
         let event = state
             .service

@@ -15,13 +15,19 @@ impl IntoResponse for CalError {
     fn into_response(self) -> Response {
         let (status, message): (StatusCode, &str) = match &self {
             CalError::InvalidWebhookSignature => (StatusCode::UNAUTHORIZED, "unauthenticated"),
-            CalError::InvalidPayload => (StatusCode::BAD_REQUEST, "invalid webhook payload"),
+            CalError::InvalidPayload => {
+                tracing::warn!("cal webhook: invalid payload");
+                (StatusCode::BAD_REQUEST, "invalid webhook payload")
+            }
             // Unsupported events get a 2xx so cal.com doesn't retry them.
             CalError::UnsupportedEvent(_) => return StatusCode::NO_CONTENT.into_response(),
-            CalError::Internal(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "internal server error occurred",
-            ),
+            CalError::Internal(e) => {
+                tracing::error!(error=?e, "cal webhook: internal error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error occurred",
+                )
+            }
         };
 
         (

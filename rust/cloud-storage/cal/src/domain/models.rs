@@ -47,8 +47,13 @@ pub struct BookingCreated {
     /// We stash browser-side Meta attribution signals here (`fbp`, `fbc`,
     /// `user_agent`) so the server-side Lead event can include them in
     /// `user_data` when it fires.
+    ///
+    /// Typed as `serde_json::Value` rather than `String` because cal.com
+    /// documents this field as a JSON object with provider-specific data
+    /// (e.g. `videoCallUrl`) — values aren't guaranteed to be strings.
+    /// Downstream consumers narrow per-key with `v.as_str()`.
     #[serde(default)]
-    pub metadata: HashMap<String, String>,
+    pub metadata: HashMap<String, serde_json::Value>,
 }
 
 /// A cal.com contact — used for both organizers and attendees.

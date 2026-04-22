@@ -54,9 +54,18 @@ impl AnalyticsSink for AnalyticsClientSink {
 
         let user_data = MetaUserData {
             email: attendee_email.map(str::to_string),
-            fbp: metadata.get("fbp").cloned(),
-            fbc: metadata.get("fbc").cloned(),
-            client_user_agent: metadata.get("user_agent").cloned(),
+            fbp: metadata
+                .get("fbp")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned),
+            fbc: metadata
+                .get("fbc")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned),
+            client_user_agent: metadata
+                .get("user_agent")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned),
             ..MetaUserData::default()
         };
 
@@ -66,15 +75,13 @@ impl AnalyticsSink for AnalyticsClientSink {
         };
 
         // Debug log so we can see whether cal.com's metadata passthrough is
-        // carrying the browser attribution signals and exactly what
-        // user_data Meta will receive. Email is shown in plaintext here
-        // only — it's hashed inside `track_meta` before leaving the
-        // process. Enable with `RUST_LOG=cal=debug` when investigating
-        // Meta match quality.
+        // carrying the browser attribution signals. Only presence flags and
+        // metadata key names are emitted — the raw email, fbp/fbc values,
+        // and user_agent are deliberately not logged to avoid PII leakage.
+        // Enable with `RUST_LOG=cal=debug` when investigating match quality.
         tracing::debug!(
             uid = %booking.uid,
             content_name = %content_name,
-            attendee_email = ?attendee_email,
             metadata_keys = ?metadata.keys().collect::<Vec<_>>(),
             has_email = user_data.email.is_some(),
             has_fbp = user_data.fbp.is_some(),
