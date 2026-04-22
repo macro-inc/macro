@@ -1,13 +1,10 @@
-import { createEffect, createMemo, createSignal, For, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createMemo, For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
-import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { usePermissions } from '@core/context/user';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import ContractIcon from '@icon/regular/arrows-in.svg';
-import ExpandIcon from '@icon/regular/arrows-out.svg';
 import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
@@ -40,7 +37,6 @@ type SettingsPanelProps = {
 export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
-  const [spotlight, setSpotlight] = createSignal(false);
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -153,19 +149,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   return (
     <div
-      class="size-full p-2 pl-0 outline-none bracket-never"
+      class="size-full outline-none bracket-never"
       classList={{
         invisible: props.hide,
       }}
       tabIndex={0}
       ref={settingsContainerRef}
     >
-      <SplitlikeContainer
-        setSpotlight={setSpotlight}
-        spotlight={spotlight}
-        tr={!spotlight()}
-      >
-        <div class="flex flex-col h-full bg-panel border border-edge-muted rounded-sm overflow-hidden isolate">
+      <div class="flex flex-col h-full overflow-hidden isolate">
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
@@ -213,19 +204,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     </div>
                   </Tabs.List>
 
-                  <div class="flex-1" />
-
-                  <Show when={!isMobile()}>
-                    <DeprecatedIconButton
-                      icon={spotlight() ? ContractIcon : ExpandIcon}
-                      onClick={() => setSpotlight(!spotlight())}
-                      tooltip={{
-                        label: spotlight() ? 'Exit Spotlight' : 'Enter Spotlight Mode'
-                      }}
-                      theme="clear"
-                      size="sm"
-                    />
-                  </Show>
                 </div>
               </div>
 
@@ -250,7 +228,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
               </div>
             </Tabs>
           </div>
-        </SplitlikeContainer>
       </div>
   );
 }

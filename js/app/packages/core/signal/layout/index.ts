@@ -1,8 +1,6 @@
 import type { ContextValue } from '@corvu/resizable';
 import { createSignal } from 'solid-js';
 
-export * from './settings';
-
 export const LAYOUT_CONTEXT_ID = 'layout';
 
 // TODO: deprecate side bar in layout
