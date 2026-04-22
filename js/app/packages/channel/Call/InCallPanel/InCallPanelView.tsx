@@ -1,6 +1,6 @@
 import { Show, createMemo, type Component } from 'solid-js';
 import type { CallControlVariant } from '../CallControls/CallControlButton';
-import { StackedUserFacesRow } from '@core/component/StackedUserFacesRow';
+import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
 import { CallControls } from '../CallControls/CallControls';
 import { openChannelCallTab } from '../openChannelCallTab';
@@ -155,7 +155,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             data-in-call-panel-avatars
           >
             <Show when={!slim()}>
-              <StackedUserFacesRow<InCallStripFace>
+              <StackedAvatarsRow<InCallStripFace>
                 class="w-full min-w-0"
                 distribute="fill"
                 each={stripStackEach}
@@ -180,7 +180,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                     trackCall={() => panel.callCtx.trackVersion()}
                   />
                 )}
-              </StackedUserFacesRow>
+              </StackedAvatarsRow>
             </Show>
 
             <Show when={slim()}>

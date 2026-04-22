@@ -3,19 +3,19 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  StackedUserFacesDefaultEmptyPlaceholder,
-  stackedUserFaceInnerClass,
-  type StackedUserFaceInput,
-  type StackedUserFacesSize,
-} from '@core/component/StackedUserFacesRow';
+  StackedAvatarsDefaultEmptyPlaceholder,
+  stackedAvatarInnerClass,
+  type StackedAvatarInput,
+  type StackedAvatarsSize,
+} from '@core/component/StackedAvatarsRow';
 
 /** Matches {@link UserIcon} `lg` (`size-10`) for the in-call strip. */
-export const IN_CALL_STRIP_FACE_SIZE = 'lg' satisfies StackedUserFacesSize;
+export const IN_CALL_STRIP_FACE_SIZE = 'lg' satisfies StackedAvatarsSize;
 
 /** Stable id for the local slot before `room().localParticipant.identity` is available. */
 export const IN_CALL_LOCAL_STRIP_PENDING_ID = '__in_call_local_pending__';
 
-export type InCallStripFace = StackedUserFaceInput & {
+export type InCallStripFace = StackedAvatarInput & {
   stripMemberKind: 'local' | 'remote';
   /** Local participant: show ring placeholder until LiveKit identity is ready for `UserIcon`. */
   stripLocalPending?: boolean;
@@ -51,7 +51,7 @@ export const InCallStripAvatarFace: Component<{
       <Show
         when={props.face.stripLocalPending}
         fallback={
-          <div class={stackedUserFaceInnerClass(IN_CALL_STRIP_FACE_SIZE)}>
+          <div class={stackedAvatarInnerClass(IN_CALL_STRIP_FACE_SIZE)}>
             <UserIcon
               id={props.face.userId}
               isDeleted={false}
@@ -62,7 +62,7 @@ export const InCallStripAvatarFace: Component<{
           </div>
         }
       >
-        <StackedUserFacesDefaultEmptyPlaceholder size={IN_CALL_STRIP_FACE_SIZE} />
+        <StackedAvatarsDefaultEmptyPlaceholder size={IN_CALL_STRIP_FACE_SIZE} />
       </Show>
     </Tooltip>
   );

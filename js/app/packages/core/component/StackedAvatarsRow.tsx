@@ -14,10 +14,10 @@ import type { UserIconProps } from './UserIcon';
 import { cn } from '@ui/utils/classname';
 
 /** Same keys as {@link UserIconProps} `size` (aligned ring + overlap + overflow chip). */
-export type StackedUserFacesSize = NonNullable<UserIconProps['size']>;
+export type StackedAvatarsSize = NonNullable<UserIconProps['size']>;
 
 /** `distribute="fill"`: face + chip footprint in px (matches Tailwind `size-*` at default rem). */
-const FACE_DIAMETER_PX: Record<StackedUserFacesSize, number> = {
+const AVATAR_DIAMETER_PX: Record<StackedAvatarsSize, number> = {
   xs: 16,
   sm: 24,
   md: 32,
@@ -27,10 +27,10 @@ const FACE_DIAMETER_PX: Record<StackedUserFacesSize, number> = {
 };
 
 /** Horizontal row shell: stacking context (`isolate`). */
-export const STACKED_USER_FACES_ROW_CLASS =
+export const STACKED_AVATARS_ROW_CLASS =
   'flex items-center h-full shrink-0 w-fit isolate leading-none min-w-0';
 
-export type StackedUserFacesOverflowContext<T = unknown> = {
+export type StackedAvatarsOverflowContext<T = unknown> = {
   overflowItems: T[];
   overflowCount: number;
 };
@@ -40,7 +40,7 @@ export type StackedUserFacesOverflowContext<T = unknown> = {
  * `fill` uses the md footprint (intrinsic fill still needs a sized parent for `UserIcon`).
  */
 const STACK_STYLE: Record<
-  StackedUserFacesSize,
+  StackedAvatarsSize,
   {
     overlap: string;
     overflowChip: string;
@@ -113,29 +113,29 @@ const STACK_STYLE: Record<
 };
 
 /** Inner ring around `UserIcon` (no overlap margin — the row applies overlap on a wrapper). */
-export function stackedUserFaceInnerClass(size: StackedUserFacesSize = 'md') {
+export function stackedAvatarInnerClass(size: StackedAvatarsSize = 'md') {
   return STACK_STYLE[size].inner;
 }
 
-/** Default +N chip shell (no text); pair with {@link stackedOverflowChipTextClass}. */
-export function stackedOverflowChipClass(size: StackedUserFacesSize = 'md') {
+/** Default +N chip shell (no text); pair with {@link stackedAvatarOverflowChipTextClass}. */
+export function stackedAvatarOverflowChipClass(size: StackedAvatarsSize = 'md') {
   return STACK_STYLE[size].overflowChip;
 }
 
-export function stackedOverflowChipTextClass(size: StackedUserFacesSize = 'md') {
+export function stackedAvatarOverflowChipTextClass(size: StackedAvatarsSize = 'md') {
   return STACK_STYLE[size].overflowChipText;
 }
 
 /**
  * Muted user-in-ring placeholder: same outer ring as stacked faces
- * ({@link stackedUserFaceInnerClass}); icon scales with `size`.
+ * ({@link stackedAvatarInnerClass}); icon scales with `size`.
  */
-export function StackedUserFacesDefaultEmptyPlaceholder(props: {
-  size?: StackedUserFacesSize;
+export function StackedAvatarsDefaultEmptyPlaceholder(props: {
+  size?: StackedAvatarsSize;
 }) {
   const s = () => props.size ?? 'md';
   return (
-    <div class={stackedUserFaceInnerClass(s())}>
+    <div class={stackedAvatarInnerClass(s())}>
       <div class="flex size-full min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted text-panel leading-none">
         <User
           class={cn(STACK_STYLE[s()].defaultEmptyIcon, 'block shrink-0')}
@@ -146,17 +146,17 @@ export function StackedUserFacesDefaultEmptyPlaceholder(props: {
   );
 }
 
-export type StackedUserFaceInput = {
+export type StackedAvatarInput = {
   userId: string;
   tooltip?: string;
   onPress?: () => void;
   ariaLabel?: string;
 };
 
-export type StackedUserFacesRowProps<T = unknown> = {
+export type StackedAvatarsRowProps<T = unknown> = {
   each: Accessor<T[]>;
   max: number | Accessor<number>;
-  size?: StackedUserFacesSize;
+  size?: StackedAvatarsSize;
   /** Shown when `each()` is empty (e.g. connecting); if truthy, overrides `defaultEmptyUserPlaceholder`. */
   placeholder?: Accessor<JSX.Element | undefined | null | false>;
   /** When the list is empty and `placeholder` is unset or falsy, show the built-in muted user ring at `size`. */
@@ -164,15 +164,15 @@ export type StackedUserFacesRowProps<T = unknown> = {
   /** Face slot; use `UserIcon` with `showTooltip={false}` if you add your own `Tooltip`. */
   children: (item: T, index: number) => JSX.Element;
   /** Plain tooltip on the +N chip when not using `overflowTooltipContent`. */
-  overflowTooltip?: string | ((ctx: StackedUserFacesOverflowContext<T>) => string | undefined);
+  overflowTooltip?: string | ((ctx: StackedAvatarsOverflowContext<T>) => string | undefined);
   overflowTooltipContent?: (
     close: () => void,
-    ctx: StackedUserFacesOverflowContext<T>,
+    ctx: StackedAvatarsOverflowContext<T>,
   ) => JSX.Element;
   overflowWrap?: (
-    ctx: StackedUserFacesOverflowContext<T> & { chip: JSX.Element },
+    ctx: StackedAvatarsOverflowContext<T> & { chip: JSX.Element },
   ) => JSX.Element;
-  renderOverflow?: (ctx: StackedUserFacesOverflowContext<T>) => JSX.Element;
+  renderOverflow?: (ctx: StackedAvatarsOverflowContext<T>) => JSX.Element;
   overflowChipClass?: string;
   overflowChipLabelClass?: string;
   class?: string;
@@ -188,23 +188,23 @@ function maxValue(max: number | Accessor<number>) {
 }
 
 function defaultOverflowChip(
-  size: StackedUserFacesSize,
+  size: StackedAvatarsSize,
   overflowCount: number,
   chipClass?: string,
   labelClass?: string,
 ): JSX.Element {
   return (
     <div
-      class={cn(stackedOverflowChipClass(size), chipClass)}
-      data-ui="stacked-user-faces-overflow-chip"
+      class={cn(stackedAvatarOverflowChipClass(size), chipClass)}
+      data-ui="stacked-avatars-overflow-chip"
     >
-      <span class={cn(stackedOverflowChipTextClass(size), labelClass)}>{`+${overflowCount}`}</span>
+      <span class={cn(stackedAvatarOverflowChipTextClass(size), labelClass)}>{`+${overflowCount}`}</span>
     </div>
   );
 }
 
-export function StackedUserFacesRow<T = unknown>(
-  props: StackedUserFacesRowProps<T>,
+export function StackedAvatarsRow<T = unknown>(
+  props: StackedAvatarsRowProps<T>,
 ) {
   const size = () => props.size ?? 'md';
 
@@ -244,7 +244,7 @@ export function StackedUserFacesRow<T = unknown>(
   const overflowCount = createMemo(() => overflow().length);
 
   const overflowCtx = createMemo(
-    (): StackedUserFacesOverflowContext<T> => ({
+    (): StackedAvatarsOverflowContext<T> => ({
       overflowItems: overflow(),
       overflowCount: overflowCount(),
     }),
@@ -272,7 +272,7 @@ export function StackedUserFacesRow<T = unknown>(
     const overflowFaceCount = overflowCount();
     const slotCount =
       visibleFaces.length + (overflowFaceCount > 0 ? 1 : 0);
-    const faceDiameterPx = FACE_DIAMETER_PX[size()];
+    const faceDiameterPx = AVATAR_DIAMETER_PX[size()];
 
     if (slotCount < 2 || rowWidthPx < 1) return null;
 
@@ -322,7 +322,7 @@ export function StackedUserFacesRow<T = unknown>(
     const custom = props.placeholder?.();
     if (custom) return custom;
     if (props.defaultEmptyUserPlaceholder) {
-      return <StackedUserFacesDefaultEmptyPlaceholder size={size()} />;
+      return <StackedAvatarsDefaultEmptyPlaceholder size={size()} />;
     }
     return undefined;
   });
@@ -372,8 +372,8 @@ export function StackedUserFacesRow<T = unknown>(
   return (
     <div
       ref={setRowEl}
-      class={cn(STACKED_USER_FACES_ROW_CLASS, props.class)}
-      data-ui="stacked-user-faces-row"
+      class={cn(STACKED_AVATARS_ROW_CLASS, props.class)}
+      data-ui="stacked-avatars-row"
     >
       <Show when={all().length === 0}>
         <Show when={placeholderEl()}>
