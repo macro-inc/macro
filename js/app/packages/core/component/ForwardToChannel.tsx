@@ -28,7 +28,7 @@ import {
 } from 'solid-js';
 import { Button } from '@ui/components/Button';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { getDestinationFromOptions } from './NewMessage';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
