@@ -586,6 +586,93 @@ export function softInvalidateChannelMessages(channelId: string) {
   });
 }
 
+/** Returns the shared prefix for all by-ids message queries in a channel. */
+export function getChannelMessagesByIdsQueryKeyPrefix(channelId: string) {
+  return [...channelKeys.messagesByIds._def, channelId];
+}
+
+/** Applies one updater to every cached by-ids message variant for a channel. */
+export function setChannelMessagesByIdsData(
+  channelId: string,
+  updater: (
+    data: ApiChannelMessage[] | undefined
+  ) => ApiChannelMessage[] | undefined
+) {
+  queryClient.setQueriesData<ApiChannelMessage[]>(
+    { queryKey: getChannelMessagesByIdsQueryKeyPrefix(channelId) },
+    updater
+  );
+}
+
+function mapChannelMessagesByIdsItems(
+  data: ApiChannelMessage[],
+  updater: (message: ApiChannelMessage) => ApiChannelMessage
+): ApiChannelMessage[] {
+  let didChange = false;
+  const next = data.map((message) => {
+    const nextMessage = updater(message);
+    if (nextMessage !== message) didChange = true;
+    return nextMessage;
+  });
+  return didChange ? next : data;
+}
+
+export function replaceTopLevelMessageReactionsInChannelMessagesByIds(
+  data: ApiChannelMessage[] | undefined,
+  messageId: string,
+  reactions: ApiCountedReaction[]
+): ApiChannelMessage[] | undefined {
+  if (!data) return data;
+  return mapChannelMessagesByIdsItems(data, (message) =>
+    message.id === messageId ? { ...message, reactions } : message
+  );
+}
+
+export function replaceTopLevelMessageAttachmentsInChannelMessagesByIds(
+  data: ApiChannelMessage[] | undefined,
+  messageId: string,
+  attachments: ApiMessageAttachment[]
+): ApiChannelMessage[] | undefined {
+  if (!data) return data;
+  return mapChannelMessagesByIdsItems(data, (message) =>
+    message.id === messageId ? { ...message, attachments } : message
+  );
+}
+
+export function replaceTopLevelMessageStateInChannelMessagesByIds(
+  data: ApiChannelMessage[] | undefined,
+  messageId: string,
+  nextState: {
+    content: string;
+    editedAt: string | null | undefined;
+    updatedAt: string;
+    attachments: ApiMessageAttachment[];
+  }
+): ApiChannelMessage[] | undefined {
+  if (!data) return data;
+  return mapChannelMessagesByIdsItems(data, (message) =>
+    message.id === messageId
+      ? {
+          ...message,
+          content: nextState.content,
+          edited_at: nextState.editedAt ?? undefined,
+          updated_at: nextState.updatedAt,
+          attachments: nextState.attachments,
+        }
+      : message
+  );
+}
+
+/**
+ * Marks the by-ids message queries as stale without triggering an immediate refetch.
+ */
+export function softInvalidateChannelMessagesByIds(channelId: string) {
+  queryClient.invalidateQueries({
+    queryKey: getChannelMessagesByIdsQueryKeyPrefix(channelId),
+    refetchType: 'inactive',
+  });
+}
+
 /**
  * Build a single oldest-first message index for display and lookup.
  * Pages arrive newest-first, items within each page are newest-first,
