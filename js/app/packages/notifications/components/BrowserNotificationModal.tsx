@@ -1,6 +1,7 @@
 import Bell from '@icon/regular/bell.svg';
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
+import { isPlatform } from '@core/util/platform';
 import { useIsAuthenticated } from '@queries/auth';
 import { createMemo, onMount, Show } from 'solid-js';
 import {
@@ -18,6 +19,7 @@ export const BrowserNotificationModal = () => {
   const shouldShow = createMemo(
     () =>
       !import.meta.env.DEV &&
+      !isPlatform('ios') &&
       settings.shouldPrompt() &&
       isAuthenticated() &&
       !!tutorialCompleted()
