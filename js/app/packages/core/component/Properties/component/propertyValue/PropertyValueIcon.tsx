@@ -59,17 +59,15 @@ export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
 
       {/* Status */}
       <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.NOT_STARTED}>
-        <StatusCreated
-          class={twMerge('size-3', props.class, 'text-task')}
-        />
+        <StatusCreated class={twMerge('size-3', props.class, 'text-task')} />
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS}>
-        <StatusInProgress class={twMerge('size-3', props.class, 'text-alert-ink')} />
+        <StatusInProgress
+          class={twMerge('size-3', props.class, 'text-alert-ink')}
+        />
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.IN_REVIEW}>
-        <StatusInReview
-          class={twMerge('size-3', props.class, 'text-note')}
-        />
+        <StatusInReview class={twMerge('size-3', props.class, 'text-note')} />
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.COMPLETED}>
         <StatusDone class={twMerge('size-3', props.class, 'text-accent')} />
