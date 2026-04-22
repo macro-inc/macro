@@ -110,20 +110,25 @@ export function useChannelMessagesByIdsQuery(
   channelId: Accessor<string>,
   messageIds: Accessor<string[]>
 ) {
-  return useQuery(() => ({
-    queryKey: channelKeys.messagesByIds(channelId(), messageIds()).queryKey,
-    queryFn: async (): Promise<ApiChannelMessage[]> => {
-      const page = await throwOnErr(() =>
-        commsServiceClient.postChannelMessages({
-          channel_id: channelId(),
-          filters: { message_ids: messageIds() },
-        })
-      );
-      return page.items;
-    },
-    enabled: messageIds().length > 0,
-    staleTime: Infinity,
-  }));
+  return useQuery(() => {
+    const resolvedChannelId = channelId();
+    const resolvedMessageIds = messageIds();
+    return {
+      queryKey: channelKeys.messagesByIds(resolvedChannelId, resolvedMessageIds)
+        .queryKey,
+      queryFn: async (): Promise<ApiChannelMessage[]> => {
+        const page = await throwOnErr(() =>
+          commsServiceClient.postChannelMessages({
+            channel_id: resolvedChannelId,
+            filters: { message_ids: resolvedMessageIds },
+          })
+        );
+        return page.items;
+      },
+      enabled: resolvedMessageIds.length > 0,
+      staleTime: Infinity,
+    };
+  });
 }
 
 /** Returns the cache key for one channel message query variant. */

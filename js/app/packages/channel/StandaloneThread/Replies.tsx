@@ -57,12 +57,13 @@ export function Replies(props: RepliesProps) {
           <For each={ctx.displayReplies()}>
             {(reply) => {
               const meta = () => listMetaByReplyId()[reply.id];
+              const replyActions = () => props.getMessageActions?.(reply);
               return (
                 <div class="relative">
                   <ThreadRail />
                   <Message.Root
                     message={reply}
-                    actions={props.getMessageActions?.(reply)}
+                    actions={replyActions()}
                     onClick={
                       props.onClickMessage
                         ? (e: MouseEvent) => props.onClickMessage!(reply.id, e)
@@ -106,7 +107,7 @@ export function Replies(props: RepliesProps) {
                         <Message.Reactions />
                       </Message.Slot>
                     </Message.Layout>
-                    <Show when={props.getMessageActions}>
+                    <Show when={replyActions()}>
                       <Message.ActionMenu />
                     </Show>
                   </Message.Root>

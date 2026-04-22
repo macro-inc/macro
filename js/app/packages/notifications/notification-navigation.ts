@@ -84,7 +84,10 @@ async function openChannelNotification(
   }
 
   const orchestrator = layoutManager.getOrchestrator();
-  await navigateToChannelMessage(orchestrator, channelId, messageId, threadId);
+  await navigateToChannelMessage(orchestrator, channelId, messageId, threadId, {
+    splitManager: layoutManager,
+    preferNewSplit: newSplit,
+  });
 }
 
 function safeFileTypeToBlockName(fileType: string | undefined | null) {

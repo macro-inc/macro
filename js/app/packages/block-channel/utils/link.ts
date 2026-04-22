@@ -1,5 +1,6 @@
 import { URL_PARAMS } from '@block-channel/constants';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import type { BlockOrchestrator } from '@core/orchestrator';
 
 export function getChannelParams(
@@ -33,10 +34,14 @@ export async function navigateToChannelMessage(
   orchestrator: BlockOrchestrator,
   channelId: string,
   messageId: string,
-  threadId?: string
+  threadId?: string,
+  options?: {
+    splitManager?: SplitManager;
+    preferNewSplit?: boolean;
+  }
 ) {
   const params = getChannelParams(messageId, threadId);
-  const splitManager = globalSplitManager();
+  const splitManager = options?.splitManager ?? globalSplitManager();
   if (!splitManager) return;
 
   const existing = splitManager.getSplitByContent('channel', channelId);
@@ -45,7 +50,11 @@ export async function navigateToChannelMessage(
   } else {
     splitManager.openWithSplit(
       { type: 'channel', id: channelId, params },
-      { activate: true, referredFrom: null }
+      {
+        activate: true,
+        referredFrom: null,
+        preferNewSplit: options?.preferNewSplit,
+      }
     );
   }
 
