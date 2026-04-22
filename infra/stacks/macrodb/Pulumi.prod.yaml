@@ -1,7 +1,8 @@
 config:
   aws:region: us-east-1
   macrodb:db_password_secret_key: macrodb-password-prod
-  macrodb:parameter_group_family: postgres14
+  macrodb:parameter_group_family_legacy: postgres14
+  macrodb:parameter_group_family: postgres16
   macrodb:engine_version: 14.17
   macrodb:instance_size: db.t4g.xlarge
   macrodb:storage_type: gp3
@@ -18,5 +19,4 @@ config:
   macrodb:monitoring_interval: 60
   macrodb:rds_monitoring_role_arn: arn:aws:iam::569036502058:role/rds-monitoring-role
   macrodb:backup_retention_days: 6
-  macrodb:read_replica_enabled: true
   macrodb:read_replica_instance_size: db.t4g.xlarge

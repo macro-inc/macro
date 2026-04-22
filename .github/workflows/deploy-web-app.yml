@@ -41,16 +41,11 @@ on:
         required: true
       POSTHOG_API_KEY:
         required: true
-      NPMRC_GH_TOKEN:
-        required: true
 
 concurrency:
   group: ${{ github.workflow }}-web-app-${{ inputs.environment }}
   # We do not want to cancel a deployment if it's in progress. That could lead to a broken deployment.
   cancel-in-progress: false
-
-env:
-  WEB_APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '0.0.0' }}
 
 jobs:
   build-deploy:
@@ -63,8 +58,6 @@ jobs:
           ref: ${{ github.ref_name }}
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
-        with:
-          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Build
         working-directory: js/app
         run: just build-${{ inputs.environment }}

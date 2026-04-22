@@ -28,6 +28,16 @@ import {
 import { match } from 'ts-pattern';
 import { isAfter } from 'date-fns';
 import { getChannelParams } from '@block-channel/utils/link';
+import {
+  compositeEntity,
+  type NotificationSource,
+  setDoneOverride,
+} from '@notifications';
+import {
+  bulkMarkNotificationsAsDone,
+  bulkMarkNotificationsAsUndone,
+} from '@queries/notification/user-notifications';
+import { notificationKeys } from '@queries/notification/keys';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -247,25 +257,29 @@ export const restoreSoupFocus = async (
     );
   }
 
-  if (!domRef) return;
+  if (!(domRef instanceof HTMLElement)) return;
 
   // Wait for DOM to update after modal closes
   await waitForFrames(2);
 
-  // Find and focus the entity element
+  // Entity rows are plain divs without a `tabindex` attribute so `.focus()`
+  // on them is a no-op. Targeting them is still useful because the browser
+  // may scroll them into view as part of the focus attempt. Always follow
+  // up by focusing the soup container (which has `tabindex={-1}`) — that's
+  // what actually reactivates the hotkey scope.
   if (entityId) {
     const entityEl = domRef.querySelector(`[data-entity-id="${entityId}"]`);
-    if (entityEl instanceof HTMLElement) {
-      entityEl.focus();
-      return;
-    }
+    if (entityEl instanceof HTMLElement) entityEl.focus();
   }
 
-  // Fallback: focus the first entity in the list if no specific entity to focus
+  if (document.activeElement && domRef.contains(document.activeElement)) return;
+
   const firstEntityEl = domRef.querySelector('[data-entity-id]');
-  if (firstEntityEl instanceof HTMLElement) {
-    firstEntityEl.focus();
-  }
+  if (firstEntityEl instanceof HTMLElement) firstEntityEl.focus();
+
+  if (document.activeElement && domRef.contains(document.activeElement)) return;
+
+  domRef.focus();
 };
 
 export interface OpenEntityOptions {
@@ -571,4 +585,234 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
       }
     },
   };
+}
+
+export type MarkEntitiesDoneContext = {
+  /** Clears optimistic state — use for mark-done failure (cache is pre-mutation). */
+  rollback: () => void;
+  /** Re-applies the optimistic done state. Use for redo / undo failure. */
+  reapply: () => void;
+  /** Reverts email/soup caches and forces `done=false` override. Use for undo. */
+  applyUndone: () => void;
+};
+
+/**
+ * Extract the email ids and notification ids targeted by a mark-done on these
+ * entities. The ids are snapshotted here so mutationFn/undoFn/redoFn operate
+ * on the set that existed at mutation time.
+ */
+export function resolveMarkEntitiesDoneVariables(args: {
+  entities: EntityData[];
+  notificationSource: NotificationSource;
+}): { emailIds: string[]; notificationIds: string[] } {
+  const { entities, notificationSource } = args;
+  const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
+  const notificationIds = entities.flatMap((entity) =>
+    (
+      notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
+    ).map((n) => n.id)
+  );
+  return { emailIds, notificationIds };
+}
+
+/**
+ * Applies the optimistic UI state for marking entities as done — removes
+ * emails from the soup + email caches and flips the notification `done`
+ * override. Returns a context the mutation uses for rollback / reapply.
+ */
+export function applyEntitiesDoneOptimistic(args: {
+  emailIds: string[];
+  notificationIds: string[];
+}): MarkEntitiesDoneContext {
+  const { emailIds, notificationIds } = args;
+  const emailIdSet = new Set(emailIds);
+
+  type EmailQueryKey = readonly unknown[];
+  type EmailCacheData = { pages: { items: EntityData[] }[] };
+  const removedEmails = new Map<EmailQueryKey, Map<string, EntityData>>();
+
+  const filterEmailCache = () => {
+    if (emailIdSet.size === 0) return;
+    for (const [key, data] of queryClient.getQueriesData<EmailCacheData>({
+      queryKey: queryKeys.all.email,
+    })) {
+      if (!data) continue;
+      const bucket = removedEmails.get(key) ?? new Map<string, EntityData>();
+      let mutated = false;
+      const pages = data.pages.map((page) => {
+        const items: EntityData[] = [];
+        for (const item of page.items) {
+          if (emailIdSet.has(item.id)) {
+            bucket.set(item.id, item);
+            mutated = true;
+          } else {
+            items.push(item);
+          }
+        }
+        return mutated && items.length !== page.items.length
+          ? { ...page, items }
+          : page;
+      });
+      if (mutated) {
+        removedEmails.set(key, bucket);
+        queryClient.setQueryData(key, { ...data, pages });
+      }
+    }
+  };
+
+  const restoreEmailCache = () => {
+    for (const [key, bucket] of removedEmails) {
+      if (bucket.size === 0) continue;
+      const toRestore = [...bucket.values()];
+      bucket.clear();
+      queryClient.setQueryData<EmailCacheData>(key, (current) => {
+        if (!current) return current;
+        const restoredIds = new Set(toRestore.map((e) => e.id));
+        return {
+          ...current,
+          pages: current.pages.map((page, idx) => {
+            const filtered = page.items.filter((i) => !restoredIds.has(i.id));
+            if (idx === 0) {
+              return { ...page, items: [...toRestore, ...filtered] };
+            }
+            if (filtered.length === page.items.length) {
+              return page;
+            }
+            return { ...page, items: filtered };
+          }),
+        };
+      });
+    }
+  };
+
+  let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
+
+  const reapply = () => {
+    soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
+    filterEmailCache();
+    setDoneOverride(notificationIds, true);
+  };
+
+  const rollback = () => {
+    soupTxn?.rollback();
+    soupTxn = null;
+    restoreEmailCache();
+    setDoneOverride(notificationIds, undefined);
+  };
+
+  const applyUndone = () => {
+    soupTxn?.rollback();
+    soupTxn = null;
+    restoreEmailCache();
+    // Force `done=false` — cache may have reconciled to `done=true` from the
+    // server, so clearing the override would leave the UI hidden after undo.
+    setDoneOverride(notificationIds, false);
+  };
+
+  reapply();
+
+  return { rollback, reapply, applyUndone };
+}
+
+/**
+ * Fires the archive + bulk-done APIs for the given ids. Throws on any
+ * failure; caller is responsible for rollback via the context returned by
+ * `applyEntitiesDoneOptimistic`.
+ */
+export async function executeMarkEntitiesDone(args: {
+  emailIds: string[];
+  notificationIds: string[];
+}): Promise<void> {
+  const { emailIds, notificationIds } = args;
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+  ]);
+
+  const results = await Promise.allSettled([
+    ...emailIds.map((id) =>
+      throwOnErr(
+        async () => await emailClient.flagArchived({ value: true, id })
+      )
+    ),
+    notificationIds.length > 0
+      ? bulkMarkNotificationsAsDone(notificationIds)
+      : Promise.resolve(),
+  ]);
+
+  const rejected = results.find(
+    (r): r is PromiseRejectedResult => r.status === 'rejected'
+  );
+
+  if (rejected) {
+    // Real refetch to reconcile server state with the UI after the caller
+    // rolls back its optimistic cache writes.
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
+      ...emailIds.map((id) => invalidateSoupEntity(id)),
+    ]);
+    throw rejected.reason ?? new Error('Failed to mark as done');
+  }
+
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.all.email,
+      refetchType: 'none',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: notificationKeys.user._def,
+      refetchType: 'none',
+    }),
+    ...emailIds.map((id) => invalidateSoupEntity(id)),
+  ]);
+}
+
+/**
+ * Fires the unarchive + bulk-undone APIs for the given ids. Throws on any
+ * failure; caller is responsible for re-applying optimistic state.
+ */
+export async function executeMarkEntitiesUndone(args: {
+  emailIds: string[];
+  notificationIds: string[];
+}): Promise<void> {
+  const { emailIds, notificationIds } = args;
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+  ]);
+
+  const results = await Promise.allSettled([
+    ...emailIds.map((id) =>
+      throwOnErr(
+        async () => await emailClient.flagArchived({ value: false, id })
+      )
+    ),
+    notificationIds.length > 0
+      ? bulkMarkNotificationsAsUndone(notificationIds)
+      : Promise.resolve(),
+  ]);
+
+  const rejected = results.find(
+    (r): r is PromiseRejectedResult => r.status === 'rejected'
+  );
+
+  if (rejected) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
+    ]);
+    throw rejected.reason ?? new Error('Failed to undo');
+  }
+
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.all.email,
+      refetchType: 'none',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: notificationKeys.user._def,
+      refetchType: 'none',
+    }),
+  ]);
 }

@@ -1,18 +1,13 @@
 use logger::Logger;
-use macro_bundle_updater_plugin::BundleRoot;
+use macro_bundle_updater_plugin::inbound::plugin::PluginService;
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
 use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
-#[cfg(target_os = "ios")]
-use std::sync::OnceLock;
-use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
-use tauri::{AppHandle, Emitter};
-use tauri::{Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 mod tauri_protocol;
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
@@ -20,70 +15,9 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
-struct HeartbeatState {
-    alive: AtomicBool,
-    /// Incremented on each resume event so stale check threads are ignored
-    generation: AtomicU64,
-}
-
-#[tauri::command]
-fn heartbeat_response(state: tauri::State<'_, HeartbeatState>) {
-    state.alive.store(true, Ordering::SeqCst);
-}
-
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
-
-#[cfg(target_os = "ios")]
-static GLOBAL_APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
-
-/// Send a heartbeat ping to the JS layer and check for a response after 1 second.
-/// If no response is received, reload the webview (the content process is likely dead).
-#[cfg(target_os = "ios")]
-fn send_heartbeat(handle: &AppHandle) {
-    tracing::info!("app resumed, sending heartbeat ping");
-
-    let state = handle.state::<HeartbeatState>();
-    let current_gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    state.alive.store(false, Ordering::SeqCst);
-
-    let _ = handle.emit("heartbeat_ping", ());
-
-    let handle = handle.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        let state = handle.state::<HeartbeatState>();
-
-        if state.generation.load(Ordering::SeqCst) != current_gen {
-            tracing::debug!("heartbeat: stale generation {current_gen}, skipping");
-            return;
-        }
-
-        if !state.alive.load(Ordering::SeqCst) {
-            tracing::warn!(
-                "heartbeat: no response from JS — content process likely dead, reloading webview"
-            );
-            if let Some(webview) = handle.webview_windows().values().next() {
-                let _ = webview.reload();
-            }
-        } else {
-            tracing::info!("heartbeat: JS responded, content process alive");
-        }
-    });
-}
-
-/// Called from native Objective-C when the iOS app resumes from background.
-/// See `main.mm` for the notification observer.
-#[cfg(target_os = "ios")]
-#[unsafe(no_mangle)]
-extern "C" fn on_app_resumed() {
-    let Some(handle) = GLOBAL_APP_HANDLE.get() else {
-        tracing::warn!("on_app_resumed: app handle not yet initialized");
-        return;
-    };
-    send_heartbeat(handle);
-}
 
 /// domains which the tauri webview can render.
 /// This should be as restrictive as possible.
@@ -222,25 +156,13 @@ pub fn run() {
                 let h = handler.get_or_init(|| {
                     // Restore persisted bundle root before the first request is served
                     let app = ctx.app_handle();
-                    match app.path().app_cache_dir() {
-                        Ok(cache_dir) => {
-                            tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
-                            let restored = BundleRoot::load(&cache_dir);
-                            if let Ok(val) = restored.0.read()
-                                && let Some(ref path) = *val
-                            {
-                                if let Some(br) = app.try_state::<BundleRoot>() {
-                                    tracing::info!("Setting managed BundleRoot to {path:?}");
-                                    if let Ok(mut w) = br.0.write() {
-                                        *w = Some(path.clone());
-                                    }
-                                } else {
-                                    tracing::warn!("BundleRoot state not managed yet");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to get app_cache_dir: {e}");
+                    if let Ok(cache_dir) = app.path().app_cache_dir() {
+                        tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
+                        if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
+                            tauri::async_runtime::block_on(async {
+                                let mut service = s.lock().await;
+                                service.load_bundle_root(&cache_dir).await;
+                            });
                         }
                     }
                     tauri_protocol::get(app.clone(), &window_origin)
@@ -248,30 +170,25 @@ pub fn run() {
                 h(ctx.webview_label(), request, responder);
             }
         })
-        .manage(BundleRoot(RwLock::new(None)))
-        .manage(HeartbeatState {
-            alive: AtomicBool::new(true),
-            generation: AtomicU64::new(0),
-        })
         .invoke_handler(tauri::generate_handler![
-            heartbeat_response,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
-            macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status
+            macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
+            macro_bundle_updater_plugin::inbound::plugin::clear_bundle
         ])
         .setup(|app| {
             // Restore persisted bundle root on startup
             if let Ok(cache_dir) = app.path().app_cache_dir() {
-                let restored = BundleRoot::load(&cache_dir);
-                if let Ok(val) = restored.0.read()
-                    && let Some(ref path) = *val
-                {
-                    let bundle_root = app.state::<BundleRoot>();
-                    if let Ok(mut w) = bundle_root.0.write() {
-                        *w = Some(path.clone());
-                        tracing::info!("Setup: restored BundleRoot to {path:?}");
-                    }
+                if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
+                    tauri::async_runtime::block_on(async {
+                        let mut service = s.lock().await;
+                        service.load_bundle_root(&cache_dir).await;
+                        tracing::info!(
+                            "Setup: restored bundle root to {:?}",
+                            service.bundle_root_path()
+                        );
+                    });
                 }
             }
 
@@ -285,11 +202,6 @@ pub fn run() {
             }
 
             app.chain(attach_deep_link_handler);
-
-            #[cfg(target_os = "ios")]
-            {
-                let _ = GLOBAL_APP_HANDLE.set(app.handle().clone());
-            }
 
             Ok(())
         })

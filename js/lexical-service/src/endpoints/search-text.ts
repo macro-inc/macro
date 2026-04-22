@@ -1,30 +1,35 @@
-import { OpenAPIRoute } from "chanfana";
-import type { Context } from "hono";
-import { z } from "zod";
-import { toSearchText } from "../lib/convsersions";
-import { createSyncClient } from "../lib/sync-service";
+import { OpenAPIRoute } from 'chanfana';
+import type { Context } from 'hono';
+import { z } from 'zod';
+import { toSearchText } from '../lib/convsersions';
+import { createSyncClient } from '../lib/sync-service';
 import {
   handleEndpointError,
   createSyncError,
   validateEnvironment,
-  ConversionError
-} from "../lib/error-handler";
-import { standardErrorResponses, docIdParam, searchableNodeSchema } from "../lib/schemas";
+  ConversionError,
+} from '../lib/error-handler';
+import {
+  standardErrorResponses,
+  docIdParam,
+  searchableNodeSchema,
+} from '../lib/schemas';
 
 export class SearchTextEndpoint extends OpenAPIRoute {
   schema = {
-    summary: "Convert document snapshot to searchable text",
-    description: "Fetches a document snapshot from the sync service and converts it to searchable text with node metadata using Lexical editor state parsing",
+    summary: 'Convert document snapshot to searchable text',
+    description:
+      'Fetches a document snapshot from the sync service and converts it to searchable text with node metadata using Lexical editor state parsing',
     request: {
       params: docIdParam,
     },
     responses: {
       200: {
-        description: "Successfully converted document to searchable text",
+        description: 'Successfully converted document to searchable text',
         content: {
-          "application/json": {
+          'application/json': {
             schema: z.object({
-              data: z.array(searchableNodeSchema)
+              data: z.array(searchableNodeSchema),
             }),
           },
         },
@@ -54,10 +59,14 @@ export class SearchTextEndpoint extends OpenAPIRoute {
           const searchableNodes = toSearchText(rawDocument.data);
           return c.json({ data: searchableNodes });
         } catch {
-          throw new ConversionError('Failed to parse document snapshot for search text');
+          throw new ConversionError(
+            'Failed to parse document snapshot for search text'
+          );
         }
       } else {
-        throw createSyncError(rawDocument as { success: false; error: Error; status?: number });
+        throw createSyncError(
+          rawDocument as { success: false; error: Error; status?: number }
+        );
       }
     } catch (error) {
       return handleEndpointError(error, c, docId);

@@ -138,7 +138,8 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
     }
   }
 
-  const nameHighlight = data.results.at(0)?.highlight.name ?? null;
+  const nameHighlight =
+    data.results.find((r) => r.highlight.name)?.highlight.name ?? null;
 
   let senderHighlightTerms: string[] | null = null;
   if (data.type === 'email') {

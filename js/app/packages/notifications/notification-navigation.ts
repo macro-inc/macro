@@ -7,7 +7,10 @@ import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import type { NotificationSource } from './notification-source';
-import { getChannelParams } from '@block-channel/utils/link';
+import {
+  getChannelParams,
+  navigateToChannelMessage,
+} from '@block-channel/utils/link';
 import { isChannelNotification } from './notification-helpers';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
 import {
@@ -73,22 +76,18 @@ async function openChannelNotification(
   newSplit: boolean = false
 ) {
   const channelId = notification.entity_id;
-  const { messageId, threadId, params } =
-    getChannelNotificationParams(notification);
+  const { messageId, threadId } = getChannelNotificationParams(notification);
 
-  openSplitIfNotOpen(layoutManager, 'channel', channelId, {
-    newSplit,
-    params,
-  });
+  if (!messageId) {
+    openSplitIfNotOpen(layoutManager, 'channel', channelId, { newSplit });
+    return;
+  }
 
-  if (!messageId) return;
-
-  // Also call goToLocationFromParams for already-open channels where
-  // the split existed before and params weren't applied as initial props.
   const orchestrator = layoutManager.getOrchestrator();
-  const handle = await orchestrator.getBlockHandle(channelId, 'channel');
-
-  handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
+  await navigateToChannelMessage(orchestrator, channelId, messageId, threadId, {
+    splitManager: layoutManager,
+    preferNewSplit: newSplit,
+  });
 }
 
 function safeFileTypeToBlockName(fileType: string | undefined | null) {

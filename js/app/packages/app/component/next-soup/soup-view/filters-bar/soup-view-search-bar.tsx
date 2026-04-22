@@ -6,8 +6,9 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
+import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
 import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
 
 type SearchbarVariant = 'filled' | 'secondary';
@@ -16,6 +17,7 @@ interface SoupSearchbarProps {
   variant?: SearchbarVariant;
   autoFocus?: boolean;
   onDismiss?: () => void;
+  placeholder?: string;
 }
 
 const variantStyles: Record<SearchbarVariant, string> = {
@@ -64,12 +66,27 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       editor.controls.blur();
       props.onDismiss?.();
       return true;
-    });
+    })
+    .onTab((e) => {
+      e.preventDefault();
+      return true;
+    })
+    .use((lex) =>
+      lex.registerCommand(
+        KEY_ARROW_DOWN_COMMAND,
+        () => {
+          if (menuIsOpen()) return false;
+          lex.getRootElement()?.blur();
+          return true;
+        },
+        COMMAND_PRIORITY_HIGH
+      )
+    );
 
   // Sync search text + mention filters only when the mention menu is closed.
   // This avoids cascading reactive updates during mention insertion and
   // prevents search from firing while typing @partial.
-  const menuIsOpen = () => editor.controls.isMentionMenuOpen();
+  const menuIsOpen = () => editor.controls.isInlineMenuOpen();
 
   createEffect(() => setSearchPaused(menuIsOpen()));
 
@@ -110,17 +127,10 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         <div
           data-soup-search
           class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
-          onKeyDown={(e) => {
-            if (menuIsOpen()) return;
-            if (e.key === 'ArrowDown' || e.key === 'j') {
-              e.preventDefault();
-              editor.controls.blur();
-            }
-          }}
         >
           <MarkdownShell
             config={editor}
-            placeholder="Search"
+            placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
             class="!min-h-0 !overflow-visible"
           />

@@ -15,12 +15,13 @@ function MarkdownMentionsContent(_props: LessonContentProps) {
     <div class="flex flex-col gap-3 onboarding-stagger">
       <HotkeyCallout
         keys={['@']}
-        label="to mention someone"
+        label="to mention someone or something"
         completed={completed()}
       />
       <p>
-        Macro's editor supports rich markdown, mentions, and emoji. Try typing
-        something or mentioning a teammate with <strong>@</strong>.
+        Macro's editor supports rich markdown, mentions, and emoji. Try
+        mentioning someone or something by typing <strong>@</strong> in the
+        editor.
       </p>
     </div>
   );
@@ -63,9 +64,10 @@ function MarkdownMentionsDemo(props: LessonContentProps) {
 
   return (
     <MockAppChrome>
-      <div class="px-8 py-6">
+      <div class="h-full flex flex-col px-8 py-6">
         <h1 class="text-3xl font-semibold text-ink mb-4">Daily Note</h1>
         <MarkdownShell
+          class="flex-1 min-h-0 cursor-text"
           config={config}
           placeholder="Start typing... use @ to mention"
           autofocus
@@ -78,7 +80,6 @@ function MarkdownMentionsDemo(props: LessonContentProps) {
 export const markdownMentionsLesson: LessonDefinition = {
   id: 'markdown-mentions',
   title: 'Editor',
-  subtitle: 'Rich text with mentions and emoji.',
   content: MarkdownMentionsContent,
   demo: MarkdownMentionsDemo,
   order: 50,

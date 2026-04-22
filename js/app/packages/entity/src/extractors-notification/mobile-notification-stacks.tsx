@@ -3,7 +3,6 @@ import { reconcile, createStore } from 'solid-js/store';
 import {
   type NotificationStack,
   getMostRecentNotification,
-  getAllNotificationsFromGroup,
   openNotification,
 } from '@notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -15,8 +14,8 @@ import { Entity } from '../entity';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { toast } from '@core/component/Toast/Toast';
 import { cn } from '@ui/utils/classname';
+import { useNotificationStackActions } from './notification-actions';
 import { NotificationContent } from './notification-content';
 import { NotificationTimestamp } from './notification-timestamp';
 
@@ -88,15 +87,15 @@ function MobileStackRow(props: {
 }) {
   const ctx = useContext(EntityRowContext);
   const notificationSource = useGlobalNotificationSource();
+  const { markStackAsDone } = useNotificationStackActions({
+    stack: props.stack,
+  });
   const stackEntityId = () => getMostRecentNotification(props.stack).id;
   const unread = () => isNotificationUnread(props.stack);
 
   const handleSwipeLeft = async () => {
     await ctx?.collapseEntity(stackEntityId());
-    void notificationSource.bulkMarkAsDone(
-      getAllNotificationsFromGroup(props.stack)
-    );
-    toast.success('Marked as done');
+    markStackAsDone();
   };
 
   const handleClick = async (e: MouseEvent) => {

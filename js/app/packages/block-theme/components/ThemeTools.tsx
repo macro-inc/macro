@@ -1,19 +1,20 @@
 import { deleteTheme, exportTheme, importTheme, invertTheme, saveTheme } from '../utils/themeUtils';
 import { currentThemeId, isThemeSaved, themes, userThemes } from '../signals/themeSignals';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import IconPaintbrush from '@macro-icons/wide/paintbrush.svg';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
 import IconImport from '@macro-icons/macro-import.svg';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import IconTrash from '@macro-icons/macro-trash.svg';
 import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@macro-icons/macro-dice.svg';
 import IconSave from '@macro-icons/macro-save.svg';
-import IconPaintbrush from '@macro-icons/wide/paintbrush.svg';
+
 
 export function ThemeTools() {
   let themeName!: HTMLDivElement;
-  
+
   const defaultThemeName = 'New Theme';
 
   const currentThemeName = createMemo(() => {
@@ -41,14 +42,14 @@ export function ThemeTools() {
         'grid-template-columns': `min-content min-content 1fr repeat(${columnCount()}, min-content)`,
         'padding': '0 12px 0 20px' /* (41 - 32) / 2 */,
         'gap': '4.5px' /* (41 - 32) / 2 */,
-        'font-family': 'var( --font-mono)',
+        'font-family': 'var(--font-sans)',
         'background-color': 'var(--b1)',
         'scrollbar-width': 'none',
         'align-items': 'center',
         'overflow': 'hidden',
         'font-size': '14px',
+        'height': '39.5px',
         'display': 'grid',
-        'height': '43px',
         'width': '100%',
       }}
     >

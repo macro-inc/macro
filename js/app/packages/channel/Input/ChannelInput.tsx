@@ -32,6 +32,7 @@ import {
 } from 'solid-js';
 import { isReplyInput } from './types';
 import type { IUser } from '@core/user/types';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -164,6 +165,19 @@ export function ChannelInput(props: ChannelInputProps) {
     },
   });
 
+  const [attach, scopeId] = useHotkeyDOMScope('channel-input-intercept');
+  registerHotkey({
+    scopeId,
+    description: 'block escape from moving up scope',
+    hotkey: ['escape'],
+    runWithInputFocused: true,
+    hide: true,
+    keyDownHandler: () => {
+      // Block upstream escape handlers when ESC should close inline menus.
+      return markdownEditor.controls.isInlineMenuOpen();
+    },
+  });
+
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
       <Input.DropZone
@@ -199,6 +213,7 @@ export function ChannelInput(props: ChannelInputProps) {
                 initialValue={inputState.view().value}
                 autofocus={!isMobile() && (props.autofocus ?? true)}
                 class="text-sm"
+                refFn={attach}
               />
             </Input.Editor>
           </Input.EditorShell>

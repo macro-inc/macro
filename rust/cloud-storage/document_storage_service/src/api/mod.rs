@@ -92,11 +92,17 @@ fn api_router(state: ApiContext) -> Router {
         service: state.github_sync_service.clone(),
     };
 
-    // Webhook router is outside auth — LiveKit validates via its own JWT.
-    let webhook_router = Router::new().nest(
-        "/call",
-        call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
-    );
+    // Webhook router is outside auth — LiveKit validates via its own JWT,
+    // cal.com validates via HMAC signature.
+    let webhook_router = Router::new()
+        .nest(
+            "/call",
+            call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
+        )
+        .nest(
+            "/cal",
+            cal::inbound::cal_webhook_router::cal_webhook_router(state.cal_webhook_state.clone()),
+        );
 
     // Internal call router — agent-authenticated via x-macro-internal-call header.
     let internal_call_router = Router::new().nest(

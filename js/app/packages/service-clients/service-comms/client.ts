@@ -44,6 +44,7 @@ import type { ApiChannelMessagesPage } from '@service-storage/generated/schemas/
 import type { ApiChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
 import type { ApiThreadReply } from '@service-storage/generated/schemas';
+import type { ChannelMessageFilters } from '@service-storage/generated/schemas/channelMessageFilters';
 
 export type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 export type { ApiChannelMessagesPage as ChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
@@ -400,6 +401,24 @@ export const commsServiceClient = {
       await commsFetch<ApiChannelMessagesPage>(
         `/channels/${channel_id}/messages?${params.toString()}`,
         { method: 'GET' }
+      ),
+      (result) => result
+    );
+  },
+  async postChannelMessages(
+    args: WithChannelId & { filters: ChannelMessageFilters; limit?: number }
+  ) {
+    const { channel_id, filters, limit } = args;
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append('limit', limit.toString());
+    const query = params.toString();
+    return mapOk(
+      await commsFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages${query ? `?${query}` : ''}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(filters),
+        }
       ),
       (result) => result
     );

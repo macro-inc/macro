@@ -2,52 +2,89 @@ use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
 
 #[test]
-fn test_build_simple_query_string_single_term() {
-    let result = build_simple_query_string(&["hello".to_string()]);
+fn test_build_keyword_query_string_single_term() {
+    let result = build_keyword_query_string(&["hello".to_string()]);
     assert_eq!(result, "(hello | hello@*)");
 }
 
 #[test]
-fn test_build_simple_query_string_multiple_terms() {
-    let result = build_simple_query_string(&["hello".to_string(), "test".to_string()]);
+fn test_build_keyword_query_string_multiple_terms() {
+    let result = build_keyword_query_string(&["hello".to_string(), "test".to_string()]);
     assert_eq!(result, "(hello | hello@*) + (test | test@*)");
 }
 
 #[test]
-fn test_build_simple_query_string_multi_word_term_skips_email_pattern() {
-    let result = build_simple_query_string(&["hi there".to_string()]);
+fn test_build_keyword_query_string_multi_word_term_skips_email_pattern() {
+    let result = build_keyword_query_string(&["hi there".to_string()]);
     assert_eq!(result, "(hi there)");
 }
 
 #[test]
-fn test_build_simple_query_string_uppercase_lowercased_for_email() {
-    let result = build_simple_query_string(&["Teo".to_string()]);
+fn test_build_keyword_query_string_uppercase_lowercased_for_email() {
+    let result = build_keyword_query_string(&["Teo".to_string()]);
     assert_eq!(result, "(Teo | teo@*)");
 }
 
 #[test]
-fn test_build_simple_query_string_mixed_single_and_multi_word() {
-    let result = build_simple_query_string(&["Teo".to_string(), "hello world".to_string()]);
+fn test_build_keyword_query_string_mixed_single_and_multi_word() {
+    let result = build_keyword_query_string(&["Teo".to_string(), "hello world".to_string()]);
     assert_eq!(result, "(Teo | teo@*) + (hello world)");
 }
 
 #[test]
-fn test_build_simple_query_string_email_term_uses_phrase() {
-    let result = build_simple_query_string(&["hutch@macro.com".to_string()]);
-    assert_eq!(result, "\"hutch@macro.com\"");
+fn test_build_keyword_query_string_email_term_uses_phrase() {
+    let result = build_keyword_query_string(&["alice@example.com".to_string()]);
+    assert_eq!(result, "\"alice@example.com\"");
 }
 
 #[test]
-fn test_build_simple_query_string_email_term_mixed_with_word() {
-    let result = build_simple_query_string(&["hutch@macro.com".to_string(), "review".to_string()]);
-    assert_eq!(result, "\"hutch@macro.com\" + (review | review@*)");
+fn test_build_keyword_query_string_email_term_mixed_with_word() {
+    let result =
+        build_keyword_query_string(&["alice@example.com".to_string(), "review".to_string()]);
+    assert_eq!(result, "\"alice@example.com\" + (review | review@*)");
+}
+
+#[test]
+fn test_build_text_query_string_single_term_is_prefix() {
+    let result = build_text_query_string(&["scri".to_string()]);
+    assert_eq!(result, "scri*");
+}
+
+#[test]
+fn test_build_text_query_string_multiple_terms_are_prefixed_and_anded() {
+    let result = build_text_query_string(&["scri".to_string(), "test".to_string()]);
+    assert_eq!(result, "scri* + test*");
+}
+
+#[test]
+fn test_build_text_query_string_multi_word_term_uses_group() {
+    let result = build_text_query_string(&["hi there".to_string()]);
+    assert_eq!(result, "(hi there)");
+}
+
+#[test]
+fn test_build_text_query_string_email_term_uses_phrase() {
+    let result = build_text_query_string(&["alice@example.com".to_string()]);
+    assert_eq!(result, "\"alice@example.com\"");
+}
+
+#[test]
+fn test_build_text_query_string_short_term_skips_prefix() {
+    let result = build_text_query_string(&["ab".to_string()]);
+    assert_eq!(result, "(ab)");
+}
+
+#[test]
+fn test_build_text_query_string_three_char_term_gets_prefix() {
+    let result = build_text_query_string(&["abc".to_string()]);
+    assert_eq!(result, "abc*");
 }
 
 #[test]
 fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<()> {
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["hello".to_string(), "test".to_string()],
-        user_id: "macro|gab@macro.com".to_string(),
+        user_id: "macro|alice@example.com".to_string(),
         thread_ids: vec![],
         link_ids: vec![],
         sender: vec![],
@@ -67,19 +104,48 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     .into();
 
     let json = builder.build_bool_query()?.build().to_json();
-    let must = &json["bool"]["must"];
-    let sqc = &must[0]["simple_query_string"];
+    let should = json["bool"]["must"][0]["bool"]["should"]
+        .as_array()
+        .unwrap();
+    assert_eq!(json["bool"]["must"][0]["bool"]["minimum_should_match"], 1);
+    assert_eq!(should.len(), 2);
 
-    assert_eq!(sqc["query"], "(hello | hello@*) + (test | test@*)");
-    assert_eq!(sqc["default_operator"], "AND");
+    let keyword_sqs = should
+        .iter()
+        .map(|s| &s["simple_query_string"])
+        .find(|s| {
+            s["fields"]
+                .as_array()
+                .is_some_and(|f| f.contains(&serde_json::json!("sender")))
+        })
+        .unwrap();
+    assert_eq!(keyword_sqs["query"], "(hello | hello@*) + (test | test@*)");
+    assert_eq!(keyword_sqs["default_operator"], "AND");
+    let keyword_fields = keyword_sqs["fields"].as_array().unwrap();
+    assert!(keyword_fields.contains(&serde_json::json!("sender")));
+    assert!(keyword_fields.contains(&serde_json::json!("reply_to")));
+    assert!(keyword_fields.contains(&serde_json::json!("recipients")));
+    assert!(keyword_fields.contains(&serde_json::json!("cc")));
+    assert!(keyword_fields.contains(&serde_json::json!("bcc")));
+    assert!(!keyword_fields.contains(&serde_json::json!("subject")));
 
-    let fields = sqc["fields"].as_array().unwrap();
-    assert!(fields.contains(&serde_json::json!("sender")));
-    assert!(fields.contains(&serde_json::json!("reply_to")));
-    assert!(fields.contains(&serde_json::json!("content")));
-    assert!(fields.contains(&serde_json::json!("subject")));
-    assert!(fields.contains(&serde_json::json!("sender_name")));
-    assert!(fields.contains(&serde_json::json!("recipient_names")));
+    let text_sqs = should
+        .iter()
+        .map(|s| &s["simple_query_string"])
+        .find(|s| {
+            s["fields"]
+                .as_array()
+                .is_some_and(|f| f.contains(&serde_json::json!("subject")))
+        })
+        .unwrap();
+    assert_eq!(text_sqs["query"], "hello* + test*");
+    assert_eq!(text_sqs["default_operator"], "AND");
+    let text_fields = text_sqs["fields"].as_array().unwrap();
+    assert!(text_fields.contains(&serde_json::json!("subject")));
+    assert!(text_fields.contains(&serde_json::json!("content")));
+    assert!(text_fields.contains(&serde_json::json!("sender_name")));
+    assert!(text_fields.contains(&serde_json::json!("recipient_names")));
+    assert!(!text_fields.contains(&serde_json::json!("sender")));
 
     Ok(())
 }
@@ -150,10 +216,24 @@ fn test_build_bool_query() -> anyhow::Result<()> {
             ],
             "must": [
                 {
-                    "simple_query_string": {
-                        "default_operator": "AND",
-                        "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
-                        "query": "(test | test@*)"
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {
+                                "simple_query_string": {
+                                    "default_operator": "AND",
+                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                                    "query": "(test | test@*)"
+                                }
+                            },
+                            {
+                                "simple_query_string": {
+                                    "default_operator": "AND",
+                                    "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
+                                    "query": "test*"
+                                }
+                            }
+                        ]
                     }
                 }
             ]

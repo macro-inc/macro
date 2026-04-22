@@ -165,10 +165,19 @@ function success(
   message: string,
   subtext?: string,
   actions?: ToastAction[],
-  duration?: number
+  duration?: number,
+  /** When true, bypasses the 3s dedupe so repeated calls stack instead of replacing. */
+  stack?: boolean
 ): number | undefined {
-  dismissIfRecent(message, ToastType.SUCCESS);
-  return createToast(message, ToastType.SUCCESS, subtext, actions, duration);
+  if (!stack) dismissIfRecent(message, ToastType.SUCCESS);
+  return createToast(
+    message,
+    ToastType.SUCCESS,
+    subtext,
+    actions,
+    duration,
+    stack
+  );
 }
 
 function dismiss(toastId: number) {
@@ -189,26 +198,22 @@ function alert(message: string, subtext?: string, duration?: number) {
 
 // ─── Shared actions row ──────────────────────────────────────────────────────
 
-function ActionsRow(props: { actions: ToastAction[] }) {
+function ActionButtons(props: { actions: ToastAction[] }) {
   return (
-    <div class="flex flex-row flex-wrap justify-end gap-2 mt-2">
-      <For each={props.actions}>
-        {(action) => (
-          <Button
-            onClick={action.onClick}
-            variant="secondary"
-            class="flex items-center gap-1.5 rounded py-1.5 px-3 text-sm font-semibold"
-          >
-            <Show when={action.icon}>
-              {(icon) => (
-                <Dynamic component={icon()} class="size-3.5 shrink-0" />
-              )}
-            </Show>
-            {action.label}
-          </Button>
-        )}
-      </For>
-    </div>
+    <For each={props.actions}>
+      {(action) => (
+        <Button
+          onClick={action.onClick}
+          variant="secondary"
+          class="flex items-center gap-1.5 rounded py-1 px-2 text-sm font-semibold shrink-0"
+        >
+          <Show when={action.icon}>
+            {(icon) => <Dynamic component={icon()} class="size-3.5 shrink-0" />}
+          </Show>
+          {action.label}
+        </Button>
+      )}
+    </For>
   );
 }
 
@@ -335,6 +340,9 @@ function ToastContent(props: {
                   <Toast.Title class="font-semibold text-ink grow shrink truncate">
                     {customConfig().title}
                   </Toast.Title>
+                  <Show when={customConfig().actions?.length}>
+                    <ActionButtons actions={customConfig().actions!} />
+                  </Show>
                   <Toast.CloseButton>
                     <Button variant="ghost" size="icon-sm" class="rounded-xs">
                       <XIcon />
@@ -343,9 +351,6 @@ function ToastContent(props: {
                 </div>
                 <Show when={customConfig().content}>
                   <div class="my-2 ml-7">{customConfig().content?.()}</div>
-                </Show>
-                <Show when={customConfig().actions?.length}>
-                  <ActionsRow actions={customConfig().actions!} />
                 </Show>
               </>
             )}
@@ -373,6 +378,9 @@ function ToastContent(props: {
                   <Toast.Title class="font-semibold text-ink grow shrink truncate">
                     {props.message}
                   </Toast.Title>
+                  <Show when={props.actions?.length}>
+                    <ActionButtons actions={props.actions!} />
+                  </Show>
                   <Toast.CloseButton>
                     <Button variant="ghost" size="icon-sm" class="rounded-xs">
                       <XIcon />
@@ -383,9 +391,6 @@ function ToastContent(props: {
                   <Toast.Description class="text-sm text-ink-extra-muted ml-7">
                     {props.subtext}
                   </Toast.Description>
-                </Show>
-                <Show when={props.actions?.length}>
-                  <ActionsRow actions={props.actions!} />
                 </Show>
               </>
             )}
@@ -472,18 +477,17 @@ function createToast(
   actions?: ToastAction[],
   // When undefined, the toast auto-dismisses after a default delay but shows NO progress bar.
   // When explicitly set, the toast uses that duration AND shows the progress bar.
-  duration?: number
+  duration?: number,
+  /** Skip recentToasts tracking so this toast never dedupes against a future call. */
+  stack?: boolean
 ) {
-  const key = createToastKey(message, toastType);
-
-  const existingToast = recentToasts.get(key);
-  if (existingToast?.timeoutId) {
-    clearTimeout(existingToast.timeoutId);
+  if (!stack) {
+    const key = createToastKey(message, toastType);
+    const existingToast = recentToasts.get(key);
+    if (existingToast?.timeoutId) {
+      clearTimeout(existingToast.timeoutId);
+    }
   }
-
-  const timeoutId = setTimeout(() => {
-    recentToasts.delete(key);
-  }, THROTTLE_DURATION);
 
   const toastId = toaster.show(
     (props) => (
@@ -501,15 +505,21 @@ function createToast(
     { region: 'toast-region' }
   );
 
-  recentToasts.set(key, {
-    message,
-    toastType,
-    timestamp: Date.now(),
-    timeoutId,
-    toastId,
-    subtext,
-    actions,
-  });
+  if (!stack) {
+    const key = createToastKey(message, toastType);
+    const timeoutId = setTimeout(() => {
+      recentToasts.delete(key);
+    }, THROTTLE_DURATION);
+    recentToasts.set(key, {
+      message,
+      toastType,
+      timestamp: Date.now(),
+      timeoutId,
+      toastId,
+      subtext,
+      actions,
+    });
+  }
 
   return toastId;
 }

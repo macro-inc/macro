@@ -147,6 +147,10 @@ pub struct EditCallRecordRequest {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// If `Some(true)`, grant the creator's team View access on the call.
+    /// If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+    /// The team is resolved from the call's `created_by`, not the acting user.
+    pub share_with_team: Option<bool>,
 }
 
 /// A transcript segment as returned in a [`CallRecord`].

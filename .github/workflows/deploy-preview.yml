@@ -32,8 +32,6 @@ jobs:
 
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
-        with:
-          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
 
       # Build identical to dev.macro.com deployment
       - name: Build

@@ -5,7 +5,7 @@
 use std::fmt::Debug;
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -321,7 +321,7 @@ pub trait CallService: Send + Sync + 'static {
     /// `EntityType::Call` and its `entity_id` must be the call's UUID.
     fn get_call_record(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
 
     /// Delete a [`CallRecord`] the caller has channel-member access to.
@@ -333,13 +333,13 @@ pub trait CallService: Send + Sync + 'static {
     /// table are untouched. Idempotent.
     fn delete_call_record(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Edits a [`CallRecord`].
     fn edit_call_record(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
         request: EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
@@ -350,7 +350,7 @@ pub trait CallService: Send + Sync + 'static {
     /// Returns the new value.
     fn toggle_share_with_team(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<bool, CallError>> + Send;
 }
 

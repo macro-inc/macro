@@ -1,13 +1,8 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
-import { Resize } from '@core/component/Resize';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import {
-  LAYOUT_CONTEXT_ID,
-  setPersistedLayoutSizes,
-} from '@core/signal/layout';
 import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
@@ -21,6 +16,8 @@ import {
   Suspense,
 } from 'solid-js';
 import Banner from './banner/Banner';
+import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
+import { DevStatusBar } from './DevStatusBar';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
@@ -31,7 +28,6 @@ import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { AutomationComposer } from '@block-automation/component';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
-import { SettingsWrapper } from './settings/SettingsWrapper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 import {
   AppSidebar,
@@ -112,18 +108,6 @@ function LayoutInner(props: RouteSectionProps) {
     }
   });
 
-  // This effect is to handle moving from unauthenticated to authenticated
-  createEffect((prevAuth: boolean | undefined) => {
-    const currentAuth = isAuthenticated();
-    if (prevAuth === false && currentAuth === true) {
-      setPersistedLayoutSizes([1, 0]);
-    }
-    if (currentAuth === false) {
-      setPersistedLayoutSizes([1, 0]);
-    }
-    return currentAuth;
-  }, isAuthenticated());
-
   mountGlobalFocusListener();
 
   attachGlobalDOMScope(document.body);
@@ -137,6 +121,7 @@ function LayoutInner(props: RouteSectionProps) {
         }
       )}
     >
+      <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
           <GlobalShortcuts />
@@ -183,19 +168,11 @@ function LayoutInner(props: RouteSectionProps) {
           />
         </Show>
 
-        <Resize.Zone
-          gutter={2}
-          direction="horizontal"
-          class="flex-1 w-full min-h-0 font-sans text-ink caret-accent"
-          id={'main-layout'}
-        >
-          <ItemDndProvider>
-            <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
-              {props.children}
-            </Resize.Panel>
-            <SettingsWrapper />
-          </ItemDndProvider>
-        </Resize.Zone>
+        <ItemDndProvider>
+          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
+            {props.children}
+          </div>
+        </ItemDndProvider>
       </div>
       <Show
         when={
@@ -219,6 +196,7 @@ function LayoutInner(props: RouteSectionProps) {
           <AutomationComposer />
         </Show>
       </Suspense>
+      <DevStatusBar />
     </div>
   );
 }

@@ -1150,6 +1150,10 @@ impl CallRepository for PgCallRepo {
             edit::update_share_permission(&mut tx, call_record_id, share_permission).await?;
         }
 
+        if let Some(share_with_team) = request.share_with_team {
+            edit::set_share_with_team(&mut tx, call_record_id, share_with_team).await?;
+        }
+
         tx.commit().await?;
         Ok(())
     }
