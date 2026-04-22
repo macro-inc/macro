@@ -71,16 +71,6 @@ export const fileFilter = config({
   },
 });
 
-/**
- * Channels marked as important/recent.
- * Server-side only: `importance` is not available on client channel entity.
- */
-export const recentChannelsFilter = config({
-  id: 'recent-channels',
-  predicate: (e) => e.type === 'channel' || e.type === 'channel_message',
-  query: { include: { channelImportance: true } },
-});
-
 export const ENTITY_TYPE_FILTERS = [
   documentFilter,
   agentFilter,
@@ -90,5 +80,4 @@ export const ENTITY_TYPE_FILTERS = [
   taskFilter,
   emailFilter,
   fileFilter,
-  recentChannelsFilter,
 ] as const;
