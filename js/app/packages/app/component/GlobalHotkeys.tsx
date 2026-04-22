@@ -1,8 +1,10 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
+import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
+import { useMutationUndoContext } from '@queries/undo';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo, onCleanup } from 'solid-js';
 import { useLogout } from '@core/auth/logout';
@@ -92,6 +94,7 @@ export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
 
   const analytics = useAnalytics();
+  const undoCtx = useMutationUndoContext();
 
   useHotkeyAnalytics();
 
@@ -381,6 +384,34 @@ export default function GlobalShortcuts() {
       });
       return true;
     },
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.undo,
+    hotkey: 'cmd+z',
+    scopeId: 'global',
+    description: 'Undo',
+    keyDownHandler: (e) => {
+      if (!undoCtx.canUndo()) return false;
+      e?.preventDefault();
+      undoCtx.undo({ onError: () => toast.failure('Failed to undo') });
+      return true;
+    },
+    condition: () => undoCtx.canUndo(),
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.redo,
+    hotkey: 'shift+cmd+z',
+    scopeId: 'global',
+    description: 'Redo',
+    keyDownHandler: (e) => {
+      if (!undoCtx.canRedo()) return false;
+      e?.preventDefault();
+      undoCtx.redo({ onError: () => toast.failure('Failed to redo') });
+      return true;
+    },
+    condition: () => undoCtx.canRedo(),
   });
 
   return null;
