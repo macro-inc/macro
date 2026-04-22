@@ -1,7 +1,7 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { DropdownMenuContent } from '@core/component/Menu';
 import CaretDown from '@icon/regular/caret-down.svg';
-import { createMemo, createSignal, type JSX } from 'solid-js';
+import { createMemo, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import type { CallControlVariant } from './CallControlButton';
 import {
@@ -25,21 +25,12 @@ export function CallControlButtonWithDropdown(props: {
   disabled?: boolean;
   variant?: CallControlVariant;
 }) {
-  const [isPending, setIsPending] = createSignal(false);
-  const interactionDisabled = createMemo(
-    () => isPending() || !!props.disabled
-  );
+  const interactionDisabled = createMemo(() => !!props.disabled);
 
-  const handleClick = async () => {
+  const handleClick = () => {
     if (interactionDisabled()) return;
-    setIsPending(true);
-    try {
-      await props.onClick();
-    } catch (e) {
-      console.error('ControlButton action failed', e);
-    } finally {
-      setIsPending(false);
-    }
+    
+    props.onClick();
   };
 
   const resolvedVariant = () => props.variant ?? 'default';

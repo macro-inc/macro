@@ -17,7 +17,8 @@ import {
  * Headless model for the in-call sidebar strip: participant split + the same
  * control surface as `CallOverlay` (mic / cam / screen / leave + device switches).
  *
- * Dev: `?in_call_debug_extra=8` appends fake remotes for crowded-roster UI (see `inCallPanelDebug.ts`).
+ * Dev: `?in_call_debug_extra=8` appends fake remotes for crowded-roster UI (see `inCallPanelDebug.ts`;
+ * values are clamped to a max in that module).
  */
 export function useInCallPanel(
   options?: UseInCallPanelOptions

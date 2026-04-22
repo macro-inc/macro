@@ -2,7 +2,6 @@ import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import {
   type Component,
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -134,6 +133,81 @@ export const SIDEBAR_LINKS = [
 ] satisfies SidebarItem[];
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
+
+/** Root sidebar `max-width` transition (see `SIDEBAR_MAX_WIDTH_TRANSITION_STYLE`). */
+const SIDEBAR_MAX_WIDTH_TRANSITION_MS = 100;
+const SIDEBAR_MAX_WIDTH_TRANSITION_STYLE = `max-width ease-in-out ${SIDEBAR_MAX_WIDTH_TRANSITION_MS}ms`;
+
+/**
+ * InCallPanel stays in slim layout until the sidebar shell finishes widening.
+ * Uses `transitionend` on that element’s `max-width` (no timer on the happy path);
+ * a short fallback timeout covers reduced-motion / no-op layout.
+ */
+function createInCallPanelSlimToggle(args: {
+  initialSlim: boolean;
+  parentOnOpenChange: (open: boolean) => void;
+  getShell: () => HTMLDivElement | undefined;
+}) {
+  const [panelIsSlim, setPanelIsSlim] = createSignal(args.initialSlim);
+  let shellEl: HTMLDivElement | undefined;
+  let onMaxWidthEnd: ((e: TransitionEvent) => void) | undefined;
+  let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const detachExpandTracking = () => {
+    const el = shellEl;
+    const handler = onMaxWidthEnd;
+    shellEl = undefined;
+    onMaxWidthEnd = undefined;
+    if (el && handler) {
+      el.removeEventListener('transitionend', handler);
+    }
+    if (fallbackTimer !== undefined) {
+      globalThis.clearTimeout(fallbackTimer);
+      fallbackTimer = undefined;
+    }
+  };
+
+  const finishExpand = () => {
+    detachExpandTracking();
+    setPanelIsSlim(false);
+  };
+
+  onCleanup(detachExpandTracking);
+
+  return {
+    panelIsSlim,
+    handleSidebarOpenChange(open: boolean) {
+      detachExpandTracking();
+
+      if (!open) {
+        setPanelIsSlim(true);
+        args.parentOnOpenChange(open);
+        return;
+      }
+
+      args.parentOnOpenChange(open);
+
+      requestAnimationFrame(() => {
+        const el = args.getShell();
+        if (!el) {
+          setPanelIsSlim(false);
+          return;
+        }
+
+        const onEnd = (e: TransitionEvent) => {
+          if (e.propertyName !== 'max-width' || e.target !== el) return;
+          finishExpand();
+        };
+
+        shellEl = el;
+        onMaxWidthEnd = onEnd;
+        el.addEventListener('transitionend', onEnd);
+
+        fallbackTimer = globalThis.setTimeout(finishExpand, SIDEBAR_MAX_WIDTH_TRANSITION_MS + 80);
+      });
+    },
+  } as const;
+}
 
 type AppSidebarProps = {
   sidebarState?: SidebarState;
@@ -440,17 +514,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';
 
-  // Delay the slim→expanded flip by the sidebar's CSS transition duration so
-  // InCallPanel avatars only grow once the sidebar has reached full width.
-  // Collapsing (expanded→slim) still flips immediately for a snappy feel.
-  const [panelIsSlim, setPanelIsSlim] = createSignal(isSlim());
-  createEffect(() => {
-    if (isSlim()) {
-      setPanelIsSlim(true);
-    } else {
-      const t = setTimeout(() => setPanelIsSlim(false), 100);
-      onCleanup(() => clearTimeout(t));
-    }
+  let sidebarShell: HTMLDivElement | undefined;
+  const { panelIsSlim, handleSidebarOpenChange } = createInCallPanelSlimToggle({
+    initialSlim: isSlim(),
+    parentOnOpenChange: props.onOpenChange,
+    getShell: () => sidebarShell,
   });
 
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
@@ -461,12 +529,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
     setHotkeyVisible,
     resetHotkeysState,
     isSlim,
-    onOpenChange: props.onOpenChange,
+    onOpenChange: handleSidebarOpenChange,
     openWithSplit: layout.openWithSplit,
   });
 
   return (
     <div
+      ref={(el) => {
+        sidebarShell = el ?? undefined;
+      }}
       class={cn(
         'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
@@ -478,7 +549,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       )}
       data-expanded={isExpanded()}
       data-slim={isSlim()}
-      style={{ transition: 'max-width ease-in-out 100ms' }}
+      style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
       <div class="flex items-center justify-between py-2 pl-2 pr-2 relative">
         <div class="flex items-center group/logo-area w-full">
@@ -488,7 +559,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="grow-1 shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
-            onClick={() => props.onOpenChange(!isExpanded())}
+            onClick={() => handleSidebarOpenChange(!isExpanded())}
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}
             tooltip={

@@ -16,7 +16,7 @@ import {
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import {
-  createEffect,
+  createComputed,
   createSignal,
   Match,
   onCleanup,
@@ -143,15 +143,28 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const hasActiveCallHere =
     callCtx?.isInCall() && callCtx.activeChannelId() === channelId;
 
-  const [activeTab, setActiveTab] = createSignal<ChannelTabId>(
+  const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
     wantsJoinCall || hasActiveCallHere ? 'call' : DEFAULT_CHANNEL_TAB
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
+  /** Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage. */
+  const messagesChannelHandle: { current?: ChannelHandle } = {};
+
+  const setActiveTab = (tab: ChannelTabId) => {
+    if (tab !== 'messages') {
+      messagesChannelHandle.current = undefined;
+    }
+    setActiveTabInternal(tab);
+  };
+
   // CallContext: which channel has the Call tab selected (for isCallPage(), etc.).
-  createEffect(() => {
+  // `createComputed` (not `createEffect`) so this runs before paint and matches
+  // `activeTab` on the first frame (e.g. deep-link opens on Call tab).
+  createComputed(() => {
     if (isPreview || !callCtx) return;
-    callCtx.syncCallPageTab(channelId, activeTab() === 'call');
+    const tab = activeTab();
+    callCtx.syncCallPageTab(channelId, tab === 'call');
   });
 
   // Nav away unmounts this block without switching tabs first — clear stale ownership.
@@ -191,15 +204,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       targetMessageReplyId: messageReplyId,
     };
   };
-
-  /** Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage. */
-  const messagesChannelHandle: { current?: ChannelHandle } = {};
-
-  createEffect(() => {
-    if (activeTab() !== 'messages') {
-      messagesChannelHandle.current = undefined;
-    }
-  });
 
   // Register on the block always — `goToLocationFromParams` used to live only
   // inside `onChannelReady` (Messages tab), so open-call from Attachments/etc. was a no-op.
