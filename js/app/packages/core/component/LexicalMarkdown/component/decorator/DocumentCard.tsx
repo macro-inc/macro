@@ -48,7 +48,7 @@ import {
   $getNodeByKey,
   $setSelection,
 } from 'lexical';
-import type { Component } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
   createMemo,
@@ -188,6 +188,22 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
   const blockOwner = useBlockOwner();
 
+  const registerPreviewElement = (
+    nodeId: string,
+    getElement: () => JSX.Element
+  ) =>
+    runWithOwner(blockOwner, () => {
+      let disposeOnBlockUnmount: () => void = () => {};
+      onCleanup(() => disposeOnBlockUnmount());
+
+      return createRoot((dispose) => {
+        const element = createMemo(getElement);
+        setDocumentCardPreviewComponent(nodeId, element, dispose);
+        disposeOnBlockUnmount = () => unsetDocumentCardPreviewCache(nodeId);
+        return element;
+      }, blockOwner);
+    });
+
   createEffect(() => {
     if (hasLoadedPreview()) return;
 
@@ -209,6 +225,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     });
     if (!nodeId) return;
 
+    let getElement: () => JSX.Element;
+
     if (shouldCreateBlockPreview) {
       const i = item();
       if (!i || i.loading) return;
@@ -223,39 +241,16 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       );
       if (!preview) return;
 
-      const noDispose = runWithOwner(blockOwner, () => {
-        let disposeOnBlockUnmount: () => void = () => {};
-        onCleanup(() => disposeOnBlockUnmount());
-
-        return createRoot((dispose) => {
-          const element = createMemo(() => preview.element());
-          setDocumentCardPreviewComponent(nodeId, element, dispose);
-          disposeOnBlockUnmount = () => unsetDocumentCardPreviewCache(nodeId);
-          return element;
-        }, blockOwner);
-      });
-
-      setHasLoadedPreview(true);
-      setPreviewComponent(() => noDispose);
-      return;
+      getElement = () => preview.element();
+    } else {
+      getElement = () =>
+        ChannelMessageThreadCard({
+          channelId: props.documentId,
+          messageId: msgId!,
+        });
     }
 
-    const noDispose = runWithOwner(blockOwner, () => {
-      let disposeOnBlockUnmount: () => void = () => {};
-      onCleanup(() => disposeOnBlockUnmount());
-
-      return createRoot((dispose) => {
-        const element = createMemo(() =>
-          ChannelMessageThreadCard({
-            channelId: props.documentId,
-            messageId: msgId!,
-          })
-        );
-        setDocumentCardPreviewComponent(nodeId, element, dispose);
-        disposeOnBlockUnmount = () => unsetDocumentCardPreviewCache(nodeId);
-        return element;
-      }, blockOwner);
-    });
+    const noDispose = registerPreviewElement(nodeId, getElement);
 
     setHasLoadedPreview(true);
     setPreviewComponent(() => noDispose);

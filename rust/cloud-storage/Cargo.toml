@@ -11,6 +11,7 @@ members = [
   "authentication_service",
   "authentication_service_client",
   "backfill_entity_access",
+  "cal",
   "call",
   "channels",
   "chat",
