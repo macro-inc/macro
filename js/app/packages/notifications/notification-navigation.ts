@@ -1,6 +1,6 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import type { BlockAlias, BlockName } from '@core/block';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import type { NotificationType } from '@core/types';
 import type { UnifiedNotification } from './types';
 import { getNotificationById } from '@queries/notification/user-notifications';
@@ -90,8 +90,18 @@ async function openChannelNotification(
   });
 }
 
-function safeFileTypeToBlockName(fileType: string | undefined | null) {
-  return fileTypeToBlockName(fileType) ?? 'unknown';
+// Resolve the block type for a document notification, honoring `subType` so
+// that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
+// 'task' block alias instead of raw 'md'.
+function safeDocumentContentToBlockName(content: {
+  fileType?: string | null;
+  subType?: { type: string } | null;
+}) {
+  return itemToBlockName({
+    type: 'document',
+    fileType: content.fileType ?? undefined,
+    subType: content.subType ?? undefined,
+  } as Parameters<typeof itemToBlockName>[0]);
 }
 
 type NotSupportedError = {
@@ -145,7 +155,7 @@ function getSupportedHandler(
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(meta.content.fileType),
+          safeDocumentContentToBlockName(meta.content),
           notification.entity_id,
           { newSplit }
         );
@@ -164,7 +174,7 @@ function getSupportedHandler(
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(meta.content.fileType),
+          safeDocumentContentToBlockName(meta.content),
           notification.entity_id,
           { newSplit }
         );
@@ -175,7 +185,7 @@ function getSupportedHandler(
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(meta.content.fileType),
+          safeDocumentContentToBlockName(meta.content),
           notification.entity_id,
           { newSplit }
         );
@@ -186,7 +196,7 @@ function getSupportedHandler(
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(meta.content.fileType),
+          safeDocumentContentToBlockName(meta.content),
           notification.entity_id,
           { newSplit }
         );
