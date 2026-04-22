@@ -150,7 +150,7 @@ export const createAppViteConfig = ({
         fs: {
           allow: [
             // Allow serving files from the workspace root
-            resolve(__dirname, '../../'),
+            resolve(__dirname, '../../../'),
           ],
         },
       },
