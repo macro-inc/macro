@@ -17,13 +17,10 @@ import { Dynamic } from 'solid-js/web';
  *   <div onFocusIn={(e) => scrollToFocusedInput(e)}>
  */
 let captured = false;
-export function scrollToFocusedInput(
-  e: FocusEvent & { currentTarget: HTMLElement },
-  offset = 40
-) {
+export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
   if (!isEditableInput(e.target as Element) || captured) return;
   const input = e.target as HTMLElement;
-  const container = e.currentTarget;
+  const container = e.currentTarget as HTMLElement;
   captured = true;
   // Has to be delayed until after browser's native keyboard-show scroll completes
   setTimeout(() => {
@@ -54,7 +51,7 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
 
   return (
     <Drawer.Content
-      onFocusIn={(e) => {
+      onFocusIn={(e: FocusEvent) => {
         if (isEditableInput(e.target as Element)) setInputFocused(true);
         scrollToFocusedInput(e);
       }}

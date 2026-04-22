@@ -313,7 +313,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
       side="bottom"
       preventScroll={false}
       preventScrollbarShift={false}
-      initialFocusEl={() =>
+      initialFocusEl={
         activeTab() === 'share'
           ? (document.querySelector<HTMLElement>(
               '[data-share-drawer-recipient] input'
