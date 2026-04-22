@@ -12,20 +12,15 @@ import {
   callControlPanelActive,
   callControlPanelDanger,
   callControlPanelFlat,
-  callControlPanelHoverBg,
   callControlPanelIdle,
   callControlPressable,
 } from './callControlButtonShared';
 
-/**
- * Call control with a chevron that opens device selection (mic / camera).
- */
 export function CallControlButtonWithDropdown(props: {
   onClick: () => Promise<void> | void;
   active?: boolean;
   danger?: boolean;
   children?: JSX.Element;
-  /** Render prop: menu content must be created under this `DropdownMenu` root. */
   dropdownContent: () => JSX.Element;
   disabled?: boolean;
   variant?: CallControlVariant;
@@ -59,9 +54,15 @@ export function CallControlButtonWithDropdown(props: {
 
   const isPanelVariant = () => {
     const v = resolvedVariant();
-
     return v === 'panel' || v === 'panel-small';
   };
+
+  const panelChrome = () =>
+    cn(
+      props.danger && callControlPanelDanger,
+      !props.danger && !props.active && callControlPanelIdle,
+      !props.danger && props.active && callControlPanelActive
+    );
 
   return (
     <div
@@ -70,38 +71,16 @@ export function CallControlButtonWithDropdown(props: {
         defaultVariant() &&
           cn(
             'rounded-lg gap-1 pr-2',
-            interactionDisabled() &&
-              'opacity-50 pointer-events-none border border-edge-muted',
-            !interactionDisabled() &&
-              props.danger &&
-              callControlDefaultDanger,
-            !interactionDisabled() &&
-              !props.danger &&
-              defaultActive() &&
-              callControlDefaultActive,
-            !interactionDisabled() &&
-              !props.danger &&
-              !defaultActive() &&
-              callControlDefaultIdle
+            props.danger && callControlDefaultDanger,
+            !props.danger && defaultActive() && callControlDefaultActive,
+            !props.danger && !defaultActive() && callControlDefaultIdle,
+            interactionDisabled() && 'pointer-events-none opacity-50'
           ),
         isPanelVariant() &&
           cn(
             'gap-0.5 border-0 bg-transparent pr-1 shadow-none outline-none',
-            !interactionDisabled() &&
-              props.danger &&
-              callControlPanelDanger,
-            !interactionDisabled() &&
-              !props.danger &&
-              !props.active &&
-              callControlPanelIdle,
-            !interactionDisabled() &&
-              !props.danger &&
-              props.active &&
-              callControlPanelActive
-          ),
-        interactionDisabled() &&
-          !defaultVariant() &&
-          'opacity-50 pointer-events-none',
+            interactionDisabled() && 'pointer-events-none opacity-50'
+          )
       )}
     >
       <button
@@ -114,18 +93,20 @@ export function CallControlButtonWithDropdown(props: {
               callControlPressable,
               callControlDefaultSize,
               callControlPanelFlat,
-              'hover:bg-transparent',
               "before:pointer-events-none before:absolute before:right-0 before:top-2 before:bottom-2 before:h-auto before:w-[1px] before:bg-ink-extra-muted/40 before:content-['']",
               '-translate-x-[3px]',
-              defaultActive() && 'before:bg-accent-2'
+              !props.danger &&
+                defaultActive() &&
+                cn('before:bg-accent-2', callControlPanelActive),
+              !props.danger && !defaultActive() && callControlPanelIdle,
+              props.danger && callControlPanelDanger
             ),
           isPanelVariant() &&
             cn(
               callControlPressable,
               'h-8 w-5 rounded-md',
               callControlPanelFlat,
-              callControlPanelHoverBg,
-              'text-inherit'
+              panelChrome()
             )
         )}
       >
@@ -138,8 +119,15 @@ export function CallControlButtonWithDropdown(props: {
         <DropdownMenu.Trigger
           class={cn(
             callControlPressable,
-            'text-inherit',
-            isPanelVariant() && callControlPanelHoverBg
+            defaultVariant() &&
+              cn(
+                !props.danger &&
+                  defaultActive() &&
+                  callControlPanelActive,
+                !props.danger && !defaultActive() && callControlPanelIdle,
+                props.danger && callControlPanelDanger
+              ),
+            isPanelVariant() && panelChrome()
           )}
         >
           <CaretDown

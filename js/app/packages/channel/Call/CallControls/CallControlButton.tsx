@@ -13,7 +13,6 @@ import {
   callControlPanelActive,
   callControlPanelDanger,
   callControlPanelFlat,
-  callControlPanelHoverBg,
   callControlPanelIdle,
   callControlPressable,
 } from './callControlButtonShared';
@@ -26,11 +25,9 @@ export const CallControlButton: Component<{
   danger?: boolean;
   children?: JSX.Element;
   disabled?: boolean;
-  /** `default`: bordered pill. `panel`: flat; icon `text-*` matches default border/bg tokens. */
   variant?: CallControlVariant;
 }> = (props) => {
   const [isPending, setIsPending] = createSignal(false);
-  // Do not destructure `disabled` / `active` — Solid only tracks `props.*` reads.
   const interactionDisabled = createMemo(
     () => isPending() || !!props.disabled
   );
@@ -60,38 +57,21 @@ export const CallControlButton: Component<{
       class={cn(
         callControlPressable,
         interactionDisabled() &&
-          'opacity-50 pointer-events-none border border-edge-muted',
+          'pointer-events-none opacity-50',
         resolvedVariant() === 'default' &&
           cn(
             callControlDefaultSize,
-            !interactionDisabled() &&
-              props.danger &&
-              callControlDefaultDanger,
-            !interactionDisabled() &&
-              !props.danger &&
-              props.active &&
-              callControlDefaultActive,
-            !interactionDisabled() &&
-              !props.danger &&
-              !props.active &&
-              callControlDefaultIdle
+            props.danger && callControlDefaultDanger,
+            !props.danger && props.active && callControlDefaultActive,
+            !props.danger && !props.active && callControlDefaultIdle
           ),
         isPanelVariant() &&
           cn(
             'h-8 w-8',
             callControlPanelFlat,
-            callControlPanelHoverBg,
-            !interactionDisabled() &&
-              props.danger &&
-              callControlPanelDanger,
-            !interactionDisabled() &&
-              !props.danger &&
-              !props.active &&
-              callControlPanelIdle,
-            !interactionDisabled() &&
-              !props.danger &&
-              props.active &&
-              callControlPanelActive
+            props.danger && callControlPanelDanger,
+            !props.danger && !props.active && callControlPanelIdle,
+            !props.danger && props.active && callControlPanelActive
           )
       )}
     >
