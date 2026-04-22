@@ -105,6 +105,7 @@ export * from './patchChannelOptionsChannelName';
 export * from './patchMessageParams';
 export * from './patchMessageRequest';
 export * from './patchMessageRequestAttachmentIdsToDelete';
+export * from './patchMessageRequestAttachmentsToAdd';
 export * from './patchMessageRequestContent';
 export * from './patchMessageRequestNonce';
 export * from './postActivityRequest';

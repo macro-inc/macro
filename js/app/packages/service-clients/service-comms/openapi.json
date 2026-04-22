@@ -2532,6 +2532,12 @@
               "type": "string"
             }
           },
+          "attachments_to_add": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/NewAttachment"
+            }
+          },
           "content": {
             "type": ["string", "null"]
           },

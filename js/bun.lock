@@ -132,7 +132,7 @@
         "knip": "^6.0.4",
         "lightningcss": "^1.30.2",
         "openai": "^6.25.0",
-        "orval": "^7.13.0",
+        "orval": "^7.21.0",
         "typescript": "^5.9.3",
         "vite": "^6.4.1",
         "vite-plugin-solid": "^2.11.8",

@@ -5,6 +5,7 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
 import type { InputAttachmentData, InputSnapshot } from '../Input';
 import type { MessageData } from '../Message';
 
@@ -54,4 +55,33 @@ export function getAttachmentIdsToDelete(args: {
   return args.currentAttachments
     .filter((attachment) => !nextAttachmentIds.has(attachment.entity_id))
     .map((attachment) => attachment.id);
+}
+
+function inputAttachmentEntityType(kind: InputAttachmentData['kind']): string {
+  switch (kind) {
+    case 'image':
+      return STATIC_IMAGE;
+    case 'video':
+      return STATIC_VIDEO;
+    case 'document':
+      return 'document';
+  }
+}
+
+export function getAttachmentsToAdd(args: {
+  currentAttachments: ApiMessageAttachment[];
+  nextSnapshot: InputSnapshot;
+}): NewAttachment[] {
+  const currentIds = new Set(
+    args.currentAttachments.map((attachment) => attachment.entity_id)
+  );
+
+  return args.nextSnapshot.attachments
+    .filter((attachment) => !currentIds.has(attachment.id))
+    .map((attachment) => ({
+      entity_id: attachment.id,
+      entity_type: inputAttachmentEntityType(attachment.kind),
+      width: attachment.width ?? null,
+      height: attachment.height ?? null,
+    }));
 }
