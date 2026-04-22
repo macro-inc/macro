@@ -58,7 +58,7 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
         if (isEditableInput(e.target as Element)) setInputFocused(true);
         scrollToFocusedInput(e);
       }}
-      onFocusOut={(e: FocusEvent) => {
+      onFocusOut={() => {
         setInputFocused(false);
       }}
       class={cn(

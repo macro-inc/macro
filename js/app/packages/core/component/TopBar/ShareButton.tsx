@@ -38,7 +38,6 @@ import IconLink from '@icon/regular/link.svg';
 import UserCircle from '@macro-icons/wide/user-circle.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import WideUsers from '@macro-icons/wide/users.svg';
-import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
 import IconX from '@icon/bold/x-bold.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import IconComment from '@macro-icons/wide/comment.svg';
