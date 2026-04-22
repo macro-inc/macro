@@ -12,6 +12,7 @@ import {
   useUserId,
   useUserInfo,
 } from '@core/context/user';
+import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -434,6 +435,7 @@ export function Root() {
             <EntityProvider>
               <UserContextProvider>
                 <BrowserNotificationModal />
+                <IosPushNotificationModal />
                 <QuerySyncProviderWithUserId />
                 <UserInfoSideEffects />
                 <ConfiguredGlobalAppStateProvider>

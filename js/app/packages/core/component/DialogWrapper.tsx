@@ -30,7 +30,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
       <div class="z-modal fixed inset-0">
         <Dialog.Content
           class={cn(
-            'max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-hidden portal-scope'
+            'max-w-[calc(100vw-16px)] mt-40 mx-auto overflow-hidden portal-scope'
           )}
           style={{ width: width }}
         >
