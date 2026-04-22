@@ -104,7 +104,9 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
   const channelMessageId = () => {
     if (previewType() !== 'channel') return undefined;
-    return props.blockParams?.[CHANNEL_PARAMS.message];
+    const messageId = props.blockParams?.[CHANNEL_PARAMS.message];
+    const threadId = props.blockParams?.[CHANNEL_PARAMS.thread];
+    return threadId ? threadId : messageId;
   };
 
   const [hasLoadedPreview, setHasLoadedPreview] = createSignal(false);
