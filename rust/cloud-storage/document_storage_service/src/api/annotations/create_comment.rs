@@ -113,7 +113,11 @@ pub async fn create_comment_handler(
                     Ok(Some(PropertyValue::EntityRef(refs))) => {
                         refs.iter().map(|r| r.entity_id.clone()).collect()
                     }
-                    _ => vec![],
+                    Ok(_) => vec![],
+                    Err(e) => {
+                        tracing::error!(error = ?e, document_id = %document_id, "failed to fetch task assignees for comment notification");
+                        vec![]
+                    }
                 };
 
                 let recipients = compute_notification_recipients(

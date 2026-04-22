@@ -293,11 +293,8 @@ impl CommentNotifContext {
         }
     }
 
-    pub fn build_task_assignee_comment_notif(
-        &self,
-        assignee_ids: HashSet<MacroUserIdStr<'static>>,
-    ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
-        let notification = CommentedOnDocumentMetadata {
+    fn commented_on_document_metadata(&self) -> CommentedOnDocumentMetadata {
+        CommentedOnDocumentMetadata {
             document_name: self.document_name.clone(),
             owner: self.owner.clone(),
             file_type: self.file_type.clone(),
@@ -305,11 +302,16 @@ impl CommentNotifContext {
             thread_id: self.thread_id,
             text: self.text.clone(),
             sender_profile_picture_url: self.sender_profile_picture_url.clone(),
-        };
+        }
+    }
 
+    pub fn build_task_assignee_comment_notif(
+        &self,
+        assignee_ids: HashSet<MacroUserIdStr<'static>>,
+    ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
         SendNotificationRequestBuilder {
             notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
-            notification,
+            notification: self.commented_on_document_metadata(),
             sender_id: self.sender_id.clone(),
             recipient_ids: assignee_ids,
         }
@@ -318,22 +320,12 @@ impl CommentNotifContext {
     pub fn build_document_comment_notif(
         &self,
     ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
-        let notification = CommentedOnDocumentMetadata {
-            document_name: self.document_name.clone(),
-            owner: self.owner.clone(),
-            file_type: self.file_type.clone(),
-            comment_id: self.comment_id,
-            thread_id: self.thread_id,
-            text: self.text.clone(),
-            sender_profile_picture_url: self.sender_profile_picture_url.clone(),
-        };
-
         let mut recipient_ids = HashSet::new();
         recipient_ids.insert(self.owner.clone());
 
         SendNotificationRequestBuilder {
             notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
-            notification,
+            notification: self.commented_on_document_metadata(),
             sender_id: self.sender_id.clone(),
             recipient_ids,
         }
