@@ -14,6 +14,10 @@ ENV PYTHONUNBUFFERED=1
 # Disable pip version check to speed up builds
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Keep the Hugging Face cache inside /app so downloaded plugin models
+# (e.g. the turn detector) survive the build→production COPY step.
+ENV HF_HOME=/app/.cache/huggingface
+
 # --- Build stage ---
 # Install dependencies, build native extensions, and prepare the application
 FROM base AS build
