@@ -50,6 +50,6 @@ export const launchLesson: LessonDefinition = {
   id: 'launch',
   title: 'Welcome to Macro',
   content: LaunchContent,
-  // ...(ENABLE_APP_STORE_QR_CODE && { demo: LaunchDemo, centeredButton: true }),
+  ...(ENABLE_APP_STORE_QR_CODE && { demo: LaunchDemo, centeredButton: true }),
   order: 100,
 };
