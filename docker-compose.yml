@@ -7,17 +7,26 @@ x-common-env: &common-env
   env_file:
     - .env
 
+x-rust-services-image: &rust-services-image
+  image: macro-local-rust-services:dev
+
 services:
+  rust_services_image:
+    profiles:
+      - build-helper
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile.dev
+      target: services_bundle
+    image: macro-local-rust-services:dev
+
   # ============================================================================
   # authentication-service (Port 8080)
   # Primary auth service - depends on FusionAuth, Redis, MacroDB
   # ============================================================================
   authentication-service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: authentication_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/authentication_service"]
     ports:
       - "8080:8080"
     depends_on:
@@ -40,11 +49,8 @@ services:
   # WebSocket gateway - Redis only
   # ============================================================================
   connection_gateway:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: connection_gateway_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/connection_gateway_service"]
     ports:
       - "8082:8080"
     depends_on:
@@ -64,11 +70,8 @@ services:
   # Contact management - ContactsDB
   # ============================================================================
   contacts_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: contacts_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/contacts_service"]
     ports:
       - "8083:8080"
     networks:
@@ -86,11 +89,8 @@ services:
   # Document analysis and processing
   # ============================================================================
   document_cognition_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: document_cognition_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/document_cognition_service"]
     ports:
       - "8085:8080"
     depends_on:
@@ -112,11 +112,8 @@ services:
   # Main document storage API
   # ============================================================================
   document_storage_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: document_storage_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/document_storage_service"]
     ports:
       - "8086:8080"
     depends_on:
@@ -138,11 +135,8 @@ services:
   # Email processing and management
   # ============================================================================
   email_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: email_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/email_service"]
     ports:
       - "8087:8080"
     depends_on:
@@ -166,11 +160,8 @@ services:
   # User notifications - NotificationDB
   # ============================================================================
   notification_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: notification_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/notification_service"]
     ports:
       - "8089:8080"
     depends_on:
@@ -197,6 +188,7 @@ services:
     profiles:
       - processors
     <<: *common-env
+    platform: linux/amd64
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.search_processing_service.dev
@@ -219,11 +211,8 @@ services:
   # Static file serving - DynamoDB
   # ============================================================================
   static_file_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: static_file_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/static_file_service"]
     ports:
       - "8094:8080"
     networks:
@@ -257,11 +246,8 @@ services:
   # URL unfurling - no dependencies
   # ============================================================================
   unfurl_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: unfurl_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/unfurl_service"]
     ports:
       - "8095:8080"
     networks:
@@ -278,11 +264,8 @@ services:
   # Proxies external images to avoid CORS issues and IP leakage
   # ============================================================================
   image_proxy_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: image_proxy_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/image_proxy_service"]
     ports:
       - "8097:8080"
     networks:

@@ -50,8 +50,54 @@ docker_up *ARGS:
 # Run all services locally using docker-compose
 # Requires .env file with dev environment variables
 run_local *ARGS:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
   just create_networks
-  just docker_up {{ ARGS }}
+  set -- {{ ARGS }}
+
+  do_build=false
+  build_processors=false
+  filtered_args=()
+  expecting_profile_name=false
+  for arg in "$@"; do
+    if [ "$expecting_profile_name" = true ]; then
+      if [ "$arg" = "processors" ]; then
+        build_processors=true
+      fi
+      expecting_profile_name=false
+    fi
+
+    if [ "$arg" = "--build" ]; then
+      do_build=true
+    elif [ "$arg" = "--profile" ]; then
+      expecting_profile_name=true
+      filtered_args+=("$arg")
+    elif [ "$arg" = "search_processing_service" ]; then
+      build_processors=true
+      filtered_args+=("$arg")
+    else
+      filtered_args+=("$arg")
+    fi
+  done
+
+  if [ "$do_build" = true ] || ! docker image inspect macro-local-rust-services:dev >/dev/null 2>&1; then
+    docker compose build rust_services_image
+  fi
+
+  if [ "$do_build" = true ]; then
+    docker compose build websocket_service sync_service lexical_service
+    if [ "$build_processors" = true ]; then
+      docker compose build search_processing_service
+    fi
+  fi
+
+  echo "startup docker compose"
+  if [ "${#filtered_args[@]}" -gt 0 ]; then
+    docker compose up "${filtered_args[@]}"
+  else
+    docker compose up
+  fi
 
 # Stop all local services
 stop-local:
