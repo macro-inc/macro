@@ -9,6 +9,7 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import { Subscription } from './Subscription';
+import { MobileApp } from './MobileApp';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
@@ -70,6 +71,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     }
 
     if(permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
+    if(!isNativeMobilePlatform()){tabs.push({ value: 'Mobile App', label: 'Mobile App' })}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
 
     return tabs;
@@ -169,7 +171,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts' || value === 'Mobile App')){
                   setActiveTabId(value as SettingsTab);
                 }
               }}
@@ -200,7 +202,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                               value={value}
                               tabIndex={-1}
                               data-value={value}
-                              class="text-xs font-medium relative flex items-center px-2 py-1 border-r border-edge-muted last:border-r-0 transition-colors duration-150 text-ink-muted data-[selected]:text-ink data-[selected]:bg-ink/10 hover:text-ink hover:bg-ink/15 data-[selected]:hover:bg-ink/20"
+                              class="text-xs font-medium relative flex items-center px-2 py-1 border-r border-edge-muted last:border-r-0 transition-colors duration-150 text-ink-muted data-[selected]:text-ink data-[selected]:bg-ink/10 hover:text-ink hover:bg-ink/15 data-[selected]:hover:bg-ink/20 whitespace-nowrap"
                             >
                               <span class="flex items-center gap-1.5">
                                 <span>{label}</span>
@@ -247,6 +249,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Tabs.Content value="Shortcuts" class="absolute inset-0">
                   <Shortcuts />
                 </Tabs.Content>
+                <Show when={!isNativeMobilePlatform()}>
+                  <Tabs.Content value="Mobile App" class="absolute inset-0">
+                    <MobileApp />
+                  </Tabs.Content>
+                </Show>
               </div>
             </Tabs>
           </div>
