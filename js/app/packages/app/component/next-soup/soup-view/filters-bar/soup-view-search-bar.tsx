@@ -6,7 +6,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
+import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
 import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';

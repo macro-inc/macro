@@ -72,7 +72,7 @@ import type { Setter } from 'solid-js';
 import {
   $getId,
   INITIALIZE_DOCUMENT_IDS,
-} from '../../../lexical-core/plugins/nodeIdPlugin';
+} from '@lexical-core/plugins/nodeIdPlugin';
 import { MarkdownEditorErrors } from './constants';
 import {
   $applyDocumentMetadataFromSerialized,

@@ -1,4 +1,4 @@
-import { getDestinationFromOptions } from '@core/component/NewMessage';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   recipientEntityMapper,

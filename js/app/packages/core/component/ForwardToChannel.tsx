@@ -1,4 +1,5 @@
-import { useChannelMarkdownArea } from '@block-channel/component/DeprecatedChannelInput/MarkdownArea';
+import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -27,7 +28,7 @@ import {
 } from 'solid-js';
 import { Button } from '@ui/components/Button';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { getDestinationFromOptions } from './NewMessage';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
@@ -70,11 +71,18 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   const [mdScrollRef, setMdScrollRef] = createSignal<HTMLElement>();
 
-  const {
-    focus: focusMarkdownArea,
-    state: markdownState,
-    MarkdownArea,
-  } = useChannelMarkdownArea();
+  const [markdown, setMarkdown] = createSignal('');
+  const markdownEditor = createConfiguredChannelMarkdownEditor({
+    namespace: 'forward-to-channel-markdown',
+    enableMentions: true,
+    onChange: setMarkdown,
+    onEnter: (e) => {
+      handleSubmit();
+      e.preventDefault();
+      return true;
+    },
+  });
+  markdownEditor.buildHandle();
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
 
@@ -170,7 +178,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         sendToUsers({
           attachments: [asAttachment()],
           users: destination_.users,
-          content: markdownState(),
+          content: markdown(),
           mentions: [],
         }).then((res) => {
           if (!res) {
@@ -200,7 +208,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             submitChannelPermissions(option.id),
             sendToChannel({
               attachments: [asAttachment()],
-              content: markdownState(),
+              content: markdown(),
               channelId: option.id,
               mentions: [],
             }).then((res) => {
@@ -227,7 +235,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           // handles option.kind of user, custom, and contact (gmail)
           sendToUsers({
             attachments: [asAttachment()],
-            content: markdownState(),
+            content: markdown(),
             users: [option.id],
             mentions: [],
           }).then((res) => {
@@ -327,21 +335,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           <CustomScrollbar scrollContainer={mdScrollRef} />
           <div
             class="grow-1 shrink-1 min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
-            onClick={() => focusMarkdownArea()}
+            onClick={() => markdownEditor.controls.focus()}
             ref={setMdScrollRef}
           >
-            <MarkdownArea
+            <MarkdownShell
+              config={markdownEditor}
               placeholder="Optional message"
-              onEnter={(e: KeyboardEvent) => {
-                handleSubmit();
-                e.preventDefault();
-                return true;
-              }}
-              initialValue={markdownState()}
-              onTab={() => false}
-              useBlockBoundary={false}
               portalScope="local"
-              dontFocusOnMount
+              class="text-sm"
             />
           </div>
         </div>
