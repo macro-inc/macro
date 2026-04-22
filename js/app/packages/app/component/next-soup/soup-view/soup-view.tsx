@@ -435,7 +435,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Initial load: focus first entity once rows arrive
   createEffect(
-    on(rows, () => {
+    on([rows, focusEffectsEnabled, moveInitialFocus], () => {
       if (!focusEffectsEnabled() || !moveInitialFocus()) return;
       if (!initialLoad || source.isLoading()) return;
       focusFirstEntity();
