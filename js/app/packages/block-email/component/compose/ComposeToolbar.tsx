@@ -24,10 +24,7 @@ import {
   NODE_TRANSFORM,
   type NodeTransformType,
 } from 'core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
-import {
-  FORMAT_TEXT_COMMAND,
-  type LexicalEditor,
-} from 'lexical';
+import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
 import { useCompose } from './ComposeContext';
 
