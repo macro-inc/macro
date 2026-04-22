@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useChannelMarkdownArea } from '@block-channel/component/DeprecatedChannelInput/MarkdownArea';
+import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
@@ -247,7 +248,7 @@ function PermissionButton(props: { platformNotif: any }) {
 }
 
 function CustomBuilder(props: {
-  markdownArea: ReturnType<typeof useChannelMarkdownArea>;
+  markdownEditor: ReturnType<typeof createConfiguredChannelMarkdownEditor>;
   customNotification: UnifiedNotification;
   onTest: (notification: UnifiedNotification) => void;
 }) {
@@ -266,11 +267,10 @@ function CustomBuilder(props: {
             Message Content
           </label>
           <div class="border border-edge-muted rounded-lg p-3 bg-menu min-h-64 max-h-96 overflow-auto">
-            <props.markdownArea.MarkdownArea
+            <MarkdownShell
+              config={props.markdownEditor}
               placeholder="Type your markdown message here... (use @ for mentions)"
               initialValue="Hey! Check out this **cool feature** we just shipped.\n\nHere's a code example:\n```typescript\nconst notify = () => {\n  console.log('Hello!');\n};\n```\n\nLet me know what you think!"
-              users={() => []}
-              history={() => []}
             />
           </div>
           <p class="text-xs text-ink-muted mt-2">
@@ -454,7 +454,13 @@ function EmptyState(props: { title: string; description: string }) {
 function PlaygroundContent() {
   const { ws } = createMockWebsocket();
   const platformNotif = usePlatformNotificationState();
-  const markdownArea = useChannelMarkdownArea();
+  const [markdown, setMarkdown] = createSignal('');
+  const markdownEditor = createConfiguredChannelMarkdownEditor({
+    namespace: 'notifications-playground-markdown',
+    enableMentions: true,
+    users: () => [],
+    onChange: setMarkdown,
+  });
 
   const notificationSource = createNotificationSource(ws);
 
@@ -488,7 +494,7 @@ function PlaygroundContent() {
       notification_event_type: 'channel_message_send',
       notification_metadata: {
         sender: 'user-custom',
-        messageContent: markdownArea.state(),
+        messageContent: markdown(),
         messageId: 'msg-custom',
         channelType: 'direct_message',
         channelName: 'test-channel',
@@ -641,7 +647,7 @@ function PlaygroundContent() {
           }
         >
           <CustomBuilder
-            markdownArea={markdownArea}
+            markdownEditor={markdownEditor}
             customNotification={customNotification()}
             onTest={handleTestNotification}
           />

@@ -1,5 +1,13 @@
-import { FormatRibbon } from '@block-channel/component/DeprecatedChannelInput/FormatRibbon';
-import { useChannelMarkdownArea } from '@block-channel/component/DeprecatedChannelInput/MarkdownArea';
+import {
+  createConfiguredChannelMarkdownEditor,
+  createMentionsTracker,
+  FormatButtons,
+} from '@channel/Input';
+import {
+  applyInlineFormat,
+  applyNodeFormat,
+} from '@channel/Input/utils/formatting';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { useBlockId, useBlockName } from '@core/block';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -111,15 +119,19 @@ export function NewMessage(props: NewMessageProps) {
   >([]);
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
 
-  const {
-    focus: focusMarkdownArea,
-    state: markdownState,
-    mentions,
-    formatState: markdownFormatState,
-    setInlineFormat,
-    setNodeFormat,
-    MarkdownArea,
-  } = useChannelMarkdownArea();
+  const [markdown, setMarkdown] = createSignal('');
+  const mentionsTracker = createMentionsTracker();
+  const markdownEditor = createConfiguredChannelMarkdownEditor({
+    namespace: 'new-message-markdown',
+    enableMentions: true,
+    onMentionCreate: mentionsTracker.onMentionCreate,
+    onMentionRemove: mentionsTracker.onMentionRemove,
+    onChange: setMarkdown,
+    onEnter: (e) => {
+      e.preventDefault();
+      return true;
+    },
+  });
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const asAttachment =
@@ -138,17 +150,17 @@ export function NewMessage(props: NewMessageProps) {
     if (destination_.type === 'users') {
       sendToUsers({
         users: destination_.users,
-        content: markdownState(),
+        content: markdown(),
         attachments: asAttachment ? [asAttachment] : [],
-        mentions: mentions().map(mentionToSimpleMention),
+        mentions: mentionsTracker.mentions().map(mentionToSimpleMention),
         navigate: { navigate: true },
       });
     } else if (destination_.type === 'channel') {
       sendToChannel({
         channelId: destination_.id,
-        content: markdownState(),
+        content: markdown(),
         attachments: asAttachment ? [asAttachment] : [],
-        mentions: mentions().map(mentionToSimpleMention),
+        mentions: mentionsTracker.mentions().map(mentionToSimpleMention),
         navigate: { navigate: true },
       });
     }
@@ -162,7 +174,7 @@ export function NewMessage(props: NewMessageProps) {
 
   const handleInteractOutside = (e: PointerDownOutsideEvent) => {
     e.preventDefault();
-    const trimmed = markdownState().trim();
+    const trimmed = markdown().trim();
     if (trimmed.length > 0 && warningGiven() === false) {
       toast.alert(
         'Are you sure you want to leave? Your message will be deleted.'
@@ -217,27 +229,24 @@ export function NewMessage(props: NewMessageProps) {
                 triggerMode="input"
               />
               <div class="flex flex-col w-full h-[200px] rounded-md border border-edge">
-                <FormatRibbon
-                  state={markdownFormatState}
-                  inlineFormat={setInlineFormat}
-                  nodeFormat={setNodeFormat}
-                />
+                <div class="flex flex-row w-full gap-2 items-center p-2">
+                  <FormatButtons
+                    selectionState={() => markdownEditor.selection}
+                    onInlineFormat={(f) =>
+                      applyInlineFormat(markdownEditor.lexical, f)
+                    }
+                    onNodeFormat={(f) =>
+                      applyNodeFormat(markdownEditor.lexical, f)
+                    }
+                  />
+                </div>
                 <div
                   class="w-full h-full p-2 overflow-auto portal-scope"
-                  onClick={() => focusMarkdownArea()}
+                  onClick={() => markdownEditor.controls.focus()}
                 >
-                  <MarkdownArea
+                  <MarkdownShell
+                    config={markdownEditor}
                     placeholder="Write a message..."
-                    initialValue={markdownState()}
-                    onEnter={(e: KeyboardEvent) => {
-                      e.preventDefault();
-                      return true;
-                    }}
-                    onEscape={(e: KeyboardEvent) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      return true;
-                    }}
                     portalScope="local"
                   />
                 </div>
@@ -249,7 +258,7 @@ export function NewMessage(props: NewMessageProps) {
               </Show>
               <div class="flex flex-row gap-2 items-center">
                 <DeprecatedTextButton
-                  disabled={markdownState().trim().length === 0}
+                  disabled={markdown().trim().length === 0}
                   text="Send"
                   theme="accent"
                   onClick={handleSubmit}
