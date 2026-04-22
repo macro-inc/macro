@@ -167,7 +167,7 @@ type PersistedSoupViewState = {
   version?: number;
   activeTab: string | undefined;
   filters: SetPredicatesInput<string>;
-  filterData: Partial<QueryState>;
+  queryFilters: Partial<QueryState>;
   sort: SystemSortOption[];
   previewEntity: string | undefined;
   assigneeFilter: string[];
@@ -706,7 +706,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           );
           const persistedFilterData = isStale
             ? {}
-            : (initialPersistedState.filterData ?? {});
+            : (initialPersistedState.queryFilters ?? {});
           queryFilters.set({
             include: persistedFilterData.include,
             exclude: persistedFilterData.exclude,
@@ -750,7 +750,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             and: [...soup.predicates.andIds()],
             or: [...soup.predicates.orIds()],
           },
-          filterData: JSON.parse(JSON.stringify(queryFilters.state)),
+          queryFilters: JSON.parse(JSON.stringify(queryFilters.state)),
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),
