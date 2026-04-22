@@ -20,8 +20,8 @@ export function ChannelMessageThreadCard(props: ChannelMessageThreadCardProps) {
         navigateToChannelMessage(
           orchestrator,
           props.channelId,
-          props.messageId,
-          isReply ? clickedMessageId : undefined
+          clickedMessageId,
+          isReply ? props.messageId : undefined
         );
       }}
     />
