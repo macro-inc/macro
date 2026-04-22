@@ -23,6 +23,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  createRoot,
 } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
@@ -85,6 +86,29 @@ const NOTIFICATION_EVENT_TYPE = 'notification';
 
 const QUERY_LIMIT = 500;
 
+// Persistent overrides for the `done` flag that survive cache writes.
+// In-flight infinite-query page fetches can land after an optimistic cache
+// flip and overwrite it with stale server data; this map keeps the UI
+// consistent regardless of what the cache says.
+const [doneOverrides, setDoneOverrides] = createRoot(() =>
+  createSignal<ReadonlyMap<string, boolean>>(new Map())
+);
+
+export function setDoneOverride(
+  ids: readonly string[],
+  done: boolean | undefined
+) {
+  if (ids.length === 0) return;
+  setDoneOverrides((prev) => {
+    const next = new Map(prev);
+    for (const id of ids) {
+      if (done === undefined) next.delete(id);
+      else next.set(id, done);
+    }
+    return next;
+  });
+}
+
 export function createNotificationSource(
   ws: ConnectionGatewayWebsocket,
   onNotification?: (notification: UnifiedNotification) => void
@@ -99,9 +123,35 @@ export function createNotificationSource(
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
-  const notifications = createMemo(() =>
-    notificationsQuery.isSuccess ? notificationsQuery.data : []
-  );
+  const notifications = createMemo(() => {
+    if (!notificationsQuery.isSuccess) return [];
+    const raw = notificationsQuery.data;
+    const overrides = doneOverrides();
+    if (overrides.size === 0) return raw;
+    return raw.map((n) => {
+      const override = overrides.get(n.id);
+      return override !== undefined ? { ...n, done: override } : n;
+    });
+  });
+
+  // Prune overrides for notifications that are no longer in the query cache
+  // (aged out of QUERY_LIMIT, deleted server-side) so the map doesn't grow
+  // unbounded. Overrides whose value happens to match the cache are NOT
+  // pruned — during an in-flight mutation the cache may still hold the
+  // pre-mutation value and a stale fetch could flip it back before the
+  // API lands.
+  createEffect(() => {
+    if (!notificationsQuery.isSuccess) return;
+    const raw = notificationsQuery.data;
+    const overrides = doneOverrides();
+    if (overrides.size === 0) return;
+    const presentIds = new Set(raw.map((n) => n.id));
+    const toPrune: string[] = [];
+    for (const id of overrides.keys()) {
+      if (!presentIds.has(id)) toPrune.push(id);
+    }
+    if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
+  });
 
   const notificationsByEntity = createMemo(() => {
     const data = notifications();

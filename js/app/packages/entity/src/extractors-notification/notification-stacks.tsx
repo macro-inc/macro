@@ -72,9 +72,9 @@ function NotificationStackRow(props: {
     props.onClick?.(e);
   };
 
-  const handleMarkAsDone = async (e?: PointerEvent | MouseEvent) => {
+  const handleMarkAsDone = (e?: PointerEvent | MouseEvent) => {
     e?.stopPropagation();
-    await markStackAsDone();
+    markStackAsDone();
   };
 
   const handleMarkAsRead = async () => {

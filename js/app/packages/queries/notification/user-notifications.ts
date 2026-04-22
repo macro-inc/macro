@@ -192,6 +192,30 @@ export function invalidateUserNotifications() {
   });
 }
 
+/** Plain-async wrapper around `bulkMarkNotificationAsDone`. Throws on failure. */
+export async function bulkMarkNotificationsAsDone(
+  notificationIds: string[]
+): Promise<void> {
+  await throwOnErr(
+    async () =>
+      await notificationServiceClient.bulkMarkNotificationAsDone({
+        notificationIds,
+      })
+  );
+}
+
+/** Plain-async wrapper around `bulkMarkNotificationAsUndone`. Throws on failure. */
+export async function bulkMarkNotificationsAsUndone(
+  notificationIds: string[]
+): Promise<void> {
+  await throwOnErr(
+    async () =>
+      await notificationServiceClient.bulkMarkNotificationAsUndone({
+        notificationIds,
+      })
+  );
+}
+
 export function invalidateEntityNotifications(eventItemId: string) {
   return queryClient.invalidateQueries({
     queryKey: [...notificationKeys.entity._def, eventItemId],
@@ -439,5 +463,11 @@ export function optimisticInsertNotification(
     );
   }
 
-  invalidateUserNotifications();
+  // Cache is already updated via setQueriesData above. Mark as stale without
+  // refetching — refetchType default would re-fetch every cached page of the
+  // infinite notification query for every incoming websocket notification.
+  queryClient.invalidateQueries({
+    queryKey: notificationKeys.user._def,
+    refetchType: 'none',
+  });
 }
