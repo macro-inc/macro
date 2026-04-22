@@ -36,6 +36,7 @@ fn mentioned_user_who_is_also_thread_participant_gets_only_mention() {
         Some(&sender),
         &[bob.to_string()],                              // bob is mentioned
         &[bob.to_string(), sender.as_ref().to_string()], // bob is also a thread participant
+        &[],
         &user_id("macro|owner@test.com"),
         true, // is_reply
     );
@@ -64,6 +65,7 @@ fn mentioned_user_who_is_also_doc_owner_gets_only_mention() {
         Some(&sender),
         &[owner.as_ref().to_string()], // owner is mentioned
         &[sender.as_ref().to_string()],
+        &[],
         &owner,
         false,
     );
@@ -87,6 +89,7 @@ fn thread_participant_who_is_also_doc_owner_gets_only_thread_reply() {
         Some(&sender),
         &[],                                                        // no mentions
         &[owner.as_ref().to_string(), sender.as_ref().to_string()], // owner is thread participant
+        &[],
         &owner,
         true,
     );
@@ -110,7 +113,8 @@ fn user_who_is_mentioned_and_thread_participant_and_doc_owner_gets_only_mention(
         Some(&sender),
         &[owner.as_ref().to_string()], // owner is mentioned
         &[owner.as_ref().to_string(), sender.as_ref().to_string()], // owner is thread participant
-        &owner,                        // and doc owner
+        &[],
+        &owner, // and doc owner
         true,
     );
 
@@ -137,6 +141,7 @@ fn dedup_works_across_different_casing() {
             "macro|bob@test.com".to_string(),
             sender.as_ref().to_string(),
         ], // lowercase owner
+        &[],
         &owner,
         true,
     );
@@ -161,6 +166,7 @@ fn dedup_works_for_doc_owner_with_different_casing() {
         Some(&sender),
         &["macro|Owner@Test.COM".to_string()], // mixed case
         &[sender.as_ref().to_string()],
+        &[],
         &owner,
         false,
     );
@@ -187,7 +193,8 @@ fn sender_never_receives_notification() {
         Some(&sender),
         &[],
         &[sender.as_ref().to_string()], // sender is only thread participant
-        &sender,                        // sender is also doc owner
+        &[],
+        &sender, // sender is also doc owner
         true,
     );
 
@@ -210,6 +217,7 @@ fn new_thread_comment_notifies_doc_owner() {
         Some(&sender),
         &[],
         &[sender.as_ref().to_string()], // only one comment (the new one)
+        &[],
         &owner,
         false, // not a reply
     );
@@ -229,6 +237,7 @@ fn reply_notifies_thread_participants_and_doc_owner() {
         Some(&sender),
         &[],
         &[alice.to_string(), sender.as_ref().to_string()],
+        &[],
         &owner,
         true,
     );
@@ -247,9 +256,203 @@ fn no_thread_reply_notifications_for_first_comment() {
         Some(&sender),
         &[],
         &[sender.as_ref().to_string()],
+        &[],
         &owner,
         false, // first comment, not a reply
     );
 
     assert!(result.thread_reply_recipients.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Task assignee notifications
+// ---------------------------------------------------------------------------
+
+#[test]
+fn assignee_gets_notification_when_not_in_other_groups() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+    let assignee = "macro|assignee@test.com";
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &[],
+        &[sender.as_ref().to_string()],
+        &[assignee.to_string()],
+        &owner,
+        false,
+    );
+
+    assert!(
+        result.assignee_recipients.contains(&user_id(assignee)),
+        "assignee should be in assignee recipients"
+    );
+    assert_eq!(result.doc_owner_recipient.as_deref(), Some(owner.as_ref()));
+    assert_eq!(result.all_recipients().len(), result.total_count());
+}
+
+#[test]
+fn mentioned_user_who_is_also_assignee_gets_only_mention() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+    let bob = "macro|bob@test.com";
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &[bob.to_string()],
+        &[sender.as_ref().to_string()],
+        &[bob.to_string()],
+        &owner,
+        false,
+    );
+
+    assert!(
+        result.mention_recipients.contains(&user_id(bob)),
+        "bob should be in mention recipients"
+    );
+    assert!(
+        !result.assignee_recipients.contains(&user_id(bob)),
+        "bob should NOT be in assignee recipients"
+    );
+    assert_eq!(result.all_recipients().len(), result.total_count());
+}
+
+#[test]
+fn thread_participant_who_is_also_assignee_gets_only_thread_reply() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+    let alice = "macro|alice@test.com";
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &[],
+        &[alice.to_string(), sender.as_ref().to_string()],
+        &[alice.to_string()],
+        &owner,
+        true,
+    );
+
+    assert!(
+        result.thread_reply_recipients.contains(&user_id(alice)),
+        "alice should be in thread reply recipients"
+    );
+    assert!(
+        !result.assignee_recipients.contains(&user_id(alice)),
+        "alice should NOT be in assignee recipients"
+    );
+    assert_eq!(result.all_recipients().len(), result.total_count());
+}
+
+#[test]
+fn assignee_who_is_also_doc_owner_gets_only_assignee() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &[],
+        &[sender.as_ref().to_string()],
+        &[owner.as_ref().to_string()],
+        &owner,
+        false,
+    );
+
+    assert!(
+        result.assignee_recipients.contains(&owner),
+        "owner should be in assignee recipients"
+    );
+    assert!(
+        result.doc_owner_recipient.is_none(),
+        "owner should NOT also get doc owner notification"
+    );
+    assert_eq!(result.all_recipients().len(), result.total_count());
+}
+
+#[test]
+fn sender_who_is_assignee_gets_no_notification() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &[],
+        &[sender.as_ref().to_string()],
+        &[sender.as_ref().to_string()],
+        &owner,
+        false,
+    );
+
+    assert!(
+        !result.assignee_recipients.contains(&sender),
+        "sender should NOT be in assignee recipients"
+    );
+    assert_eq!(result.doc_owner_recipient.as_deref(), Some(owner.as_ref()));
+}
+
+#[test]
+fn multiple_assignees_deduped_correctly() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+    let mentioned = "macro|mentioned@test.com";
+    let thread_participant = "macro|thread@test.com";
+    let pure_assignee = "macro|assignee@test.com";
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &[mentioned.to_string()],
+        &[thread_participant.to_string(), sender.as_ref().to_string()],
+        &[
+            mentioned.to_string(),
+            thread_participant.to_string(),
+            pure_assignee.to_string(),
+        ],
+        &owner,
+        true,
+    );
+
+    assert!(result.mention_recipients.contains(&user_id(mentioned)));
+    assert!(!result.assignee_recipients.contains(&user_id(mentioned)));
+    assert!(
+        result
+            .thread_reply_recipients
+            .contains(&user_id(thread_participant))
+    );
+    assert!(
+        !result
+            .assignee_recipients
+            .contains(&user_id(thread_participant))
+    );
+    assert!(
+        result.assignee_recipients.contains(&user_id(pure_assignee)),
+        "pure assignee should be in assignee recipients"
+    );
+    assert_eq!(result.doc_owner_recipient.as_deref(), Some(owner.as_ref()));
+    assert_eq!(result.all_recipients().len(), result.total_count());
+}
+
+#[test]
+fn assignee_dedup_works_across_different_casing() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &["macro|Bob@Test.COM".to_string()],
+        &[sender.as_ref().to_string()],
+        &["macro|bob@test.com".to_string()],
+        &owner,
+        false,
+    );
+
+    let all = result.all_recipients();
+    let bob_count = all.iter().filter(|r| r.contains("bob")).count();
+    assert_eq!(
+        bob_count, 1,
+        "bob should receive exactly one notification, got {bob_count}"
+    );
+    assert!(
+        result.assignee_recipients.is_empty(),
+        "bob already in mentions, should not be in assignees"
+    );
+    assert_eq!(result.all_recipients().len(), result.total_count());
 }
