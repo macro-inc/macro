@@ -14,17 +14,17 @@ reqwest = "0.13"
 rootcause = "0.12"
 semver = "1"
 serde = "1"
-tauri = { git = "https://github.com/seanaye/tauri", branch = "seanaye/feat/expose-protocol-handlers" }
+tauri = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
 thiserror = "2"
 tokio = "1"
 tracing = "0.1"
 url = "2.5.4"
 
 [patch.crates-io]
-tauri = { git = "https://github.com/seanaye/tauri", branch = "seanaye/feat/expose-protocol-handlers" }
-tauri-runtime = { git = "https://github.com/seanaye/tauri", branch = "seanaye/feat/expose-protocol-handlers" }
-tauri-runtime-wry = { git = "https://github.com/seanaye/tauri", branch = "seanaye/feat/expose-protocol-handlers" }
-tauri-utils = { git = "https://github.com/seanaye/tauri", branch = "seanaye/feat/expose-protocol-handlers" }
-tauri-macros = { git = "https://github.com/seanaye/tauri", branch = "seanaye/feat/expose-protocol-handlers" }
-tauri-codegen = { git = "https://github.com/seanaye/tauri", branch = "seanaye/feat/expose-protocol-handlers" }
-tauri-build = { git = "https://github.com/seanaye/tauri", branch = "seanaye/feat/expose-protocol-handlers" }
+tauri = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
+tauri-runtime = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
+tauri-runtime-wry = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
+tauri-utils = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
+tauri-macros = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
+tauri-codegen = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
+tauri-build = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
