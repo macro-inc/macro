@@ -18,7 +18,6 @@ type EditableThreadProps = {
   data?: ApiChannelMessage;
 };
 
-
 function EditableThreadInner() {
   const ctx = useStandaloneThread();
   const userId = useUserId();
@@ -60,7 +59,7 @@ function EditableThreadInner() {
         />
       </Show>
     </>
-  )
+  );
 }
 
 export function EditableThread(props: EditableThreadProps) {
