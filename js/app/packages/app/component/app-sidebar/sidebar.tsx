@@ -5,11 +5,7 @@ import {
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
 import { CommandState } from '@app/component/command';
-import {
-  devStatusBarOpen,
-  gitBranch,
-  setDevStatusBarOpen,
-} from '@app/component/DevStatusBar';
+import { gitBranch, setDevStatusBarOpen } from '@app/component/DevStatusBar';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
