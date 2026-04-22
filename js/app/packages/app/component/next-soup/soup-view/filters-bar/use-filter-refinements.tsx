@@ -152,20 +152,29 @@ export function useFilterRefinements() {
 
   const setChannelIds = (ids: string[]) => {
     const current = filterData().include.channelId ?? [];
-    if (ids.length > 0) {
-      queryFilters.add({ include: { channelId: ids } });
-    } else {
-      queryFilters.remove({ include: { channelId: current } });
-    }
+    batch(() => {
+      if (current.length) {
+        queryFilters.remove({ include: { channelId: current } });
+      }
+
+      if (ids.length) {
+        queryFilters.add({ include: { channelId: ids } });
+      }
+    });
   };
 
   const setSenderIds = (ids: string[]) => {
     const current = filterData().include.channelSenderId ?? [];
-    if (ids.length > 0) {
-      queryFilters.add({ include: { channelSenderId: ids } });
-    } else {
-      queryFilters.remove({ include: { channelSenderId: current } });
-    }
+
+    batch(() => {
+      if (current.length) {
+        queryFilters.remove({ include: { channelSenderId: current } });
+      }
+
+      if (ids.length) {
+        queryFilters.add({ include: { channelSenderId: ids } });
+      }
+    });
   };
 
   /**
