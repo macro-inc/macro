@@ -240,7 +240,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
-  mobileHorizontalScroll?: boolean;
+  horizontalScroll?: boolean;
   class?: string;
 };
 
@@ -492,10 +492,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           return (
             <div class="relative">
               <div
-                ref={
-                  props.mobileHorizontalScroll ? setChipsScrollRef : undefined
-                }
-                class={`flex gap-1.5 text-ink scrollbar-hidden ${props.mobileHorizontalScroll ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-[150px] sm:overflow-y-auto pb-[2px] sm:pb-0' : 'flex-wrap max-h-[150px] overflow-y-auto'}`}
+                ref={props.horizontalScroll ? setChipsScrollRef : undefined}
+                class={`flex gap-1.5 text-ink scrollbar-hidden ${props.horizontalScroll ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-[150px] sm:overflow-y-auto pb-[2px] sm:pb-0' : 'flex-wrap max-h-[150px] overflow-y-auto'}`}
               >
                 <For each={state.selectedOptions()}>
                   {(option) => {
@@ -653,7 +651,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   }}
                 />
               </div>
-              <Show when={props.mobileHorizontalScroll}>
+              <Show when={props.horizontalScroll}>
                 <CustomScrollbar
                   scrollContainer={chipsScrollRef}
                   horizontal
