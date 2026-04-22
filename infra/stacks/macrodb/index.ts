@@ -17,11 +17,18 @@ const password = aws.secretsmanager
 
 // ---- Parameter Groups ----
 
-const parameterGroup = new aws.rds.ParameterGroup(
+// The original parameter group we assign to the dbs
+// For prod, we need to use the _legacy family config value to ensure we don't destroy the existing one while it's still needed
+const parameterGroupFamily =
+  stack === 'prod'
+    ? config.require('parameter_group_family_legacy')
+    : config.require('parameter_group_family');
+
+const originalParameterGroup = new aws.rds.ParameterGroup(
   'parameter-group',
   {
     name: `macro-db-parameter-group-${stack}`,
-    family: config.require('parameter_group_family'),
+    family: parameterGroupFamily,
     description: `Custom parameter group for macro-db-${stack}`,
     parameters: [
       { name: 'checkpoint_timeout', value: '900' },
@@ -49,7 +56,42 @@ const parameterGroup = new aws.rds.ParameterGroup(
   { protect: true }
 );
 
-export const parameterGroupArn = parameterGroup.arn;
+// For prod, we need to create a "new" parameter group for postgres 16 family
+if (stack === 'prod') {
+  new aws.rds.ParameterGroup(
+    'parameter-group-v16',
+    {
+      name: `macro-db-parameter-group-v16-${stack}`,
+      family: config.require('parameter_group_family'),
+      description: `Custom parameter group (${config.require('parameter_group_family')}) for macro-db-${stack}`,
+      parameters: [
+        { name: 'checkpoint_timeout', value: '900' },
+        { name: 'max_wal_size', value: '16384' },
+        { name: 'min_wal_size', value: '4096' },
+        { name: 'vacuum_cost_page_miss', value: '10' },
+        {
+          name: 'shared_preload_libraries',
+          value: 'pg_stat_statements,auto_explain',
+          applyMethod: 'pending-reboot',
+        },
+        { name: 'auto_explain.log_format', value: 'json' },
+        { name: 'auto_explain.log_min_duration', value: '1000' },
+        { name: 'auto_explain.log_analyze', value: 'on' },
+        { name: 'auto_explain.log_buffers', value: 'on' },
+        { name: 'auto_explain.log_timing', value: 'off' },
+        { name: 'auto_explain.log_triggers', value: 'on' },
+        { name: 'auto_explain.log_verbose', value: 'on' },
+        { name: 'auto_explain.log_nested_statements', value: 'on' },
+        { name: 'auto_explain.sample_rate', value: '1' },
+        { name: 'idle_in_transaction_session_timeout', value: '300000' },
+      ],
+      tags,
+    },
+    { protect: true }
+  );
+}
+
+export const parameterGroupArn = originalParameterGroup.arn;
 
 const MAINTANENCE_WINDOW = 'sun:04:00-sun:05:00'; // SUNDAY 0000 to 0100 EST
 
@@ -87,7 +129,7 @@ const database = new aws.rds.Instance(
     finalSnapshotIdentifier:
       stack === 'prod' ? `macro-db-${stack}-final` : undefined, // only final snapshot prod
     deletionProtection: stack === 'prod',
-    parameterGroupName: pulumi.interpolate`${parameterGroup.name}`,
+    parameterGroupName: pulumi.interpolate`${originalParameterGroup.name}`,
     enabledCloudwatchLogsExports:
       stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
     multiAz: stack === 'prod',
@@ -127,7 +169,7 @@ const readReplica = new aws.rds.Instance(
     ),
     publiclyAccessible: true,
     vpcSecurityGroupIds: [...config.require('security_group_ids').split(',')],
-    parameterGroupName: pulumi.interpolate`${parameterGroup.name}`,
+    parameterGroupName: pulumi.interpolate`${originalParameterGroup.name}`,
     enabledCloudwatchLogsExports:
       stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
     skipFinalSnapshot: true,

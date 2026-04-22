@@ -1,7 +1,8 @@
 config:
   aws:region: us-east-1
   macrodb:db_password_secret_key: macrodb-password-prod
-  macrodb:parameter_group_family: postgres14
+  macrodb:parameter_group_family_legacy: postgres14
+  macrodb:parameter_group_family: postgres16
   macrodb:engine_version: 14.17
   macrodb:instance_size: db.t4g.xlarge
   macrodb:storage_type: gp3
