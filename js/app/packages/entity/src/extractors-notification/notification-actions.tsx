@@ -25,12 +25,20 @@ interface SingleNotificationActionsProps {
 type MarkStackDoneVariables = { notificationIds: string[] };
 type MarkStackDoneContext = { toastId?: number };
 
+// Only one notification mark-done toast may be visible at a time — an older
+// toast's Undo button would otherwise invoke the LIFO undo stack and pop the
+// newer entry.
+let visibleMarkDoneToastId: number | undefined;
+
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
   const undoCtx = useMutationUndoContext();
 
-  const showMarkDoneToast = (): number | undefined =>
-    toast.success(
+  const showMarkDoneToast = (): number | undefined => {
+    if (visibleMarkDoneToastId !== undefined) {
+      toast.dismiss(visibleMarkDoneToastId);
+    }
+    const id = toast.success(
       'Marked as done',
       undefined,
       [
@@ -48,6 +56,9 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
       10_000,
       true
     );
+    visibleMarkDoneToastId = id;
+    return id;
+  };
 
   const mutation = useUndoableMutation<
     void,
@@ -67,7 +78,12 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
       toast.failure('Failed to mark as done');
     },
     undoFn: async (vars, context) => {
-      if (context?.toastId !== undefined) toast.dismiss(context.toastId);
+      if (context?.toastId !== undefined) {
+        toast.dismiss(context.toastId);
+        if (visibleMarkDoneToastId === context.toastId) {
+          visibleMarkDoneToastId = undefined;
+        }
+      }
       await executeMarkNotificationsUndone(vars.notificationIds);
     },
     redoFn: async (vars, context) => {

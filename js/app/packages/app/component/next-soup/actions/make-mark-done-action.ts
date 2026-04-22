@@ -27,6 +27,10 @@ type MarkDoneVariables = {
 
 type MarkDoneContext = MarkEntitiesDoneContext & { toastId?: number };
 
+// Only one mark-done toast may be visible at a time — an older toast's Undo
+// button would otherwise invoke the LIFO undo stack and pop the newer entry.
+let visibleMarkDoneToastId: number | undefined;
+
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource } = options;
@@ -37,9 +41,12 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const showMarkDoneToast = (
     variables: MarkDoneVariables
   ): number | undefined => {
+    if (visibleMarkDoneToastId !== undefined) {
+      toast.dismiss(visibleMarkDoneToastId);
+    }
     const count = variables.entities.length;
     const firstEntityId = variables.entities[0]?.id;
-    return toast.success(
+    const id = toast.success(
       count > 1 ? `Marked ${count} items as done` : 'Marked as done',
       undefined,
       [
@@ -57,6 +64,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       10_000,
       true
     );
+    visibleMarkDoneToastId = id;
+    return id;
   };
 
   const mutation = useUndoableMutation<
@@ -84,7 +93,12 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       toast.failure('Failed to mark as done');
     },
     undoFn: async (variables, context) => {
-      if (context?.toastId !== undefined) toast.dismiss(context.toastId);
+      if (context?.toastId !== undefined) {
+        toast.dismiss(context.toastId);
+        if (visibleMarkDoneToastId === context.toastId) {
+          visibleMarkDoneToastId = undefined;
+        }
+      }
       context?.applyUndone();
       try {
         await executeMarkEntitiesUndone({
