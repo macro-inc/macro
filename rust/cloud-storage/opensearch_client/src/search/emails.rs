@@ -18,7 +18,7 @@ impl SearchQueryConfig for EmailSearchConfig {
 }
 
 /// Keyword-indexed email-address fields. Matched explicitly: a bare word
-/// only matches an address with that exact local-part (`julia` → `julia@*`),
+/// only matches an address with that exact local-part (`alice` → `alice@*`),
 /// not addresses that merely start with the characters.
 const EMAIL_KEYWORD_FIELDS: &[&str] = &["sender", "reply_to", "recipients", "cc", "bcc"];
 
@@ -36,10 +36,10 @@ const EMAIL_TEXT_FIELDS: &[&str] = &[
 /// Single-word terms become `(term | term@*)` — an exact token match OR a
 /// local-part match on the address. This deliberately does NOT use a trailing
 /// `*` on the bare term, so partial local-parts don't leak across addresses
-/// (e.g. `jul` won't match `julia@macro.com` via this group).
+/// (e.g. `ali` won't match `alice@example.com` via this group).
 /// Email-like terms (containing `@`) are wrapped in quotes to force phrase
 /// matching — otherwise the standard analyzer would tokenize
-/// `hutch@macro.com` into `[hutch, macro, com]`.
+/// `alice@example.com` into `[alice, example, com]`.
 /// The email pattern is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
 fn build_keyword_query_string(terms: &[String]) -> String {

@@ -33,14 +33,14 @@ fn test_build_keyword_query_string_mixed_single_and_multi_word() {
 
 #[test]
 fn test_build_keyword_query_string_email_term_uses_phrase() {
-    let result = build_keyword_query_string(&["hutch@macro.com".to_string()]);
-    assert_eq!(result, "\"hutch@macro.com\"");
+    let result = build_keyword_query_string(&["alice@example.com".to_string()]);
+    assert_eq!(result, "\"alice@example.com\"");
 }
 
 #[test]
 fn test_build_keyword_query_string_email_term_mixed_with_word() {
-    let result = build_keyword_query_string(&["hutch@macro.com".to_string(), "review".to_string()]);
-    assert_eq!(result, "\"hutch@macro.com\" + (review | review@*)");
+    let result = build_keyword_query_string(&["alice@example.com".to_string(), "review".to_string()]);
+    assert_eq!(result, "\"alice@example.com\" + (review | review@*)");
 }
 
 #[test]
@@ -63,8 +63,8 @@ fn test_build_text_query_string_multi_word_term_uses_group() {
 
 #[test]
 fn test_build_text_query_string_email_term_uses_phrase() {
-    let result = build_text_query_string(&["hutch@macro.com".to_string()]);
-    assert_eq!(result, "\"hutch@macro.com\"");
+    let result = build_text_query_string(&["alice@example.com".to_string()]);
+    assert_eq!(result, "\"alice@example.com\"");
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn test_build_text_query_string_three_char_term_gets_prefix() {
 fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<()> {
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["hello".to_string(), "test".to_string()],
-        user_id: "macro|gab@macro.com".to_string(),
+        user_id: "macro|alice@example.com".to_string(),
         thread_ids: vec![],
         link_ids: vec![],
         sender: vec![],
