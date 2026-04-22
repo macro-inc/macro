@@ -1,4 +1,4 @@
-import { type Accessor, Show, onCleanup, onMount } from 'solid-js';
+import { type Accessor, Match, Show, Switch, onCleanup, onMount } from 'solid-js';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { useCallContext } from './CallContext';
@@ -39,37 +39,50 @@ export function ChannelCallTab(props: {
     try {
       await call.joinCall();
     } catch {
-      // joinError is set inside useCall
+      // joinError is set inside useCall join mutation onError
     }
   };
 
   return (
-    <Show
-      when={() => call.isInThisChannel()}
+    <Switch
       fallback={
-        <Show
-          when={call.joinError()}
-          fallback={
-            <Show when={props.pendingJoin?.()}>
-              <div class="flex size-full items-center justify-center text-ink-muted">
-                Joining call...
-              </div>
-            </Show>
-          }
-        >
-          <div class="flex size-full flex-col items-center justify-center gap-3 text-ink-muted">
-            <p>{call.joinError()}</p>
-            <button
-              onClick={handleRetry}
-              class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors"
-            >
-              Try again
-            </button>
-          </div>
-        </Show>
+        <div class="flex size-full flex-col items-center justify-center gap-3 text-ink-muted px-4">
+          <p class="text-center text-sm">You’re not in this call yet.</p>
+          <button
+            type="button"
+            onClick={() => void call.joinCall()}
+            disabled={call.isJoining()}
+            class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {call.isJoining() ? 'Connecting…' : 'Join call'}
+          </button>
+        </div>
       }
     >
-      <CallOverlay onLeave={call.leaveCall} />
-    </Show>
+      <Match when={call.isInThisChannel() && !call.joinError()}>
+        <CallOverlay onLeave={call.leaveCall} />
+      </Match>
+      <Match when={call.joinError()}>
+        <div class="flex size-full flex-col items-center justify-center gap-3 text-ink-muted px-4">
+          <p class="text-center">{call.joinError()}</p>
+          <Show when={call.isJoining()}>
+            <p class="text-xs text-ink-extra-muted animate-pulse">Connecting…</p>
+          </Show>
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={call.isJoining()}
+            class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+          >
+            Try again
+          </button>
+        </div>
+      </Match>
+      <Match when={props.pendingJoin?.()}>
+        <div class="flex size-full items-center justify-center text-ink-muted">
+          Joining call...
+        </div>
+      </Match>
+    </Switch>
   );
 }

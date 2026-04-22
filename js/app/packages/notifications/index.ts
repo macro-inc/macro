@@ -20,6 +20,8 @@ export { createTabLeaderSignal } from './notification-election';
 export {
   createEffectOnEntityTypeNotification,
   entityHasUnreadNotifications,
+  executeMarkNotificationsDone,
+  executeMarkNotificationsUndone,
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsDone,
   markNotificationsForEntityAsRead,
@@ -66,7 +68,10 @@ export type {
 } from './notification-settings';
 export { useNotificationSettings } from './notification-settings';
 export type { NotificationSource } from './notification-source';
-export { createNotificationSource } from './notification-source';
+export {
+  createNotificationSource,
+  setDoneOverride,
+} from './notification-source';
 export type { NotificationStack } from './notification-stacking';
 export {
   getAllNotificationsFromGroup,

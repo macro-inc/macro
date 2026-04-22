@@ -148,7 +148,6 @@ type SidebarHotkeyDeps = {
   isSlim: () => boolean;
   onOpenChange: (open: boolean) => void;
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
-  callCtx?: ReturnType<typeof useCallContextOptional>;
 };
 
 export const registerSidebarHotkeys = ({
@@ -159,7 +158,6 @@ export const registerSidebarHotkeys = ({
   hotkeyVisible,
   setHotkeyVisible,
   resetHotkeysState,
-  callCtx,
 }: SidebarHotkeyDeps) => {
   const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
   const debounceSetHotkeyVisible = debounce(() => setHotkeyVisible(true), 200);
@@ -269,16 +267,17 @@ export const registerSidebarHotkeys = ({
         }
       }
 
-      const resolvedContent =
-        link.id === 'calls' && callCtx?.isInCall() && callCtx.activeChannelId()
-          ? ({ type: 'channel', id: callCtx.activeChannelId()! } as const)
-          : ({ type: 'component', id: link.id } as const);
-
-      openWithSplit(resolvedContent, {
-        preferNewSplit: e?.shiftKey,
-        mergeHistory: false,
-        allowDuplicate: true,
-      });
+      openWithSplit(
+        {
+          type: 'component',
+          id: link.id,
+        },
+        {
+          preferNewSplit: e?.shiftKey,
+          mergeHistory: false,
+          allowDuplicate: true,
+        }
+      );
       return true;
     };
 
@@ -368,8 +367,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
-  const callCtx = useCallContextOptional();
   const notificationSettings = useNotificationSettings();
+  const callCtx = useCallContextOptional();
 
   const showEnableNotifications = () =>
     notificationSettings.isSupported && notificationSettings.canPrompt();
@@ -464,7 +463,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     isSlim,
     onOpenChange: props.onOpenChange,
     openWithSplit: layout.openWithSplit,
-    callCtx,
   });
 
   return (
@@ -614,7 +612,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
-  const callCtx = useCallContextOptional();
 
   const location = useLocation();
 
@@ -631,15 +628,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
     return activeContent?.id === props.id;
   };
 
-  const content = () => {
-    if (props.id === 'calls') {
-      const channelId = callCtx?.activeChannelId();
-      if (callCtx?.isInCall() && channelId) {
-        return { type: 'channel' as const, id: channelId };
-      }
-    }
-    return { type: 'component' as const, id: props.id };
-  };
+  const content = () =>
+    ({
+      type: 'component',
+      id: props.id,
+    }) as const;
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? true;
@@ -717,7 +710,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           }}
         >
           <Show when={props.icon}>
-            <div class="flex shrink-0 [&_svg]:size-4">
+            <div class="shrink-0 [&_svg]:size-4">
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
             </div>
           </Show>

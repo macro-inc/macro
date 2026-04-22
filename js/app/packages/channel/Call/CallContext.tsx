@@ -20,6 +20,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { CallTokenResponse } from '@service-call/client';
+import { CallAudioSink } from './CallAudioSink';
 
 export type CallParticipantInfo = {
   identity: string;
@@ -250,7 +251,10 @@ function createCallState() {
   }
 
   function resetState() {
-    setStore({ ...initialState });
+    // Preserve joinError across room teardown — LiveKit can emit Disconnected
+    // when the network drops or reconnects; wiping joinError would hide the
+    // "Try again" UI while the user is still not in the call (empty ChannelCallTab).
+    setStore({ ...initialState, joinError: store.joinError });
   }
 
   function attachRoomListeners(r: Room) {
@@ -273,6 +277,7 @@ function createCallState() {
     r.on(RoomEvent.TrackUnsubscribed, bumpTrackVersion);
     r.on(RoomEvent.TrackMuted, bumpTrackVersion);
     r.on(RoomEvent.TrackUnmuted, bumpTrackVersion);
+    r.on(RoomEvent.LocalTrackPublished, bumpTrackVersion);
 
     r.on(RoomEvent.ActiveSpeakersChanged, () => {
       setStore('speakerVersion', (v) => v + 1);
@@ -476,8 +481,9 @@ function createCallState() {
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
-// Real connection established — optimistic flag no longer needed
+      // Real connection established — optimistic flag no longer needed
       setStore('optimisticJoinChannelId', null);
+      setStore('joinError', null);
     } catch (e) {
       console.error('failed to connect to LiveKit room', e);
       destroyRoom();
@@ -650,7 +656,8 @@ function createCallState() {
   // --- optimistic join ---
 
   function beginOptimisticJoin(channelId: string) {
-    setStore('joinError', null);
+    // Do not clear joinError here — retries should keep the error panel visible
+    // with `isJoining` until LiveKit connects (see useCall join mutation).
     setStore('optimisticJoinChannelId', channelId);
   }
 
@@ -766,6 +773,9 @@ export function CallProvider(props: ParentProps) {
   const state = createCallState();
 
   return (
-    <CallContext.Provider value={state}>{props.children}</CallContext.Provider>
+    <CallContext.Provider value={state}>
+      {props.children}
+      <CallAudioSink />
+    </CallContext.Provider>
   );
 }

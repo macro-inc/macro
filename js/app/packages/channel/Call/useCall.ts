@@ -1,6 +1,10 @@
-import { useJoinCallMutation, useLeaveCallMutation } from '@queries/call/call';
+import { useLeaveCallMutation } from '@queries/call/call';
+import { queryClient } from '@queries/client';
+import { useMutation } from '@tanstack/solid-query';
+import { callServiceClient } from '@service-call/client';
+import { throwOnErr } from '@core/util/maybeResult';
 import { RoomEvent } from 'livekit-client';
-import { onCleanup } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
 
 type UseCallOptions = {
@@ -10,13 +14,21 @@ type UseCallOptions = {
   onLeave?: () => void;
 };
 
+type JoinCallContext = {
+  channelId: string;
+};
+
+const JOIN_TIMEOUT_MS = 15_000;
+
 /**
  * Hook that orchestrates joining/leaving calls by combining
  * the API mutations with the LiveKit room connection.
+ *
+ * Join is implemented as a single TanStack mutation so optimistic UI, timeout,
+ * rollback, and server cleanup stay in onMutate / onError / onSuccess.
  */
 export function useCall(channelId: () => string, options?: UseCallOptions) {
   const callCtx = useCallContext();
-  const joinMutation = useJoinCallMutation();
   const leaveMutation = useLeaveCallMutation();
 
   // Track the disconnect listener so we can swap it when the room changes.
@@ -44,41 +56,85 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
 
   onCleanup(() => cleanupDisconnectListener?.());
 
-  async function joinCall() {
-    const id = channelId();
+  /** Cleared in `joinCall` `finally` + safety timer so Try again never stays disabled if TanStack pending glitches. */
+  const [joinUiPending, setJoinUiPending] = createSignal(false);
 
-    callCtx.beginOptimisticJoin(id);
-    options?.onJoin?.();
+  let cancelCurrentJoin: () => void = () => {};
 
-    try {
-      const [tokenResponse] = await Promise.all([
-        joinMutation.mutateAsync(id),
-        new Promise((resolve) => setTimeout(resolve, 300)),
-      ]);
+  const joinCallMutation = useMutation(() => ({
+    mutationFn: async (id: string) => {
+      let cancelled = false;
+      cancelCurrentJoin = () => {
+        cancelled = true;
+      };
 
-      await callCtx.connect(tokenResponse);
+      const doConnect = async () => {
+        // Call the join API directly so a timed-out join attempt cannot leave
+        // `useJoinCallMutation` stuck pending and block the next retry.
+        const [tokenResponse] = await Promise.all([
+          throwOnErr(() => callServiceClient.getOrCreateCall(id)),
+          new Promise<void>((resolve) => setTimeout(resolve, 300)),
+        ]);
+        if (cancelled) return;
+        await callCtx.connect(tokenResponse);
+      };
 
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Connection timed out')),
+          JOIN_TIMEOUT_MS
+        )
+      );
+
+      await Promise.race([doConnect(), timeout]);
+    },
+    onMutate: (id: string): JoinCallContext => {
+      cancelCurrentJoin();
+      callCtx.beginOptimisticJoin(id);
+      options?.onJoin?.();
+      return { channelId: id };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
       attachDisconnectListener();
-    } catch (e) {
+    },
+    // Keep this handler synchronous: we undo the optimistic join and show the
+    // error message right away. LiveKit disconnect and the server leave call
+    // run in a fire-and-forget async block — on flaky networks those can take
+    // forever, and if we awaited them here TanStack would keep the mutation
+    // pending and the Try again button would stay stuck.
+    onError: (_err, channelId: string, _ctx: JoinCallContext | undefined) => {
+      cancelCurrentJoin();
       callCtx.rollbackOptimisticJoin();
       callCtx.setJoinError(
         'Unable to join the call. Please check your connection.'
       );
-
-      if (joinMutation.isSuccess) {
+      void (async () => {
         try {
-          await leaveMutation.mutateAsync(id);
-        } catch (leaveErr) {
-          console.error(
-            'Failed to roll back join after connect failure',
-            leaveErr
-          );
+          await callCtx.disconnect();
+        } catch (e) {
+          console.error('join error recovery: disconnect failed', e);
         }
-      }
+        try {
+          await leaveMutation.mutateAsync(channelId);
+        } catch (e) {
+          console.error('join error recovery: leave server state failed', e);
+        }
+      })();
+    },
+  }));
 
-      throw e;
+  const joinCall = async () => {
+    setJoinUiPending(true);
+    const safetyMs = JOIN_TIMEOUT_MS + 5_000;
+    const safetyTimer = globalThis.setTimeout(() => setJoinUiPending(false), safetyMs);
+    try {
+      await joinCallMutation.mutateAsync(channelId());
+    } finally {
+      globalThis.clearTimeout(safetyTimer);
+      setJoinUiPending(false);
     }
-  }
+  };
 
   async function leaveCall() {
     const id = channelId();
@@ -97,7 +153,9 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   return {
     joinCall,
     leaveCall,
-    isJoining: () => joinMutation.isPending,
+    // Rely on `joinUiPending` (finally + safety timer) so the button is not
+    // gated on `joinCallMutation.isPending`, which can stick true in edge cases.
+    isJoining: () => joinUiPending(),
     isLeaving: () => leaveMutation.isPending,
     isInCall: callCtx.isInCall,
     isInThisChannel: () =>

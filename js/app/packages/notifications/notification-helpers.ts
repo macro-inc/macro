@@ -1,7 +1,13 @@
 import type { Entity, EntityType } from '@core/types';
+import { queryClient } from '@queries/client';
+import { notificationKeys } from '@queries/notification/keys';
+import {
+  bulkMarkNotificationsAsDone,
+  bulkMarkNotificationsAsUndone,
+} from '@queries/notification/user-notifications';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { isMatching, P } from 'ts-pattern';
-import { CHANNEL_EVENT_TYPES } from './notification-source';
+import { CHANNEL_EVENT_TYPES, setDoneOverride } from './notification-source';
 import type { NotificationSource } from './notification-source';
 import { type UnifiedNotification, compositeEntity } from './types';
 
@@ -199,6 +205,52 @@ export function useNotificationsMutedForEntity(
       item_id: entity.id,
     })
   );
+}
+
+/**
+ * Optimistically flips the `done` override to `true` for these ids, fires the
+ * bulk-done API, and rolls the override back on failure. Used as a mutation's
+ * mutationFn / redoFn.
+ */
+export async function executeMarkNotificationsDone(
+  notificationIds: string[]
+): Promise<void> {
+  setDoneOverride(notificationIds, true);
+  await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
+  try {
+    await bulkMarkNotificationsAsDone(notificationIds);
+  } catch (err) {
+    setDoneOverride(notificationIds, false);
+    throw err;
+  } finally {
+    await queryClient.invalidateQueries({
+      queryKey: notificationKeys.user._def,
+      refetchType: 'none',
+    });
+  }
+}
+
+/**
+ * Optimistically flips the override to `false` and fires the bulk-undone API.
+ * On failure the override is re-applied so the UI stays consistent with the
+ * server. Used as a mutation's undoFn.
+ */
+export async function executeMarkNotificationsUndone(
+  notificationIds: string[]
+): Promise<void> {
+  setDoneOverride(notificationIds, false);
+  await queryClient.cancelQueries({ queryKey: notificationKeys.user._def });
+  try {
+    await bulkMarkNotificationsAsUndone(notificationIds);
+  } catch (err) {
+    setDoneOverride(notificationIds, true);
+    throw err;
+  } finally {
+    await queryClient.invalidateQueries({
+      queryKey: notificationKeys.user._def,
+      refetchType: 'none',
+    });
+  }
 }
 
 export function createEffectOnEntityTypeNotification(
