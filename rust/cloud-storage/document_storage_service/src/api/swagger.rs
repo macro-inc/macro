@@ -65,7 +65,7 @@ use crate::{
 use channels::inbound::axum_router::{
     ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
     ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
-    ApiThreadInfo, ApiThreadReply,
+    ApiThreadInfo, ApiThreadReply, ChannelMessageFilters,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::ShortIdResponse;
@@ -187,6 +187,7 @@ use utoipa::OpenApi;
 
         // channels
         channels::inbound::axum_router::get_channel_messages_handler,
+        channels::inbound::axum_router::post_channel_messages_handler,
         channels::inbound::axum_router::get_thread_replies_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
@@ -338,6 +339,7 @@ use utoipa::OpenApi;
             ApiChannelAttachment,
             ApiChannelParticipant,
             ApiParticipantRole,
+            ChannelMessageFilters,
 
             // Calls
             call::domain::models::CallTokenResponse,

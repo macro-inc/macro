@@ -135,6 +135,7 @@ pub(crate) fn compute_notification_recipients(
     sender_id: Option<&MacroUserIdStr<'_>>,
     mentioned_user_ids: &[String],
     thread_comment_owners: &[String],
+    task_assignee_ids: &[String],
     document_owner: &MacroUserIdStr<'_>,
     is_reply: bool,
 ) -> NotificationRecipients {
@@ -162,7 +163,20 @@ pub(crate) fn compute_notification_recipients(
         }
     }
 
-    // 3. Document owner — only if not sender and not already notified
+    // 3. Task assignee recipients — only if not sender and not already notified
+    let mut assignee_recipients: HashSet<MacroUserIdStr<'static>> = HashSet::new();
+    for assignee_str in task_assignee_ids {
+        if let Ok(parsed) = MacroUserIdStr::try_from(assignee_str.clone()) {
+            let normalized = parsed.as_ref().to_string();
+            let is_sender = sender_id.is_some_and(|s| s.as_ref() == normalized);
+            if !is_sender && !notified.contains(&normalized) {
+                notified.insert(normalized);
+                assignee_recipients.insert(parsed);
+            }
+        }
+    }
+
+    // 4. Document owner — only if not sender and not already notified
     let owner_normalized = document_owner.as_ref().to_string();
     let owner_is_sender = sender_id.is_some_and(|s| s.as_ref() == owner_normalized);
     let doc_owner_recipient = if !owner_is_sender && !notified.contains(&owner_normalized) {
@@ -174,6 +188,7 @@ pub(crate) fn compute_notification_recipients(
     NotificationRecipients {
         mention_recipients,
         thread_reply_recipients,
+        assignee_recipients,
         doc_owner_recipient,
     }
 }
@@ -183,6 +198,8 @@ pub(crate) struct NotificationRecipients {
     pub mention_recipients: HashSet<MacroUserIdStr<'static>>,
     /// Users who should get a thread reply notification (already parsed and owned).
     pub thread_reply_recipients: HashSet<MacroUserIdStr<'static>>,
+    /// Task assignees who should get a "commented on your task" notification.
+    pub assignee_recipients: HashSet<MacroUserIdStr<'static>>,
     /// The document owner, if they should get a "commented on your document" notification.
     pub doc_owner_recipient: Option<String>,
 }
@@ -198,6 +215,9 @@ impl NotificationRecipients {
         for r in &self.thread_reply_recipients {
             all.insert(r.as_ref().to_string());
         }
+        for r in &self.assignee_recipients {
+            all.insert(r.as_ref().to_string());
+        }
         if let Some(r) = &self.doc_owner_recipient {
             all.insert(r.clone());
         }
@@ -209,6 +229,7 @@ impl NotificationRecipients {
     pub fn total_count(&self) -> usize {
         self.mention_recipients.len()
             + self.thread_reply_recipients.len()
+            + self.assignee_recipients.len()
             + self.doc_owner_recipient.iter().count()
     }
 }
@@ -272,10 +293,8 @@ impl CommentNotifContext {
         }
     }
 
-    pub fn build_document_comment_notif(
-        &self,
-    ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
-        let notification = CommentedOnDocumentMetadata {
+    fn commented_on_document_metadata(&self) -> CommentedOnDocumentMetadata {
+        CommentedOnDocumentMetadata {
             document_name: self.document_name.clone(),
             owner: self.owner.clone(),
             file_type: self.file_type.clone(),
@@ -283,14 +302,30 @@ impl CommentNotifContext {
             thread_id: self.thread_id,
             text: self.text.clone(),
             sender_profile_picture_url: self.sender_profile_picture_url.clone(),
-        };
+        }
+    }
 
+    pub fn build_task_assignee_comment_notif(
+        &self,
+        assignee_ids: HashSet<MacroUserIdStr<'static>>,
+    ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
+            notification: self.commented_on_document_metadata(),
+            sender_id: self.sender_id.clone(),
+            recipient_ids: assignee_ids,
+        }
+    }
+
+    pub fn build_document_comment_notif(
+        &self,
+    ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
         let mut recipient_ids = HashSet::new();
         recipient_ids.insert(self.owner.clone());
 
         SendNotificationRequestBuilder {
             notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
-            notification,
+            notification: self.commented_on_document_metadata(),
             sender_id: self.sender_id.clone(),
             recipient_ids,
         }

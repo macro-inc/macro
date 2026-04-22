@@ -54,7 +54,9 @@ import {
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import PhoneCallIcon from '@icon/duotone/phone-call-duotone.svg';
+import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import BellIcon from '@icon/regular/bell.svg';
+import { useNotificationSettings } from '@notifications';
 
 interface SidebarItem {
   id: ListView;
@@ -353,7 +355,7 @@ const CALLS_LINK: SidebarItem = {
   id: 'calls',
   label: 'Calls',
   href: LIST_VIEW_PATHS.calls,
-  icon: PhoneCallIcon,
+  icon: AnimatedCallIcon,
   hotkey: 'l',
 };
 
@@ -361,6 +363,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
+  const notificationSettings = useNotificationSettings();
+
+  const showEnableNotifications = () =>
+    notificationSettings.isSupported && notificationSettings.canPrompt();
+
+  const handleEnableNotifications = async () => {
+    if (!notificationSettings.isSupported) return;
+    try {
+      await notificationSettings.toggle(true);
+    } catch (error) {
+      console.error('Failed to enable notifications:', error);
+    }
+  };
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
@@ -516,6 +531,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class=" w-full px-2 flex flex-col">
+        <Show when={showEnableNotifications()}>
+          <SidebarActionButton
+            label="Enable Notifications"
+            isSlim={isSlim}
+            onClick={handleEnableNotifications}
+            icon={() => <BellIcon class="size-4" />}
+          />
+        </Show>
+
         <SidebarActionButton
           label="Invite"
           isSlim={isSlim}

@@ -53,7 +53,7 @@ pub async fn get_call_access(
             UNION ALL
             -- Source 2: items share permission
             SELECT
-                "publicAccessLevel" as "access_level!"
+                "publicAccessLevel"::text AS access_level
             FROM "SharePermission"
             WHERE id in (
                 SELECT share_permission_id
@@ -67,7 +67,7 @@ pub async fn get_call_access(
             )
             AND "isPublic" = true
             AND "publicAccessLevel" IS NOT NULL
-        )
+        ) AS combined_access
         "#,
         call_id,
         &source_ids.0,

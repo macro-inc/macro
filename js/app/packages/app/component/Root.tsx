@@ -37,6 +37,7 @@ import {
 import { prefetchHistory } from '@queries/history/history';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
+import { MutationUndoProvider } from '@queries/undo';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
@@ -436,32 +437,34 @@ export function Root() {
                 <QuerySyncProviderWithUserId />
                 <UserInfoSideEffects />
                 <ConfiguredGlobalAppStateProvider>
-                  <ChannelsContextProvider>
-                    <QuickAccessProvider>
-                      <SearchProvider>
-                        <ChatAttachmentsInit />
-                        <ReactiveFavicon />
-                        <Title>{tabTitle()}</Title>
-                        <MacroJump />
-                        <Visor />
-                        <Suspense>
-                          <IsomorphicRouter
-                            transformUrl={transformShortIdInUrlPathname}
-                            root={Layout}
-                            rootPreload={rootPreload}
-                            base={ROUTER_BASE}
-                          >
-                            {{
-                              path: '/',
-                              component: TauriRouteListener,
-                              children: ROUTES,
-                            }}
-                          </IsomorphicRouter>
-                        </Suspense>
-                        <ToastRegion />
-                      </SearchProvider>
-                    </QuickAccessProvider>
-                  </ChannelsContextProvider>
+                  <MutationUndoProvider>
+                    <ChannelsContextProvider>
+                      <QuickAccessProvider>
+                        <SearchProvider>
+                          <ChatAttachmentsInit />
+                          <ReactiveFavicon />
+                          <Title>{tabTitle()}</Title>
+                          <MacroJump />
+                          <Visor />
+                          <Suspense>
+                            <IsomorphicRouter
+                              transformUrl={transformShortIdInUrlPathname}
+                              root={Layout}
+                              rootPreload={rootPreload}
+                              base={ROUTER_BASE}
+                            >
+                              {{
+                                path: '/',
+                                component: TauriRouteListener,
+                                children: ROUTES,
+                              }}
+                            </IsomorphicRouter>
+                          </Suspense>
+                          <ToastRegion />
+                        </SearchProvider>
+                      </QuickAccessProvider>
+                    </ChannelsContextProvider>
+                  </MutationUndoProvider>
                 </ConfiguredGlobalAppStateProvider>
               </UserContextProvider>
             </EntityProvider>

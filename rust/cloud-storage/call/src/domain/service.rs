@@ -4,7 +4,7 @@
 mod test;
 
 use connection::domain::ports::ConnectionService;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -616,7 +616,7 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn get_call_record(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<CallRecord, CallError> {
         let entity = receipt.entity();
         if entity.entity_type != EntityType::Call {
@@ -660,7 +660,7 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn delete_call_record(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<(), CallError> {
         let entity = receipt.entity();
         if entity.entity_type != EntityType::Call {
@@ -719,7 +719,7 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn edit_call_record(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
         request: EditCallRecordRequest,
     ) -> Result<(), CallError> {
         let entity = receipt.entity();
@@ -742,7 +742,7 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn toggle_share_with_team(
         &self,
-        receipt: EntityAccessReceipt<MemberParticipantRole>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<bool, CallError> {
         let entity = receipt.entity();
         if entity.entity_type != EntityType::Call {

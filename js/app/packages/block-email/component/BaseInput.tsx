@@ -1510,7 +1510,7 @@ export function BaseInput(props: {
               scheduleDraftSave();
             }}
             onUserMention={handleUserMention}
-            portalScope="local"
+            portalScope="split"
             formatState={formatState}
             setFormatState={setFormatState}
             domRef={props.markdownDomRef}

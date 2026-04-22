@@ -6,11 +6,13 @@ use crate::domain::{
     ports::SystemQuery,
 };
 
+/// Queries the running Tauri app for version, architecture, and OS target.
 pub struct SystemInfo<R: Runtime> {
     app_handle: tauri::AppHandle<R>,
 }
 
 impl<R: Runtime> SystemInfo<R> {
+    /// Create a new system info query bound to the given app handle.
     pub fn new(app_handle: tauri::AppHandle<R>) -> Self {
         Self { app_handle }
     }
@@ -26,7 +28,18 @@ impl<R: Runtime> SystemInfo<R> {
         }
     }
 
-    fn get_version(&self) -> Version {
+    async fn get_version(&self) -> Version {
+        // If an OTA update has been applied, read the version from semver.txt
+        // in the bundle root so the server can compare build metadata accurately.
+        if let Some(s) = self
+            .app_handle
+            .try_state::<tokio::sync::Mutex<crate::inbound::plugin::PluginService>>()
+        {
+            let service = s.lock().await;
+            if let Some(v) = service.bundle_version().await {
+                return v;
+            }
+        }
         self.app_handle.package_info().version.clone()
     }
 
@@ -44,7 +57,7 @@ impl<R: Runtime> SystemInfo<R> {
 impl<R: Runtime> SystemQuery for SystemInfo<R> {
     async fn get_system_info(&self) -> Result<AppInfo, rootcause::Report> {
         Ok(AppInfo {
-            current_version: self.get_version(),
+            current_version: self.get_version().await,
             arch: self.get_arch(),
             target: self.get_target(),
         })

@@ -11,7 +11,7 @@ import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-import { isSettingsPanelOpen } from '@core/signal/layout';
+
 import {
   type Accessor,
   createMemo,
@@ -713,7 +713,7 @@ export function createSplitLayout(
   }
 
   function spotlightSplit(id: SplitId) {
-    if (state.splits.length <= 1 && !isSettingsPanelOpen()) {
+    if (state.splits.length <= 1) {
       return;
     }
     const split = findSplitById(id);

@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::{
     models::{
-        CountedReaction, MessageAttachment, MessagePageDirection, ThreadData, ThreadReplyRow,
-        TopLevelMessageRow,
+        ChannelMessageFilters, CountedReaction, MessageAttachment, MessagePageDirection,
+        ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{MockChannelMessagesRepo, TopLevelMessagesQueryResult},
 };
@@ -26,7 +26,7 @@ fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
 fn empty_repo() -> MockChannelMessagesRepo {
     let mut repo = MockChannelMessagesRepo::new();
     repo.expect_get_top_level_messages()
-        .returning(|_, _, _, _| {
+        .returning(|_, _, _, _, _| {
             Box::pin(async {
                 Ok(TopLevelMessagesQueryResult {
                     rows: vec![],
@@ -62,6 +62,7 @@ async fn returns_empty_page_for_no_messages() {
             Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &ChannelMessageFilters::default(),
         )
         .await
         .unwrap();
@@ -92,7 +93,7 @@ async fn returns_messages_with_thread_info() {
 
     let row_clone = row.clone();
     repo.expect_get_top_level_messages()
-        .returning(move |_, _, _, _| {
+        .returning(move |_, _, _, _, _| {
             let r = row_clone.clone();
             Box::pin(async move {
                 Ok(TopLevelMessagesQueryResult {
@@ -149,6 +150,7 @@ async fn returns_messages_with_thread_info() {
             Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             50,
+            &ChannelMessageFilters::default(),
         )
         .await
         .unwrap();
@@ -167,8 +169,8 @@ async fn returns_messages_with_thread_info() {
 async fn clamps_limit() {
     let mut repo = MockChannelMessagesRepo::new();
     repo.expect_get_top_level_messages()
-        .withf(|_, _, _, limit| *limit == 100)
-        .returning(|_, _, _, _| {
+        .withf(|_, _, _, limit, _| *limit == 100)
+        .returning(|_, _, _, _, _| {
             Box::pin(async {
                 Ok(TopLevelMessagesQueryResult {
                     rows: vec![],
@@ -190,6 +192,7 @@ async fn clamps_limit() {
             Query::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             200,
+            &ChannelMessageFilters::default(),
         )
         .await
         .unwrap();

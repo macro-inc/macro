@@ -71,7 +71,7 @@ export const SoupFiltersBar = () => {
     <Switch>
       <Match when={isComponentListView('search')}>
         <div class="w-full flex flex-col gap-2 p-2 border-b border-edge-muted/50">
-          <SoupSearchbar autoFocus />
+          <SoupSearchbar autoFocus placeholder="Search, @mention contacts" />
           <div class="flex items-start gap-2">
             <UnifiedFilterDropdown />
             <ActiveFilterChips
