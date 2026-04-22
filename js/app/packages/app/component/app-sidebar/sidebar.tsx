@@ -1,5 +1,59 @@
-import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
+import { useAnalytics } from '@app/component/analytics-context';
+import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
+import {
+  InviteModal,
+  setInviteModalOpen,
+} from '@app/component/app-sidebar/invite-modal';
+import { CommandState } from '@app/component/command';
+import {
+  devStatusBarOpen,
+  gitBranch,
+  setDevStatusBarOpen,
+} from '@app/component/DevStatusBar';
+import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import {
+  LIST_VIEW_ID,
+  LIST_VIEW_PATHS,
+  type ListView,
+} from '@app/constants/list-views';
+import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { Hotkey } from '@core/component/Hotkey';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { clearPressedKeys } from '@core/hotkey/state';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { activateClosestDOMScope } from '@core/hotkey/utils';
+import BellIcon from '@icon/regular/bell.svg';
+import TerminalIcon from '@icon/regular/terminal.svg';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
+import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
+import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
+import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
+import { useNotificationSettings } from '@notifications';
+import { debounce } from '@solid-primitives/scheduled';
+import { useLocation } from '@solidjs/router';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   type Component,
   createMemo,
@@ -9,62 +63,6 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
-import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
-import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { useLocation } from '@solidjs/router';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import {
-  LIST_VIEW_ID,
-  LIST_VIEW_PATHS,
-  type ListView,
-} from '@app/constants/list-views';
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
-import { CommandState } from '@app/component/command';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { useSettingsState } from '@core/constant/SettingsState';
-import type { ValidHotkey } from '@core/hotkey/types';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { debounce } from '@solid-primitives/scheduled';
-import { Hotkey } from '@core/component/Hotkey';
-import { clearPressedKeys } from '@core/hotkey/state';
-import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { ContextMenu } from '@kobalte/core/context-menu';
-import { useAnalytics } from '@app/component/analytics-context';
-import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
-import {
-  InviteModal,
-  setInviteModalOpen,
-} from '@app/component/app-sidebar/invite-modal';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
-import BellIcon from '@icon/regular/bell.svg';
-import GitBranchIcon from '@icon/regular/git-branch.svg';
-import { useNotificationSettings } from '@notifications';
-
-const [gitBranch, setGitBranch] = createSignal<string>(
-  import.meta.env.__GIT_BRANCH__ ?? ''
-);
-if (import.meta.env.DEV && import.meta.hot) {
-  import.meta.hot.on('git-branch:update', (data: string) => setGitBranch(data));
-}
 
 interface SidebarItem {
   id: ListView;
@@ -583,13 +581,17 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <Show when={import.meta.env.DEV && gitBranch()}>
           {(branch) => (
             <Button
-              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1 min-w-0"
+              class={cn(
+                'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1 min-w-0',
+                devStatusBarOpen() && 'bg-ink/10 text-ink'
+              )}
               variant="ghost"
               tooltipPlacement="right"
-              tooltip={branch()}
+              tooltip={`Toggle Dev Toolbar: ${branch()}`}
+              onClick={() => setDevStatusBarOpen((v) => !v)}
             >
               <div class="size-4 shrink-0">
-                <GitBranchIcon class="size-4" />
+                <TerminalIcon class="size-4" />
               </div>
               <span class="truncate min-w-0 group-data-[slim=true]/sidebar:invisible">
                 {branch()}
