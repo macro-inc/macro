@@ -3,6 +3,7 @@ import { useSearchParams } from '@solidjs/router';
 import AppStoreQr from '@macro-icons/app-store.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
+import { ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 
 function LaunchContent(props: LessonContentProps) {
   const analytics = useAnalytics();
@@ -21,9 +22,15 @@ function LaunchContent(props: LessonContentProps) {
 
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
-      <p>You're all set!</p>
-      <p>Before you dive in, you can also install our mobile iOS app.</p>
-      <p>This QR code is always accessible from the settings panel.</p>
+      {ENABLE_APP_STORE_QR_CODE ? (
+        <>
+          <p>You're all set!</p>
+          <p>Before you dive in, you can also install our mobile iOS app.</p>
+          <p>This QR code is always accessible from the settings panel.</p>
+        </>
+      ) : (
+        <p>You're all set! Let's dive in.</p>
+      )}
     </div>
   );
 }
@@ -43,7 +50,6 @@ export const launchLesson: LessonDefinition = {
   id: 'launch',
   title: 'Welcome to Macro',
   content: LaunchContent,
-  demo: LaunchDemo,
-  centeredButton: true,
+  ...(ENABLE_APP_STORE_QR_CODE && { demo: LaunchDemo, centeredButton: true }),
   order: 100,
 };

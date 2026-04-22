@@ -24,7 +24,6 @@
     "esbuild"
   ],
   "patchedDependencies": {
-    "@orval/zod@7.1.1": "app/patches/@orval%2Fzod@7.1.1.patch",
     "solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
     "@thisbeyond/solid-dnd@0.7.5": "app/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
     "@lexical/markdown@0.32.1": "app/patches/@lexical%2Fmarkdown@0.32.1.patch",
