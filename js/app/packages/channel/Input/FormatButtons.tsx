@@ -6,6 +6,7 @@ import ListChecksIcon from '@icon/regular/list-checks.svg';
 import ListNumbersIcon from '@icon/regular/list-numbers.svg';
 import TextItalicIcon from '@icon/regular/text-italic.svg';
 import TextStrikethroughIcon from '@icon/regular/text-strikethrough.svg';
+import TextQuoteIcon from '@icon/regular/quotes.svg';
 import type {
   NodeTransformType,
   SelectionData,
@@ -17,6 +18,7 @@ type FormatButtonsProps = {
   selectionState: Accessor<SelectionData | undefined>;
   onInlineFormat: (format: TextFormatType) => void;
   onNodeFormat: (format: NodeTransformType) => void;
+  includeQuote?: boolean;
 };
 
 export function FormatButtons(props: FormatButtonsProps) {
@@ -72,6 +74,15 @@ export function FormatButtons(props: FormatButtonsProps) {
       >
         <ListChecksIcon class="size-5" />
       </RibbonButton>
+      {props.includeQuote && (
+        <RibbonButton
+          label="Blockquote"
+          active={props.selectionState()?.elementsInRange.has('quote')}
+          onClick={() => props.onNodeFormat('quote')}
+        >
+          <TextQuoteIcon class="size-5" />
+        </RibbonButton>
+      )}
     </>
   );
 }
