@@ -20,7 +20,7 @@ jobs:
         with:
           token: ${{ GITHUB.TOKEN }}
           diff: |
-            web-app: ./infra/stacks/web-app/* ./js/app/packages/* ./js/app/package.json
+            web-app: ./infra/stacks/web-app/** ./js/app/packages/** ./js/app/package.json ./js/package.json ./js/lexical-core/**
   deploy_web_app:
     needs: [check-to-deploy]
     if: ${{ needs.check-to-deploy.outputs.web-app == 'true' }}
@@ -38,4 +38,3 @@ jobs:
       DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
       SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-      NPMRC_GH_TOKEN: ${{ secrets.NPMRC_GH_TOKEN }}

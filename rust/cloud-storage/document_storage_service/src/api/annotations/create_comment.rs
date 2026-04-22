@@ -25,8 +25,11 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
+use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::NotificationIngress;
+use properties::PropertiesService as _;
 use sqlx::PgPool;
+use system_properties::SystemPropertyKey;
 
 use super::comment_error_response;
 
@@ -52,8 +55,10 @@ pub struct Params {
         )
     )]
 #[axum::debug_handler(state = ApiContext)]
+#[expect(clippy::too_many_arguments, reason = "axum handler extractors")]
 pub async fn create_comment_handler(
     State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
+    State(properties_service): State<Arc<crate::api::context::PropertiesService>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,
@@ -97,10 +102,29 @@ pub async fn create_comment_handler(
                     .map(|c| c.owner.clone())
                     .collect();
 
+                let task_assignee_ids: Vec<String> = match properties_service
+                    .get_system_property_value(
+                        &document_id,
+                        models_properties::EntityType::Task,
+                        SystemPropertyKey::Assignees,
+                    )
+                    .await
+                {
+                    Ok(Some(PropertyValue::EntityRef(refs))) => {
+                        refs.iter().map(|r| r.entity_id.clone()).collect()
+                    }
+                    Ok(_) => vec![],
+                    Err(e) => {
+                        tracing::error!(error = ?e, document_id = %document_id, "failed to fetch task assignees for comment notification");
+                        vec![]
+                    }
+                };
+
                 let recipients = compute_notification_recipients(
                     sender_id.as_ref(),
                     mentioned_user_ids,
                     &thread_comment_owners,
+                    &task_assignee_ids,
                     &document_context.owner,
                     is_reply,
                 );
@@ -147,7 +171,21 @@ pub async fn create_comment_handler(
                         .inspect_err(|e| tracing::error!(error =? e, "couldn't send thread reply notification"));
                 }
 
-                // 3. Document owner notification (lowest priority)
+                // 3. Task assignee notifications
+                if !recipients.assignee_recipients.is_empty() {
+                    let request = notif_ctx
+                        .build_task_assignee_comment_notif(recipients.assignee_recipients)
+                        .into_request()
+                        .with_apns()
+                        .with_conn_gateway();
+
+                    _ = notification_ingress_service
+                        .send_notification(request)
+                        .await
+                        .inspect_err(|e| tracing::error!(error =? e, "couldn't send task assignee comment notification"));
+                }
+
+                // 4. Document owner notification (lowest priority)
                 if recipients.doc_owner_recipient.is_some() {
                     let request = notif_ctx
                         .build_document_comment_notif()

@@ -18,7 +18,7 @@ import {
   type InputSnapshot,
 } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { getDestinationFromOptions } from '@core/component/NewMessage';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';

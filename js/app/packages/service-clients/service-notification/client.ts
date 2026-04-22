@@ -173,6 +173,16 @@ export const notificationServiceClient = {
       (result) => result
     );
   },
+  async bulkMarkNotificationAsUndone(args: NotificationBulkRequest) {
+    const { notificationIds } = args;
+    return mapOk(
+      await notificationFetch<any>(`/user_notifications/bulk/undone`, {
+        method: 'PATCH',
+        body: JSON.stringify({ notificationIds }),
+      }),
+      (result) => result
+    );
+  },
   async markNotificationEntityAsSeen(args: WithEventItemId) {
     const { event_item_id } = args;
     return mapOk(

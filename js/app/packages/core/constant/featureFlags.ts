@@ -310,11 +310,15 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   false
 );
 
+export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
+  'ENABLE_APP_STORE_QR_CODE',
+  DEV_MODE_ENV
+);
+
 export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
   'RAIL_CHAT_TASK_COMMENTS',
   DEV_MODE_ENV
 );
-
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
 const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 

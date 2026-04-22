@@ -19,6 +19,7 @@ import {
   isAccessiblePreviewItem,
   type AccessiblePreviewItem,
 } from '@queries/preview';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { matches } from '@core/util/match';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import Minimize from '@icon/regular/arrows-in.svg';
@@ -68,6 +69,7 @@ import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink } from '../core/BlockLink';
+import { ChannelMessageThreadCard } from './ChannelMessageThreadCard';
 
 false && floatWithElement;
 
@@ -99,6 +101,13 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     id: props.documentId,
     type: previewType(),
   }));
+
+  const channelMessageId = () => {
+    if (previewType() !== 'channel') return undefined;
+    const messageId = props.blockParams?.[CHANNEL_PARAMS.message];
+    const threadId = props.blockParams?.[CHANNEL_PARAMS.thread];
+    return threadId ? threadId : messageId;
+  };
 
   const [hasLoadedPreview, setHasLoadedPreview] = createSignal(false);
 
@@ -180,8 +189,6 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const blockOwner = useBlockOwner();
 
   createEffect(() => {
-    if (!editor) return;
-    if (!isPreviewable()) return;
     if (hasLoadedPreview()) return;
 
     if (props.previewComponent) {
@@ -190,44 +197,60 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       return;
     }
 
-    let nodeId = editor()?.read(() => {
+    const msgId = channelMessageId();
+    const shouldCreateBlockPreview = !msgId && isPreviewable();
+
+    if (!msgId && !shouldCreateBlockPreview) return;
+
+    const nodeId = editor()?.read(() => {
       const node = $getNodeByKey(props.key);
       if (!node) return;
       return $getId(node);
     });
-    if (!nodeId) {
-      console.error('Unable to find node id for document card');
+    if (!nodeId) return;
+
+    if (shouldCreateBlockPreview) {
+      const i = item();
+      if (!i || i.loading) return;
+
+      const preview = createBlockInstance(
+        resolveBlockAlias(verifyBlockName(props.blockName)),
+        i.id,
+        {
+          params: previewData(),
+          nested: { parentContext: previewContext() },
+        }
+      );
+      if (!preview) return;
+
+      const noDispose = runWithOwner(blockOwner, () => {
+        let disposeOnBlockUnmount: () => void = () => {};
+        onCleanup(() => disposeOnBlockUnmount());
+
+        return createRoot((dispose) => {
+          const element = createMemo(() => preview.element());
+          setDocumentCardPreviewComponent(nodeId, element, dispose);
+          disposeOnBlockUnmount = () => unsetDocumentCardPreviewCache(nodeId);
+          return element;
+        }, blockOwner);
+      });
+
+      setHasLoadedPreview(true);
+      setPreviewComponent(() => noDispose);
       return;
     }
-
-    const i = item();
-    if (!i || i.loading) {
-      return;
-    }
-    const documentId = i.id;
-
-    const preview = createBlockInstance(
-      resolveBlockAlias(verifyBlockName(props.blockName)),
-      documentId,
-      {
-        params: previewData(),
-        nested: {
-          parentContext: previewContext(),
-        },
-      }
-    );
 
     const noDispose = runWithOwner(blockOwner, () => {
       let disposeOnBlockUnmount: () => void = () => {};
-      onCleanup(() => {
-        disposeOnBlockUnmount();
-      });
+      onCleanup(() => disposeOnBlockUnmount());
 
       return createRoot((dispose) => {
-        if (!preview || !nodeId) return;
-
-        const element = createMemo(() => preview.element());
-
+        const element = createMemo(() =>
+          ChannelMessageThreadCard({
+            channelId: props.documentId,
+            messageId: msgId!,
+          })
+        );
         setDocumentCardPreviewComponent(nodeId, element, dispose);
         disposeOnBlockUnmount = () => unsetDocumentCardPreviewCache(nodeId);
         return element;
@@ -403,13 +426,15 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       contentEditable={false}
       class="relative my-2 rounded border border-edge-muted no-select-children select-none overflow-hidden flex flex-col"
       classList={{
-        'bg-active outline-edge outline-4': isSelectedAsNode(),
+        'bg-active outline-edge outline-4':
+          isSelectedAsNode() && !channelMessageId(),
         'resize-y shrink-0 min-h-[100px]': isPreviewable(),
       }}
       style={{
         height: isPreviewable() ? previewBoxHeight : 'auto',
       }}
       onClick={(e) => {
+        if (channelMessageId()) return;
         e.preventDefault();
         clickCardHandler();
       }}
@@ -425,12 +450,15 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
           {(item) => (
             <>
               <DocumentInfo item={item()} blockName={props.blockName} />
-              <Show when={isPreviewable()}>
-                <div class="relative grow overflow-y-scroll">
-                  <Show when={previewComponent()}>
+              <Show when={previewComponent()}>
+                <Show
+                  when={isPreviewable()}
+                  fallback={<Dynamic component={previewComponent()} />}
+                >
+                  <div class="relative grow overflow-y-scroll">
                     <Dynamic component={previewComponent()} />
-                  </Show>
-                </div>
+                  </div>
+                </Show>
               </Show>
             </>
           )}

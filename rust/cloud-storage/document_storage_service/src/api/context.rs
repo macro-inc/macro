@@ -84,7 +84,7 @@ type DssSoupState = SoupRouterState<
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
-type PropertiesService = PropertiesServiceImpl<
+pub(crate) type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
