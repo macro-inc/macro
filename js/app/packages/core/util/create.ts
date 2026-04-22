@@ -7,7 +7,13 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { invalidateUserQuota } from '@queries/auth';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import {
+  invalidateUserQuota,
+  type UserInfoData,
+  authKeys,
+} from '@queries/auth';
+import { queryClient } from '@queries/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
 import { staticFileClient } from '@service-static-files/client';
@@ -260,6 +266,18 @@ export async function createCanvasFileFromJsonString(args: {
 
 export async function createChat(args?: CreateChatRequest) {
   const { showPaywall } = usePaywallState();
+
+  if (!isNativeMobilePlatform()) {
+    const userInfo = queryClient.getQueryData<UserInfoData>(
+      authKeys.userInfo.queryKey
+    );
+    const status = userInfo?.licenseStatus;
+    if (status !== 'trialing' && status !== 'active') {
+      showPaywall(PaywallKey.CHAT_LIMIT);
+      return { error: 'Upgrade required.' };
+    }
+  }
+
   const maybeChat = await cognitionApiServiceClient.createChat(args ?? {});
 
   invalidateUserQuota();
