@@ -202,9 +202,14 @@ export function DispatchAgentButton() {
   });
 
   const executeAction = async (action: AgentAction) => {
-    const prompt = await buildPrompt();
-    action.execute(prompt);
-    setLastUsedKey(action.key);
+    try {
+      const prompt = await buildPrompt();
+      action.execute(prompt);
+      setLastUsedKey(action.key);
+    } catch (e) {
+      console.error('Failed to generate task prompt', e);
+      toast.failure('Failed to generate task prompt');
+    }
     setOpen(false);
   };
 

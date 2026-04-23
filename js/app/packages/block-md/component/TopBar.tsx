@@ -227,7 +227,7 @@ export function TopBar() {
       label: 'Dispatch to Agent',
       icon: TerminalWindowIcon,
       action: () => {},
-      condition: () => isTask,
+      condition: () => isTask && !isMobile(),
       buttonComponent: () => <DispatchAgentButton />,
     },
     {
