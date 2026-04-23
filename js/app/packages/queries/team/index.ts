@@ -4,6 +4,7 @@ export {
   useUserTeamsQuery,
   useTeamQuery,
   useCreateTeamMutation,
+  useCreateTeamWithInvitesMutation,
   usePatchTeamMutation,
   useDeleteTeamMutation,
   invalidateUserTeams,
