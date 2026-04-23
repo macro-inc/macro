@@ -17,7 +17,10 @@ const sizeClasses = {
 export const EmojiButton: Component<EmojiButtonProps> = (props) => {
   return (
     <span
-      class={cn('inline-flex items-center justify-center', sizeClasses[props.size ?? 'md'])}
+      class={cn(
+        'inline-flex items-center justify-center',
+        sizeClasses[props.size ?? 'md']
+      )}
     >
       {renderEmoji(props.emoji?.emoji)}
     </span>

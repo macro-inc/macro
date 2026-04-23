@@ -33,7 +33,10 @@ export function Overlay(props: ComponentProps<typeof Dialog.Overlay<'div'>>) {
   return (
     <Dialog.Overlay
       {...props}
-      class={cn('flex sm:max-h-full items-center justify-content z-modal-overlay fixed inset-0 bg-modal-overlay', props.class)}
+      class={cn(
+        'flex sm:max-h-full items-center justify-content z-modal-overlay fixed inset-0 bg-modal-overlay',
+        props.class
+      )}
       style={{
         'max-height': `calc(100dvh - env(safe-area-inset-top, 0px))`,
       }}
@@ -111,7 +114,10 @@ export function Header(props: ComponentProps<typeof Dialog.Label<'h2'>>) {
   return (
     <Dialog.Label
       {...props}
-      class={cn('text-ink text-lg font-semibold font-sans leading-7', props.class)}
+      class={cn(
+        'text-ink text-lg font-semibold font-sans leading-7',
+        props.class
+      )}
     >
       {props.children}
     </Dialog.Label>
@@ -122,7 +128,10 @@ export function Message(props: ComponentProps<typeof Dialog.Description<'p'>>) {
   return (
     <Dialog.Description
       {...props}
-      class={cn('text-ink-muted text-sm font-normal font-sans leading-tight', props.class)}
+      class={cn(
+        'text-ink-muted text-sm font-normal font-sans leading-tight',
+        props.class
+      )}
     >
       {props.children}
     </Dialog.Description>
@@ -133,7 +142,10 @@ export function ButtonBar(props: ComponentProps<'div'>) {
   return (
     <div
       {...props}
-      class={cn('pt-3 justify-start items-start self-end gap-3 inline-flex', props.class)}
+      class={cn(
+        'pt-3 justify-start items-start self-end gap-3 inline-flex',
+        props.class
+      )}
     >
       {props.children}
     </div>

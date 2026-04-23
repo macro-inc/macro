@@ -51,7 +51,10 @@ function MenuItem(props: {
 }) {
   return (
     <button
-      class={cn('text-start w-full rounded-sm text-xs p-1 px-2 hover:bg-hover hover-transition-bg items-center', props.selected && 'bg-active')}
+      class={cn(
+        'text-start w-full rounded-sm text-xs p-1 px-2 hover:bg-hover hover-transition-bg items-center',
+        props.selected && 'bg-active'
+      )}
       onClick={props.onClick}
       on:mouseover={() => props.setSelected(props.index)}
     >

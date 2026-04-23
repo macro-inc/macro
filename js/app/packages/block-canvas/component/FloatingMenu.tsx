@@ -116,7 +116,9 @@ export function SwatchColorPicker(props: {
 
   // SCUFFED THEMING TODO: we need to handle canvas color selection? this checks if we are in a darkish or lightish theme but that is janky?
   return (
-    <div class={cn('flex flex-wrap gap-1', isMobileWidth() ? 'w-20' : 'w-full')}>
+    <div
+      class={cn('flex flex-wrap gap-1', isMobileWidth() ? 'w-20' : 'w-full')}
+    >
       <For each={isMobileWidth() ? mobileColorOptions : colorOptions}>
         {(opt) => (
           <Swatch
@@ -180,7 +182,11 @@ function ReverseEdgeButton() {
   return (
     <Tooltip tooltip="Reverse connection">
       <button
-        class={cn(themeColors['base'], themeStyles['base'], 'h-6 w-6 flex border-0 rounded-md justify-center items-center')}
+        class={cn(
+          themeColors['base'],
+          themeStyles['base'],
+          'h-6 w-6 flex border-0 rounded-md justify-center items-center'
+        )}
         onClick={() => {
           edges.batchUpdate(
             () => {
@@ -471,13 +477,18 @@ export function FloatingMenu() {
 
   return (
     <div
-      class={cn('absolute flex flex-row top-4 z-5 cursor-auto', !isMobileWidth() && 'right-4')}
+      class={cn(
+        'absolute flex flex-row top-4 z-5 cursor-auto',
+        !isMobileWidth() && 'right-4'
+      )}
     >
       <div
         class={cn(
           'flex bg-menu rounded-lg shadow-lg ring ring-edge',
           isMobileWidth() ? 'flex-row p-2 mr-2' : 'flex-col w-54 p-3',
-          selectedNodes().length + selectedEdges().length <= 1 && validMenus().size === 0 && 'hidden'
+          selectedNodes().length + selectedEdges().length <= 1 &&
+            validMenus().size === 0 &&
+            'hidden'
         )}
         ref={ref}
         oncontextmenu={(e) => {
@@ -487,7 +498,14 @@ export function FloatingMenu() {
       >
         <Show when={validMenus().has('strokeColor')}>
           <div
-            class={cn('flex justify-center items-center', isMobileWidth() && (validMenus().has('strokeWidth') || validMenus().has('textSize') || selectedNodes().length + selectedEdges().length > 1) && 'mr-4')}
+            class={cn(
+              'flex justify-center items-center',
+              isMobileWidth() &&
+                (validMenus().has('strokeWidth') ||
+                  validMenus().has('textSize') ||
+                  selectedNodes().length + selectedEdges().length > 1) &&
+                'mr-4'
+            )}
           >
             <SwatchColorPicker
               onClick={(color) => applyUnfiedColor(color)}
@@ -645,7 +663,13 @@ export function FloatingMenu() {
             <Divider />
           </Show>
           <div
-            class={cn('flex', isMobileWidth() ? 'flex-row' : 'flex-col', isMobileWidth() && selectedNodes().length + selectedEdges().length > 1 && 'hidden')}
+            class={cn(
+              'flex',
+              isMobileWidth() ? 'flex-row' : 'flex-col',
+              isMobileWidth() &&
+                selectedNodes().length + selectedEdges().length > 1 &&
+                'hidden'
+            )}
           >
             <div class="flex flex-row">
               <Show when={validMenus().has('strokeWidth')}>
@@ -742,7 +766,12 @@ export function FloatingMenu() {
             <Show when={validMenus().has('textSize')}>
               <Divider />
               <div
-                class={cn(isMobileWidth() && (validMenus().has('strokeWidth') || validMenus().has('cornerRadius')) && 'ml-2')}
+                class={cn(
+                  isMobileWidth() &&
+                    (validMenus().has('strokeWidth') ||
+                      validMenus().has('cornerRadius')) &&
+                    'ml-2'
+                )}
               >
                 <SlidableNumberInput
                   label={'Font size'}

@@ -314,13 +314,19 @@ export default function MarkdownParseTestPage() {
               <h2 class="text-sm">Input</h2>
               <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
                 <button
-                  class={cn('px-2 py-0.5 text-xs border-r-1 border-edge', inputType() === 'markdown' && 'bg-accent text-panel')}
+                  class={cn(
+                    'px-2 py-0.5 text-xs border-r-1 border-edge',
+                    inputType() === 'markdown' && 'bg-accent text-panel'
+                  )}
                   onClick={() => setInputType('markdown')}
                 >
                   Markdown
                 </button>
                 <button
-                  class={cn('px-2 py-0.5 text-xs', inputType() === 'lexical-json' && 'bg-accent text-panel')}
+                  class={cn(
+                    'px-2 py-0.5 text-xs',
+                    inputType() === 'lexical-json' && 'bg-accent text-panel'
+                  )}
                   onClick={() => setInputType('lexical-json')}
                 >
                   Lexical JSON
@@ -349,13 +355,19 @@ export default function MarkdownParseTestPage() {
                 <span class="text-sm text-ink-extra-muted">Render as</span>
                 <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
                   <button
-                    class={cn('px-3 py-1 text-sm border-r-1 border-edge', outputType() === 'static' && 'bg-accent text-panel')}
+                    class={cn(
+                      'px-3 py-1 text-sm border-r-1 border-edge',
+                      outputType() === 'static' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setOutputType('static')}
                   >
                     Static
                   </button>
                   <button
-                    class={cn('px-3 py-1 text-sm', outputType() === 'editor' && 'bg-accent text-panel')}
+                    class={cn(
+                      'px-3 py-1 text-sm',
+                      outputType() === 'editor' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setOutputType('editor')}
                   >
                     Editor
@@ -367,19 +379,28 @@ export default function MarkdownParseTestPage() {
                 <span class="text-sm text-ink-extra-muted">Target</span>
                 <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
                   <button
-                    class={cn('px-3 py-1 text-sm border-r-1 border-edge', targetType() === 'internal' && 'bg-accent text-panel')}
+                    class={cn(
+                      'px-3 py-1 text-sm border-r-1 border-edge',
+                      targetType() === 'internal' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setTargetType('internal')}
                   >
                     Internal
                   </button>
                   <button
-                    class={cn('px-3 py-1 text-sm', targetType() === 'external' && 'bg-accent text-panel')}
+                    class={cn(
+                      'px-3 py-1 text-sm',
+                      targetType() === 'external' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setTargetType('external')}
                   >
                     External
                   </button>
                   <button
-                    class={cn('px-3 py-1 text-sm', targetType() === 'both' && 'bg-accent text-panel')}
+                    class={cn(
+                      'px-3 py-1 text-sm',
+                      targetType() === 'both' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setTargetType('both')}
                   >
                     Both

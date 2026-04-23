@@ -213,7 +213,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
       <div
         class={cn(
           'absolute pointer-events-auto overflow-visible bg-transparent',
-          horiz() ? 'bottom-0 left-0 right-0 h-[1px]' : 'right-0 top-0 bottom-0 w-[1px]',
+          horiz()
+            ? 'bottom-0 left-0 right-0 h-[1px]'
+            : 'right-0 top-0 bottom-0 w-[1px]',
           props.class
         )}
         onMouseEnter={() => setIsHovering(true)}

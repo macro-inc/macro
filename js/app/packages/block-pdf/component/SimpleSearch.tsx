@@ -148,7 +148,10 @@ export function SimpleSearch() {
       <div class="flex items-center justify-start rounded-md border border-edge floating-hover p-1 focus-within:floating-input focus-within:border-accent">
         <div class="px-2">
           <MagnifyingGlass
-            class={cn('size-4', isSearching() ? 'animate-pulse text-accent-ink' : 'text-ink')}
+            class={cn(
+              'size-4',
+              isSearching() ? 'animate-pulse text-accent-ink' : 'text-ink'
+            )}
           />
         </div>
         <input

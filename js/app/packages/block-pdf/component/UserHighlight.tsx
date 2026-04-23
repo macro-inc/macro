@@ -261,7 +261,10 @@ export function UserHighlight(props: VoidProps<IHighlightObj>) {
   return (
     <div
       ref={highlightRef}
-      class={cn('absolute', props.threadId ? 'z-placeable' : 'z-user-highlight')}
+      class={cn(
+        'absolute',
+        props.threadId ? 'z-placeable' : 'z-user-highlight'
+      )}
       style={{
         left: `${props.left}px`,
         top: `${props.top}px`,

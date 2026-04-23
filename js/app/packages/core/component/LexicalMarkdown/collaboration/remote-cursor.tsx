@@ -303,7 +303,9 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
 
                     return (
                       <div
-                        class={cn('m-0 text-transparent absolute top-0 -left-[.5px] pointer-events-none')}
+                        class={cn(
+                          'm-0 text-transparent absolute top-0 -left-[.5px] pointer-events-none'
+                        )}
                         id="remote-cursor"
                         style={{
                           ...rest,
@@ -317,7 +319,9 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
               </Portal>
               <Show when={shouldShow()}>
                 <div
-                  class={cn('m-0 text-transparent absolute pointer-events-none w-auto! p-2 flex items-center')}
+                  class={cn(
+                    'm-0 text-transparent absolute pointer-events-none w-auto! p-2 flex items-center'
+                  )}
                   style={{
                     ...startStyle,
                     top: `-${userTagHeight + 2}px`,

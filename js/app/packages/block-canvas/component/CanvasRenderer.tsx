@@ -289,7 +289,10 @@ export function CanvasRenderer() {
 
       <Show when={!isNestedBlock && canEdit()}>
         <div
-          class={cn('w-full absolute flex', isMobileWidth() && 'justify-center')}
+          class={cn(
+            'w-full absolute flex',
+            isMobileWidth() && 'justify-center'
+          )}
         >
           <FloatingMenu />
         </div>

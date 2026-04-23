@@ -303,7 +303,9 @@ export function FindAndReplace() {
               <MagnifyingGlass
                 class={cn(
                   'size-4',
-                  findAndReplaceStore.isSearching ? 'animate-pulse text-accent-ink' : 'text-ink'
+                  findAndReplaceStore.isSearching
+                    ? 'animate-pulse text-accent-ink'
+                    : 'text-ink'
                 )}
               />
             </div>

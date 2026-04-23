@@ -24,13 +24,14 @@ function ParticipantsSection(props: {
 }) {
   return (
     <div
-      class={cn('rounded-sm border border-edge-muted bg-menu py-3', props.class)}
+      class={cn(
+        'rounded-sm border border-edge-muted bg-menu py-3',
+        props.class
+      )}
     >
       <div class="px-3 pb-3 text-sm font-medium text-ink">{props.title}</div>
       <div class="border-b border-edge-muted" />
-      <div class={cn('px-3 pt-3', props.contentClass)}>
-        {props.children}
-      </div>
+      <div class={cn('px-3 pt-3', props.contentClass)}>{props.children}</div>
     </div>
   );
 }

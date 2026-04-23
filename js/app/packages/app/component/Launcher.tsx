@@ -716,7 +716,9 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             <span
               class={cn(
                 'px-1 py-0.5 rounded-sm h-fit ring text-xs grid place-items-center transition-colors duration-150',
-                shiftHeld() ? 'ring-accent text-accent bg-accent/10' : 'ring-edge-muted'
+                shiftHeld()
+                  ? 'ring-accent text-accent bg-accent/10'
+                  : 'ring-edge-muted'
               )}
             >
               <Hotkey shortcut="shift" />

@@ -166,7 +166,10 @@ export function ToolBar() {
     <ScopedPortal scope="block">
       <div class="absolute left-1/2 bottom-2 flex flex-row p-1 bg-menu border border-edge -translate-x-1/2">
         <div
-          class={cn('flex flex-row items-center space-x-2', canEdit() && 'border-r border-edge')}
+          class={cn(
+            'flex flex-row items-center space-x-2',
+            canEdit() && 'border-r border-edge'
+          )}
         >
           <DeprecatedIconButton
             tooltip={{

@@ -192,7 +192,10 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
               <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink-muted select-none text-sm">
                 <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
                 <p
-                  class={cn('ph-no-capture truncate my-auto', props.disabled && 'italic')}
+                  class={cn(
+                    'ph-no-capture truncate my-auto',
+                    props.disabled && 'italic'
+                  )}
                 >
                   {contactInfo}
                 </p>

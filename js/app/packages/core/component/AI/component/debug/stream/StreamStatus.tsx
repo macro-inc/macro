@@ -36,7 +36,10 @@ export function StreamStatus(props: Props) {
 function Dot(props: { active: boolean }) {
   return (
     <div
-      class={cn('w-3 h-3 rounded-full border border-edge', props.active && 'bg-accent')}
+      class={cn(
+        'w-3 h-3 rounded-full border border-edge',
+        props.active && 'bg-accent'
+      )}
     />
   );
 }

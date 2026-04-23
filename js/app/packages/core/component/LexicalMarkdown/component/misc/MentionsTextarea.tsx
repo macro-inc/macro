@@ -168,7 +168,10 @@ export function MentionsTextarea(props: MentionsTextareaProps) {
   return (
     <LexicalWrapperContext.Provider value={props.wrapper}>
       <div
-        class={cn('relative w-full h-full overflow-auto min-h-8 supress-css-brackets', props.class)}
+        class={cn(
+          'relative w-full h-full overflow-auto min-h-8 supress-css-brackets',
+          props.class
+        )}
         on:keydown={(e) => {
           e.stopPropagation();
         }}

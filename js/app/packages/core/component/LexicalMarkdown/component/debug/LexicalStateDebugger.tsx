@@ -115,7 +115,9 @@ function SelectionIndicator(props: {
   return (
     <span class={cn('flex space-x-1 px-1 items-center', props.class)}>
       <Show when={props.anchor}>
-        <div class={cn('h-2 w-2 rounded-full', selectionColors['anchor'])}></div>
+        <div
+          class={cn('h-2 w-2 rounded-full', selectionColors['anchor'])}
+        ></div>
       </Show>
       <Show when={props.focus}>
         <div class={cn('h-2 w-2 rounded-full', selectionColors['focus'])}></div>
@@ -264,7 +266,11 @@ function Selection(props: { selection?: SelectionRenderable; class?: string }) {
       when={props.selection}
       fallback={
         <div
-          class={cn('rounded-md border-edge', props.class, selectionColors['noSelection'])}
+          class={cn(
+            'rounded-md border-edge',
+            props.class,
+            selectionColors['noSelection']
+          )}
         >
           No Selection
         </div>
@@ -272,7 +278,11 @@ function Selection(props: { selection?: SelectionRenderable; class?: string }) {
     >
       {(selection) => (
         <div
-          class={cn('rounded-md border-edge', props.class, selectionColors[selection().type])}
+          class={cn(
+            'rounded-md border-edge',
+            props.class,
+            selectionColors[selection().type]
+          )}
         >
           {selection().type === 'rangeSelection'
             ? 'Range Selection'

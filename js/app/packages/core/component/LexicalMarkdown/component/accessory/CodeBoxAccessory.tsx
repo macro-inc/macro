@@ -406,7 +406,10 @@ export const StaticCodeBoxAccessory = (props: {
   return (
     <>
       <div
-        class={cn('md-code-box-header w-full flex absolute top-0 left-0 justify-between content-center items-center p-1 pointer-events-auto select-none', textColor())}
+        class={cn(
+          'md-code-box-header w-full flex absolute top-0 left-0 justify-between content-center items-center p-1 pointer-events-auto select-none',
+          textColor()
+        )}
         ref={ref}
       >
         <StaticLabel language={language()} />
@@ -416,12 +419,8 @@ export const StaticCodeBoxAccessory = (props: {
               <div class={cn('text-xs', textColor())}>Preview</div>
               <Switch checked={isPreviewMode()} onChange={setIsPreviewMode}>
                 <Switch.Input class="sr-only" />
-                <Switch.Control
-                  class="inline-flex h-4 w-8 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-[checked]:bg-accent"
-                >
-                  <Switch.Thumb
-                    class="block h-3 w-3 rounded-full transition-transform data-[checked]:translate-x-4 bg-dialog"
-                  />
+                <Switch.Control class="inline-flex h-4 w-8 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-[checked]:bg-accent">
+                  <Switch.Thumb class="block h-3 w-3 rounded-full transition-transform data-[checked]:translate-x-4 bg-dialog" />
                 </Switch.Control>
               </Switch>
             </div>

@@ -409,7 +409,10 @@ export function LocationHighlight(props: {
         {(style) => {
           return (
             <div
-              class={cn('absolute top-0 left-0 m-0 select-none pointer-events-none', props.class)}
+              class={cn(
+                'absolute top-0 left-0 m-0 select-none pointer-events-none',
+                props.class
+              )}
               style={style}
             />
           );

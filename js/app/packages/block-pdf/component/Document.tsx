@@ -664,7 +664,10 @@ export function Document() {
             setSize: setDocumentSize,
             setInitialized: setInitialized,
           }}
-          class={cn('w-full h-full relative outline-none', disableClick() && 'noClickParse')}
+          class={cn(
+            'w-full h-full relative outline-none',
+            disableClick() && 'noClickParse'
+          )}
           ref={(ref) => {
             mountRef = ref;
             setDocumentContainerRef(ref);

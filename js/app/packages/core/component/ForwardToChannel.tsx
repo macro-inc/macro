@@ -390,7 +390,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 <span
                   class={cn(
                     'text-xs mt-0.5',
-                    !canSendAsGroup() ? 'text-ink-disabled/50' : 'text-ink-muted'
+                    !canSendAsGroup()
+                      ? 'text-ink-disabled/50'
+                      : 'text-ink-muted'
                   )}
                 >
                   {sendAsGroupMessage() && canSendAsGroup()

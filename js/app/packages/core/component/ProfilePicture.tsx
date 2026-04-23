@@ -64,7 +64,10 @@ export function ProfilePicture(props: ProfilePictureProps) {
       when={profilePicUrl()}
       fallback={
         <div
-          class={cn('shrink-0 flex items-center justify-center', props.sizeClass.container)}
+          class={cn(
+            'shrink-0 flex items-center justify-center',
+            props.sizeClass.container
+          )}
           style={{
             'line-height': 0,
           }}
@@ -78,7 +81,10 @@ export function ProfilePicture(props: ProfilePictureProps) {
     >
       {(url) => (
         <div
-          class={cn('flex-shrink-0 overflow-hidden rounded-full', props.sizeClass.container)}
+          class={cn(
+            'flex-shrink-0 overflow-hidden rounded-full',
+            props.sizeClass.container
+          )}
         >
           <img
             src={url}

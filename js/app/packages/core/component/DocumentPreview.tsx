@@ -255,7 +255,8 @@ function MetadataInfo(props: {
         'mt-2',
         props.align === 'left' && 'w-fit max-w-[66%]',
         'text-ink-muted',
-        props.align === 'left' && 'overflow-hidden whitespace-nowrap text-ellipsis'
+        props.align === 'left' &&
+          'overflow-hidden whitespace-nowrap text-ellipsis'
       )}
     >
       <span class="relative text-[0.8em] text-ink-muted max-w-full flex items-center">

@@ -63,7 +63,11 @@ export function Equation(props: {
 
   return (
     <div
-      class={cn('inline-block', isSelectedAsNode() && 'bg-hover', props.key && 'hover:bg-hover')}
+      class={cn(
+        'inline-block',
+        isSelectedAsNode() && 'bg-hover',
+        props.key && 'hover:bg-hover'
+      )}
       role="button"
       tabIndex={-1}
       onDblClick={() => {

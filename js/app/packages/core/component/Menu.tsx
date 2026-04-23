@@ -306,7 +306,9 @@ export function MenuGroup(props: { children: JSX.Element; class?: string }) {
 
 export function GroupLabel(props: { children: JSX.Element }) {
   return (
-    <ContextMenu.GroupLabel class={cn(MENU_ITEM_CLASS, 'text-xs! text-ink-extra-muted')}>
+    <ContextMenu.GroupLabel
+      class={cn(MENU_ITEM_CLASS, 'text-xs! text-ink-extra-muted')}
+    >
       {props.children}
     </ContextMenu.GroupLabel>
   );
@@ -452,14 +454,14 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         when={props.submenu}
         fallback={
           <ContextMenu.Content
-              class={cn(
-                !props.overrideStyling && MENU_CONTENT_CLASS,
-                props.class,
-                props.width && menuWidths[props.width],
-                props.mobileFullScreen &&
-                  isMobile() &&
-                  'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
-              )}
+            class={cn(
+              !props.overrideStyling && MENU_CONTENT_CLASS,
+              props.class,
+              props.width && menuWidths[props.width],
+              props.mobileFullScreen &&
+                isMobile() &&
+                'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
+            )}
             onOpenAutoFocus={props.onOpenAutoFocus}
             ref={contentRef}
             onCloseAutoFocus={props.onCloseAutoFocus}
@@ -469,8 +471,12 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         }
       >
         <ContextMenu.SubContent
-            class={cn(MENU_CONTENT_CLASS, props.class, props.width && menuWidths[props.width])}
-          >
+          class={cn(
+            MENU_CONTENT_CLASS,
+            props.class,
+            props.width && menuWidths[props.width]
+          )}
+        >
           {props.children}
         </ContextMenu.SubContent>
       </Show>
@@ -486,17 +492,25 @@ export function DropdownMenuContent(props: ParentProps<MenuContentProps>) {
       when={props.submenu}
       fallback={
         <DropdownMenu.Content
-            class={cn(MENU_CONTENT_CLASS, local.class, local.width && menuWidths[local.width])}
-            {...rest}
-          >
-            {local.children}
-          </DropdownMenu.Content>
-        }
-      >
-        <DropdownMenu.SubContent
-          class={cn(MENU_CONTENT_CLASS, local.class, local.width && menuWidths[local.width])}
+          class={cn(
+            MENU_CONTENT_CLASS,
+            local.class,
+            local.width && menuWidths[local.width]
+          )}
           {...rest}
         >
+          {local.children}
+        </DropdownMenu.Content>
+      }
+    >
+      <DropdownMenu.SubContent
+        class={cn(
+          MENU_CONTENT_CLASS,
+          local.class,
+          local.width && menuWidths[local.width]
+        )}
+        {...rest}
+      >
         {local.children}
       </DropdownMenu.SubContent>
     </Show>

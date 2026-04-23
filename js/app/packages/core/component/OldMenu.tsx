@@ -144,7 +144,11 @@ export function OldMenuItem(props: OldMenuItemProps) {
           <div
             class={cn(
               'flex flex-row w-full gap-1.5 justify-start items-center font-medium',
-              props.textSize === 'base' ? 'text-base' : isMobile() ? 'text-base' : 'text-sm',
+              props.textSize === 'base'
+                ? 'text-base'
+                : isMobile()
+                  ? 'text-base'
+                  : 'text-sm',
               props.secondaryActionHandler && 'max-w-[calc(100%-18px)]'
             )}
           >
