@@ -96,7 +96,7 @@ impl CallRepository for PgCallRepo {
             owner: created_by.to_string(),
             channel_share_permissions: Some(vec![ChannelSharePermission {
                 channel_id: channel_id.to_string(),
-                access_level: AccessLevel::View,
+                access_level: AccessLevel::Edit,
             }]),
         };
 
@@ -126,7 +126,7 @@ impl CallRepository for PgCallRepo {
             "#,
             &share_permission.id,
             &channel_id.to_string(),
-            share_permission.channel_share_permissions.as_ref().unwrap()[0].access_level as _,
+            AccessLevel::Edit as _,
         )
         .execute(tx.as_mut())
         .await?;
@@ -148,7 +148,7 @@ impl CallRepository for PgCallRepo {
             entity_access_db_utils::EntityType::Call,
             &channel_id.to_string(),
             entity_access_db_utils::EntityAccessSourceType::Channel,
-            entity_access_db_utils::AccessLevel::View,
+            entity_access_db_utils::AccessLevel::Edit,
         )
         .await?;
 

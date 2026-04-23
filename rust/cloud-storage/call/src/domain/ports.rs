@@ -5,7 +5,7 @@
 use std::fmt::Debug;
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -333,13 +333,13 @@ pub trait CallService: Send + Sync + 'static {
     /// table are untouched. Idempotent.
     fn delete_call_record(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Edits a [`CallRecord`].
     fn edit_call_record(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
@@ -350,7 +350,7 @@ pub trait CallService: Send + Sync + 'static {
     /// Returns the new value.
     fn toggle_share_with_team(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<bool, CallError>> + Send;
 }
 
