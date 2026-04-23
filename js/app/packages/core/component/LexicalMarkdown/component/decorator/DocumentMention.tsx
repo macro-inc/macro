@@ -457,8 +457,9 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
               });
             },
           }}
+
           documentInfo={{
-            id: props.documentId,
+            id:  props.documentId,
             type: verifyBlockName(props.blockName),
             params: props.blockParams ?? {},
             isOpenable: currentBlockId !== props.documentId,

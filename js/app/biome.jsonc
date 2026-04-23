@@ -119,9 +119,14 @@
   },
   "overrides": [
     {
-      "includes": ["scripts/**", "packages/block-code/scripts/**"],
+      "includes": [
+        "scripts/**",
+        "packages/block-code/scripts/**"
+      ],
       "javascript": {
-        "globals": ["Bun"]
+        "globals": [
+          "Bun"
+        ]
       }
     },
     {
@@ -142,7 +147,9 @@
       }
     },
     {
-      "includes": ["packages/service-clients/**/generated/**"],
+      "includes": [
+        "packages/service-clients/**/generated/**"
+      ],
       "assist": {
         "actions": {
           "source": {
