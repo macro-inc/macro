@@ -99,7 +99,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
               },
             },
           ],
-          10_000,
+          3_000,
           true
         );
       };

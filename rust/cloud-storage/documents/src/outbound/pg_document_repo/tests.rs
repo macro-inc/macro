@@ -721,3 +721,155 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
         "Should still have exactly 1 channel row after idempotent upsert"
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("document_pdf_comments_and_highlights")
+    )
+)]
+async fn test_fetch_document_comments(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PgDocumentRepo::new(pool);
+
+    // Test fetching comments for document-with-comments (which has 3 threads and 7 comments)
+    let comment_threads = repo.get_document_comments("document-with-comments").await?;
+
+    // Verify we got all threads
+    assert_eq!(comment_threads.len(), 4);
+
+    // Map threads by ID for easier testing
+    let thread_map: std::collections::HashMap<i64, &crate::domain::models::CommentThread> =
+        comment_threads
+            .iter()
+            .map(|t| (t.thread.thread_id, t))
+            .collect();
+
+    // Check thread 1001 (unresolved with 3 comments)
+    let thread_1001 = thread_map.get(&1001).expect("Thread 1001 should exist");
+    assert_eq!(thread_1001.comments.len(), 3);
+    assert!(!thread_1001.thread.resolved);
+
+    // Check thread 1002 (resolved with 3 comments)
+    let thread_1002 = thread_map.get(&1002).expect("Thread 1002 should exist");
+    assert_eq!(thread_1002.comments.len(), 3);
+    assert!(thread_1002.thread.resolved);
+
+    // Check thread 1003 (unresolved with 1 comment)
+    let thread_1003 = thread_map.get(&1003).expect("Thread 1003 should exist");
+    assert_eq!(thread_1003.comments.len(), 1);
+    assert!(!thread_1003.thread.resolved);
+
+    // Check specific comment content for thread 1001
+    let first_comment = &thread_1001.comments[0];
+    assert_eq!(first_comment.text, "Initial question on page 1");
+    assert_eq!(first_comment.sender, Some("user@user.com".to_string()));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("document_pdf_comments_and_highlights")
+    )
+)]
+async fn test_fetch_document_comments_empty(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PgDocumentRepo::new(pool);
+
+    // This document ID doesn't exist in our fixture, so should return empty results
+    let comment_threads = repo.get_document_comments("non-existent-document").await?;
+
+    // Verify we got an empty list
+    assert_eq!(comment_threads.len(), 0);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("document_pdf_comments_and_highlights")
+    )
+)]
+async fn test_thread_deletion(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // First verify we have 2 threads in document-delete-test
+    let threads_before = repo.get_document_comments("document-delete-test").await?;
+    assert_eq!(threads_before.len(), 2);
+
+    // Now mark one thread as deleted
+    sqlx::query!(
+        r#"
+        UPDATE "Thread"
+        SET "deletedAt" = NOW()
+        WHERE "id" = 3001
+        "#
+    )
+    .execute(&pool)
+    .await?;
+
+    // Fetch comments again - deleted threads should be filtered out
+    let threads_after = repo.get_document_comments("document-delete-test").await?;
+
+    // Verify only one thread remains and it's the correct one
+    assert_eq!(threads_after.len(), 1);
+    assert_eq!(threads_after[0].thread.thread_id, 3002);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("document_pdf_comments_and_highlights")
+    )
+)]
+async fn test_comment_deletion(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // First verify thread 1001 has 3 comments
+    let threads_before = repo.get_document_comments("document-with-comments").await?;
+    let thread_1001_before = threads_before
+        .iter()
+        .find(|t| t.thread.thread_id == 1001)
+        .expect("Thread 1001 should exist");
+    assert_eq!(thread_1001_before.comments.len(), 3);
+
+    // Now mark one comment as deleted
+    sqlx::query!(
+        r#"
+        UPDATE "Comment"
+        SET "deletedAt" = NOW()
+        WHERE "id" = 10001
+        "#
+    )
+    .execute(&pool)
+    .await?;
+
+    // Fetch comments again - deleted comments should be filtered out
+    let threads_after = repo.get_document_comments("document-with-comments").await?;
+    let thread_1001_after = threads_after
+        .iter()
+        .find(|t| t.thread.thread_id == 1001)
+        .expect("Thread 1001 should exist");
+
+    // Verify one comment was filtered out
+    assert_eq!(thread_1001_after.comments.len(), 2);
+
+    // Verify the remaining comments are the ones we expect
+    let comment_ids: Vec<i64> = thread_1001_after
+        .comments
+        .iter()
+        .map(|c| c.comment_id)
+        .collect();
+    assert!(comment_ids.contains(&10002));
+    assert!(comment_ids.contains(&10003));
+    assert!(!comment_ids.contains(&10001));
+
+    Ok(())
+}

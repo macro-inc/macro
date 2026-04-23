@@ -1,5 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { RoundPanel } from '@core/component/RoundPanel';
 import { toast } from '@core/component/Toast/Toast';
 import { isOk } from '@core/util/maybeResult';
 import IconCheck from '@icon/regular/check.svg';
@@ -80,7 +80,7 @@ export function UserTooltip(props: UserTooltipProps) {
     'px-3 text-xs w-full justify-start hover:bg-hover/20 rounded-xs';
 
   return (
-    <ClippedPanel active>
+    <RoundPanel active>
       <div class="bg-panel text-ink box-border border-accent overflow-hidden max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted pointer-events-none">
@@ -154,6 +154,6 @@ export function UserTooltip(props: UserTooltipProps) {
           </div>
         </Show>
       </div>
-    </ClippedPanel>
+    </RoundPanel>
   );
 }
