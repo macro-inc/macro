@@ -1,22 +1,30 @@
 export { teamKeys } from './keys';
+
 export {
   useUserTeamsQuery,
-  useUserInvitesQuery,
   useTeamQuery,
-  useTeamInvitesQuery,
-  invalidateUserTeams,
-  invalidateUserInvites,
-  invalidateTeam,
-  invalidateTeamInvites,
-} from './queries';
-export {
   useCreateTeamMutation,
-  useJoinTeamMutation,
-  useRejectInvitationMutation,
   usePatchTeamMutation,
-  usePatchTeamUserTierMutation,
+  useDeleteTeamMutation,
+  invalidateUserTeams,
+  invalidateTeam,
+} from './teams';
+
+export {
+  useTeamInvitesQuery,
   useInviteToTeamMutation,
   useDeleteTeamInviteMutation,
+  invalidateTeamInvites,
+} from './invites';
+
+export {
+  useUserInvitesQuery,
+  useJoinTeamMutation,
+  useRejectInvitationMutation,
+  invalidateUserInvites,
+} from './invitations';
+
+export {
+  usePatchTeamUserTierMutation,
   useRemoveUserFromTeamMutation,
-  useDeleteTeamMutation,
-} from './mutations';
+} from './members';
