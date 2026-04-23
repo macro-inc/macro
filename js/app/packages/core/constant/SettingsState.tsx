@@ -17,7 +17,7 @@ export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
 
 export const useSettingsState = () => {
-  const { replaceSplit, insertSplit } = useSplitLayout();
+  const { insertSplit } = useSplitLayout();
 
   const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
