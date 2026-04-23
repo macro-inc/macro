@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
+import { internalDrag } from '@core/directive/internalDragState';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { idToEmail } from '@core/user';
 import { createStaticFile } from '@core/util/create';
@@ -80,6 +81,7 @@ export function ProfilePicture(props: ProfilePictureProps) {
           <img
             src={url}
             class="object-cover rounded-full w-full h-full origin-[50%_20%]"
+            use:internalDrag={true}
           />
         </div>
       )}

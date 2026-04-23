@@ -1,3 +1,4 @@
+import { internalDrag } from '@core/directive/internalDragState';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { maybeThrow } from '@core/util/maybeResult';
@@ -212,9 +213,7 @@ export function ImagePreview(props: ImagePreviewProps) {
               }}
               draggable={!isTouchDevice()}
               onLoad={() => setLoaded(true)}
-              onDragStart={(e) => {
-                e.dataTransfer?.setData('application/x-macro-internal', '1');
-              }}
+              use:internalDrag={true}
             />
           </Show>
         </Dialog.Trigger>

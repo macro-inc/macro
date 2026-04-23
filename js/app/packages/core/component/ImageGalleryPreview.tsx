@@ -1,3 +1,4 @@
+import { internalDrag } from '@core/directive/internalDragState';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
@@ -213,12 +214,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                           }}
                           draggable={!isTouchDevice()}
                           onLoad={() => setLoaded(true)}
-                          onDragStart={(e) => {
-                            e.dataTransfer?.setData(
-                              'application/x-macro-internal',
-                              '1'
-                            );
-                          }}
+                          use:internalDrag={true}
                         />
                       </>
                     );
