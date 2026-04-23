@@ -6,9 +6,10 @@ import XIcon from '@icon/regular/x.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import EditableField from '@core/component/EditableField';
-import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
+import { Dialog } from '@kobalte/core/dialog';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
 import { useDisplayName, tryMacroId } from '@core/user';
@@ -370,98 +371,140 @@ export function Team() {
         </Show>
       </div>
 
-      <Modal open={showLeaveModal()} onOpenChange={setShowLeaveModal}>
-        <Overlay />
-        <Content>
-          <Header>Leave Team</Header>
-          <Message>
-            Are you sure you want to leave {team()?.name}? You will lose access to team resources.
-          </Message>
-          <ButtonBar>
-            <Button variant="secondary" onClick={() => setShowLeaveModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleLeaveTeam}>
-              Leave
-            </Button>
-          </ButtonBar>
-        </Content>
-      </Modal>
+      <Dialog open={showLeaveModal()} onOpenChange={setShowLeaveModal}>
+        <Dialog.Portal>
+          <DialogWrapper>
+            <div class="flex flex-col text-ink">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                  <XIcon />
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+                  Leave Team
+                </Dialog.Title>
+              </div>
+              <div class="p-3 flex flex-col gap-3">
+                <p>Are you sure you want to leave {team()?.name}? You will lose access to team resources.</p>
+                <div class="flex justify-end gap-1 pt-2">
+                  <Button variant="ghost" class="rounded-xs" onClick={() => setShowLeaveModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" class="rounded-xs" onClick={handleLeaveTeam}>
+                    Leave
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogWrapper>
+        </Dialog.Portal>
+      </Dialog>
 
-      <Modal open={!!showRemoveModal()} onOpenChange={() => setShowRemoveModal(null)}>
-        <Overlay />
-        <Content>
-          <Header>Remove Member</Header>
-          <Message>
-            Are you sure you want to remove this member from the team?
-          </Message>
-          <ButtonBar>
-            <Button variant="secondary" onClick={() => setShowRemoveModal(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                const memberId = showRemoveModal();
-                if (memberId) handleRemoveMember(memberId);
-              }}
-            >
-              Remove
-            </Button>
-          </ButtonBar>
-        </Content>
-      </Modal>
+      <Dialog open={!!showRemoveModal()} onOpenChange={() => setShowRemoveModal(null)}>
+        <Dialog.Portal>
+          <DialogWrapper>
+            <div class="flex flex-col text-ink">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                  <XIcon />
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+                  Remove Member
+                </Dialog.Title>
+              </div>
+              <div class="p-3 flex flex-col gap-3">
+                <p>Are you sure you want to remove this member from the team?</p>
+                <div class="flex justify-end gap-1 pt-2">
+                  <Button variant="ghost" class="rounded-xs" onClick={() => setShowRemoveModal(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    class="rounded-xs"
+                    onClick={() => {
+                      const memberId = showRemoveModal();
+                      if (memberId) handleRemoveMember(memberId);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogWrapper>
+        </Dialog.Portal>
+      </Dialog>
 
-      <Modal open={!!showCancelInviteModal()} onOpenChange={() => setShowCancelInviteModal(null)}>
-        <Overlay />
-        <Content>
-          <Header>Cancel Invitation</Header>
-          <Message>
-            Are you sure you want to cancel this invitation?
-          </Message>
-          <ButtonBar>
-            <Button variant="secondary" onClick={() => setShowCancelInviteModal(null)}>
-              Keep
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                const inviteId = showCancelInviteModal();
-                if (inviteId) handleCancelInvite(inviteId);
-              }}
-            >
-              Cancel Invite
-            </Button>
-          </ButtonBar>
-        </Content>
-      </Modal>
+      <Dialog open={!!showCancelInviteModal()} onOpenChange={() => setShowCancelInviteModal(null)}>
+        <Dialog.Portal>
+          <DialogWrapper>
+            <div class="flex flex-col text-ink">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                  <XIcon />
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+                  Cancel Invitation
+                </Dialog.Title>
+              </div>
+              <div class="p-3 flex flex-col gap-3">
+                <p>Are you sure you want to cancel this invitation?</p>
+                <div class="flex justify-end gap-1 pt-2">
+                  <Button variant="ghost" class="rounded-xs" onClick={() => setShowCancelInviteModal(null)}>
+                    Keep
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    class="rounded-xs"
+                    onClick={() => {
+                      const inviteId = showCancelInviteModal();
+                      if (inviteId) handleCancelInvite(inviteId);
+                    }}
+                  >
+                    Cancel Invite
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogWrapper>
+        </Dialog.Portal>
+      </Dialog>
 
-      <Modal open={showInviteModal()} onOpenChange={setShowInviteModal}>
-        <Overlay />
-        <Content>
-          <Header>Invite to Team</Header>
-          <Message>
-            <input
-              type="email"
-              placeholder="Email address"
-              value={inviteEmail()}
-              onInput={(e) => setInviteEmail(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleInvite();
-              }}
-              class="w-full px-3 py-2 border border-edge rounded-md bg-panel text-ink text-sm"
-            />
-          </Message>
-          <ButtonBar>
-            <Button variant="secondary" onClick={() => setShowInviteModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="accent" onClick={handleInvite}>
-              Send Invite
-            </Button>
-          </ButtonBar>
-        </Content>
-      </Modal>
+      <Dialog open={showInviteModal()} onOpenChange={setShowInviteModal}>
+        <Dialog.Portal>
+          <DialogWrapper>
+            <div class="flex flex-col text-ink">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                  <XIcon />
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+                  Invite to Team
+                </Dialog.Title>
+              </div>
+              <div class="p-3 flex flex-col gap-3">
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  value={inviteEmail()}
+                  onInput={(e) => setInviteEmail(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleInvite();
+                  }}
+                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+                />
+                <div class="flex justify-end gap-1 pt-2">
+                  <Button variant="ghost" class="rounded-xs" onClick={() => setShowInviteModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="accent" class="rounded-xs" onClick={handleInvite}>
+                    Send Invite
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogWrapper>
+        </Dialog.Portal>
+      </Dialog>
     </div>
   );
 }
