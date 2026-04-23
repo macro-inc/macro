@@ -13,6 +13,7 @@ function getTimestamp(hit: ContentHitData): DateValue | undefined {
   switch (hit.type) {
     case 'email':
     case 'channel':
+    case 'call_record':
       return hit.sentAt;
   }
   return undefined;

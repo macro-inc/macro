@@ -29,6 +29,7 @@ import type {
   ChatMessageSearchResult,
   ChannelSearchResult,
   ProjectSearchResult,
+  CallRecordSearchResult,
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
 import type {
@@ -42,14 +43,20 @@ type InnerSearchResult =
   | EmailSearchResult
   | ChatMessageSearchResult
   | ChannelSearchResult
-  | ProjectSearchResult;
+  | ProjectSearchResult
+  | CallRecordSearchResult;
 
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
   | { results: DocumentSearchResult[]; type: 'pdf'; searchQuery: string }
   | { results: DocumentSearchResult[]; type: 'md' }
   | { results: ChannelSearchResult[]; type: 'channel' }
-  | { results: EmailSearchResult[]; type: 'email'; searchQuery?: string };
+  | { results: EmailSearchResult[]; type: 'email'; searchQuery?: string }
+  | {
+      results: CallRecordSearchResult[];
+      type: 'call_record';
+      callId: string;
+    };
 
 const getSearchData = (data: TypedInnerSearchResult): SearchData => {
   let contentHitData: ContentHitData[] = [];
@@ -122,6 +129,27 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           location: {
             type: 'email' as const,
             messageId: r.message_id!,
+          },
+        }));
+      });
+      break;
+    }
+    case 'call_record': {
+      contentHitData = data.results.flatMap((r) => {
+        const isContentHit = !!r.transcript_id && !!r.speaker_id;
+        if (!isContentHit) return [];
+
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          type: 'call_record' as const,
+          id: r.transcript_id!,
+          content: mergeAdjacentMacroEmTags(content),
+          senderId: r.speaker_id!,
+          sentAt: r.started_at!,
+          location: {
+            type: 'call_record' as const,
+            callId: data.callId,
+            transcriptId: r.transcript_id!,
           },
         }));
       });
@@ -324,6 +352,33 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.created_at,
             updatedAt: result.updated_at,
             projectId: result.metadata?.parent_project_id ?? undefined,
+            search,
+          },
+        ];
+      }
+
+      case 'callRecord': {
+        if (!result.metadata) return [];
+        const search = getSearchData({
+          type: 'call_record',
+          results: result.call_search_results,
+          callId: result.call_id,
+        });
+
+        return [
+          {
+            type: 'call',
+            id: result.call_id,
+            name: result.metadata.channel_name ?? result.name ?? 'Call',
+            channelId: result.channel_id,
+            channelName: result.metadata.channel_name ?? undefined,
+            ownerId: result.owner_id,
+            createdAt: result.metadata.started_at,
+            updatedAt: result.metadata.updated_at,
+            isActive: false,
+            attended: result.metadata.attended,
+            durationMs: result.metadata.duration_ms,
+            participantIds: result.participant_ids,
             search,
           },
         ];

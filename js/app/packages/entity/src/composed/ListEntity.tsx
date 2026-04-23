@@ -68,7 +68,10 @@ import {
   isWithNotification,
   type WithNotification,
 } from '../types/notification';
-import type { SearchLocation } from '../types/search';
+import type {
+  CallRecordContentHitData,
+  SearchLocation,
+} from '../types/search';
 import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
 import { unreadFilterFn } from '../utils/filter';
@@ -574,27 +577,64 @@ function NarrowInboxLayout(props: LayoutProps) {
           </Entity.Slot>
         </Match>
         <Match when={isCallEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <Entity.Slot
-              placement="body"
-              class="flex flex-col pb-2 min-h-[2lh] pr-4"
-            >
-              <span class="text-ink-muted text-xs truncate">
-                {entity().channelName ?? 'Call'}
-              </span>
-              <span class="text-ink-extra-muted text-xs flex items-center gap-2">
+          {(entity) => {
+            const hit = () => {
+              const e = entity() as EntityData;
+              return isSearchEntity(e)
+                ? e.search.contentHitData?.[0]
+                : undefined;
+            };
+            return (
+              <Entity.Slot
+                placement="body"
+                class="flex flex-col pb-2 min-h-[2lh] pr-4"
+              >
                 <Show
-                  when={entity().durationMs}
-                  fallback={entity().isActive ? 'In progress' : 'No duration'}
+                  when={hit()}
+                  fallback={
+                    <span class="text-ink-muted text-xs truncate">
+                      {entity().channelName ?? 'Call'}
+                    </span>
+                  }
                 >
-                  {(ms) => formatCallDuration(ms())}
+                  {(h) => (
+                    <span class="flex items-center gap-1 min-w-0 truncate">
+                      <Show
+                        when={
+                          h().type === 'call_record'
+                            ? (h() as CallRecordContentHitData)
+                            : undefined
+                        }
+                      >
+                        {(callHit) => (
+                          <Show when={callHit().senderId}>
+                            {(id) => <UserIcon id={id()} size="xs" />}
+                          </Show>
+                        )}
+                      </Show>
+                      <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
+                        <SearchSender hit={h()} />
+                      </span>
+                      <span class="text-ink/50 font-normal truncate min-w-0 text-xs">
+                        <SearchContent hit={h()} singleLine />
+                      </span>
+                    </span>
+                  )}
                 </Show>
-                <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
-                  <AttendanceBadge attended={entity().attended} />
-                </Show>
-              </span>
-            </Entity.Slot>
-          )}
+                <span class="text-ink-extra-muted text-xs flex items-center gap-2">
+                  <Show
+                    when={entity().durationMs}
+                    fallback={entity().isActive ? 'In progress' : 'No duration'}
+                  >
+                    {(ms) => formatCallDuration(ms())}
+                  </Show>
+                  <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
+                    <AttendanceBadge attended={entity().attended} />
+                  </Show>
+                </span>
+              </Entity.Slot>
+            );
+          }}
         </Match>
         <Match when={true}>
           <Entity.Slot placement="body" class="pb-2 min-h-[2lh] pr-4" />
@@ -729,19 +769,58 @@ function WideLayout(props: LayoutProps) {
             )}
           </Match>
           <Match when={isCallEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <>
-                <Entity.Title entity={entity()} />
-                <span class="text-ink-extra-muted font-medium truncate">
+            {(entity) => {
+              const hit = () => {
+                const e = entity() as EntityData;
+                return isSearchEntity(e)
+                  ? e.search.contentHitData?.[0]
+                  : undefined;
+              };
+              return (
+                <>
+                  <Entity.Title entity={entity()} />
                   <Show
-                    when={entity().durationMs}
-                    fallback={entity().isActive ? 'In progress' : ''}
+                    when={hit()}
+                    fallback={
+                      <span class="text-ink-extra-muted font-medium truncate">
+                        <Show
+                          when={entity().durationMs}
+                          fallback={entity().isActive ? 'In progress' : ''}
+                        >
+                          {(ms) => formatCallDuration(ms())}
+                        </Show>
+                      </span>
+                    }
                   >
-                    {(ms) => formatCallDuration(ms())}
+                    {(h) => (
+                      <>
+                        <span class="shrink-0 flex gap-1.5 items-center">
+                          <Show
+                            when={
+                              h().type === 'call_record'
+                                ? (h() as CallRecordContentHitData)
+                                : undefined
+                            }
+                          >
+                            {(callHit) => (
+                              <Show when={callHit().senderId}>
+                                {(id) => <UserIcon id={id()} size="xs" />}
+                              </Show>
+                            )}
+                          </Show>
+                          <span class="text-ink-extra-muted text-xs whitespace-nowrap">
+                            <SearchSender hit={h()} />
+                          </span>
+                        </span>
+                        <div class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden">
+                          <SearchContent hit={h()} singleLine />
+                        </div>
+                      </>
+                    )}
                   </Show>
-                </span>
-              </>
-            )}
+                </>
+              );
+            }}
           </Match>
           <Match when={isAutomationEntity(props.entity) && props.entity}>
             {(entity) => (

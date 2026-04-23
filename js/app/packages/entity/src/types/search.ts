@@ -25,11 +25,18 @@ type EmailMessageHighlightLocation = {
   messageId: string;
 };
 
+type CallRecordSegmentHighlightLocation = {
+  type: 'call_record';
+  callId: string;
+  transcriptId: string;
+};
+
 export type SearchLocation =
   | MarkdownHighlightLocation
   | PdfHighlightLocation
   | ChannelMessageHighlightLocation
-  | EmailMessageHighlightLocation;
+  | EmailMessageHighlightLocation
+  | CallRecordSegmentHighlightLocation;
 
 export type ChannelContentHitData = {
   type: 'channel';
@@ -67,6 +74,15 @@ export type EmailContentHitData = {
   location: EmailMessageHighlightLocation;
 };
 
+export type CallRecordContentHitData = {
+  type: 'call_record';
+  id: string;
+  content: string;
+  senderId: string;
+  sentAt: DateValue;
+  location: CallRecordSegmentHighlightLocation;
+};
+
 export type DocumentContentHitData =
   | MdContentHitData
   | PdfContentHitData
@@ -76,6 +92,7 @@ export type ContentHitData =
   | DocumentContentHitData
   | ChannelContentHitData
   | EmailContentHitData
+  | CallRecordContentHitData
   | GenericContentHitData;
 
 export type SearchData = {

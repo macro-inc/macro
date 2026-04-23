@@ -3,6 +3,7 @@ import type {
   ContentHitData,
   ChannelContentHitData,
   EmailContentHitData,
+  CallRecordContentHitData,
 } from '../types/search';
 import { DisplayName } from '../components/DisplayName';
 
@@ -19,6 +20,9 @@ function getSenderId(hit: ContentHitData): string | undefined {
   }
   if (hit.type === 'email') {
     return (hit as EmailContentHitData).senderId;
+  }
+  if (hit.type === 'call_record') {
+    return (hit as CallRecordContentHitData).senderId;
   }
   return undefined;
 }

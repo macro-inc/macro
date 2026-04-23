@@ -30,7 +30,13 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
       role="button"
     >
       <div class="flex flex-col gap-3 min-w-0">
-        <Show when={props.hit.type === 'channel' || props.hit.type === 'email'}>
+        <Show
+          when={
+            props.hit.type === 'channel' ||
+            props.hit.type === 'email' ||
+            props.hit.type === 'call_record'
+          }
+        >
           <div class="flex items-center gap-1">
             <Show when={senderId()}>
               {(id) => <UserIcon id={id()} size="xs" />}
