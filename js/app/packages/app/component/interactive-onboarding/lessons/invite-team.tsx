@@ -1,4 +1,4 @@
-import { createEffect, createSignal, Index, on, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, Index, on, Show } from 'solid-js';
 import { Tooltip } from '@core/component/Tooltip';
 import { z } from 'zod';
 import { cn } from '@ui/utils/classname';
@@ -6,6 +6,7 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
 import { useCreateTeamWithInvitesMutation } from '@queries/team';
+import { useEmail } from '@core/context/user';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 const inviteFormSchema = z.object({
@@ -20,6 +21,7 @@ const inviteFormSchema = z.object({
 });
 
 const INVITE_FORM_ID = 'invite-team-form';
+const TEAM_NAME_MAX_LENGTH = 50;
 
 function InviteTeamContent() {
   return (
@@ -41,6 +43,14 @@ function InviteTeamDemo(props: LessonContentProps) {
   const [submitted, setSubmitted] = createSignal(false);
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
+  const userEmail = useEmail();
+
+  const emailPlaceholder = createMemo(() => {
+    const email = userEmail();
+    if (!email) return 'colleague@company.com';
+    const domain = email.split('@')[1];
+    return domain ? `colleague@${domain}` : 'colleague@company.com';
+  });
 
   const isValid = () => teamName().trim().length > 0;
   const isPending = () => createTeamMutation.isPending;
@@ -67,8 +77,13 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   const addEmailField = () => {
-    if (!canAddEmail()) return;
+    if (!canAddEmail() || isPending()) return;
+    const newIndex = emails().length;
     setEmails((prev) => [...prev, '']);
+    requestAnimationFrame(() => {
+      const input = document.getElementById(`invite-email-${newIndex}`);
+      input?.focus();
+    });
   };
 
   const updateEmail = (index: number, value: string) => {
@@ -189,25 +204,45 @@ function InviteTeamDemo(props: LessonContentProps) {
             value={teamName()}
             onInput={(e) => updateTeamName(e.currentTarget.value)}
             placeholder="Enter your team name"
+            maxLength={TEAM_NAME_MAX_LENGTH}
+            disabled={isPending()}
+            aria-describedby="team-name-counter"
             class={cn(
               'w-full px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
               errors().teamName
                 ? 'border-failure focus-visible:ring-failure'
-                : 'border-edge focus-visible:ring-accent'
+                : 'border-edge focus-visible:ring-accent',
+              isPending() && 'opacity-50 cursor-not-allowed'
             )}
           />
-          <Show when={errors().teamName}>
-            <p class="text-sm text-failure-ink">{errors().teamName}</p>
-          </Show>
+          <div class="flex justify-between items-center">
+            <Show when={errors().teamName}>
+              <p class="text-sm text-failure-ink" role="alert">
+                {errors().teamName}
+              </p>
+            </Show>
+            <p
+              id="team-name-counter"
+              class={cn(
+                'text-sm ml-auto',
+                teamName().length > TEAM_NAME_MAX_LENGTH - 10
+                  ? 'text-warning-ink'
+                  : 'text-ink/40'
+              )}
+            >
+              {teamName().length}/{TEAM_NAME_MAX_LENGTH}
+            </p>
+          </div>
         </div>
 
         <div class="flex flex-col gap-2 min-h-0 flex-1">
           <div class="flex flex-col min-h-0">
             <div class="shrink-0 px-2">
-              <label class="text-base font-medium text-ink">
-                Invite members
+              <label class="text-base font-medium text-ink" id="invite-members-label">
+                Invite members{' '}
+                <span class="font-normal text-ink/50">(optional)</span>
               </label>
-              <p class="text-sm text-ink/50">
+              <p class="text-sm text-ink/50" id="invite-members-description">
                 We'll send them an invite to join your workspace
               </p>
             </div>
@@ -217,17 +252,23 @@ function InviteTeamDemo(props: LessonContentProps) {
                   <div class="flex flex-col gap-1 shrink-0">
                     <div class="flex items-center gap-2">
                       <input
+                        id={`invite-email-${index}`}
                         type="email"
                         value={email()}
                         onInput={(e) =>
                           updateEmail(index, e.currentTarget.value)
                         }
-                        placeholder="colleague@company.com"
+                        placeholder={emailPlaceholder()}
+                        disabled={isPending()}
+                        aria-labelledby="invite-members-label"
+                        aria-describedby="invite-members-description"
+                        aria-invalid={!!errors().emails?.[index]}
                         class={cn(
                           'w-full px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
                           errors().emails?.[index]
                             ? 'border-failure focus-visible:ring-failure'
-                            : 'border-edge focus-visible:ring-accent'
+                            : 'border-edge focus-visible:ring-accent',
+                          isPending() && 'opacity-50 cursor-not-allowed'
                         )}
                       />
                       <Tooltip
@@ -241,7 +282,16 @@ function InviteTeamDemo(props: LessonContentProps) {
                               ? updateEmail(0, '')
                               : removeEmail(index)
                           }
-                          class="p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0"
+                          disabled={isPending()}
+                          aria-label={
+                            emails().length > 1
+                              ? `Remove email ${index + 1}`
+                              : 'Clear email'
+                          }
+                          class={cn(
+                            'p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0',
+                            isPending() && 'opacity-50 cursor-not-allowed'
+                          )}
                         >
                           <Show
                             when={emails().length > 1}
@@ -253,7 +303,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                       </Tooltip>
                     </div>
                     <Show when={errors().emails?.[index]}>
-                      <p class="text-sm text-failure-ink">
+                      <p class="text-sm text-failure-ink" role="alert">
                         {errors().emails?.[index]}
                       </p>
                     </Show>
@@ -265,10 +315,11 @@ function InviteTeamDemo(props: LessonContentProps) {
           <button
             type="button"
             onClick={addEmailField}
-            disabled={!canAddEmail()}
+            disabled={!canAddEmail() || isPending()}
+            aria-label="Add another email invite"
             class={cn(
               'flex items-center gap-2 px-3 py-2 text-sm rounded-xs w-full bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0 mx-2',
-              canAddEmail()
+              canAddEmail() && !isPending()
                 ? 'text-ink bg-ink/8 hover:bg-ink/12'
                 : 'text-ink/30 bg-ink/4 cursor-not-allowed'
             )}
@@ -282,7 +333,7 @@ function InviteTeamDemo(props: LessonContentProps) {
         </div>
 
         <Show when={createTeamMutation.error}>
-          <p class="text-sm text-failure-ink px-2">
+          <p class="text-sm text-failure-ink px-2" role="alert">
             {createTeamMutation.error?.message ?? 'Failed to create team'}
           </p>
         </Show>
