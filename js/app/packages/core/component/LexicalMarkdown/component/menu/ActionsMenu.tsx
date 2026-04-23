@@ -318,7 +318,7 @@ export function ActionMenu(props: {
           use:clickOutside={clickOutsideHandler}
           ref={menuRef}
         >
-          <RoundPanel active class="py-2 bg-panel">
+          <RoundPanel active>
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{

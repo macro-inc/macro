@@ -245,7 +245,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
           }}
           ref={menuRef}
         >
-          <RoundPanel active class="py-2 bg-panel">
+          <RoundPanel active>
             <div class="flex flex-col gap-1 px-2 w-full">
               <Show
                 when={emojiOptions().length > 0}

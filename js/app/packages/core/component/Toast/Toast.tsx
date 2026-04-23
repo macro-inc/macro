@@ -304,7 +304,6 @@ function ToastContent(props: {
       onMouseLeave={() => setIsHovered(false)}
     >
       <RoundPanel
-        edgeColor="var(--color-edge-muted)"
         highlightColor={accentColor()}
         active
         class="relative w-[90vw] sm:w-md px-2 sm:p-3"

@@ -459,7 +459,7 @@ function InteractiveOnboardingInner() {
 
       {/* Centered card */}
       <div class="size-full max-w-[1600px] max-h-[900px]">
-        <RoundPanel class="bg-panel size-full">
+        <RoundPanel>
           <div class="size-full flex">
             <Show
               when={state.currentLesson()}
