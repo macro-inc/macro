@@ -31,6 +31,7 @@ import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
+import { formatRelativeTimestamp } from '@entity';
 import { z } from 'zod';
 
 const roleOrder: Record<string, number> = {
@@ -165,7 +166,9 @@ function InviteRow(props: {
         </div>
         <div class="min-w-0 flex-1">
           <div class="text-sm text-ink truncate">{props.invite.email}</div>
-          <div class="text-xs text-ink-muted">Pending invite</div>
+          <div class="text-xs text-ink-muted">
+            Invited as {props.invite.team_role} · {formatRelativeTimestamp(props.invite.created_at, { condensed: true })}
+          </div>
         </div>
       </div>
       <Show when={props.isOwner}>
@@ -332,8 +335,8 @@ export function Team() {
                 </Button>
               </Show>
             </header>
-            <div class="border border-edge rounded-sm px-3 py-2">
-              <div class="flex items-center justify-between">
+            <div class="border border-edge rounded-sm px-3">
+              <div class="flex items-center justify-between py-2">
                 <span class="text-sm text-ink-muted">Name</span>
                 <Show
                   when={isOwner()}
@@ -384,7 +387,7 @@ export function Team() {
           <section class="mb-6">
             <header class="flex items-center justify-between mb-2">
               <div>
-                <h3 class="text-sm">Members</h3>
+                <h3 class="text-sm">Members ({members().length})</h3>
                 <p class="text-xs text-ink-muted">People who have access to this team.</p>
               </div>
               <Show when={isOwner()}>
