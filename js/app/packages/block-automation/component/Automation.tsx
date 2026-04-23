@@ -33,6 +33,7 @@ import {
   WEEKDAY_OPTIONS,
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 
 type HistoryRecord = {
   id?: string | null;
@@ -242,7 +243,7 @@ export function Automation() {
                   setRenameOpen(true);
                 }}
               >
-                {d().name || 'Untitled automation'}
+                {d().name || blockNameToDefaultFile('automation')}
               </span>
             </div>
           </SplitHeaderLeft>

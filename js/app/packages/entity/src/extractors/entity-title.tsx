@@ -20,7 +20,10 @@ function extractRawTitle(entity: EntityData): string {
     .with({ type: 'email' }, (e) => e.name || '(No Subject)')
     .with({ type: 'chat' }, (e) => e.name)
     .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
-    .with({ type: 'automation' }, (e) => e.name || 'Untitled automation')
+    .with(
+      { type: 'automation' },
+      (e) => e.name || blockNameToDefaultFile('automation')
+    )
     .otherwise(() => 'Unknown');
 }
 
