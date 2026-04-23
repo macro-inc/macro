@@ -1,6 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { getDestinationFromOptions } from '@core/component/NewMessage';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';

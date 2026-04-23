@@ -1096,7 +1096,16 @@ export function ShareOptions(props: {
 
   return (
     <DropdownMenu open={isOpen()} onOpenChange={setIsOpen}>
-      <DropdownMenu.Trigger disabled={props.disabled}>
+      <DropdownMenu.Trigger
+        disabled={props.disabled}
+        on:keydown={(e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.stopPropagation();
+            e.preventDefault();
+            setIsOpen((prev) => !prev);
+          }
+        }}
+      >
         <Button
           disabled={props.disabled}
           class={`min-w-[67px] py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}

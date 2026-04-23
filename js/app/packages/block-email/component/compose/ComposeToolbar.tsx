@@ -1,5 +1,5 @@
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { FormatRibbon } from '@block-channel/component/DeprecatedChannelInput/FormatRibbon';
+import { FormatButtons } from '@channel/Input/FormatButtons';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
@@ -24,11 +24,7 @@ import {
   NODE_TRANSFORM,
   type NodeTransformType,
 } from 'core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
-import {
-  FORMAT_TEXT_COMMAND,
-  type LexicalEditor,
-  type TextFormatType,
-} from 'lexical';
+import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
 import { useCompose } from './ComposeContext';
 
@@ -76,16 +72,18 @@ export function EmailComposeToolbar(props: {
   return (
     <>
       <Show when={showFormatRibbon()}>
-        <FormatRibbon
-          class="-ml-3"
-          state={structuredClone(defaultSelectionData)}
-          inlineFormat={(format: TextFormatType) => {
-            props.editor?.()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
-          }}
-          nodeFormat={(transform: NodeTransformType) => {
-            props.editor?.()?.dispatchCommand(NODE_TRANSFORM, transform);
-          }}
-        />
+        <div class="flex flex-row w-full gap-2 items-center p-2 -ml-3">
+          <FormatButtons
+            selectionState={() => defaultSelectionData}
+            includeQuote
+            onInlineFormat={(format) => {
+              props.editor?.()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+            }}
+            onNodeFormat={(transform: NodeTransformType) => {
+              props.editor?.()?.dispatchCommand(NODE_TRANSFORM, transform);
+            }}
+          />
+        </div>
       </Show>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
         <Show

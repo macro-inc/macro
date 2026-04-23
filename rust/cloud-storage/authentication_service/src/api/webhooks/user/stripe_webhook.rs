@@ -540,6 +540,7 @@ fn track_stripe_subscription(
                 email: Some(data.email.clone()),
                 fbp: data.fbp.clone(),
                 fbc: data.fbc.clone(),
+                ..MetaUserData::default()
             };
             let event_id = Some(subscription_id.as_str());
 

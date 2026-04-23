@@ -1,47 +1,47 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const errorResponse = z.object({
   error: z.literal(true),
-  message: z.string()
+  message: z.string(),
 });
 
 export const standardErrorResponses = {
   400: {
-    description: "Invalid request parameters",
+    description: 'Invalid request parameters',
     content: {
-      "application/json": {
+      'application/json': {
         schema: errorResponse,
       },
     },
   },
   401: {
-    description: "Unauthorized - Invalid or missing authentication",
+    description: 'Unauthorized - Invalid or missing authentication',
     content: {
-      "application/json": {
+      'application/json': {
         schema: errorResponse,
       },
     },
   },
   404: {
-    description: "Resource not found",
+    description: 'Resource not found',
     content: {
-      "application/json": {
+      'application/json': {
         schema: errorResponse,
       },
     },
   },
   500: {
-    description: "Internal server error",
+    description: 'Internal server error',
     content: {
-      "application/json": {
+      'application/json': {
         schema: errorResponse,
       },
     },
   },
   503: {
-    description: "Service unavailable",
+    description: 'Service unavailable',
     content: {
-      "application/json": {
+      'application/json': {
         schema: errorResponse,
       },
     },
@@ -49,18 +49,18 @@ export const standardErrorResponses = {
 };
 
 export const docIdParam = z.object({
-  docId: z.string().min(1, "Document ID is required"),
+  docId: z.string().min(1, 'Document ID is required'),
 });
 
 export const searchableNodeSchema = z.object({
   nodeId: z.string(),
   content: z.string(),
-  rawContent: z.string()
+  rawContent: z.string(),
 });
 
 export const cognitionNodeSchema = z.object({
   nodeId: z.string(),
   content: z.string(),
   rawContent: z.string(),
-  type: z.string()
+  type: z.string(),
 });

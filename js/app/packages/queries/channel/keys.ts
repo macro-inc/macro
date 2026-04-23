@@ -10,6 +10,9 @@ export const channelKeys = createQueryKeys('channel', {
   messages: (channelID: string, loadAroundMessageId: string | null = null) => ({
     queryKey: [channelID, { loadAroundMessageId }],
   }),
+  messagesByIds: (channelID: string, messageIds: string[]) => ({
+    queryKey: [channelID, { messageIds }],
+  }),
   attachments: (channelID: string) => ({
     queryKey: [channelID],
   }),

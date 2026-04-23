@@ -94,7 +94,7 @@ pub struct BundleUpdateRequest {
 /// the name of the semver file as it exists in the s3 bucket
 pub static SEMVER_FILE_NAME: &str = "/app/semver.txt";
 /// the name of the bundle file as it exists in the s3 bucket
-pub static BUNDLE_ARCHIVE_NAME: &str = "app-archive.zip";
+pub static BUNDLE_ARCHIVE_NAME: &str = "/app/app-archive.zip";
 
 /// the typed of errors that can occur while querying the bundle state
 #[derive(Debug, Error)]

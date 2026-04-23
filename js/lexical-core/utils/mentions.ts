@@ -3,27 +3,27 @@ import {
   $isContactMentionNode,
   type ContactMentionInfo,
   type ContactMentionNode,
-} from '@lexical-core/nodes/ContactMentionNode';
+} from '../nodes/ContactMentionNode';
 import {
   $isDateMentionNode,
   type DateMentionInfo,
   type DateMentionNode,
-} from '@lexical-core/nodes/DateMentionNode';
+} from '../nodes/DateMentionNode';
 import {
   $isDocumentMentionNode,
   type DocumentMentionInfo,
   type DocumentMentionNode,
-} from '@lexical-core/nodes/DocumentMentionNode';
+} from '../nodes/DocumentMentionNode';
 import {
   $isGroupMentionNode,
   type GroupMentionNode,
-} from '@lexical-core/nodes/GroupMentionNode';
+} from '../nodes/GroupMentionNode';
 import {
   $isUserMentionNode,
   type UserMentionInfo,
   type UserMentionNode,
-} from '@lexical-core/nodes/UserMentionNode';
-import { wrapXml } from '@lexical-core/transformers/transformers';
+} from '../nodes/UserMentionNode';
+import { wrapXml } from '../transformers/transformers';
 import { $getRoot, type LexicalNode } from 'lexical';
 
 function dropKey<T extends object, K extends keyof T>(
