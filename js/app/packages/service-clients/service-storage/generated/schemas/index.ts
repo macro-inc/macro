@@ -291,6 +291,7 @@ export * from './editPdfPlaceableCommentAnchorRequestWidthPct';
 export * from './editPdfPlaceableCommentAnchorRequestXPct';
 export * from './editPdfPlaceableCommentAnchorRequestYPct';
 export * from './emailFilters';
+export * from './emailFiltersCalendarOnly';
 export * from './emailFiltersImportance';
 export * from './emptyResponse';
 export * from './entityFilterAst';

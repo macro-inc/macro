@@ -5295,6 +5295,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
           ),
+        calendar_only: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When `Some(true)`, only include threads that have at least one message\nwith an iCalendar attachment (`.ics` filename or `application\/ics` mime\ntype). `Some(false)` and `None` apply no constraint.'
+          ),
         cc: zod
           .array(zod.string())
           .optional()
