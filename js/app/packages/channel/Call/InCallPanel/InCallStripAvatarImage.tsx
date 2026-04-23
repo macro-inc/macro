@@ -1,4 +1,4 @@
-import { Show, createMemo, type Component } from 'solid-js';
+import { Show, type Component } from 'solid-js';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
@@ -10,37 +10,37 @@ import {
 } from '@core/component/StackedAvatarsRow';
 
 /** Matches {@link UserIcon} `lg` (`size-10`) for the in-call strip. */
-export const IN_CALL_STRIP_FACE_SIZE = 'lg' satisfies StackedAvatarsSize;
+export const IN_CALL_STRIP_IMAGE_SIZE = 'lg' satisfies StackedAvatarsSize;
 
 /** Stable id for the local slot before `room().localParticipant.identity` is available. */
 export const IN_CALL_LOCAL_STRIP_PENDING_ID = '__in_call_local_pending__';
 
-export type InCallStripFace = StackedAvatarInput & {
+export type InCallStripImage = StackedAvatarInput & {
   stripMemberKind: 'local' | 'remote';
   /** Local participant: show ring placeholder until LiveKit identity is ready for `UserIcon`. */
   stripLocalPending?: boolean;
 };
 
-export const InCallStripAvatarFace: Component<{
-  face: InCallStripFace;
+export const InCallStripAvatarImage: Component<{
+  image: InCallStripImage;
   trackCall?: () => unknown;
 }> = (props) => {
   const [displayName] = useDisplayName(
-    props.face.stripLocalPending ? undefined : tryMacroId(props.face.userId),
+    props.image.stripLocalPending ? undefined : tryMacroId(props.image.userId),
   );
 
-  const nameLabel = createMemo(() => {
+  const nameLabel = () => {
     props.trackCall?.();
-    if (props.face.stripLocalPending) return 'You';
+    if (props.image.stripLocalPending) return 'You';
     const fromProfile = displayName()?.trim();
     if (fromProfile) return fromProfile;
-    const liveKit = props.face.tooltip?.trim();
+    const liveKit = props.image.tooltip?.trim();
     if (liveKit) return liveKit;
     return (
-      props.face.userId?.split('|').at(1)?.split('@')[0] ||
-      (props.face.stripMemberKind === 'remote' ? 'Participant' : 'You')
+      props.image.userId?.split('|').at(1)?.split('@')[0] ||
+      (props.image.stripMemberKind === 'remote' ? 'Participant' : 'You')
     );
-  });
+  };
 
   return (
     <Tooltip
@@ -49,11 +49,11 @@ export const InCallStripAvatarFace: Component<{
       }
     >
       <Show
-        when={props.face.stripLocalPending}
+        when={props.image.stripLocalPending}
         fallback={
-          <div class={stackedAvatarInnerClass(IN_CALL_STRIP_FACE_SIZE)}>
+          <div class={stackedAvatarInnerClass(IN_CALL_STRIP_IMAGE_SIZE)}>
             <UserIcon
-              id={props.face.userId}
+              id={props.image.userId}
               isDeleted={false}
               size="fill"
               showTooltip={false}
@@ -62,7 +62,7 @@ export const InCallStripAvatarFace: Component<{
           </div>
         }
       >
-        <StackedAvatarsDefaultEmptyPlaceholder size={IN_CALL_STRIP_FACE_SIZE} />
+        <StackedAvatarsDefaultEmptyPlaceholder size={IN_CALL_STRIP_IMAGE_SIZE} />
       </Show>
     </Tooltip>
   );

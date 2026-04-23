@@ -14,7 +14,7 @@ import {
   callControlPanelFlat,
   callControlPanelIdle,
   callControlPressable,
-} from './callControlButtonShared';
+} from './call-control-button-shared';
 
 export function CallControlButtonWithDropdown(props: {
   onClick: () => Promise<void> | void;

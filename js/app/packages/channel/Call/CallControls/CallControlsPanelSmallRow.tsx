@@ -15,7 +15,7 @@ import {
   leaveItemClass,
   menuGroupLabelClass,
   menuItemClass,
-} from './callControlsMenuStyles';
+} from './call-controls-menu-styles';
 
 const panelSmallIconClass = 'w-4 h-4';
 

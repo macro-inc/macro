@@ -15,7 +15,7 @@ import {
   callControlPanelFlat,
   callControlPanelIdle,
   callControlPressable,
-} from './callControlButtonShared';
+} from './call-control-button-shared';
 
 export type CallControlVariant = 'default' | 'panel' | 'panel-small';
 

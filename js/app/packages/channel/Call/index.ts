@@ -4,7 +4,7 @@ export {
   useCallContextOptional,
 } from './CallContext';
 export type { CallState } from './CallContext';
-export { useCall } from './useCall';
+export { useCall } from './use-call';
 export { CallOverlay } from './CallOverlay';
 export { CallControls } from './CallControls/CallControls';
 export type { CallControlsProps } from './CallControls/CallControls';
@@ -13,7 +13,7 @@ export { CallAudioSink } from './CallAudioSink';
 export { ChannelCallButton } from './ChannelCallButton';
 export { ChannelCallTab } from './ChannelCallTab';
 export { ChannelCallAutoJoin } from './ChannelCallAutoJoin';
-export { openChannelCallTab } from './openChannelCallTab';
+export { openChannelCallTab } from './open-channel-call-tab';
 export {
   InCallPanel,
   InCallParticipantsListPopover,

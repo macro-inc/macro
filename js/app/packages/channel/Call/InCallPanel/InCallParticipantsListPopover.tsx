@@ -7,14 +7,12 @@ import {
   createSignal,
 } from 'solid-js';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { toast } from '@core/component/Toast/Toast';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import {
-  openDirectMessageWithMutation,
-  useGetOrCreateDirectMessageMutation,
-} from '@queries/channel/get-or-create-dm';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import type { InCallPanelMember, UseInCallPanelResult } from './types';
 import { InCallParticipantAvatar } from './InCallParticipantAvatar';
-import { profilePictureIdForMember } from './profilePictureIdForMember';
+import { profilePictureIdForMember } from './profile-picture-id-for-member';
 import { cn } from '@ui/utils/classname';
 
 /** Shared shell for “In this call” (popover content + +N tooltip). */
@@ -63,7 +61,9 @@ export function InCallParticipantNameRow(props: {
   allowOpenDm?: boolean;
 }) {
   const { replaceOrInsertSplit } = useSplitLayout();
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
+    onError: () => toast.failure('Could not open direct message'),
+  });
 
   const raw = profilePictureIdForMember(props.panel, props.member);
   const [displayName] = useDisplayName(tryMacroId(raw ?? ''));
@@ -83,14 +83,15 @@ export function InCallParticipantNameRow(props: {
 
   const openDm = () => {
     if (props.member.kind !== 'remote') return;
-    const macroId = tryMacroId(props.member.participant.identity);
-    if (!macroId) return;
-    void openDirectMessageWithMutation(
-      getOrCreateDmMutation.mutateAsync,
-      { recipient_id: macroId },
-      (channelId) => {
-        props.onClose();
-        replaceOrInsertSplit({ type: 'channel', id: channelId });
+    const { identity } = props.member.participant;
+    if (!identity.startsWith('macro|') || !identity.slice(6).includes('@')) return;
+    getOrCreateDmMutation.mutate(
+      { recipient_id: identity },
+      {
+        onSuccess: ({ channel_id }) => {
+          props.onClose();
+          replaceOrInsertSplit({ type: 'channel', id: channel_id });
+        },
       },
     );
   };

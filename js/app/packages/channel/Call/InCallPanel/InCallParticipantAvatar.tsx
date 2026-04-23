@@ -1,9 +1,9 @@
-import { type Accessor, Show, createMemo } from 'solid-js';
+import { type Accessor, Show } from 'solid-js';
 import { tryMacroId, type MacroId as MacroIdType } from '@core/user';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserIconProps } from '@core/component/UserIcon';
 import type { InCallPanelMember, UseInCallPanelResult } from './types';
-import { profilePictureIdForMember } from './profilePictureIdForMember';
+import { profilePictureIdForMember } from './profile-picture-id-for-member';
 import { InCallAvatarPlaceholderShell } from './InCallAvatarPlaceholder';
 
 /**
@@ -15,9 +15,7 @@ export function InCallParticipantAvatar(props: {
   member: InCallPanelMember;
   size?: UserIconProps['size'];
 }) {
-  const rawIdentity = createMemo(() =>
-    profilePictureIdForMember(props.panel, props.member)
-  );
+  const rawIdentity = () => profilePictureIdForMember(props.panel, props.member);
 
   const size = () => props.size ?? 'md';
 

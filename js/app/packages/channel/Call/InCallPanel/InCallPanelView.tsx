@@ -3,21 +3,21 @@ import type { CallControlVariant } from '../CallControls/CallControlButton';
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
 import { CallControls } from '../CallControls/CallControls';
-import { openChannelCallTab } from '../openChannelCallTab';
+import { openChannelCallTab } from '../open-channel-call-tab';
 import {
   IN_CALL_ROSTER_CARD_CLASS,
   InCallParticipantsListPopover,
   InCallRosterListSection,
 } from './InCallParticipantsListPopover';
-import { profilePictureIdForMember } from '../InCallPanel/profilePictureIdForMember';
+import { profilePictureIdForMember } from './profile-picture-id-for-member';
 import type { InCallPanelProps } from '../InCallPanel/types';
-import { useInCallPanel } from '../InCallPanel/useInCallPanel';
+import { useInCallPanel } from './use-in-call-panel';
 import {
   IN_CALL_LOCAL_STRIP_PENDING_ID,
-  IN_CALL_STRIP_FACE_SIZE,
-  InCallStripAvatarFace,
-  type InCallStripFace,
-} from './InCallStripAvatarFace';
+  IN_CALL_STRIP_IMAGE_SIZE,
+  InCallStripAvatarImage,
+  type InCallStripImage,
+} from './InCallStripAvatarImage';
 import { cn } from '@ui/utils/classname';
 
 export const InCallPanel: Component<InCallPanelProps> = (props) => {
@@ -48,9 +48,9 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
   ]);
 
   /** Full roster order for the in-call avatar strip. */
-  const stripStackEach = createMemo((): InCallStripFace[] => {
+  const stripStackEach = createMemo((): InCallStripImage[] => {
     if (!panel.isActive()) return [];
-    const out: InCallStripFace[] = [];
+    const out: InCallStripImage[] = [];
     for (const member of orderedMembers()) {
       if (member.kind === 'local') {
         const id = profilePictureIdForMember(panel, member);
@@ -155,12 +155,12 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             data-in-call-panel-avatars
           >
             <Show when={!slim()}>
-              <StackedAvatarsRow<InCallStripFace>
+              <StackedAvatarsRow<InCallStripImage>
                 class="w-full min-w-0"
                 distribute="fill"
                 each={stripStackEach}
                 max={6}
-                size={IN_CALL_STRIP_FACE_SIZE}
+                size={IN_CALL_STRIP_IMAGE_SIZE}
                 defaultEmptyUserPlaceholder
                 overflowChipClass="bg-edge-muted"
                 overflowTooltipContent={(close) => (
@@ -174,9 +174,9 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                   </div>
                 )}
               >
-                {(face) => (
-                  <InCallStripAvatarFace
-                    face={face}
+                {(image) => (
+                  <InCallStripAvatarImage
+                    image={image}
                     trackCall={() => panel.callCtx.trackVersion()}
                   />
                 )}

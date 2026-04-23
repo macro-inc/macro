@@ -1,11 +1,11 @@
 import { createMemo } from 'solid-js';
-import { useCall } from '../useCall';
+import { useCall } from '../use-call';
 import { useCallContext } from '../CallContext';
 import type { UseInCallPanelOptions, UseInCallPanelResult } from './types';
 import {
   debugInCallExtraRemoteMembers,
   readInCallPanelDebugExtraRemoteCount,
-} from './inCallPanelDebug';
+} from './in-call-panel-debug';
 import {
   IN_CALL_PANEL_VISIBLE_AVATAR_COUNT,
   buildOrderedInCallMembers,
