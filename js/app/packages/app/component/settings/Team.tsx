@@ -2,6 +2,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import LeaveIcon from '@icon/regular/sign-out.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import TrashIcon from '@icon/regular/trash.svg';
+import SpinnerIcon from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
@@ -30,6 +31,7 @@ import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
+import { z } from 'zod';
 
 const roleOrder: Record<string, number> = {
   [TeamRole.Owner]: 0,
@@ -82,9 +84,19 @@ function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => vo
   );
 }
 
+const emailSchema = z.string().email();
+
+function parseEmails(raw: string): string[] {
+  return raw
+    .split(/[,\n\s]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .filter((s) => emailSchema.safeParse(s).success);
+}
+
 function MemberRow(props: {
   member: TeamMember;
-  canManage: boolean;
+  isOwner: boolean;
   isCurrentUser: boolean;
   onRemove: () => void;
   onTierChange: (tier: TeamUserTier) => void;
@@ -107,12 +119,12 @@ function MemberRow(props: {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Show
-          when={props.canManage}
+          when={props.isOwner}
           fallback={<span class="text-xs text-ink-muted">{props.member.tier}</span>}
         >
           <TierSelect value={props.member.tier} onChange={props.onTierChange} />
         </Show>
-        <Show when={props.canManage}>
+        <Show when={props.isOwner}>
           <Show
             when={!props.isCurrentUser && props.member.role !== TeamRole.Owner}
             fallback={
@@ -135,9 +147,14 @@ function MemberRow(props: {
   );
 }
 
+function MemberName(props: { memberId: string }) {
+  const [displayName] = useDisplayName(tryMacroId(props.memberId));
+  return <span class="font-medium">{displayName()}</span>;
+}
+
 function InviteRow(props: {
   invite: TeamInviteDetails;
-  canManage: boolean;
+  isOwner: boolean;
   onCancel: () => void;
 }) {
   return (
@@ -151,7 +168,7 @@ function InviteRow(props: {
           <div class="text-xs text-ink-muted">Pending invite</div>
         </div>
       </div>
-      <Show when={props.canManage}>
+      <Show when={props.isOwner}>
         <Tooltip tooltip="Cancel invite">
           <Button variant="ghost" size="sm" class="shrink-0" onClick={props.onCancel}>
             <XIcon class="w-4 h-4" />
@@ -184,11 +201,14 @@ export function Team() {
   const inviteToTeamMutation = useInviteToTeamMutation();
 
   const [showLeaveModal, setShowLeaveModal] = createSignal(false);
-  const [showRemoveModal, setShowRemoveModal] = createSignal<string | null>(null);
+  const [showRemoveModal, setShowRemoveModal] = createSignal<TeamMember | null>(null);
   const [showCancelInviteModal, setShowCancelInviteModal] = createSignal<string | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
-  const [inviteEmail, setInviteEmail] = createSignal('');
+  const [inviteEmails, setInviteEmails] = createSignal('');
   const [updatedTeamName, setUpdatedTeamName] = createSignal<string | undefined>(undefined);
+
+  const parsedEmails = () => parseEmails(inviteEmails());
+  const hasValidEmails = () => parsedEmails().length > 0;
 
   const teamName = () => updatedTeamName() ?? team()?.name ?? '';
 
@@ -209,11 +229,6 @@ export function Team() {
     return teamData.owner_id === currentUserId;
   });
 
-  const canManage = createMemo(() => {
-    const role = currentMember()?.role;
-    return role === TeamRole.Owner || role === TeamRole.Admin;
-  });
-
   const handleLeaveTeam = async () => {
     const currentUserId = userId();
     const currentTeamId = teamId();
@@ -226,13 +241,14 @@ export function Team() {
     setShowLeaveModal(false);
   };
 
-  const handleRemoveMember = (memberId: string) => {
+  const handleRemoveMember = () => {
+    const member = showRemoveModal();
     const currentTeamId = teamId();
-    if (!currentTeamId) return;
+    if (!currentTeamId || !member) return;
 
     removeUserMutation.mutate({
       teamId: currentTeamId,
-      userId: memberId,
+      userId: member.user_id,
     });
     setShowRemoveModal(null);
   };
@@ -249,15 +265,15 @@ export function Team() {
   };
 
   const handleInvite = () => {
-    const email = inviteEmail().trim();
+    const emails = parsedEmails();
     const currentTeamId = teamId();
-    if (!email || !currentTeamId) return;
+    if (emails.length === 0 || !currentTeamId) return;
 
     inviteToTeamMutation.mutate({
       teamId: currentTeamId,
-      request: { emails: [email] },
+      request: { emails },
     });
-    setInviteEmail('');
+    setInviteEmails('');
     setShowInviteModal(false);
   };
 
@@ -317,7 +333,7 @@ export function Team() {
                 <h3 class="text-sm">Members</h3>
                 <p class="text-xs text-ink-muted">People who have access to this team.</p>
               </div>
-              <Show when={canManage()}>
+              <Show when={isOwner()}>
                 <Button variant="secondary" size="sm" class="rounded-xs" onClick={() => setShowInviteModal(true)}>
                   <PlusIcon class="size-4" />
                   Invite Member
@@ -333,9 +349,9 @@ export function Team() {
                   {(member) => (
                     <MemberRow
                       member={member}
-                      canManage={canManage()}
+                      isOwner={isOwner()}
                       isCurrentUser={member.user_id === userId()}
-                      onRemove={() => setShowRemoveModal(member.user_id)}
+                      onRemove={() => setShowRemoveModal(member)}
                       onTierChange={(newTier) => {
                         const currentTeamId = teamId();
                         if (!currentTeamId) return;
@@ -354,7 +370,7 @@ export function Team() {
             </Show>
           </section>
 
-          <Show when={canManage() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
+          <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
             <section class="mb-6">
               <h3 class="text-sm mb-2">Pending Invites</h3>
               <div class="border border-edge rounded-md px-3">
@@ -362,7 +378,7 @@ export function Team() {
                   {(invite) => (
                     <InviteRow
                       invite={invite}
-                      canManage={canManage()}
+                      isOwner={isOwner()}
                       onCancel={() => setShowCancelInviteModal(invite.id)}
                     />
                   )}
@@ -388,11 +404,23 @@ export function Team() {
               <div class="p-3 flex flex-col gap-3">
                 <p>Are you sure you want to leave {team()?.name}? You will lose access to team resources.</p>
                 <div class="flex justify-end gap-1 pt-2">
-                  <Button variant="ghost" class="rounded-xs" onClick={() => setShowLeaveModal(false)}>
+                  <Button
+                    variant="ghost"
+                    class="rounded-xs"
+                    disabled={removeUserMutation.isPending}
+                    onClick={() => setShowLeaveModal(false)}
+                  >
                     Cancel
                   </Button>
-                  <Button variant="destructive" class="rounded-xs" onClick={handleLeaveTeam}>
-                    Leave
+                  <Button
+                    variant="destructive"
+                    class="rounded-xs"
+                    disabled={removeUserMutation.isPending}
+                    onClick={handleLeaveTeam}
+                  >
+                    <Show when={removeUserMutation.isPending} fallback="Leave">
+                      <SpinnerIcon class="size-4 animate-spin" />
+                    </Show>
                   </Button>
                 </div>
               </div>
@@ -414,20 +442,31 @@ export function Team() {
                 </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
-                <p>Are you sure you want to remove this member from the team?</p>
+                <p>
+                  Are you sure you want to remove{' '}
+                  <Show when={showRemoveModal()}>
+                    {(member) => <MemberName memberId={member().user_id} />}
+                  </Show>{' '}
+                  from the team?
+                </p>
                 <div class="flex justify-end gap-1 pt-2">
-                  <Button variant="ghost" class="rounded-xs" onClick={() => setShowRemoveModal(null)}>
+                  <Button
+                    variant="ghost"
+                    class="rounded-xs"
+                    disabled={removeUserMutation.isPending}
+                    onClick={() => setShowRemoveModal(null)}
+                  >
                     Cancel
                   </Button>
                   <Button
                     variant="destructive"
                     class="rounded-xs"
-                    onClick={() => {
-                      const memberId = showRemoveModal();
-                      if (memberId) handleRemoveMember(memberId);
-                    }}
+                    disabled={removeUserMutation.isPending}
+                    onClick={handleRemoveMember}
                   >
-                    Remove
+                    <Show when={removeUserMutation.isPending} fallback="Remove">
+                      <SpinnerIcon class="size-4 animate-spin" />
+                    </Show>
                   </Button>
                 </div>
               </div>
@@ -451,18 +490,26 @@ export function Team() {
               <div class="p-3 flex flex-col gap-3">
                 <p>Are you sure you want to cancel this invitation?</p>
                 <div class="flex justify-end gap-1 pt-2">
-                  <Button variant="ghost" class="rounded-xs" onClick={() => setShowCancelInviteModal(null)}>
+                  <Button
+                    variant="ghost"
+                    class="rounded-xs"
+                    disabled={deleteInviteMutation.isPending}
+                    onClick={() => setShowCancelInviteModal(null)}
+                  >
                     Keep
                   </Button>
                   <Button
                     variant="destructive"
                     class="rounded-xs"
+                    disabled={deleteInviteMutation.isPending}
                     onClick={() => {
                       const inviteId = showCancelInviteModal();
                       if (inviteId) handleCancelInvite(inviteId);
                     }}
                   >
-                    Cancel Invite
+                    <Show when={deleteInviteMutation.isPending} fallback="Cancel Invite">
+                      <SpinnerIcon class="size-4 animate-spin" />
+                    </Show>
                   </Button>
                 </div>
               </div>
@@ -484,22 +531,42 @@ export function Team() {
                 </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
-                <input
-                  type="email"
-                  placeholder="Email address"
-                  value={inviteEmail()}
-                  onInput={(e) => setInviteEmail(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleInvite();
-                  }}
-                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+                <p class="text-sm text-ink-muted">
+                  Enter email addresses separated by commas, spaces, or new lines.
+                </p>
+                <textarea
+                  placeholder={'name@company.com\ncolleague@company.com'}
+                  value={inviteEmails()}
+                  onInput={(e) => setInviteEmails(e.currentTarget.value)}
+                  rows={4}
+                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none leading-relaxed"
                 />
+                <Show when={inviteEmails().trim() && parsedEmails().length > 0}>
+                  <p class="text-xs text-ink-muted">
+                    {parsedEmails().length} valid email{parsedEmails().length !== 1 ? 's' : ''} will be invited
+                  </p>
+                </Show>
                 <div class="flex justify-end gap-1 pt-2">
-                  <Button variant="ghost" class="rounded-xs" onClick={() => setShowInviteModal(false)}>
+                  <Button
+                    variant="ghost"
+                    class="rounded-xs"
+                    disabled={inviteToTeamMutation.isPending}
+                    onClick={() => setShowInviteModal(false)}
+                  >
                     Cancel
                   </Button>
-                  <Button variant="accent" class="rounded-xs" onClick={handleInvite}>
-                    Send Invite
+                  <Button
+                    variant={hasValidEmails() ? 'accent' : 'ghost'}
+                    class="rounded-xs"
+                    disabled={!hasValidEmails() || inviteToTeamMutation.isPending}
+                    onClick={handleInvite}
+                  >
+                    <Show
+                      when={inviteToTeamMutation.isPending}
+                      fallback={parsedEmails().length > 1 ? `Send ${parsedEmails().length} Invites` : 'Send Invite'}
+                    >
+                      <SpinnerIcon class="size-4 animate-spin" />
+                    </Show>
                   </Button>
                 </div>
               </div>
