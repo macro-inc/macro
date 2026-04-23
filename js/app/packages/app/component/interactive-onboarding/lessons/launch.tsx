@@ -4,13 +4,10 @@ import AppStoreQr from '@macro-icons/app-store.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
 import { ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
-
-const SIGNUP_VALUE_BY_TIER: Record<string, number> = {
-  free: 20,
-  haiku: 175,
-  sonnet: 300,
-  opus: 450,
-};
+import {
+  SIGNUP_LEAD_VALUE_BY_TIER,
+  SIGNUP_LEAD_VALUE_DEFAULT,
+} from '@app/lib/analytics/leadValues';
 
 function LaunchContent(props: LessonContentProps) {
   const analytics = useAnalytics();
@@ -28,7 +25,7 @@ function LaunchContent(props: LessonContentProps) {
     analytics.trackMeta('Lead', {
       content_name: 'signup',
       content_category: tier,
-      value: SIGNUP_VALUE_BY_TIER[tier] ?? SIGNUP_VALUE_BY_TIER.free,
+      value: SIGNUP_LEAD_VALUE_BY_TIER[tier] ?? SIGNUP_LEAD_VALUE_DEFAULT,
       currency: 'USD',
     });
     setTimeout(() => props.onComplete('Launch'));
