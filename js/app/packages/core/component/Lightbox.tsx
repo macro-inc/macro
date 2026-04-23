@@ -45,7 +45,7 @@ type LightboxProps = {
   onNext?: () => void;
   // "2/5" style indicator — rendered when provided
   indexLabel?: Accessor<string>;
-  navigationVisible?: boolean;
+  navigationHidden?: boolean;
 };
 
 export function Lightbox(props: LightboxProps) {
@@ -309,7 +309,7 @@ export function Lightbox(props: LightboxProps) {
 
         {/* Nav arrows — desktop only */}
         <Show when={!isMobile()}>
-          <Show when={props.navigationVisible !== false}>
+          <Show when={!props.navigationHidden}>
             <button
               class={cn(
                 navButtonClass,
@@ -323,9 +323,7 @@ export function Lightbox(props: LightboxProps) {
             >
               <ChevronLeftIcon class="w-5 h-5 text-ink" />
             </button>
-          </Show>
 
-          <Show when={props.navigationVisible !== false}>
             <button
               class={cn(
                 navButtonClass,

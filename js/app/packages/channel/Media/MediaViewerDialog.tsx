@@ -22,7 +22,7 @@ function VideoViewerContent(props: {
   onPrevious?: () => void;
   onNext?: () => void;
   indexLabel?: Accessor<string>;
-  navigationVisible?: boolean;
+  navigationHidden?: boolean;
 }) {
   const navButtonClass =
     'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-colors disabled:cursor-not-allowed disabled:opacity-50';
@@ -59,7 +59,7 @@ function VideoViewerContent(props: {
           </div>
         </Show>
 
-        <Show when={props.navigationVisible !== false}>
+        <Show when={!props.navigationHidden}>
           <button
             class={cn(navButtonClass, 'left-4')}
             style={{ 'z-index': stackingContext.zModal + 1 }}
@@ -69,9 +69,7 @@ function VideoViewerContent(props: {
           >
             <ChevronLeftIcon class="h-5 w-5 text-ink" />
           </button>
-        </Show>
 
-        <Show when={props.navigationVisible !== false}>
           <button
             class={cn(navButtonClass, 'right-4')}
             style={{ 'z-index': stackingContext.zModal + 1 }}
@@ -129,7 +127,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
                   onPrevious={hasPrevious() ? navigatePrevious : undefined}
                   onNext={hasNext() ? navigateNext : undefined}
                   indexLabel={hasMultipleItems() ? indexLabel : undefined}
-                  navigationVisible={hasMultipleItems()}
+                  navigationHidden={!hasMultipleItems()}
                 />
               }
             >
@@ -138,7 +136,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
                 imageId={() => item().id}
                 onPrevious={hasPrevious() ? navigatePrevious : undefined}
                 onNext={hasNext() ? navigateNext : undefined}
-                navigationVisible={hasMultipleItems()}
+                navigationHidden={!hasMultipleItems()}
                 indexLabel={hasMultipleItems() ? indexLabel : undefined}
               />
             </Show>
