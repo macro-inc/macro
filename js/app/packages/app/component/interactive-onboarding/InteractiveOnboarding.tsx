@@ -34,6 +34,8 @@ import MobileWebSignupSent from './MobileWebSignupSent';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { isOk } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 
 export default function InteractiveOnboarding() {
   const isAuthenticated = useIsAuthenticated();
@@ -101,21 +103,25 @@ function InteractiveOnboardingInner() {
 
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
-  const allLessons = LESSONS.filter((l) => {
+  const inviteTeamEnabled = useFeatureFlag('enable-invite-team-onboarding', {
+    enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
+  });
+  const allLessons = () => LESSONS.filter((l) => {
     if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
       return false;
     if (l.id === 'about-us' && isAuthenticated()) return false;
+    if (l.id === 'invite-team' && !inviteTeamEnabled().enabled) return false;
     return true;
   });
-  const lessons = isTouch
-    ? allLessons.filter(
+  const lessons = () => isTouch
+    ? allLessons().filter(
         (l) =>
           l.id === 'welcome' ||
           l.id === 'about-us' ||
           l.id === 'choose-plan' ||
           l.id === 'launch'
       )
-    : allLessons;
+    : allLessons();
 
   const testMode = new URLSearchParams(location.search).has('test');
 
@@ -124,7 +130,7 @@ function InteractiveOnboardingInner() {
   const slideIndex =
     slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
 
-  const sortedLessons = [...lessons].sort(
+  const sortedLessons = [...lessons()].sort(
     (a, b) => (a.order ?? 0) - (b.order ?? 0)
   );
   const debugCompleted =
@@ -148,7 +154,7 @@ function InteractiveOnboardingInner() {
     : undefined;
 
   const state = createOnboardingState({
-    definitions: lessons,
+    definitions: lessons(),
     initialCompleted: debugCompleted ?? returnCompleted ?? new Set(),
   });
 
