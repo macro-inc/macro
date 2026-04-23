@@ -939,33 +939,126 @@ export interface ReadContent {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-/**
- * The read content response
- */
-export type ReadContentResponse =
-  | {
+export interface ReadContentResponse {
+  /**
+   * Any comments on the document
+   */
+  comments: {
+    /**
+     * The comments in the thread, ordered by `createdAt` ASC.
+     */
+    comments: {
+      /**
+       * The unique id of the comment.
+       */
+      commentId: number;
+      /**
+       * When the comment was created.
+       */
+      createdAt?: string | null;
+      /**
+       * When the comment was deleted, if ever.
+       */
+      deletedAt?: string | null;
+      /**
+       * Arbitrary comment metadata.
+       */
+      metadata?: {
+        [k: string]: unknown;
+      };
+      /**
+       * Ordering position within the thread.
+       */
+      order?: number | null;
+      /**
+       * The user id of the comment owner.
+       */
+      owner: string;
+      /**
+       * Sender display string.
+       */
+      sender?: string | null;
+      /**
+       * Comment body.
+       */
       text: string;
-    }
-  | {
-      markdown: {
-        /**
-         * Human readable content
-         */
-        content: string;
-        /**
-         * The node id
-         */
-        nodeId: string;
-        /**
-         * Json respresentation
-         */
-        rawContent: string;
-        /**
-         * The style on the node, H1, em, code, etc.
-         */
-        type: string;
-      }[];
+      /**
+       * The thread this comment belongs to.
+       */
+      threadId: number;
+      /**
+       * When the comment was last updated.
+       */
+      updatedAt?: string | null;
+    }[];
+    /**
+     * The thread metadata.
+     */
+    thread: {
+      /**
+       * When the thread was created.
+       */
+      createdAt?: string | null;
+      /**
+       * When the thread was deleted, if ever.
+       */
+      deletedAt?: string | null;
+      /**
+       * The document the thread is attached to.
+       */
+      documentId: string;
+      /**
+       * Arbitrary thread metadata.
+       */
+      metadata?: {
+        [k: string]: unknown;
+      };
+      /**
+       * The user id of the thread owner.
+       */
+      owner: string;
+      /**
+       * Whether the thread has been resolved.
+       */
+      resolved: boolean;
+      /**
+       * The unique id of the thread.
+       */
+      threadId: number;
+      /**
+       * When the thread was last updated.
+       */
+      updatedAt?: string | null;
     };
+  }[];
+  /**
+   * The content of the document
+   */
+  content:
+    | {
+        text: string;
+      }
+    | {
+        markdown: {
+          /**
+           * Human readable content
+           */
+          content: string;
+          /**
+           * The node id
+           */
+          nodeId: string;
+          /**
+           * Json respresentation
+           */
+          rawContent: string;
+          /**
+           * The style on the node, H1, em, code, etc.
+           */
+          type: string;
+        }[];
+      };
+}
 
 /* eslint-disable */
 /**
