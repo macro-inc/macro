@@ -21,6 +21,22 @@ import {
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext, type MediaDeviceInfo } from './CallContext';
 
+// Matches the runtime check in @livekit/track-processors' ProcessorWrapper.isSupported:
+// either the modern MediaStreamTrackProcessor API (Chromium/Edge, Safari 18.4+) OR the
+// canvas.captureStream() fallback (Firefox 126+, which includes Zen). Kept local so the
+// toggle renders without importing the WASM-bearing package.
+function isBackgroundBlurSupported(): boolean {
+  if (typeof window === 'undefined') return false;
+  const hasStreamProcessor =
+    'MediaStreamTrackProcessor' in window &&
+    'MediaStreamTrackGenerator' in window;
+  const hasFallback =
+    'VideoFrame' in window &&
+    typeof HTMLCanvasElement !== 'undefined' &&
+    'captureStream' in HTMLCanvasElement.prototype;
+  return hasStreamProcessor || hasFallback;
+}
+
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
@@ -349,12 +365,27 @@ export function CallOverlay(props: { onLeave: () => void }) {
           onClick={() => callCtx.toggleVideo()}
           active={!callCtx.isVideoMuted()}
           dropdownContent={
-            <DeviceList
-              label="Camera"
-              devices={callCtx.videoInputDevices()}
-              activeDeviceId={callCtx.activeVideoInputDeviceId()}
-              onSelect={(id) => callCtx.switchVideoInput(id)}
-            />
+            <>
+              <DeviceList
+                label="Camera"
+                devices={callCtx.videoInputDevices()}
+                activeDeviceId={callCtx.activeVideoInputDeviceId()}
+                onSelect={(id) => callCtx.switchVideoInput(id)}
+              />
+              <Show when={isBackgroundBlurSupported()}>
+                <MenuSeparator />
+                <MenuGroup>
+                  <GroupLabel>Effects</GroupLabel>
+                  <MenuItem
+                    text="Blur background"
+                    selectorType="checkbox"
+                    checked={callCtx.isBackgroundBlurred()}
+                    closeOnSelect={false}
+                    onClick={() => callCtx.toggleBackgroundBlur()}
+                  />
+                </MenuGroup>
+              </Show>
+            </>
           }
         >
           <Show
