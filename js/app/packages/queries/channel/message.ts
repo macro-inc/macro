@@ -18,7 +18,8 @@ import type { Attachment, Message } from '@service-comms/generated/models';
 import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { channelKeys, ChannelNonceKeys } from './keys';
+import { ChannelNonceKeys } from './keys';
+import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
 import { createMutationNonce, registerNonce } from '../nonce';
 import {
   captureDeleteSnapshotForTarget,
@@ -157,8 +158,9 @@ function makeOptimisticThreadReply(
 export function optimisticInsertChannelMessage(
   vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>
 ): InsertMessageContext | undefined {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
+  queryClient.cancelQueries({
+    queryKey: getChannelMessagesQueryKeyPrefix(vars.channelId),
+  });
 
   const now = new Date().toISOString();
   const newAttachments = makeOptimisticAttachments(
@@ -390,14 +392,13 @@ export function useSendMessageMutation(
     ...withCallbacks<IdResponse, Error, SendMessageParams, SendMessageContext>(
       {
         onMutate: async (vars) => {
-          await queryClient.cancelQueries({
-            queryKey: channelKeys.withID(vars.channelID).queryKey,
-          });
-          // Register nonces for deduplication when WebSocket events arrive
           registerMessageNonces(
             vars.optimisticId,
             vars.message.attachments.length > 0
           );
+          await queryClient.cancelQueries({
+            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+          });
           return optimisticInsertChannelMessage({
             channelId: vars.channelID,
             optimisticId: vars.optimisticId,
@@ -480,10 +481,10 @@ export function useDeleteMessageMutation(
     ...withCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>(
       {
         onMutate: async (vars) => {
-          await queryClient.cancelQueries({
-            queryKey: channelKeys.withID(vars.channelID).queryKey,
-          });
           deleteNonce.prepare(vars);
+          await queryClient.cancelQueries({
+            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+          });
           return optimisticDeleteChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
@@ -563,10 +564,10 @@ export function usePatchMessageMutation(
     >(
       {
         onMutate: async (vars) => {
-          await queryClient.cancelQueries({
-            queryKey: channelKeys.withID(vars.channelID).queryKey,
-          });
           patchNonce.prepare(vars);
+          await queryClient.cancelQueries({
+            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+          });
           return optimisticUpdateChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
