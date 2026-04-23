@@ -109,19 +109,23 @@ pub async fn grant_bundle_update(
         .map_err(|_| "Worker dropped the grant receiver".to_string())
 }
 
-/// Apply a completed bundle update: set the bundle root and navigate to it.
-#[tauri::command]
-#[tracing::instrument(err, skip(service, app_handle))]
-pub async fn perform_update<R: Runtime>(
-    service: tauri::State<'_, Mutex<PluginService>>,
-    app_handle: tauri::AppHandle<R>,
-) -> Result<(), String> {
-    let mut service = service.lock().await;
+/// Apply a completed bundle update to the live webview.
+///
+/// Returns `Ok(true)` if an update was applied, `Ok(false)` if the service is
+/// not in the `Completed` state (no pending update to commit).
+pub async fn apply_completed_update<R: Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+) -> Result<bool, String> {
+    let service_state = app_handle
+        .try_state::<Mutex<PluginService>>()
+        .ok_or_else(|| "Bundle updater plugin not initialized".to_string())?;
+    let mut service = service_state.lock().await;
+
     let entrypoint = {
         let status = service.status().borrow();
         match status.as_ref() {
             Ok(UpdateStatus::Completed(bundle_location)) => bundle_location.entrypoint.clone(),
-            _ => return Err("No pending update".into()),
+            _ => return Ok(false),
         }
     };
 
@@ -152,7 +156,19 @@ pub async fn perform_update<R: Runtime>(
         tracing::info!("Bundle update complete, reloading to pick up new assets");
         let _ = webview.eval("window.location.reload();");
     }
-    Ok(())
+    Ok(true)
+}
+
+/// Apply a completed bundle update: set the bundle root and navigate to it.
+#[tauri::command]
+#[tracing::instrument(err, skip(app_handle))]
+pub async fn perform_update<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+) -> Result<(), String> {
+    match apply_completed_update(&app_handle).await? {
+        true => Ok(()),
+        false => Err("No pending update".into()),
+    }
 }
 
 /// Trigger a manual check for bundle updates.
