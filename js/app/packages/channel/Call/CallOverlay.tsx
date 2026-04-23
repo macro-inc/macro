@@ -391,7 +391,6 @@ export function CallOverlay(props: { onLeave: () => void }) {
           <Screencast class="w-5 h-5" />
         </ControlButton>
 
-        <ControlButton onClick={props.onLeave} disabled={isConnecting()} danger>
         <div
           title={
             callCtx.isSharedWithTeam()
