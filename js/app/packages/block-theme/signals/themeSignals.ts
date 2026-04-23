@@ -1,4 +1,4 @@
-import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES, BLACK_BEZELS } from '../constants';
+import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES } from '../constants';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import type { ThemeV0, ThemeV1 } from '../types/themeTypes';
 import { convertThemev0v1 } from '../utils/themeMigrations';
@@ -74,39 +74,6 @@ export const [monochromeIcons, setMonochromeIcons] = makePersisted(
   {name: 'enable-monochrome-icons'}
 );
 
-
-export { beveledCorners, setBeveledCorners } from '../../core/signal/beveledCorners';
-
-export const [blackBezels, setBlackBezels] = makePersisted(
-  createSignal<boolean>(BLACK_BEZELS),
-  {name: 'macro-beveled-corners'}
-);
-
-export const [gutterSize, setGutterSize] = makePersisted(
-  createSignal<number>(8),
-  {name: 'macro-gutter-size'}
-);
-createEffect(() => {
-  document.documentElement.style.setProperty('--gutter-size', `${gutterSize()}px`);
-});
-/*
-  this should be a slider in a theme block
-  for now its only reachable via GlobalHotkeys.tsx
-  so this will do
-*/
-export function toggleGutterSize(){
-  if(gutterSize() === 8){setGutterSize(5)}
-  else(setGutterSize(8));
-}
-
-createEffect(() => {
-    if(blackBezels()){
-        document.documentElement.style.setProperty('--color-page', '#000');
-    }
-    else{
-        document.documentElement.style.setProperty('--color-page', 'var(--b3)');
-    }
-});
 
 createEffect(() => {
   if(monochromeIcons()){

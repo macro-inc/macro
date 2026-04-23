@@ -65,7 +65,7 @@ import { Dynamic } from 'solid-js/web';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
-import { beveledCorners } from '../signal/beveledCorners';
+
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
@@ -706,7 +706,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <ClippedPanel tl={!beveledCorners()} active>
+      <ClippedPanel active>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>

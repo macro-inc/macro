@@ -1,6 +1,5 @@
 import { cornerClip } from '@core/util/clipPath';
 import { createMemo, splitProps, type JSX } from 'solid-js';
-import { beveledCorners } from '../signal/beveledCorners';
 import { cn } from '@ui/utils/classname';
 
 export type ClippedPanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
@@ -44,7 +43,7 @@ export function ClippedPanel(props: ClippedPanelProps) {
 
   const clipEnabled = createMemo(() => {
     if (useCornerRadiusOverride()) return false;
-    return !beveledCorners();
+    return false;
   });
 
   const outerClipPath = createMemo(() => {
@@ -69,7 +68,6 @@ export function ClippedPanel(props: ClippedPanelProps) {
 
   const outerBorderRadius = createMemo(() => {
     if (useCornerRadiusOverride()) return local.cornerRadius;
-    if (!beveledCorners()) return '0';
     return `
             ${local.tl ? '16px' : '4px'}
             ${local.tr ? '16px' : '4px'}
@@ -80,7 +78,6 @@ export function ClippedPanel(props: ClippedPanelProps) {
 
   const innerBorderRadius = createMemo(() => {
     if (useCornerRadiusOverride()) return `calc(${local.cornerRadius} - 0.5px)`;
-    if (!beveledCorners()) return '0';
     return `
               ${local.tl ? '15.5px' : '3.3px'}
               ${local.tr ? '15.5px' : '3.3px'}
