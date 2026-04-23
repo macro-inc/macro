@@ -51,6 +51,7 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
     case 'CheckingForUpdate': return 'Checking for update...';
     case 'UpdateFound': return `Update available: v${status.data.version}`;
     case 'NoUpdateNeeded': return 'Up to date';
+    case 'WaitingForWifi': return 'Waiting for Wi-Fi to download';
     case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
     case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
     case 'Completed': return 'Update ready';
@@ -452,14 +453,19 @@ function NotificationNotSupported() {
   );
 }
 
-function bundleUpdateAction(status: BundleUpdateStatus): { label: string; action: () => void } | null {
+function bundleUpdateAction(
+  status: BundleUpdateStatus,
+  cancelWifiWait: () => void,
+): { label: string; action: () => void } | null {
   switch (status.status) {
     case 'Idle':
       return { label: 'Check for Update', action: () => invoke('check_for_update') };
     case 'Error':
       return { label: 'Retry', action: () => invoke('check_for_update') };
     case 'UpdateFound':
-      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }) };
+      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }).catch(console.error) };
+    case 'WaitingForWifi':
+      return { label: 'Download anyway', action: cancelWifiWait };
     case 'Completed':
       return { label: 'Update', action: () => invoke('perform_update') };
     default:
@@ -473,7 +479,7 @@ function BundleUpdateRow() {
     <Show when={tauri}>
       {(ctx) => {
         const status = () => ctx().bundleUpdateStatus();
-        const action = () => bundleUpdateAction(status());
+        const action = () => bundleUpdateAction(status(), ctx().cancelWifiWait);
         return (
           <div class="flex items-center justify-between mb-[18px]">
             <TabContentRow

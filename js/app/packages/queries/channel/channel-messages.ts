@@ -219,6 +219,15 @@ export function insertTopLevelMessageIntoChannelMessages(
 
   const [newestPage, ...olderPages] = data.pages;
 
+  // Only insert into cache entries that represent the bottom of the
+  // conversation. If the newest page has a previous_cursor, we're viewing
+  // a mid-conversation slice (e.g. load-around) and prepending here would
+  // place the message in the wrong position — and cause duplicates when
+  // fetchPreviousPage later fetches the same message from the server.
+  if (newestPage.previous_cursor) {
+    return data;
+  }
+
   return {
     ...data,
     pages: [
@@ -697,10 +706,13 @@ export function createMessageIndex(
 
     if (!pages?.length) return { items, keys, byId };
 
+    const seen = new Set<string>();
     for (let i = pages.length - 1; i >= 0; i--) {
       const pageItems = pages[i].items;
       for (let j = pageItems.length - 1; j >= 0; j--) {
         const message = pageItems[j];
+        if (seen.has(message.id)) continue;
+        seen.add(message.id);
         items.push(message);
         keys.push(message.id);
         byId.set(message.id, message);
