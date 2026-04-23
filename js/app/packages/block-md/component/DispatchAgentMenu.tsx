@@ -25,6 +25,8 @@ import ZedIcon from '@macro-icons/wide/zed-ide.svg';
 import CodexIcon from '@macro-icons/wide/codex-ide.svg';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import { createCallback } from '@solid-primitives/rootless';
+import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
+import PlugIcon from '@icon/regular/plug.svg';
 
 const MAX_BRANCH_LENGTH = 200;
 const LAST_USED_KEY = 'dispatch-agent-last-used';
@@ -158,16 +160,6 @@ const PLATFORM_ACTIONS: AgentAction[] = [
       ),
   },
   {
-    key: 'cursor-web',
-    name: 'Cursor Web',
-    icon: CursorIcon,
-    execute: (prompt) =>
-      window.open(
-        `https://cursor.com/link/prompt?text=${encodeURIComponent(prompt)}`,
-        '_blank'
-      ),
-  },
-  {
     key: 'zed',
     name: 'Zed',
     icon: ZedIcon,
@@ -248,6 +240,14 @@ export function DispatchAgentButton() {
             text={COPY_ACTION.name}
             icon={COPY_ACTION.icon}
             onClick={() => executeAction(COPY_ACTION)}
+          />
+          <MenuItem
+            text="MCP setup instructions"
+            icon={PlugIcon}
+            onClick={() => {
+              openMacroMcpSetupModal();
+              setOpen(false);
+            }}
           />
           <div class="my-1 h-[1px] bg-edge-muted/50" />
           <div class="px-2 py-1 text-xs text-ink-extra-muted font-medium">
