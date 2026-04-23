@@ -5,7 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type MatchType = (typeof MatchType)[keyof typeof MatchType];
+export type MatchType = typeof MatchType[keyof typeof MatchType];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const MatchType = {

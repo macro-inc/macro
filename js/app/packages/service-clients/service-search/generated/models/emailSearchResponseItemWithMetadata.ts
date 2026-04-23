@@ -12,5 +12,4 @@ import type { EmailSearchResponseItemWithMetadataAllOf } from './emailSearchResp
 timestamps in opensearch as they would require us to update each email message record for the thread
 every time the thread updates (specifically for updated_at and viewed_at)
  */
-export type EmailSearchResponseItemWithMetadata = EmailSearchResponseItem &
-  EmailSearchResponseItemWithMetadataAllOf;
+export type EmailSearchResponseItemWithMetadata = EmailSearchResponseItem & EmailSearchResponseItemWithMetadataAllOf;

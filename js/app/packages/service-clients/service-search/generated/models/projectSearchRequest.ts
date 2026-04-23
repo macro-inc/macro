@@ -7,5 +7,4 @@
 import type { ProjectSearchRequestAllOf } from './projectSearchRequestAllOf';
 import type { ProjectSearchRequestAllOfTwo } from './projectSearchRequestAllOfTwo';
 
-export type ProjectSearchRequest = ProjectSearchRequestAllOf &
-  ProjectSearchRequestAllOfTwo;
+export type ProjectSearchRequest = ProjectSearchRequestAllOf & ProjectSearchRequestAllOfTwo;

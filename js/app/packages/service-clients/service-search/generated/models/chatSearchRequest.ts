@@ -7,5 +7,4 @@
 import type { ChatSearchRequestAllOf } from './chatSearchRequestAllOf';
 import type { ChatSearchRequestAllOfTwo } from './chatSearchRequestAllOfTwo';
 
-export type ChatSearchRequest = ChatSearchRequestAllOf &
-  ChatSearchRequestAllOfTwo;
+export type ChatSearchRequest = ChatSearchRequestAllOf & ChatSearchRequestAllOfTwo;

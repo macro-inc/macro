@@ -388,6 +388,27 @@ pub struct SearchGotoChannel {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SearchGotoCallRecord {
+    /// The channel id the call belongs to.
+    pub channel_id: uuid::Uuid,
+    /// Primary key of the `call_record_transcripts` row. Lets the frontend
+    /// navigate to (and highlight) the specific matched segment inside the
+    /// call record view.
+    pub transcript_id: uuid::Uuid,
+    /// Speaker of the matched segment.
+    pub speaker_id: String,
+    /// Position of the segment within the call.
+    pub sequence_num: i32,
+    /// When the segment started (mirrors `call_record_transcripts.started_at`).
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    /// When the segment ended (may be null — some older segments don't
+    /// have an end time).
+    pub ended_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The macro user ids of call participants (copied from the call doc).
+    pub participant_ids: Vec<String>,
+}
+
 /// Enum containing structs for all data needed to handle search "goto" in the frontend
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 #[serde(untagged)]
@@ -396,6 +417,7 @@ pub enum SearchGotoContent {
     Chats(SearchGotoChat),
     Emails(SearchGotoEmail),
     Channels(SearchGotoChannel),
+    CallRecords(SearchGotoCallRecord),
     // there is no goto needed for projects
 }
 

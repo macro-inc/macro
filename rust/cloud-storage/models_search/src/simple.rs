@@ -50,6 +50,20 @@ pub struct SearchGotoChannel {
     pub channel_message_id: uuid::Uuid,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema, JsonSchema)]
+pub struct SearchGotoCallRecord {
+    pub channel_id: uuid::Uuid,
+    /// Primary key of the matched `call_record_transcripts` row.
+    pub transcript_id: uuid::Uuid,
+    /// Speaker of the matched segment.
+    pub speaker_id: String,
+    /// Position within the call.
+    pub sequence_num: i32,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub participant_ids: Vec<String>,
+}
+
 /// The search service version of a goto
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema, JsonSchema)]
 #[serde(untagged)]
@@ -58,6 +72,7 @@ pub enum SearchGotoContent {
     Chats(SearchGotoChat),
     Emails(SearchGotoEmail),
     Channels(SearchGotoChannel),
+    CallRecords(SearchGotoCallRecord),
 }
 
 impl From<opensearch_client::search::model::SearchGotoContent> for SearchGotoContent {
@@ -89,6 +104,17 @@ impl From<opensearch_client::search::model::SearchGotoContent> for SearchGotoCon
             opensearch_client::search::model::SearchGotoContent::Channels(a) => {
                 SearchGotoContent::Channels(SearchGotoChannel {
                     channel_message_id: a.channel_message_id,
+                })
+            }
+            opensearch_client::search::model::SearchGotoContent::CallRecords(a) => {
+                SearchGotoContent::CallRecords(SearchGotoCallRecord {
+                    channel_id: a.channel_id,
+                    transcript_id: a.transcript_id,
+                    speaker_id: a.speaker_id,
+                    sequence_num: a.sequence_num,
+                    started_at: a.started_at,
+                    ended_at: a.ended_at,
+                    participant_ids: a.participant_ids,
                 })
             }
         }

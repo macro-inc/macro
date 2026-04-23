@@ -6,5 +6,4 @@
  */
 import type { ChannelMetadata } from './channelMetadata';
 
-export type ChannelSearchResponseItemWithMetadataAllOfMetadata =
-  null | ChannelMetadata;
+export type ChannelSearchResponseItemWithMetadataAllOfMetadata = null | ChannelMetadata;

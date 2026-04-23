@@ -8,6 +8,4 @@
 /**
  * The raw content of the document
  */
-export type SimpleDocumentSearchResponseBaseItemHumanReadableTimestampRawContent =
-  | string
-  | null;
+export type SimpleDocumentSearchResponseBaseItemHumanReadableTimestampRawContent = string | null;

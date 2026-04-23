@@ -106,7 +106,14 @@ export interface ContentSearch {
   /**
    * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels']
    */
-  entityTypes: ('documents' | 'chats' | 'emails' | 'channels' | 'projects')[];
+  entityTypes: (
+    | 'documents'
+    | 'chats'
+    | 'emails'
+    | 'channels'
+    | 'projects'
+    | 'call_records'
+  )[];
   /**
    * The text content to search for. This searches within the body of documents, emails, and messages.
    */
@@ -573,6 +580,85 @@ export interface SearchToolResponse {
         type: 'project';
         updated_at: string;
       }
+    | {
+        /**
+         * The id of the call record.
+         */
+        call_id: string;
+        /**
+         * Hits for this call record (content matches).
+         */
+        call_search_results: {
+          /**
+           * The highlight fragments from the transcript/content.
+           */
+          highlight: {
+            /**
+             * The highlight match on the bcc (email only)
+             */
+            bcc?: string[];
+            /**
+             * The highlight match on the cc (email only)
+             */
+            cc?: string[];
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+            /**
+             * The highlight match on the recipients (email only)
+             */
+            recipients?: string[];
+            /**
+             * The highlight match on the sender (email only)
+             */
+            sender?: string | null;
+            /**
+             * The highlight match on the user (owner) of the entity
+             */
+            user_id?: string | null;
+          };
+          /**
+           * The score of the result.
+           */
+          score?: number | null;
+        }[];
+        /**
+         * The id of the channel the call belongs to.
+         */
+        channel_id: string;
+        /**
+         * Aligned identifier across response item shapes.
+         */
+        id: string;
+        /**
+         * Metadata from the database; `None` if the call record has since been deleted.
+         */
+        metadata?: {
+          channel_name?: string | null;
+          duration_ms: number;
+          ended_at: string;
+          started_at: string;
+          updated_at: string;
+        } | null;
+        /**
+         * Display name for the call — falls back to the channel name when available.
+         */
+        name?: string | null;
+        /**
+         * The macro user id of the call creator.
+         */
+        owner_id: string;
+        /**
+         * The macro user ids of call participants.
+         */
+        participant_ids: string[];
+        type: 'callRecord';
+      }
   )[];
 }
 
@@ -983,7 +1069,14 @@ export interface NameSearch {
   /**
    * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels']
    */
-  entityTypes: ('documents' | 'chats' | 'emails' | 'channels' | 'projects')[];
+  entityTypes: (
+    | 'documents'
+    | 'chats'
+    | 'emails'
+    | 'channels'
+    | 'projects'
+    | 'call_records'
+  )[];
   /**
    * The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names.
    */

@@ -8,7 +8,8 @@
 /**
  * Data type for property values, determining storage and validation.
  */
-export type DataType = (typeof DataType)[keyof typeof DataType];
+export type DataType = typeof DataType[keyof typeof DataType];
+
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DataType = {

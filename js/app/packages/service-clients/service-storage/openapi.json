@@ -12,7 +12,9 @@
   "paths": {
     "/activity": {
       "get": {
-        "tags": ["activity::get_recent_activity"],
+        "tags": [
+          "activity::get_recent_activity"
+        ],
         "summary": "Gets the users recent activities",
         "operationId": "get_recent_activity_handler",
         "parameters": [
@@ -84,7 +86,9 @@
     },
     "/annotations/anchors": {
       "delete": {
-        "tags": ["annotations::delete_anchor"],
+        "tags": [
+          "annotations::delete_anchor"
+        ],
         "summary": "Deletes a single unthreaded anchor for a document\nIf you need to delete a threaded anchor, see the delete comment handler",
         "operationId": "delete_anchor",
         "requestBody": {
@@ -141,7 +145,9 @@
         }
       },
       "patch": {
-        "tags": ["annotations::edit_anchor"],
+        "tags": [
+          "annotations::edit_anchor"
+        ],
         "summary": "Edits a single anchor for a document",
         "operationId": "edit_anchor",
         "requestBody": {
@@ -200,7 +206,9 @@
     },
     "/annotations/anchors/document/{document_id}": {
       "get": {
-        "tags": ["annotations::get"],
+        "tags": [
+          "annotations::get"
+        ],
         "summary": "Gets a set of comment anchors for a document",
         "operationId": "get_document_anchors",
         "parameters": [
@@ -258,7 +266,9 @@
         }
       },
       "post": {
-        "tags": ["annotations::create_anchor"],
+        "tags": [
+          "annotations::create_anchor"
+        ],
         "summary": "Creates an unthreaded anchor for a document\nIf you need to create a threaded anchor, see the create comment handler",
         "operationId": "create_anchor",
         "parameters": [
@@ -328,7 +338,9 @@
     },
     "/annotations/comments/comment/{comment_id}": {
       "delete": {
-        "tags": ["annotations::delete_comment"],
+        "tags": [
+          "annotations::delete_comment"
+        ],
         "summary": "Deletes a single comment for a document",
         "operationId": "delete_comment",
         "parameters": [
@@ -397,7 +409,9 @@
         }
       },
       "patch": {
-        "tags": ["annotations::edit_comment"],
+        "tags": [
+          "annotations::edit_comment"
+        ],
         "summary": "Edits a single comment for a document",
         "operationId": "edit_comment",
         "parameters": [
@@ -468,7 +482,9 @@
     },
     "/annotations/comments/document/{document_id}": {
       "get": {
-        "tags": ["annotations::get"],
+        "tags": [
+          "annotations::get"
+        ],
         "summary": "Gets a set of comment threads for a document",
         "operationId": "get_document_comments",
         "parameters": [
@@ -526,7 +542,9 @@
         }
       },
       "post": {
-        "tags": ["annotations::create_comment"],
+        "tags": [
+          "annotations::create_comment"
+        ],
         "summary": "Creates a single comment for a document\nOptionally creates a new thread/anchor if one does not exist",
         "operationId": "create_comment",
         "parameters": [
@@ -656,7 +674,9 @@
     },
     "/call/record/{call_id}": {
       "get": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `GET /call/record/{call_id}`.",
         "description": "Returns the full [`CallRecord`] (metadata + participants + transcript)\nfor a call identified by its own id. Covers both active and archived calls.\nAccess is validated via channel membership (MemberParticipantRole).",
         "operationId": "get_call_record",
@@ -716,7 +736,9 @@
         }
       },
       "delete": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `DELETE /call/record/{call_id}`.",
         "description": "Deletes a call record (and its participants/transcripts via cascade).\nAccess is validated via channel membership (MemberParticipantRole).",
         "operationId": "delete_call_record",
@@ -769,7 +791,9 @@
         }
       },
       "patch": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `PATCH /call/record/{call_id}`.",
         "description": "Edits a call record — currently supports updating the record's share\npermissions. Access is validated via channel membership",
         "operationId": "edit_call_record",
@@ -834,7 +858,9 @@
     },
     "/call/record/{call_id}/share-with-team/toggle": {
       "post": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `POST /call/record/{call_id}/share-with-team/toggle`.",
         "description": "Toggles the `share_with_team` flag on the active call. Returns the new\nvalue as the JSON body.",
         "operationId": "toggle_share_with_team",
@@ -896,7 +922,9 @@
     },
     "/call/webhook": {
       "post": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `POST /call/webhook`.",
         "description": "Receives webhook events from the RTC provider (e.g. LiveKit).\nThe `Authorization` header contains the webhook auth token\nand the body contains the raw event payload.",
         "operationId": "call_webhook",
@@ -922,7 +950,9 @@
     },
     "/call/{channel_id}": {
       "get": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `GET /call/{channel_id}`.",
         "description": "Gets or creates a call for the channel. If a call already exists, joins it;\notherwise creates a new one. Always returns a join token.",
         "operationId": "get_or_create_call",
@@ -972,7 +1002,9 @@
         }
       },
       "delete": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `DELETE /call/{channel_id}`.",
         "operationId": "leave_or_end_call",
         "parameters": [
@@ -1033,7 +1065,9 @@
     },
     "/call/{channel_id}/active": {
       "get": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `GET /call/{channel_id}/active`.",
         "description": "Returns 200 with call info if an active call exists, or 204 No Content if not.",
         "operationId": "check_active_call",
@@ -1088,7 +1122,9 @@
     },
     "/call/{channel_id}/transcript": {
       "post": {
-        "tags": ["call::inbound::axum_router"],
+        "tags": [
+          "call::inbound::axum_router"
+        ],
         "summary": "Handler for `POST /call/{channel_id}/transcript`.",
         "description": "Receives transcript segments from the transcription agent.\nAuthenticated via the `x-macro-internal-call` shared secret.\nDuplicate segments (same `segment_id`) are ignored.",
         "operationId": "ingest_transcript",
@@ -1153,7 +1189,9 @@
     },
     "/channels/{channel_id}/attachments": {
       "get": {
-        "tags": ["channels::inbound::axum_router"],
+        "tags": [
+          "channels::inbound::axum_router"
+        ],
         "summary": "Handler for `GET /channels/{channel_id}/attachments`.",
         "operationId": "get_channel_attachments",
         "parameters": [
@@ -1243,7 +1281,9 @@
     },
     "/channels/{channel_id}/messages": {
       "get": {
-        "tags": ["channels::inbound::axum_router"],
+        "tags": [
+          "channels::inbound::axum_router"
+        ],
         "summary": "Handler for `GET /channels/{channel_id}/messages`.",
         "operationId": "get_channel_messages",
         "parameters": [
@@ -1351,7 +1391,9 @@
         }
       },
       "post": {
-        "tags": ["channels::inbound::axum_router"],
+        "tags": [
+          "channels::inbound::axum_router"
+        ],
         "summary": "Handler for `POST /channels/{channel_id}/messages`.",
         "operationId": "post_channel_messages",
         "parameters": [
@@ -1471,7 +1513,9 @@
     },
     "/channels/{channel_id}/messages/{message_id}/replies": {
       "get": {
-        "tags": ["channels::inbound::axum_router"],
+        "tags": [
+          "channels::inbound::axum_router"
+        ],
         "summary": "Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.",
         "operationId": "get_thread_replies",
         "parameters": [
@@ -1545,7 +1589,9 @@
     },
     "/channels/{channel_id}/participants": {
       "get": {
-        "tags": ["channels::inbound::axum_router"],
+        "tags": [
+          "channels::inbound::axum_router"
+        ],
         "summary": "Handler for `GET /channels/{channel_id}/participants`.",
         "operationId": "get_channel_participants",
         "parameters": [
@@ -1609,7 +1655,9 @@
     },
     "/documents": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Gets the users documents to populate their recent document list",
         "operationId": "get_user_documents_handler",
         "parameters": [
@@ -1687,7 +1735,9 @@
         }
       },
       "post": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Handler for `POST /documents`.",
         "description": "Creates a new document, generates an S3 presigned upload URL, and returns\nthe document metadata with the URL for the client to upload to.",
         "operationId": "create_document",
@@ -1708,7 +1758,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["error", "data"],
+                  "required": [
+                    "error",
+                    "data"
+                  ],
                   "properties": {
                     "data": {
                       "oneOf": [
@@ -1719,14 +1772,19 @@
                             },
                             {
                               "type": "object",
-                              "required": ["contentType"],
+                              "required": [
+                                "contentType"
+                              ],
                               "properties": {
                                 "contentType": {
                                   "type": "string",
                                   "description": "Content type of the document converted from file type"
                                 },
                                 "fileType": {
-                                  "type": ["string", "null"],
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
                                   "description": "The file type of the document"
                                 }
                               }
@@ -1790,7 +1848,9 @@
     },
     "/documents/create_task": {
       "post": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Creates a task document with properties in a single call.",
         "description": "This endpoint creates task metadata and sets properties atomically.\nTask content should be set separately via the sync service.",
         "operationId": "create_task_handler",
@@ -1812,7 +1872,9 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a task.",
-                  "required": ["documentId"],
+                  "required": [
+                    "documentId"
+                  ],
                   "properties": {
                     "documentId": {
                       "type": "string",
@@ -1858,7 +1920,9 @@
     },
     "/documents/initialize_user_documents": {
       "post": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "operationId": "initialize_user_documents",
         "responses": {
           "200": {
@@ -1906,7 +1970,9 @@
     },
     "/documents/list": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Gets a list of all the user's documents so they are able to be searched on",
         "operationId": "get_document_list_handler",
         "responses": {
@@ -1955,7 +2021,9 @@
     },
     "/documents/permissions_token/validate": {
       "post": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Validates the provided document permissions token",
         "operationId": "validate_document_permissions_token",
         "requestBody": {
@@ -2014,7 +2082,9 @@
     },
     "/documents/permissions_token/{document_id}": {
       "post": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Generates a document permissions token for a provided document id",
         "operationId": "get_document_permissions_token",
         "parameters": [
@@ -2074,7 +2144,9 @@
     },
     "/documents/presave/{document_id}": {
       "put": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Takes the docx document bom parts and generates presigned urls to upload\nany new content",
         "operationId": "presave_document_handler",
         "parameters": [
@@ -2145,7 +2217,9 @@
     },
     "/documents/preview": {
       "post": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "operationId": "get_batch_preview_handler",
         "requestBody": {
           "content": {
@@ -2203,7 +2277,9 @@
     },
     "/documents/{document_id}": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Handler for `GET /documents/{document_id}`.",
         "description": "Returns document metadata, user access level, and view location.",
         "operationId": "get_document",
@@ -2262,7 +2338,9 @@
         }
       },
       "put": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Creates a new version of a document",
         "operationId": "save_document_handler",
         "parameters": [
@@ -2340,7 +2418,9 @@
         }
       },
       "delete": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Handler for `DELETE /documents/{document_id}`.",
         "description": "Soft-deletes a document (only owners can delete).",
         "operationId": "delete_document",
@@ -2399,7 +2479,9 @@
         }
       },
       "patch": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Handler for `PATCH /documents/{document_id}`.",
         "description": "Edits document metadata such as name or project, and modifies\nthe document's share permissions. Requires edit access to the document,\nand edit access to the target project if moving the document.",
         "operationId": "edit_document",
@@ -2480,7 +2562,9 @@
     },
     "/documents/{document_id}/copy": {
       "post": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Handler for `POST /documents/{document_id}/copy`.",
         "description": "Copies an existing document, creating a new document with the same content.\nDoes not require re-uploading the document file.",
         "operationId": "copy_document",
@@ -2571,7 +2655,9 @@
     },
     "/documents/{document_id}/export": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Generates a presigned url to download the raw content of the document\nFor files with modification layers, they will not be applied in the downloaded file.",
         "operationId": "export_document",
         "parameters": [
@@ -2641,7 +2727,9 @@
     },
     "/documents/{document_id}/location": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Gets the presigned url(s) for the document. aka location",
         "operationId": "get_location_handler",
         "parameters": [
@@ -2730,7 +2818,9 @@
     },
     "/documents/{document_id}/location_v3": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Handler for `GET /documents/{document_id}/location_v3`.",
         "description": "Returns a presigned URL or sync service content for accessing the document.",
         "operationId": "get_document_location_v3",
@@ -2813,7 +2903,9 @@
     },
     "/documents/{document_id}/permanent": {
       "delete": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Permanently deletes a document.",
         "operationId": "permanently_delete_document",
         "parameters": [
@@ -2873,7 +2965,9 @@
     },
     "/documents/{document_id}/processing": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Fetches the document pdf processing result for a given document id",
         "operationId": "get_document_processing_result",
         "parameters": [
@@ -2933,7 +3027,9 @@
     },
     "/documents/{document_id}/processing/{job_id}": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Fetches the document processing result for a given document id and job id",
         "operationId": "job_processing_result_handler",
         "parameters": [
@@ -3002,7 +3098,9 @@
     },
     "/documents/{document_id}/revert_delete": {
       "put": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Deletes a specific document",
         "operationId": "revert_delete_document",
         "parameters": [
@@ -3062,7 +3160,9 @@
     },
     "/documents/{document_id}/short_id": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Handler for `GET /documents/{document_id}/short_id`.",
         "description": "Returns the short UUID for a document.",
         "operationId": "get_document_short_id",
@@ -3123,7 +3223,9 @@
     },
     "/documents/{document_id}/simple_save": {
       "put": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "For any file that isn't PDF or DOCX, use this endpoint for saving.\nThis endpoint will allow you to save the document by providing the file content as part of a multipart request. Use key 'file' along with the file bytes.\nsimple_save is different than the save_document endpoint because it does not return a presigned URL, Instead, it simply saves the file to S3 directly (and returns the document metadata).",
         "operationId": "simple_save",
         "parameters": [
@@ -3183,7 +3285,9 @@
     },
     "/documents/{document_id}/views": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Gets the list of users who have viewed a given document",
         "operationId": "get_document_views_handler",
         "parameters": [
@@ -3243,7 +3347,9 @@
     },
     "/documents/{document_id}/{document_version_id}": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Gets a particular document by its id",
         "operationId": "get_document_version",
         "parameters": [
@@ -3313,7 +3419,9 @@
     },
     "/entity/{entity_type}/{entity_id}/permissions": {
       "get": {
-        "tags": ["entity::get_entity_permission"],
+        "tags": [
+          "entity::get_entity_permission"
+        ],
         "summary": "Get the current user's permission for a given entity.",
         "operationId": "get_entity_permission",
         "parameters": [
@@ -3361,7 +3469,9 @@
     },
     "/github/install-sync": {
       "get": {
-        "tags": ["github::inbound::github_sync_router"],
+        "tags": [
+          "github::inbound::github_sync_router"
+        ],
         "summary": "Redirects the user to the github sync app installation page.",
         "operationId": "install_sync",
         "responses": {
@@ -3373,7 +3483,9 @@
     },
     "/health": {
       "get": {
-        "tags": ["health"],
+        "tags": [
+          "health"
+        ],
         "summary": "Health check",
         "operationId": "health_handler",
         "responses": {
@@ -3392,7 +3504,9 @@
     },
     "/history": {
       "get": {
-        "tags": ["history::get_history"],
+        "tags": [
+          "history::get_history"
+        ],
         "summary": "Gets the users history",
         "operationId": "get_history_handler",
         "responses": {
@@ -3431,7 +3545,9 @@
     },
     "/history/{item_type}/{item_id}": {
       "post": {
-        "tags": ["history::upsert_history"],
+        "tags": [
+          "history::upsert_history"
+        ],
         "summary": "Upserts an item into the user's history and performs other necessary tracking actions",
         "operationId": "upsert_history_handler",
         "parameters": [
@@ -3508,7 +3624,9 @@
         }
       },
       "delete": {
-        "tags": ["history::delete_history"],
+        "tags": [
+          "history::delete_history"
+        ],
         "summary": "Deletes an item from the user's history",
         "operationId": "delete_history_handler",
         "parameters": [
@@ -3567,7 +3685,9 @@
     },
     "/instructions": {
       "get": {
-        "tags": ["instructions::get_instructions"],
+        "tags": [
+          "instructions::get_instructions"
+        ],
         "summary": "Gets the instructions document for the current user",
         "operationId": "get_instructions_handler",
         "responses": {
@@ -3614,7 +3734,9 @@
         }
       },
       "post": {
-        "tags": ["instructions::create_instructions"],
+        "tags": [
+          "instructions::create_instructions"
+        ],
         "summary": "Creates an instructions document for the current user",
         "operationId": "create_instructions_handler",
         "responses": {
@@ -3663,7 +3785,9 @@
     },
     "/items/soup": {
       "get": {
-        "tags": ["soup::inbound::axum_router"],
+        "tags": [
+          "soup::inbound::axum_router"
+        ],
         "summary": "Gets the items the user has access to",
         "operationId": "get_items_soup",
         "parameters": [
@@ -3730,7 +3854,9 @@
         }
       },
       "post": {
-        "tags": ["soup::inbound::axum_router"],
+        "tags": [
+          "soup::inbound::axum_router"
+        ],
         "summary": "Gets the items the user has access to",
         "operationId": "post_items_soup",
         "parameters": [
@@ -3780,7 +3906,9 @@
     },
     "/items/soup/ast": {
       "post": {
-        "tags": ["soup::inbound::axum_router"],
+        "tags": [
+          "soup::inbound::axum_router"
+        ],
         "summary": "Gets the items the user has access to using AST filters",
         "operationId": "post_items_soup_ast",
         "parameters": [
@@ -3830,7 +3958,9 @@
     },
     "/pins": {
       "get": {
-        "tags": ["pins::get_pins"],
+        "tags": [
+          "pins::get_pins"
+        ],
         "summary": "Gets the users pinned items",
         "operationId": "get_pins_handler",
         "responses": {
@@ -3867,7 +3997,9 @@
         }
       },
       "patch": {
-        "tags": ["pins::reorder_pins"],
+        "tags": [
+          "pins::reorder_pins"
+        ],
         "summary": "Saves the updated order of the pins for the user",
         "operationId": "reorder_pins_handler",
         "requestBody": {
@@ -3929,7 +4061,9 @@
     },
     "/pins/{pinned_item_id}": {
       "post": {
-        "tags": ["pins::add_pin"],
+        "tags": [
+          "pins::add_pin"
+        ],
         "summary": "Pins the item for the user",
         "operationId": "add_pin_handler",
         "parameters": [
@@ -3997,7 +4131,9 @@
         }
       },
       "delete": {
-        "tags": ["pins::remove_pin"],
+        "tags": [
+          "pins::remove_pin"
+        ],
         "summary": "Deletes the pin for the user",
         "operationId": "remove_pin_handler",
         "parameters": [
@@ -4067,7 +4203,9 @@
     },
     "/projects": {
       "get": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Gets all the users projects. This includes projects shared with the user.",
         "operationId": "get_projects_handler",
         "responses": {
@@ -4104,7 +4242,9 @@
         }
       },
       "post": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Creates a new project.\nThe project can be created as a sub-project of another project or as a top-level project.",
         "operationId": "create_project_handler",
         "requestBody": {
@@ -4153,7 +4293,9 @@
     },
     "/projects/pending": {
       "get": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Gets all the users projects that are pending upload. This includes projects shared with the user.",
         "operationId": "get_pending_projects_handler",
         "responses": {
@@ -4163,7 +4305,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["error", "data"],
+                  "required": [
+                    "error",
+                    "data"
+                  ],
                   "properties": {
                     "data": {
                       "oneOf": [
@@ -4176,7 +4321,9 @@
                               },
                               {
                                 "type": "object",
-                                "required": ["documentStatuses"],
+                                "required": [
+                                  "documentStatuses"
+                                ],
                                 "properties": {
                                   "documentStatuses": {
                                     "type": "array",
@@ -4226,7 +4373,9 @@
     },
     "/projects/preview": {
       "post": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "operationId": "get_batch_project_preview",
         "requestBody": {
           "content": {
@@ -4274,7 +4423,9 @@
     },
     "/projects/upload": {
       "post": {
-        "tags": ["projects::upload_folder"],
+        "tags": [
+          "projects::upload_folder"
+        ],
         "summary": "Uploads a folder to the user's cloud storage. Mimicing the folder structure\nwith projects and placing all documents in the correct location.",
         "operationId": "upload_folder_handler",
         "requestBody": {
@@ -4294,13 +4445,19 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["error", "data"],
+                  "required": [
+                    "error",
+                    "data"
+                  ],
                   "properties": {
                     "data": {
                       "oneOf": [
                         {
                           "type": "object",
-                          "required": ["fileSystem", "destinationMap"],
+                          "required": [
+                            "fileSystem",
+                            "destinationMap"
+                          ],
                           "properties": {
                             "destinationMap": {
                               "$ref": "#/components/schemas/HashMap",
@@ -4359,7 +4516,9 @@
     },
     "/projects/upload_extract": {
       "post": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Creates a request id in the dynamodb table for tracking the upload\nReturns a presigned url for uploading a zip file to the staging bucket\nReturns a request id for tracking the upload",
         "operationId": "upload_extract_folder_handler",
         "requestBody": {
@@ -4379,13 +4538,19 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["error", "data"],
+                  "required": [
+                    "error",
+                    "data"
+                  ],
                   "properties": {
                     "data": {
                       "oneOf": [
                         {
                           "type": "object",
-                          "required": ["requestId", "presignedUrl"],
+                          "required": [
+                            "requestId",
+                            "presignedUrl"
+                          ],
                           "properties": {
                             "presignedUrl": {
                               "type": "string"
@@ -4442,7 +4607,9 @@
     },
     "/projects/{id}": {
       "get": {
-        "tags": ["projects::get_project"],
+        "tags": [
+          "projects::get_project"
+        ],
         "operationId": "get_project_handler",
         "parameters": [
           {
@@ -4489,7 +4656,9 @@
         }
       },
       "delete": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Deletes a project.\nSoft deletes the project and all of its children.",
         "operationId": "delete_project_handler",
         "parameters": [
@@ -4510,7 +4679,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["error", "data"],
+                  "required": [
+                    "error",
+                    "data"
+                  ],
                   "properties": {
                     "data": {
                       "oneOf": [
@@ -4582,7 +4754,9 @@
     },
     "/projects/{id}/access_level": {
       "get": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Gets the user's access level to the project",
         "operationId": "get_project_user_access_level",
         "parameters": [
@@ -4642,7 +4816,9 @@
     },
     "/projects/{id}/content": {
       "get": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Gets the content of a project.\nThis includes the projects sub-projects as well as the items in the project.",
         "operationId": "get_project_content_handler",
         "parameters": [
@@ -4692,7 +4868,9 @@
     },
     "/projects/{id}/permanent": {
       "delete": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Permanently deletes a project and all of it's children.",
         "operationId": "permanently_delete_project",
         "parameters": [
@@ -4752,7 +4930,9 @@
     },
     "/projects/{id}/permissions": {
       "get": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Gets the current documents share permissions\nGets the projects share permissions",
         "operationId": "get_project_permissions_v2",
         "parameters": [
@@ -4802,7 +4982,9 @@
     },
     "/projects/{id}/revert_delete": {
       "put": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Deletes a specific document",
         "operationId": "revert_delete_project",
         "parameters": [
@@ -4862,7 +5044,9 @@
     },
     "/recents/deleted": {
       "get": {
-        "tags": ["recents"],
+        "tags": [
+          "recents"
+        ],
         "summary": "Gets the users recently deleted items.",
         "operationId": "recently_deleted",
         "responses": {
@@ -4911,7 +5095,9 @@
     },
     "/saved_views": {
       "get": {
-        "tags": ["saved_views"],
+        "tags": [
+          "saved_views"
+        ],
         "operationId": "get_views_handler",
         "responses": {
           "200": {
@@ -4947,7 +5133,9 @@
         }
       },
       "post": {
-        "tags": ["saved_views"],
+        "tags": [
+          "saved_views"
+        ],
         "operationId": "create_view_handler",
         "requestBody": {
           "content": {
@@ -4993,7 +5181,9 @@
         }
       },
       "delete": {
-        "tags": ["saved_views"],
+        "tags": [
+          "saved_views"
+        ],
         "operationId": "delete_view_handler",
         "parameters": [
           {
@@ -5035,7 +5225,9 @@
     },
     "/saved_views/exclude_default": {
       "post": {
-        "tags": ["saved_views"],
+        "tags": [
+          "saved_views"
+        ],
         "operationId": "exclude_default_view_handler",
         "requestBody": {
           "content": {
@@ -5076,7 +5268,9 @@
     },
     "/saved_views/{saved_view_id}": {
       "patch": {
-        "tags": ["saved_views"],
+        "tags": [
+          "saved_views"
+        ],
         "operationId": "patch_view_handler",
         "parameters": [
           {
@@ -5128,7 +5322,9 @@
     },
     "/threads/{thread_id}": {
       "patch": {
-        "tags": ["threads"],
+        "tags": [
+          "threads"
+        ],
         "summary": "Edits the share permissions of a thread.",
         "operationId": "edit_thread_v2",
         "parameters": [
@@ -5359,7 +5555,9 @@
     },
     "/v2/documents/{document_id}/permissions": {
       "get": {
-        "tags": ["document"],
+        "tags": [
+          "document"
+        ],
         "summary": "Gets the current documents share permissions",
         "operationId": "get_document_permissions_v2",
         "parameters": [
@@ -5409,7 +5607,9 @@
     },
     "/v2/projects/{id}": {
       "patch": {
-        "tags": ["project"],
+        "tags": [
+          "project"
+        ],
         "summary": "Edits a project.",
         "operationId": "edit_project_v2",
         "parameters": [
@@ -5473,13 +5673,20 @@
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
-        "enum": ["view", "comment", "edit", "owner"]
+        "enum": [
+          "view",
+          "comment",
+          "edit",
+          "owner"
+        ]
       },
       "Activity": {
         "oneOf": [
           {
             "type": "object",
-            "required": ["Document"],
+            "required": [
+              "Document"
+            ],
             "properties": {
               "Document": {
                 "$ref": "#/components/schemas/BasicDocument"
@@ -5488,7 +5695,9 @@
           },
           {
             "type": "object",
-            "required": ["Chat"],
+            "required": [
+              "Chat"
+            ],
             "properties": {
               "Chat": {
                 "$ref": "#/components/schemas/Chat"
@@ -5499,7 +5708,10 @@
       },
       "AddPinRequest": {
         "type": "object",
-        "required": ["pinType", "pinIndex"],
+        "required": [
+          "pinType",
+          "pinIndex"
+        ],
         "properties": {
           "pinIndex": {
             "type": "integer",
@@ -5528,11 +5740,15 @@
               },
               {
                 "type": "object",
-                "required": ["fileType"],
+                "required": [
+                  "fileType"
+                ],
                 "properties": {
                   "fileType": {
                     "type": "string",
-                    "enum": ["pdf"]
+                    "enum": [
+                      "pdf"
+                    ]
                   }
                 }
               }
@@ -5549,11 +5765,15 @@
               },
               {
                 "type": "object",
-                "required": ["fileType"],
+                "required": [
+                  "fileType"
+                ],
                 "properties": {
                   "fileType": {
                     "type": "string",
-                    "enum": ["pdf"]
+                    "enum": [
+                      "pdf"
+                    ]
                   }
                 }
               }
@@ -5563,7 +5783,9 @@
       },
       "AnchorResponse": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -5577,11 +5799,18 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["payload", "updateType"],
+            "required": [
+              "payload",
+              "updateType"
+            ],
             "properties": {
               "payload": {
                 "type": "object",
-                "required": ["sender", "documentId", "response"],
+                "required": [
+                  "sender",
+                  "documentId",
+                  "response"
+                ],
                 "properties": {
                   "documentId": {
                     "type": "string"
@@ -5596,17 +5825,26 @@
               },
               "updateType": {
                 "type": "string",
-                "enum": ["create-comment"]
+                "enum": [
+                  "create-comment"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["payload", "updateType"],
+            "required": [
+              "payload",
+              "updateType"
+            ],
             "properties": {
               "payload": {
                 "type": "object",
-                "required": ["sender", "documentId", "response"],
+                "required": [
+                  "sender",
+                  "documentId",
+                  "response"
+                ],
                 "properties": {
                   "documentId": {
                     "type": "string"
@@ -5621,17 +5859,26 @@
               },
               "updateType": {
                 "type": "string",
-                "enum": ["create-anchor"]
+                "enum": [
+                  "create-anchor"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["payload", "updateType"],
+            "required": [
+              "payload",
+              "updateType"
+            ],
             "properties": {
               "payload": {
                 "type": "object",
-                "required": ["sender", "documentId", "response"],
+                "required": [
+                  "sender",
+                  "documentId",
+                  "response"
+                ],
                 "properties": {
                   "documentId": {
                     "type": "string"
@@ -5646,17 +5893,26 @@
               },
               "updateType": {
                 "type": "string",
-                "enum": ["edit-comment"]
+                "enum": [
+                  "edit-comment"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["payload", "updateType"],
+            "required": [
+              "payload",
+              "updateType"
+            ],
             "properties": {
               "payload": {
                 "type": "object",
-                "required": ["sender", "documentId", "response"],
+                "required": [
+                  "sender",
+                  "documentId",
+                  "response"
+                ],
                 "properties": {
                   "documentId": {
                     "type": "string"
@@ -5671,17 +5927,26 @@
               },
               "updateType": {
                 "type": "string",
-                "enum": ["edit-anchor"]
+                "enum": [
+                  "edit-anchor"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["payload", "updateType"],
+            "required": [
+              "payload",
+              "updateType"
+            ],
             "properties": {
               "payload": {
                 "type": "object",
-                "required": ["sender", "documentId", "response"],
+                "required": [
+                  "sender",
+                  "documentId",
+                  "response"
+                ],
                 "properties": {
                   "documentId": {
                     "type": "string"
@@ -5696,17 +5961,26 @@
               },
               "updateType": {
                 "type": "string",
-                "enum": ["delete-comment"]
+                "enum": [
+                  "delete-comment"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["payload", "updateType"],
+            "required": [
+              "payload",
+              "updateType"
+            ],
             "properties": {
               "payload": {
                 "type": "object",
-                "required": ["sender", "documentId", "response"],
+                "required": [
+                  "sender",
+                  "documentId",
+                  "response"
+                ],
                 "properties": {
                   "documentId": {
                     "type": "string"
@@ -5721,7 +5995,9 @@
               },
               "updateType": {
                 "type": "string",
-                "enum": ["delete-anchor"]
+                "enum": [
+                  "delete-anchor"
+                ]
               }
             }
           }
@@ -5759,7 +6035,10 @@
             "description": "Type of entity."
           },
           "height": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "Height (for images)."
           },
@@ -5778,7 +6057,10 @@
             "description": "The user who sent the message containing this attachment."
           },
           "width": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "Width (for images)."
           }
@@ -5787,7 +6069,9 @@
       "ApiChannelAttachmentsPage": {
         "type": "object",
         "description": "Paginated response of channel attachments.",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -5797,7 +6081,10 @@
             "description": "Attachments on this page."
           },
           "next_cursor": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Cursor for the next page, null if no more pages."
           }
         }
@@ -5839,12 +6126,18 @@
             "description": "When the message was created."
           },
           "deleted_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the message was soft-deleted."
           },
           "edited_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the message was edited."
           },
@@ -5878,7 +6171,9 @@
       "ApiChannelMessagesPage": {
         "type": "object",
         "description": "Paginated response of channel messages.",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -5888,11 +6183,17 @@
             "description": "Messages on this page."
           },
           "next_cursor": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Cursor for the next page, null if no more pages."
           },
           "previous_cursor": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Cursor for the previous page, null if no newer page exists."
           }
         }
@@ -5900,7 +6201,12 @@
       "ApiChannelParticipant": {
         "type": "object",
         "description": "A channel participant.",
-        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "required": [
+          "channel_id",
+          "user_id",
+          "role",
+          "joined_at"
+        ],
         "properties": {
           "channel_id": {
             "type": "string",
@@ -5925,7 +6231,10 @@
       "ApiCountedReaction": {
         "type": "object",
         "description": "A reaction with emoji and user list.",
-        "required": ["emoji", "users"],
+        "required": [
+          "emoji",
+          "users"
+        ],
         "properties": {
           "emoji": {
             "type": "string",
@@ -5943,7 +6252,12 @@
       "ApiMessageAttachment": {
         "type": "object",
         "description": "An attachment on a message.",
-        "required": ["id", "entity_type", "entity_id", "created_at"],
+        "required": [
+          "id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
@@ -5959,7 +6273,10 @@
             "description": "Type of entity."
           },
           "height": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "Height (for images)."
           },
@@ -5969,7 +6286,10 @@
             "description": "Attachment id."
           },
           "width": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "Width (for images)."
           }
@@ -5978,15 +6298,25 @@
       "ApiParticipantRole": {
         "type": "string",
         "description": "Participant role in a channel.",
-        "enum": ["owner", "admin", "member"]
+        "enum": [
+          "owner",
+          "admin",
+          "member"
+        ]
       },
       "ApiThreadInfo": {
         "type": "object",
         "description": "Thread metadata and preview replies.",
-        "required": ["reply_count", "preview"],
+        "required": [
+          "reply_count",
+          "preview"
+        ],
         "properties": {
           "latest_reply_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "Timestamp of the latest reply."
           },
@@ -6034,7 +6364,10 @@
             "description": "When the reply was created."
           },
           "edited_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the reply was edited."
           },
@@ -6063,29 +6396,49 @@
       },
       "BasicDocument": {
         "type": "object",
-        "required": ["id", "documentVersionId", "owner", "name"],
+        "required": [
+          "id",
+          "documentVersionId",
+          "owner",
+          "name"
+        ],
         "properties": {
           "branchedFromId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The id of the document this document branched from"
           },
           "branchedFromVersionId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentFamilyId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the document family this document belongs to"
           },
@@ -6095,7 +6448,10 @@
             "description": "The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type"
           },
           "fileType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The file type of the document (e.g. pdf, docx)"
           },
           "id": {
@@ -6111,11 +6467,17 @@
             "description": "The owner of the document"
           },
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The id of the project that this document belongs to"
           },
           "sha": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
           },
           "subType": {
@@ -6130,7 +6492,10 @@
             ]
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
@@ -6141,7 +6506,10 @@
           {
             "type": "object",
             "description": "A task document with its associated properties",
-            "required": ["is_completed", "type"],
+            "required": [
+              "is_completed",
+              "type"
+            ],
             "properties": {
               "is_completed": {
                 "type": "boolean",
@@ -6149,7 +6517,9 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["task"]
+                "enum": [
+                  "task"
+                ]
               }
             }
           }
@@ -6158,7 +6528,11 @@
       },
       "BomPart": {
         "type": "object",
-        "required": ["id", "sha", "path"],
+        "required": [
+          "id",
+          "sha",
+          "path"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -6177,7 +6551,12 @@
       "CallActiveResponse": {
         "type": "object",
         "description": "Response indicating whether an active call exists for a channel.",
-        "required": ["callId", "channelId", "createdBy", "createdAt"],
+        "required": [
+          "callId",
+          "channelId",
+          "createdBy",
+          "createdAt"
+        ],
         "properties": {
           "callId": {
             "type": "string",
@@ -6205,7 +6584,10 @@
         "description": "Filters for call records.",
         "properties": {
           "attended": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "channel_ids": {
@@ -6242,7 +6624,10 @@
             "description": "The channel this call belongs to."
           },
           "channelName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Resolved display name for the channel."
           },
           "createdBy": {
@@ -6250,16 +6635,25 @@
             "description": "User who created the call."
           },
           "durationMs": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "Call duration in milliseconds (None if still active)."
           },
           "egressId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Recording egress ID, if any."
           },
           "endedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the call ended (None if still active)."
           },
@@ -6275,7 +6669,10 @@
             "description": "Participants (both active and historic)."
           },
           "recordingUrl": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Presigned URL for the call recording, if available."
           },
           "roomName": {
@@ -6299,7 +6696,10 @@
       "CallRecordParticipant": {
         "type": "object",
         "description": "A participant as returned in a [`CallRecord`] (historic — includes `left_at`).",
-        "required": ["userId", "joinedAt"],
+        "required": [
+          "userId",
+          "joinedAt"
+        ],
         "properties": {
           "joinedAt": {
             "type": "string",
@@ -6307,7 +6707,10 @@
             "description": "When the user joined the call."
           },
           "leftAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the user left (None if still in an active call)."
           },
@@ -6394,7 +6797,12 @@
       "CallRecordTranscriptSegment": {
         "type": "object",
         "description": "A transcript segment as returned in a [`CallRecord`].",
-        "required": ["speakerId", "content", "startedAt", "sequenceNum"],
+        "required": [
+          "speakerId",
+          "content",
+          "startedAt",
+          "sequenceNum"
+        ],
         "properties": {
           "content": {
             "type": "string",
@@ -6405,12 +6813,18 @@
             "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Unique across tracks in the call. `None` when the provider didn't\nreturn a speaker label."
           },
           "endedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the speaker stopped (if known)."
           },
           "segmentId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "LiveKit segment ID (nullable for archived records)."
           },
           "sequenceNum": {
@@ -6432,7 +6846,13 @@
       "CallTokenResponse": {
         "type": "object",
         "description": "Response returned when creating or joining a call.",
-        "required": ["callId", "channelId", "token", "roomName", "serverUrl"],
+        "required": [
+          "callId",
+          "channelId",
+          "token",
+          "roomName",
+          "serverUrl"
+        ],
         "properties": {
           "callId": {
             "type": "string",
@@ -6480,10 +6900,16 @@
             "format": "uuid"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "org_id": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "minimum": 0
           },
@@ -6491,7 +6917,10 @@
             "type": "string"
           },
           "team_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "updated_at": {
@@ -6519,7 +6948,10 @@
             "description": "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
           },
           "importance": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "mentions": {
@@ -6534,7 +6966,10 @@
             "description": "Filter by channel notification state."
           },
           "org_id": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "Channel organization ID to search within. Empty to ignore organization filtering."
           },
@@ -6546,7 +6981,10 @@
             "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
           },
           "team_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Channel team ID to search within. Empty to ignore team filtering."
           },
           "thread_ids": {
@@ -6577,7 +7015,10 @@
             "format": "date-time"
           },
           "deleted_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "mentions": {
@@ -6595,7 +7036,10 @@
             "type": "string"
           },
           "thread_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "updated_at": {
@@ -6609,7 +7053,10 @@
         "description": "Filters for channel message queries.",
         "properties": {
           "last_activity": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When set, only return top-level messages that have activity after this\ntimestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time."
           },
@@ -6625,7 +7072,12 @@
       },
       "ChannelParticipant": {
         "type": "object",
-        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "required": [
+          "channel_id",
+          "user_id",
+          "role",
+          "joined_at"
+        ],
         "properties": {
           "channel_id": {
             "type": "string",
@@ -6636,7 +7088,10 @@
             "format": "date-time"
           },
           "left_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "role": {
@@ -6650,7 +7105,10 @@
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
-        "required": ["channel_id", "access_level"],
+        "required": [
+          "channel_id",
+          "access_level"
+        ],
         "properties": {
           "access_level": {
             "$ref": "#/components/schemas/AccessLevel",
@@ -6664,11 +7122,20 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "direct_message", "team"]
+        "enum": [
+          "public",
+          "organization",
+          "private",
+          "direct_message",
+          "team"
+        ]
       },
       "ChannelWithParticipants": {
         "type": "object",
-        "required": ["channel", "participants"],
+        "required": [
+          "channel",
+          "participants"
+        ],
         "properties": {
           "channel": {
             "$ref": "#/components/schemas/Channel"
@@ -6683,15 +7150,26 @@
       },
       "Chat": {
         "type": "object",
-        "required": ["id", "name", "userId", "isPersistent"],
+        "required": [
+          "id",
+          "name",
+          "userId",
+          "isPersistent"
+        ],
         "properties": {
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the chat was deleted"
           },
@@ -6703,7 +7181,10 @@
             "type": "boolean"
           },
           "model": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The model used to generate the chat"
           },
           "name": {
@@ -6711,15 +7192,24 @@
             "description": "The name of the chat"
           },
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The project id of the chat"
           },
           "tokenCount": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the chat was last updated"
           },
@@ -6741,7 +7231,10 @@
             "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
           },
           "importance": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "notification_filters": {
@@ -6773,34 +7266,55 @@
       },
       "CloudStorageItemType": {
         "type": "string",
-        "enum": ["document", "chat", "project"]
+        "enum": [
+          "document",
+          "chat",
+          "project"
+        ]
       },
       "Comment": {
         "type": "object",
-        "required": ["commentId", "threadId", "owner", "text"],
+        "required": [
+          "commentId",
+          "threadId",
+          "owner",
+          "text"
+        ],
         "properties": {
           "commentId": {
             "type": "integer",
             "format": "int64"
           },
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "metadata": {},
           "order": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "owner": {
             "type": "string"
           },
           "sender": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "text": {
             "type": "string"
@@ -6810,14 +7324,20 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }
       },
       "CommentThread": {
         "type": "object",
-        "required": ["thread", "comments"],
+        "required": [
+          "thread",
+          "comments"
+        ],
         "properties": {
           "comments": {
             "type": "array",
@@ -6835,7 +7355,10 @@
         "description": "Query parameters for the copy document endpoint.",
         "properties": {
           "version_id": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The DB version id of the document to copy. Defaults to latest."
           }
@@ -6844,7 +7367,9 @@
       "CopyDocumentRequest": {
         "type": "object",
         "description": "Request body for copying a document.",
-        "required": ["documentName"],
+        "required": [
+          "documentName"
+        ],
         "properties": {
           "documentName": {
             "type": "string",
@@ -6866,7 +7391,10 @@
       "CopyDocumentResponse": {
         "type": "object",
         "description": "Response wrapper for the copy document endpoint.",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/DocumentResponse",
@@ -6880,7 +7408,10 @@
       },
       "CreateBulkDocumentResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -6897,7 +7428,9 @@
       },
       "CreateBulkDocumentResponseData": {
         "type": "object",
-        "required": ["success"],
+        "required": [
+          "success"
+        ],
         "properties": {
           "documentMetadata": {
             "oneOf": [
@@ -6929,7 +7462,9 @@
       },
       "CreateCommentRequest": {
         "type": "object",
-        "required": ["text"],
+        "required": [
+          "text"
+        ],
         "properties": {
           "anchor": {
             "oneOf": [
@@ -6956,7 +7491,10 @@
             "type": "string"
           },
           "threadId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           },
           "threadMetadata": {}
@@ -6969,7 +7507,9 @@
           },
           {
             "type": "object",
-            "required": ["documentId"],
+            "required": [
+              "documentId"
+            ],
             "properties": {
               "anchor": {
                 "oneOf": [
@@ -6990,24 +7530,39 @@
       },
       "CreateDocumentRequest": {
         "type": "object",
-        "required": ["sha", "documentName"],
+        "required": [
+          "sha",
+          "documentName"
+        ],
         "properties": {
           "branchedFromId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The document id if the document is being branched."
           },
           "branchedFromVersionId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The version id if the document is being branched."
           },
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "Optional time to set the document's created_at to. Set when backfilling email attachments."
           },
           "documentFamilyId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The document family id if the document is being branched."
           },
@@ -7016,16 +7571,25 @@
             "description": "The name of the document without extension."
           },
           "emailAttachmentId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Internal only field that links the document created to the specified email attachment by\ncreating a row in the document_email table."
           },
           "fileType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional file type of the document."
           },
           "id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "The id of the document in the database"
           },
@@ -7034,15 +7598,24 @@
             "description": "Whether the document is a task.\nThis is only applicable for md documents and the request will fail if the file type is not\nmd."
           },
           "jobId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional job id to be used to track an upload job for the newly created document.\nWill need to have a corresponding job initiated for the file beforehand."
           },
           "mimeType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The content type of the document (currently only used for logging matches against file type)."
           },
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "sha": {
@@ -7062,14 +7635,19 @@
           },
           {
             "type": "object",
-            "required": ["contentType"],
+            "required": [
+              "contentType"
+            ],
             "properties": {
               "contentType": {
                 "type": "string",
                 "description": "Content type of the document converted from file type"
               },
               "fileType": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "The file type of the document"
               }
             }
@@ -7078,7 +7656,9 @@
       },
       "CreateInstructionsDocumentResponse": {
         "type": "object",
-        "required": ["documentId"],
+        "required": [
+          "documentId"
+        ],
         "properties": {
           "documentId": {
             "type": "string"
@@ -7087,14 +7667,19 @@
       },
       "CreateProjectRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
             "description": "The name of the project."
           },
           "projectParentId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "The project that the new project will belong to."
           }
@@ -7102,7 +7687,10 @@
       },
       "CreateProjectResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Project",
@@ -7117,15 +7705,23 @@
       "CreateTaskRequest": {
         "type": "object",
         "description": "Request body for creating a task.",
-        "required": ["taskName"],
+        "required": [
+          "taskName"
+        ],
         "properties": {
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "Optional project ID to associate the task with."
           },
           "propertyValues": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/PropertyInput"
             },
@@ -7144,7 +7740,9 @@
       "CreateTaskResponse": {
         "type": "object",
         "description": "Response for creating a task.",
-        "required": ["documentId"],
+        "required": [
+          "documentId"
+        ],
         "properties": {
           "documentId": {
             "type": "string",
@@ -7161,11 +7759,15 @@
               },
               {
                 "type": "object",
-                "required": ["fileType"],
+                "required": [
+                  "fileType"
+                ],
                 "properties": {
                   "fileType": {
                     "type": "string",
-                    "enum": ["pdf"]
+                    "enum": [
+                      "pdf"
+                    ]
                   }
                 }
               }
@@ -7180,7 +7782,9 @@
           },
           {
             "type": "object",
-            "required": ["documentId"],
+            "required": [
+              "documentId"
+            ],
             "properties": {
               "documentId": {
                 "type": "string"
@@ -7198,11 +7802,15 @@
               },
               {
                 "type": "object",
-                "required": ["anchorType"],
+                "required": [
+                  "anchorType"
+                ],
                 "properties": {
                   "anchorType": {
                     "type": "string",
-                    "enum": ["highlight"]
+                    "enum": [
+                      "highlight"
+                    ]
                   }
                 }
               }
@@ -7212,7 +7820,10 @@
       },
       "CreateViewRequest": {
         "type": "object",
-        "required": ["name", "config"],
+        "required": [
+          "name",
+          "config"
+        ],
         "properties": {
           "config": {},
           "name": {
@@ -7241,7 +7852,9 @@
           },
           {
             "type": "object",
-            "required": ["deleted"],
+            "required": [
+              "deleted"
+            ],
             "properties": {
               "deleted": {
                 "type": "boolean"
@@ -7254,14 +7867,21 @@
         "type": "object",
         "properties": {
           "removeAnchorThreadOnly": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "default": null
           }
         }
       },
       "DeleteCommentResponse": {
         "type": "object",
-        "required": ["documentId", "commentId", "thread"],
+        "required": [
+          "documentId",
+          "commentId",
+          "thread"
+        ],
         "properties": {
           "anchor": {
             "oneOf": [
@@ -7287,7 +7907,10 @@
       },
       "DeleteThreadInfo": {
         "type": "object",
-        "required": ["threadId", "deleted"],
+        "required": [
+          "threadId",
+          "deleted"
+        ],
         "properties": {
           "deleted": {
             "type": "boolean"
@@ -7307,11 +7930,15 @@
               },
               {
                 "type": "object",
-                "required": ["fileType"],
+                "required": [
+                  "fileType"
+                ],
                 "properties": {
                   "fileType": {
                     "type": "string",
-                    "enum": ["pdf"]
+                    "enum": [
+                      "pdf"
+                    ]
                   }
                 }
               }
@@ -7326,13 +7953,18 @@
           },
           {
             "type": "object",
-            "required": ["documentId"],
+            "required": [
+              "documentId"
+            ],
             "properties": {
               "documentId": {
                 "type": "string"
               },
               "threadId": {
-                "type": ["integer", "null"],
+                "type": [
+                  "integer",
+                  "null"
+                ],
                 "format": "int64"
               }
             }
@@ -7343,11 +7975,16 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["uuid", "anchorType"],
+            "required": [
+              "uuid",
+              "anchorType"
+            ],
             "properties": {
               "anchorType": {
                 "type": "string",
-                "enum": ["highlight"]
+                "enum": [
+                  "highlight"
+                ]
               },
               "uuid": {
                 "type": "string",
@@ -7376,11 +8013,17 @@
             "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           },
           "importance": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "is_email_attachment": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both."
           },
           "notification_filters": {
@@ -7424,33 +8067,51 @@
         ],
         "properties": {
           "branchedFromId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The id of the document this document branched from"
           },
           "branchedFromVersionId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentBom": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/BomPart"
             },
             "description": "If the document is a DOCX document and unzipped, the document_bom will be present"
           },
           "documentFamilyId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the document family this document belongs to"
           },
@@ -7468,7 +8129,10 @@
             "description": "The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type"
           },
           "fileType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The file type of the document (file extension)"
           },
           "modificationData": {
@@ -7479,15 +8143,24 @@
             "description": "The owner of the document"
           },
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The id of the project that this document belongs to"
           },
           "projectName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The name of the project that this document belongs to"
           },
           "sha": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
           },
           "subType": {
@@ -7502,7 +8175,10 @@
             ]
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
@@ -7510,7 +8186,12 @@
       },
       "DocumentPermissionsToken": {
         "type": "object",
-        "required": ["document_id", "access_level", "exp", "iss"],
+        "required": [
+          "document_id",
+          "access_level",
+          "exp",
+          "iss"
+        ],
         "properties": {
           "access_level": {
             "$ref": "#/components/schemas/AccessLevel",
@@ -7530,14 +8211,19 @@
             "description": "The issuer of the token"
           },
           "user_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The users id if present"
           }
         }
       },
       "DocumentPermissionsTokenRequest": {
         "type": "object",
-        "required": ["token"],
+        "required": [
+          "token"
+        ],
         "properties": {
           "token": {
             "type": "string",
@@ -7547,7 +8233,9 @@
       },
       "DocumentPermissionsTokenResponse": {
         "type": "object",
-        "required": ["token"],
+        "required": [
+          "token"
+        ],
         "properties": {
           "token": {
             "type": "string",
@@ -7564,11 +8252,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["access"]
+                    "enum": [
+                      "access"
+                    ]
                   }
                 }
               }
@@ -7581,11 +8273,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["no_access"]
+                    "enum": [
+                      "no_access"
+                    ]
                   }
                 }
               }
@@ -7598,11 +8294,15 @@
               },
               {
                 "type": "object",
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["does_not_exist"]
+                    "enum": [
+                      "does_not_exist"
+                    ]
                   }
                 }
               }
@@ -7612,7 +8312,11 @@
       },
       "DocumentPreviewData": {
         "type": "object",
-        "required": ["document_id", "document_name", "owner"],
+        "required": [
+          "document_id",
+          "document_name",
+          "owner"
+        ],
         "properties": {
           "document_id": {
             "type": "string",
@@ -7623,7 +8327,10 @@
             "description": "The name of the document"
           },
           "file_type": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The file type of the document (e.g. pdf, docx)"
           },
           "owner": {
@@ -7642,7 +8349,10 @@
             ]
           },
           "updated_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was last updated"
           }
@@ -7653,7 +8363,10 @@
           {
             "type": "object",
             "description": "A task document with completion status",
-            "required": ["is_completed", "type"],
+            "required": [
+              "is_completed",
+              "type"
+            ],
             "properties": {
               "is_completed": {
                 "type": "boolean",
@@ -7661,7 +8374,9 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["task"]
+                "enum": [
+                  "task"
+                ]
               }
             }
           }
@@ -7670,13 +8385,18 @@
       },
       "DocumentResponse": {
         "type": "object",
-        "required": ["documentMetadata"],
+        "required": [
+          "documentMetadata"
+        ],
         "properties": {
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentResponseMetadata"
           },
           "presignedUrl": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -7690,28 +8410,43 @@
         ],
         "properties": {
           "branchedFromId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The id of the document this document branched from"
           },
           "branchedFromVersionId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was created"
           },
           "documentBom": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/BomPart"
             },
             "description": "If the document is a DOCX document, the document_bom will be present"
           },
           "documentFamilyId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the document family this document belongs to"
           },
@@ -7729,7 +8464,10 @@
             "description": "The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type"
           },
           "fileType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The file type of the document"
           },
           "modificationData": {
@@ -7740,7 +8478,10 @@
             "description": "The owner of the document"
           },
           "sha": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
           },
           "subType": {
@@ -7755,7 +8496,10 @@
             ]
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
@@ -7763,12 +8507,17 @@
       },
       "DocumentStorageServiceApiVersion": {
         "type": "string",
-        "enum": ["v1", "v2"]
+        "enum": [
+          "v1",
+          "v2"
+        ]
       },
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task"]
+        "enum": [
+          "task"
+        ]
       },
       "EditAnchorRequest": {
         "oneOf": [
@@ -7779,11 +8528,15 @@
               },
               {
                 "type": "object",
-                "required": ["fileType"],
+                "required": [
+                  "fileType"
+                ],
                 "properties": {
                   "fileType": {
                     "type": "string",
-                    "enum": ["pdf"]
+                    "enum": [
+                      "pdf"
+                    ]
                   }
                 }
               }
@@ -7798,7 +8551,9 @@
           },
           {
             "type": "object",
-            "required": ["documentId"],
+            "required": [
+              "documentId"
+            ],
             "properties": {
               "documentId": {
                 "type": "string"
@@ -7823,14 +8578,19 @@
             ]
           },
           "shareWithTeam": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
           }
         }
       },
       "EditCommentRequest": {
         "type": "object",
-        "required": ["threadId"],
+        "required": [
+          "threadId"
+        ],
         "properties": {
           "mentions": {
             "oneOf": [
@@ -7844,7 +8604,10 @@
           },
           "metadata": {},
           "text": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "threadId": {
             "type": "integer",
@@ -7859,7 +8622,11 @@
           },
           {
             "type": "object",
-            "required": ["documentId", "documentName", "documentOwner"],
+            "required": [
+              "documentId",
+              "documentName",
+              "documentOwner"
+            ],
             "properties": {
               "documentId": {
                 "type": "string"
@@ -7871,7 +8638,10 @@
                 "type": "string"
               },
               "fileType": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             }
           }
@@ -7880,7 +8650,10 @@
       "EditDocumentResponse": {
         "type": "object",
         "description": "Edit document response.",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/GenericSuccessResponse",
@@ -7897,7 +8670,10 @@
         "description": "Arguments for the edit_document service call.",
         "properties": {
           "documentName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The name of the document."
           },
           "fileType": {
@@ -7912,7 +8688,10 @@
             ]
           },
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The new project id of the document."
           },
           "sharePermission": {
@@ -7937,11 +8716,15 @@
               },
               {
                 "type": "object",
-                "required": ["anchorType"],
+                "required": [
+                  "anchorType"
+                ],
                 "properties": {
                   "anchorType": {
                     "type": "string",
-                    "enum": ["free-comment"]
+                    "enum": [
+                      "free-comment"
+                    ]
                   }
                 }
               }
@@ -7951,52 +8734,87 @@
       },
       "EditPdfPlaceableCommentAnchorRequest": {
         "type": "object",
-        "required": ["uuid"],
+        "required": [
+          "uuid"
+        ],
         "properties": {
           "allowableEdits": {},
           "heightPct": {
-            "type": ["number", "null"],
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
           },
           "originalIndex": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "originalPage": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "page": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "rotation": {
-            "type": ["number", "null"],
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
           },
           "shouldLockOnSave": {
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "uuid": {
             "type": "string",
             "format": "uuid"
           },
           "wasDeleted": {
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "wasEdited": {
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "widthPct": {
-            "type": ["number", "null"],
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
           },
           "xPct": {
-            "type": ["number", "null"],
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
           },
           "yPct": {
-            "type": ["number", "null"],
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
           }
         }
@@ -8038,7 +8856,10 @@
             "description": "Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default."
           },
           "importance": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums)."
           },
           "include_labels": {
@@ -8152,7 +8973,10 @@
           {
             "type": "object",
             "description": "Permission for item-based entities (document, chat, project, thread).",
-            "required": ["access_level", "type"],
+            "required": [
+              "access_level",
+              "type"
+            ],
             "properties": {
               "access_level": {
                 "$ref": "#/components/schemas/AccessLevel",
@@ -8160,14 +8984,19 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["access_level"]
+                "enum": [
+                  "access_level"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Permission for channel-based entities.",
-            "required": ["role", "type"],
+            "required": [
+              "role",
+              "type"
+            ],
             "properties": {
               "role": {
                 "$ref": "#/components/schemas/ParticipantRole",
@@ -8175,7 +9004,9 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["channel_role"]
+                "enum": [
+                  "channel_role"
+                ]
               }
             }
           }
@@ -8186,24 +9017,33 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["permission", "status"],
+            "required": [
+              "permission",
+              "status"
+            ],
             "properties": {
               "permission": {
                 "$ref": "#/components/schemas/EntityPermission"
               },
               "status": {
                 "type": "string",
-                "enum": ["access"]
+                "enum": [
+                  "access"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["status"],
+            "required": [
+              "status"
+            ],
             "properties": {
               "status": {
                 "type": "string",
-                "enum": ["no_access"]
+                "enum": [
+                  "no_access"
+                ]
               }
             }
           }
@@ -8213,7 +9053,10 @@
       "EntityReference": {
         "type": "object",
         "description": "Entity reference for entity-type property values.",
-        "required": ["entity_id", "entity_type"],
+        "required": [
+          "entity_id",
+          "entity_type"
+        ],
         "properties": {
           "entity_id": {
             "type": "string"
@@ -8222,7 +9065,10 @@
             "$ref": "#/components/schemas/EntityType"
           },
           "specific_message_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat."
           }
@@ -8245,7 +9091,9 @@
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
-        "required": ["message"],
+        "required": [
+          "message"
+        ],
         "properties": {
           "message": {
             "type": "string",
@@ -8255,7 +9103,9 @@
       },
       "ExcludeDefaultViewRequest": {
         "type": "object",
-        "required": ["defaultViewId"],
+        "required": [
+          "defaultViewId"
+        ],
         "properties": {
           "defaultViewId": {
             "type": "string"
@@ -8265,7 +9115,11 @@
       "ExcludedDefaultView": {
         "type": "object",
         "description": "Frontend can define any set of its own default views for the user.\nThis is a list of views that are excluded from the default views list on the frontend.\n\nIt is important that the frontend can quickly iterate on default views, for that reason\nwe don't keep track of default views in the database, only those that are explicitly excluded.",
-        "required": ["id", "userId", "defaultViewId"],
+        "required": [
+          "id",
+          "userId",
+          "defaultViewId"
+        ],
         "properties": {
           "defaultViewId": {
             "type": "string"
@@ -8281,7 +9135,9 @@
       },
       "ExportDocumentResponse": {
         "type": "object",
-        "required": ["presigned_url"],
+        "required": [
+          "presigned_url"
+        ],
         "properties": {
           "presigned_url": {
             "type": "string",
@@ -8293,7 +9149,11 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["item", "document_id", "type"],
+            "required": [
+              "item",
+              "document_id",
+              "type"
+            ],
             "properties": {
               "document_id": {
                 "type": "string"
@@ -8303,13 +9163,19 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["file"]
+                "enum": [
+                  "file"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["content", "project_id", "type"],
+            "required": [
+              "content",
+              "project_id",
+              "type"
+            ],
             "properties": {
               "content": {
                 "type": "object",
@@ -8325,7 +9191,9 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["folder"]
+                "enum": [
+                  "folder"
+                ]
               }
             }
           }
@@ -8764,7 +9632,9 @@
           {
             "type": "object",
             "description": "Set the file type to a specific value.",
-            "required": ["set"],
+            "required": [
+              "set"
+            ],
             "properties": {
               "set": {
                 "$ref": "#/components/schemas/FileType",
@@ -8775,14 +9645,21 @@
           {
             "type": "string",
             "description": "Clear the file type (set to null).",
-            "enum": ["clear"]
+            "enum": [
+              "clear"
+            ]
           }
         ],
         "description": "Represents a file type update: either set to a specific type or clear to null."
       },
       "FolderItem": {
         "type": "object",
-        "required": ["name", "fullName", "relativePath", "sha"],
+        "required": [
+          "name",
+          "fullName",
+          "relativePath",
+          "sha"
+        ],
         "properties": {
           "fileType": {
             "oneOf": [
@@ -8815,7 +9692,10 @@
       },
       "GenericErrorResponse": {
         "type": "object",
-        "required": ["error", "message"],
+        "required": [
+          "error",
+          "message"
+        ],
         "properties": {
           "error": {
             "type": "boolean",
@@ -8829,7 +9709,9 @@
       },
       "GenericResponse": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "data": {
             "description": "Data to be returned"
@@ -8839,14 +9721,19 @@
             "description": "Indicates if an error occurred"
           },
           "message": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Message to explain failure"
           }
         }
       },
       "GenericSuccessResponse": {
         "type": "object",
-        "required": ["success"],
+        "required": [
+          "success"
+        ],
         "properties": {
           "success": {
             "type": "boolean",
@@ -8856,7 +9743,9 @@
       },
       "GetActivitiesResponse": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "data": {
             "oneOf": [
@@ -8907,7 +9796,9 @@
       },
       "GetBatchPreviewRequest": {
         "type": "object",
-        "required": ["document_ids"],
+        "required": [
+          "document_ids"
+        ],
         "properties": {
           "document_ids": {
             "type": "array",
@@ -8919,7 +9810,9 @@
       },
       "GetBatchPreviewResponse": {
         "type": "object",
-        "required": ["previews"],
+        "required": [
+          "previews"
+        ],
         "properties": {
           "previews": {
             "type": "array",
@@ -8931,7 +9824,9 @@
       },
       "GetBatchProjectPreviewRequest": {
         "type": "object",
-        "required": ["projectIds"],
+        "required": [
+          "projectIds"
+        ],
         "properties": {
           "projectIds": {
             "type": "array",
@@ -8943,7 +9838,9 @@
       },
       "GetBatchProjectPreviewResponse": {
         "type": "object",
-        "required": ["previews"],
+        "required": [
+          "previews"
+        ],
         "properties": {
           "previews": {
             "type": "array",
@@ -8955,7 +9852,10 @@
       },
       "GetDocumentKeyResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/GetDocumentKeyResponseData",
@@ -8969,7 +9869,9 @@
       },
       "GetDocumentKeyResponseData": {
         "type": "object",
-        "required": ["key"],
+        "required": [
+          "key"
+        ],
         "properties": {
           "key": {
             "type": "string",
@@ -8979,24 +9881,40 @@
       },
       "GetDocumentListResult": {
         "type": "object",
-        "required": ["documentId", "documentVersionId", "documentName"],
+        "required": [
+          "documentId",
+          "documentVersionId",
+          "documentName"
+        ],
         "properties": {
           "branchedFromId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The id of the document this document branched from"
           },
           "branchedFromVersionId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was created"
           },
           "documentFamilyId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the document family this document belongs to"
           },
@@ -9014,11 +9932,17 @@
             "description": "The id of the document version"
           },
           "fileType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The file type of the document"
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
@@ -9026,7 +9950,9 @@
       },
       "GetDocumentPermissionsResponseDataV2": {
         "type": "object",
-        "required": ["documentPermissions"],
+        "required": [
+          "documentPermissions"
+        ],
         "properties": {
           "documentPermissions": {
             "$ref": "#/components/schemas/SharePermissionV2"
@@ -9035,7 +9961,9 @@
       },
       "GetDocumentProcessingResult": {
         "type": "object",
-        "required": ["result"],
+        "required": [
+          "result"
+        ],
         "properties": {
           "result": {
             "type": "string",
@@ -9045,7 +9973,9 @@
       },
       "GetDocumentProcessingResultResponse": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "data": {
             "oneOf": [
@@ -9063,14 +9993,20 @@
             "description": "Indicates if an error occurred"
           },
           "message": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Message to explain failure"
           }
         }
       },
       "GetDocumentResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/GetDocumentResponseData",
@@ -9084,7 +10020,10 @@
       },
       "GetDocumentResponseData": {
         "type": "object",
-        "required": ["documentMetadata", "userAccessLevel"],
+        "required": [
+          "documentMetadata",
+          "userAccessLevel"
+        ],
         "properties": {
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentMetadata",
@@ -9095,14 +10034,20 @@
             "description": "The users level of access to the document"
           },
           "viewLocation": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The users view location if there is one"
           }
         }
       },
       "GetDocumentSearchResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -9119,7 +10064,9 @@
       },
       "GetDocumentUserAccessLevelResponse": {
         "type": "object",
-        "required": ["userAccessLevel"],
+        "required": [
+          "userAccessLevel"
+        ],
         "properties": {
           "userAccessLevel": {
             "$ref": "#/components/schemas/AccessLevel",
@@ -9129,7 +10076,9 @@
       },
       "GetDocumentsResponse": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "data": {
             "oneOf": [
@@ -9147,14 +10096,19 @@
             "description": "Indicates if an error occurred"
           },
           "message": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Message to explain failure"
           }
         }
       },
       "GetInstructionsDocumentResponse": {
         "type": "object",
-        "required": ["documentId"],
+        "required": [
+          "documentId"
+        ],
         "properties": {
           "documentId": {
             "type": "string"
@@ -9163,7 +10117,9 @@
       },
       "GetPinsResponse": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "data": {
             "oneOf": [
@@ -9184,7 +10140,10 @@
       },
       "GetProjectContentResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -9201,7 +10160,10 @@
       },
       "GetProjectResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/GetProjectResponseData",
@@ -9215,7 +10177,10 @@
       },
       "GetProjectResponseData": {
         "type": "object",
-        "required": ["projectMetadata", "userAccessLevel"],
+        "required": [
+          "projectMetadata",
+          "userAccessLevel"
+        ],
         "properties": {
           "projectMetadata": {
             "$ref": "#/components/schemas/Project",
@@ -9229,7 +10194,10 @@
       },
       "GetProjectsResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -9246,7 +10214,10 @@
       },
       "GetUserHistoryResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -9272,11 +10243,15 @@
                 },
                 {
                   "type": "object",
-                  "required": ["type"],
+                  "required": [
+                    "type"
+                  ],
                   "properties": {
                     "type": {
                       "type": "string",
-                      "enum": ["external"]
+                      "enum": [
+                        "external"
+                      ]
                     }
                   }
                 }
@@ -9289,11 +10264,15 @@
                 },
                 {
                   "type": "object",
-                  "required": ["type"],
+                  "required": [
+                    "type"
+                  ],
                   "properties": {
                     "type": {
                       "type": "string",
-                      "enum": ["internal"]
+                      "enum": [
+                        "internal"
+                      ]
                     }
                   }
                 }
@@ -9307,7 +10286,11 @@
       },
       "HighlightType": {
         "type": "integer",
-        "enum": [1, 2, 3]
+        "enum": [
+          1,
+          2,
+          3
+        ]
       },
       "Item": {
         "oneOf": [
@@ -9332,7 +10315,10 @@
       },
       "ItemWithUserAccessLevel": {
         "type": "object",
-        "required": ["item", "userAccessLevel"],
+        "required": [
+          "item",
+          "userAccessLevel"
+        ],
         "properties": {
           "item": {
             "$ref": "#/components/schemas/Item"
@@ -9370,7 +10356,9 @@
       "LeaveCallResponse": {
         "type": "object",
         "description": "Response for the leave/end call operation.",
-        "required": ["callEnded"],
+        "required": [
+          "callEnded"
+        ],
         "properties": {
           "callEnded": {
             "type": "boolean",
@@ -9383,7 +10371,9 @@
           {
             "type": "object",
             "description": "The presigned url of the document if it is not a docx",
-            "required": ["presignedUrl"],
+            "required": [
+              "presignedUrl"
+            ],
             "properties": {
               "presignedUrl": {
                 "type": "string",
@@ -9394,7 +10384,9 @@
           {
             "type": "object",
             "description": "The presigned urls of the docx bom parts if it is a docx",
-            "required": ["presignedUrls"],
+            "required": [
+              "presignedUrls"
+            ],
             "properties": {
               "presignedUrls": {
                 "type": "array",
@@ -9409,7 +10401,10 @@
       },
       "Mentions": {
         "type": "object",
-        "required": ["users", "mentionId"],
+        "required": [
+          "users",
+          "mentionId"
+        ],
         "properties": {
           "mentionId": {
             "type": "string"
@@ -9427,11 +10422,17 @@
         "description": "Notification-level filters that apply to an entity type.",
         "properties": {
           "done": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
           },
           "seen": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
           }
         }
@@ -9440,11 +10441,17 @@
         "type": "object",
         "properties": {
           "expand": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Whether to expand projects. Defaults to true."
           },
           "limit": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "Limit the number of items returned. Defaults to 20. Max 500.",
             "minimum": 0
@@ -9465,17 +10472,27 @@
       "ParticipantRole": {
         "type": "string",
         "description": "The role a user has within a channel.",
-        "enum": ["owner", "admin", "member"]
+        "enum": [
+          "owner",
+          "admin",
+          "member"
+        ]
       },
       "PatchProjectRequestV2": {
         "type": "object",
         "properties": {
           "name": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The new name of the project."
           },
           "projectParentId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The new project that the new project will belong to."
           },
           "sharePermission": {
@@ -9495,7 +10512,10 @@
         "type": "object",
         "properties": {
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The new project that the thread will belong to."
           },
           "sharePermission": {
@@ -9520,11 +10540,15 @@
               },
               {
                 "type": "object",
-                "required": ["anchorType"],
+                "required": [
+                  "anchorType"
+                ],
                 "properties": {
                   "anchorType": {
                     "type": "string",
-                    "enum": ["placeable"]
+                    "enum": [
+                      "placeable"
+                    ]
                   }
                 }
               }
@@ -9537,11 +10561,15 @@
               },
               {
                 "type": "object",
-                "required": ["anchorType"],
+                "required": [
+                  "anchorType"
+                ],
                 "properties": {
                   "anchorType": {
                     "type": "string",
-                    "enum": ["highlight"]
+                    "enum": [
+                      "highlight"
+                    ]
                   }
                 }
               }
@@ -9553,11 +10581,16 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["uuid", "anchorType"],
+            "required": [
+              "uuid",
+              "anchorType"
+            ],
             "properties": {
               "anchorType": {
                 "type": "string",
-                "enum": ["free-comment"]
+                "enum": [
+                  "free-comment"
+                ]
               },
               "uuid": {
                 "type": "string",
@@ -9567,11 +10600,16 @@
           },
           {
             "type": "object",
-            "required": ["uuid", "anchorType"],
+            "required": [
+              "uuid",
+              "anchorType"
+            ],
             "properties": {
               "anchorType": {
                 "type": "string",
-                "enum": ["highlight"]
+                "enum": [
+                  "highlight"
+                ]
               },
               "uuid": {
                 "type": "string",
@@ -9590,11 +10628,15 @@
               },
               {
                 "type": "object",
-                "required": ["anchorType"],
+                "required": [
+                  "anchorType"
+                ],
                 "properties": {
                   "anchorType": {
                     "type": "string",
-                    "enum": ["free-comment"]
+                    "enum": [
+                      "free-comment"
+                    ]
                   }
                 }
               }
@@ -9607,11 +10649,15 @@
               },
               {
                 "type": "object",
-                "required": ["anchorType"],
+                "required": [
+                  "anchorType"
+                ],
                 "properties": {
                   "anchorType": {
                     "type": "string",
-                    "enum": ["highlight"]
+                    "enum": [
+                      "highlight"
+                    ]
                   }
                 }
               }
@@ -9624,11 +10670,15 @@
               },
               {
                 "type": "object",
-                "required": ["anchorType"],
+                "required": [
+                  "anchorType"
+                ],
                 "properties": {
                   "anchorType": {
                     "type": "string",
-                    "enum": ["attachment"]
+                    "enum": [
+                      "attachment"
+                    ]
                   }
                 }
               }
@@ -9663,11 +10713,17 @@
             "format": "int32"
           },
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "documentId": {
@@ -9709,11 +10765,17 @@
             "type": "string"
           },
           "threadId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "uuid": {
@@ -9778,14 +10840,23 @@
             "type": "string"
           },
           "uuid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           }
         }
       },
       "PdfHighlightRect": {
         "type": "object",
-        "required": ["id", "top", "left", "width", "height"],
+        "required": [
+          "id",
+          "top",
+          "left",
+          "width",
+          "height"
+        ],
         "properties": {
           "height": {
             "type": "number",
@@ -9811,7 +10882,12 @@
       },
       "PdfHighlightRectAnchorRequest": {
         "type": "object",
-        "required": ["top", "left", "width", "height"],
+        "required": [
+          "top",
+          "left",
+          "width",
+          "height"
+        ],
         "properties": {
           "height": {
             "type": "number",
@@ -9950,7 +11026,10 @@
             "type": "boolean"
           },
           "uuid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "wasDeleted": {
@@ -9975,7 +11054,9 @@
       },
       "PinRequest": {
         "type": "object",
-        "required": ["pinType"],
+        "required": [
+          "pinType"
+        ],
         "properties": {
           "pinType": {
             "type": "string",
@@ -9985,7 +11066,11 @@
       },
       "PinnedItem": {
         "type": "object",
-        "required": ["pinIndex", "item", "activity"],
+        "required": [
+          "pinIndex",
+          "item",
+          "activity"
+        ],
         "properties": {
           "activity": {
             "$ref": "#/components/schemas/Item",
@@ -10042,7 +11127,9 @@
       },
       "PreSaveDocumentRequest": {
         "type": "object",
-        "required": ["newBom"],
+        "required": [
+          "newBom"
+        ],
         "properties": {
           "newBom": {
             "type": "array",
@@ -10055,7 +11142,10 @@
       },
       "PreSaveDocumentResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/PreSaveDocumentResponseData",
@@ -10069,7 +11159,9 @@
       },
       "PreSaveDocumentResponseData": {
         "type": "object",
-        "required": ["presignedUrls"],
+        "required": [
+          "presignedUrls"
+        ],
         "properties": {
           "presignedUrls": {
             "type": "array",
@@ -10082,7 +11174,10 @@
       },
       "PresignedUrl": {
         "type": "object",
-        "required": ["sha", "presignedUrl"],
+        "required": [
+          "sha",
+          "presignedUrl"
+        ],
         "properties": {
           "presignedUrl": {
             "type": "string",
@@ -10096,15 +11191,25 @@
       },
       "Project": {
         "type": "object",
-        "required": ["id", "name", "userId"],
+        "required": [
+          "id",
+          "name",
+          "userId"
+        ],
         "properties": {
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the project was created"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "id": {
@@ -10116,11 +11221,17 @@
             "description": "The name of the project"
           },
           "parentId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The parent project id"
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the project was updated"
           },
@@ -10132,7 +11243,11 @@
       },
       "ProjectDeleteResponseData": {
         "type": "object",
-        "required": ["project_ids", "document_ids", "chat_ids"],
+        "required": [
+          "project_ids",
+          "document_ids",
+          "chat_ids"
+        ],
         "properties": {
           "chat_ids": {
             "type": "array",
@@ -10159,7 +11274,10 @@
       },
       "ProjectDocumentStatus": {
         "type": "object",
-        "required": ["documentId", "status"],
+        "required": [
+          "documentId",
+          "status"
+        ],
         "properties": {
           "documentId": {
             "type": "string"
@@ -10174,7 +11292,10 @@
         "description": "The project filters used to filter down what projects you search over.",
         "properties": {
           "importance": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "notification_filters": {
@@ -10206,11 +11327,15 @@
               },
               {
                 "type": "object",
-                "required": ["access"],
+                "required": [
+                  "access"
+                ],
                 "properties": {
                   "access": {
                     "type": "string",
-                    "enum": ["access"]
+                    "enum": [
+                      "access"
+                    ]
                   }
                 }
               }
@@ -10223,11 +11348,15 @@
               },
               {
                 "type": "object",
-                "required": ["access"],
+                "required": [
+                  "access"
+                ],
                 "properties": {
                   "access": {
                     "type": "string",
-                    "enum": ["no_access"]
+                    "enum": [
+                      "no_access"
+                    ]
                   }
                 }
               }
@@ -10240,11 +11369,15 @@
               },
               {
                 "type": "object",
-                "required": ["access"],
+                "required": [
+                  "access"
+                ],
                 "properties": {
                   "access": {
                     "type": "string",
-                    "enum": ["does_not_exist"]
+                    "enum": [
+                      "does_not_exist"
+                    ]
                   }
                 }
               }
@@ -10254,7 +11387,12 @@
       },
       "ProjectPreviewData": {
         "type": "object",
-        "required": ["id", "name", "owner", "path"],
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "path"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -10272,7 +11410,10 @@
             }
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }
@@ -10339,7 +11480,9 @@
       "PropertyFilter": {
         "type": "object",
         "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
-        "required": ["property_definition_id"],
+        "required": [
+          "property_definition_id"
+        ],
         "properties": {
           "entity_ids": {
             "type": "array",
@@ -10349,7 +11492,10 @@
             "description": "Entity reference IDs to match. Multiple values are OR'd together."
           },
           "entity_type": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
           },
           "option_ids": {
@@ -10368,7 +11514,10 @@
       "PropertyInput": {
         "type": "object",
         "description": "Property input for setting a property value on a task.",
-        "required": ["propertyId", "value"],
+        "required": [
+          "propertyId",
+          "value"
+        ],
         "properties": {
           "propertyId": {
             "type": "string",
@@ -10385,11 +11534,16 @@
           {
             "type": "object",
             "description": "User-scoped property only",
-            "required": ["user_id", "scope"],
+            "required": [
+              "user_id",
+              "scope"
+            ],
             "properties": {
               "scope": {
                 "type": "string",
-                "enum": ["user"]
+                "enum": [
+                  "user"
+                ]
               },
               "user_id": {
                 "type": "string"
@@ -10399,7 +11553,10 @@
           {
             "type": "object",
             "description": "Organization-scoped property only",
-            "required": ["organization_id", "scope"],
+            "required": [
+              "organization_id",
+              "scope"
+            ],
             "properties": {
               "organization_id": {
                 "type": "integer",
@@ -10407,14 +11564,20 @@
               },
               "scope": {
                 "type": "string",
-                "enum": ["organization"]
+                "enum": [
+                  "organization"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Both user and organization-scoped",
-            "required": ["user_id", "organization_id", "scope"],
+            "required": [
+              "user_id",
+              "organization_id",
+              "scope"
+            ],
             "properties": {
               "organization_id": {
                 "type": "integer",
@@ -10422,7 +11585,9 @@
               },
               "scope": {
                 "type": "string",
-                "enum": ["user_and_organization"]
+                "enum": [
+                  "user_and_organization"
+                ]
               },
               "user_id": {
                 "type": "string"
@@ -10432,11 +11597,15 @@
           {
             "type": "object",
             "description": "System-owned property (no user or org owner)",
-            "required": ["scope"],
+            "required": [
+              "scope"
+            ],
             "properties": {
               "scope": {
                 "type": "string",
-                "enum": ["system"]
+                "enum": [
+                  "system"
+                ]
               }
             }
           }
@@ -10448,11 +11617,16 @@
           {
             "type": "object",
             "description": "Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["Boolean"]
+                "enum": [
+                  "Boolean"
+                ]
               },
               "value": {
                 "type": "boolean",
@@ -10463,11 +11637,16 @@
           {
             "type": "object",
             "description": "Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["Number"]
+                "enum": [
+                  "Number"
+                ]
               },
               "value": {
                 "type": "number",
@@ -10479,11 +11658,16 @@
           {
             "type": "object",
             "description": "String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["String"]
+                "enum": [
+                  "String"
+                ]
               },
               "value": {
                 "type": "string",
@@ -10494,11 +11678,16 @@
           {
             "type": "object",
             "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["Date"]
+                "enum": [
+                  "Date"
+                ]
               },
               "value": {
                 "type": "string",
@@ -10510,11 +11699,16 @@
           {
             "type": "object",
             "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["SelectOption"]
+                "enum": [
+                  "SelectOption"
+                ]
               },
               "value": {
                 "type": "array",
@@ -10529,11 +11723,16 @@
           {
             "type": "object",
             "description": "Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["EntityReference"]
+                "enum": [
+                  "EntityReference"
+                ]
               },
               "value": {
                 "type": "array",
@@ -10547,11 +11746,16 @@
           {
             "type": "object",
             "description": "Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["Link"]
+                "enum": [
+                  "Link"
+                ]
               },
               "value": {
                 "type": "array",
@@ -10567,7 +11771,9 @@
       },
       "RecentlyDeletedResponseData": {
         "type": "object",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -10580,7 +11786,11 @@
       },
       "ReorderPinRequest": {
         "type": "object",
-        "required": ["pinnedItemId", "pinnedItemType", "pinIndex"],
+        "required": [
+          "pinnedItemId",
+          "pinnedItemType",
+          "pinIndex"
+        ],
         "properties": {
           "pinIndex": {
             "type": "integer",
@@ -10599,7 +11809,10 @@
       },
       "S3ObjectInfo": {
         "type": "object",
-        "required": ["bucket", "key"],
+        "required": [
+          "bucket",
+          "key"
+        ],
         "properties": {
           "bucket": {
             "type": "string"
@@ -10611,7 +11824,10 @@
       },
       "SaveBomPart": {
         "type": "object",
-        "required": ["sha", "path"],
+        "required": [
+          "sha",
+          "path"
+        ],
         "properties": {
           "path": {
             "type": "string",
@@ -10630,21 +11846,30 @@
             "description": "The modification data for the document instance.\nUsed to store highlights and other overlays onto a static file"
           },
           "newBom": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/SaveBomPart"
             },
             "description": "**DOCX ONLY**\nThe updated BOM for the document.\nContaining the file path and the sha."
           },
           "sha": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The sha of the new document.\nThis is used to generate a presigned url to upload the new document content to s3."
           }
         }
       },
       "SaveDocumentResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/SaveDocumentResponseData",
@@ -10658,14 +11883,19 @@
       },
       "SaveDocumentResponseData": {
         "type": "object",
-        "required": ["documentMetadata"],
+        "required": [
+          "documentMetadata"
+        ],
         "properties": {
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentResponseMetadata",
             "description": "The updated document metadata"
           },
           "presignedUrl": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
           }
         }
@@ -10675,11 +11905,16 @@
           {
             "type": "object",
             "description": "Boolean true/false value",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["boolean"]
+                "enum": [
+                  "boolean"
+                ]
               },
               "value": {
                 "type": "boolean"
@@ -10689,11 +11924,16 @@
           {
             "type": "object",
             "description": "Date and time value",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["date"]
+                "enum": [
+                  "date"
+                ]
               },
               "value": {
                 "type": "string",
@@ -10704,11 +11944,16 @@
           {
             "type": "object",
             "description": "Numeric value",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["number"]
+                "enum": [
+                  "number"
+                ]
               },
               "value": {
                 "type": "number",
@@ -10719,11 +11964,16 @@
           {
             "type": "object",
             "description": "String/text value",
-            "required": ["value", "type"],
+            "required": [
+              "value",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["string"]
+                "enum": [
+                  "string"
+                ]
               },
               "value": {
                 "type": "string"
@@ -10733,7 +11983,10 @@
           {
             "type": "object",
             "description": "Select option by ID (for select-type properties)",
-            "required": ["option_id", "type"],
+            "required": [
+              "option_id",
+              "type"
+            ],
             "properties": {
               "option_id": {
                 "type": "string",
@@ -10741,14 +11994,19 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["select_option"]
+                "enum": [
+                  "select_option"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Multiple select options by ID (for multi-select properties)",
-            "required": ["option_ids", "type"],
+            "required": [
+              "option_ids",
+              "type"
+            ],
             "properties": {
               "option_ids": {
                 "type": "array",
@@ -10759,28 +12017,38 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["multi_select_option"]
+                "enum": [
+                  "multi_select_option"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Entity reference",
-            "required": ["reference", "type"],
+            "required": [
+              "reference",
+              "type"
+            ],
             "properties": {
               "reference": {
                 "$ref": "#/components/schemas/EntityReference"
               },
               "type": {
                 "type": "string",
-                "enum": ["entity_reference"]
+                "enum": [
+                  "entity_reference"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Multiple entity references (for multi-select entity properties)",
-            "required": ["references", "type"],
+            "required": [
+              "references",
+              "type"
+            ],
             "properties": {
               "references": {
                 "type": "array",
@@ -10790,18 +12058,25 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["multi_entity_reference"]
+                "enum": [
+                  "multi_entity_reference"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Link value",
-            "required": ["url", "type"],
+            "required": [
+              "url",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["link"]
+                "enum": [
+                  "link"
+                ]
               },
               "url": {
                 "type": "string"
@@ -10811,11 +12086,16 @@
           {
             "type": "object",
             "description": "Multiple link values (for multi-select link properties)",
-            "required": ["urls", "type"],
+            "required": [
+              "urls",
+              "type"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["multi_link"]
+                "enum": [
+                  "multi_link"
+                ]
               },
               "urls": {
                 "type": "array",
@@ -10830,10 +12110,17 @@
       },
       "SharePermissionV2": {
         "type": "object",
-        "required": ["id", "isPublic", "owner"],
+        "required": [
+          "id",
+          "isPublic",
+          "owner"
+        ],
         "properties": {
           "channelSharePermissions": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/ChannelSharePermission"
             },
@@ -10867,12 +12154,18 @@
       "SharedEmailFilter": {
         "type": "string",
         "description": "Controls whether shared email threads are included in results.",
-        "enum": ["exclude", "include", "only"]
+        "enum": [
+          "exclude",
+          "include",
+          "only"
+        ]
       },
       "ShortIdResponse": {
         "type": "object",
         "description": "Short ID response.",
-        "required": ["shortId"],
+        "required": [
+          "shortId"
+        ],
         "properties": {
           "shortId": {
             "type": "string",
@@ -10887,7 +12180,9 @@
           },
           {
             "type": "object",
-            "required": ["frecency_score"],
+            "required": [
+              "frecency_score"
+            ],
             "properties": {
               "frecency_score": {
                 "type": "number",
@@ -10909,17 +12204,27 @@
       },
       "SoupAttachment": {
         "type": "object",
-        "required": ["id", "messageId", "createdAt"],
+        "required": [
+          "id",
+          "messageId",
+          "createdAt"
+        ],
         "properties": {
           "contentId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "createdAt": {
             "type": "string",
             "format": "date-time"
           },
           "filename": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
             "type": "string",
@@ -10930,13 +12235,22 @@
             "format": "uuid"
           },
           "mimeType": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "providerAttachmentId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sizeBytes": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         }
@@ -10969,7 +12283,10 @@
             "description": "The channel this call belongs to."
           },
           "channelName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Resolved display name for the channel."
           },
           "createdBy": {
@@ -10977,12 +12294,18 @@
             "description": "User who created the call."
           },
           "durationMs": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "Call duration in milliseconds (None if still active)."
           },
           "endedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the call ended (None if still active)."
           },
@@ -11007,7 +12330,10 @@
       "SoupCallRecordParticipant": {
         "type": "object",
         "description": "A participant in a call record, as displayed in Soup.",
-        "required": ["userId", "joinedAt"],
+        "required": [
+          "userId",
+          "joinedAt"
+        ],
         "properties": {
           "joinedAt": {
             "type": "string",
@@ -11015,7 +12341,10 @@
             "description": "When the user joined the call."
           },
           "leftAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the user left (None if still in an active call)."
           },
@@ -11037,11 +12366,17 @@
             "type": "object",
             "properties": {
               "interacted_at": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time"
               },
               "viewed_at": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time"
               }
             }
@@ -11066,7 +12401,10 @@
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the chat was deleted"
           },
@@ -11088,7 +12426,10 @@
             "description": "Who the chat belongs to"
           },
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "The project id of the chat"
           },
@@ -11105,7 +12446,10 @@
             "description": "The time the chat was last updated"
           },
           "viewedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the chat was last viewed"
           }
@@ -11113,10 +12457,16 @@
       },
       "SoupContact": {
         "type": "object",
-        "required": ["id", "linkId"],
+        "required": [
+          "id",
+          "linkId"
+        ],
         "properties": {
           "emailAddress": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
             "type": "string",
@@ -11127,10 +12477,16 @@
             "format": "uuid"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sfsPhotoUrl": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -11147,12 +12503,18 @@
         ],
         "properties": {
           "branchedFromId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "The id of the document this document branched from"
           },
           "branchedFromVersionId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type"
           },
@@ -11162,12 +12524,18 @@
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentFamilyId": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The id of the document family this document belongs to"
           },
@@ -11177,7 +12545,10 @@
             "description": "The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type"
           },
           "fileType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The file type of the document (e.g. pdf, docx)"
           },
           "id": {
@@ -11194,7 +12565,10 @@
             "description": "The owner of the document"
           },
           "projectId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "The id of the project that this document belongs to"
           },
@@ -11206,7 +12580,10 @@
             "description": "Properties"
           },
           "sha": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
           },
           "subType": {
@@ -11226,7 +12603,10 @@
             "description": "The time the document instance / document BOM was updated"
           },
           "viewedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was last viewed"
           }
@@ -11237,7 +12617,10 @@
           {
             "type": "object",
             "description": "A task document with its associated properties",
-            "required": ["is_completed", "type"],
+            "required": [
+              "is_completed",
+              "type"
+            ],
             "properties": {
               "is_completed": {
                 "type": "boolean",
@@ -11245,7 +12628,9 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["task"]
+                "enum": [
+                  "task"
+                ]
               }
             }
           }
@@ -11287,28 +12672,49 @@
             "type": "boolean"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "ownerId": {
             "type": "string"
           },
           "projectId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "providerId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderEmail": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderName": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "senderPhotoUrl": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "snippet": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sortTs": {
             "type": "string",
@@ -11319,7 +12725,10 @@
             "format": "date-time"
           },
           "viewedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }
@@ -11331,7 +12740,12 @@
           },
           {
             "type": "object",
-            "required": ["attachments", "participants", "labels", "properties"],
+            "required": [
+              "attachments",
+              "participants",
+              "labels",
+              "properties"
+            ],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -11365,79 +12779,109 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["data", "tag"],
+            "required": [
+              "data",
+              "tag"
+            ],
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/SoupDocument"
               },
               "tag": {
                 "type": "string",
-                "enum": ["document"]
+                "enum": [
+                  "document"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["data", "tag"],
+            "required": [
+              "data",
+              "tag"
+            ],
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/SoupChat"
               },
               "tag": {
                 "type": "string",
-                "enum": ["chat"]
+                "enum": [
+                  "chat"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["data", "tag"],
+            "required": [
+              "data",
+              "tag"
+            ],
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/SoupProject"
               },
               "tag": {
                 "type": "string",
-                "enum": ["project"]
+                "enum": [
+                  "project"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["data", "tag"],
+            "required": [
+              "data",
+              "tag"
+            ],
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/SoupEnrichedEmailThreadPreview"
               },
               "tag": {
                 "type": "string",
-                "enum": ["emailThread"]
+                "enum": [
+                  "emailThread"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["data", "tag"],
+            "required": [
+              "data",
+              "tag"
+            ],
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/SoupChannel"
               },
               "tag": {
                 "type": "string",
-                "enum": ["channel"]
+                "enum": [
+                  "channel"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["data", "tag"],
+            "required": [
+              "data",
+              "tag"
+            ],
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/SoupCallRecord"
               },
               "tag": {
                 "type": "string",
-                "enum": ["callRecord"]
+                "enum": [
+                  "callRecord"
+                ]
               }
             }
           }
@@ -11487,19 +12931,31 @@
       },
       "SoupLabelListVisibility": {
         "type": "string",
-        "enum": ["labelShow", "labelShowIfUnread", "labelHide"]
+        "enum": [
+          "labelShow",
+          "labelShowIfUnread",
+          "labelHide"
+        ]
       },
       "SoupLabelType": {
         "type": "string",
-        "enum": ["system", "user"]
+        "enum": [
+          "system",
+          "user"
+        ]
       },
       "SoupMessageListVisibility": {
         "type": "string",
-        "enum": ["show", "hide"]
+        "enum": [
+          "show",
+          "hide"
+        ]
       },
       "SoupPage": {
         "type": "object",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -11508,7 +12964,10 @@
             }
           },
           "next_cursor": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -11529,7 +12988,10 @@
             "description": "The time the project was created"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the project was deleted"
           },
@@ -11547,7 +13009,10 @@
             "description": "The user id of who created the project"
           },
           "parentId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "The parent project id"
           },
@@ -11564,7 +13029,10 @@
             "description": "The time the project was updated"
           },
           "viewedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "The time the document was last viewed"
           }
@@ -11573,7 +13041,9 @@
       "SoupProperty": {
         "type": "object",
         "description": "A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.",
-        "required": ["definition"],
+        "required": [
+          "definition"
+        ],
         "properties": {
           "definition": {
             "$ref": "#/components/schemas/PropertyDefinition",
@@ -11594,7 +13064,10 @@
       },
       "SuccessResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "$ref": "#/components/schemas/GenericSuccessResponse",
@@ -11608,7 +13081,10 @@
       },
       "SyncServiceVersionID": {
         "type": "object",
-        "required": ["peer", "counter"],
+        "required": [
+          "peer",
+          "counter"
+        ],
         "properties": {
           "counter": {
             "type": "integer",
@@ -11624,21 +13100,35 @@
         "description": "Task-only filters nested under document filters.",
         "properties": {
           "include_cbm_atm_nc": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
           }
         }
       },
       "Thread": {
         "type": "object",
-        "required": ["threadId", "owner", "resolved", "documentId"],
+        "required": [
+          "threadId",
+          "owner",
+          "resolved",
+          "documentId"
+        ],
         "properties": {
           "createdAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "deletedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "documentId": {
@@ -11656,14 +13146,19 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }
       },
       "ThreadResponse": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "array",
@@ -11693,7 +13188,10 @@
             "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
           },
           "endedAt": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "When the speaker stopped talking for this segment."
           },
@@ -11718,13 +13216,18 @@
       },
       "TypedSuccessResponse": {
         "type": "object",
-        "required": ["error", "data"],
+        "required": [
+          "error",
+          "data"
+        ],
         "properties": {
           "data": {
             "oneOf": [
               {
                 "type": "object",
-                "required": ["items"],
+                "required": [
+                  "items"
+                ],
                 "properties": {
                   "items": {
                     "type": "array",
@@ -11748,11 +13251,16 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["uuid", "attachmentType"],
+            "required": [
+              "uuid",
+              "attachmentType"
+            ],
             "properties": {
               "attachmentType": {
                 "type": "string",
-                "enum": ["highlight"]
+                "enum": [
+                  "highlight"
+                ]
               },
               "uuid": {
                 "type": "string",
@@ -11764,7 +13272,10 @@
       },
       "UpdateChannelSharePermission": {
         "type": "object",
-        "required": ["operation", "channelId"],
+        "required": [
+          "operation",
+          "channelId"
+        ],
         "properties": {
           "accessLevel": {
             "oneOf": [
@@ -11789,20 +13300,30 @@
       },
       "UpdateOperation": {
         "type": "string",
-        "enum": ["add", "remove", "replace"]
+        "enum": [
+          "add",
+          "remove",
+          "replace"
+        ]
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",
         "properties": {
           "channelSharePermissions": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/components/schemas/UpdateChannelSharePermission"
             },
             "description": "Any channel share permissions to be created/updated/removed"
           },
           "isPublic": {
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "If the item is publicly accessible"
           },
           "publicAccessLevel": {
@@ -11821,17 +13342,30 @@
       "UploadDocumentStatus": {
         "type": "string",
         "description": "The upload status of the document",
-        "enum": ["pending", "completed", "failed", "unknown"]
+        "enum": [
+          "pending",
+          "completed",
+          "failed",
+          "unknown"
+        ]
       },
       "UploadExtractFolderRequest": {
         "type": "object",
-        "required": ["sha"],
+        "required": [
+          "sha"
+        ],
         "properties": {
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "parentId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sha": {
             "type": "string"
@@ -11840,7 +13374,11 @@
       },
       "UploadFolderRequest": {
         "type": "object",
-        "required": ["content", "rootFolderName", "uploadRequestId"],
+        "required": [
+          "content",
+          "rootFolderName",
+          "uploadRequestId"
+        ],
         "properties": {
           "content": {
             "type": "array",
@@ -11850,7 +13388,10 @@
             "description": "The content of the folder"
           },
           "parentId": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional parent project id to upload the folder into"
           },
           "rootFolderName": {
@@ -11865,7 +13406,9 @@
       },
       "UpsertUserDocumentViewLocationRequest": {
         "type": "object",
-        "required": ["location"],
+        "required": [
+          "location"
+        ],
         "properties": {
           "location": {
             "type": "string"
@@ -11874,10 +13417,16 @@
       },
       "UserActivitiesResponse": {
         "type": "object",
-        "required": ["recent", "total"],
+        "required": [
+          "recent",
+          "total"
+        ],
         "properties": {
           "next_offset": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The next offset to be used if there is one"
           },
@@ -11899,7 +13448,11 @@
       "UserDocumentViewLocation": {
         "type": "object",
         "description": "The last place a user viewed a particular document at",
-        "required": ["user_id", "document_id", "location"],
+        "required": [
+          "user_id",
+          "document_id",
+          "location"
+        ],
         "properties": {
           "document_id": {
             "type": "string"
@@ -11916,13 +13469,19 @@
         "type": "object",
         "properties": {
           "location": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "UserDocumentsResponse": {
         "type": "object",
-        "required": ["documents", "total"],
+        "required": [
+          "documents",
+          "total"
+        ],
         "properties": {
           "documents": {
             "type": "array",
@@ -11931,7 +13490,10 @@
             }
           },
           "next_offset": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "The next offset to be used if there is one"
           },
@@ -11944,7 +13506,9 @@
       },
       "UserPinsResponse": {
         "type": "object",
-        "required": ["recent"],
+        "required": [
+          "recent"
+        ],
         "properties": {
           "recent": {
             "type": "array",
@@ -11957,7 +13521,10 @@
       },
       "UserViewsResponse": {
         "type": "object",
-        "required": ["users", "count"],
+        "required": [
+          "users",
+          "count"
+        ],
         "properties": {
           "count": {
             "type": "integer",
@@ -12012,13 +13579,19 @@
         "properties": {
           "config": {},
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "ViewsResponse": {
         "type": "object",
-        "required": ["views", "excludedDefaultViews"],
+        "required": [
+          "views",
+          "excludedDefaultViews"
+        ],
         "properties": {
           "excludedDefaultViews": {
             "type": "array",
@@ -12048,7 +13621,9 @@
       },
       "WithDocumentId": {
         "type": "object",
-        "required": ["document_id"],
+        "required": [
+          "document_id"
+        ],
         "properties": {
           "document_id": {
             "type": "string"
@@ -12057,7 +13632,9 @@
       },
       "WithProjectId": {
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"

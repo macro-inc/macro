@@ -12,5 +12,4 @@ import type { ChatSearchResponseItemWithMetadataAllOf } from './chatSearchRespon
 timestamps in opensearch as they would require us to update each chat message record for the chat
 every time the chat updates (specifically for updated_at and viewed_at)
  */
-export type ChatSearchResponseItemWithMetadata = ChatSearchResponseItem &
-  ChatSearchResponseItemWithMetadataAllOf;
+export type ChatSearchResponseItemWithMetadata = ChatSearchResponseItem & ChatSearchResponseItemWithMetadataAllOf;

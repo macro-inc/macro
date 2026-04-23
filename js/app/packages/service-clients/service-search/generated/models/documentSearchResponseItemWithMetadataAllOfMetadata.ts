@@ -6,5 +6,4 @@
  */
 import type { DocumentMetadata } from './documentMetadata';
 
-export type DocumentSearchResponseItemWithMetadataAllOfMetadata =
-  null | DocumentMetadata;
+export type DocumentSearchResponseItemWithMetadataAllOfMetadata = null | DocumentMetadata;

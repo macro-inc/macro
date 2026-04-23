@@ -4,11 +4,10 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
 import type { EntityFilters } from './entityFilters';
 import type { MatchType } from './matchType';
 import type { SearchOn } from './searchOn';
-import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
 
 export interface UnifiedSearchRequest {
   collapse?: UnifiedSearchRequestCollapse;

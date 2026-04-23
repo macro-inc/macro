@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelFiltersImportance } from './channelFiltersImportance';
+import type { NotificationFilters } from './notificationFilters';
 import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
 import type { ChannelFiltersTeamId } from './channelFiltersTeamId';
-import type { NotificationFilters } from './notificationFilters';
 
 /**
  * The channel message filters used to filter down what channel messages you search over.

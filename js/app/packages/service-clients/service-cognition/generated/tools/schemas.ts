@@ -75,7 +75,16 @@ export const BashCodeExecutionResponse = z.object({
 export const ContentSearch = z
   .object({
     entityTypes: z
-      .array(z.enum(['documents', 'chats', 'emails', 'channels', 'projects']))
+      .array(
+        z.enum([
+          'documents',
+          'chats',
+          'emails',
+          'channels',
+          'projects',
+          'call_records',
+        ])
+      )
       .default([]),
     query: z.string(),
   })
@@ -301,6 +310,41 @@ export const SearchToolResponse = z.object({
           type: z.literal('project'),
           updated_at: z.string().datetime({ offset: true }),
         }),
+        z.object({
+          call_id: z.string().uuid(),
+          call_search_results: z.array(
+            z.object({
+              highlight: z.object({
+                bcc: z.array(z.string()).optional(),
+                cc: z.array(z.string()).optional(),
+                content: z.array(z.string()).optional(),
+                name: z.union([z.string(), z.null()]).optional(),
+                recipients: z.array(z.string()).optional(),
+                sender: z.union([z.string(), z.null()]).optional(),
+                user_id: z.union([z.string(), z.null()]).optional(),
+              }),
+              score: z.union([z.number(), z.null()]).optional(),
+            })
+          ),
+          channel_id: z.string().uuid(),
+          id: z.string().uuid(),
+          metadata: z
+            .union([
+              z.object({
+                channel_name: z.union([z.string(), z.null()]).optional(),
+                duration_ms: z.number().int(),
+                ended_at: z.string().datetime({ offset: true }),
+                started_at: z.string().datetime({ offset: true }),
+                updated_at: z.string().datetime({ offset: true }),
+              }),
+              z.null(),
+            ])
+            .optional(),
+          name: z.union([z.string(), z.null()]).optional(),
+          owner_id: z.string(),
+          participant_ids: z.array(z.string()),
+          type: z.literal('callRecord'),
+        }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(
         (errors, schema) =>
@@ -514,7 +558,16 @@ export const ListEntitiesResponse = z.object({
 export const NameSearch = z
   .object({
     entityTypes: z
-      .array(z.enum(['documents', 'chats', 'emails', 'channels', 'projects']))
+      .array(
+        z.enum([
+          'documents',
+          'chats',
+          'emails',
+          'channels',
+          'projects',
+          'call_records',
+        ])
+      )
       .default([]),
     name: z.string(),
   })

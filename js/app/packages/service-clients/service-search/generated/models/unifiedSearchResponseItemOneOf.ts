@@ -7,5 +7,4 @@
 import type { DocumentSearchResponseItemWithMetadata } from './documentSearchResponseItemWithMetadata';
 import type { UnifiedSearchResponseItemOneOfAllOf } from './unifiedSearchResponseItemOneOfAllOf';
 
-export type UnifiedSearchResponseItemOneOf =
-  DocumentSearchResponseItemWithMetadata & UnifiedSearchResponseItemOneOfAllOf;
+export type UnifiedSearchResponseItemOneOf = DocumentSearchResponseItemWithMetadata & UnifiedSearchResponseItemOneOfAllOf;
