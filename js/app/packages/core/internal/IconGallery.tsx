@@ -46,6 +46,15 @@ type ColorOption =
   | (typeof THEME_COLORS)[number]
   | { name: 'Custom'; value: 'custom'; css: string };
 
+// Dynamically import all arcanum SVG icons
+const arcanumIconModules = import.meta.glob(
+  '../../macro-icons/arcanum/arcanum-*.svg',
+  {
+    eager: true,
+    query: '?component-solid',
+  }
+) as Record<string, { default: Component }>;
+
 // Dynamically import all static SVG icons
 const staticIconModules = import.meta.glob('../../macro-icons/wide/*.svg', {
   eager: true,
@@ -145,12 +154,26 @@ for (const [name, component] of Object.entries(staticIcons)) {
 // Sort alphabetically
 STATIC_ONLY_ICONS.sort((a, b) => a.name.localeCompare(b.name));
 
+// Build arcanum icons list
+type ArcanumIcon = {
+  name: string;
+  component: Component;
+};
+
+const ARCANUM_ICONS: ArcanumIcon[] = [];
+for (const [path, module] of Object.entries(arcanumIconModules)) {
+  const rawName = getIconName(path);
+  ARCANUM_ICONS.push({ name: rawName, component: module.default });
+}
+ARCANUM_ICONS.sort((a, b) => a.name.localeCompare(b.name));
+
 export default function IconGallery() {
   const [selectedColor, setSelectedColor] = createSignal<ColorOption>(
     THEME_COLORS[0]
   );
   const [customColor, setCustomColor] = createSignal('');
   const [iconSize, setIconSize] = createSignal(48);
+  const [arcanumSize, setArcanumSize] = createSignal(300);
   const [animationTriggers, setAnimationTriggers] = createSignal<
     Record<string, boolean>
   >({});
@@ -390,6 +413,42 @@ export default function IconGallery() {
                     color: getColorStyle(),
                     width: `${iconSize()}px`,
                     height: `${iconSize()}px`,
+                  }}
+                >
+                  <icon.component />
+                </div>
+                <span class="mt-2 text-[8px] text-muted">{icon.name}</span>
+              </div>
+            )}
+          </For>
+        </div>
+
+        {/* Arcanum icons */}
+        <div class="mt-6 mb-3 flex items-center gap-3">
+          <h2 class="text-xs font-semibold text-ink">Arcanum</h2>
+          <label class="flex items-center gap-2 text-xs text-ink">
+            <input
+              type="range"
+              min="10"
+              max="400"
+              value={arcanumSize()}
+              onInput={(e) => setArcanumSize(Number(e.currentTarget.value))}
+              class="icon-gallery-slider w-24"
+            />
+            <span class="w-8 text-[10px] text-muted">{arcanumSize()}px</span>
+          </label>
+          <span class="h-px flex-1 bg-edge-muted" />
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <For each={ARCANUM_ICONS}>
+            {(icon) => (
+              <div class="inline-flex flex-col items-center rounded-[1px] border border-edge-muted p-2">
+                <div
+                  class="flex items-center justify-center"
+                  style={{
+                    color: getColorStyle(),
+                    width: `${arcanumSize()}px`,
+                    height: `${arcanumSize()}px`,
                   }}
                 >
                   <icon.component />
