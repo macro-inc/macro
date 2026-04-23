@@ -172,7 +172,7 @@ pub async fn patch_message_handler(
     Ok((StatusCode::OK, "message sent".to_string()))
 }
 
-#[tracing::instrument(skip(ctx, attachments, user_id))]
+#[tracing::instrument(skip(ctx, attachment_ids_to_delete, attachments, user_id), err(Debug))]
 async fn patch_message_attachments_state(
     ctx: &AppState,
     attachment_ids_to_delete: Vec<String>,
