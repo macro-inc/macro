@@ -1,4 +1,5 @@
 import { internalDrag } from '@core/directive/internalDragState';
+false && internalDrag;
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';

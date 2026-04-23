@@ -1,4 +1,5 @@
 import { internalDrag } from '@core/directive/internalDragState';
+false && internalDrag;
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
