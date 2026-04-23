@@ -60,7 +60,7 @@ function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => vo
       itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
         <Select.Item
           item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-xs rounded-xs hover:bg-hover cursor-pointer outline-none data-[highlighted]:bg-hover"
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-[highlighted]:bg-hover bracket-never"
         >
           <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
           <Select.ItemIndicator>
@@ -69,7 +69,7 @@ function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => vo
         </Select.Item>
       )}
     >
-      <Select.Trigger as={Button} size="sm" class="rounded-xs">
+      <Select.Trigger as={Button} class="rounded-xs">
         <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
         <CaretDownIcon class="w-3 h-3 text-ink-muted" />
       </Select.Trigger>
@@ -262,7 +262,7 @@ export function Team() {
   };
 
   return (
-    <div class="absolute inset-0 overflow-y-auto" style="scrollbar-width: none;">
+    <div class="max-w-2xl mx-auto">
       <div class="p-6">
         <Show
           when={!userTeamsQuery.isLoading && team()}
@@ -279,7 +279,7 @@ export function Team() {
             </Show>
           }
         >
-          <header class="flex items-start justify-between gap-4 mb-8">
+          <header class="flex items-center justify-between gap-4 mb-8">
             <section class="min-w-0 flex-1">
               <h2 class="text-sm">Team</h2>
               <Show
@@ -305,23 +305,25 @@ export function Team() {
             </section>
             <Show when={currentMember() && currentMember()?.role !== TeamRole.Owner}>
               <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowLeaveModal(true)}>
-                <LeaveIcon class="w-4 h-4" />
+                <LeaveIcon class="size-4" />
                 Leave
               </Button>
             </Show>
           </header>
 
           <section class="mb-6">
-            <div class="flex items-center justify-between mb-1">
-              <h3 class="text-sm">Members</h3>
+            <header class="flex items-center justify-between mb-2">
+              <div>
+                <h3 class="text-sm">Members</h3>
+                <p class="text-xs text-ink-muted">People who have access to this team.</p>
+              </div>
               <Show when={canManage()}>
                 <Button variant="secondary" size="sm" class="rounded-xs" onClick={() => setShowInviteModal(true)}>
-                  <PlusIcon class="w-4 h-4" />
-                  Invite
+                  <PlusIcon class="size-4" />
+                  Invite Member
                 </Button>
               </Show>
-            </div>
-            <p class="text-xs text-ink-muted mb-2">People who have access to this team.</p>
+            </header>
             <Show
               when={!teamQuery.isLoading}
               fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-16" />}
