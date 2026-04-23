@@ -29,7 +29,6 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import EyeSlashDuo from '@icon/duotone/eye-slash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
-import LoadingSpinner from '@icon/regular/spinner.svg';
 import {
   $convertMentionToCard,
   $isDocumentMentionNode,
@@ -84,23 +83,6 @@ function MentionContainer(props: {
         </span>
       </Show>
     </span>
-  );
-}
-
-function Spinner() {
-  return (
-    <div class="animate-spin">
-      <LoadingSpinner class="size-4" />
-    </div>
-  );
-}
-
-function Loading(props: { collapsed?: boolean }) {
-  return (
-    <MentionContainer
-      icon={<Spinner />}
-      text={props.collapsed ? '' : 'Loading'}
-    />
   );
 }
 
@@ -197,7 +179,13 @@ function InlinePreview(props: {
     <Switch>
       <Match when={item().loading}>
         <MentionContainer
-        icon={<EntityIcon targetType={props.blockName as any} size="fill" class="animate-pulse" />}
+          icon={
+            <EntityIcon
+              targetType={props.blockName as any}
+              size="fill"
+              class="animate-pulse"
+            />
+          }
           text={
             <span
               data-document-mention="true"
@@ -206,7 +194,9 @@ function InlinePreview(props: {
               data-document-name={props.documentName}
               class="opacity-50"
             >
-              {props.documentName!.replaceAll('\n', ' ').trim()}
+              <Show when={props.documentName} fallback={'Loading...'}>
+                {(name) => name().replaceAll('\n', ' ').trim()}
+              </Show>
             </span>
           }
           collapsed={props.collapsed}
@@ -221,10 +211,10 @@ function InlinePreview(props: {
               data-document-id={props.entity.id}
               data-block-name={props.blockName}
               data-document-name={props.documentName}
-              class="opacity-75"
-              title="Recently created - preview may be temporarily unavailable"
             >
-              {props.documentName!.replaceAll('\n', ' ').trim()}
+              <Show when={props.documentName} fallback={'Unknown'}>
+                {(name) => name().replaceAll('\n', ' ').trim()}
+              </Show>
               <span class="relative text-[0.8em] text-current/50 rounded-xs">
                 {(() => {
                   const accessories = mentionsAccessories(
@@ -491,9 +481,6 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
             {...navHandlers}
           >
             <Switch>
-              <Match when={item().loading}>
-                <Loading collapsed={isCollapsed()} />
-              </Match>
               <Match when={item()}>
                 <InlinePreview
                   entity={itemEntity()}
@@ -501,6 +488,7 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
                   blockParams={props.blockParams || {}}
                   theme={props.theme}
                   collapsed={isCollapsed()}
+                  documentName={props.documentName}
                 />
               </Match>
             </Switch>
