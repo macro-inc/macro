@@ -158,10 +158,6 @@ function makeOptimisticThreadReply(
 export function optimisticInsertChannelMessage(
   vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>
 ): InsertMessageContext | undefined {
-  queryClient.cancelQueries({
-    queryKey: getChannelMessagesQueryKeyPrefix(vars.channelId),
-  });
-
   const now = new Date().toISOString();
   const newAttachments = makeOptimisticAttachments(
     vars.channelId,
