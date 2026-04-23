@@ -16,7 +16,8 @@
   "dependencies": {
     "@solidjs/router": "^0.15.3",
     "@tauri-apps/api": "^2.8.0",
-    "solid-js": "^1.8.11"
+    "solid-js": "^1.8.11",
+    "tauri-plugin-device-info-api": "^1.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
