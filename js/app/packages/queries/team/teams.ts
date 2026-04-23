@@ -7,6 +7,7 @@ import type { Team } from '@service-auth/generated/schemas/team';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
+import { authKeys } from '../auth';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 
@@ -134,6 +135,97 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
         onError: (error, _args, context) => {
           console.error('Failed to delete team', error);
           toast.failure('Failed to delete team');
+
+          if (context?.previousTeams) {
+            queryClient.setQueryData(
+              teamKeys.userTeams.queryKey,
+              context.previousTeams
+            );
+          }
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type CreateTeamWithInvitesArgs = {
+  name: string;
+  emails?: string[];
+};
+type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
+type CreateTeamWithInvitesCallbacks = MutationCallbacks<
+  Team,
+  Error,
+  CreateTeamWithInvitesArgs,
+  CreateTeamWithInvitesContext
+>;
+
+export function useCreateTeamWithInvitesMutation(
+  callbacks?: CreateTeamWithInvitesCallbacks
+) {
+  return useMutation(() => ({
+    mutationFn: async ({ name, emails }: CreateTeamWithInvitesArgs) => {
+      const team = await throwOnErr(() =>
+        authServiceClient.createTeam({ name })
+      );
+
+      if (emails && emails.length > 0) {
+        await throwOnErr(() =>
+          authServiceClient.inviteToTeam(team.id, { emails })
+        );
+      }
+
+      return team;
+    },
+
+    ...withCallbacks<
+      Team,
+      Error,
+      CreateTeamWithInvitesArgs,
+      CreateTeamWithInvitesContext
+    >(
+      {
+        onMutate: async ({ name }) => {
+          await queryClient.cancelQueries({
+            queryKey: teamKeys.userTeams.queryKey,
+          });
+
+          const previousTeams = queryClient.getQueryData<Team[]>(
+            teamKeys.userTeams.queryKey
+          );
+
+          const userInfo = queryClient.getQueryData<{ userId: string }>(
+            authKeys.userInfo.queryKey
+          );
+
+          if (userInfo?.userId) {
+            const optimisticTeam: Team = {
+              id: `optimistic-${Date.now()}`,
+              name,
+              owner_id: userInfo.userId,
+            };
+
+            queryClient.setQueryData<Team[]>(
+              teamKeys.userTeams.queryKey,
+              (old) => (old ? [...old, optimisticTeam] : [optimisticTeam])
+            );
+          }
+
+          return { previousTeams };
+        },
+
+        onSuccess: (_team, { emails }) => {
+          invalidateUserTeams();
+          const hasInvites = emails && emails.length > 0;
+          toast.success(
+            hasInvites ? 'Team created and invitations sent' : 'Team created'
+          );
+        },
+
+        onError: (error, _args, context) => {
+          console.error('Failed to create team', error);
+          toast.failure('Failed to create team');
 
           if (context?.previousTeams) {
             queryClient.setQueryData(
