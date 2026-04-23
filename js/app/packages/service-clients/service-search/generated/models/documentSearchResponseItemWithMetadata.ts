@@ -12,4 +12,5 @@ import type { DocumentSearchResponseItemWithMetadataAllOf } from './documentSear
 timestamps in opensearch as they would require us to update document page record
 every time the document updates (specifically for updated_at and viewed_at)
  */
-export type DocumentSearchResponseItemWithMetadata = DocumentSearchResponseItem & DocumentSearchResponseItemWithMetadataAllOf;
+export type DocumentSearchResponseItemWithMetadata =
+  DocumentSearchResponseItem & DocumentSearchResponseItemWithMetadataAllOf;

@@ -4,8 +4,9 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName } from './simpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName';
+
 import type { SearchHighlight } from './searchHighlight';
+import type { SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName } from './simpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName';
 
 export interface SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp {
   /** The call record id */

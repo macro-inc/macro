@@ -4,10 +4,11 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SearchHighlight } from './searchHighlight';
+
 import type { DocumentSearchResultNodeId } from './documentSearchResultNodeId';
 import type { DocumentSearchResultRawContent } from './documentSearchResultRawContent';
 import type { DocumentSearchResultScore } from './documentSearchResultScore';
+import type { SearchHighlight } from './searchHighlight';
 
 /**
  * A document match for a given node

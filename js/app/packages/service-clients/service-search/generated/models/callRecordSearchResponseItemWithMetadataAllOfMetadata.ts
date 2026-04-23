@@ -6,4 +6,5 @@
  */
 import type { CallRecordMetadata } from './callRecordMetadata';
 
-export type CallRecordSearchResponseItemWithMetadataAllOfMetadata = null | CallRecordMetadata;
+export type CallRecordSearchResponseItemWithMetadataAllOfMetadata =
+  null | CallRecordMetadata;

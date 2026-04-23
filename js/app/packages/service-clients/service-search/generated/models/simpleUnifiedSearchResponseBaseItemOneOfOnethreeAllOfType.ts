@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SimpleUnifiedSearchResponseBaseItemOneOfOnethreeAllOfType = typeof SimpleUnifiedSearchResponseBaseItemOneOfOnethreeAllOfType[keyof typeof SimpleUnifiedSearchResponseBaseItemOneOfOnethreeAllOfType];
-
+export type SimpleUnifiedSearchResponseBaseItemOneOfOnethreeAllOfType =
+  (typeof SimpleUnifiedSearchResponseBaseItemOneOfOnethreeAllOfType)[keyof typeof SimpleUnifiedSearchResponseBaseItemOneOfOnethreeAllOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SimpleUnifiedSearchResponseBaseItemOneOfOnethreeAllOfType = {

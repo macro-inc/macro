@@ -4,10 +4,11 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SearchHighlight } from './searchHighlight';
+
 import type { EmailSearchResultMessageId } from './emailSearchResultMessageId';
 import type { EmailSearchResultScore } from './emailSearchResultScore';
 import type { EmailSearchResultSentAt } from './emailSearchResultSentAt';
+import type { SearchHighlight } from './searchHighlight';
 
 /**
  * A email message match for a given thread id

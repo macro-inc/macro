@@ -8,8 +8,8 @@
 /**
  * Controls whether shared email threads are included in results.
  */
-export type SharedEmailFilter = typeof SharedEmailFilter[keyof typeof SharedEmailFilter];
-
+export type SharedEmailFilter =
+  (typeof SharedEmailFilter)[keyof typeof SharedEmailFilter];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SharedEmailFilter = {

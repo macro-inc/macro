@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChatSearchRequestAllOfTwoCollapse } from './chatSearchRequestAllOfTwoCollapse';
-import type { MatchType } from './matchType';
 import type { ChatSearchRequestAllOfTwoQuery } from './chatSearchRequestAllOfTwoQuery';
-import type { SearchOn } from './searchOn';
 import type { ChatSearchRequestAllOfTwoTerms } from './chatSearchRequestAllOfTwoTerms';
+import type { MatchType } from './matchType';
+import type { SearchOn } from './searchOn';
 
 export type ChatSearchRequestAllOfTwo = {
   /** If true, returns only 1 result per entity. False by default. */

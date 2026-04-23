@@ -7,4 +7,6 @@
 import type { CallRecordSearchResponseItemWithMetadata } from './callRecordSearchResponseItemWithMetadata';
 import type { UnifiedSearchResponseItemOneOfOnesixAllOf } from './unifiedSearchResponseItemOneOfOnesixAllOf';
 
-export type UnifiedSearchResponseItemOneOfOnesix = CallRecordSearchResponseItemWithMetadata & UnifiedSearchResponseItemOneOfOnesixAllOf;
+export type UnifiedSearchResponseItemOneOfOnesix =
+  CallRecordSearchResponseItemWithMetadata &
+    UnifiedSearchResponseItemOneOfOnesixAllOf;

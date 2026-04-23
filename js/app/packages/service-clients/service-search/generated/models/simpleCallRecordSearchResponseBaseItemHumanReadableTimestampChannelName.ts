@@ -8,4 +8,6 @@
 /**
  * The best-effort channel name
  */
-export type SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName = string | null;
+export type SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName =
+  | string
+  | null;

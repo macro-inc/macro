@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type PropertyOwnerOneOfScope = typeof PropertyOwnerOneOfScope[keyof typeof PropertyOwnerOneOfScope];
-
+export type PropertyOwnerOneOfScope =
+  (typeof PropertyOwnerOneOfScope)[keyof typeof PropertyOwnerOneOfScope];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyOwnerOneOfScope = {

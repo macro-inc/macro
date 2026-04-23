@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmailSearchRequestAllOfTwoCollapse } from './emailSearchRequestAllOfTwoCollapse';
-import type { MatchType } from './matchType';
 import type { EmailSearchRequestAllOfTwoQuery } from './emailSearchRequestAllOfTwoQuery';
-import type { SearchOn } from './searchOn';
 import type { EmailSearchRequestAllOfTwoTerms } from './emailSearchRequestAllOfTwoTerms';
+import type { MatchType } from './matchType';
+import type { SearchOn } from './searchOn';
 
 export type EmailSearchRequestAllOfTwo = {
   /** If true, returns only 1 result per entity. False by default. */

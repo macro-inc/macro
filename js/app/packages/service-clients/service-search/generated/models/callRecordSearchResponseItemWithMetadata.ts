@@ -10,4 +10,5 @@ import type { CallRecordSearchResponseItemWithMetadataAllOf } from './callRecord
 /**
  * CallRecordSearchResponseItem with metadata fetched from macrodb.
  */
-export type CallRecordSearchResponseItemWithMetadata = CallRecordSearchResponseItem & CallRecordSearchResponseItemWithMetadataAllOf;
+export type CallRecordSearchResponseItemWithMetadata =
+  CallRecordSearchResponseItem & CallRecordSearchResponseItemWithMetadataAllOf;

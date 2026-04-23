@@ -5,12 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CallRecordSearchResultEndedAt } from './callRecordSearchResultEndedAt';
-import type { SearchHighlight } from './searchHighlight';
 import type { CallRecordSearchResultScore } from './callRecordSearchResultScore';
 import type { CallRecordSearchResultSequenceNum } from './callRecordSearchResultSequenceNum';
 import type { CallRecordSearchResultSpeakerId } from './callRecordSearchResultSpeakerId';
 import type { CallRecordSearchResultStartedAt } from './callRecordSearchResultStartedAt';
 import type { CallRecordSearchResultTranscriptId } from './callRecordSearchResultTranscriptId';
+import type { SearchHighlight } from './searchHighlight';
 
 /**
  * A match on a specific transcript segment within a call record.

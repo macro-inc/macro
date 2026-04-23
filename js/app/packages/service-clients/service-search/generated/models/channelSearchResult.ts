@@ -5,12 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelSearchResultCreatedAt } from './channelSearchResultCreatedAt';
-import type { SearchHighlight } from './searchHighlight';
 import type { ChannelSearchResultMessageId } from './channelSearchResultMessageId';
 import type { ChannelSearchResultScore } from './channelSearchResultScore';
 import type { ChannelSearchResultSenderId } from './channelSearchResultSenderId';
 import type { ChannelSearchResultThreadId } from './channelSearchResultThreadId';
 import type { ChannelSearchResultUpdatedAt } from './channelSearchResultUpdatedAt';
+import type { SearchHighlight } from './searchHighlight';
 
 /**
  * A channel message match for a given channel id

@@ -7,4 +7,6 @@
 import type { EmailSearchResponseItemWithMetadata } from './emailSearchResponseItemWithMetadata';
 import type { UnifiedSearchResponseItemOneOfSevenAllOf } from './unifiedSearchResponseItemOneOfSevenAllOf';
 
-export type UnifiedSearchResponseItemOneOfSeven = EmailSearchResponseItemWithMetadata & UnifiedSearchResponseItemOneOfSevenAllOf;
+export type UnifiedSearchResponseItemOneOfSeven =
+  EmailSearchResponseItemWithMetadata &
+    UnifiedSearchResponseItemOneOfSevenAllOf;

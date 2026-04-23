@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelSearchRequestAllOfTwoCollapse } from './channelSearchRequestAllOfTwoCollapse';
-import type { MatchType } from './matchType';
 import type { ChannelSearchRequestAllOfTwoQuery } from './channelSearchRequestAllOfTwoQuery';
-import type { SearchOn } from './searchOn';
 import type { ChannelSearchRequestAllOfTwoTerms } from './channelSearchRequestAllOfTwoTerms';
+import type { MatchType } from './matchType';
+import type { SearchOn } from './searchOn';
 
 export type ChannelSearchRequestAllOfTwo = {
   /** If true, returns only 1 result per entity. False by default. */

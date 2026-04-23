@@ -7,4 +7,6 @@
 import type { SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp } from './simpleCallRecordSearchResponseBaseItemHumanReadableTimestamp';
 import type { SimpleUnifiedSearchResponseBaseItemOneOfOnesixAllOf } from './simpleUnifiedSearchResponseBaseItemOneOfOnesixAllOf';
 
-export type SimpleUnifiedSearchResponseBaseItemOneOfOnesix = SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp & SimpleUnifiedSearchResponseBaseItemOneOfOnesixAllOf;
+export type SimpleUnifiedSearchResponseBaseItemOneOfOnesix =
+  SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp &
+    SimpleUnifiedSearchResponseBaseItemOneOfOnesixAllOf;

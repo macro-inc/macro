@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentSearchRequestAllOfTwoCollapse } from './documentSearchRequestAllOfTwoCollapse';
-import type { MatchType } from './matchType';
 import type { DocumentSearchRequestAllOfTwoQuery } from './documentSearchRequestAllOfTwoQuery';
-import type { SearchOn } from './searchOn';
 import type { DocumentSearchRequestAllOfTwoTerms } from './documentSearchRequestAllOfTwoTerms';
+import type { MatchType } from './matchType';
+import type { SearchOn } from './searchOn';
 
 export type DocumentSearchRequestAllOfTwo = {
   /** If true, returns only 1 result per entity. False by default. */

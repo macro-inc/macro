@@ -9,4 +9,6 @@ import type { SoupProperty } from './soupProperty';
 /**
  * Entity properties (assignees, status, priority, etc.) for markdown documents.
  */
-export type DocumentSearchResponseItemWithMetadataAllOfProperties = SoupProperty[] | null;
+export type DocumentSearchResponseItemWithMetadataAllOfProperties =
+  | SoupProperty[]
+  | null;

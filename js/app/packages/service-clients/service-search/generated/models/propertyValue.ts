@@ -5,12 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PropertyValueOneOf } from './propertyValueOneOf';
-import type { PropertyValueOneOfThree } from './propertyValueOneOfThree';
 import type { PropertyValueOneOfFive } from './propertyValueOneOfFive';
-import type { PropertyValueOneOfSeven } from './propertyValueOneOfSeven';
 import type { PropertyValueOneOfNine } from './propertyValueOneOfNine';
 import type { PropertyValueOneOfOneone } from './propertyValueOneOfOneone';
 import type { PropertyValueOneOfOnethree } from './propertyValueOneOfOnethree';
+import type { PropertyValueOneOfSeven } from './propertyValueOneOfSeven';
+import type { PropertyValueOneOfThree } from './propertyValueOneOfThree';
 
 /**
  * Property value (service representation).
@@ -18,4 +18,11 @@ import type { PropertyValueOneOfOnethree } from './propertyValueOneOfOnethree';
 Represents the actual value stored for an entity property.
 This is serialized to/from JSONB in the database.
  */
-export type PropertyValue = PropertyValueOneOf | PropertyValueOneOfThree | PropertyValueOneOfFive | PropertyValueOneOfSeven | PropertyValueOneOfNine | PropertyValueOneOfOneone | PropertyValueOneOfOnethree;
+export type PropertyValue =
+  | PropertyValueOneOf
+  | PropertyValueOneOfThree
+  | PropertyValueOneOfFive
+  | PropertyValueOneOfSeven
+  | PropertyValueOneOfNine
+  | PropertyValueOneOfOneone
+  | PropertyValueOneOfOnethree;

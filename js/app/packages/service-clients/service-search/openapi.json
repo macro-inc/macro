@@ -12,9 +12,7 @@
   "paths": {
     "/search": {
       "post": {
-        "tags": [
-          "search::unified"
-        ],
+        "tags": ["search::unified"],
         "summary": "Perform a search through all items",
         "operationId": "unified_search",
         "parameters": [
@@ -94,9 +92,7 @@
     },
     "/search/simple": {
       "post": {
-        "tags": [
-          "search::simple::simple_unified"
-        ],
+        "tags": ["search::simple::simple_unified"],
         "summary": "Perform a search through all items.\nThis is a simple search where we do not group your results by entity id.",
         "operationId": "simple_unified_search",
         "parameters": [
@@ -182,10 +178,7 @@
         "description": "Filters for call records.",
         "properties": {
           "attended": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "channel_ids": {
@@ -221,10 +214,7 @@
             "description": "Whether the requesting user was a participant on the call."
           },
           "channel_name": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "created_by": {
             "type": "string"
@@ -282,10 +272,7 @@
             "description": "Aligned identifier across response item shapes."
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Display name for the call — falls back to the channel name when available."
           },
           "owner_id": {
@@ -328,15 +315,10 @@
       "CallRecordSearchResult": {
         "type": "object",
         "description": "A match on a specific transcript segment within a call record.\nModelled after `ChannelSearchResult` — one of these per matched segment,\nwith all the metadata a frontend needs to navigate to and highlight it.",
-        "required": [
-          "highlight"
-        ],
+        "required": ["highlight"],
         "properties": {
           "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the segment ended (nullable — some segments have no end time)."
           },
@@ -345,41 +327,26 @@
             "description": "The highlight fragments from the segment's text."
           },
           "score": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "double",
             "description": "The score of the match."
           },
           "sequence_num": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int32",
             "description": "Position of the segment within the call."
           },
           "speaker_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The macro user id of the speaker for the matched segment."
           },
           "started_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the segment started being spoken."
           },
           "transcript_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Primary key of the matched `call_record_transcripts` row.\nPresent when the hit came from segment content."
           }
@@ -404,10 +371,7 @@
             "description": "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
           },
           "importance": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "mentions": {
@@ -422,10 +386,7 @@
             "description": "Filter by channel notification state."
           },
           "org_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64",
             "description": "Channel organization ID to search within. Empty to ignore organization filtering."
           },
@@ -437,10 +398,7 @@
             "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
           },
           "team_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Channel team ID to search within. Empty to ignore team filtering."
           },
           "thread_ids": {
@@ -455,20 +413,14 @@
       "ChannelMetadata": {
         "type": "object",
         "description": "Metadata for a channel fetched from the database",
-        "required": [
-          "created_at",
-          "updated_at"
-        ],
+        "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "interacted_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "updated_at": {
@@ -476,10 +428,7 @@
             "format": "date-time"
           },
           "viewed_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -499,15 +448,10 @@
           },
           {
             "type": "object",
-            "required": [
-              "match_type"
-            ],
+            "required": ["match_type"],
             "properties": {
               "collapse": {
-                "type": [
-                  "boolean",
-                  "null"
-                ],
+                "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
               "match_type": {
@@ -515,10 +459,7 @@
                 "description": "The match type to use when searching"
               },
               "query": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The query to search for"
               },
               "search_on": {
@@ -526,10 +467,7 @@
                 "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
               },
               "terms": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": ["array", "null"],
                 "items": {
                   "type": "string"
                 },
@@ -542,9 +480,7 @@
       "ChannelSearchResponse": {
         "type": "object",
         "description": "The document search response object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -587,10 +523,7 @@
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
           "owner_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "we don't store this for channels atm but keeping it here for consistency"
           }
         }
@@ -622,15 +555,10 @@
       "ChannelSearchResult": {
         "type": "object",
         "description": "A channel message match for a given channel id",
-        "required": [
-          "highlight"
-        ],
+        "required": ["highlight"],
         "properties": {
           "created_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the channel message was created\nThis is only prsent if the search result is on the message content"
           },
@@ -639,41 +567,26 @@
             "description": "The highlights for the channel message"
           },
           "message_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The channel message id\nThis is only prsent if the search result is on the message content"
           },
           "score": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
           },
           "sender_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The sender id\nThis is only prsent if the search result is on the message content"
           },
           "thread_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The channel message thread id"
           },
           "updated_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the channel message was last updated\nThis is only prsent if the search result is on the message content"
           }
@@ -691,10 +604,7 @@
             "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
           },
           "importance": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "notification_filters": {
@@ -727,15 +637,10 @@
       "ChatMessageSearchResult": {
         "type": "object",
         "description": "A chat match for a given message id",
-        "required": [
-          "highlight"
-        ],
+        "required": ["highlight"],
         "properties": {
           "chat_message_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The chat message id for the chat\nThis is only present if the search match was on the chat message content"
           },
@@ -744,17 +649,11 @@
             "description": "The highlights for the chat message"
           },
           "role": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The role of the chat message\nThis is only present if the search match was on the chat message content"
           },
           "score": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
           }
@@ -763,37 +662,25 @@
       "ChatMetadata": {
         "type": "object",
         "description": "Metadata for a chat fetched from the database",
-        "required": [
-          "created_at",
-          "updated_at"
-        ],
+        "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "deleted_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "project_id": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "updated_at": {
             "type": "string",
             "format": "date-time"
           },
           "viewed_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -813,15 +700,10 @@
           },
           {
             "type": "object",
-            "required": [
-              "match_type"
-            ],
+            "required": ["match_type"],
             "properties": {
               "collapse": {
-                "type": [
-                  "boolean",
-                  "null"
-                ],
+                "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
               "match_type": {
@@ -829,10 +711,7 @@
                 "description": "The match type to use when searching"
               },
               "query": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The query to search for"
               },
               "search_on": {
@@ -840,10 +719,7 @@
                 "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
               },
               "terms": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": ["array", "null"],
                 "items": {
                   "type": "string"
                 },
@@ -856,9 +732,7 @@
       "ChatSearchResponse": {
         "type": "object",
         "description": "The chat search response object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -967,17 +841,11 @@
             "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           },
           "importance": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "is_email_attachment": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both."
           },
           "notification_filters": {
@@ -1014,37 +882,25 @@
       "DocumentMetadata": {
         "type": "object",
         "description": "Metadata for a document fetched from the database",
-        "required": [
-          "created_at",
-          "updated_at"
-        ],
+        "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "deleted_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "project_id": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "updated_at": {
             "type": "string",
             "format": "date-time"
           },
           "viewed_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -1064,15 +920,10 @@
           },
           {
             "type": "object",
-            "required": [
-              "match_type"
-            ],
+            "required": ["match_type"],
             "properties": {
               "collapse": {
-                "type": [
-                  "boolean",
-                  "null"
-                ],
+                "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
               "match_type": {
@@ -1080,10 +931,7 @@
                 "description": "The match type to use when searching"
               },
               "query": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The query to search for"
               },
               "search_on": {
@@ -1091,10 +939,7 @@
                 "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
               },
               "terms": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": ["array", "null"],
                 "items": {
                   "type": "string"
                 },
@@ -1107,9 +952,7 @@
       "DocumentSearchResponse": {
         "type": "object",
         "description": "The document search response object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -1149,10 +992,7 @@
             "description": "The search results for the document\nThis may be empty if the search result match was on the document name only"
           },
           "file_type": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The file type of the document"
           },
           "id": {
@@ -1199,10 +1039,7 @@
                 ]
               },
               "properties": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": ["array", "null"],
                 "items": {
                   "$ref": "#/components/schemas/SoupProperty"
                 },
@@ -1216,33 +1053,22 @@
       "DocumentSearchResult": {
         "type": "object",
         "description": "A document match for a given node",
-        "required": [
-          "highlight"
-        ],
+        "required": ["highlight"],
         "properties": {
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights for the document"
           },
           "node_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The node id for the document.\nThis is only useful for markdown at the moment\nThis will only be provided if the match was on content"
           },
           "raw_content": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The raw content of the document.\nThis is only included for markdown files and will be the raw json node of the match"
           },
           "score": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
           }
@@ -1251,9 +1077,7 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": [
-          "task"
-        ]
+        "enum": ["task"]
       },
       "EmailFilters": {
         "type": "object",
@@ -1292,10 +1116,7 @@
             "description": "Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default."
           },
           "importance": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums)."
           },
           "include_labels": {
@@ -1339,18 +1160,13 @@
       "EmailSearchParticipant": {
         "type": "object",
         "description": "A participant (sender) in an email thread",
-        "required": [
-          "email"
-        ],
+        "required": ["email"],
         "properties": {
           "email": {
             "type": "string"
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
@@ -1369,15 +1185,10 @@
           },
           {
             "type": "object",
-            "required": [
-              "match_type"
-            ],
+            "required": ["match_type"],
             "properties": {
               "collapse": {
-                "type": [
-                  "boolean",
-                  "null"
-                ],
+                "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
               "match_type": {
@@ -1385,10 +1196,7 @@
                 "description": "The match type to use when searching"
               },
               "query": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The query to search for"
               },
               "search_on": {
@@ -1396,10 +1204,7 @@
                 "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
               },
               "terms": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": ["array", "null"],
                 "items": {
                   "type": "string"
                 },
@@ -1412,9 +1217,7 @@
       "EmailSearchResponse": {
         "type": "object",
         "description": "The document search response object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -1450,10 +1253,7 @@
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Subject of the email thread"
           },
           "owner_id": {
@@ -1467,10 +1267,7 @@
             "description": "The participants (senders) in this email thread"
           },
           "subject": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The subject of the email\nThis is only present if the search result is on the message content"
           },
           "thread_id": {
@@ -1517,20 +1314,14 @@
                 "type": "boolean"
               },
               "snippet": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "updated_at": {
                 "type": "string",
                 "format": "date-time"
               },
               "viewed_at": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "date-time"
               }
             }
@@ -1577,10 +1368,7 @@
             "description": "This is only present if the search result is on the message content"
           },
           "message_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The email message id.\nThis is only present if the search result is on the message content"
           },
@@ -1596,10 +1384,7 @@
             "description": "This is only present if the search result is on the message content"
           },
           "score": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
           },
@@ -1608,10 +1393,7 @@
             "description": "The sender.\nIf the match is on the subject, the sender is the latest sender on the thread."
           },
           "sent_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the email message was sent\nThis is only present if the search result is on the message content"
           }
@@ -1661,10 +1443,7 @@
       "EntityReference": {
         "type": "object",
         "description": "Entity reference for entity-type property values.",
-        "required": [
-          "entity_id",
-          "entity_type"
-        ],
+        "required": ["entity_id", "entity_type"],
         "properties": {
           "entity_id": {
             "type": "string"
@@ -1673,10 +1452,7 @@
             "$ref": "#/components/schemas/EntityType"
           },
           "specific_message_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat."
           }
@@ -1699,9 +1475,7 @@
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "properties": {
           "message": {
             "type": "string",
@@ -2139,29 +1913,18 @@
       },
       "MatchType": {
         "type": "string",
-        "enum": [
-          "exact",
-          "partial",
-          "regexp",
-          "query"
-        ]
+        "enum": ["exact", "partial", "regexp", "query"]
       },
       "NotificationFilters": {
         "type": "object",
         "description": "Notification-level filters that apply to an entity type.",
         "properties": {
           "done": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
           },
           "seen": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
           }
         }
@@ -2171,10 +1934,7 @@
         "description": "The project filters used to filter down what projects you search over.",
         "properties": {
           "importance": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "notification_filters": {
@@ -2200,37 +1960,25 @@
       "ProjectMetadata": {
         "type": "object",
         "description": "Metadata for a project fetched from the database",
-        "required": [
-          "created_at",
-          "updated_at"
-        ],
+        "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "deleted_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "parent_project_id": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "updated_at": {
             "type": "string",
             "format": "date-time"
           },
           "viewed_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -2281,15 +2029,10 @@
           },
           {
             "type": "object",
-            "required": [
-              "match_type"
-            ],
+            "required": ["match_type"],
             "properties": {
               "collapse": {
-                "type": [
-                  "boolean",
-                  "null"
-                ],
+                "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
               "match_type": {
@@ -2297,10 +2040,7 @@
                 "description": "The match type to use when searching"
               },
               "query": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "The query to search for"
               },
               "search_on": {
@@ -2308,10 +2048,7 @@
                 "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
               },
               "terms": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": ["array", "null"],
                 "items": {
                   "type": "string"
                 },
@@ -2386,18 +2123,13 @@
       },
       "ProjectSearchResult": {
         "type": "object",
-        "required": [
-          "highlight"
-        ],
+        "required": ["highlight"],
         "properties": {
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight"
           },
           "score": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
           }
@@ -2465,9 +2197,7 @@
       "PropertyFilter": {
         "type": "object",
         "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
-        "required": [
-          "property_definition_id"
-        ],
+        "required": ["property_definition_id"],
         "properties": {
           "entity_ids": {
             "type": "array",
@@ -2477,10 +2207,7 @@
             "description": "Entity reference IDs to match. Multiple values are OR'd together."
           },
           "entity_type": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
           },
           "option_ids": {
@@ -2501,16 +2228,11 @@
           {
             "type": "object",
             "description": "User-scoped property only",
-            "required": [
-              "user_id",
-              "scope"
-            ],
+            "required": ["user_id", "scope"],
             "properties": {
               "scope": {
                 "type": "string",
-                "enum": [
-                  "user"
-                ]
+                "enum": ["user"]
               },
               "user_id": {
                 "type": "string"
@@ -2520,10 +2242,7 @@
           {
             "type": "object",
             "description": "Organization-scoped property only",
-            "required": [
-              "organization_id",
-              "scope"
-            ],
+            "required": ["organization_id", "scope"],
             "properties": {
               "organization_id": {
                 "type": "integer",
@@ -2531,20 +2250,14 @@
               },
               "scope": {
                 "type": "string",
-                "enum": [
-                  "organization"
-                ]
+                "enum": ["organization"]
               }
             }
           },
           {
             "type": "object",
             "description": "Both user and organization-scoped",
-            "required": [
-              "user_id",
-              "organization_id",
-              "scope"
-            ],
+            "required": ["user_id", "organization_id", "scope"],
             "properties": {
               "organization_id": {
                 "type": "integer",
@@ -2552,9 +2265,7 @@
               },
               "scope": {
                 "type": "string",
-                "enum": [
-                  "user_and_organization"
-                ]
+                "enum": ["user_and_organization"]
               },
               "user_id": {
                 "type": "string"
@@ -2564,15 +2275,11 @@
           {
             "type": "object",
             "description": "System-owned property (no user or org owner)",
-            "required": [
-              "scope"
-            ],
+            "required": ["scope"],
             "properties": {
               "scope": {
                 "type": "string",
-                "enum": [
-                  "system"
-                ]
+                "enum": ["system"]
               }
             }
           }
@@ -2584,16 +2291,11 @@
           {
             "type": "object",
             "description": "Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}",
-            "required": [
-              "value",
-              "type"
-            ],
+            "required": ["value", "type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "Boolean"
-                ]
+                "enum": ["Boolean"]
               },
               "value": {
                 "type": "boolean",
@@ -2604,16 +2306,11 @@
           {
             "type": "object",
             "description": "Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}",
-            "required": [
-              "value",
-              "type"
-            ],
+            "required": ["value", "type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "Number"
-                ]
+                "enum": ["Number"]
               },
               "value": {
                 "type": "number",
@@ -2625,16 +2322,11 @@
           {
             "type": "object",
             "description": "String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}",
-            "required": [
-              "value",
-              "type"
-            ],
+            "required": ["value", "type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "String"
-                ]
+                "enum": ["String"]
               },
               "value": {
                 "type": "string",
@@ -2645,16 +2337,11 @@
           {
             "type": "object",
             "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}",
-            "required": [
-              "value",
-              "type"
-            ],
+            "required": ["value", "type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "Date"
-                ]
+                "enum": ["Date"]
               },
               "value": {
                 "type": "string",
@@ -2666,16 +2353,11 @@
           {
             "type": "object",
             "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
-            "required": [
-              "value",
-              "type"
-            ],
+            "required": ["value", "type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "SelectOption"
-                ]
+                "enum": ["SelectOption"]
               },
               "value": {
                 "type": "array",
@@ -2690,16 +2372,11 @@
           {
             "type": "object",
             "description": "Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)",
-            "required": [
-              "value",
-              "type"
-            ],
+            "required": ["value", "type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "EntityReference"
-                ]
+                "enum": ["EntityReference"]
               },
               "value": {
                 "type": "array",
@@ -2713,16 +2390,11 @@
           {
             "type": "object",
             "description": "Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)",
-            "required": [
-              "value",
-              "type"
-            ],
+            "required": ["value", "type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "Link"
-                ]
+                "enum": ["Link"]
               },
               "value": {
                 "type": "array",
@@ -2761,10 +2433,7 @@
             "description": "The highlight match on the content field"
           },
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The highlight match on the name field"
           },
           "recipients": {
@@ -2775,34 +2444,22 @@
             "description": "The highlight match on the recipients (email only)"
           },
           "sender": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The highlight match on the sender (email only)"
           },
           "user_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The highlight match on the user (owner) of the entity"
           }
         }
       },
       "SearchOn": {
         "type": "string",
-        "enum": [
-          "name",
-          "content",
-          "name_content"
-        ]
+        "enum": ["name", "content", "name_content"]
       },
       "SearchResponse": {
         "type": "object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -2816,11 +2473,7 @@
       "SharedEmailFilter": {
         "type": "string",
         "description": "Controls whether shared email threads are included in results.",
-        "enum": [
-          "exclude",
-          "include",
-          "only"
-        ]
+        "enum": ["exclude", "include", "only"]
       },
       "SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
@@ -2844,10 +2497,7 @@
             "description": "The channel id"
           },
           "channel_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The best-effort channel name"
           },
           "duration_ms": {
@@ -2939,10 +2589,7 @@
             "description": "The message id"
           },
           "org_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64",
             "description": "The org id"
           },
@@ -2951,10 +2598,7 @@
             "description": "The sender id"
           },
           "thread_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The thread id"
           },
           "updated_at": {
@@ -3016,10 +2660,7 @@
             "description": "The message id"
           },
           "org_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64",
             "description": "The org id"
           },
@@ -3028,10 +2669,7 @@
             "description": "The sender id"
           },
           "thread_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The thread id"
           },
           "updated_at": {
@@ -3048,9 +2686,7 @@
       },
       "SimpleChannelSearchResponse": {
         "type": "object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -3063,9 +2699,7 @@
       },
       "SimpleChatSearchResponse": {
         "type": "object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -3174,9 +2808,7 @@
       },
       "SimpleDocumentSearchResponse": {
         "type": "object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -3224,10 +2856,7 @@
             "description": "The owner id"
           },
           "raw_content": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The raw content of the document"
           },
           "updated_at": {
@@ -3279,10 +2908,7 @@
             "description": "The owner id"
           },
           "raw_content": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The raw content of the document"
           },
           "updated_at": {
@@ -3299,9 +2925,7 @@
       },
       "SimpleEmailSearchResponse": {
         "type": "object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -3386,10 +3010,7 @@
             "description": "The time the email was sent"
           },
           "subject": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The subject"
           },
           "thread_id": {
@@ -3486,10 +3107,7 @@
             "description": "The time the email was sent"
           },
           "subject": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The subject"
           },
           "thread_id": {
@@ -3514,9 +3132,7 @@
       },
       "SimpleProjectSearchResponse": {
         "type": "object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -3627,9 +3243,7 @@
       },
       "SimpleUnifiedSearchBaseResponse": {
         "type": "object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -3648,15 +3262,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "document"
-                    ]
+                    "enum": ["document"]
                   }
                 }
               }
@@ -3669,15 +3279,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "chat"
-                    ]
+                    "enum": ["chat"]
                   }
                 }
               }
@@ -3690,15 +3296,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "email"
-                    ]
+                    "enum": ["email"]
                   }
                 }
               }
@@ -3711,15 +3313,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "channel"
-                    ]
+                    "enum": ["channel"]
                   }
                 }
               }
@@ -3732,15 +3330,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "project"
-                    ]
+                    "enum": ["project"]
                   }
                 }
               }
@@ -3753,15 +3347,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "callRecord"
-                    ]
+                    "enum": ["callRecord"]
                   }
                 }
               }
@@ -3778,15 +3368,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "document"
-                    ]
+                    "enum": ["document"]
                   }
                 }
               }
@@ -3799,15 +3385,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "chat"
-                    ]
+                    "enum": ["chat"]
                   }
                 }
               }
@@ -3820,15 +3402,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "email"
-                    ]
+                    "enum": ["email"]
                   }
                 }
               }
@@ -3841,15 +3419,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "channel"
-                    ]
+                    "enum": ["channel"]
                   }
                 }
               }
@@ -3862,15 +3436,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "project"
-                    ]
+                    "enum": ["project"]
                   }
                 }
               }
@@ -3883,15 +3453,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "callRecord"
-                    ]
+                    "enum": ["callRecord"]
                   }
                 }
               }
@@ -3902,9 +3468,7 @@
       "SoupProperty": {
         "type": "object",
         "description": "A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.",
-        "required": [
-          "definition"
-        ],
+        "required": ["definition"],
         "properties": {
           "definition": {
             "$ref": "#/components/schemas/PropertyDefinition",
@@ -3928,26 +3492,17 @@
         "description": "Task-only filters nested under document filters.",
         "properties": {
           "include_cbm_atm_nc": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
           }
         }
       },
       "UnifiedSearchRequest": {
         "type": "object",
-        "required": [
-          "query",
-          "match_type"
-        ],
+        "required": ["query", "match_type"],
         "properties": {
           "collapse": {
-            "type": [
-              "boolean",
-              "null"
-            ]
+            "type": ["boolean", "null"]
           },
           "filters": {
             "$ref": "#/components/schemas/EntityFilters",
@@ -3969,15 +3524,10 @@
       },
       "UnifiedSearchResponse": {
         "type": "object",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The next cursor to use for paginating results"
           },
           "results": {
@@ -3998,15 +3548,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "document"
-                    ]
+                    "enum": ["document"]
                   }
                 }
               }
@@ -4019,15 +3565,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "chat"
-                    ]
+                    "enum": ["chat"]
                   }
                 }
               }
@@ -4040,15 +3582,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "email"
-                    ]
+                    "enum": ["email"]
                   }
                 }
               }
@@ -4061,15 +3599,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "channel"
-                    ]
+                    "enum": ["channel"]
                   }
                 }
               }
@@ -4082,15 +3616,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "project"
-                    ]
+                    "enum": ["project"]
                   }
                 }
               }
@@ -4103,15 +3633,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "callRecord"
-                    ]
+                    "enum": ["callRecord"]
                   }
                 }
               }

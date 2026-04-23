@@ -4,8 +4,9 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CallRecordSearchResult } from './callRecordSearchResult';
+
 import type { CallRecordSearchResponseItemName } from './callRecordSearchResponseItemName';
+import type { CallRecordSearchResult } from './callRecordSearchResult';
 
 /**
  * A single response item, part of the CallRecordSearchResponse object.
