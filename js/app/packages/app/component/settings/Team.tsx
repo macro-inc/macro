@@ -3,6 +3,7 @@ import LeaveIcon from '@icon/regular/sign-out.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import SpinnerIcon from '@icon/regular/spinner.svg';
+import EnvelopeIcon from '@icon/regular/envelope.svg';
 import XIcon from '@icon/regular/x.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
@@ -159,8 +160,8 @@ function InviteRow(props: {
   return (
     <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0">
       <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="w-8 h-8 rounded-full bg-ink-extra-muted flex items-center justify-center shrink-0">
-          <span class="text-xs text-ink-muted">?</span>
+        <div class="w-8 h-8 rounded-full border border-edge-muted flex items-center justify-center shrink-0">
+          <EnvelopeIcon class="size-4 text-ink-muted" />
         </div>
         <div class="min-w-0 flex-1">
           <div class="text-sm text-ink truncate">{props.invite.email}</div>
@@ -314,59 +315,71 @@ export function Team() {
             </Show>
           }
         >
-          <header class="flex items-center justify-between gap-4 mb-8">
-            <section class="min-w-0 flex-1">
-              <h2 class="text-sm mb-1">Team</h2>
-              <Show
-                when={isOwner()}
-                fallback={<div class="text-ink text-xl font-semibold truncate">{originalTeamName()}</div>}
-              >
-                <div class="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={teamNameValue()}
-                    onInput={(e) => setEditingTeamName(e.currentTarget.value)}
-                    placeholder="Enter team name"
-                    class="text-xl font-semibold bg-transparent border border-edge-muted rounded-xs px-2 py-1 hover:border-edge focus:border-accent outline-none text-ink w-64"
-                  />
-                  <Show when={hasTeamNameChanged()}>
-                    <div class="flex items-center gap-1 shrink-0">
-                      <Tooltip tooltip="Save">
-                        <Button
-                          variant="accent"
-                          size="icon-sm"
-                          class="rounded-xs"
-                          disabled={patchTeamMutation.isPending || !editingTeamName()?.trim()}
-                          onClick={handleSaveTeamName}
-                        >
-                          <Show when={patchTeamMutation.isPending} fallback={<CheckIcon class="size-4" />}>
-                            <SpinnerIcon class="size-4 animate-spin" />
-                          </Show>
-                        </Button>
-                      </Tooltip>
-                      <Tooltip tooltip="Cancel">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          class="rounded-xs"
-                          disabled={patchTeamMutation.isPending}
-                          onClick={handleCancelTeamNameEdit}
-                        >
-                          <XIcon class="size-4" />
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  </Show>
-                </div>
-              </Show>
-            </section>
-            <Show when={currentMember() && currentMember()?.role !== TeamRole.Owner}>
-              <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowLeaveModal(true)}>
-                <LeaveIcon class="size-4" />
-                Leave
-              </Button>
-            </Show>
+          <header class="mb-6">
+            <h2 class="text-xl font-bold text-ink">{originalTeamName()}</h2>
           </header>
+
+          <section class="mb-6">
+            <header class="flex items-center justify-between mb-2">
+              <div>
+                <h3 class="text-sm">Details</h3>
+                <p class="text-xs text-ink-muted">Team information and settings.</p>
+              </div>
+              <Show when={currentMember() && currentMember()?.role !== TeamRole.Owner}>
+                <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowLeaveModal(true)}>
+                  <LeaveIcon class="size-4" />
+                  Leave
+                </Button>
+              </Show>
+            </header>
+            <div class="border border-edge rounded-sm px-3 py-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-ink-muted">Name</span>
+                <Show
+                  when={isOwner()}
+                  fallback={<span class="text-sm text-ink">{originalTeamName()}</span>}
+                >
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={teamNameValue()}
+                      onInput={(e) => setEditingTeamName(e.currentTarget.value)}
+                      placeholder="Enter team name"
+                      class="text-sm bg-transparent border border-edge-muted rounded-xs px-2 py-1 hover:border-edge focus:border-accent outline-none text-ink w-48"
+                    />
+                    <Show when={hasTeamNameChanged()}>
+                      <div class="flex items-center gap-1 shrink-0">
+                        <Tooltip tooltip="Save">
+                          <Button
+                            variant="accent"
+                            size="icon-sm"
+                            class="rounded-xs"
+                            disabled={patchTeamMutation.isPending || !editingTeamName()?.trim()}
+                            onClick={handleSaveTeamName}
+                          >
+                            <Show when={patchTeamMutation.isPending} fallback={<CheckIcon class="size-4" />}>
+                              <SpinnerIcon class="size-4 animate-spin" />
+                            </Show>
+                          </Button>
+                        </Tooltip>
+                        <Tooltip tooltip="Cancel">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            class="rounded-xs"
+                            disabled={patchTeamMutation.isPending}
+                            onClick={handleCancelTeamNameEdit}
+                          >
+                            <XIcon class="size-4" />
+                          </Button>
+                        </Tooltip>
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </section>
 
           <section class="mb-6">
             <header class="flex items-center justify-between mb-2">
