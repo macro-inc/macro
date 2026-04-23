@@ -205,7 +205,7 @@ export function Team() {
 
   const [showLeaveModal, setShowLeaveModal] = createSignal(false);
   const [showRemoveModal, setShowRemoveModal] = createSignal<TeamMember | null>(null);
-  const [showCancelInviteModal, setShowCancelInviteModal] = createSignal<string | null>(null);
+  const [showCancelInviteModal, setShowCancelInviteModal] = createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
   const [inviteEmails, setInviteEmails] = createSignal('');
   const [editingTeamName, setEditingTeamName] = createSignal<string | undefined>(undefined);
@@ -276,13 +276,14 @@ export function Team() {
     setShowRemoveModal(null);
   };
 
-  const handleCancelInvite = (inviteId: string) => {
+  const handleCancelInvite = () => {
+    const invite = showCancelInviteModal();
     const currentTeamId = teamId();
-    if (!currentTeamId) return;
+    if (!currentTeamId || !invite) return;
 
     deleteInviteMutation.mutate({
       teamId: currentTeamId,
-      teamInviteId: inviteId,
+      teamInviteId: invite.id,
     });
     setShowCancelInviteModal(null);
   };
@@ -436,7 +437,7 @@ export function Team() {
                     <InviteRow
                       invite={invite}
                       isOwner={isOwner()}
-                      onCancel={() => setShowCancelInviteModal(invite.id)}
+                      onCancel={() => setShowCancelInviteModal(invite)}
                     />
                   )}
                 </For>
@@ -545,7 +546,10 @@ export function Team() {
                 </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
-                <p>Are you sure you want to cancel this invitation?</p>
+                <p>
+                  Are you sure you want to cancel the invitation for{' '}
+                  <span class="font-medium">{showCancelInviteModal()?.email}</span>?
+                </p>
                 <div class="flex justify-end gap-1 pt-2">
                   <Button
                     variant="ghost"
@@ -559,10 +563,7 @@ export function Team() {
                     variant="destructive"
                     class="rounded-xs"
                     disabled={deleteInviteMutation.isPending}
-                    onClick={() => {
-                      const inviteId = showCancelInviteModal();
-                      if (inviteId) handleCancelInvite(inviteId);
-                    }}
+                    onClick={handleCancelInvite}
                   >
                     <Show when={deleteInviteMutation.isPending} fallback="Cancel Invite">
                       <SpinnerIcon class="size-4 animate-spin" />
