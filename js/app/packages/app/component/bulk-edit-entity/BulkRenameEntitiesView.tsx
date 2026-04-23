@@ -13,6 +13,7 @@ export const BulkRenameEntitiesView = (props: {
   entities: EntityData[];
   onFinish: () => void;
   onCancel: () => void;
+  onError?: (error: unknown) => void;
 }) => {
   const renameMutation = createBulkRenameDssEntityMutation();
 
@@ -88,11 +89,15 @@ export const BulkRenameEntitiesView = (props: {
       default:
     }
 
-    await renameMutation.mutateAsync(
-      props.entities.map((e) => ({ entity: e, newName: renameFn(e.name) }))
-    );
-
-    props.onFinish();
+    try {
+      await renameMutation.mutateAsync(
+        props.entities.map((e) => ({ entity: e, newName: renameFn(e.name) }))
+      );
+      props.onFinish();
+    } catch (error) {
+      console.error('Failed to rename entities:', error);
+      props.onError?.(error);
+    }
   };
 
   return (
