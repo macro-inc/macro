@@ -103,7 +103,7 @@ function InteractiveOnboardingInner() {
 
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
-  const inviteTeamEnabled = useFeatureFlag('enable-invite-team-onboarding', {
+  const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
     enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
   const allLessons = () =>
