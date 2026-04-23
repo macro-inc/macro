@@ -136,7 +136,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
     }
     case 'call_record': {
       contentHitData = data.results.flatMap((r) => {
-        const isContentHit = !!r.transcript_id && !!r.speaker_id;
+        const isContentHit = !!r.transcript_id;
         if (!isContentHit) return [];
 
         const contents = r.highlight.content ?? [];
