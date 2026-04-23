@@ -12,10 +12,7 @@ import { useSplitPanelOrThrow } from '../layoutUtils';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
-import {
-  RoundPanel,
-  type RoundPanelProps,
-} from '@core/component/RoundPanel';
+import { RoundPanel, type RoundPanelProps } from '@core/component/RoundPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 
