@@ -5,6 +5,7 @@ import { cn } from '@ui/utils/classname';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
+import { useCreateTeamWithInvitesMutation } from '@queries/team';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 const inviteFormSchema = z.object({
@@ -39,14 +40,19 @@ function InviteTeamDemo(props: LessonContentProps) {
   const [errors, setErrors] = createSignal<FormErrors>({});
   const [submitted, setSubmitted] = createSignal(false);
 
+  const createTeamMutation = useCreateTeamWithInvitesMutation();
+
   const isValid = () => teamName().trim().length > 0;
+  const isPending = () => createTeamMutation.isPending;
 
   createEffect(
     on(
-      isValid,
-      (valid) => {
-        props.onComplete('Create team', { skipFocus: true });
-        if (!valid) {
+      () => [isValid(), isPending()] as const,
+      ([valid, pending]) => {
+        props.onComplete(pending ? 'Creating...' : 'Create team', {
+          skipFocus: true,
+        });
+        if (!valid || pending) {
           props.onUnready();
         }
       },
@@ -125,8 +131,10 @@ function InviteTeamDemo(props: LessonContentProps) {
     }
   };
 
-  const handleSubmit = (e: SubmitEvent) => {
+  const handleSubmit = async (e: SubmitEvent) => {
     e.preventDefault();
+    if (isPending()) return;
+
     setSubmitted(true);
 
     const result = inviteFormSchema.safeParse({
@@ -152,8 +160,16 @@ function InviteTeamDemo(props: LessonContentProps) {
     }
 
     setErrors({});
-    console.log('Form submitted:', result.data);
-    props.advance();
+
+    try {
+      await createTeamMutation.mutateAsync({
+        name: result.data.teamName,
+        emails: result.data.emails.length > 0 ? result.data.emails : undefined,
+      });
+      props.advance();
+    } catch {
+      // Error is displayed in the form via createTeamMutation.error
+    }
   };
 
   return (
@@ -264,6 +280,12 @@ function InviteTeamDemo(props: LessonContentProps) {
             You can always invite more people later from Settings
           </p>
         </div>
+
+        <Show when={createTeamMutation.error}>
+          <p class="text-sm text-failure-ink px-2">
+            {createTeamMutation.error?.message ?? 'Failed to create team'}
+          </p>
+        </Show>
       </form>
     </div>
   );
