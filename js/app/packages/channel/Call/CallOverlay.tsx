@@ -30,12 +30,12 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
   return (
     <div
       class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
-      classList={{ 'ring-2 ring-accent-2': isSpeaking() }}
+      classList={{ 'ring-inset ring-2 ring-accent-2': isSpeaking() }}
     >
       <Show
         when={cameraTrack()}
         fallback={
-          <div class="flex items-center justify-center w-full h-full p-4">
+          <div class="flex items-center justify-center w-full h-full p-4 ring-2 ring-accent-2">
             <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
               {displayName().charAt(0).toUpperCase()}
             </div>

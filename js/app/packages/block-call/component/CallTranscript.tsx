@@ -1,8 +1,10 @@
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import type { ApiChannelMessage } from '@service-comms/client';
+import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
-import { createMemo, For, Show } from 'solid-js';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 
 // Match the channel message grouping window (5 minutes).
 const GROUPING_WINDOW_MS = 5 * 60 * 1000;
@@ -102,6 +104,8 @@ export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
   channelId: string;
 }) {
+  const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
+
   const items = createMemo<SegmentItem[]>(() => {
     const sorted = [...props.transcript].sort(
       (a, b) => a.sequenceNum - b.sequenceNum
@@ -113,25 +117,43 @@ export function CallTranscript(props: {
   });
 
   return (
-    <div class="flex flex-col py-2">
-      <For each={items()}>
-        {(item) => (
-          <Show
-            when={item.groupedWithPrevious}
-            fallback={
-              <TranscriptSegmentRow
-                segment={item.segment}
-                channelId={props.channelId}
-              />
-            }
-          >
-            <GroupedTranscriptSegmentRow
-              segment={item.segment}
-              channelId={props.channelId}
-            />
-          </Show>
-        )}
-      </For>
+    <div
+      class="relative flex h-full min-h-0 flex-col overflow-hidden"
+    >
+      <div class="relative flex flex-1 min-h-0 flex-col">
+        <div
+          ref={setScrollRef}
+          class="h-full min-h-0 flex-1 overflow-y-auto scrollbar-hidden"
+        >
+
+        <div class="isolate flex items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
+          <Subtitles class="size-4 text-ink shrink-0" />
+          <p class="font-semibold text-ink select-none text-sm shrink-0">Transcript</p>
+        </div>
+
+        <div class="flex flex-col gap-2 p-4 pt-2 @[860px]:pt-4">
+          <For each={items()}>
+            {(item) => (
+              <Show
+                when={item.groupedWithPrevious}
+                fallback={
+                  <TranscriptSegmentRow
+                    segment={item.segment}
+                    channelId={props.channelId}
+                  />
+                }
+              >
+                <GroupedTranscriptSegmentRow
+                  segment={item.segment}
+                  channelId={props.channelId}
+                />
+              </Show>
+            )}
+          </For>
+        </div>
+        </div>
+      </div>
+      <CustomScrollbar scrollContainer={scrollRef} />
     </div>
   );
 }
