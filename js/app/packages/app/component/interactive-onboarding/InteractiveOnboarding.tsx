@@ -181,14 +181,18 @@ function InteractiveOnboardingInner() {
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
-  const handleLessonComplete = (buttonLabel?: string) => {
+  const handleLessonComplete = (buttonLabel?: string, options?: { skipFocus?: boolean }) => {
     setContinueLabel(buttonLabel);
     setReadyToContinue(true);
     // Skip auto-focus on touch — Safari scrolls to the focused element,
     // which jumps the view to the bottom on longer lessons.
-    if (!isTouch) {
+    if (!isTouch && !options?.skipFocus) {
       requestAnimationFrame(() => continueButtonRef?.focus());
     }
+  };
+
+  const handleLessonUnready = () => {
+    setReadyToContinue(false);
   };
 
   // Programmatic advance for lessons that progress on their own interaction
@@ -516,6 +520,7 @@ function InteractiveOnboardingInner() {
                           <Dynamic
                             component={lesson().definition.content}
                             onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
                             advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}
@@ -527,6 +532,7 @@ function InteractiveOnboardingInner() {
                               <Dynamic
                                 component={Demo()}
                                 onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
                                 advance={advanceLesson}
                                 isActive={true}
                                 scopeId={scopeId}
@@ -579,6 +585,7 @@ function InteractiveOnboardingInner() {
                         <Dynamic
                           component={lesson().definition.content}
                           onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
                           advance={advanceLesson}
                           isActive={true}
                           scopeId={scopeId}
@@ -633,6 +640,7 @@ function InteractiveOnboardingInner() {
                           <Dynamic
                             component={Demo()}
                             onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
                             advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}

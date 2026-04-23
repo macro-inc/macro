@@ -25,8 +25,10 @@ export interface LessonDefinition {
 }
 
 export interface LessonContentProps {
-  /** Call when the user has demonstrated understanding. Pass a string to customise the "Get Started" button label. */
-  onComplete: (buttonLabel?: string) => void;
+  /** Call when the user has demonstrated understanding. Pass a string to customise the "Get Started" button label. Pass skipFocus: true to prevent auto-focusing the continue button. */
+  onComplete: (buttonLabel?: string, options?: { skipFocus?: boolean }) => void;
+  /** Call to disable the continue button (e.g., when form validation fails). */
+  onUnready: () => void;
   /** Whether this lesson is currently visible */
   isActive: boolean;
   /** Hotkey scope ID from the shell — register all lesson hotkeys into this scope */
