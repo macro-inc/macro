@@ -4,8 +4,8 @@ import EditableField from '@core/component/EditableField';
 import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
 import { Button } from '@ui/components/Button';
 import { useUserId } from '@core/context/user';
-import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
-import { authServiceClient } from '@service-auth/client';
+import { useDisplayName, tryMacroId } from '@core/user';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   useUserTeamsQuery,
   useTeamQuery,
@@ -21,7 +21,6 @@ import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import type { UserName } from '@service-auth/generated/schemas/userName';
 
 const roleOrder: Record<string, number> = {
   [TeamRole.Owner]: 0,
@@ -29,20 +28,15 @@ const roleOrder: Record<string, number> = {
   [TeamRole.Member]: 2,
 };
 
-function formatUserName(userName: UserName | undefined): string {
-  if (!userName) return 'Unknown';
-  const parts = [userName.first_name, userName.last_name].filter(Boolean);
-  return parts.length > 0 ? parts.join(' ') : 'Unknown';
-}
-
 function MemberRow(props: {
   member: TeamMember;
-  userName: UserName | undefined;
   canManage: boolean;
   isCurrentUser: boolean;
   onRemove: () => void;
   onTierChange: (tier: TeamUserTier) => void;
 }) {
+  const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
+
   return (
     <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0 gap-2">
       <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -51,7 +45,7 @@ function MemberRow(props: {
         </div>
         <div class="min-w-0 flex-1">
           <div class="text-sm text-ink truncate">
-            {formatUserName(props.userName)}
+            {displayName()}
             {props.isCurrentUser && <span class="text-ink-muted"> (you)</span>}
           </div>
           <div class="text-xs text-ink-muted">{props.member.role}</div>
@@ -140,19 +134,6 @@ export function Team() {
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
     return [...unsorted].sort((a, b) => (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3));
-  });
-
-  const memberIds = createMemo(() => members().map((m) => m.user_id));
-
-  const [userNames] = createResource(memberIds, async (ids) => {
-    if (ids.length === 0) return {};
-    const [_, result] = await authServiceClient.getUserNames({ user_ids: ids });
-    if (!result) return {};
-    const nameMap: Record<string, UserName> = {};
-    for (const name of result.names) {
-      nameMap[name.id] = name;
-    }
-    return nameMap;
   });
 
   const currentMember = createMemo(() => {
@@ -288,7 +269,6 @@ export function Team() {
                   {(member) => (
                     <MemberRow
                       member={member}
-                      userName={userNames()?.[member.user_id]}
                       canManage={canManage()}
                       isCurrentUser={member.user_id === userId()}
                       onRemove={() => setShowRemoveModal(member.user_id)}
