@@ -203,8 +203,8 @@ function InviteTeamDemo(props: LessonContentProps) {
             type="text"
             value={teamName()}
             onInput={(e) => updateTeamName(e.currentTarget.value)}
+            onBlur={() => validateField('teamName', 0, teamName())}
             placeholder="Enter your team name"
-            maxLength={TEAM_NAME_MAX_LENGTH}
             disabled={isPending()}
             aria-describedby="team-name-counter"
             class={cn(
@@ -225,9 +225,11 @@ function InviteTeamDemo(props: LessonContentProps) {
               id="team-name-counter"
               class={cn(
                 'text-sm ml-auto',
-                teamName().length > TEAM_NAME_MAX_LENGTH - 10
-                  ? 'text-warning-ink'
-                  : 'text-ink/40'
+                teamName().length > TEAM_NAME_MAX_LENGTH
+                  ? 'text-failure-ink'
+                  : teamName().length > TEAM_NAME_MAX_LENGTH - 10
+                    ? 'text-alert-ink'
+                    : 'text-ink/40'
               )}
             >
               {teamName().length}/{TEAM_NAME_MAX_LENGTH}
@@ -257,6 +259,9 @@ function InviteTeamDemo(props: LessonContentProps) {
                         value={email()}
                         onInput={(e) =>
                           updateEmail(index, e.currentTarget.value)
+                        }
+                        onBlur={(e) =>
+                          validateField('email', index, e.currentTarget.value)
                         }
                         placeholder={emailPlaceholder()}
                         disabled={isPending()}
