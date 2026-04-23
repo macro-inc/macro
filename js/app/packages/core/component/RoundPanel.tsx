@@ -1,37 +1,28 @@
-import { splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
+import type { JSX } from 'solid-js';
 
-export type RoundPanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
-  highlightColor?: JSX.CSSProperties['color'];
+export type RoundPanelProps = {
+  highlightColor?: string;
+  children?: JSX.Element;
   active?: boolean;
+  class?: string;
 };
 
 export function RoundPanel(props: RoundPanelProps) {
-  const [local, rest] = splitProps(props, [
-    'active',
-    'highlightColor',
-    'children',
-    'class',
-  ]);
-
-  const edge = 'var(--color-edge-muted)';
-  const hl = () => local.highlightColor || 'var(--color-accent)';
-
   return (
     <div
       style={{
-        'background-image': `linear-gradient(${local.active ? `${hl()}, ${edge} 80%` : edge})`,
+        'background-image': `linear-gradient(${props.active ? `${props.highlightColor || 'var(--color-accent)'}, var(--color-edge-muted) 80%` : 'var(--color-edge-muted)'})`,
       }}
       class="p-px h-full w-full box-border rounded overflow-clip"
     >
       <div
         class={cn(
           'h-full w-full box-border bg-panel rounded-[3px] overflow-clip',
-          local.class
+          props.class
         )}
-        {...rest}
       >
-        {local.children}
+        {props.children}
       </div>
     </div>
   );
