@@ -51,9 +51,7 @@ interface MobileForwardToChannelLayoutProps
   setSubmitAccessLevel: (level: AccessLevel | null) => void;
   mdScrollRef: Accessor<HTMLElement | undefined>;
   setMdScrollRef: (el: HTMLElement) => void;
-  focusMarkdownArea: () => void;
-  markdownState: ReturnType<typeof useChannelMarkdownArea>['state'];
-  markdownArea: ReturnType<typeof useChannelMarkdownArea>['MarkdownArea'];
+  markdownEditor: ReturnType<typeof createConfiguredChannelMarkdownEditor>;
   handleSubmit: () => void;
   canSendAsGroup: Accessor<boolean>;
   sendAsGroupMessage: Accessor<boolean>;
@@ -63,7 +61,6 @@ interface MobileForwardToChannelLayoutProps
 function MobileForwardToChannelLayout(
   props: MobileForwardToChannelLayoutProps
 ) {
-  const MarkdownArea = props.markdownArea;
   return (
     <Show when={props.isAuthenticated()}>
       <div class="px-3 py-2 min-h-11" data-share-drawer-recipient>
@@ -149,21 +146,14 @@ function MobileForwardToChannelLayout(
         <CustomScrollbar scrollContainer={props.mdScrollRef} />
         <div
           class="grow-1 shrink-1 min-h-20 overflow-y-auto scrollbar-hidden px-3 py-[6px] w-full text-sm"
-          onClick={() => props.focusMarkdownArea()}
+          onClick={() => props.markdownEditor.controls.focus()}
           ref={props.setMdScrollRef}
         >
-          <MarkdownArea
+          <MarkdownShell
+            config={props.markdownEditor}
             placeholder="Optional message"
-            onEnter={(e: KeyboardEvent) => {
-              props.handleSubmit();
-              e.preventDefault();
-              return true;
-            }}
-            initialValue={props.markdownState()}
-            onTab={() => false}
-            useBlockBoundary={false}
             portalScope="local"
-            dontFocusOnMount
+            class="text-sm"
           />
         </div>
       </div>
@@ -220,7 +210,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       return true;
     },
   });
-  markdownEditor.buildHandle();
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
 
@@ -441,9 +430,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           setSubmitAccessLevel={setSubmitAccessLevel}
           mdScrollRef={mdScrollRef}
           setMdScrollRef={setMdScrollRef}
-          focusMarkdownArea={focusMarkdownArea}
-          markdownState={markdownState}
-          markdownArea={MarkdownArea}
+          markdownEditor={markdownEditor}
           handleSubmit={handleSubmit}
           canSendAsGroup={canSendAsGroup}
           sendAsGroupMessage={sendAsGroupMessage}
