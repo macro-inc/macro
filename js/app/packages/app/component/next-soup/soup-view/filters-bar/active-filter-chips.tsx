@@ -62,6 +62,13 @@ export type ActiveFilter = {
    */
   isPopupOpen?: Accessor<boolean>;
   setPopupOpen?: (v: boolean) => void;
+  /**
+   * Per-chip override to hide the "Category: " prefix. When set, takes
+   * precedence over the shared `hideCategoryLabel` on `ActiveFilterChips`.
+   * Use for boolean chips whose optionLabel already stands on its own
+   * (e.g. "Attended"/"Unattended" — no need for "Attended: Attended").
+   */
+  hideCategoryLabel?: boolean;
 };
 
 interface ActiveFilterChipsProps {
@@ -128,7 +135,11 @@ const SearchableFilterChip = (props: {
             )}
           </Show>
           <span class="font-medium">
-            <Show when={!props.hideCategoryLabel}>
+            <Show
+              when={
+                !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
+              }
+            >
               {props.filter.categoryLabel}:{' '}
             </Show>
             {props.filter.optionLabel()}
@@ -188,7 +199,11 @@ const FilterChip = (props: {
               )}
             </Show>
             <span class="font-medium">
-              <Show when={!props.hideCategoryLabel}>
+              <Show
+                when={
+                  !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
+                }
+              >
                 {props.filter.categoryLabel}:{' '}
               </Show>
               {props.filter.optionLabel()}
@@ -211,7 +226,11 @@ const FilterChip = (props: {
               )}
             </Show>
             <span class="font-medium">
-              <Show when={!props.hideCategoryLabel}>
+              <Show
+                when={
+                  !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
+                }
+              >
                 {props.filter.categoryLabel}:{' '}
               </Show>
               {props.filter.optionLabel()}

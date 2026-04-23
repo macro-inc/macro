@@ -453,6 +453,7 @@ export function useFilterRefinements() {
         filters.push(
           getOrCreateChip(key, () => ({
             categoryLabel: 'Attended',
+            hideCategoryLabel: true,
             optionId: () =>
               queryFilters().call_filters?.attended
                 ? ATTENDED_YES
@@ -460,10 +461,10 @@ export function useFilterRefinements() {
             optionLabel: () =>
               queryFilters().call_filters?.attended
                 ? 'Attended'
-                : 'Not attended',
+                : 'Unattended',
             categoryOptions: [
               { id: ATTENDED_YES, label: 'Attended' },
-              { id: ATTENDED_NO, label: 'Not attended' },
+              { id: ATTENDED_NO, label: 'Unattended' },
             ] as unknown as ActiveFilter['categoryOptions'],
             multiple: false,
             isOptionActive: (optionId) =>

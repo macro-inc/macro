@@ -936,7 +936,7 @@ export const UnifiedFilterDropdown = () => {
                                                   | undefined,
                                               },
                                               {
-                                                label: 'Not attended',
+                                                label: 'Unattended',
                                                 value: false as
                                                   | boolean
                                                   | undefined,
