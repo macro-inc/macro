@@ -4,10 +4,12 @@ import CheckIcon from '@icon/bold/check-bold.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
-import PhoneDisconnect from '@icon/regular/phone-disconnect.svg';
+import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
+import Users from '@icon/regular/users.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import VideoConference from '@icon/regular/video-conference.svg';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { For, Show } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useCallContext } from '../CallContext';
@@ -27,6 +29,14 @@ export type CallControlsPanelSmallRowProps = {
 export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps) {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
+  const toggleShareWithTeam = useToggleShareWithTeamMutation();
+
+  const handleToggleShareWithTeam = async () => {
+    const callId = callCtx.activeCallId();
+    if (!callId) return;
+    const newValue = await toggleShareWithTeam.mutateAsync(callId);
+    callCtx.setSharedWithTeam(newValue);
+  };
 
   return (
     <div
@@ -215,6 +225,23 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
                   {callCtx.isScreenSharing()
                     ? 'Stop sharing screen'
                     : 'Share screen'}
+                </span>
+              </div>
+            </DropdownMenu.Item>
+
+            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
+
+            <DropdownMenu.Item
+              class={menuItemClass}
+              closeOnSelect={false}
+              onSelect={() => void handleToggleShareWithTeam()}
+            >
+              <div class="flex min-w-0 flex-1 items-center gap-2">
+                <Users class="h-4 w-4 shrink-0" />
+                <span class="min-w-0 flex-1">
+                  {callCtx.isSharedWithTeam()
+                    ? 'Shared with team'
+                    : 'Share with team'}
                 </span>
               </div>
             </DropdownMenu.Item>
