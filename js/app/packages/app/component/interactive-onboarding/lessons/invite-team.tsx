@@ -21,7 +21,7 @@ const inviteFormSchema = z.object({
 
 const INVITE_FORM_ID = 'invite-team-form';
 
-function InviteTeamContent(props: LessonContentProps) {
+function InviteTeamContent() {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
       <p>Create your team and invite collaborators to get started together.</p>

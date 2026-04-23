@@ -166,7 +166,9 @@ export function useCreateTeamWithInvitesMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async ({ name, emails }: CreateTeamWithInvitesArgs) => {
-      const team = await throwOnErr(() => authServiceClient.createTeam({ name }));
+      const team = await throwOnErr(() =>
+        authServiceClient.createTeam({ name })
+      );
 
       if (emails && emails.length > 0) {
         await throwOnErr(() =>
