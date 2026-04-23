@@ -1,11 +1,19 @@
 import { UserIcon } from '@core/component/UserIcon';
 import LeaveIcon from '@icon/regular/sign-out.svg';
+import PlusIcon from '@icon/regular/plus.svg';
+import TrashIcon from '@icon/regular/trash.svg';
+import XIcon from '@icon/regular/x.svg';
+import CaretDownIcon from '@icon/regular/caret-down.svg';
+import CheckIcon from '@icon/regular/check.svg';
 import EditableField from '@core/component/EditableField';
 import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
+import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
+import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
 import { useDisplayName, tryMacroId } from '@core/user';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import type { CollectionNode } from '@kobalte/core';
 import {
   useUserTeamsQuery,
   useTeamQuery,
@@ -27,6 +35,51 @@ const roleOrder: Record<string, number> = {
   [TeamRole.Admin]: 1,
   [TeamRole.Member]: 2,
 };
+
+type TierOption = { value: TeamUserTier; label: string };
+
+const tierOptions: TierOption[] = [
+  { value: TeamUserTier.Haiku, label: 'Haiku' },
+  { value: TeamUserTier.Sonnet, label: 'Sonnet' },
+  { value: TeamUserTier.Opus, label: 'Opus' },
+];
+
+function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => void }) {
+  const selectedOption = () => tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
+
+  return (
+    <Select<TierOption>
+      options={tierOptions}
+      value={selectedOption()}
+      onChange={(opt) => opt && props.onChange(opt.value)}
+      optionValue="value"
+      optionTextValue="label"
+      gutter={4}
+      placement="bottom-end"
+      itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
+        <Select.Item
+          item={itemProps.item}
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-xs rounded-xs hover:bg-hover cursor-pointer outline-none data-[highlighted]:bg-hover"
+        >
+          <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+          <Select.ItemIndicator>
+            <CheckIcon class="w-3 h-3" />
+          </Select.ItemIndicator>
+        </Select.Item>
+      )}
+    >
+      <Select.Trigger as={Button} size="sm" class="rounded-xs">
+        <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
+        <CaretDownIcon class="w-3 h-3 text-ink-muted" />
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+          <Select.Listbox />
+        </Select.Content>
+      </Select.Portal>
+    </Select>
+  );
+}
 
 function MemberRow(props: {
   member: TeamMember;
@@ -56,20 +109,25 @@ function MemberRow(props: {
           when={props.canManage}
           fallback={<span class="text-xs text-ink-muted">{props.member.tier}</span>}
         >
-          <select
-            class="text-xs bg-panel border border-edge rounded px-2 py-1 text-ink"
-            value={props.member.tier}
-            onChange={(e) => props.onTierChange(e.currentTarget.value as TeamUserTier)}
-          >
-            <option value={TeamUserTier.Haiku}>Haiku</option>
-            <option value={TeamUserTier.Sonnet}>Sonnet</option>
-            <option value={TeamUserTier.Opus}>Opus</option>
-          </select>
+          <TierSelect value={props.member.tier} onChange={props.onTierChange} />
         </Show>
-        <Show when={props.canManage && !props.isCurrentUser && props.member.role !== TeamRole.Owner}>
-          <Button variant="ghost" size="sm" onClick={props.onRemove}>
-            Remove
-          </Button>
+        <Show when={props.canManage}>
+          <Show
+            when={!props.isCurrentUser && props.member.role !== TeamRole.Owner}
+            fallback={
+              <Tooltip tooltip={props.member.role === TeamRole.Owner ? "Cannot remove team owner" : "Cannot remove yourself"}>
+                <Button variant="ghost" size="sm" disabled class="rounded-xs opacity-50 cursor-not-allowed">
+                  <TrashIcon class="w-4 h-4" />
+                </Button>
+              </Tooltip>
+            }
+          >
+            <Tooltip tooltip="Remove member">
+              <Button variant="ghost" size="sm" onClick={props.onRemove}>
+                <TrashIcon class="w-4 h-4" />
+              </Button>
+            </Tooltip>
+          </Show>
         </Show>
       </div>
     </div>
@@ -93,9 +151,11 @@ function InviteRow(props: {
         </div>
       </div>
       <Show when={props.canManage}>
-        <Button variant="ghost" size="sm" class="shrink-0" onClick={props.onCancel}>
-          Cancel
-        </Button>
+        <Tooltip tooltip="Cancel invite">
+          <Button variant="ghost" size="sm" class="shrink-0" onClick={props.onCancel}>
+            <XIcon class="w-4 h-4" />
+          </Button>
+        </Tooltip>
       </Show>
     </div>
   );
@@ -254,7 +314,8 @@ export function Team() {
             <div class="flex items-center justify-between mb-1">
               <h3 class="text-sm">Members</h3>
               <Show when={canManage()}>
-                <Button variant="ghost" size="sm" onClick={() => setShowInviteModal(true)}>
+                <Button variant="secondary" size="sm" class="rounded-xs" onClick={() => setShowInviteModal(true)}>
+                  <PlusIcon class="w-4 h-4" />
                   Invite
                 </Button>
               </Show>
