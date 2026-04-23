@@ -6,7 +6,8 @@ import {
 } from '@core/store/cacheChannelInput';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
-import type { InputAttachmentData, InputSnapshot } from '../Input';
+import { attachmentEntityType } from '../Input/message-payload';
+import type { InputAttachmentData, InputSnapshot } from '../Input/types';
 import type { MessageData } from '../Message';
 
 function toInputAttachmentKind(
@@ -57,17 +58,6 @@ export function getAttachmentIdsToDelete(args: {
     .map((attachment) => attachment.id);
 }
 
-function inputAttachmentEntityType(kind: InputAttachmentData['kind']): string {
-  switch (kind) {
-    case 'image':
-      return STATIC_IMAGE;
-    case 'video':
-      return STATIC_VIDEO;
-    case 'document':
-      return 'document';
-  }
-}
-
 export function getAttachmentsToAdd(args: {
   currentAttachments: ApiMessageAttachment[];
   nextSnapshot: InputSnapshot;
@@ -80,7 +70,7 @@ export function getAttachmentsToAdd(args: {
     .filter((attachment) => !currentIds.has(attachment.id))
     .map((attachment) => ({
       entity_id: attachment.id,
-      entity_type: inputAttachmentEntityType(attachment.kind),
+      entity_type: attachmentEntityType(attachment.kind),
       width: attachment.width ?? null,
       height: attachment.height ?? null,
     }));
