@@ -19,9 +19,13 @@ pub(in crate::api::search) async fn filter_calls(
     user_id: &str,
     filters: &CallFilters,
 ) -> Result<FilterCallResponse, SearchError> {
-    let accessible = macro_db_client::call_record::get::get_accessible_call_ids(&ctx.db, user_id)
-        .await
-        .map_err(SearchError::InternalError)?;
+    let accessible = macro_db_client::call_record::get::get_accessible_call_ids(
+        &ctx.db,
+        user_id,
+        filters.attended,
+    )
+    .await
+    .map_err(SearchError::InternalError)?;
 
     let call_ids = accessible.into_iter().map(|id| id.to_string()).collect();
 

@@ -53,10 +53,15 @@ pub struct CallRecordSearchPayload {
 /// `entity_access` table using the user's source ids (channel memberships +
 /// team memberships + user id), unioned with any publicly-shared records.
 /// This mirrors the per-entity check in `entity_access::get_call_access`.
+///
+/// `attended` optionally narrows by participation: `Some(true)` keeps only
+/// calls the user joined, `Some(false)` keeps only calls the user did not
+/// join, `None` applies no participation filter.
 #[tracing::instrument(skip(db))]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
+    attended: Option<bool>,
 ) -> anyhow::Result<Vec<Uuid>> {
     let rows = sqlx::query(
         r#"
@@ -73,20 +78,27 @@ pub async fn get_accessible_call_ids(
         )
         SELECT DISTINCT cr.id
         FROM call_records cr
-        WHERE EXISTS (
-            SELECT 1 FROM entity_access ea
-            WHERE ea.entity_id = cr.id
-              AND ea.entity_type = 'call'
-              AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-        ) OR EXISTS (
-            SELECT 1 FROM "SharePermission" sp
-            WHERE sp.id = cr.share_permission_id
-              AND sp."isPublic" = true
-              AND sp."publicAccessLevel" IS NOT NULL
+        WHERE (
+            EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id = cr.id
+                  AND ea.entity_type = 'call'
+                  AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+            ) OR EXISTS (
+                SELECT 1 FROM "SharePermission" sp
+                WHERE sp.id = cr.share_permission_id
+                  AND sp."isPublic" = true
+                  AND sp."publicAccessLevel" IS NOT NULL
+            )
         )
+        AND ($2::bool IS NULL OR EXISTS (
+            SELECT 1 FROM call_record_participants crp
+            WHERE crp.call_record_id = cr.id AND crp.user_id = $1
+        ) = $2)
         "#,
     )
     .bind(user_id)
+    .bind(attended)
     .fetch_all(db)
     .await?;
 
