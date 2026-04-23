@@ -2,7 +2,8 @@ import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { usePermissions } from '@core/context/user';
-import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { Subscription } from './Subscription';
 import { MobileApp } from './MobileApp';
 import { Appearance } from './Appearance';
@@ -39,6 +40,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const permissions = usePermissions();
   const userTeamsQuery = useUserTeamsQuery();
   const hasTeam = () => (userTeamsQuery.data?.length ?? 0) > 0;
+  const teamsFlag = useFeatureFlag('enable-teams', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -60,7 +62,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     ];
 
     tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
-    if (hasTeam()) { tabs.push({ value: 'Team', label: 'Team' }) }
+    if (teamsFlag().enabled && hasTeam()) { tabs.push({ value: 'Team', label: 'Team' }) }
     if (permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()) { tabs.push({ value: 'Subscription', label: 'Subscription' }) }
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
@@ -196,7 +198,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={activeTabId() === 'Shortcuts'}>
           <Shortcuts />
         </Show>
-        <Show when={activeTabId() === 'Team' && hasTeam()}>
+        <Show when={activeTabId() === 'Team' && teamsFlag().enabled && hasTeam()}>
           <Suspense>
             <Team />
           </Suspense>
