@@ -92,21 +92,19 @@ function InviteTeamDemo(props: LessonContentProps) {
       next[index] = value;
       return next;
     });
-    if (value.trim() === '') {
+    if (errors().emails?.[index]) {
       setErrors((prev) => {
         const emailErrors = { ...prev.emails };
         delete emailErrors[index];
         return { ...prev, emails: emailErrors };
       });
-    } else if (submitted()) {
-      validateField('email', index, value);
     }
   };
 
   const updateTeamName = (value: string) => {
     setTeamName(value);
-    if (submitted()) {
-      validateField('teamName', 0, value);
+    if (errors().teamName) {
+      setErrors((prev) => ({ ...prev, teamName: undefined }));
     }
   };
 
