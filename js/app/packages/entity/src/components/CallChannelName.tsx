@@ -1,3 +1,4 @@
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { isChannelPreviewItem, useItemPreview } from '@queries/preview';
@@ -6,36 +7,25 @@ import type { CallEntity } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 
 /**
- * Calls can surface channels the user isn't a member of (search hits on
- * unattended calls). Those channels aren't in the local channels context,
- * so the entity's baked-in `channelName` falls back to the generic "Call"
- * default. Pull the live name from the preview endpoint instead — renders
- * immediately with the baked-in value and swaps in the fetched name when
- * it resolves, never blocking the list row.
+ * Renders the channel name for a call-record list row.
  *
- * Matches `EntityTitle` for the highlighted-hit case: when the search
- * matched on the channel name, we render the highlight as markdown
- * instead of the plain name.
+ * `transform-utils` leaves `entity.name` undefined when the channel isn't
+ * resolvable from the indexed metadata or the local channels context
+ * (happens for search hits on unattended calls). In that case we fall
+ * back to the shared `useItemPreview` query to fetch the live name —
+ * otherwise we render what we already have without issuing any request.
+ *
+ * Matches `EntityTitle` for the search-highlight case: if the query
+ * matched on the channel name, the highlight is rendered as markdown.
  */
 export function CallChannelName(props: { entity: CallEntity }) {
-  const [preview] = useItemPreview(() => ({
-    id: props.entity.channelId,
-    type: 'channel' as const,
-  }));
-
   const highlight = () =>
     isSearchEntity(props.entity)
       ? (props.entity.search.nameHighlight ?? undefined)
       : undefined;
 
-  const name = () => {
-    const p = preview();
-    if (isChannelPreviewItem(p)) return p.name;
-    return props.entity.channelName ?? props.entity.name;
-  };
-
   return (
-    <Show when={highlight()} fallback={<>{name()}</>}>
+    <Show when={highlight()} fallback={<CallChannelNameText entity={props.entity} />}>
       {(h) => (
         <StaticMarkdown
           markdown={h()}
@@ -45,4 +35,27 @@ export function CallChannelName(props: { entity: CallEntity }) {
       )}
     </Show>
   );
+}
+
+function CallChannelNameText(props: { entity: CallEntity }) {
+  return (
+    <Show when={!props.entity.name} fallback={<>{props.entity.name}</>}>
+      <CallChannelNameFromPreview channelId={props.entity.channelId} />
+    </Show>
+  );
+}
+
+function CallChannelNameFromPreview(props: { channelId: string }) {
+  const [preview] = useItemPreview(() => ({
+    id: props.channelId,
+    type: 'channel' as const,
+  }));
+
+  const name = () => {
+    const p = preview();
+    if (isChannelPreviewItem(p)) return p.name;
+    return blockNameToDefaultFile('call');
+  };
+
+  return <>{name()}</>;
 }
