@@ -133,10 +133,6 @@ function TauriProvider(props: { children: JSX.Element }) {
     });
   });
 
-  (
-    window.__TAURI_INTERNALS__ as Record<string, unknown>
-  ).setBundleUpdateStatus = setBundleUpdateStatus;
-
   onMount(() => {
     console.info('[bundle-update] registering listener');
     const unlistenPromise = listen<BundleUpdateStatus>(
