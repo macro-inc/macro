@@ -326,7 +326,7 @@ export function Team() {
               when={!teamQuery.isLoading}
               fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-16" />}
             >
-              <div class="border border-edge rounded-md px-3">
+              <div class="border border-edge rounded-sm px-3">
                 <For each={members()}>
                   {(member) => (
                     <MemberRow
