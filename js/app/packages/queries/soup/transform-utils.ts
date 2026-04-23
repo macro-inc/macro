@@ -365,13 +365,18 @@ export const useSearchResponseItemMapper = () => {
           callId: result.call_id,
         });
 
+        const channelName =
+          result.metadata.channel_name ??
+          channels().find((c) => c.id === result.channel_id)?.name ??
+          blockNameToDefaultFile('call');
+
         return [
           {
             type: 'call',
             id: result.call_id,
-            name: result.metadata.channel_name ?? result.name ?? 'Call',
+            name: channelName,
             channelId: result.channel_id,
-            channelName: result.metadata.channel_name ?? undefined,
+            channelName,
             ownerId: result.owner_id,
             createdAt: result.metadata.started_at,
             updatedAt: result.metadata.updated_at,
