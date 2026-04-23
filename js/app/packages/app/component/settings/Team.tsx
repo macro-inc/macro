@@ -6,7 +6,6 @@ import SpinnerIcon from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import EditableField from '@core/component/EditableField';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
@@ -205,12 +204,17 @@ export function Team() {
   const [showCancelInviteModal, setShowCancelInviteModal] = createSignal<string | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
   const [inviteEmails, setInviteEmails] = createSignal('');
-  const [updatedTeamName, setUpdatedTeamName] = createSignal<string | undefined>(undefined);
+  const [editingTeamName, setEditingTeamName] = createSignal<string | undefined>(undefined);
 
   const parsedEmails = () => parseEmails(inviteEmails());
   const hasValidEmails = () => parsedEmails().length > 0;
 
-  const teamName = () => updatedTeamName() ?? team()?.name ?? '';
+  const originalTeamName = () => team()?.name ?? '';
+  const teamNameValue = () => editingTeamName() ?? originalTeamName();
+  const hasTeamNameChanged = () => {
+    const editing = editingTeamName();
+    return editing !== undefined && editing.trim() !== originalTeamName();
+  };
 
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
@@ -228,6 +232,21 @@ export function Team() {
     if (!currentUserId || !teamData) return false;
     return teamData.owner_id === currentUserId;
   });
+
+  const handleSaveTeamName = () => {
+    const newName = editingTeamName()?.trim();
+    const currentTeamId = teamId();
+    if (!currentTeamId || !newName) return;
+
+    patchTeamMutation.mutate(
+      { teamId: currentTeamId, request: { name: newName } },
+      { onSuccess: () => setEditingTeamName(undefined) }
+    );
+  };
+
+  const handleCancelTeamNameEdit = () => {
+    setEditingTeamName(undefined);
+  };
 
   const handleLeaveTeam = async () => {
     const currentUserId = userId();
@@ -297,26 +316,48 @@ export function Team() {
         >
           <header class="flex items-center justify-between gap-4 mb-8">
             <section class="min-w-0 flex-1">
-              <h2 class="text-sm">Team</h2>
+              <h2 class="text-sm mb-1">Team</h2>
               <Show
                 when={isOwner()}
-                fallback={<div class="text-ink text-xl font-semibold truncate">{teamName()}</div>}
+                fallback={<div class="text-ink text-xl font-semibold truncate">{originalTeamName()}</div>}
               >
-                <EditableField
-                  class="text-xl font-semibold"
-                  value={teamName()}
-                  onSave={(newValue: string) => {
-                    const currentTeamId = teamId();
-                    if (!currentTeamId || !newValue.trim()) return;
-                    setUpdatedTeamName(newValue);
-                    patchTeamMutation.mutate({
-                      teamId: currentTeamId,
-                      request: { name: newValue },
-                    });
-                  }}
-                  placeholder="Enter team name"
-                  allowEmpty={false}
-                />
+                <div class="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={teamNameValue()}
+                    onInput={(e) => setEditingTeamName(e.currentTarget.value)}
+                    placeholder="Enter team name"
+                    class="text-xl font-semibold bg-transparent border border-edge-muted rounded-xs px-2 py-1 hover:border-edge focus:border-accent outline-none text-ink w-64"
+                  />
+                  <Show when={hasTeamNameChanged()}>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <Tooltip tooltip="Save">
+                        <Button
+                          variant="accent"
+                          size="icon-sm"
+                          class="rounded-xs"
+                          disabled={patchTeamMutation.isPending || !editingTeamName()?.trim()}
+                          onClick={handleSaveTeamName}
+                        >
+                          <Show when={patchTeamMutation.isPending} fallback={<CheckIcon class="size-4" />}>
+                            <SpinnerIcon class="size-4 animate-spin" />
+                          </Show>
+                        </Button>
+                      </Tooltip>
+                      <Tooltip tooltip="Cancel">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          class="rounded-xs"
+                          disabled={patchTeamMutation.isPending}
+                          onClick={handleCancelTeamNameEdit}
+                        >
+                          <XIcon class="size-4" />
+                        </Button>
+                      </Tooltip>
+                    </div>
+                  </Show>
+                </div>
               </Show>
             </section>
             <Show when={currentMember() && currentMember()?.role !== TeamRole.Owner}>
