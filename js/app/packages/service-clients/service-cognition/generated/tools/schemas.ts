@@ -412,6 +412,31 @@ export const GetThreadResponse = z.object({
   threadId: z.string().uuid(),
 });
 
+export const ListCallRecords = z
+  .object({
+    attended: z.union([z.boolean(), z.null()]),
+    channelId: z.union([z.string().uuid(), z.null()]),
+  })
+  .strict();
+
+export const ListCallRecordsResponse = z.object({
+  records: z.array(
+    z.object({
+      callId: z.string().uuid(),
+      channelId: z.string().uuid(),
+      channelName: z.union([z.string(), z.null()]).optional(),
+      createdBy: z.string(),
+      durationMs: z.union([z.number().int(), z.null()]).optional(),
+      endedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      isActive: z.boolean(),
+      participants: z.array(z.string()),
+      startedAt: z.string().datetime({ offset: true }),
+    })
+  ),
+});
+
 export const ListEntities = z
   .object({
     includeTypes: z.union([
@@ -494,6 +519,22 @@ export const NameSearch = z
     name: z.string(),
   })
   .strict();
+
+export const ReadCallRecord = z.object({ callId: z.string().uuid() }).strict();
+
+export const ReadCallRecordResponse = z.object({
+  callId: z.string().uuid(),
+  transcript: z.array(
+    z.object({
+      content: z.string(),
+      endedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      speakerId: z.string(),
+      startedAt: z.string().datetime({ offset: true }),
+    })
+  ),
+});
 
 export const ReadContent = z.object({ documentId: z.string().uuid() }).strict();
 
