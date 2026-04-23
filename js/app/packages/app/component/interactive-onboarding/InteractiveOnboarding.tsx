@@ -140,7 +140,11 @@ function InteractiveOnboardingInner() {
   );
   const debugCompleted =
     slideIndex !== null
-      ? new Set(sortedLessons().slice(0, slideIndex).map((l) => l.id))
+      ? new Set(
+          sortedLessons()
+            .slice(0, slideIndex)
+            .map((l) => l.id)
+        )
       : undefined;
 
   // Detect a return-from-OAuth param synchronously so we can pre-populate
