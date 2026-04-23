@@ -1,0 +1,10 @@
+{
+  "lsp": {
+    "biome": {
+      "settings": {
+        "config_path": "app/biome.jsonc",
+        "require_config_file": true,
+      }
+    }
+  }
+}

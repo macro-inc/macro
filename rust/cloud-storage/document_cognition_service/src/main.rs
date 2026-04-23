@@ -1,7 +1,14 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
-use ai_tools::{NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties};
+use ai_tools::{
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpTaskProperties,
+};
 use anyhow::Context;
+use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
+use call::inbound::toolset::CallToolContext;
+use call::outbound::pg_call_repo::PgCallRepo;
+use call::outbound::s3_recording_storage::S3RecordingStorage;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
@@ -295,6 +302,24 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized email tool context");
 
+    let call_service = CallServiceImpl::new(
+        PgCallRepo::new(db.clone()),
+        NoOpCallRtcClient,
+        NoOpConnectionService,
+        (*entity_access_service).clone(),
+        NoOpNotificationIngress,
+        None::<S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone()));
+    let call_tool_context = CallToolContext::new(
+        call_service,
+        call_query_service,
+        (*entity_access_service).clone(),
+    );
+
+    tracing::info!("initialized call tool context");
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -304,6 +329,7 @@ async fn main() -> anyhow::Result<()> {
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
+        call_tool_context: call_tool_context.clone(),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
     };
     let all_tools = ai_tools::all_tools();
@@ -341,6 +367,7 @@ async fn main() -> anyhow::Result<()> {
         memory_service,
         properties_tool_context,
         email_tool_context: email_tool_context.clone(),
+        call_tool_context,
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,

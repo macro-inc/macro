@@ -63,26 +63,66 @@ setup:
   just stop
   @echo "FusionAuth setup complete"
 
-# Inserts local FusionAuth variables into root `.env` file
+# Patches the root `.env` file with local FusionAuth values.
+# Idempotent: replaces existing values in-place, appends if missing.
+# Covers both dynamic values (from Pulumi/FusionAuth API) and static
+# values that differ between local and dev FusionAuth.
 insert_local_fusionauth_variables:
   #!/usr/bin/env bash
+  set -eo pipefail
+
+  ENV_FILE="{{justfile_directory()}}/../../../.env"
+  if [ ! -f "$ENV_FILE" ]; then
+    echo "Error: $ENV_FILE does not exist. Run 'just get_environment' first."
+    exit 1
+  fi
+
+  if ! pulumi stack output macroApplicationClientId -s local &>/dev/null; then
+    echo "Error: Pulumi local stack not found. Run 'just setup' first."
+    exit 1
+  fi
+
   API_KEY="bf69486b-4733-4954-a44e-2e1b5f2c8a91"
   APPLICATION_ID=$(pulumi stack output macroApplicationClientId -s local)
   TENANT_ID=$(pulumi stack output defaultTenantId -s local)
+
   CURL_RESPONSE=$(curl -s "http://localhost:9011/api/application/${APPLICATION_ID}" \
     -H "Authorization: ${API_KEY}")
   if [ -z "$CURL_RESPONSE" ]; then
-    echo "Local FusionAuth instance is not running"
+    echo "Error: Local FusionAuth instance is not running."
     exit 1
   fi
   CLIENT_SECRET=$(echo "$CURL_RESPONSE" | jq -r '.application.oauthConfiguration.clientSecret')
+  if [ -z "$CLIENT_SECRET" ] || [ "$CLIENT_SECRET" = "null" ]; then
+    echo "Error: Could not read client secret from FusionAuth."
+    exit 1
+  fi
 
-  ENV_FILE="{{justfile_directory()}}/../../../.env"
+  # Sets a key=value in the env file. Replaces in-place if present, appends if missing.
+  patch_var() {
+    local key="$1" value="$2"
+    if grep -q "^${key}=" "$ENV_FILE"; then
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s|^${key}=.*|${key}=\"${value}\"|" "$ENV_FILE"
+      else
+        sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$ENV_FILE"
+      fi
+    else
+      echo "${key}=\"${value}\"" >> "$ENV_FILE"
+    fi
+  }
 
-  echo "#AUTO-ADDED DO NOT MODIFY" >> "$ENV_FILE"
-  echo "FUSIONAUTH_TENANT_ID=\"${TENANT_ID}\"" >> "$ENV_FILE"
-  echo "AUDIENCE=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
-  echo "FUSIONAUTH_CLIENT_ID=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
-  echo "FUSIONAUTH_CLIENT_SECRET_KEY=\"${CLIENT_SECRET}\"" >> "$ENV_FILE"
+  # Dynamic (from Pulumi / FusionAuth API)
+  patch_var AUDIENCE "$APPLICATION_ID"
+  patch_var FUSIONAUTH_TENANT_ID "$TENANT_ID"
+  patch_var FUSIONAUTH_CLIENT_ID "$APPLICATION_ID"
+  patch_var FUSIONAUTH_CLIENT_SECRET_KEY "$CLIENT_SECRET"
 
-  echo "Appended FusionAuth local values to .env"
+  # Static (known values for local FusionAuth)
+  patch_var JWT_SECRET_KEY "super-secret-jwt-signing-key-for-local-development-only"
+  patch_var ISSUER "local.macro.com"
+  patch_var FUSIONAUTH_BASE_URL "http://fusionauth:9011"
+  patch_var FUSIONAUTH_API_KEY_SECRET_KEY "$API_KEY"
+  patch_var FUSIONAUTH_OAUTH_REDIRECT_URI "http://localhost:8080/oauth/redirect"
+
+  echo "Patched .env with local FusionAuth values"

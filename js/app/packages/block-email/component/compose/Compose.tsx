@@ -20,7 +20,7 @@ import {
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import { useHasPaidAccess } from '@core/auth';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { RoundPanel } from '@core/component/RoundPanel';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
@@ -654,7 +654,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </Show>
         <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:hide-scrollbar mobile:min-h-full">
           <WrapUnlessMobile
-            wrapper={(children) => <ClippedPanel>{children}</ClippedPanel>}
+            wrapper={(children) => <RoundPanel>{children}</RoundPanel>}
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
