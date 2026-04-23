@@ -136,6 +136,41 @@ impl<
             .await
             .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call event"));
     }
+
+    /// Send an event to the active participants of a call (best-effort).
+    ///
+    /// Unlike [`Self::send_call_event`], which fans out to every member of
+    /// the channel, this targets only users currently in the call — rows in
+    /// `call_participants` with `left_at IS NULL`.
+    async fn send_call_participant_event(
+        &self,
+        call_id: &Uuid,
+        message_type: &str,
+        message: &serde_json::Value,
+    ) {
+        let participants = match self.repo.get_participants(call_id).await {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::error!(error=?e, "failed to fetch call participants for event");
+                return;
+            }
+        };
+
+        let users: Vec<MacroUserIdStr<'static>> = participants
+            .into_iter()
+            .filter_map(|p| {
+                MacroUserIdStr::parse_from_str(&p.user_id)
+                    .map(CowLike::into_owned)
+                    .ok()
+            })
+            .collect();
+
+        let _ = self
+            .connection_service
+            .send_channel_message(&users, message_type, message.clone())
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call participant event"));
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -757,10 +792,25 @@ impl<
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
 
-        self.repo
+        let (new_value, channel_id) = self
+            .repo
             .toggle_share_with_team(&call_id)
             .await
-            .map_err(|e| CallError::Internal(e.into()))
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        self.send_call_participant_event(
+            &call_id,
+            "call_share_with_team_toggled",
+            &serde_json::json!({
+                "call_id": call_id,
+                "channel_id": channel_id,
+                "share_with_team": new_value,
+                "toggled_by": receipt.get_authenticated_user().ok(),
+            }),
+        )
+        .await;
+
+        Ok(new_value)
     }
 }
 

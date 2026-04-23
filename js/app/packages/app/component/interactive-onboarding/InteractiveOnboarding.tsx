@@ -21,7 +21,7 @@ import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { RoundPanel } from '@core/component/RoundPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -459,10 +459,7 @@ function InteractiveOnboardingInner() {
 
       {/* Centered card */}
       <div class="size-full max-w-[1600px] max-h-[900px]">
-        <ClippedPanel
-          cornerRadius={'4px'}
-          class="bg-panel size-full shadow-lg shadow-[#1111]"
-        >
+        <RoundPanel>
           <div class="size-full flex">
             <Show
               when={state.currentLesson()}
@@ -645,7 +642,7 @@ function InteractiveOnboardingInner() {
               )}
             </Show>
           </div>
-        </ClippedPanel>
+        </RoundPanel>
       </div>
     </div>
   );

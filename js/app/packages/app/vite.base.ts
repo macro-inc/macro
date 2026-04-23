@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, exec } from 'node:child_process';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import chokidar from 'chokidar';
@@ -12,7 +12,15 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 
-const shortSha = execSync('git rev-parse --short HEAD').toString().trim();
+function readShortSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+const shortSha = readShortSha();
 const appVersion = `${version}+${shortSha}`;
 
 function readGitBranch(): string {
@@ -23,19 +31,18 @@ function readGitBranch(): string {
   }
 }
 
+function readGitBranchAsync(): Promise<string> {
+  return new Promise((res) => {
+    exec('git rev-parse --abbrev-ref HEAD', (err, stdout) => {
+      res(err ? '' : stdout.trim());
+    });
+  });
+}
+
 function gitBranchHmrPlugin(): Plugin {
   return {
     name: 'git-branch-hmr',
     apply: 'serve',
-    transformIndexHtml() {
-      return [
-        {
-          tag: 'script',
-          injectTo: 'head-prepend',
-          children: `window.__GIT_BRANCH__ = ${JSON.stringify(readGitBranch())};`,
-        },
-      ];
-    },
     configureServer(server) {
       let gitDir: string;
       try {
@@ -55,6 +62,15 @@ function gitBranchHmrPlugin(): Plugin {
           type: 'custom',
           event: 'git-branch:update',
           data: readGitBranch(),
+        });
+      });
+      server.ws.on('connection', () => {
+        readGitBranchAsync().then((branch) => {
+          server.ws.send({
+            type: 'custom',
+            event: 'git-branch:update',
+            data: branch,
+          });
         });
       });
       server.httpServer?.once('close', () => void watcher.close());
@@ -225,5 +241,8 @@ function defineEnv(mode: string, command: string, platform: AppPlatform) {
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),
+    'import.meta.env.__GIT_BRANCH__': JSON.stringify(
+      command === 'serve' ? readGitBranch() : ''
+    ),
   };
 }

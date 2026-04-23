@@ -7,7 +7,9 @@ import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
+import Users from '@icon/regular/users.svg';
 import CaretDown from '@icon/regular/caret-down.svg';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   DropdownMenuContent,
@@ -18,6 +20,35 @@ import {
 } from '@core/component/Menu';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext, type MediaDeviceInfo } from './CallContext';
+
+// Mirrors @livekit/track-processors' supportsBackgroundProcessors() =
+// BackgroundProcessor.isSupported && ProcessorWrapper.isSupported. Kept local so the
+// toggle renders without statically importing the WASM/MediaPipe-bearing package.
+function isBackgroundBlurSupported(): boolean {
+  if (typeof window === 'undefined') return false;
+  // BackgroundProcessor.isSupported: OffscreenCanvas, VideoFrame, createImageBitmap, WebGL2.
+  if (
+    !('OffscreenCanvas' in window) ||
+    !('VideoFrame' in window) ||
+    !('createImageBitmap' in window)
+  ) {
+    return false;
+  }
+  try {
+    if (!document.createElement('canvas').getContext('webgl2')) return false;
+  } catch {
+    return false;
+  }
+  // ProcessorWrapper.isSupported: modern MediaStreamTrackProcessor API OR canvas
+  // captureStream() fallback (Firefox 126+).
+  const hasStreamProcessor =
+    'MediaStreamTrackProcessor' in window &&
+    'MediaStreamTrackGenerator' in window;
+  const hasFallback =
+    typeof HTMLCanvasElement !== 'undefined' &&
+    'captureStream' in HTMLCanvasElement.prototype;
+  return hasStreamProcessor || hasFallback;
+}
 
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
@@ -209,6 +240,14 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 
 export function CallOverlay(props: { onLeave: () => void }) {
   const callCtx = useCallContext();
+  const toggleShareWithTeam = useToggleShareWithTeamMutation();
+
+  const handleToggleShareWithTeam = async () => {
+    const callId = callCtx.activeCallId();
+    if (!callId) return;
+    const newValue = await toggleShareWithTeam.mutateAsync(callId);
+    callCtx.setSharedWithTeam(newValue);
+  };
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
@@ -339,12 +378,27 @@ export function CallOverlay(props: { onLeave: () => void }) {
           onClick={() => callCtx.toggleVideo()}
           active={!callCtx.isVideoMuted()}
           dropdownContent={
-            <DeviceList
-              label="Camera"
-              devices={callCtx.videoInputDevices()}
-              activeDeviceId={callCtx.activeVideoInputDeviceId()}
-              onSelect={(id) => callCtx.switchVideoInput(id)}
-            />
+            <>
+              <DeviceList
+                label="Camera"
+                devices={callCtx.videoInputDevices()}
+                activeDeviceId={callCtx.activeVideoInputDeviceId()}
+                onSelect={(id) => callCtx.switchVideoInput(id)}
+              />
+              <Show when={isBackgroundBlurSupported()}>
+                <MenuSeparator />
+                <MenuGroup>
+                  <GroupLabel>Effects</GroupLabel>
+                  <MenuItem
+                    text="Blur background"
+                    selectorType="checkbox"
+                    checked={callCtx.isBackgroundBlurred()}
+                    closeOnSelect={false}
+                    onClick={() => callCtx.toggleBackgroundBlur()}
+                  />
+                </MenuGroup>
+              </Show>
+            </>
           }
         >
           <Show
@@ -361,6 +415,21 @@ export function CallOverlay(props: { onLeave: () => void }) {
         >
           <Screencast class="w-5 h-5" />
         </ControlButton>
+
+        <div
+          title={
+            callCtx.isSharedWithTeam()
+              ? 'Shared with team — click to make private'
+              : 'Not shared — click to share with team'
+          }
+        >
+          <ControlButton
+            onClick={handleToggleShareWithTeam}
+            active={callCtx.isSharedWithTeam()}
+          >
+            <Users class="w-5 h-5" />
+          </ControlButton>
+        </div>
 
         <ControlButton onClick={props.onLeave} danger>
           <PhoneDisconnect class="w-5 h-5" />

@@ -245,7 +245,11 @@ function createSplitFocusTracker(props: {
       if (!element) return;
 
       const parentId = getParentSplitId(element);
-      if (parentId && element instanceof HTMLElement) {
+      if (
+        parentId &&
+        element instanceof HTMLElement &&
+        !element.closest('[data-no-focus-restore]')
+      ) {
         lastFocusedChildBySplitId.set(parentId, element);
       }
 

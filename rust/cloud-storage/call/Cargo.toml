@@ -5,7 +5,8 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["inbound", "outbound", "ports"]
+ai_tools = ["dep:ai", "dep:async-trait", "dep:schemars", "ports"]
+default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
   "dep:model-error-response",
@@ -26,7 +27,9 @@ outbound = [
 ports = ["dep:entity_access", "dep:tokio"]
 
 [dependencies]
+ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
@@ -52,6 +55,7 @@ model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }

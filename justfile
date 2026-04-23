@@ -48,10 +48,39 @@ docker_up *ARGS:
   docker compose up {{ ARGS }}
 
 # Run all services locally using docker-compose
-# Requires .env file with dev environment variables
+# Requires .env file (from `just get_environment`) and FusionAuth setup (from `just setup`).
+# Automatically patches .env with local FusionAuth values before starting services.
 run_local *ARGS:
   just create_networks
+  just patch_local_fusionauth_env
   just docker_up {{ ARGS }}
+
+# Patches .env with local FusionAuth values if the Pulumi stack exists.
+# Requires FusionAuth to be running — starts it temporarily if needed.
+patch_local_fusionauth_env:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f .env ]; then
+    echo "Error: .env not found. Run 'just get_environment' first."
+    exit 1
+  fi
+  if ! pulumi stack output macroApplicationClientId -s local -C infra/stacks/fusionauth-instance &>/dev/null; then
+    echo "Warning: Pulumi local stack not found — skipping FusionAuth env patching."
+    echo "         Run 'just setup' if this is a fresh checkout."
+    exit 0
+  fi
+  # FusionAuth must be running to read the client secret
+  NEEDS_STOP=false
+  if ! curl -s http://localhost:9011/api/status 2>/dev/null | grep -q '"Ok"'; then
+    echo "Starting FusionAuth temporarily to read config..."
+    docker compose up fusionauth -d --wait
+    NEEDS_STOP=true
+  fi
+  just infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
+  if [ "$NEEDS_STOP" = true ]; then
+    echo "Stopping temporary FusionAuth..."
+    docker compose stop fusionauth
+  fi
 
 # Stop all local services
 stop-local:

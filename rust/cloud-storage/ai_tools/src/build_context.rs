@@ -5,7 +5,8 @@
 //! instead of duplicating the wiring logic.
 
 use crate::tool_context::{
-    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpTaskProperties, ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -250,6 +251,24 @@ pub async fn build_tool_service_context_from_env(
         ))),
     );
 
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        NoOpCallRtcClient,
+        NoOpConnectionService,
+        (*entity_access_service).clone(),
+        NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        call_query_service,
+        (*entity_access_service).clone(),
+    );
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
@@ -259,6 +278,7 @@ pub async fn build_tool_service_context_from_env(
         document_tool_context,
         properties_tool_context,
         email_tool_context,
+        call_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
     })
 }

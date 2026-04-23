@@ -334,9 +334,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <div
-        class={`size-4 shrink-0 transition-colors duration-300 ${hovering() ? 'text-accent' : ''}`}
-      >
+      <div class="size-4 shrink-0">
         <Dynamic component={props.icon} triggerAnimation={hovering()} />
       </div>
       <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">

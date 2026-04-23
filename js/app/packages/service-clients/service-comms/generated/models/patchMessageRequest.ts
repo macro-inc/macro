@@ -5,11 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PatchMessageRequestAttachmentIdsToDelete } from './patchMessageRequestAttachmentIdsToDelete';
+import type { PatchMessageRequestAttachmentsToAdd } from './patchMessageRequestAttachmentsToAdd';
 import type { PatchMessageRequestContent } from './patchMessageRequestContent';
 import type { PatchMessageRequestNonce } from './patchMessageRequestNonce';
 
 export interface PatchMessageRequest {
   attachment_ids_to_delete?: PatchMessageRequestAttachmentIdsToDelete;
+  attachments_to_add?: PatchMessageRequestAttachmentsToAdd;
   content?: PatchMessageRequestContent;
   nonce?: PatchMessageRequestNonce;
 }

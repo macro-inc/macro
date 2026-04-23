@@ -1,4 +1,10 @@
 use axum::extract::FromRef;
+use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
+use call::domain::ports::CallRtcClient;
+use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
+use call::inbound::toolset::CallToolContext;
+use call::outbound::pg_call_repo::PgCallRepo;
+use call::outbound::s3_recording_storage::S3RecordingStorage;
 use connection::domain::ports::ConnectionService;
 use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToolContext};
 use email::{
@@ -88,6 +94,82 @@ impl ConnectionService for NoOpConnectionService {
     }
 }
 
+/// No-op RTC client used by the call tool context — the AI read-only tools
+/// never touch RTC, so token/egress methods bail rather than silently succeed.
+#[derive(Clone)]
+pub struct NoOpCallRtcClient;
+
+impl CallRtcClient for NoOpCallRtcClient {
+    async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn generate_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_participant<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn start_room_composite_egress(
+        &self,
+        _room_name: &str,
+        _s3_config: &EgressS3Config,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn stop_egress(&self, _egress_id: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn receive_webhook(
+        &self,
+        _body: &str,
+        _auth_token: &str,
+    ) -> Result<CallWebhookEvent, CallError> {
+        Err(CallError::Auth)
+    }
+
+    async fn dispatch_transcription_agent(&self, _room_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+/// No-op notification ingress used by the call tool context — reads never
+/// push notifications.
+#[derive(Clone)]
+pub struct NoOpNotificationIngress;
+
+impl notification::domain::service::NotificationIngress for NoOpNotificationIngress {
+    async fn send_notification<
+        'a,
+        T: notification::domain::models::Notification + Clone + 'static,
+        U: serde::Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        _req: notification::domain::models::SendNotificationRequest<'a, T, U>,
+    ) -> Result<
+        Option<notification::domain::models::NotificationResult<'a>>,
+        rootcause::Report<notification::domain::service::SendNotificationError>,
+    > {
+        Ok(None)
+    }
+}
+
 /// Type alias for the entity access management service implementation used by AI tools
 pub type ToolEntityAccessManagementService =
     entity_access_management::domain::service::EntityAccessManagementServiceImpl<
@@ -153,6 +235,26 @@ pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService
 /// Type alias for the email tool context
 pub type ToolEmailToolContext = EmailToolContext<ToolUserEmailService>;
 
+/// Type alias for the call service implementation used by AI tools.
+/// Wired with NoOp RTC/connection/notification clients and no recording
+/// storage — the AI tools are read-only, so those capabilities are never
+/// exercised.
+pub type ToolCallService = CallServiceImpl<
+    PgCallRepo,
+    NoOpCallRtcClient,
+    NoOpConnectionService,
+    ToolEntityAccessService,
+    NoOpNotificationIngress,
+    Option<S3RecordingStorage>,
+>;
+
+/// Type alias for the read-only call record query service.
+pub type ToolCallRecordQueryService = CallRecordQueryServiceImpl<PgCallRepo>;
+
+/// Type alias for the call tool context
+pub type ToolCallToolContext =
+    CallToolContext<ToolCallService, ToolCallRecordQueryService, ToolEntityAccessService>;
+
 #[derive(Clone, Default)]
 pub struct NoOpScheduleContext;
 
@@ -173,6 +275,7 @@ pub struct ToolServiceContext {
     pub document_tool_context: ToolDocumentToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
+    pub call_tool_context: ToolCallToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
 }
 

@@ -40,6 +40,13 @@ import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
 import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
+import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
+import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamRequest';
+import type { PatchTeamRequest } from './generated/schemas/patchTeamRequest';
+import type { PatchTeamUserTierRequest } from './generated/schemas/patchTeamUserTierRequest';
+import type { Team } from './generated/schemas/team';
+import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
+import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
@@ -574,6 +581,130 @@ export const authServiceClient = {
           message: `HTTP error! status: ${response.status}`,
         };
       }
+    );
+  },
+
+  async getUserTeams() {
+    return mapOk(
+      await fetchWithAuth<Team[]>(`${authHost}/team/user`, { method: 'GET' }),
+      (result) => result
+    );
+  },
+
+  async getUserInvites() {
+    return mapOk(
+      await fetchWithAuth<TeamInvitesResponse>(
+        `${authHost}/team/user/invites`,
+        {
+          method: 'GET',
+        }
+      ),
+      (result) => result
+    );
+  },
+
+  async getTeam(teamId: string) {
+    return mapOk(
+      await fetchWithAuth<TeamWithMembers>(`${authHost}/team/${teamId}`, {
+        method: 'GET',
+      }),
+      (result) => result
+    );
+  },
+
+  async getTeamInvites(teamId: string) {
+    return mapOk(
+      await fetchWithAuth<TeamInvitesResponse>(
+        `${authHost}/team/${teamId}/invites`,
+        { method: 'GET' }
+      ),
+      (result) => result
+    );
+  },
+
+  async createTeam(args: CreateTeamRequest) {
+    return mapOk(
+      await fetchWithAuth<Team>(`${authHost}/team`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
+  async joinTeam(teamInviteId: string) {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team/join/${teamInviteId}`, {
+        method: 'GET',
+      }),
+      () => undefined
+    );
+  },
+
+  async rejectInvitation(teamInviteId: string) {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team/join/${teamInviteId}`, {
+        method: 'DELETE',
+      }),
+      () => undefined
+    );
+  },
+
+  async patchTeam(teamId: string, args: PatchTeamRequest) {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team/${teamId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+      }),
+      () => undefined
+    );
+  },
+
+  async patchTeamUserTier(teamId: string, args: PatchTeamUserTierRequest) {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/tier`, {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+      }),
+      () => undefined
+    );
+  },
+
+  async inviteToTeam(teamId: string, args: InviteToTeamRequest) {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/invite`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
+      () => undefined
+    );
+  },
+
+  async deleteTeamInvite(teamId: string, teamInviteId: string) {
+    return mapOk(
+      await fetchWithAuth<{}>(
+        `${authHost}/team/${teamId}/invite/${teamInviteId}`,
+        { method: 'DELETE' }
+      ),
+      () => undefined
+    );
+  },
+
+  async removeUserFromTeam(teamId: string, userId: string) {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/remove/${userId}`, {
+        method: 'DELETE',
+      }),
+      () => undefined
+    );
+  },
+
+  async deleteTeam(teamId: string) {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team/${teamId}`, {
+        method: 'DELETE',
+      }),
+      () => undefined
     );
   },
 };
