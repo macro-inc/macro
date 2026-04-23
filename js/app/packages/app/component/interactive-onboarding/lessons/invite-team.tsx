@@ -1,11 +1,21 @@
-import { createEffect, createMemo, createSignal, Index, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  Index,
+  on,
+  Show,
+} from 'solid-js';
 import { Tooltip } from '@core/component/Tooltip';
 import { z } from 'zod';
 import { cn } from '@ui/utils/classname';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
-import { useCreateTeamWithInvitesMutation } from '@queries/team';
+import {
+  invalidateUserTeams,
+  useCreateTeamWithInvitesMutation,
+} from '@queries/team';
 import { useEmail } from '@core/context/user';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
@@ -40,9 +50,10 @@ function InviteTeamDemo(props: LessonContentProps) {
   const [teamName, setTeamName] = createSignal('');
   const [emails, setEmails] = createSignal<string[]>(['']);
   const [errors, setErrors] = createSignal<FormErrors>({});
-  const [submitted, setSubmitted] = createSignal(false);
 
-  const createTeamMutation = useCreateTeamWithInvitesMutation();
+  const createTeamMutation = useCreateTeamWithInvitesMutation({
+    onSettled: () => invalidateUserTeams(),
+  });
   const userEmail = useEmail();
 
   const emailPlaceholder = createMemo(() => {
@@ -54,6 +65,13 @@ function InviteTeamDemo(props: LessonContentProps) {
 
   const isValid = () => teamName().trim().length > 0;
   const isPending = () => createTeamMutation.isPending;
+
+  const charCountColor = () => {
+    const len = teamName().length;
+    if (len > TEAM_NAME_MAX_LENGTH) return 'text-failure-ink';
+    if (len > TEAM_NAME_MAX_LENGTH - 10) return 'text-alert-ink';
+    return 'text-ink/40';
+  };
 
   createEffect(
     on(
@@ -72,6 +90,9 @@ function InviteTeamDemo(props: LessonContentProps) {
 
   const canAddEmail = () => {
     const currentEmails = emails();
+    if (currentEmails.length === 0) {
+      return true;
+    }
     const lastEmail = currentEmails[currentEmails.length - 1];
     return lastEmail?.trim() !== '';
   };
@@ -148,8 +169,6 @@ function InviteTeamDemo(props: LessonContentProps) {
     e.preventDefault();
     if (isPending()) return;
 
-    setSubmitted(true);
-
     const result = inviteFormSchema.safeParse({
       teamName: teamName(),
       emails: emails(),
@@ -221,14 +240,7 @@ function InviteTeamDemo(props: LessonContentProps) {
             </Show>
             <p
               id="team-name-counter"
-              class={cn(
-                'text-sm ml-auto',
-                teamName().length > TEAM_NAME_MAX_LENGTH
-                  ? 'text-failure-ink'
-                  : teamName().length > TEAM_NAME_MAX_LENGTH - 10
-                    ? 'text-alert-ink'
-                    : 'text-ink/40'
-              )}
+              class={cn('text-sm ml-auto', charCountColor())}
             >
               {teamName().length}/{TEAM_NAME_MAX_LENGTH}
             </p>
@@ -238,7 +250,10 @@ function InviteTeamDemo(props: LessonContentProps) {
         <div class="flex flex-col gap-2 min-h-0 flex-1">
           <div class="flex flex-col min-h-0">
             <div class="shrink-0 px-2">
-              <label class="text-base font-medium text-ink" id="invite-members-label">
+              <label
+                class="text-base font-medium text-ink"
+                id="invite-members-label"
+              >
                 Invite members{' '}
                 <span class="font-normal text-ink/50">(optional)</span>
               </label>
@@ -345,10 +360,11 @@ function InviteTeamDemo(props: LessonContentProps) {
   );
 }
 
-function SkipAction() {
+function SkipAction(props: LessonContentProps) {
   return (
     <button
       type="button"
+      onClick={() => props.advance()}
       class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between text-ink/60 hover:text-ink hover:bg-ink/5 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
     >
       Skip for now

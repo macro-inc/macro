@@ -21,7 +21,7 @@ export interface LessonDefinition {
   /** Center the continue button label. */
   centeredButton?: boolean;
   /** Optional secondary button rendered below the continue button. */
-  secondaryAction?: Component;
+  secondaryAction?: Component<LessonContentProps>;
 }
 
 export interface LessonContentProps {

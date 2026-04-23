@@ -560,7 +560,16 @@ function InteractiveOnboardingInner() {
                               centered={lesson().definition.centeredButton}
                             />
                             <Show when={lesson().definition.secondaryAction}>
-                              {(Action) => <Dynamic component={Action()} />}
+                              {(Action) => (
+                                <Dynamic
+                                  component={Action()}
+                                  onComplete={handleLessonComplete}
+                                  onUnready={handleLessonUnready}
+                                  advance={advanceLesson}
+                                  isActive={true}
+                                  scopeId={scopeId}
+                                />
+                              )}
                             </Show>
                           </div>
                         </Show>
@@ -611,7 +620,16 @@ function InteractiveOnboardingInner() {
                             centered={lesson().definition.centeredButton}
                           />
                           <Show when={lesson().definition.secondaryAction}>
-                            {(Action) => <Dynamic component={Action()} />}
+                            {(Action) => (
+                              <Dynamic
+                                component={Action()}
+                                onComplete={handleLessonComplete}
+                                onUnready={handleLessonUnready}
+                                advance={advanceLesson}
+                                isActive={true}
+                                scopeId={scopeId}
+                              />
+                            )}
                           </Show>
                         </div>
                       </Show>
