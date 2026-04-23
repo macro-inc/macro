@@ -51,6 +51,7 @@ interface NotificationStacksProps {
 
 function NotificationStackRow(props: {
   stack: NotificationStack;
+  entity: EntityData;
   onClick?: (e: PointerEvent | MouseEvent | KeyboardEvent) => void;
   content?: JSX.Element;
 }) {
@@ -67,7 +68,17 @@ function NotificationStackRow(props: {
     if (!splitManager) return;
 
     e.stopPropagation();
-    await openNotification(mostRecent, splitManager, e.shiftKey);
+    const entity = props.entity;
+    const entityOverride = {
+      fileType: 'fileType' in entity ? entity.fileType : undefined,
+      subType: 'subType' in entity ? entity.subType : undefined,
+    };
+    await openNotification(
+      mostRecent,
+      splitManager,
+      e.shiftKey,
+      entityOverride
+    );
     await notificationSource.markAsRead(mostRecent);
     props.onClick?.(e);
   };
@@ -189,7 +200,11 @@ export function NotificationStacks(props: NotificationStacksProps) {
         togglePosition="bottom"
       >
         {(stack) => (
-          <NotificationStackRow stack={stack} onClick={props.onClick} />
+          <NotificationStackRow
+            stack={stack}
+            entity={props.entity}
+            onClick={props.onClick}
+          />
         )}
       </CollapsibleList>
     </Show>

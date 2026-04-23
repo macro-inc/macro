@@ -17,13 +17,13 @@ impl SearchQueryConfig for EmailSearchConfig {
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Emails;
 }
 
-/// The fields to search across with simple_query_string for email search.
-const EMAIL_SIMPLE_QUERY_FIELDS: &[&str] = &[
-    "sender",
-    "reply_to",
-    "recipients",
-    "cc",
-    "bcc",
+/// Keyword-indexed email-address fields. Matched explicitly: a bare word
+/// only matches an address with that exact local-part (`alice` → `alice@*`),
+/// not addresses that merely start with the characters.
+const EMAIL_KEYWORD_FIELDS: &[&str] = &["sender", "reply_to", "recipients", "cc", "bcc"];
+
+/// Text-analyzed fields. Matched as a prefix so `scri` matches `script`.
+const EMAIL_TEXT_FIELDS: &[&str] = &[
     "subject",
     "content",
     "sender_name",
@@ -32,17 +32,17 @@ const EMAIL_SIMPLE_QUERY_FIELDS: &[&str] = &[
     "bcc_names",
 ];
 
-/// Transforms search terms into a simple_query_string query string.
-/// Single-word terms become `(term | term@*)` so they match both text fields
-/// and keyword email-address fields. Multi-word terms (containing spaces) skip
-/// the `@*` pattern since email addresses never contain spaces.
+/// Builds the simple_query_string over the keyword email-address fields.
+/// Single-word terms become `(term | term@*)` — an exact token match OR a
+/// local-part match on the address. This deliberately does NOT use a trailing
+/// `*` on the bare term, so partial local-parts don't leak across addresses
+/// (e.g. `ali` won't match `alice@example.com` via this group).
 /// Email-like terms (containing `@`) are wrapped in quotes to force phrase
-/// matching on analyzed text fields — otherwise the standard analyzer tokenizes
-/// `hutch@macro.com` into `[hutch, macro, com]`, causing `macro.com` to be
-/// highlighted inside unrelated addresses like `gab@macro.com`.
+/// matching — otherwise the standard analyzer would tokenize
+/// `alice@example.com` into `[alice, example, com]`.
 /// The email pattern is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
-fn build_simple_query_string(terms: &[String]) -> String {
+fn build_keyword_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
@@ -52,6 +52,32 @@ fn build_simple_query_string(terms: &[String]) -> String {
                 format!("({})", term)
             } else {
                 format!("({} | {}@*)", term, term.to_lowercase())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+/// Minimum prefix length before we emit a `term*` wildcard. Shorter prefixes
+/// expand to too many unique tokens in the index and risk blowing past
+/// `max_clause_count`. Under this threshold we fall back to exact token match.
+const MIN_PREFIX_LEN: usize = 3;
+
+/// Builds the simple_query_string over the text-analyzed fields.
+/// Single-word terms become `term*` so a prefix like `scri` matches the
+/// token `script` in subject/content/display-name fields. Terms shorter than
+/// `MIN_PREFIX_LEN` fall back to exact match to keep term expansion bounded.
+/// Multi-word and `@`-containing terms use grouped / phrase matching.
+fn build_text_query_string(terms: &[String]) -> String {
+    terms
+        .iter()
+        .map(|term| {
+            if term.contains('@') {
+                format!("\"{}\"", term)
+            } else if term.contains(' ') || term.chars().count() < MIN_PREFIX_LEN {
+                format!("({})", term)
+            } else {
+                format!("{}*", term)
             }
         })
         .collect::<Vec<_>>()
@@ -166,13 +192,23 @@ impl EmailQueryBuilder {
             inner.should(title_query);
             content_bool_query.set_must(inner.build().into());
         } else {
-            let query_string = build_simple_query_string(&self.inner.terms);
-            let sqs = SimpleQueryStringQuery::new(
-                query_string,
-                EMAIL_SIMPLE_QUERY_FIELDS.iter().copied(),
+            let keyword_sqs = SimpleQueryStringQuery::new(
+                build_keyword_query_string(&self.inner.terms),
+                EMAIL_KEYWORD_FIELDS.iter().copied(),
             )
             .default_operator("AND");
-            content_bool_query.set_must(sqs.into());
+
+            let text_sqs = SimpleQueryStringQuery::new(
+                build_text_query_string(&self.inner.terms),
+                EMAIL_TEXT_FIELDS.iter().copied(),
+            )
+            .default_operator("AND");
+
+            let mut combined = BoolQueryBuilder::new();
+            combined.minimum_should_match(1);
+            combined.should(keyword_sqs.into());
+            combined.should(text_sqs.into());
+            content_bool_query.set_must(combined.build().into());
         }
 
         // CUSTOM ATTRIBUTES SECTION

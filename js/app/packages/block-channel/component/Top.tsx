@@ -93,9 +93,8 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
           <SplitLabel
             label={channelName() ?? 'New Channel'}
-            id={props.channelId}
-            itemType="channel"
             lockRename={props.lockRename}
+            renameOverrides={{ channelType: props.channelType }}
           />
         </div>
         <Show when={props.tabs && props.activeTab && props.onTabChange}>

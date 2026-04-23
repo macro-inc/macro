@@ -640,7 +640,14 @@ export interface GetEntityProperties {
   /**
    * The type of entity.
    */
-  entity_type: 'document' | 'task' | 'project' | 'chat' | 'thread' | 'channel';
+  entity_type:
+    | 'document'
+    | 'task'
+    | 'project'
+    | 'chat'
+    | 'thread'
+    | 'channel'
+    | 'user';
 }
 
 /* eslint-disable */
@@ -1287,7 +1294,14 @@ export interface SetEntityProperty {
    */
   entity_ref: {
     entityId: string;
-    entityType: 'document' | 'task' | 'project' | 'chat' | 'thread' | 'channel';
+    entityType:
+      | 'document'
+      | 'task'
+      | 'project'
+      | 'chat'
+      | 'thread'
+      | 'channel'
+      | 'user';
   } | null;
   /**
    * For multi entity reference properties.
@@ -1301,13 +1315,21 @@ export interface SetEntityProperty {
           | 'project'
           | 'chat'
           | 'thread'
-          | 'channel';
+          | 'channel'
+          | 'user';
       }[]
     | null;
   /**
    * The type of entity.
    */
-  entity_type: 'document' | 'task' | 'project' | 'chat' | 'thread' | 'channel';
+  entity_type:
+    | 'document'
+    | 'task'
+    | 'project'
+    | 'chat'
+    | 'thread'
+    | 'channel'
+    | 'user';
   /**
    * For single link properties.
    */

@@ -18,7 +18,8 @@ use strum::IntoEnumIterator;
 #[test]
 fn all_urls_work() {
     let fetcher = DefaultBundleFetcher::new("https://macro.com".parse().unwrap());
-    let _url = fetcher.get_app_bundle_path();
+    let url = fetcher.get_app_bundle_path();
+    assert_eq!(url.as_str(), "https://macro.com/app/app-archive.zip");
 }
 
 struct MockBundleFetcher;

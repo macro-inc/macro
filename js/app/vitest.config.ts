@@ -38,15 +38,18 @@ export default defineConfig({
         },
       },
       {
-        extends: './packages/lexical-core/vitest.config.ts',
         test: {
-          include: ['packages/lexical-core/**/*.{test,spec}.{ts,tsx}'],
+          environment: 'jsdom',
+          globals: true,
+          include: ['../lexical-core/**/*.{test,spec}.{ts,tsx}'],
           name: 'lexical-core',
         },
       },
       {
-        extends: './packages/lexical-core/vitest.config.ts',
+        plugins: [tsconfigPaths()],
         test: {
+          environment: 'jsdom',
+          globals: true,
           include: ['packages/block-theme/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-theme',
         },

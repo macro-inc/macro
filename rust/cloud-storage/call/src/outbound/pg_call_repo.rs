@@ -96,7 +96,7 @@ impl CallRepository for PgCallRepo {
             owner: created_by.to_string(),
             channel_share_permissions: Some(vec![ChannelSharePermission {
                 channel_id: channel_id.to_string(),
-                access_level: AccessLevel::View,
+                access_level: AccessLevel::Edit,
             }]),
         };
 
@@ -126,7 +126,7 @@ impl CallRepository for PgCallRepo {
             "#,
             &share_permission.id,
             &channel_id.to_string(),
-            share_permission.channel_share_permissions.as_ref().unwrap()[0].access_level as _,
+            AccessLevel::Edit as _,
         )
         .execute(tx.as_mut())
         .await?;
@@ -148,7 +148,7 @@ impl CallRepository for PgCallRepo {
             entity_access_db_utils::EntityType::Call,
             &channel_id.to_string(),
             entity_access_db_utils::EntityAccessSourceType::Channel,
-            entity_access_db_utils::AccessLevel::View,
+            entity_access_db_utils::AccessLevel::Edit,
         )
         .await?;
 
@@ -399,19 +399,19 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<bool, Self::Err> {
+    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<(bool, Uuid), Self::Err> {
         let row = sqlx::query!(
             r#"
             UPDATE calls
                SET share_with_team = NOT share_with_team
              WHERE id = $1
-            RETURNING share_with_team
+            RETURNING share_with_team, channel_id
             "#,
             call_id,
         )
         .fetch_one(&self.pool)
         .await?;
-        Ok(row.share_with_team)
+        Ok((row.share_with_team, row.channel_id))
     }
 
     #[tracing::instrument(err, skip(self))]

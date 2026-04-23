@@ -6,7 +6,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
+import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
 import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
@@ -86,7 +86,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   // Sync search text + mention filters only when the mention menu is closed.
   // This avoids cascading reactive updates during mention insertion and
   // prevents search from firing while typing @partial.
-  const menuIsOpen = () => editor.controls.isMentionMenuOpen();
+  const menuIsOpen = () => editor.controls.isInlineMenuOpen();
 
   createEffect(() => setSearchPaused(menuIsOpen()));
 

@@ -344,6 +344,7 @@ export const GetEntityProperties = z
       'chat',
       'thread',
       'channel',
+      'user',
     ]),
   })
   .strict();
@@ -736,6 +737,7 @@ export const SetEntityProperty = z
             'chat',
             'thread',
             'channel',
+            'user',
           ]),
         })
         .strict(),
@@ -753,6 +755,7 @@ export const SetEntityProperty = z
               'chat',
               'thread',
               'channel',
+              'user',
             ]),
           })
           .strict()
@@ -766,6 +769,7 @@ export const SetEntityProperty = z
       'chat',
       'thread',
       'channel',
+      'user',
     ]),
     link_url: z.union([z.string(), z.null()]).default(null),
     link_urls: z.union([z.array(z.string()), z.null()]).default(null),

@@ -265,7 +265,12 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     setState: (state: SerializedEditorState) =>
       initializeEditorWithState(editor, state),
     getLexical: () => editor,
-    isMentionMenuOpen: () => mentionsMenuOps?.isOpen() ?? false,
+    isInlineMenuOpen: () => {
+      const mentions = mentionsMenuOps?.isOpen() ?? false;
+      const emojis = emojisMenuOps?.isOpen() ?? false;
+      const actions = actionsMenuOps?.isOpen() ?? false;
+      return mentions || emojis || actions;
+    },
   };
 
   return {

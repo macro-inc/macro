@@ -16,8 +16,13 @@ import {
   replaceTopLevelMessageIdInChannelMessages,
   replaceTopLevelMessageReactionsInChannelMessages,
   replaceTopLevelMessageAttachmentsInChannelMessages,
+  replaceTopLevelMessageReactionsInChannelMessagesByIds,
+  replaceTopLevelMessageAttachmentsInChannelMessagesByIds,
+  replaceTopLevelMessageStateInChannelMessagesByIds,
+  setChannelMessagesByIdsData,
   setChannelMessagesData,
   softInvalidateChannelMessages,
+  softInvalidateChannelMessagesByIds,
   type ThreadPreviewReplySnapshot,
   type TopLevelMessageSnapshot,
 } from './channel-messages';
@@ -305,6 +310,13 @@ export function replaceTargetReactions(
       reactions
     )
   );
+  setChannelMessagesByIdsData(channelId, (prev) =>
+    replaceTopLevelMessageReactionsInChannelMessagesByIds(
+      prev,
+      target.messageId,
+      reactions
+    )
+  );
 }
 
 /** Replaces attachments for a target message across all rendered caches. */
@@ -332,6 +344,13 @@ export function replaceTargetAttachments(
 
   setChannelMessagesData(channelId, (prev) =>
     replaceTopLevelMessageAttachmentsInChannelMessages(
+      prev,
+      target.messageId,
+      attachments
+    )
+  );
+  setChannelMessagesByIdsData(channelId, (prev) =>
+    replaceTopLevelMessageAttachmentsInChannelMessagesByIds(
       prev,
       target.messageId,
       attachments
@@ -408,6 +427,13 @@ export function replaceTargetMessageState(
       nextState
     )
   );
+  setChannelMessagesByIdsData(channelId, (prev) =>
+    replaceTopLevelMessageStateInChannelMessagesByIds(
+      prev,
+      target.messageId,
+      nextState
+    )
+  );
 }
 
 /** Soft-invalidates the rendered caches touched by a target message. */
@@ -416,6 +442,7 @@ export function softInvalidateTargetCaches(
   target?: MessageTarget
 ) {
   softInvalidateChannelMessages(channelId);
+  softInvalidateChannelMessagesByIds(channelId);
 
   if (target?.kind === 'thread_reply') {
     softInvalidateThreadReplies(channelId, target.threadId);

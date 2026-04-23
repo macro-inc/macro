@@ -48,3 +48,14 @@ export function useCallRecordQuery(callId: Accessor<string>) {
       await throwOnErr(() => callServiceClient.getCallRecord(callId())),
   }));
 }
+
+export function useToggleShareWithTeamMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (callId: string) =>
+      throwOnErr(() => callServiceClient.toggleShareWithTeam(callId)),
+    onError(error: Error) {
+      console.error('failed to toggle share with team', error);
+    },
+  }));
+}

@@ -38,8 +38,7 @@ const hooks = {
       for (const callback of callbacks) {
         try {
           callback(env);
-        } catch (_) {
-        }
+        } catch (_) {}
       }
     }
   },
@@ -51,13 +50,13 @@ const util = {
       return new Token(tokens.type, this.encode(tokens.content), tokens.alias);
     } else if (Array.isArray(tokens)) {
       return tokens.map((token) => this.encode(token));
-    } else if (typeof tokens === "string") {
+    } else if (typeof tokens === 'string') {
       return tokens
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
     return tokens;
   },
@@ -78,7 +77,7 @@ const util = {
   clone(obj: any, visited?: any): any {
     visited = visited || {};
 
-    if (obj === null || typeof obj !== "object") {
+    if (obj === null || typeof obj !== 'object') {
       return obj;
     }
 
@@ -125,7 +124,7 @@ const languages = {
     inside: string,
     before: string,
     insert: Grammar,
-    root?: any,
+    root?: any
   ): Grammar {
     root = root || this;
     const grammar = root[inside] || {};
@@ -170,7 +169,7 @@ const languages = {
         const result = callback.call(o, i, o[i], type || i);
         if (result) {
           o[i] = result;
-        } else if (typeof o[i] === "object" && o[i] !== null) {
+        } else if (typeof o[i] === 'object' && o[i] !== null) {
           languages.DFS(o[i], callback, null, visited);
         }
       }
@@ -199,11 +198,7 @@ const Prism = {
     }
   },
 
-  highlightAllUnder(
-    _container: any,
-    _async?: boolean,
-    callback?: NoOp,
-  ): void {
+  highlightAllUnder(_container: any, _async?: boolean, callback?: NoOp): void {
     // No-op in headless environment
     if (callback) {
       callback();
@@ -223,7 +218,7 @@ const Prism = {
 };
 
 // Set up the global Prism object before any modules load
-if (typeof globalThis !== "undefined") {
+if (typeof globalThis !== 'undefined') {
   (globalThis as any).Prism = Prism;
 }
 

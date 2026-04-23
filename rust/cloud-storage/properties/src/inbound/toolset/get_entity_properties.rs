@@ -22,6 +22,7 @@ pub enum ToolEntityType {
     Chat,
     Thread,
     Channel,
+    User,
 }
 
 impl From<ToolEntityType> for EntityType {
@@ -33,6 +34,7 @@ impl From<ToolEntityType> for EntityType {
             ToolEntityType::Chat => EntityType::Chat,
             ToolEntityType::Thread => EntityType::Thread,
             ToolEntityType::Channel => EntityType::Channel,
+            ToolEntityType::User => EntityType::User,
         }
     }
 }

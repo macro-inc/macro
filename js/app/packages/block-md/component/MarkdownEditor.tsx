@@ -114,7 +114,7 @@ import {
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
@@ -323,7 +323,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       clientY: currentPos.y,
     };
     const item = event.draggable.data;
-    const blockName = fileTypeToBlockName(item.fileType ?? item.type);
+    const blockName = itemToBlockName(item);
     if (!blockName) return;
     let id = event.draggable.data.id as string;
     if (event.draggable.data.type === 'channel_message') {

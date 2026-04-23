@@ -1,6 +1,7 @@
 {
   "include": [
-    "./packages/**/*"
+    "./packages/**/*",
+    "../lexical-core/**/*"
   ],
   "exclude": [
     "./node_module/**/*",
@@ -9,6 +10,7 @@
     "./packages/block-code/scripts/**/*",
     "./packages/service-clients/service-sync/scripts/**/*",
     "./packages/loro-mirror/packages/react/**/*",
+    "../lexical-core/tests/**/*"
   ],
   "compilerOptions": {
     "noImplicitAny": true,
@@ -64,7 +66,7 @@
         "./packages/tauri/src"
       ],
       "@icon/*": [
-        "./node_modules/@phosphor-icons/core/assets/*"
+        "../node_modules/@phosphor-icons/core/assets/*"
       ],
       "@block-canvas/*": [
         "./packages/block-canvas/*"
@@ -187,10 +189,10 @@
         "./packages/websocket/*"
       ],
       "@lexical-core": [
-        "./packages/lexical-core/"
+        "../lexical-core/"
       ],
       "@lexical-core/*": [
-        "./packages/lexical-core/*"
+        "../lexical-core/*"
       ],
       "@baby-gl": [
         "./packages/baby-gl/"
@@ -223,7 +225,7 @@
         "./packages/entity/src/*"
       ],
     },
-    "rootDir": ".",
+    "rootDir": "..",
     "outDir": "./dist"
   },
   "references": [

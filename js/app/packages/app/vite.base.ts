@@ -1,8 +1,9 @@
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
+import chokidar from 'chokidar';
 import { Features } from 'lightningcss';
-import type { UserConfigFn } from 'vite';
+import type { Plugin, UserConfigFn } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
@@ -11,8 +12,61 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 
-const shortSha = execSync('git rev-parse --short HEAD').toString().trim();
+function readShortSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+const shortSha = readShortSha();
 const appVersion = `${version}+${shortSha}`;
+
+function readGitBranch(): string {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD').toString().trim();
+  } catch {
+    return '';
+  }
+}
+
+function gitBranchHmrPlugin(): Plugin {
+  return {
+    name: 'git-branch-hmr',
+    apply: 'serve',
+    configureServer(server) {
+      let gitDir: string;
+      try {
+        gitDir = execSync('git rev-parse --absolute-git-dir').toString().trim();
+      } catch {
+        return;
+      }
+      const headPath = resolve(gitDir, 'HEAD');
+      const watcher = chokidar.watch(headPath, {
+        ignoreInitial: true,
+        persistent: false,
+        usePolling: true,
+        interval: 100,
+      });
+      watcher.on('all', () => {
+        server.ws.send({
+          type: 'custom',
+          event: 'git-branch:update',
+          data: readGitBranch(),
+        });
+      });
+      server.ws.on('connection', () => {
+        server.ws.send({
+          type: 'custom',
+          event: 'git-branch:update',
+          data: readGitBranch(),
+        });
+      });
+      server.httpServer?.once('close', () => void watcher.close());
+    },
+  };
+}
 
 const PLATFORMS = ['web', 'desktop', 'ios', 'android'] as const;
 
@@ -50,6 +104,7 @@ export const createAppViteConfig = ({
         tsconfigpaths({
           root: '../../',
         }),
+        gitBranchHmrPlugin(),
       ],
       define: defineEnv(ENV_MODE, command, platform),
       clearScreen: false,
@@ -150,7 +205,7 @@ export const createAppViteConfig = ({
         fs: {
           allow: [
             // Allow serving files from the workspace root
-            resolve(__dirname, '../../'),
+            resolve(__dirname, '../../../'),
           ],
         },
       },
@@ -176,5 +231,8 @@ function defineEnv(mode: string, command: string, platform: AppPlatform) {
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),
+    'import.meta.env.__GIT_BRANCH__': JSON.stringify(
+      command === 'serve' ? readGitBranch() : ''
+    ),
   };
 }
