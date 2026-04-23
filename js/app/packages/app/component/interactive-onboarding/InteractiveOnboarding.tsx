@@ -5,6 +5,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -106,15 +107,16 @@ function InteractiveOnboardingInner() {
   const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
     enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
-  const allLessons = () =>
+  const allLessons = createMemo(() =>
     LESSONS.filter((l) => {
       if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
         return false;
       if (l.id === 'about-us' && isAuthenticated()) return false;
       if (l.id === 'invite-team' && !inviteTeamEnabled().enabled) return false;
       return true;
-    });
-  const lessons = () =>
+    })
+  );
+  const lessons = createMemo(() =>
     isTouch
       ? allLessons().filter(
           (l) =>
@@ -123,7 +125,8 @@ function InteractiveOnboardingInner() {
             l.id === 'choose-plan' ||
             l.id === 'launch'
         )
-      : allLessons();
+      : allLessons()
+  );
 
   const testMode = new URLSearchParams(location.search).has('test');
 
@@ -132,12 +135,12 @@ function InteractiveOnboardingInner() {
   const slideIndex =
     slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
 
-  const sortedLessons = [...lessons()].sort(
-    (a, b) => (a.order ?? 0) - (b.order ?? 0)
+  const sortedLessons = createMemo(() =>
+    [...lessons()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   );
   const debugCompleted =
     slideIndex !== null
-      ? new Set(sortedLessons.slice(0, slideIndex).map((l) => l.id))
+      ? new Set(sortedLessons().slice(0, slideIndex).map((l) => l.id))
       : undefined;
 
   // Detect a return-from-OAuth param synchronously so we can pre-populate
@@ -149,14 +152,14 @@ function InteractiveOnboardingInner() {
   );
   const returnCompleted = returningLesson
     ? new Set(
-        sortedLessons
+        sortedLessons()
           .filter((l) => (l.order ?? 0) <= (returningLesson.order ?? 0))
           .map((l) => l.id)
       )
     : undefined;
 
   const state = createOnboardingState({
-    definitions: lessons(),
+    definitions: lessons,
     initialCompleted: debugCompleted ?? returnCompleted ?? new Set(),
   });
 
