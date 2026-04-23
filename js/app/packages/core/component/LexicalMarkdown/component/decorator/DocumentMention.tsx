@@ -90,7 +90,7 @@ function MentionContainer(props: {
 function Spinner() {
   return (
     <div class="animate-spin">
-    <LoadingSpinner class="size-4" />
+      <LoadingSpinner class="size-4" />
     </div>
   );
 }
@@ -195,9 +195,9 @@ function InlinePreview(props: {
 
   return (
     <Switch>
-      <Match when={item().loading && props.documentName}>
+      <Match when={item().loading}>
         <MentionContainer
-          icon={<EntityIcon targetType={props.blockName as any} size="fill" />}
+        icon={<EntityIcon targetType={props.blockName as any} size="fill" class="animate-pulse" />}
           text={
             <span
               data-document-mention="true"
@@ -205,16 +205,12 @@ function InlinePreview(props: {
               data-block-name={props.blockName}
               data-document-name={props.documentName}
               class="opacity-50"
-              title="Loading preview..."
             >
               {props.documentName!.replaceAll('\n', ' ').trim()}
             </span>
           }
           collapsed={props.collapsed}
         />
-      </Match>
-      <Match when={item().loading && !props.documentName}>
-        <Loading collapsed={props.collapsed} />
       </Match>
       <Match when={shouldShowFallback()}>
         <MentionContainer
