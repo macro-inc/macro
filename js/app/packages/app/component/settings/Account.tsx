@@ -463,7 +463,7 @@ function bundleUpdateAction(
     case 'Error':
       return { label: 'Retry', action: () => invoke('check_for_update') };
     case 'UpdateFound':
-      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }) };
+      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }).catch(console.error) };
     case 'WaitingForWifi':
       return { label: 'Download anyway', action: cancelWifiWait };
     case 'Completed':

@@ -51,6 +51,21 @@ function TauriProvider(props: { children: JSX.Element }) {
   );
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
+  const [waitingForWifi, setWaitingForWifi] = createSignal(false);
+
+  function grantBundleUpdate() {
+    invoke('grant_bundle_update', { approved: true }).catch((e) =>
+      console.error('[bundle-update] grant_bundle_update failed', e)
+    );
+  }
+
+  function cancelWifiWait() {
+    batch(() => {
+      setWaitingForWifi(false);
+      setBundleUpdateStatus({ status: 'CheckingForUpdate' });
+    });
+    grantBundleUpdate();
+  }
 
   const value: TauriContextValue = {
     runtimeInsets: insets,
@@ -59,29 +74,24 @@ function TauriProvider(props: { children: JSX.Element }) {
     cancelWifiWait,
   };
 
-  const [waitingForWifi, setWaitingForWifi] = createSignal(false);
-
-  function cancelWifiWait() {
-    setWaitingForWifi(false);
-    invoke('grant_bundle_update', { approved: true }).catch((e) =>
-      console.error('[bundle-update] grant_bundle_update failed', e)
-    );
-  }
-
   // When an update is found, only approve the download if we're on wifi/ethernet.
   // On cellular, wait and poll until a suitable connection is available.
   createEffect(() => {
     const status = bundleUpdateStatus();
     if (status.status !== 'UpdateFound') return;
 
+    let aborted = false;
+    onCleanup(() => {
+      aborted = true;
+    });
+
     console.info('[bundle-update] update found, checking network');
     getNetworkInfo()
       .then((info) => {
-        if (info.networkType !== 'cellular') {
+        if (aborted) return;
+        if (['wifi', 'ethernet'].includes(info.networkType ?? '')) {
           console.info('[bundle-update] network ok, approving download');
-          invoke('grant_bundle_update', { approved: true }).catch((e) =>
-            console.error('[bundle-update] grant_bundle_update failed', e)
-          );
+          grantBundleUpdate();
         } else {
           console.info('[bundle-update] cellular network, waiting for wifi');
           batch(() => {
@@ -91,14 +101,13 @@ function TauriProvider(props: { children: JSX.Element }) {
         }
       })
       .catch((e) => {
+        if (aborted) return;
         // If network detection fails, allow the download rather than blocking it.
         console.warn(
           '[bundle-update] network check failed, approving download',
           e
         );
-        invoke('grant_bundle_update', { approved: true }).catch((err) =>
-          console.error('[bundle-update] grant_bundle_update failed', err)
-        );
+        grantBundleUpdate();
       });
   });
 
@@ -109,12 +118,12 @@ function TauriProvider(props: { children: JSX.Element }) {
     async function tryGrant() {
       try {
         const info = await getNetworkInfo();
-        if (info.networkType !== 'cellular') {
+        // Re-check after the async gap — cancelWifiWait or a prior tick may have already fired.
+        if (!waitingForWifi()) return;
+        if (['wifi', 'ethernet'].includes(info.networkType ?? '')) {
           setWaitingForWifi(false);
           console.info('[bundle-update] wifi detected, approving download');
-          invoke('grant_bundle_update', { approved: true }).catch((e) =>
-            console.error('[bundle-update] grant_bundle_update failed', e)
-          );
+          grantBundleUpdate();
         }
       } catch {
         // Ignore — will retry on next tick.
@@ -139,7 +148,10 @@ function TauriProvider(props: { children: JSX.Element }) {
       'bundle-update-status',
       (ev) => {
         console.info('[bundle-update] received', JSON.stringify(ev.payload));
-        setBundleUpdateStatus(ev.payload);
+        batch(() => {
+          setBundleUpdateStatus(ev.payload);
+          if (ev.payload.status !== 'WaitingForWifi') setWaitingForWifi(false);
+        });
       }
     );
     // Fetch current status since events emitted before the listener registered are missed
