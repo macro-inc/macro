@@ -20,6 +20,7 @@ import {
   useUserTeamsQuery,
   useTeamQuery,
   usePatchTeamMutation,
+  useDeleteTeamMutation,
 } from '@queries/team/teams';
 import {
   useTeamInvitesQuery,
@@ -202,8 +203,11 @@ export function Team() {
   const patchTeamMutation = usePatchTeamMutation();
   const patchTierMutation = usePatchTeamUserTierMutation();
   const inviteToTeamMutation = useInviteToTeamMutation();
+  const deleteTeamMutation = useDeleteTeamMutation();
 
   const [showLeaveModal, setShowLeaveModal] = createSignal(false);
+  const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
+  const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
   const [showRemoveModal, setShowRemoveModal] = createSignal<TeamMember | null>(null);
   const [showCancelInviteModal, setShowCancelInviteModal] = createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
@@ -212,6 +216,9 @@ export function Team() {
 
   const parsedEmails = () => parseEmails(inviteEmails());
   const hasValidEmails = () => parsedEmails().length > 0;
+
+  const deleteConfirmationPhrase = () => `Delete ${team()?.name ?? ''}`;
+  const canDeleteTeam = () => deleteConfirmation() === deleteConfirmationPhrase();
 
   const originalTeamName = () => team()?.name ?? '';
   const teamNameValue = () => editingTeamName() ?? originalTeamName();
@@ -261,6 +268,28 @@ export function Team() {
       { teamId: currentTeamId, userId: currentUserId },
       { onSuccess: () => setShowLeaveModal(false) }
     );
+  };
+
+  const handleDeleteTeam = () => {
+    const currentTeamId = teamId();
+    if (!currentTeamId) return;
+
+    deleteTeamMutation.mutate(
+      { teamId: currentTeamId },
+      {
+        onSuccess: () => {
+          setDeleteConfirmation('');
+          setShowDeleteTeamModal(false);
+        },
+      }
+    );
+  };
+
+  const handleDeleteTeamModalClose = (open: boolean) => {
+    if (!open) {
+      setDeleteConfirmation('');
+      setShowDeleteTeamModal(false);
+    }
   };
 
   const handleRemoveMember = () => {
@@ -336,10 +365,20 @@ export function Team() {
                 <h3 class="text-sm">Details</h3>
                 <p class="text-xs text-ink-muted">Team information and settings.</p>
               </div>
-              <Show when={currentMember() && currentMember()?.role !== TeamRole.Owner}>
-                <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowLeaveModal(true)}>
-                  <LeaveIcon class="size-4" />
-                  Leave
+              <Show
+                when={isOwner()}
+                fallback={
+                  <Show when={currentMember()}>
+                    <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowLeaveModal(true)}>
+                      <LeaveIcon class="size-4" />
+                      Leave
+                    </Button>
+                  </Show>
+                }
+              >
+                <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowDeleteTeamModal(true)}>
+                  <TrashIcon class="size-4" />
+                  Delete Team
                 </Button>
               </Show>
             </header>
@@ -484,6 +523,59 @@ export function Team() {
                     onClick={handleLeaveTeam}
                   >
                     <Show when={removeUserMutation.isPending} fallback="Leave">
+                      <SpinnerIcon class="size-4 animate-spin" />
+                    </Show>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogWrapper>
+        </Dialog.Portal>
+      </Dialog>
+
+      <Dialog open={showDeleteTeamModal()} onOpenChange={handleDeleteTeamModalClose}>
+        <Dialog.Portal>
+          <DialogWrapper>
+            <div class="flex flex-col text-ink">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                  <XIcon />
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+                  Delete Team
+                </Dialog.Title>
+              </div>
+              <div class="p-3 flex flex-col gap-3">
+                <p>
+                  Are you sure you want to delete <span class="font-medium">{team()?.name}</span>?
+                  This action cannot be undone and all team members will lose access.
+                </p>
+                <p class="text-sm text-ink-muted">
+                  Type <span class="font-medium text-ink">{deleteConfirmationPhrase()}</span> to confirm.
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmation()}
+                  onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
+                  placeholder={deleteConfirmationPhrase()}
+                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+                />
+                <div class="flex justify-end gap-1 pt-2">
+                  <Button
+                    variant="ghost"
+                    class="rounded-xs"
+                    disabled={deleteTeamMutation.isPending}
+                    onClick={() => handleDeleteTeamModalClose(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    class="rounded-xs"
+                    disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
+                    onClick={handleDeleteTeam}
+                  >
+                    <Show when={deleteTeamMutation.isPending} fallback="Delete Team">
                       <SpinnerIcon class="size-4 animate-spin" />
                     </Show>
                   </Button>
