@@ -80,6 +80,11 @@ export type ChannelSubFilters = Pick<
   'channel_ids' | 'sender_ids'
 >;
 export type EmailSubFilters = Pick<EmailFilters, 'importance'>;
+export type CallSubFilters = {
+  channel_ids?: string[];
+  speaker_ids?: string[];
+  attended?: boolean | null;
+};
 
 export function getCachedChannelSubFilters(
   contentId: string
@@ -137,6 +142,33 @@ export function cacheEmailSubFilters(
   }
 }
 
+export function getCachedCallSubFilters(contentId: string): CallSubFilters {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
+  try {
+    const raw = localStorage.getItem(
+      soupViewCacheKey(contentId, 'call-sub-filters')
+    );
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function cacheCallSubFilters(
+  contentId: string,
+  filters: CallSubFilters
+) {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return;
+  try {
+    localStorage.setItem(
+      soupViewCacheKey(contentId, 'call-sub-filters'),
+      JSON.stringify(filters)
+    );
+  } catch {
+    // best-effort
+  }
+}
+
 export function useSearchIndexController() {
   const { soup, setQueryFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
@@ -185,6 +217,21 @@ export function useSearchIndexController() {
             importance,
           },
         });
+      } else if (opt.value === 'calls') {
+        const cached = getCachedCallSubFilters(contentId);
+        const attended =
+          'attended' in cached
+            ? (cached.attended ?? undefined)
+            : opt.queryFilters.call_filters?.attended;
+        setQueryFilters({
+          ...opt.queryFilters,
+          call_filters: {
+            ...opt.queryFilters.call_filters,
+            channel_ids: cached.channel_ids,
+            speaker_ids: cached.speaker_ids,
+            attended,
+          },
+        });
       } else {
         setQueryFilters({ ...opt.queryFilters });
       }
@@ -220,6 +267,12 @@ export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
     label: 'Email',
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
     queryFilters: QUERY_FILTERS.email,
+  },
+  {
+    value: 'calls',
+    label: 'Calls',
+    icon: () => <EntityIcon targetType="call" size="xs" theme="monochrome" />,
+    queryFilters: QUERY_FILTERS.calls,
   },
   {
     value: 'folders',

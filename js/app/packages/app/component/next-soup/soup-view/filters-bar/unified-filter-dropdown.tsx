@@ -34,10 +34,12 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import {
   INDEX_OPTIONS,
+  cacheCallSubFilters,
   cacheChannelSubFilters,
   cacheEmailSubFilters,
   useSearchFilterOptions,
   useSearchIndexController,
+  type CallSubFilters,
   type ChannelSubFilters,
   type SearchableOption,
 } from './search-filter-controls';
@@ -494,6 +496,7 @@ export const UnifiedFilterDropdown = () => {
   const isSearchView = () => currentView() === 'search';
   const isChannelsIndexActive = () => soup.filters.isActive('channels');
   const isEmailIndexActive = () => soup.filters.isActive('email');
+  const isCallsIndexActive = () => soup.filters.isActive('calls');
   const hasActiveIndex = () =>
     INDEX_OPTIONS.some((opt) => soup.filters.isActive(opt.value));
 
@@ -512,6 +515,17 @@ export const UnifiedFilterDropdown = () => {
     if (!isSearchView() || !isEmailIndexActive()) return;
     const ef = queryFilters().email_filters;
     cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
+  });
+
+  createEffect(() => {
+    if (!isSearchView() || !isCallsIndexActive()) return;
+    const cf = queryFilters().call_filters;
+    const sub: CallSubFilters = {};
+    if (cf?.channel_ids?.length) sub.channel_ids = cf.channel_ids;
+    if (cf?.speaker_ids?.length) sub.speaker_ids = cf.speaker_ids;
+    if (cf?.attended !== undefined && cf?.attended !== null)
+      sub.attended = cf.attended;
+    cacheCallSubFilters(contentId, sub);
   });
 
   const { channelOptions: inChannelOptions, senderOptions: fromSenderOptions } =
@@ -563,9 +577,61 @@ export const UnifiedFilterDropdown = () => {
 
   const importance = createMemo(() => queryFilters().email_filters?.importance);
 
+  // Calls sub-filters: In (channel), From (speaker), Attended.
+  // Reuses the same channel/user options as channel search since the
+  // semantics ("a channel you're in" / "a person to filter by") are the same.
+  const activeCallChannelIds: Accessor<string[]> = createMemo(
+    () => queryFilters().call_filters?.channel_ids ?? []
+  );
+
+  const setCallChannelIds = (ids: string[]) => {
+    batch(() => {
+      if (!isCallsIndexActive()) handleIndexChange('calls');
+      setQueryFilters((prev) => ({
+        ...prev,
+        call_filters: {
+          ...prev.call_filters,
+          channel_ids: ids.length > 0 ? ids : undefined,
+        },
+      }));
+    });
+  };
+
+  const activeSpeakerIds: Accessor<string[]> = createMemo(
+    () => queryFilters().call_filters?.speaker_ids ?? []
+  );
+
+  const setSpeakerIds = (ids: string[]) => {
+    batch(() => {
+      if (!isCallsIndexActive()) handleIndexChange('calls');
+      setQueryFilters((prev) => ({
+        ...prev,
+        call_filters: {
+          ...prev.call_filters,
+          speaker_ids: ids.length > 0 ? ids : undefined,
+        },
+      }));
+    });
+  };
+
+  const setAttended = (val: boolean | undefined) => {
+    batch(() => {
+      if (!isCallsIndexActive()) handleIndexChange('calls');
+      setQueryFilters((prev) => ({
+        ...prev,
+        call_filters: { ...prev.call_filters, attended: val },
+      }));
+    });
+  };
+
+  const attended = createMemo(() => queryFilters().call_filters?.attended);
+
   const [openChannelSub, setOpenChannelSub] = createSignal<
     'in' | 'from' | null
   >(null);
+  const [openCallSub, setOpenCallSub] = createSignal<'in' | 'from' | null>(
+    null
+  );
 
   registerHotkey({
     hotkey: 'f',
@@ -677,7 +743,8 @@ export const UnifiedFilterDropdown = () => {
                           soup.filters.isActive(option.value);
                         const hasSub =
                           option.value === 'channels' ||
-                          option.value === 'email';
+                          option.value === 'email' ||
+                          option.value === 'calls';
                         return (
                           <Show
                             when={hasSub}
@@ -821,6 +888,93 @@ export const UnifiedFilterDropdown = () => {
                                                     )}
                                                   >
                                                     {importanceOption.label}
+                                                  </span>
+                                                </DropdownMenu.Item>
+                                              );
+                                            }}
+                                          </For>
+                                        </DropdownMenu.SubContent>
+                                      </DropdownMenu.Portal>
+                                    </DropdownMenu.Sub>
+                                  </Show>
+                                  <Show when={option.value === 'calls'}>
+                                    <SearchableFilterSubmenu
+                                      label="In"
+                                      options={inChannelOptions}
+                                      activeIds={activeCallChannelIds}
+                                      onChange={setCallChannelIds}
+                                      placeholder="Search channels..."
+                                      open={() => openCallSub() === 'in'}
+                                      onOpenChange={(v) =>
+                                        setOpenCallSub(v ? 'in' : null)
+                                      }
+                                    />
+                                    <SearchableFilterSubmenu
+                                      label="From"
+                                      options={fromSenderOptions}
+                                      activeIds={activeSpeakerIds}
+                                      onChange={setSpeakerIds}
+                                      placeholder="Search speakers..."
+                                      open={() => openCallSub() === 'from'}
+                                      onOpenChange={(v) =>
+                                        setOpenCallSub(v ? 'from' : null)
+                                      }
+                                    />
+                                    <DropdownMenu.Sub gutter={4}>
+                                      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
+                                        <span class="text-ink">Attended</span>
+                                        <CaretRightIcon class="size-3 text-ink-muted" />
+                                      </DropdownMenu.SubTrigger>
+                                      <DropdownMenu.Portal>
+                                        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
+                                          <For
+                                            each={[
+                                              {
+                                                label: 'Attended',
+                                                value: true as
+                                                  | boolean
+                                                  | undefined,
+                                              },
+                                              {
+                                                label: 'Not attended',
+                                                value: false as
+                                                  | boolean
+                                                  | undefined,
+                                              },
+                                              {
+                                                label: 'All',
+                                                value: undefined as
+                                                  | boolean
+                                                  | undefined,
+                                              },
+                                            ]}
+                                          >
+                                            {(attendedOption) => {
+                                              const attendedActive = () =>
+                                                attended() ===
+                                                attendedOption.value;
+                                              return (
+                                                <DropdownMenu.Item
+                                                  class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
+                                                  onSelect={() =>
+                                                    setAttended(
+                                                      attendedOption.value
+                                                    )
+                                                  }
+                                                  closeOnSelect
+                                                >
+                                                  <TypeIndicator
+                                                    active={attendedActive()}
+                                                  />
+                                                  <span
+                                                    class={cn(
+                                                      'flex-1 truncate',
+                                                      attendedActive()
+                                                        ? 'text-ink'
+                                                        : 'text-ink-muted'
+                                                    )}
+                                                  >
+                                                    {attendedOption.label}
                                                   </span>
                                                 </DropdownMenu.Item>
                                               );

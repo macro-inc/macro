@@ -175,6 +175,24 @@ export function useFilterRefinements() {
       },
     }));
 
+  const setCallChannelIds = (ids: string[]) =>
+    setQueryFilters((prev) => ({
+      ...prev,
+      call_filters: {
+        ...prev.call_filters,
+        channel_ids: ids.length > 0 ? ids : undefined,
+      },
+    }));
+
+  const setSpeakerIds = (ids: string[]) =>
+    setQueryFilters((prev) => ({
+      ...prev,
+      call_filters: {
+        ...prev.call_filters,
+        speaker_ids: ids.length > 0 ? ids : undefined,
+      },
+    }));
+
   /**
    * Cache of chip objects keyed by a stable id derived from the chip's category
    * and static identity (e.g. "In", "Type|channels", "Assignee|<uuid>"). Reusing
@@ -350,6 +368,128 @@ export function useFilterRefinements() {
           };
         })
       );
+    }
+
+    // Call filters (only when the calls index is active in the search view).
+    // Mirrors the channel In/From chips but reads/writes call_filters.
+    if (currentView() === 'search' && soup.filters.isActive('calls')) {
+      const callChannelIds = (
+        queryFilters().call_filters?.channel_ids ?? []
+      ).filter((id) => id !== NIL_UUID);
+      const callInOpen = chipCache.get('CallIn')?.isPopupOpen?.() ?? false;
+      if (callChannelIds.length > 0 || callInOpen) {
+        const key = 'CallIn';
+        seenKeys.add(key);
+        filters.push(
+          getOrCreateChip(key, () => {
+            const [isPopupOpen, setPopupOpen] = createSignal(false);
+            return {
+              categoryLabel: 'In',
+              optionId: () => {
+                const ids = (
+                  queryFilters().call_filters?.channel_ids ?? []
+                ).filter((id) => id !== NIL_UUID);
+                return `call-in:${ids.join(',')}`;
+              },
+              optionLabel: () => {
+                const ids = (
+                  queryFilters().call_filters?.channel_ids ?? []
+                ).filter((id) => id !== NIL_UUID);
+                return labelForIds(ids, channelLabelMap());
+              },
+              searchableOptions: channelOptions,
+              activeSearchableIds: () =>
+                (queryFilters().call_filters?.channel_ids ?? []).filter(
+                  (id) => id !== NIL_UUID
+                ),
+              onSearchableChange: setCallChannelIds,
+              searchPlaceholder: 'Search channels...',
+              onRemove: () => setCallChannelIds([]),
+              isPopupOpen,
+              setPopupOpen,
+            };
+          })
+        );
+      }
+
+      const speakerIds = queryFilters().call_filters?.speaker_ids ?? [];
+      const fromSpeakerOpen =
+        chipCache.get('CallFrom')?.isPopupOpen?.() ?? false;
+      if (speakerIds.length > 0 || fromSpeakerOpen) {
+        const key = 'CallFrom';
+        seenKeys.add(key);
+        filters.push(
+          getOrCreateChip(key, () => {
+            const [isPopupOpen, setPopupOpen] = createSignal(false);
+            return {
+              categoryLabel: 'From',
+              optionId: () => {
+                const ids = queryFilters().call_filters?.speaker_ids ?? [];
+                return `call-from:${ids.join(',')}`;
+              },
+              optionLabel: () => {
+                const ids = queryFilters().call_filters?.speaker_ids ?? [];
+                return labelForIds(ids, senderLabelMap());
+              },
+              searchableOptions: senderOptions,
+              activeSearchableIds: () =>
+                queryFilters().call_filters?.speaker_ids ?? [],
+              onSearchableChange: setSpeakerIds,
+              searchPlaceholder: 'Search speakers...',
+              onRemove: () => setSpeakerIds([]),
+              isPopupOpen,
+              setPopupOpen,
+            };
+          })
+        );
+      }
+
+      const callAttended = queryFilters().call_filters?.attended;
+      if (callAttended !== undefined && callAttended !== null) {
+        const ATTENDED_YES = 'attended:yes';
+        const ATTENDED_NO = 'attended:no';
+        const key = 'CallAttended';
+        seenKeys.add(key);
+        filters.push(
+          getOrCreateChip(key, () => ({
+            categoryLabel: 'Attended',
+            optionId: () =>
+              queryFilters().call_filters?.attended
+                ? ATTENDED_YES
+                : ATTENDED_NO,
+            optionLabel: () =>
+              queryFilters().call_filters?.attended
+                ? 'Attended'
+                : 'Not attended',
+            categoryOptions: [
+              { id: ATTENDED_YES, label: 'Attended' },
+              { id: ATTENDED_NO, label: 'Not attended' },
+            ] as unknown as ActiveFilter['categoryOptions'],
+            multiple: false,
+            isOptionActive: (optionId) =>
+              optionId ===
+              (queryFilters().call_filters?.attended
+                ? ATTENDED_YES
+                : ATTENDED_NO),
+            onRemove: () =>
+              setQueryFilters((prev) => ({
+                ...prev,
+                call_filters: {
+                  ...prev.call_filters,
+                  attended: undefined,
+                },
+              })),
+            onReplace: (newOptionId) =>
+              setQueryFilters((prev) => ({
+                ...prev,
+                call_filters: {
+                  ...prev.call_filters,
+                  attended: newOptionId === ATTENDED_YES,
+                },
+              })),
+          }))
+        );
+      }
     }
 
     // Email importance (only when the email index is active in the search view
