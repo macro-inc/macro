@@ -27,6 +27,15 @@ function gitBranchHmrPlugin(): Plugin {
   return {
     name: 'git-branch-hmr',
     apply: 'serve',
+    transformIndexHtml() {
+      return [
+        {
+          tag: 'script',
+          injectTo: 'head-prepend',
+          children: `window.__GIT_BRANCH__ = ${JSON.stringify(readGitBranch())};`,
+        },
+      ];
+    },
     configureServer(server) {
       let gitDir: string;
       try {
@@ -42,13 +51,6 @@ function gitBranchHmrPlugin(): Plugin {
         interval: 100,
       });
       watcher.on('all', () => {
-        server.ws.send({
-          type: 'custom',
-          event: 'git-branch:update',
-          data: readGitBranch(),
-        });
-      });
-      server.ws.on('connection', () => {
         server.ws.send({
           type: 'custom',
           event: 'git-branch:update',
@@ -223,8 +225,5 @@ function defineEnv(mode: string, command: string, platform: AppPlatform) {
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),
-    'import.meta.env.__GIT_BRANCH__': JSON.stringify(
-      command === 'serve' ? readGitBranch() : ''
-    ),
   };
 }

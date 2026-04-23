@@ -1,7 +1,6 @@
 interface ImportMetaEnv {
   readonly __APP_VERSION__: string;
   readonly __LOCAL_JWT__: string;
-  readonly __GIT_BRANCH__: string;
   readonly VITE_PLATFORM: 'web' | 'desktop' | 'ios' | 'android';
 
   readonly VITE_SEGMENT_WRITE_KEY: string;
@@ -13,4 +12,8 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+}
+
+interface Window {
+  __GIT_BRANCH__?: string;
 }
