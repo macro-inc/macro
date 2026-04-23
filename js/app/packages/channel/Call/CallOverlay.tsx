@@ -21,17 +21,30 @@ import {
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext, type MediaDeviceInfo } from './CallContext';
 
-// Matches the runtime check in @livekit/track-processors' ProcessorWrapper.isSupported:
-// either the modern MediaStreamTrackProcessor API (Chromium/Edge, Safari 18.4+) OR the
-// canvas.captureStream() fallback (Firefox 126+, which includes Zen). Kept local so the
-// toggle renders without importing the WASM-bearing package.
+// Mirrors @livekit/track-processors' supportsBackgroundProcessors() =
+// BackgroundProcessor.isSupported && ProcessorWrapper.isSupported. Kept local so the
+// toggle renders without statically importing the WASM/MediaPipe-bearing package.
 function isBackgroundBlurSupported(): boolean {
   if (typeof window === 'undefined') return false;
+  // BackgroundProcessor.isSupported: OffscreenCanvas, VideoFrame, createImageBitmap, WebGL2.
+  if (
+    !('OffscreenCanvas' in window) ||
+    !('VideoFrame' in window) ||
+    !('createImageBitmap' in window)
+  ) {
+    return false;
+  }
+  try {
+    if (!document.createElement('canvas').getContext('webgl2')) return false;
+  } catch {
+    return false;
+  }
+  // ProcessorWrapper.isSupported: modern MediaStreamTrackProcessor API OR canvas
+  // captureStream() fallback (Firefox 126+).
   const hasStreamProcessor =
     'MediaStreamTrackProcessor' in window &&
     'MediaStreamTrackGenerator' in window;
   const hasFallback =
-    'VideoFrame' in window &&
     typeof HTMLCanvasElement !== 'undefined' &&
     'captureStream' in HTMLCanvasElement.prototype;
   return hasStreamProcessor || hasFallback;

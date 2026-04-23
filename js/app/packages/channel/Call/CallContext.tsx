@@ -221,12 +221,18 @@ function createCallState() {
    * (Re-)attach the background blur processor to the current camera track.
    * Dynamic-imports @livekit/track-processors so the MediaPipe WASM/model
    * payload is only fetched when the user actually enables blur.
+   *
+   * Returns true on success or when there's no live camera track yet (the
+   * processor will be attached later by the video-(un)mute / device-switch
+   * paths). Returns false when the browser does not actually support the
+   * processor at runtime, or attachment throws — callers that set
+   * `isBackgroundBlurred` optimistically should revert it in that case.
    */
-  async function ensureBlurOnCameraTrack(r: Room) {
-    if (!store.isBackgroundBlurred) return;
+  async function ensureBlurOnCameraTrack(r: Room): Promise<boolean> {
+    if (!store.isBackgroundBlurred) return true;
 
     const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
-    if (!camPub?.track) return;
+    if (!camPub?.track) return true;
 
     try {
       // Destroy the old instance — processors are bound to a specific
@@ -237,7 +243,7 @@ function createCallState() {
       const { BackgroundProcessor, ProcessorWrapper } = await import(
         '@livekit/track-processors'
       );
-      if (!ProcessorWrapper.isSupported) return;
+      if (!ProcessorWrapper.isSupported) return false;
 
       const processor = BackgroundProcessor({
         mode: 'background-blur',
@@ -245,8 +251,10 @@ function createCallState() {
       });
       await (camPub.track as LocalTrack).setProcessor(processor);
       setBlurProcessor(processor);
+      return true;
     } catch (e) {
       console.error('failed to attach background blur processor', e);
+      return false;
     }
   }
 
@@ -645,7 +653,13 @@ function createCallState() {
     if (!r) return;
 
     if (newEnabled) {
-      await ensureBlurOnCameraTrack(r);
+      const attached = await ensureBlurOnCameraTrack(r);
+      if (!attached) {
+        // Processor is unsupported or failed to attach — revert so the UI
+        // doesn't show "blur on" with no processor actually active.
+        setStore('isBackgroundBlurred', false);
+        setPersistedBlurPref(false);
+      }
     } else {
       await detachBlurFromCameraTrack(r);
     }
