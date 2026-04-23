@@ -1,29 +1,29 @@
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
-import { EntityIcon } from '@core/component/EntityIcon';
 import {
   getMentionsIcon,
   mentionsAccessories,
   PopupPreview,
 } from '@core/component/DocumentPreview';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { HoverCard } from '@core/component/HoverCard';
 import { useItemPreviewData } from '@core/component/ItemPreview';
+import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { useEntityProperties } from '@core/component/Properties/hooks';
+import { UserIcon } from '@core/component/UserIcon';
 import {
   itemToBlockName,
   resolveBlockAlias,
   verifyBlockName,
 } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
-import {
-  isAccessiblePreviewItem,
-  type PreviewItemNoAccess,
-  type ItemEntity,
-} from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -36,6 +36,11 @@ import {
   DocumentCardNode,
   type DocumentMentionDecoratorProps,
 } from '@lexical-core';
+import {
+  type ItemEntity,
+  isAccessiblePreviewItem,
+  type PreviewItemNoAccess,
+} from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -55,15 +60,13 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import { HoverCard } from '@core/component/HoverCard';
-import { useEntityProperties } from '@core/component/Properties/hooks';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import { UserIcon } from '@core/component/UserIcon';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
+
+// Time threshold for showing fallback state for recently created mentions (10 minutes)
+const RECENT_MENTION_THRESHOLD_MS = 10 * 60 * 1000;
 
 function MentionContainer(props: {
   icon: JSX.Element;
@@ -87,7 +90,7 @@ function MentionContainer(props: {
 function Spinner() {
   return (
     <div class="animate-spin">
-      <LoadingSpinner />
+    <LoadingSpinner class="size-4" />
     </div>
   );
 }
@@ -168,13 +171,84 @@ function InlinePreview(props: {
   blockParams: Record<string, string>;
   theme?: EditorThemeClasses;
   collapsed?: boolean;
+  documentName?: string;
+  createdAt?: number;
 }) {
   const { item, ItemEntityIcon } = useItemPreviewData(() => props.entity);
 
+  // Check if this is a recently created mention that we should show fallback for
+  const isRecentMention = createMemo(() => {
+    if (!props.createdAt) return false;
+    const age = Date.now() - props.createdAt;
+    return age < RECENT_MENTION_THRESHOLD_MS;
+  });
+
+  const shouldShowFallback = createMemo(() => {
+    const currentItem = item();
+    return (
+      !currentItem.loading &&
+      currentItem.access === 'does_not_exist' &&
+      isRecentMention() &&
+      props.documentName
+    );
+  });
+
   return (
     <Switch>
-      <Match when={item().loading}>
-        <Loading />
+      <Match when={item().loading && props.documentName}>
+        <MentionContainer
+          icon={<EntityIcon targetType={props.blockName as any} size="fill" />}
+          text={
+            <span
+              data-document-mention="true"
+              data-document-id={props.entity.id}
+              data-block-name={props.blockName}
+              data-document-name={props.documentName}
+              class="opacity-50"
+              title="Loading preview..."
+            >
+              {props.documentName!.replaceAll('\n', ' ').trim()}
+            </span>
+          }
+          collapsed={props.collapsed}
+        />
+      </Match>
+      <Match when={item().loading && !props.documentName}>
+        <Loading collapsed={props.collapsed} />
+      </Match>
+      <Match when={shouldShowFallback()}>
+        <MentionContainer
+          icon={<EntityIcon targetType={props.blockName as any} size="fill" />}
+          text={
+            <span
+              data-document-mention="true"
+              data-document-id={props.entity.id}
+              data-block-name={props.blockName}
+              data-document-name={props.documentName}
+              class="opacity-75"
+              title="Recently created - preview may be temporarily unavailable"
+            >
+              {props.documentName!.replaceAll('\n', ' ').trim()}
+              <span class="relative text-[0.8em] text-current/50 rounded-xs">
+                {(() => {
+                  const accessories = mentionsAccessories(
+                    props.blockName as BlockName,
+                    props.blockParams
+                  );
+                  if (accessories) {
+                    return (
+                      <>
+                        {` ${accessories.note ?? ''}`}
+                        {getMentionsIcon(accessories.icon)}
+                      </>
+                    );
+                  }
+                })()}
+              </span>
+            </span>
+          }
+          collapsed={props.collapsed}
+        />
       </Match>
       <Match when={matches(item(), isAccessiblePreviewItem)}>
         {(accessibleItem) => (
