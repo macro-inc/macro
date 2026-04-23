@@ -106,22 +106,24 @@ function InteractiveOnboardingInner() {
   const inviteTeamEnabled = useFeatureFlag('enable-invite-team-onboarding', {
     enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
-  const allLessons = () => LESSONS.filter((l) => {
-    if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
-      return false;
-    if (l.id === 'about-us' && isAuthenticated()) return false;
-    if (l.id === 'invite-team' && !inviteTeamEnabled().enabled) return false;
-    return true;
-  });
-  const lessons = () => isTouch
-    ? allLessons().filter(
-        (l) =>
-          l.id === 'welcome' ||
-          l.id === 'about-us' ||
-          l.id === 'choose-plan' ||
-          l.id === 'launch'
-      )
-    : allLessons();
+  const allLessons = () =>
+    LESSONS.filter((l) => {
+      if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
+        return false;
+      if (l.id === 'about-us' && isAuthenticated()) return false;
+      if (l.id === 'invite-team' && !inviteTeamEnabled().enabled) return false;
+      return true;
+    });
+  const lessons = () =>
+    isTouch
+      ? allLessons().filter(
+          (l) =>
+            l.id === 'welcome' ||
+            l.id === 'about-us' ||
+            l.id === 'choose-plan' ||
+            l.id === 'launch'
+        )
+      : allLessons();
 
   const testMode = new URLSearchParams(location.search).has('test');
 
@@ -187,7 +189,10 @@ function InteractiveOnboardingInner() {
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
-  const handleLessonComplete = (buttonLabel?: string, options?: { skipFocus?: boolean }) => {
+  const handleLessonComplete = (
+    buttonLabel?: string,
+    options?: { skipFocus?: boolean }
+  ) => {
     setContinueLabel(buttonLabel);
     setReadyToContinue(true);
     // Skip auto-focus on touch — Safari scrolls to the focused element,
@@ -538,7 +543,7 @@ function InteractiveOnboardingInner() {
                               <Dynamic
                                 component={Demo()}
                                 onComplete={handleLessonComplete}
-                            onUnready={handleLessonUnready}
+                                onUnready={handleLessonUnready}
                                 advance={advanceLesson}
                                 isActive={true}
                                 scopeId={scopeId}
@@ -591,7 +596,7 @@ function InteractiveOnboardingInner() {
                         <Dynamic
                           component={lesson().definition.content}
                           onComplete={handleLessonComplete}
-                            onUnready={handleLessonUnready}
+                          onUnready={handleLessonUnready}
                           advance={advanceLesson}
                           isActive={true}
                           scopeId={scopeId}

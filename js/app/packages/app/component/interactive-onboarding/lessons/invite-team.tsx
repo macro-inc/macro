@@ -8,10 +8,14 @@ import TrashIcon from '@icon/regular/trash-simple.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 const inviteFormSchema = z.object({
-  teamName: z.string().min(1, 'Team name is required').max(50, 'Team name is too long'),
-  emails: z.array(z.string()).transform((emails) => emails.filter((e) => e.trim() !== '')).pipe(
-    z.array(z.string().email('Invalid email address'))
-  ),
+  teamName: z
+    .string()
+    .min(1, 'Team name is required')
+    .max(50, 'Team name is too long'),
+  emails: z
+    .array(z.string())
+    .transform((emails) => emails.filter((e) => e.trim() !== ''))
+    .pipe(z.array(z.string().email('Invalid email address'))),
 });
 
 const INVITE_FORM_ID = 'invite-team-form';
@@ -38,12 +42,16 @@ function InviteTeamDemo(props: LessonContentProps) {
   const isValid = () => teamName().trim().length > 0;
 
   createEffect(
-    on(isValid, (valid) => {
-      props.onComplete('Create team', { skipFocus: true });
-      if (!valid) {
-        props.onUnready();
-      }
-    }, { defer: false })
+    on(
+      isValid,
+      (valid) => {
+        props.onComplete('Create team', { skipFocus: true });
+        if (!valid) {
+          props.onUnready();
+        }
+      },
+      { defer: false }
+    )
   );
 
   const canAddEmail = () => {
@@ -90,9 +98,17 @@ function InviteTeamDemo(props: LessonContentProps) {
     });
   };
 
-  const validateField = (field: 'teamName' | 'email', index: number, value: string) => {
+  const validateField = (
+    field: 'teamName' | 'email',
+    index: number,
+    value: string
+  ) => {
     if (field === 'teamName') {
-      const result = z.string().min(1, 'Team name is required').max(50, 'Team name is too long').safeParse(value);
+      const result = z
+        .string()
+        .min(1, 'Team name is required')
+        .max(50, 'Team name is too long')
+        .safeParse(value);
       setErrors((prev) => ({
         ...prev,
         teamName: result.success ? undefined : result.error.errors[0]?.message,
@@ -123,7 +139,10 @@ function InviteTeamDemo(props: LessonContentProps) {
       for (const error of result.error.errors) {
         if (error.path[0] === 'teamName') {
           newErrors.teamName = error.message;
-        } else if (error.path[0] === 'emails' && typeof error.path[1] === 'number') {
+        } else if (
+          error.path[0] === 'emails' &&
+          typeof error.path[1] === 'number'
+        ) {
           newErrors.emails = newErrors.emails || {};
           newErrors.emails[error.path[1]] = error.message;
         }
@@ -139,7 +158,11 @@ function InviteTeamDemo(props: LessonContentProps) {
 
   return (
     <div class="h-full w-full flex items-start justify-start p-12 overflow-hidden">
-      <form id={INVITE_FORM_ID} onSubmit={handleSubmit} class="w-full max-w-lg flex flex-col gap-8 h-full">
+      <form
+        id={INVITE_FORM_ID}
+        onSubmit={handleSubmit}
+        class="w-full max-w-lg flex flex-col gap-8 h-full"
+      >
         <div class="flex flex-col gap-2 shrink-0 px-2">
           <label class="text-base font-medium text-ink" for="team-name">
             Team name
@@ -180,7 +203,9 @@ function InviteTeamDemo(props: LessonContentProps) {
                       <input
                         type="email"
                         value={email()}
-                        onInput={(e) => updateEmail(index, e.currentTarget.value)}
+                        onInput={(e) =>
+                          updateEmail(index, e.currentTarget.value)
+                        }
                         placeholder="colleague@company.com"
                         class={cn(
                           'w-full px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
@@ -212,7 +237,9 @@ function InviteTeamDemo(props: LessonContentProps) {
                       </Tooltip>
                     </div>
                     <Show when={errors().emails?.[index]}>
-                      <p class="text-sm text-failure-ink">{errors().emails?.[index]}</p>
+                      <p class="text-sm text-failure-ink">
+                        {errors().emails?.[index]}
+                      </p>
                     </Show>
                   </div>
                 )}
@@ -242,7 +269,6 @@ function InviteTeamDemo(props: LessonContentProps) {
   );
 }
 
-
 function SkipAction() {
   return (
     <button
@@ -262,7 +288,9 @@ export const inviteTeamLesson: LessonDefinition = {
   order: 90,
   secondaryAction: SkipAction,
   onContinue: () => {
-    const form = document.getElementById(INVITE_FORM_ID) as HTMLFormElement | null;
+    const form = document.getElementById(
+      INVITE_FORM_ID
+    ) as HTMLFormElement | null;
     form?.requestSubmit();
   },
 };
