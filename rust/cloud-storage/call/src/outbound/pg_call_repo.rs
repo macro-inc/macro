@@ -399,19 +399,19 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<bool, Self::Err> {
+    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<(bool, Uuid), Self::Err> {
         let row = sqlx::query!(
             r#"
             UPDATE calls
                SET share_with_team = NOT share_with_team
              WHERE id = $1
-            RETURNING share_with_team
+            RETURNING share_with_team, channel_id
             "#,
             call_id,
         )
         .fetch_one(&self.pool)
         .await?;
-        Ok(row.share_with_team)
+        Ok((row.share_with_team, row.channel_id))
     }
 
     #[tracing::instrument(err, skip(self))]

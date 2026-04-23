@@ -96,11 +96,12 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Flip the `share_with_team` flag on an active call. Returns the new value.
+    /// Flip the `share_with_team` flag on an active call. Returns the new
+    /// value along with the call's `channel_id`.
     fn toggle_share_with_team(
         &self,
         call_id: &Uuid,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(bool, Uuid), Self::Err>> + Send;
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
