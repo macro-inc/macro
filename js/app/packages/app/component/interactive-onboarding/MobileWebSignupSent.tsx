@@ -9,7 +9,11 @@ export default function MobileWebSignupSent() {
 
   onMount(() => {
     analytics.track('mobile_web_signup_sent_viewed');
-    analytics.trackMeta('Lead', { content_name: 'mobile_web_signup' });
+    analytics.trackMeta('Lead', {
+      content_name: 'mobile_web_signup',
+      value: 5,
+      currency: 'USD',
+    });
   });
 
   return (

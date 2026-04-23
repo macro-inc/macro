@@ -34,12 +34,15 @@ pub trait CalWebhookService: Send + Sync + 'static {
 pub trait AnalyticsSink: Send + Sync + 'static {
     /// Track a `BOOKING_CREATED` event.
     ///
-    /// `content_name` is the Meta `content_name` attribute resolved from the
-    /// booking's `eventTypeId` by the service layer — see
-    /// [`crate::domain::service::CalConfig::event_type_content_names`].
+    /// `content_name` and `value` are resolved from the booking's `eventTypeId`
+    /// by the service layer — see
+    /// [`crate::domain::service::CalConfig::event_type_meta`]. `value` is in
+    /// USD and is emitted on the Meta Lead so Value Optimization can weigh
+    /// different booking types differently.
     fn on_booking_created(
         &self,
         booking: &BookingCreated,
         content_name: &str,
+        value: f64,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }

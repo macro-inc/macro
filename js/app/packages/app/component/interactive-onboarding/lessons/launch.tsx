@@ -5,6 +5,13 @@ import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
 import { ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 
+const SIGNUP_VALUE_BY_TIER: Record<string, number> = {
+  free: 20,
+  haiku: 175,
+  sonnet: 300,
+  opus: 450,
+};
+
 function LaunchContent(props: LessonContentProps) {
   const analytics = useAnalytics();
   const [searchParams] = useSearchParams();
@@ -12,10 +19,17 @@ function LaunchContent(props: LessonContentProps) {
   onMount(() => {
     // `type` is set on the Stripe success redirect (see choose-plan.tsx). Free
     // users skip Stripe entirely so the param is absent — default to 'free'.
-    const tier = searchParams.type ?? 'free';
+    const rawTier = searchParams.type;
+    const tier = (Array.isArray(rawTier) ? rawTier[0] : rawTier) ?? 'free';
     analytics.trackMeta('CompleteRegistration', {
       content_name: 'onboarding_launch',
       content_category: tier,
+    });
+    analytics.trackMeta('Lead', {
+      content_name: 'signup',
+      content_category: tier,
+      value: SIGNUP_VALUE_BY_TIER[tier] ?? SIGNUP_VALUE_BY_TIER.free,
+      currency: 'USD',
     });
     setTimeout(() => props.onComplete('Launch'));
   });

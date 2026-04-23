@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use hmac::{Hmac, Mac};
+use serde::Deserialize;
 use sha2::Sha256;
 
 use crate::domain::models::{
@@ -12,18 +13,32 @@ use crate::domain::ports::{AnalyticsSink, CalWebhookService};
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Per-event-type metadata looked up from [`CalConfig::event_type_meta`].
+///
+/// Meta Lead optimization weighs events by their declared `value`, so each
+/// cal.com event type carries its own business value (e.g. a demo booking is
+/// worth more than a generic intro call). Currency is fixed to USD at the
+/// sink, matching the web pixel's convention.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CalEventMeta {
+    /// Meta `content_name` tag for this event type.
+    pub content_name: String,
+    /// Business value attributed to one booking of this event type, in USD.
+    pub value: f64,
+}
+
 /// Configuration for the cal.com webhook service.
 #[derive(Debug, Clone)]
 pub struct CalConfig {
     /// Shared secret configured on the cal.com webhook. Used to verify the
     /// HMAC-SHA256 signature in `X-Cal-Signature-256`.
     pub webhook_secret: String,
-    /// Maps cal.com `eventTypeId` to the Meta `content_name` we fire for it.
+    /// Maps cal.com `eventTypeId` to the Meta tags + value we fire for it.
     ///
     /// Bookings whose event type id is absent from this map are logged and
     /// skipped: we'd rather miss a Lead than fire an unlabeled one when
     /// someone adds a new event type in cal.com.
-    pub event_type_content_names: HashMap<u64, String>,
+    pub event_type_meta: HashMap<u64, CalEventMeta>,
 }
 
 /// Concrete cal.com webhook service.
@@ -87,8 +102,7 @@ impl<A: AnalyticsSink> CalWebhookService for CalWebhookServiceImpl<A> {
                     return Ok(());
                 };
 
-                let Some(content_name) = self.config.event_type_content_names.get(&event_type_id)
-                else {
+                let Some(meta) = self.config.event_type_meta.get(&event_type_id) else {
                     tracing::warn!(
                         uid = %booking.uid,
                         event_type_id,
@@ -100,11 +114,12 @@ impl<A: AnalyticsSink> CalWebhookService for CalWebhookServiceImpl<A> {
                 tracing::info!(
                     uid = %booking.uid,
                     event_type_id,
-                    content_name = %content_name,
+                    content_name = %meta.content_name,
+                    value = meta.value,
                     "processing cal BOOKING_CREATED",
                 );
                 self.analytics
-                    .on_booking_created(booking, content_name)
+                    .on_booking_created(booking, &meta.content_name, meta.value)
                     .await?;
                 Ok(())
             }
