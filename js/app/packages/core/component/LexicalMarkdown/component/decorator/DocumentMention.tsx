@@ -64,8 +64,22 @@ import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
 
-// Time threshold for showing fallback state for recently created mentions (10 minutes)
-const RECENT_MENTION_THRESHOLD_MS = 10 * 60 * 1000;
+// Time threshold for showing fallback state for recently created mentions (1 minute)
+const RECENT_MENTION_THRESHOLD_MS = 1 * 60 * 1000;
+
+/**
+ * Determine if we should use fallback data for a mention due to stale preview cache.
+ * This happens when a mention is very recent and the preview API returns does_not_exist
+ * (likely due to cache staleness rather than actual deletion).
+ */
+function shouldUseFallbackForRecentMention(
+  previewItem: { loading: boolean; access?: string },
+  isRecent: boolean
+): boolean {
+  return (
+    !previewItem.loading && previewItem.access === 'does_not_exist' && isRecent
+  );
+}
 
 function MentionContainer(props: {
   icon: JSX.Element;
@@ -155,26 +169,16 @@ function InlinePreview(props: {
   collapsed?: boolean;
   documentName?: string;
   createdAt?: number;
+  isRecentMention: () => boolean;
 }) {
   const { item, ItemEntityIcon } = useItemPreviewData(() => props.entity);
 
-  // Check if this is a recently created mention that we should show fallback for
-  const isRecentMention = createMemo(() => {
-    if (!props.createdAt) return false;
-    const age = Date.now() - props.createdAt;
-    return age < RECENT_MENTION_THRESHOLD_MS;
-  });
-
   const shouldShowFallback = createMemo(() => {
-    const currentItem = item();
     return (
-      !currentItem.loading &&
-      currentItem.access === 'does_not_exist' &&
-      isRecentMention() &&
+      shouldUseFallbackForRecentMention(item(), props.isRecentMention()) &&
       props.documentName
     );
   });
-
   return (
     <Switch>
       <Match when={item().loading}>
@@ -296,6 +300,7 @@ function InlinePreview(props: {
 }
 
 export function DocumentMention(props: DocumentMentionDecoratorProps) {
+  console.log('DOC MENTION', props);
   const lexicalWrapper = useContext(LexicalWrapperContext);
   if (lexicalWrapper?.skipPreviewFetch) {
     return <DocumentMentionStatic {...props} />;
@@ -340,6 +345,13 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   const isCollapsable = createMemo(() => {
     return lexicalWrapper?.isInteractable() ?? false;
+  });
+
+  // Check if this is a recently created mention that we should show fallback for
+  const isRecentMention = createMemo(() => {
+    if (!props.createdAt) return false;
+    const age = Date.now() - props.createdAt;
+    return age < RECENT_MENTION_THRESHOLD_MS;
   });
 
   const showEmbedOption = createMemo(() => {
@@ -432,11 +444,14 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
         });
       });
     } else if (i.access === 'does_not_exist') {
-      setTimeout(() => {
-        editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
-          [props.documentId]: 'Deleted',
+      // Don't update to "Deleted" if this is a recent mention
+      if (!isRecentMention()) {
+        setTimeout(() => {
+          editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
+            [props.documentId]: 'Deleted',
+          });
         });
-      });
+      }
     }
   });
 
@@ -461,7 +476,12 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
     e.stopPropagation();
-    if (matches(item(), (i) => !i.loading && i.access === 'access')) {
+    const i = item();
+    if (
+      !i.loading &&
+      (i.access === 'access' ||
+        shouldUseFallbackForRecentMention(i, isRecentMention()))
+    ) {
       open(e);
     }
   });
@@ -489,6 +509,8 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
                   theme={props.theme}
                   collapsed={isCollapsed()}
                   documentName={props.documentName}
+                  createdAt={props.createdAt}
+                  isRecentMention={isRecentMention}
                 />
               </Match>
             </Switch>
@@ -517,6 +539,12 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
           }}
           documentInfo={{
             id: props.documentId,
+            name: (() => {
+              const i = item();
+              return shouldUseFallbackForRecentMention(i, isRecentMention())
+                ? props.documentName
+                : undefined;
+            })(),
             type: verifyBlockName(props.blockName),
             params: props.blockParams ?? {},
             isOpenable: currentBlockId !== props.documentId,
@@ -526,6 +554,10 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
             showPreview: showEmbedOption(),
             handlePreviewToggle: convertToCard,
           }}
+          useFallbackData={shouldUseFallbackForRecentMention(
+            item(),
+            isRecentMention()
+          )}
         />
       }
     />

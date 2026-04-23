@@ -12,6 +12,7 @@ import {
 } from '@core/block';
 import { itemToBlockName } from '@core/constant/allBlocks';
 // Components
+import { EntityIcon } from '@core/component/EntityIcon';
 import { RoundPanel } from '@core/component/RoundPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -422,6 +423,7 @@ export function PopupPreview(props: {
     date: string;
     characterCount?: number;
   };
+  useFallbackData?: boolean;
 }) {
   // Hooks
   const navigate = useNavigate();
@@ -857,13 +859,37 @@ export function PopupPreview(props: {
           {/* No access / does not exist errors */}
           <Match when={matches(item(), isPreviewItemNoAccess)}>
             {(noAccessItem) => (
-              <div class="text-sm p-4">
-                {noAccessItem().access === 'no_access' ? (
-                  <Unauthorized />
-                ) : (
-                  <NotFound />
-                )}
-              </div>
+              <Show
+                when={
+                  noAccessItem().access === 'does_not_exist' &&
+                  props.useFallbackData &&
+                  props.documentInfo.name
+                }
+                fallback={
+                  <div class="text-sm p-4">
+                    {noAccessItem().access === 'no_access' ? (
+                      <Unauthorized />
+                    ) : (
+                      <NotFound />
+                    )}
+                  </div>
+                }
+              >
+                <div class="w-full flex flex-col">
+                  <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <EntityIcon
+                        targetType={props.documentInfo.type}
+                        size="sm"
+                      />
+                    </div>
+                    <div class="flex shrink-0">{renderActionButtons()}</div>
+                  </div>
+                  <div class="line-clamp-2 break-words px-2 mb-2">
+                    {props.documentInfo.name}
+                  </div>
+                </div>
+              </Show>
             )}
           </Match>
         </Switch>

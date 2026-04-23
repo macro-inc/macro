@@ -337,7 +337,10 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(() => {
           const selection = $getSelection();
-          const mentionNode = $createDocumentMentionNode(payload);
+          const mentionNode = $createDocumentMentionNode({
+            ...payload,
+            createdAt: payload.createdAt ?? Date.now(),
+          });
 
           if (payload.mentionUuid) {
             mentionNode.setMentionUuid(payload.mentionUuid);

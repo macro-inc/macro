@@ -377,6 +377,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         blockName: res.blockName,
         blockParams,
         mentionUuid: mentionId,
+        createdAt: Date.now(),
       });
 
       if (position === 'before') {
