@@ -32,9 +32,7 @@ import {
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import {
-  CallAudioSink,
   CallEventSync,
-  CallProvider,
   ChannelCallAutoJoin,
   ChannelCallButton,
   ChannelCallTab,
@@ -217,47 +215,39 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <CallProvider>
-        <CallEventSync />
-        <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
-          <ChannelCallAutoJoin
-            channelId={channelId}
-            pendingJoinCall={pendingJoinCall}
-            onHandled={() => setPendingJoinCall(false)}
-          />
-          <div class="h-full flex flex-col px-2 mobile:px-0">
-            {/*
-              Mounted above <Switch> so remote call audio keeps playing when
-              the user switches from the Call tab to Messages / Attachments /
-              Participants. See CallAudioSink for details.
-            */}
-            <CallAudioSink />
-            <Switch>
-              <Match when={activeTab() === 'messages'}>
-                <NewChannel
-                  channelId={channelId}
-                  onHandleReady={onChannelReady}
-                  autofocus={!isPreview}
-                  {...convertTargetMessage(initialTargetMessageParams())}
-                />
-              </Match>
-              <Match when={activeTab() === 'attachments'}>
-                <ChannelAttachmentsTab channelId={channelId} />
-              </Match>
-              <Match when={activeTab() === 'participants'}>
-                <ChannelParticipantsTab channelId={channelId} />
-              </Match>
-              <Match when={activeTab() === 'call'}>
-                <ChannelCallTab
-                  channelId={channelId}
-                  pendingJoin={pendingJoinCall}
-                />
-              </Match>
-            </Switch>
-            <NewTop channelId={channelId} />
-          </div>
-        </ChannelTabProvider>
-      </CallProvider>
+      <CallEventSync />
+      <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
+        <ChannelCallAutoJoin
+          channelId={channelId}
+          pendingJoinCall={pendingJoinCall}
+          onHandled={() => setPendingJoinCall(false)}
+        />
+        <div class="h-full flex flex-col px-2 mobile:px-0">
+          <Switch>
+            <Match when={activeTab() === 'messages'}>
+              <NewChannel
+                channelId={channelId}
+                onHandleReady={onChannelReady}
+                autofocus={!isPreview}
+                {...convertTargetMessage(initialTargetMessageParams())}
+              />
+            </Match>
+            <Match when={activeTab() === 'attachments'}>
+              <ChannelAttachmentsTab channelId={channelId} />
+            </Match>
+            <Match when={activeTab() === 'participants'}>
+              <ChannelParticipantsTab channelId={channelId} />
+            </Match>
+            <Match when={activeTab() === 'call'}>
+              <ChannelCallTab
+                channelId={channelId}
+                pendingJoin={pendingJoinCall}
+              />
+            </Match>
+          </Switch>
+          <NewTop channelId={channelId} />
+        </div>
+      </ChannelTabProvider>
     </EntityPermissionsGate>
   );
 }
