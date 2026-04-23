@@ -1,3 +1,4 @@
+import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
@@ -6,8 +7,7 @@ import { queryClient } from '../client';
 import { previewDataLoader } from './dataloader';
 import { defaultNameTransform, fetchMessageContext } from './fetchers';
 import { previewKeys } from './keys';
-import type { ItemEntity, PreviewItem, AccessiblePreviewItem } from './types';
-import { queryReadyGate } from '@queries/gate';
+import type { AccessiblePreviewItem, ItemEntity, PreviewItem } from './types';
 
 const PREVIEW_STALE_TIME = 60 * 1000 * 60 * 24; // 24 hours
 
@@ -90,6 +90,11 @@ function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
   );
 }
 
+export function setPreviewFileType(itemId: string, fileType: string) {
+  const prev = getPreviewData(itemId);
+  if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, fileType }));
+}
+
 /** Sets the preview name in the cache. If the item is not in the cache,
  * we will optimistically update the name and prefetch the item. */
 export function setPreviewName({
@@ -102,7 +107,12 @@ export function setPreviewName({
   itemType?: ItemType;
 }) {
   const prev = getPreviewData(itemId);
-  if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, name }));
+  if (prev)
+    return setPreviewData(itemId, (prev) => ({
+      ...prev,
+      rawName: name,
+      name,
+    }));
 
   if (!itemType) {
     console.warn('no preview item type provided for cache miss, using default');
@@ -110,6 +120,7 @@ export function setPreviewName({
 
   let defaultPreviewItem: AccessiblePreviewItem = {
     id: itemId,
+    rawName: name,
     name,
     loading: false,
     access: 'access',
