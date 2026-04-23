@@ -32,9 +32,9 @@ function readGitBranch(): string {
 }
 
 function readGitBranchAsync(): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((res) => {
     exec('git rev-parse --abbrev-ref HEAD', (err, stdout) => {
-      resolve(err ? '' : stdout.trim());
+      res(err ? '' : stdout.trim());
     });
   });
 }
