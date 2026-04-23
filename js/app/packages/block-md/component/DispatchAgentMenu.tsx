@@ -4,31 +4,27 @@ import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { isOk } from '@core/util/maybeResult';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { tryMacroId, macroIdToEmail } from '@core/user';
 import { storageServiceClient } from '@service-storage/client';
 import { mdStore } from '../signal/markdownBlockData';
 import {
   discussionThreads,
   sortComments,
 } from '../comments/discussionResource';
+import { makePersisted } from '@solid-primitives/storage';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
-import {
-  createEffect,
-  createSignal,
-  For,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { createSignal, For, type Component, type JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CopyIcon from '@icon/regular/copy.svg';
-import GlobeIcon from '@icon/regular/globe-simple.svg';
 import ClaudeIcon from '@macro-icons/wide/claude.svg';
 import CursorIcon from '@macro-icons/wide/cursor-ide.svg';
 import ZedIcon from '@macro-icons/wide/zed-ide.svg';
 import CodexIcon from '@macro-icons/wide/codex-ide.svg';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+import { createCallback } from '@solid-primitives/rootless';
 
 const MAX_BRANCH_LENGTH = 200;
 const LAST_USED_KEY = 'dispatch-agent-last-used';
@@ -86,15 +82,18 @@ async function generateTaskPrompt(
     lines.push('');
     for (const thread of threads) {
       const sorted = [...thread.comments].sort(sortComments);
-      lines.push(
-        `<comment-thread thread-id="${thread.thread.threadId}">`
-      );
+      lines.push(`<comment-thread thread-id="${thread.thread.threadId}">`);
       for (const comment of sorted) {
         if (comment.text && !comment.deletedAt) {
+          const userId = comment.sender ?? comment.owner;
+          const macroId = tryMacroId(userId);
+          const author = macroId ? macroIdToEmail(macroId) : userId;
           const createdAt = comment.createdAt
             ? ` created-at="${comment.createdAt}"`
             : '';
-          lines.push(`<comment${createdAt}>${comment.text}</comment>`);
+          lines.push(
+            `<comment author="${author}"${createdAt}>${comment.text}</comment>`
+          );
         }
       }
       lines.push('</comment-thread>');
@@ -131,7 +130,7 @@ const COPY_ACTION: AgentAction = {
 const PLATFORM_ACTIONS: AgentAction[] = [
   {
     key: 'claude-code',
-    name: 'Claude Code',
+    name: 'Claude Code Web',
     icon: ClaudeIcon,
     execute: (prompt) =>
       window.open(
@@ -144,10 +143,7 @@ const PLATFORM_ACTIONS: AgentAction[] = [
     name: 'Codex Desktop',
     icon: CodexIcon,
     execute: (prompt) =>
-      window.open(
-        `codex://new?prompt=${encodeURIComponent(prompt)}`,
-        '_blank'
-      ),
+      window.open(`codex://new?prompt=${encodeURIComponent(prompt)}`, '_blank'),
   },
   {
     key: 'cursor',
@@ -162,7 +158,7 @@ const PLATFORM_ACTIONS: AgentAction[] = [
   {
     key: 'cursor-web',
     name: 'Cursor Web',
-    icon: GlobeIcon,
+    icon: CursorIcon,
     execute: (prompt) =>
       window.open(
         `https://cursor.com/link/prompt?text=${encodeURIComponent(prompt)}`,
@@ -174,52 +170,39 @@ const PLATFORM_ACTIONS: AgentAction[] = [
     name: 'Zed',
     icon: ZedIcon,
     execute: (prompt) =>
-      window.open(
-        `zed://agent?prompt=${encodeURIComponent(prompt)}`,
-        '_blank'
-      ),
+      window.open(`zed://agent?prompt=${encodeURIComponent(prompt)}`, '_blank'),
   },
 ];
 
 const ALL_ACTIONS = [COPY_ACTION, ...PLATFORM_ACTIONS];
 
-function getLastUsedAction(): AgentAction {
-  const key = localStorage.getItem(LAST_USED_KEY);
-  return ALL_ACTIONS.find((a) => a.key === key) ?? COPY_ACTION;
-}
-
-function setLastUsedAction(key: string) {
-  localStorage.setItem(LAST_USED_KEY, key);
-}
+const [lastUsedKey, setLastUsedKey] = makePersisted(
+  createSignal(COPY_ACTION.key),
+  { name: LAST_USED_KEY }
+);
 
 export function DispatchAgentButton() {
   const blockId = useBlockId();
   const name = useBlockDocumentName();
   const [store] = mdStore;
   const [open, setOpen] = createSignal(false);
-  const [lastUsed, setLastUsed] = createSignal<AgentAction>(
-    getLastUsedAction()
-  );
 
-  let currentThreads: CommentThread[] = [];
-  createEffect(() => {
-    currentThreads = discussionThreads() ?? [];
-  });
+  const lastUsed = () =>
+    ALL_ACTIONS.find((a) => a.key === lastUsedKey()) ?? COPY_ACTION;
 
-  const getEditorContent = () =>
-    store.editor ? editorStateAsMarkdown(store.editor, 'external') : '';
-
-  const buildPrompt = async () => {
+  const buildPrompt = createCallback(() => {
     const docName = name();
-    const content = getEditorContent();
-    return generateTaskPrompt(blockId, docName, content, currentThreads);
-  };
+    const content = store.editor
+      ? editorStateAsMarkdown(store.editor, 'external')
+      : '';
+    const threads = discussionThreads() ?? [];
+    return generateTaskPrompt(blockId, docName, content, threads);
+  });
 
   const executeAction = async (action: AgentAction) => {
     const prompt = await buildPrompt();
     action.execute(prompt);
-    setLastUsedAction(action.key);
-    setLastUsed(action);
+    setLastUsedKey(action.key);
     setOpen(false);
   };
 
@@ -239,10 +222,7 @@ export function DispatchAgentButton() {
           )}
           size="icon-sm"
         >
-          <Dynamic
-            component={lastUsed().icon}
-            class="w-4 h-4"
-          />
+          <Dynamic component={lastUsed().icon} class="w-4 h-4" />
         </Button>
         <DropdownMenu.Trigger
           as={Button}
