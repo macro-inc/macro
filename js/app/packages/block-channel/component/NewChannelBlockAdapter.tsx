@@ -74,6 +74,7 @@ function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
+  const chatChannelType = () => toChatChannelType(channelType());
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
   const participants = () =>
@@ -106,10 +107,10 @@ function NewTop(props: { channelId: string }) {
         activeTab={activeTab()}
         onTabChange={setActiveTab}
       />
-      <Show when={toChatChannelType(channelType()) || ENABLE_CALLS()}>
+      <Show when={chatChannelType() || ENABLE_CALLS()}>
         <SplitHeaderRight>
           <div class="flex items-center gap-1.5">
-            <Show when={toChatChannelType(channelType())}>
+            <Show when={chatChannelType()}>
               {(type) => (
                 <ChatWithAgentButton
                   entity={{

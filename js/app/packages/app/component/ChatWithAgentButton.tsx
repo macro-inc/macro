@@ -86,7 +86,11 @@ export async function openChatWithAgent(entity: ChatWithAgentEntity) {
   }
 
   const result = await createChat();
-  if ('error' in result || !result.chatId) return;
+  if ('error' in result || !result.chatId) {
+    console.warn('openChatWithAgent: createChat failed', result);
+    toast.failure('Unable to start chat');
+    return;
+  }
 
   storeChatStateImmediate(result.chatId, { attachments: [attachment] });
   globalSplitManager()?.openWithSplit(
