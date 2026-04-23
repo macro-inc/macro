@@ -6,7 +6,7 @@ export const AnimatedCallIcon = (props: {
     <svg
       width="100%"
       height="100%"
-      viewBox="0 0 18 18"
+      viewBox="-1.5 -1.5 18 18"
       fill="none"
       stroke="currentColor"
       stroke-width="1.5"
