@@ -16,4 +16,8 @@ export interface CallFilters {
   attended?: CallFiltersAttended;
   /** Channel IDs to filter calls by. Empty to include all calls. */
   channel_ids?: string[];
+  /** Macro user ids of speakers to filter transcript-segment hits by.
+Mirrors `ChannelFilters::sender_ids` for channel-message hits.
+Empty to include all speakers. */
+  speaker_ids?: string[];
 }

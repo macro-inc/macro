@@ -151,6 +151,7 @@ impl From<UnifiedSearchArgs> for CallRecordSearchArgs {
             ids_only: args.call_record_search_args.ids_only,
             call_ids: args.call_record_search_args.call_ids,
             channel_ids: args.call_record_search_args.channel_ids,
+            speaker_ids: args.call_record_search_args.speaker_ids,
         }
     }
 }
@@ -200,6 +201,7 @@ pub struct UnifiedCallRecordSearchArgs {
     pub terms: Vec<String>,
     pub call_ids: Vec<String>,
     pub channel_ids: Vec<String>,
+    pub speaker_ids: Vec<String>,
     pub ids_only: bool,
 }
 

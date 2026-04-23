@@ -36,6 +36,9 @@ pub(crate) struct CallRecordQueryBuilder {
     inner: SearchQueryBuilder<CallRecordSearchConfig>,
     /// Channel ids to restrict the search to.
     channel_ids: Vec<String>,
+    /// Speaker macro user ids to restrict the search to (analogous to
+    /// `ChannelMessageQueryBuilder::sender_ids`).
+    speaker_ids: Vec<String>,
 }
 
 impl CallRecordQueryBuilder {
@@ -43,6 +46,7 @@ impl CallRecordQueryBuilder {
         Self {
             inner: SearchQueryBuilder::new(terms),
             channel_ids: Vec::new(),
+            speaker_ids: Vec::new(),
         }
     }
 
@@ -61,15 +65,24 @@ impl CallRecordQueryBuilder {
         self
     }
 
+    pub fn speaker_ids(mut self, speaker_ids: Vec<String>) -> Self {
+        self.speaker_ids = speaker_ids;
+        self
+    }
+
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         // Access is enforced via `ids_only=true` with `ids` set to the user's
         // accessible call_ids — the generic builder handles that as
-        // `entity_id IN <ids>`. `channel_ids` is a pure narrowing filter on
-        // top of that set.
+        // `entity_id IN <ids>`. `channel_ids` and `speaker_ids` are pure
+        // narrowing filters on top of that set.
         let mut content_bool_query = self.inner.build_content_bool_query()?;
 
         if !self.channel_ids.is_empty() {
             content_bool_query.filter(QueryType::terms("channel_id", self.channel_ids.clone()));
+        }
+
+        if !self.speaker_ids.is_empty() {
+            content_bool_query.filter(QueryType::terms("speaker_id", self.speaker_ids.clone()));
         }
 
         Ok(content_bool_query)
@@ -82,6 +95,7 @@ pub struct CallRecordSearchArgs {
     pub user_id: String,
     pub call_ids: Vec<String>,
     pub channel_ids: Vec<String>,
+    pub speaker_ids: Vec<String>,
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
@@ -98,6 +112,7 @@ impl From<CallRecordSearchArgs> for CallRecordQueryBuilder {
             .user_id(&args.user_id)
             .ids(args.call_ids)
             .channel_ids(args.channel_ids)
+            .speaker_ids(args.speaker_ids)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
     }

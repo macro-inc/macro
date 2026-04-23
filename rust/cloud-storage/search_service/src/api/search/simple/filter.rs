@@ -195,6 +195,7 @@ impl FilterVariantToSearchArgs for item_filters::CallFilters {
         Ok(UnifiedCallRecordSearchArgs {
             call_ids: response.call_ids,
             channel_ids: response.channel_ids,
+            speaker_ids: self.speaker_ids.clone(),
             ids_only: true,
             ..Default::default()
         })

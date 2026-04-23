@@ -194,6 +194,13 @@
               "type": "string"
             },
             "description": "Channel IDs to filter calls by. Empty to include all calls."
+          },
+          "speaker_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Macro user ids of speakers to filter transcript-segment hits by.\nMirrors `ChannelFilters::sender_ids` for channel-message hits.\nEmpty to include all speakers."
           }
         }
       },
