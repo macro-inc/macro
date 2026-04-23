@@ -1,6 +1,7 @@
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isMobile } from '@core/mobile/isMobile';
 import { usePermissions } from '@core/context/user';
 import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 import { Subscription } from './Subscription';
@@ -172,6 +173,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <h1 class="font-semibold text-ink select-none text-sm shrink-0">
             Settings
           </h1>
+          <Show when={!isMobile()}>
+            <Tabs
+              list={settingsTabs()}
+              value={activeTabId()}
+              defaultValue="Appearance"
+              onChange={handleTabChange}
+            />
+          </Show>
         </div>
       </SplitHeaderLeft>
 
@@ -195,8 +204,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <MobileApp />
         </Show>
       </div>
-      {/* Bottom tabs */}
-      <BottomTabs />
+      {/* Bottom tabs (mobile only) */}
+      <Show when={isMobile()}>
+        <BottomTabs />
+      </Show>
     </div>
   );
 }
