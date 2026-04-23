@@ -25,7 +25,10 @@ export function CallChannelName(props: { entity: CallEntity }) {
       : undefined;
 
   return (
-    <Show when={highlight()} fallback={<CallChannelNameText entity={props.entity} />}>
+    <Show
+      when={highlight()}
+      fallback={<CallChannelNameText entity={props.entity} />}
+    >
       {(h) => (
         <StaticMarkdown
           markdown={h()}

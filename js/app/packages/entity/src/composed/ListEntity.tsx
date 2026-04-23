@@ -69,10 +69,7 @@ import {
   isWithNotification,
   type WithNotification,
 } from '../types/notification';
-import type {
-  CallRecordContentHitData,
-  SearchLocation,
-} from '../types/search';
+import type { CallRecordContentHitData, SearchLocation } from '../types/search';
 import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
 import { unreadFilterFn } from '../utils/filter';

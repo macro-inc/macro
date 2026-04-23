@@ -459,9 +459,7 @@ export function useFilterRefinements() {
                 ? ATTENDED_YES
                 : ATTENDED_NO,
             optionLabel: () =>
-              queryFilters().call_filters?.attended
-                ? 'Attended'
-                : 'Unattended',
+              queryFilters().call_filters?.attended ? 'Attended' : 'Unattended',
             categoryOptions: [
               { id: ATTENDED_YES, label: 'Attended' },
               { id: ATTENDED_NO, label: 'Unattended' },
