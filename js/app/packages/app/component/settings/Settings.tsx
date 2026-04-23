@@ -41,16 +41,18 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
   let settingsContainerRef: HTMLDivElement | undefined;
 
-  createEffect(() => {
+  function focusSettingsOnOpen() {
     if (settingsOpen()){
       setTimeout(() => {
         // Focus the settings container to activate the hotkey scope
         settingsContainerRef?.focus();
       }, 10);
     }
-  });
+  }
 
-  const settingsTabs = () => {
+  createEffect(focusSettingsOnOpen);
+
+  function settingsTabs() {
     const tabs: { value: string; label: string }[] = [
       { value: 'Appearance', label: 'Appearance' },
       { value: 'Account', label: 'Account' },
@@ -61,7 +63,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
     return tabs;
-  };
+  }
 
   // Attach hotkeys to the settings container
   onMount(() => {
@@ -70,19 +72,21 @@ export function SettingsPanel(props: SettingsPanelProps) {
     }
   });
 
+  function handleEscapeKey() {
+    closeSettings();
+    return true;
+  }
+
   // Register Escape key to close settings
   registerHotkey({
-    hotkey: 'escape',
-    scopeId: settingsHotkeyScope,
+    keyDownHandler: handleEscapeKey,
     description: 'Close settings',
-    keyDownHandler: () => {
-      closeSettings();
-      return true;
-    },
+    scopeId: settingsHotkeyScope,
+    hotkey: 'escape',
   });
 
   // Helper to navigate to a tab by index
-  const navigateToTabIndex = (index: number): boolean => {
+  function navigateToTabIndex(index: number): boolean {
     const tabs = settingsTabs();
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
@@ -92,60 +96,66 @@ export function SettingsPanel(props: SettingsPanelProps) {
       }
     }
     return false;
-  };
+  }
 
-  const getCurrentTabIndex = () => {
+  function getCurrentTabIndex() {
     const tabs = settingsTabs();
     return tabs.findIndex(tab => tab.value === activeTabId());
-  };
+  }
+
+  function handleNextTab() {
+    const tabs = settingsTabs();
+    const nextIndex = getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
+    navigateToTabIndex(nextIndex);
+    return true;
+  }
+
+  function handlePreviousTab() {
+    const tabs = settingsTabs();
+    const nextIndex = getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
+    navigateToTabIndex(nextIndex);
+    return true;
+  }
 
   // Register Tab key for next tab navigation
   registerHotkey({
     hotkey: 'tab',
     scopeId: settingsHotkeyScope,
     description: 'Next settings tab',
-    keyDownHandler: () => {
-      const tabs = settingsTabs();
-      const nextIndex = getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
-      navigateToTabIndex(nextIndex);
-      return true;
-    },
+    keyDownHandler: handleNextTab,
     hide: true,
   });
 
   // Register Shift+Tab for previous tab navigation
   registerHotkey({
-    hotkey: 'shift+tab',
-    scopeId: settingsHotkeyScope,
     description: 'Previous settings tab',
-    keyDownHandler: () => {
-      const tabs = settingsTabs();
-      const nextIndex = getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
-      navigateToTabIndex(nextIndex);
-      return true;
-    },
+    keyDownHandler: handlePreviousTab,
+    scopeId: settingsHotkeyScope,
+    hotkey: 'shift+tab',
     hide: true,
   });
 
   // Register number keys 1-9 for direct tab navigation
   for (let i = 1; i <= 9; i++) {
     const keyNum = i;
+    function handleNumberKey() { return navigateToTabIndex(keyNum - 1); }
     registerHotkey({
-      hotkey: `${keyNum}` as ValidHotkey,
-      scopeId: settingsHotkeyScope,
       description: `Go to settings tab ${keyNum}`,
-      keyDownHandler: () => navigateToTabIndex(keyNum - 1),
+      hotkey: `${keyNum}` as ValidHotkey,
+      keyDownHandler: handleNumberKey,
+      scopeId: settingsHotkeyScope,
       hide: true,
     });
   }
 
-  const handleTabChange = (value: string) => {
+  function handleTabChange(value: string) {
     if (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts' || value === 'Mobile App') {
       setActiveTabId(value as SettingsTab);
     }
-  };
+  }
 
-  const BottomTabs = () => (
+  function BottomTabs() {
+    return (
     <div class="bg-panel border-t border-edge-muted h-11 px-1">
       <Tabs
         list={settingsTabs()}
@@ -156,18 +166,17 @@ export function SettingsPanel(props: SettingsPanelProps) {
         class="[&_[data-indicator]]:h-[3px]"
       />
     </div>
-  );
+    );
+  }
 
   return (
     <div
       class="size-full flex flex-col outline-none bracket-never"
-      classList={{
-        invisible: props.hide,
-      }}
+      classList={{ invisible: props.hide }}
       tabIndex={0}
       ref={settingsContainerRef}
     >
-      {/* Header */}
+
       <SplitHeaderLeft>
         <div class="h-full flex gap-3 items-center">
           <h1 class="font-semibold text-ink select-none text-sm shrink-0">
@@ -184,8 +193,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </div>
       </SplitHeaderLeft>
 
-      {/* Content area */}
-      <div class="relative flex-grow min-h-1 overflow-auto">
+      <div class="relative grow min-h-1 overflow-auto">
         <Show when={activeTabId() === 'Account'}>
           <Suspense>
             <Account />
@@ -204,7 +212,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <MobileApp />
         </Show>
       </div>
-      {/* Bottom tabs (mobile only) */}
+
       <Show when={isMobile()}>
         <BottomTabs />
       </Show>
