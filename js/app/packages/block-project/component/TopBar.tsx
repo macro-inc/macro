@@ -117,6 +117,10 @@ export function TopBar() {
       divideAbove: true,
       condition: () => ENABLE_PROJECT_SHARING && !isSpecialProject,
       buttonComponent: () => <ShareTrigger copyLink={handleCopyLink} />,
+      focusTarget: () =>
+        document.querySelector<HTMLElement>(
+          '[data-share-drawer-recipient] input'
+        ),
     },
   ];
 

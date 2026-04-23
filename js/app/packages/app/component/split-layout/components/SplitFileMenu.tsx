@@ -1,6 +1,7 @@
 import { useBlockName } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { MenuItem } from '@core/component/Menu';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import Copy from '@icon/regular/copy.svg';
@@ -206,7 +207,10 @@ export function SplitFileMenu(props: {
                   text={
                     typeof tool.label === 'function' ? tool.label() : tool.label
                   }
-                  onClick={tool.action}
+                  onClick={() => {
+                    if (tool.focusTarget) triggerFocusInput(tool.focusTarget);
+                    tool.action();
+                  }}
                   icon={tool.icon}
                 />
               </>

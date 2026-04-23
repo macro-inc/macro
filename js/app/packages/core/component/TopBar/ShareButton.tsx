@@ -296,9 +296,9 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
     return tabs;
   });
 
-  createEffect(() => {
-    const tabs = mobileTabs();
-    if (!tabs.find((t) => t.value === activeTab())) setActiveTab('share');
+  const effectiveActiveTab = createMemo(() => {
+    const tab = activeTab();
+    return mobileTabs().find((t) => t.value === tab) ? tab : 'share';
   });
 
   const [forwardRef, setForwardRef] = createSignal<{
@@ -313,13 +313,6 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
       side="bottom"
       preventScroll={false}
       preventScrollbarShift={false}
-      initialFocusEl={
-        activeTab() === 'share'
-          ? (document.querySelector<HTMLElement>(
-              '[data-share-drawer-recipient] input'
-            ) ?? undefined)
-          : undefined
-      }
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
@@ -339,7 +332,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               />
               <span class="truncate">{props.name}</span>
             </div>
-            <Show when={activeTab() === 'share'}>
+            <Show when={effectiveActiveTab() === 'share'}>
               <Button
                 variant="ghost"
                 size="sm"
@@ -356,14 +349,16 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
           <div class="shrink-0 h-9 border-b border-edge-muted px-3 mb-2">
             <Tabs
               list={mobileTabs()}
-              value={activeTab()}
+              value={effectiveActiveTab()}
               onChange={setActiveTab}
               indicatorPosition="bottom"
             />
           </div>
           {/* Share tab: always mounted to preserve input state */}
           <div
-            style={{ display: activeTab() === 'share' ? undefined : 'none' }}
+            style={{
+              display: effectiveActiveTab() === 'share' ? undefined : 'none',
+            }}
           >
             <ForwardToChannel
               ref={(handle) => setForwardRef(handle)}
@@ -382,7 +377,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               blockName={props.blockAlias}
             />
           </div>
-          <Show when={activeTab() === 'people'}>
+          <Show when={effectiveActiveTab() === 'people'}>
             <div class="grid gap-3 text-ink text-sm select-none py-3 px-4">
               <Show when={props.owner}>
                 <div class="flex justify-between">
@@ -464,7 +459,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               </For>
             </div>
           </Show>
-          <Show when={activeTab() === 'link'}>
+          <Show when={effectiveActiveTab() === 'link'}>
             <div class="text-ink flex flex-col">
               <div
                 class={cn(
@@ -1287,16 +1282,6 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
       >
         <button
           class="text-xs hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
-          ref={(el) => {
-            if (isMobile()) {
-              focusInput(el, () => ({
-                getTarget: () =>
-                  document.querySelector<HTMLElement>(
-                    '[data-share-drawer-recipient] input'
-                  ),
-              }));
-            }
-          }}
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();

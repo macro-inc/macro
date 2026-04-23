@@ -230,6 +230,10 @@ export function TopBar() {
       action: () => shareCtx.open(),
       divideAbove: true,
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+      focusTarget: () =>
+        document.querySelector<HTMLElement>(
+          '[data-share-drawer-recipient] input'
+        ),
     },
   ];
 

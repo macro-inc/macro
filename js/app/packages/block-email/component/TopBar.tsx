@@ -185,6 +185,10 @@ export function TopBar(props: {
       action: () => shareCtx.open(),
       condition: () => ENABLE_EMAIL_SHARING,
       buttonComponent: () => <ShareTrigger />,
+      focusTarget: () =>
+        document.querySelector<HTMLElement>(
+          '[data-share-drawer-recipient] input'
+        ),
     },
   ];
 

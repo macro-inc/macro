@@ -88,6 +88,10 @@ export function TopBar() {
       action: () => shareCtx.open(),
       divideAbove: true,
       buttonComponent: () => <ShareTrigger />,
+      focusTarget: () =>
+        document.querySelector<HTMLElement>(
+          '[data-share-drawer-recipient] input'
+        ),
     },
   ];
 

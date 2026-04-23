@@ -493,7 +493,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
             <div class="relative">
               <div
                 ref={props.horizontalScroll ? setChipsScrollRef : undefined}
-                class={`flex gap-1.5 text-ink scrollbar-hidden ${props.horizontalScroll ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-[150px] sm:overflow-y-auto pb-[2px] sm:pb-0' : 'flex-wrap max-h-[150px] overflow-y-auto'}`}
+                class={cn(
+                  'flex gap-1.5 text-ink scrollbar-hidden',
+                  props.horizontalScroll
+                    ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-[150px] sm:overflow-y-auto pb-[2px] sm:pb-0'
+                    : 'flex-wrap max-h-[150px] overflow-y-auto'
+                )}
               >
                 <For each={state.selectedOptions()}>
                   {(option) => {

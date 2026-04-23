@@ -74,7 +74,6 @@ function MobileForwardToChannelLayout(
           noBrackets
           class="border-1 border-edge-muted/50 p-1"
           focusOnMount
-          // horizontalScroll
         />
       </div>
       {/* Send as group */}

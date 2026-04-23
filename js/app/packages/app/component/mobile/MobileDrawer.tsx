@@ -3,6 +3,7 @@ import Drawer from '@corvu/drawer';
 import { cn } from '@ui/utils/classname';
 import {
   createSignal,
+  onCleanup,
   splitProps,
   type ComponentProps,
   type ValidComponent,
@@ -16,21 +17,22 @@ import { Dynamic } from 'solid-js/web';
  * Usage:
  *   <div onFocusIn={(e) => scrollToFocusedInput(e)}>
  */
-let captured = false;
+let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+
 export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
-  if (!isEditableInput(e.target as Element) || captured) return;
+  if (!isEditableInput(e.target as Element) || scrollTimer !== undefined)
+    return;
   const input = e.target as HTMLElement;
   const container = e.currentTarget as HTMLElement;
-  captured = true;
   // Has to be delayed until after browser's native keyboard-show scroll completes
-  setTimeout(() => {
+  scrollTimer = setTimeout(() => {
+    scrollTimer = undefined;
     const inputRect = input.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     container.scrollTo({
       top: container.scrollTop + (inputRect.top - containerRect.top) - offset,
       behavior: 'smooth',
     });
-    captured = false;
   }, 300);
 }
 
@@ -49,14 +51,24 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   const [local, rest] = splitProps(props, ['class']);
   const [inputFocused, setInputFocused] = createSignal(false);
 
+  onCleanup(() => {
+    clearTimeout(scrollTimer);
+    scrollTimer = undefined;
+  });
+
   return (
     <Drawer.Content
       onFocusIn={(e: FocusEvent) => {
         if (isEditableInput(e.target as Element)) setInputFocused(true);
         scrollToFocusedInput(e);
       }}
-      onFocusOut={() => {
-        setInputFocused(false);
+      onFocusOut={(e: FocusEvent) => {
+        if (
+          isEditableInput(e.target as Element) &&
+          !isEditableInput(e.relatedTarget as Element | null)
+        ) {
+          setInputFocused(false);
+        }
       }}
       class={cn(
         'bottom-(--virtual-keyboard-height) fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
