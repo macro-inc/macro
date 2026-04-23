@@ -14,11 +14,11 @@ import {
 import { makePersisted } from '@solid-primitives/storage';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
 import { createSignal, For, type Component, type JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CopyIcon from '@icon/regular/copy.svg';
+import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import ClaudeIcon from '@macro-icons/wide/claude.svg';
 import CursorIcon from '@macro-icons/wide/cursor-ide.svg';
 import ZedIcon from '@macro-icons/wide/zed-ide.svg';
@@ -114,6 +114,7 @@ type AgentAction = {
   key: string;
   name: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  buttonIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   execute: (prompt: string) => void;
 };
 
@@ -121,6 +122,7 @@ const COPY_ACTION: AgentAction = {
   key: 'copy',
   name: 'Copy as prompt',
   icon: CopyIcon,
+  buttonIcon: TerminalWindowIcon,
   execute: (prompt) => {
     navigator.clipboard.writeText(prompt);
     toast.success('Task prompt copied to clipboard');
@@ -212,25 +214,25 @@ export function DispatchAgentButton() {
 
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen}>
-      <div class="flex items-center">
+      <div class="border-1 border-edge-muted flex ml-1 items-stretch rounded-xs">
         <Button
           onClick={handlePrimaryClick}
           tooltip={lastUsed().name}
-          class={cn(
-            'px-1 rounded-r-none',
-            open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink'
-          )}
+          variant="ghost"
           size="icon-sm"
+          class="p-1"
         >
-          <Dynamic component={lastUsed().icon} class="w-4 h-4" />
+          <Dynamic
+            component={lastUsed().buttonIcon ?? lastUsed().icon}
+            class="size-3.5"
+          />
         </Button>
+        <div class="w-[1px] bg-edge-muted" />
         <DropdownMenu.Trigger
           as={Button}
-          class={cn(
-            'px-0 rounded-l-none border-l border-edge-muted/50 w-4',
-            open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink'
-          )}
+          variant="ghost"
           size="icon-sm"
+          class="p-1"
         >
           <CaretDown class="w-3 h-3" />
         </DropdownMenu.Trigger>

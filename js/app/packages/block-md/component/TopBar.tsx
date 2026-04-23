@@ -51,7 +51,7 @@ import GitBranch from '@icon/regular/git-branch.svg';
 import Info from '@icon/regular/info.svg';
 import Bell from '@icon/regular/bell.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import RobotIcon from '@icon/regular/robot.svg';
+import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import IconLink from '@icon/regular/link.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
@@ -218,17 +218,17 @@ export function TopBar() {
       hotkeyToken: TOKENS.entity.action.copyBranchName,
     },
     {
-      label: 'Dispatch to Agent',
-      icon: RobotIcon,
-      action: () => {},
-      condition: () => isTask,
-      buttonComponent: () => <DispatchAgentButton />,
-    },
-    {
       label: 'Properties',
       icon: TagIcon,
       action: propertiesControl.toggle,
       isActive: propertiesControl.isOpen,
+    },
+    {
+      label: 'Dispatch to Agent',
+      icon: TerminalWindowIcon,
+      action: () => {},
+      condition: () => isTask,
+      buttonComponent: () => <DispatchAgentButton />,
     },
     {
       label: 'Share',
