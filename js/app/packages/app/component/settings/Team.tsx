@@ -252,16 +252,15 @@ export function Team() {
     setEditingTeamName(undefined);
   };
 
-  const handleLeaveTeam = async () => {
+  const handleLeaveTeam = () => {
     const currentUserId = userId();
     const currentTeamId = teamId();
     if (!currentUserId || !currentTeamId) return;
 
-    removeUserMutation.mutate({
-      teamId: currentTeamId,
-      userId: currentUserId,
-    });
-    setShowLeaveModal(false);
+    removeUserMutation.mutate(
+      { teamId: currentTeamId, userId: currentUserId },
+      { onSuccess: () => setShowLeaveModal(false) }
+    );
   };
 
   const handleRemoveMember = () => {
@@ -269,11 +268,10 @@ export function Team() {
     const currentTeamId = teamId();
     if (!currentTeamId || !member) return;
 
-    removeUserMutation.mutate({
-      teamId: currentTeamId,
-      userId: member.user_id,
-    });
-    setShowRemoveModal(null);
+    removeUserMutation.mutate(
+      { teamId: currentTeamId, userId: member.user_id },
+      { onSuccess: () => setShowRemoveModal(null) }
+    );
   };
 
   const handleCancelInvite = () => {
@@ -281,11 +279,10 @@ export function Team() {
     const currentTeamId = teamId();
     if (!currentTeamId || !invite) return;
 
-    deleteInviteMutation.mutate({
-      teamId: currentTeamId,
-      teamInviteId: invite.id,
-    });
-    setShowCancelInviteModal(null);
+    deleteInviteMutation.mutate(
+      { teamId: currentTeamId, teamInviteId: invite.id },
+      { onSuccess: () => setShowCancelInviteModal(null) }
+    );
   };
 
   const handleInvite = () => {
@@ -293,12 +290,22 @@ export function Team() {
     const currentTeamId = teamId();
     if (emails.length === 0 || !currentTeamId) return;
 
-    inviteToTeamMutation.mutate({
-      teamId: currentTeamId,
-      request: { emails },
-    });
-    setInviteEmails('');
-    setShowInviteModal(false);
+    inviteToTeamMutation.mutate(
+      { teamId: currentTeamId, request: { emails } },
+      {
+        onSuccess: () => {
+          setInviteEmails('');
+          setShowInviteModal(false);
+        },
+      }
+    );
+  };
+
+  const handleInviteModalClose = (open: boolean) => {
+    if (!open) {
+      setInviteEmails('');
+      setShowInviteModal(false);
+    }
   };
 
   return (
@@ -576,7 +583,7 @@ export function Team() {
         </Dialog.Portal>
       </Dialog>
 
-      <Dialog open={showInviteModal()} onOpenChange={setShowInviteModal}>
+      <Dialog open={showInviteModal()} onOpenChange={handleInviteModalClose}>
         <Dialog.Portal>
           <DialogWrapper>
             <div class="flex flex-col text-ink">
@@ -609,7 +616,7 @@ export function Team() {
                     variant="ghost"
                     class="rounded-xs"
                     disabled={inviteToTeamMutation.isPending}
-                    onClick={() => setShowInviteModal(false)}
+                    onClick={() => handleInviteModalClose(false)}
                   >
                     Cancel
                   </Button>
