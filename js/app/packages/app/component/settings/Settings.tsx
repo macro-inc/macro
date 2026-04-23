@@ -41,7 +41,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const permissions = usePermissions();
   const userTeamsQuery = useUserTeamsQuery();
   const hasTeam = () => (userTeamsQuery.data?.length ?? 0) > 0;
-  const teamsFlag = useFeatureFlag('enable-teams', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
+  const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
