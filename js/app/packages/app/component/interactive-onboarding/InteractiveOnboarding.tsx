@@ -27,7 +27,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useIsAuthenticated } from '@core/auth';
 import { fetchToken } from '@core/util/fetchWithToken';
-import { ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import MobileWebWelcome from './MobileWebWelcome';
@@ -106,7 +105,6 @@ function InteractiveOnboardingInner() {
     if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
       return false;
     if (l.id === 'about-us' && isAuthenticated()) return false;
-    if (l.id === 'app-store' && !ENABLE_APP_STORE_QR_CODE) return false;
     return true;
   });
   const lessons = isTouch

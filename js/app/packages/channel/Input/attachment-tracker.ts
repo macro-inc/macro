@@ -26,7 +26,13 @@ export function createInputAttachmentTracker(
   );
 
   const [attachments, setAttachments] = options.persistenceKey
-    ? makePersisted(raw, { name: options.persistenceKey })
+    ? makePersisted(raw, {
+        name: options.persistenceKey,
+        serialize: (data: InputAttachmentData[]) =>
+          JSON.stringify(data.filter((a) => !a.pending)),
+        deserialize: (data: string) =>
+          (JSON.parse(data) as InputAttachmentData[]).filter((a) => !a.pending),
+      })
     : raw;
 
   const maxAttachments = options.maxAttachments ?? 10;

@@ -25,6 +25,7 @@ export const BulkMoveToProjectView = (props: {
   entities: EntityData[];
   onFinish: () => void;
   onCancel: () => void;
+  onError?: (error: unknown) => void;
 }) => {
   let listRef!: HTMLDivElement;
   const bulkMoveToProjectMutation = createBulkMoveToProjectDssEntityMutation();
@@ -352,6 +353,7 @@ export const BulkMoveToProjectView = (props: {
         props.onFinish();
       } catch (error) {
         console.error('Failed to move entities to folder:', error);
+        props.onError?.(error);
       }
     }
   };

@@ -121,11 +121,11 @@ export class ClassedBlockNode extends ElementNode {
       element.setAttribute(attr, attrs[attr]);
     }
 
-    return { element };
+    return { element: element as HTMLElement };
   }
 
   createDOM(_config: EditorConfig): HTMLElement {
-    const el = document.createElement(this.__tag);
+    const el = document.createElement(this.__tag) as HTMLElement;
     el.setAttribute('data-classed-block', 'true');
     for (const c of this.__classes) el.classList.add(c);
     const attrs = this.__attributes ?? {};

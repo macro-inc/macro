@@ -1,5 +1,9 @@
 import { fileSelector } from '@core/directive/fileSelector';
-import { FormatRibbon } from '@block-channel/component/DeprecatedChannelInput/FormatRibbon';
+import { FormatButtons } from '@channel/Input/FormatButtons';
+import {
+  applyInlineFormat,
+  applyNodeFormat,
+} from '@channel/Input/utils/formatting';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
@@ -60,19 +64,11 @@ import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
   lazyRegister,
+  type NodeTransformType,
   type SelectionData,
 } from 'core/component/LexicalMarkdown/plugins';
-import {
-  NODE_TRANSFORM,
-  type NodeTransformType,
-} from 'core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import {
-  $getRoot,
-  FORMAT_TEXT_COMMAND,
-  type LexicalEditor,
-  type TextFormatType,
-} from 'lexical';
+import { $getRoot, type LexicalEditor } from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -1446,15 +1442,26 @@ export function BaseInput(props: {
       </div>
       <div class="w-full h-full flex flex-col">
         <Show when={showFormatRibbon()}>
-          <FormatRibbon
-            state={formatState}
-            inlineFormat={(format: TextFormatType) => {
-              editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
-            }}
-            nodeFormat={(transform: NodeTransformType) => {
-              editor()?.dispatchCommand(NODE_TRANSFORM, transform);
-            }}
-          />
+          <div class="flex flex-row w-full gap-2 items-center p-2">
+            <FormatButtons
+              selectionState={() => formatState}
+              includeQuote
+              onInlineFormat={(format) => {
+                const editor_ = editor();
+                if (!editor_) return;
+                applyInlineFormat(editor_, format);
+              }}
+              onNodeFormat={(transform) => {
+                const editor_ = editor();
+                if (!editor_) return;
+                const isActive = formatState.elementsInRange.has(transform);
+                const targetTransform: NodeTransformType = isActive
+                  ? 'paragraph'
+                  : transform;
+                applyNodeFormat(editor_, targetTransform);
+              }}
+            />
+          </div>
         </Show>
         <div
           class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-3"

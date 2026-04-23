@@ -95,7 +95,8 @@ export interface EditorControls {
   getState: () => SerializedEditorState;
   setState: (state: SerializedEditorState) => void;
   getLexical: () => LexicalEditor;
-  isMentionMenuOpen: () => boolean;
+  /** Signal that is true when either the MentionsMenu, EmojiMenu, or ActionMenu is open in this Editor. */
+  isInlineMenuOpen: () => boolean;
 }
 
 /**
@@ -111,6 +112,7 @@ export interface EditorComponentProps {
   autofocus?: boolean;
   class?: string;
   portalScope?: PortalScope;
+  refFn?: (ref: HTMLDivElement) => void;
 }
 
 export interface EditorConfig {

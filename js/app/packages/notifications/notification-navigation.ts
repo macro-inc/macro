@@ -1,13 +1,16 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import type { BlockAlias, BlockName } from '@core/block';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import type { NotificationType } from '@core/types';
 import type { UnifiedNotification } from './types';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import type { NotificationSource } from './notification-source';
-import { getChannelParams } from '@block-channel/utils/link';
+import {
+  getChannelParams,
+  navigateToChannelMessage,
+} from '@block-channel/utils/link';
 import { isChannelNotification } from './notification-helpers';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
 import {
@@ -73,26 +76,41 @@ async function openChannelNotification(
   newSplit: boolean = false
 ) {
   const channelId = notification.entity_id;
-  const { messageId, threadId, params } =
-    getChannelNotificationParams(notification);
+  const { messageId, threadId } = getChannelNotificationParams(notification);
 
-  openSplitIfNotOpen(layoutManager, 'channel', channelId, {
-    newSplit,
-    params,
-  });
+  if (!messageId) {
+    openSplitIfNotOpen(layoutManager, 'channel', channelId, { newSplit });
+    return;
+  }
 
-  if (!messageId) return;
-
-  // Also call goToLocationFromParams for already-open channels where
-  // the split existed before and params weren't applied as initial props.
   const orchestrator = layoutManager.getOrchestrator();
-  const handle = await orchestrator.getBlockHandle(channelId, 'channel');
-
-  handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
+  await navigateToChannelMessage(orchestrator, channelId, messageId, threadId, {
+    splitManager: layoutManager,
+    preferNewSplit: newSplit,
+  });
 }
 
-function safeFileTypeToBlockName(fileType: string | undefined | null) {
-  return fileTypeToBlockName(fileType) ?? 'unknown';
+// Minimal entity shape — the live entity from the UI is authoritative when
+// available (notification metadata is a snapshot at notification time and may
+// lack `subType` for older events).
+export type NotificationEntityOverride = {
+  fileType?: string | null;
+  subType?: { type: string } | null;
+};
+
+// Resolve the block type for a document notification, honoring `subType` so
+// that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
+// 'task' block alias instead of raw 'md'. Prefers the live entity's fields
+// over the notification-metadata snapshot when provided.
+function safeDocumentContentToBlockName(
+  content: NotificationEntityOverride,
+  entity?: NotificationEntityOverride
+) {
+  return itemToBlockName({
+    type: 'document',
+    fileType: entity?.fileType ?? content.fileType ?? undefined,
+    subType: entity?.subType ?? content.subType ?? undefined,
+  } as Parameters<typeof itemToBlockName>[0]);
 }
 
 type NotSupportedError = {
@@ -108,7 +126,8 @@ type NotFoundError = {
 export type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
 
 function getSupportedHandler(
-  notification: UnifiedNotification
+  notification: UnifiedNotification,
+  entity?: NotificationEntityOverride
 ): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
   const tag = notification.notification_metadata.tag;
 
@@ -146,7 +165,7 @@ function getSupportedHandler(
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(meta.content.fileType),
+          safeDocumentContentToBlockName(meta.content, entity),
           notification.entity_id,
           { newSplit }
         );
@@ -165,7 +184,7 @@ function getSupportedHandler(
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(meta.content.fileType),
+          safeDocumentContentToBlockName(meta.content, entity),
           notification.entity_id,
           { newSplit }
         );
@@ -176,7 +195,7 @@ function getSupportedHandler(
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(meta.content.fileType),
+          safeDocumentContentToBlockName(meta.content, entity),
           notification.entity_id,
           { newSplit }
         );
@@ -187,7 +206,7 @@ function getSupportedHandler(
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(meta.content.fileType),
+          safeDocumentContentToBlockName(meta.content, entity),
           notification.entity_id,
           { newSplit }
         );
@@ -202,9 +221,11 @@ function getSupportedHandler(
 export function openNotification(
   notification: UnifiedNotification,
   layoutManager: SplitManager,
-  newSplit: boolean = false
+  newSplit: boolean = false,
+  entity?: NotificationEntityOverride
 ): ResultAsync<void, NotSupportedError> {
-  const handler = getSupportedHandler(notification);
+  console.log('NOTIF', notification);
+  const handler = getSupportedHandler(notification, entity);
   if (!handler) {
     return errAsync({
       tag: 'NotSupportedError',

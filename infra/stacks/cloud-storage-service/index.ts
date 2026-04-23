@@ -281,6 +281,26 @@ const INTERNAL_CALL_SECRET = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require('call_internal_secret') })
   .apply((secret) => secret.secretString);
 
+// Cal.com webhook — HMAC secret, resolved at runtime via Secrets Manager.
+const CAL_WEBHOOK_SECRET_KEY = config.require('cal_webhook_secret_key');
+const calWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: CAL_WEBHOOK_SECRET_KEY })
+  .apply((secret) => secret.arn);
+
+// Cal.com eventTypeId → Meta content_name JSON map, resolved at runtime.
+const CAL_EVENT_TYPE_CONTENT_NAMES_KEY = config.require(
+  'cal_event_type_content_names_key'
+);
+const calEventTypeContentNamesKeyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: CAL_EVENT_TYPE_CONTENT_NAMES_KEY })
+  .apply((secret) => secret.arn);
+
+// Meta Conversions API — feeds cal → Meta "Lead" events.
+const META_PIXEL_ID = config.require('meta_pixel_id');
+const META_ACCESS_TOKEN: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('meta_access_token') })
+  .apply((secret) => secret.secretString);
+
 const callRecordingStack = new pulumi.StackReference('call-recording-stack', {
   name: `macro-inc/call-recording/${stack}`,
 });
@@ -345,6 +365,8 @@ const cloudStorageService = new CloudStorageService(
       opensearchPasswordArn,
       githubWebhookSecretKeyArn,
       githubSyncAppPemArn,
+      calWebhookSecretKeyArn,
+      calEventTypeContentNamesKeyArn,
     ],
     callRecordingCrudPolicyArn,
     containerEnvVars: [
@@ -544,6 +566,23 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'GITHUB_SYNC_APP_CLIENT_ID',
         value: GITHUB_SYNC_APP_CLIENT_ID,
+      },
+      // Cal.com webhook + Meta analytics
+      {
+        name: 'CAL_WEBHOOK_SECRET_KEY',
+        value: CAL_WEBHOOK_SECRET_KEY,
+      },
+      {
+        name: 'CAL_EVENT_TYPE_CONTENT_NAMES_KEY',
+        value: CAL_EVENT_TYPE_CONTENT_NAMES_KEY,
+      },
+      {
+        name: 'META_PIXEL_ID',
+        value: META_PIXEL_ID,
+      },
+      {
+        name: 'META_ACCESS_TOKEN',
+        value: pulumi.interpolate`${META_ACCESS_TOKEN}`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

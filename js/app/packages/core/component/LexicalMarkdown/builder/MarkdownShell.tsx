@@ -202,6 +202,7 @@ export const MarkdownShell: Component<
               editor.setRootElement(el);
               onConnect();
             });
+            props.refFn?.(el);
           }}
           contentEditable={!props.disabled}
         />

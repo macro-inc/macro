@@ -1,8 +1,8 @@
-import type { SerializedEditorState } from "lexical";
+import type { SerializedEditorState } from 'lexical';
 
 type Result<T, E = Error> =
   | { success: true; data: T }
-  | { success: false; error: E, status?: number };
+  | { success: false; error: E; status?: number };
 
 export interface SyncServiceConfig {
   baseUrl: string;
@@ -30,13 +30,16 @@ export class SyncServiceClient {
 
       if (this.config.serviceFetcher) {
         // How can this be correct??? the url would be https://sync-service/document/<docid>/raw ?????
-        response = await this.config.serviceFetcher.fetch(`https://sync-service${path}`, {
-          method: 'GET',
-          headers: {
-            'x-internal-auth-key': this.config.internalAuthKey,
-            'content-type': 'application/json'
+        response = await this.config.serviceFetcher.fetch(
+          `https://sync-service${path}`,
+          {
+            method: 'GET',
+            headers: {
+              'x-internal-auth-key': this.config.internalAuthKey,
+              'content-type': 'application/json',
+            },
           }
-        });
+        );
       } else {
         // Fallback to HTTP fetch for cross-zone or local development
         const url = `${this.config.baseUrl}${path}`;
@@ -44,40 +47,40 @@ export class SyncServiceClient {
           method: 'GET',
           headers: {
             'x-internal-auth-key': this.config.internalAuthKey,
-            'content-type': 'application/json'
+            'content-type': 'application/json',
           },
           signal: AbortSignal.timeout(5000),
         });
       }
-
 
       if (!response.ok) {
         const responseText = await response.text();
         console.log('Sync client - error response body:', responseText);
         return {
           success: false,
-          error: new Error(`Sync service error: ${response.status} - ${responseText}`),
-          status: response.status
+          error: new Error(
+            `Sync service error: ${response.status} - ${responseText}`
+          ),
+          status: response.status,
         };
       }
-      const result = await response.json() as T;
+      const result = (await response.json()) as T;
       return {
         success: true,
-        data: result
+        data: result,
       };
-
     } catch (error) {
       if (error instanceof Error) {
         return {
           success: false,
           error: new Error(`Sync client error:${error.message}`),
-          status: 500
+          status: 500,
         };
       }
       return {
         success: false,
         error: new Error(`Sync client error:${error}`),
-        status: 500
+        status: 500,
       };
     }
   }

@@ -103,7 +103,17 @@ function MobileStackRow(props: {
     const mostRecent = getMostRecentNotification(props.stack);
     const splitManager = globalSplitManager();
     if (!splitManager) return;
-    await openNotification(mostRecent, splitManager, e.shiftKey);
+    const entity = props.entity;
+    const entityOverride = {
+      fileType: 'fileType' in entity ? entity.fileType : undefined,
+      subType: 'subType' in entity ? entity.subType : undefined,
+    };
+    await openNotification(
+      mostRecent,
+      splitManager,
+      e.shiftKey,
+      entityOverride
+    );
     await notificationSource.markAsRead(mostRecent);
   };
 

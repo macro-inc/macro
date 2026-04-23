@@ -19,7 +19,7 @@ use axum::{
 };
 use entity_access::{
     domain::{
-        models::{MemberParticipantRole, ViewAccessLevel},
+        models::{EditAccessLevel, MemberParticipantRole, ViewAccessLevel},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::{
@@ -350,7 +350,7 @@ pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
 ) -> Result<StatusCode, CallError> {
     state
         .service
@@ -381,7 +381,7 @@ pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService
 #[tracing::instrument(err, skip_all)]
 pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
     Json(request): Json<EditCallRecordRequest>,
 ) -> Result<StatusCode, CallError> {
     state
@@ -412,7 +412,7 @@ pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
 ) -> Result<Json<bool>, CallError> {
     let new_value = state
         .service

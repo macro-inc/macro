@@ -371,6 +371,11 @@ if (LOCAL_ONLY) {
     'quick-access-list',
     lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
   );
+
+  registerComponent(
+    'hotkey-debugger',
+    lazy(() => import('@app/component/HotkeyDebugger'))
+  );
 }
 
 if (DEV_MODE_ENV) {
