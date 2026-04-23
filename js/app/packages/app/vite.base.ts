@@ -12,7 +12,15 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 
-const shortSha = execSync('git rev-parse --short HEAD').toString().trim();
+function readShortSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+const shortSha = readShortSha();
 const appVersion = `${version}+${shortSha}`;
 
 function readGitBranch(): string {
@@ -131,25 +139,25 @@ export const createAppViteConfig = ({
           },
           output: NO_MINIFY
             ? {
-                // remove hashes from output paths
-                // https://github.com/vitejs/vite/issues/378
-                entryFileNames: `assets/[name].js`,
-                chunkFileNames: `assets/[name].js`,
-                assetFileNames: `assets/[name].[ext]`,
-                manualChunks: {
-                  katex: ['katex'],
-                  pdfjs: ['pdfjs-dist'],
-                },
-              }
-            : {
-                format: 'es',
-                chunkFileNames: '[name]-[hash].js',
-                entryFileNames: '[name]-[hash].js',
-                manualChunks: {
-                  katex: ['katex'],
-                  pdfjs: ['pdfjs-dist'],
-                },
+              // remove hashes from output paths
+              // https://github.com/vitejs/vite/issues/378
+              entryFileNames: `assets/[name].js`,
+              chunkFileNames: `assets/[name].js`,
+              assetFileNames: `assets/[name].[ext]`,
+              manualChunks: {
+                katex: ['katex'],
+                pdfjs: ['pdfjs-dist'],
               },
+            }
+            : {
+              format: 'es',
+              chunkFileNames: '[name]-[hash].js',
+              entryFileNames: '[name]-[hash].js',
+              manualChunks: {
+                katex: ['katex'],
+                pdfjs: ['pdfjs-dist'],
+              },
+            },
         },
         assetsInlineLimit: (filePath) => {
           if (filePath.includes('.wasm')) return false;

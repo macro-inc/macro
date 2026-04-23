@@ -37,6 +37,7 @@ export type MediaDeviceInfo = {
 type CallStoreState = {
   connectionState: ConnectionState;
   activeChannelId: string | null;
+  activeCallId: string | null;
   remoteParticipants: Map<string, RemoteParticipant>;
   isAudioMuted: boolean;
   isVideoMuted: boolean;
@@ -50,11 +51,16 @@ type CallStoreState = {
   activeAudioOutputDeviceId: string | null;
   activeVideoInputDeviceId: string | null;
   isNoiseSuppressed: boolean;
+  // Mirrors the call's `share_with_team` flag. Defaults to true to match the
+  // server-side default for newly-created calls; synced from the toggle
+  // endpoint's response on each flip.
+  isSharedWithTeam: boolean;
 };
 
 const initialState: CallStoreState = {
   connectionState: ConnectionState.Disconnected,
   activeChannelId: null,
+  activeCallId: null,
   remoteParticipants: new Map(),
   isAudioMuted: false,
   isVideoMuted: true,
@@ -68,6 +74,7 @@ const initialState: CallStoreState = {
   activeAudioOutputDeviceId: null,
   activeVideoInputDeviceId: null,
   isNoiseSuppressed: false,
+  isSharedWithTeam: true,
 };
 
 export type CallState = {
@@ -79,6 +86,8 @@ export type CallState = {
   isInCall: () => boolean;
   /** Channel ID of the active call */
   activeChannelId: () => string | null;
+  /** Call ID of the active call (from CallTokenResponse) */
+  activeCallId: () => string | null;
   /** Remote participants in the call */
   remoteParticipants: () => Map<string, RemoteParticipant>;
   /** Incremented when track subscription/mute state changes */
@@ -125,6 +134,10 @@ export type CallState = {
   isNoiseSuppressed: () => boolean;
   /** Toggle Krisp noise suppression on/off */
   toggleNoiseSuppression: () => Promise<void>;
+  /** Whether the call is currently shared with the creator's team */
+  isSharedWithTeam: () => boolean;
+  /** Update the locally-cached share-with-team flag (call after a toggle RPC) */
+  setSharedWithTeam: (value: boolean) => void;
 };
 
 const CallContext = createContext<CallState>();
@@ -408,6 +421,8 @@ function createCallState() {
     }
 
     setStore('activeChannelId', tokenResponse.channelId);
+    setStore('activeCallId', tokenResponse.callId);
+    setStore('isSharedWithTeam', true);
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
@@ -519,6 +534,10 @@ function createCallState() {
     }
   }
 
+  function setSharedWithTeam(value: boolean) {
+    setStore('isSharedWithTeam', value);
+  }
+
   async function toggleNoiseSuppression() {
     const krisp = krispFilter();
     if (!krisp) return;
@@ -562,6 +581,7 @@ function createCallState() {
     connectionState: () => store.connectionState,
     isInCall: () => store.connectionState === ConnectionState.Connected,
     activeChannelId: () => store.activeChannelId,
+    activeCallId: () => store.activeCallId,
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
@@ -595,6 +615,8 @@ function createCallState() {
     switchVideoInput,
     isNoiseSuppressed: () => store.isNoiseSuppressed,
     toggleNoiseSuppression,
+    isSharedWithTeam: () => store.isSharedWithTeam,
+    setSharedWithTeam,
   };
 
   return state;
