@@ -81,7 +81,7 @@ export function Signup() {
         </div>
 
         <div class="w-full max-w-[420px] login-card">
-          <RoundPanel class="bg-panel shadow-lg shadow-[#1111]">
+          <RoundPanel class="bg-panel">
             <div class="login-stagger">
               <div class="flex items-center justify-center py-10">
                 <LogoIcon class="size-20 text-accent" />
