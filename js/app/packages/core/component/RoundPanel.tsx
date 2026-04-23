@@ -14,11 +14,11 @@ export function RoundPanel(props: RoundPanelProps) {
       style={{
         'background-image': `linear-gradient(${props.active ? `${props.highlightColor || 'var(--color-accent)'}, var(--color-edge-muted) 80%` : 'var(--color-edge-muted)'})`,
       }}
-      class="p-px h-full w-full box-border rounded overflow-clip"
+      class="p-px h-full w-full box-border rounded-[6px] overflow-clip"
     >
       <div
         class={cn(
-          'h-full w-full box-border bg-panel rounded-[3px] overflow-clip',
+          'h-full w-full box-border bg-panel rounded-[5px] overflow-clip',
           props.class
         )}
       >
