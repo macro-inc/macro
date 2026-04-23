@@ -1,0 +1,282 @@
+import { useBlockId } from '@core/block';
+import { toast } from '@core/component/Toast/Toast';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
+import { isOk } from '@core/util/maybeResult';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { storageServiceClient } from '@service-storage/client';
+import { mdStore } from '../signal/markdownBlockData';
+import {
+  discussionThreads,
+  sortComments,
+} from '../comments/discussionResource';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
+import {
+  createEffect,
+  createSignal,
+  For,
+  type Component,
+  type JSX,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import CaretDown from '@icon/regular/caret-down.svg';
+import CopyIcon from '@icon/regular/copy.svg';
+import GlobeIcon from '@icon/regular/globe-simple.svg';
+import ClaudeIcon from '@macro-icons/wide/claude.svg';
+import CursorIcon from '@macro-icons/wide/cursor-ide.svg';
+import ZedIcon from '@macro-icons/wide/zed-ide.svg';
+import CodexIcon from '@macro-icons/wide/codex-ide.svg';
+import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+
+const MAX_BRANCH_LENGTH = 200;
+const LAST_USED_KEY = 'dispatch-agent-last-used';
+
+const slugify = (title: string): string =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+async function buildBranchName(
+  documentId: string,
+  documentName: string
+): Promise<{ shortId: string; branchName: string }> {
+  const result = await storageServiceClient.getDocumentShortId({ documentId });
+  const shortId = isOk(result) ? result[1] : documentId;
+  const slug = slugify(documentName);
+  const branchName = `macro-${shortId}${slug ? `-${slug}` : ''}`.slice(
+    0,
+    MAX_BRANCH_LENGTH
+  );
+  return { shortId, branchName };
+}
+
+async function generateTaskPrompt(
+  documentId: string,
+  documentName: string,
+  content: string,
+  threads: CommentThread[]
+): Promise<string> {
+  const { shortId, branchName } = await buildBranchName(
+    documentId,
+    documentName
+  );
+
+  const lines: string[] = [];
+
+  lines.push(`Work on Macro task ${documentName}:`);
+  lines.push('');
+  lines.push(`<task identifier="${shortId}">`);
+  lines.push(`<title>${documentName}</title>`);
+  lines.push(`<branch>${branchName}</branch>`);
+  lines.push('</task>');
+
+  if (content) {
+    lines.push('');
+    lines.push('<task-content>');
+    lines.push(content);
+    lines.push('</task-content>');
+  }
+
+  if (threads.length > 0) {
+    lines.push('');
+    for (const thread of threads) {
+      const sorted = [...thread.comments].sort(sortComments);
+      lines.push(
+        `<comment-thread thread-id="${thread.thread.threadId}">`
+      );
+      for (const comment of sorted) {
+        if (comment.text && !comment.deletedAt) {
+          const createdAt = comment.createdAt
+            ? ` created-at="${comment.createdAt}"`
+            : '';
+          lines.push(`<comment${createdAt}>${comment.text}</comment>`);
+        }
+      }
+      lines.push('</comment-thread>');
+    }
+  }
+
+  lines.push('');
+  lines.push(`Please use the branch "${branchName}" for your work.`);
+  lines.push('');
+  lines.push(
+    'If you have the Macro MCP server enabled, use it to gather additional context about this task.'
+  );
+
+  return lines.join('\n');
+}
+
+type AgentAction = {
+  key: string;
+  name: string;
+  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  execute: (prompt: string) => void;
+};
+
+const COPY_ACTION: AgentAction = {
+  key: 'copy',
+  name: 'Copy as prompt',
+  icon: CopyIcon,
+  execute: (prompt) => {
+    navigator.clipboard.writeText(prompt);
+    toast.success('Task prompt copied to clipboard');
+  },
+};
+
+const PLATFORM_ACTIONS: AgentAction[] = [
+  {
+    key: 'claude-code',
+    name: 'Claude Code',
+    icon: ClaudeIcon,
+    execute: (prompt) =>
+      window.open(
+        `https://claude.ai/code?q=${encodeURIComponent(prompt)}`,
+        '_blank'
+      ),
+  },
+  {
+    key: 'codex-desktop',
+    name: 'Codex Desktop',
+    icon: CodexIcon,
+    execute: (prompt) =>
+      window.open(
+        `codex://new?prompt=${encodeURIComponent(prompt)}`,
+        '_blank'
+      ),
+  },
+  {
+    key: 'cursor',
+    name: 'Cursor',
+    icon: CursorIcon,
+    execute: (prompt) =>
+      window.open(
+        `cursor://anysphere.cursor-deeplink/prompt?text=${encodeURIComponent(prompt)}`,
+        '_blank'
+      ),
+  },
+  {
+    key: 'cursor-web',
+    name: 'Cursor Web',
+    icon: GlobeIcon,
+    execute: (prompt) =>
+      window.open(
+        `https://cursor.com/link/prompt?text=${encodeURIComponent(prompt)}`,
+        '_blank'
+      ),
+  },
+  {
+    key: 'zed',
+    name: 'Zed',
+    icon: ZedIcon,
+    execute: (prompt) =>
+      window.open(
+        `zed://agent?prompt=${encodeURIComponent(prompt)}`,
+        '_blank'
+      ),
+  },
+];
+
+const ALL_ACTIONS = [COPY_ACTION, ...PLATFORM_ACTIONS];
+
+function getLastUsedAction(): AgentAction {
+  const key = localStorage.getItem(LAST_USED_KEY);
+  return ALL_ACTIONS.find((a) => a.key === key) ?? COPY_ACTION;
+}
+
+function setLastUsedAction(key: string) {
+  localStorage.setItem(LAST_USED_KEY, key);
+}
+
+export function DispatchAgentButton() {
+  const blockId = useBlockId();
+  const name = useBlockDocumentName();
+  const [store] = mdStore;
+  const [open, setOpen] = createSignal(false);
+  const [lastUsed, setLastUsed] = createSignal<AgentAction>(
+    getLastUsedAction()
+  );
+
+  let currentThreads: CommentThread[] = [];
+  createEffect(() => {
+    currentThreads = discussionThreads() ?? [];
+  });
+
+  const getEditorContent = () =>
+    store.editor ? editorStateAsMarkdown(store.editor, 'external') : '';
+
+  const buildPrompt = async () => {
+    const docName = name();
+    const content = getEditorContent();
+    return generateTaskPrompt(blockId, docName, content, currentThreads);
+  };
+
+  const executeAction = async (action: AgentAction) => {
+    const prompt = await buildPrompt();
+    action.execute(prompt);
+    setLastUsedAction(action.key);
+    setLastUsed(action);
+    setOpen(false);
+  };
+
+  const handlePrimaryClick = () => {
+    executeAction(lastUsed());
+  };
+
+  return (
+    <DropdownMenu open={open()} onOpenChange={setOpen}>
+      <div class="flex items-center">
+        <Button
+          onClick={handlePrimaryClick}
+          tooltip={lastUsed().name}
+          class={cn(
+            'px-1 rounded-r-none',
+            open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+          )}
+          size="icon-sm"
+        >
+          <Dynamic
+            component={lastUsed().icon}
+            class="w-4 h-4"
+          />
+        </Button>
+        <DropdownMenu.Trigger
+          as={Button}
+          class={cn(
+            'px-0 rounded-l-none border-l border-edge-muted/50 w-4',
+            open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+          )}
+          size="icon-sm"
+        >
+          <CaretDown class="w-3 h-3" />
+        </DropdownMenu.Trigger>
+      </div>
+      <DropdownMenu.Portal>
+        <DropdownMenuContent>
+          <MenuItem
+            text={COPY_ACTION.name}
+            icon={COPY_ACTION.icon}
+            onClick={() => executeAction(COPY_ACTION)}
+          />
+          <div class="my-1 h-[1px] bg-edge-muted/50" />
+          <div class="px-2 py-1 text-xs text-ink-extra-muted font-medium">
+            Open in
+          </div>
+          <For each={PLATFORM_ACTIONS}>
+            {(action) => (
+              <MenuItem
+                text={action.name}
+                icon={action.icon}
+                onClick={() => executeAction(action)}
+              />
+            )}
+          </For>
+        </DropdownMenuContent>
+      </DropdownMenu.Portal>
+    </DropdownMenu>
+  );
+}
