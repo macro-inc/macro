@@ -42,6 +42,7 @@ import {
   useContext,
 } from 'solid-js';
 import { AttendanceBadge, DraftBadge, SharedBadge } from '../components/Badges';
+import { CallChannelName } from '../components/CallChannelName';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../components/UnreadIndicator';
@@ -593,7 +594,7 @@ function NarrowInboxLayout(props: LayoutProps) {
                   when={hit()}
                   fallback={
                     <span class="text-ink-muted text-xs truncate">
-                      {entity().channelName ?? 'Call'}
+                      <CallChannelName entity={entity()} />
                     </span>
                   }
                 >
@@ -778,7 +779,9 @@ function WideLayout(props: LayoutProps) {
               };
               return (
                 <>
-                  <Entity.Title entity={entity()} />
+                  <span class="truncate">
+                    <CallChannelName entity={entity()} />
+                  </span>
                   <Show
                     when={hit()}
                     fallback={
