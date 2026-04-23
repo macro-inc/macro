@@ -21,10 +21,6 @@ import {
   invalidateUserTeams,
 } from './queries';
 
-// -----------------------------------------------------------------------------
-// Create Team
-// -----------------------------------------------------------------------------
-
 type CreateTeamArgs = CreateTeamRequest;
 type CreateTeamCallbacks = MutationCallbacks<Team, Error, CreateTeamArgs>;
 
@@ -50,13 +46,14 @@ export function useCreateTeamMutation(callbacks?: CreateTeamCallbacks) {
   }));
 }
 
-// -----------------------------------------------------------------------------
-// Join Team
-// -----------------------------------------------------------------------------
-
 type JoinTeamArgs = { teamInviteId: string };
 type JoinTeamContext = { previousInvites: TeamInvitesResponse | undefined };
-type JoinTeamCallbacks = MutationCallbacks<void, Error, JoinTeamArgs, JoinTeamContext>;
+type JoinTeamCallbacks = MutationCallbacks<
+  void,
+  Error,
+  JoinTeamArgs,
+  JoinTeamContext
+>;
 
 export function useJoinTeamMutation(callbacks?: JoinTeamCallbacks) {
   return useMutation(() => ({
@@ -113,12 +110,10 @@ export function useJoinTeamMutation(callbacks?: JoinTeamCallbacks) {
   }));
 }
 
-// -----------------------------------------------------------------------------
-// Reject Invitation
-// -----------------------------------------------------------------------------
-
 type RejectInvitationArgs = { teamInviteId: string };
-type RejectInvitationContext = { previousInvites: TeamInvitesResponse | undefined };
+type RejectInvitationContext = {
+  previousInvites: TeamInvitesResponse | undefined;
+};
 type RejectInvitationCallbacks = MutationCallbacks<
   void,
   Error,
@@ -134,7 +129,12 @@ export function useRejectInvitationMutation(
       await throwOnErr(() => authServiceClient.rejectInvitation(teamInviteId));
     },
 
-    ...withCallbacks<void, Error, RejectInvitationArgs, RejectInvitationContext>(
+    ...withCallbacks<
+      void,
+      Error,
+      RejectInvitationArgs,
+      RejectInvitationContext
+    >(
       {
         onMutate: async ({ teamInviteId }) => {
           await queryClient.cancelQueries({
@@ -182,10 +182,6 @@ export function useRejectInvitationMutation(
   }));
 }
 
-// -----------------------------------------------------------------------------
-// Patch Team
-// -----------------------------------------------------------------------------
-
 type PatchTeamArgs = { teamId: string; request: PatchTeamRequest };
 type PatchTeamCallbacks = MutationCallbacks<void, Error, PatchTeamArgs>;
 
@@ -213,12 +209,15 @@ export function usePatchTeamMutation(callbacks?: PatchTeamCallbacks) {
   }));
 }
 
-// -----------------------------------------------------------------------------
-// Patch Team User Tier
-// -----------------------------------------------------------------------------
-
-type PatchTeamUserTierArgs = { teamId: string; request: PatchTeamUserTierRequest };
-type PatchTeamUserTierCallbacks = MutationCallbacks<void, Error, PatchTeamUserTierArgs>;
+type PatchTeamUserTierArgs = {
+  teamId: string;
+  request: PatchTeamUserTierRequest;
+};
+type PatchTeamUserTierCallbacks = MutationCallbacks<
+  void,
+  Error,
+  PatchTeamUserTierArgs
+>;
 
 export function usePatchTeamUserTierMutation(
   callbacks?: PatchTeamUserTierCallbacks
@@ -247,10 +246,6 @@ export function usePatchTeamUserTierMutation(
   }));
 }
 
-// -----------------------------------------------------------------------------
-// Invite to Team
-// -----------------------------------------------------------------------------
-
 type InviteToTeamArgs = { teamId: string; request: InviteToTeamRequest };
 type InviteToTeamCallbacks = MutationCallbacks<void, Error, InviteToTeamArgs>;
 
@@ -277,12 +272,10 @@ export function useInviteToTeamMutation(callbacks?: InviteToTeamCallbacks) {
   }));
 }
 
-// -----------------------------------------------------------------------------
-// Delete Team Invite
-// -----------------------------------------------------------------------------
-
 type DeleteTeamInviteArgs = { teamId: string; teamInviteId: string };
-type DeleteTeamInviteContext = { previousInvites: TeamInvitesResponse | undefined };
+type DeleteTeamInviteContext = {
+  previousInvites: TeamInvitesResponse | undefined;
+};
 type DeleteTeamInviteCallbacks = MutationCallbacks<
   void,
   Error,
@@ -300,7 +293,12 @@ export function useDeleteTeamInviteMutation(
       );
     },
 
-    ...withCallbacks<void, Error, DeleteTeamInviteArgs, DeleteTeamInviteContext>(
+    ...withCallbacks<
+      void,
+      Error,
+      DeleteTeamInviteArgs,
+      DeleteTeamInviteContext
+    >(
       {
         onMutate: async ({ teamId, teamInviteId }) => {
           const queryKey = teamKeys.invites(teamId).queryKey;
@@ -344,10 +342,6 @@ export function useDeleteTeamInviteMutation(
   }));
 }
 
-// -----------------------------------------------------------------------------
-// Remove User from Team
-// -----------------------------------------------------------------------------
-
 type RemoveUserFromTeamArgs = { teamId: string; userId: string };
 type RemoveUserFromTeamContext = { previousTeam: TeamWithMembers | undefined };
 type RemoveUserFromTeamCallbacks = MutationCallbacks<
@@ -367,7 +361,12 @@ export function useRemoveUserFromTeamMutation(
       );
     },
 
-    ...withCallbacks<void, Error, RemoveUserFromTeamArgs, RemoveUserFromTeamContext>(
+    ...withCallbacks<
+      void,
+      Error,
+      RemoveUserFromTeamArgs,
+      RemoveUserFromTeamContext
+    >(
       {
         onMutate: async ({ teamId, userId }) => {
           const queryKey = teamKeys.detail(teamId).queryKey;
@@ -412,13 +411,14 @@ export function useRemoveUserFromTeamMutation(
   }));
 }
 
-// -----------------------------------------------------------------------------
-// Delete Team
-// -----------------------------------------------------------------------------
-
 type DeleteTeamArgs = { teamId: string };
 type DeleteTeamContext = { previousTeams: Team[] | undefined };
-type DeleteTeamCallbacks = MutationCallbacks<void, Error, DeleteTeamArgs, DeleteTeamContext>;
+type DeleteTeamCallbacks = MutationCallbacks<
+  void,
+  Error,
+  DeleteTeamArgs,
+  DeleteTeamContext
+>;
 
 export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
   return useMutation(() => ({
@@ -437,9 +437,8 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
             teamKeys.userTeams.queryKey
           );
 
-          queryClient.setQueryData<Team[]>(
-            teamKeys.userTeams.queryKey,
-            (old) => old?.filter((team) => team.id !== teamId)
+          queryClient.setQueryData<Team[]>(teamKeys.userTeams.queryKey, (old) =>
+            old?.filter((team) => team.id !== teamId)
           );
 
           return { previousTeams };
