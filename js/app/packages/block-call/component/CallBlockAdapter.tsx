@@ -2,7 +2,7 @@ import { useBlockId } from '@core/block';
 import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
 import { MaybeResultError } from '@core/util/maybeResult';
 import { useCallRecordQuery } from '@queries/call/call';
-import { Match, Show, Switch } from 'solid-js';
+import { Match, Show, Switch, createSignal } from 'solid-js';
 import { CallTranscript } from './CallTranscript';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { format } from 'date-fns';
@@ -22,7 +22,7 @@ function formatCallDate(dateStr: string): string {
 
 function CallHeader(props: { record: CallRecord }) {
   return (
-    <div class="px-4 py-3 border-b border-edge shrink-0 flex items-center gap-3">
+    <div class="px-4 py-3 border-b border-edge-muted/50 shrink-0 flex items-center gap-3">
       <PhoneCallIcon class="size-5 text-ink-muted shrink-0" />
       <div class="flex flex-col min-w-0">
         <h2 class="text-sm font-medium text-ink truncate">
@@ -44,6 +44,29 @@ function CallHeader(props: { record: CallRecord }) {
             <span class="text-success font-medium">In progress</span>
           </Show>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RecordingVideo(props: { url: string }) {
+  const [isLoaded, setIsLoaded] = createSignal(false);
+
+  return (
+    <div class="p-4 border-b border-edge flex justify-center">
+      <div class="relative w-3/4 max-w-4xl aspect-video rounded bg-surface-2 overflow-hidden">
+        <div
+          class="absolute inset-0 z-0 animate-pulse bg-surface-3 transition-opacity duration-200"
+          classList={{ 'opacity-100': !isLoaded(), 'opacity-0': isLoaded() }}
+        />
+        <video
+          class="absolute inset-0 z-10 size-full object-contain transition-opacity duration-200"
+          classList={{ 'opacity-0': !isLoaded(), 'opacity-100': isLoaded() }}
+          controls
+          crossorigin="anonymous"
+          src={props.url}
+          onLoadedData={() => setIsLoaded(true)}
+        />
       </div>
     </div>
   );
@@ -83,17 +106,8 @@ export function CallBlockAdapter() {
           <Match when={callRecord.data}>
             {(data) => (
               <>
-                <Show when={data().recordingUrl}>
-                  {(url) => (
-                    <div class="p-4 border-b border-edge flex justify-center">
-                      <video
-                        class="w-3/4 rounded"
-                        controls
-                        crossorigin="anonymous"
-                        src={url()}
-                      />
-                    </div>
-                  )}
+                <Show when={data().recordingUrl} keyed>
+                  {(url) => <RecordingVideo url={url} />}
                 </Show>
                 <Show
                   when={data().transcript.length > 0}

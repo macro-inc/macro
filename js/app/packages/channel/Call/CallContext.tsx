@@ -288,6 +288,8 @@ function createCallState() {
 
     r.on(RoomEvent.TrackSubscribed, bumpTrackVersion);
     r.on(RoomEvent.TrackUnsubscribed, bumpTrackVersion);
+    r.on(RoomEvent.TrackPublished, bumpTrackVersion);
+    r.on(RoomEvent.TrackUnpublished, bumpTrackVersion);
     r.on(RoomEvent.TrackMuted, bumpTrackVersion);
     r.on(RoomEvent.TrackUnmuted, bumpTrackVersion);
     r.on(RoomEvent.LocalTrackPublished, bumpTrackVersion);
