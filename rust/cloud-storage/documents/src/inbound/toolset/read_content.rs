@@ -2,7 +2,10 @@
 
 use std::str::FromStr;
 
-use crate::domain::{models::LocationQueryParams, ports::DocumentService};
+use crate::domain::{
+    models::{CommentThread, LocationQueryParams},
+    ports::DocumentService,
+};
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::{
@@ -42,14 +45,23 @@ impl From<lexical_client::types::MarkdownNode> for MarkdownNode {
     }
 }
 
-/// The read content response
+/// The content of the document
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub enum ReadContentResponse {
+pub enum Content {
     /// Simple text content
     Text(String),
     /// All nodes of the markdown file
     Markdown(Vec<MarkdownNode>),
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadContentResponse {
+    /// The content of the document
+    pub content: Content,
+    /// Any comments on the document
+    pub comments: Vec<CommentThread>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
@@ -115,18 +127,18 @@ where
             });
         };
 
-        let response: ReadContentResponse = match file_type.macro_app_path() {
-            FileAssociation::Pdf(_) | FileAssociation::Write(_) => ReadContentResponse::Text(
+        let content: Content = match file_type.macro_app_path() {
+            FileAssociation::Pdf(_) | FileAssociation::Write(_) => Content::Text(
                 service_context
                     .service
-                    .get_document_text(entity_access_receipt)
+                    .get_document_text(entity_access_receipt.clone())
                     .await
                     .map_err(|e| ToolCallError {
                         description: "unable to get document text".to_string(),
                         internal_error: e.into(),
                     })?,
             ),
-            FileAssociation::Md(_) => ReadContentResponse::Markdown(
+            FileAssociation::Md(_) => Content::Markdown(
                 service_context
                     .lexical_client
                     .parse_markdown_for_ai(&self.document_id.to_string())
@@ -140,11 +152,11 @@ where
                     .map(|i| i.into())
                     .collect(),
             ),
-            FileAssociation::Code(_) | FileAssociation::Document(_) => ReadContentResponse::Text(
+            FileAssociation::Code(_) | FileAssociation::Document(_) => Content::Text(
                 get_document_content_from_location(
                     service_context.clone(),
                     &document_context,
-                    entity_access_receipt,
+                    entity_access_receipt.clone(),
                 )
                 .await
                 .map_err(|e| ToolCallError {
@@ -160,7 +172,16 @@ where
             }
         };
 
-        Ok(response)
+        let comments = service_context
+            .service
+            .get_document_comments(entity_access_receipt)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "unable to get document comments".to_string(),
+                internal_error: e.into(),
+            })?;
+
+        Ok(ReadContentResponse { content, comments })
     }
 }
 

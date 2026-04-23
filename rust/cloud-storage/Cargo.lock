@@ -130,6 +130,7 @@ dependencies = [
  "rand 0.9.3",
  "readonly_pool",
  "remote_env_var",
+ "rootcause",
  "schemars",
  "scribe",
  "search_service_client",
@@ -1774,7 +1775,9 @@ dependencies = [
 name = "call"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "anyhow",
+ "async-trait",
  "aws-sdk-s3",
  "axum",
  "chrono",
@@ -1796,6 +1799,7 @@ dependencies = [
  "models_pagination",
  "models_permissions",
  "notification",
+ "schemars",
  "serde",
  "serde_json",
  "sqlx",

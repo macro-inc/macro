@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use ai_tools::{
-    NoOpConnectionService, NoOpNotificationService, NoOpScheduleContext, NoOpTaskProperties,
-    ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpScheduleContext, NoOpTaskProperties, ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -256,6 +256,24 @@ async fn build_tool_context(
         ))),
     );
 
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+        NoOpCallRtcClient,
+        NoOpConnectionService,
+        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
+        NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        call_query_service,
+        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
+    );
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -284,6 +302,7 @@ async fn build_tool_context(
         document_tool_context,
         properties_tool_context,
         email_tool_context,
+        call_tool_context,
         schedule_tool_context: NoOpScheduleContext,
     };
 

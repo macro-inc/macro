@@ -178,14 +178,25 @@ export const commsServiceClient = {
       WithChannelId &
       WithMessageId & { nonce?: string }
   ) {
-    const { channel_id, content, message_id, attachment_ids_to_delete, nonce } =
-      args;
+    const {
+      channel_id,
+      content,
+      message_id,
+      attachment_ids_to_delete,
+      attachments_to_add,
+      nonce,
+    } = args;
     return mapOk(
       await commsFetch<MessageResponse>(
         `/comms/channels/${channel_id}/message/${message_id}`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ content, attachment_ids_to_delete, nonce }),
+          body: JSON.stringify({
+            content,
+            attachment_ids_to_delete,
+            attachments_to_add,
+            nonce,
+          }),
         }
       ),
       (result) => result

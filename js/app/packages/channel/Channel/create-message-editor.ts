@@ -1,11 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
 import { createSignal, type Accessor } from 'solid-js';
 import type { InputSnapshot } from '@channel/Input';
+import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
 import type { MessageData } from '../Message';
 import type { MessageEditState } from '../Thread/types';
 import {
   buildMessageEditSnapshot,
   getAttachmentIdsToDelete,
+  getAttachmentsToAdd,
 } from './message-editing';
 
 type PatchMessageInput = {
@@ -13,6 +15,7 @@ type PatchMessageInput = {
   messageID: string;
   content: string;
   attachmentIDsToDelete?: string[];
+  attachmentsToAdd?: NewAttachment[];
 };
 
 type CreateMessageEditorOptions = {
@@ -64,9 +67,15 @@ export function createMessageEditor(
       nextSnapshot: snapshot,
     });
 
+    const newAttachments = getAttachmentsToAdd({
+      currentAttachments: message.attachments,
+      nextSnapshot: snapshot,
+    });
+
     const hasContentChanged = nextContent !== message.content;
-    const hasRemovedAttachments = attachmentIDsToDelete.length > 0;
-    if (!hasContentChanged && !hasRemovedAttachments) {
+    const hasAttachmentChanges =
+      attachmentIDsToDelete.length > 0 || newAttachments.length > 0;
+    if (!hasContentChanged && !hasAttachmentChanges) {
       setEditState(undefined);
       return;
     }
@@ -76,6 +85,7 @@ export function createMessageEditor(
       messageID: message.id,
       content: nextContent,
       attachmentIDsToDelete,
+      attachmentsToAdd: newAttachments.length > 0 ? newAttachments : undefined,
     });
     setEditState(undefined);
   };

@@ -21,6 +21,35 @@ import {
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext, type MediaDeviceInfo } from './CallContext';
 
+// Mirrors @livekit/track-processors' supportsBackgroundProcessors() =
+// BackgroundProcessor.isSupported && ProcessorWrapper.isSupported. Kept local so the
+// toggle renders without statically importing the WASM/MediaPipe-bearing package.
+function isBackgroundBlurSupported(): boolean {
+  if (typeof window === 'undefined') return false;
+  // BackgroundProcessor.isSupported: OffscreenCanvas, VideoFrame, createImageBitmap, WebGL2.
+  if (
+    !('OffscreenCanvas' in window) ||
+    !('VideoFrame' in window) ||
+    !('createImageBitmap' in window)
+  ) {
+    return false;
+  }
+  try {
+    if (!document.createElement('canvas').getContext('webgl2')) return false;
+  } catch {
+    return false;
+  }
+  // ProcessorWrapper.isSupported: modern MediaStreamTrackProcessor API OR canvas
+  // captureStream() fallback (Firefox 126+).
+  const hasStreamProcessor =
+    'MediaStreamTrackProcessor' in window &&
+    'MediaStreamTrackGenerator' in window;
+  const hasFallback =
+    typeof HTMLCanvasElement !== 'undefined' &&
+    'captureStream' in HTMLCanvasElement.prototype;
+  return hasStreamProcessor || hasFallback;
+}
+
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
@@ -349,12 +378,27 @@ export function CallOverlay(props: { onLeave: () => void }) {
           onClick={() => callCtx.toggleVideo()}
           active={!callCtx.isVideoMuted()}
           dropdownContent={
-            <DeviceList
-              label="Camera"
-              devices={callCtx.videoInputDevices()}
-              activeDeviceId={callCtx.activeVideoInputDeviceId()}
-              onSelect={(id) => callCtx.switchVideoInput(id)}
-            />
+            <>
+              <DeviceList
+                label="Camera"
+                devices={callCtx.videoInputDevices()}
+                activeDeviceId={callCtx.activeVideoInputDeviceId()}
+                onSelect={(id) => callCtx.switchVideoInput(id)}
+              />
+              <Show when={isBackgroundBlurSupported()}>
+                <MenuSeparator />
+                <MenuGroup>
+                  <GroupLabel>Effects</GroupLabel>
+                  <MenuItem
+                    text="Blur background"
+                    selectorType="checkbox"
+                    checked={callCtx.isBackgroundBlurred()}
+                    closeOnSelect={false}
+                    onClick={() => callCtx.toggleBackgroundBlur()}
+                  />
+                </MenuGroup>
+              </Show>
+            </>
           }
         >
           <Show
