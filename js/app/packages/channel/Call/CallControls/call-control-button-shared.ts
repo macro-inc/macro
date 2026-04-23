@@ -16,10 +16,10 @@ export const callControlPanelActive = `text-accent-2 ${callControlPanelHoverOpac
 export const callControlDefaultSize = 'h-10 w-10 rounded-lg';
 
 export const callControlDefaultIdle =
-  'border border-edge-muted bg-transparent hover:bg-surface-2/40 text-ink';
+  'border border-edge-muted bg-transparent hover:bg-edge/20 text-ink';
 
 export const callControlDefaultActive =
-  'border border-accent-2 bg-accent-2/25 hover:bg-accent-2/40 text-accent-2 hover:text-accent-2/70';
+  'border border-accent-2 bg-accent-2/25 text-accent-2 transition-opacity hover:bg-accent-2 hover:text-accent-2 hover:opacity-70';
 
 export const callControlDefaultDanger =
-  'border border-failure/50 hover:bg-failure/40 text-failure hover:text-failure';
+  'border border-failure/50 bg-transparent text-failure transition-colors hover:bg-failure hover:text-ink';
