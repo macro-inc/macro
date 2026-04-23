@@ -105,9 +105,6 @@ export function SplitContainer(
           // tl={props.tl}
           // bl={props.bl}
           // tr={props.tr}
-          // br={props.br}
-          // edgeColor="color-accent"
-          cornerRadius={'4px'}
         >
           <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
             <SplitHeader ref={setHeaderRef} />

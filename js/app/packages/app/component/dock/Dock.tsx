@@ -47,7 +47,7 @@ export function Dock() {
 					width: "100vw",
 				}}
 			>
-				<ClippedPanel bl br>
+				<ClippedPanel>
 					<div
 						style={{
 							"grid-template-columns": "min-content 1fr min-content",

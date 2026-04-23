@@ -178,10 +178,7 @@ export function Login() {
         </div>
 
         <div class="w-full max-w-[420px] login-card">
-          <ClippedPanel
-            cornerRadius={'4px'}
-            class="bg-panel shadow-lg shadow-[#1111]"
-          >
+          <ClippedPanel class="bg-panel shadow-lg shadow-[#1111]">
             <div class="login-stagger">
               <div
                 class={cn(

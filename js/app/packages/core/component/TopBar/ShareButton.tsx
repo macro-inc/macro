@@ -641,7 +641,7 @@ export function ShareModal(props: ShareModalProps) {
             style={{ width: '800px' }}
           >
             {/* Card 1: Share form — gradient border */}
-            <ClippedPanel active cornerRadius="4px">
+            <ClippedPanel active>
               <div class="text-ink flex flex-col">
                 <div class="shrink-0 flex flex-row items-center justify-between px-3 h-[40px] gap-2 border-b border-edge-muted">
                   <div class="flex-1 flex flex-row items-center gap-2 min-w-0">
@@ -679,7 +679,7 @@ export function ShareModal(props: ShareModalProps) {
 
             {/* Card 2: Recipients — plain border */}
             <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-              <ClippedPanel cornerRadius="4px">
+              <ClippedPanel>
                 <div class="text-ink flex flex-col">
                   <div class="shrink-0 h-[40px] flex items-center px-3 border-b border-edge-muted text-sm font-medium">
                     People with access to this{' '}
@@ -806,7 +806,7 @@ export function ShareModal(props: ShareModalProps) {
                 props.itemType !== 'email'
               }
             >
-              <ClippedPanel cornerRadius="4px">
+              <ClippedPanel>
                 <div class="text-ink flex flex-col">
                   <div
                     class="h-[40px] flex items-center justify-between px-3 text-sm font-medium"

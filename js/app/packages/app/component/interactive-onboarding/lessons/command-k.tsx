@@ -164,7 +164,7 @@ function CommandKDemo(props: LessonContentProps) {
               class="max-w-[calc(100vw-16px)] overflow-hidden portal-scope"
               style={{ width: '800px' }}
             >
-              <ClippedPanel active cornerRadius="4px">
+              <ClippedPanel active>
                 <div class="[&>*]:max-h-[75vh]" ref={setCommandMenuRef}>
                   <CommandMenuInner
                     commandMenuRef={commandMenuRef}

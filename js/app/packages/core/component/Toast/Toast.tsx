@@ -307,8 +307,7 @@ function ToastContent(props: {
         edgeColor="var(--color-edge-muted)"
         highlightColor={accentColor()}
         active
-        cornerRadius={'8px'}
-        class="relative w-[90vw] sm:w-md px-2 sm:p-3 overflow-clip"
+        class="relative w-[90vw] sm:w-md px-2 sm:p-3 overflow-clip rounded-lg"
       >
         <Switch>
           {/* ── Embed layout ── */}

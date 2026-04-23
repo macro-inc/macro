@@ -459,10 +459,7 @@ function InteractiveOnboardingInner() {
 
       {/* Centered card */}
       <div class="size-full max-w-[1600px] max-h-[900px]">
-        <ClippedPanel
-          cornerRadius={'4px'}
-          class="bg-panel size-full shadow-lg shadow-[#1111]"
-        >
+        <ClippedPanel class="bg-panel size-full shadow-lg shadow-[#1111]">
           <div class="size-full flex">
             <Show
               when={state.currentLesson()}

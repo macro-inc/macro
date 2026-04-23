@@ -318,7 +318,7 @@ export function ActionMenu(props: {
           use:clickOutside={clickOutsideHandler}
           ref={menuRef}
         >
-          <ClippedPanel active class="py-2 bg-panel" cornerRadius={'4px'}>
+          <ClippedPanel active class="py-2 bg-panel">
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{
