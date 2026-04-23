@@ -1,4 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import { cn } from '@ui/utils/classname';
 import CaretDown from '@icon/regular/caret-down.svg';
 import { type Component, type JSX, Show, useContext } from 'solid-js';
 import {
@@ -136,15 +137,27 @@ export function DeprecatedTextButton(props: TextButtonProps) {
 
   return (
     <div
-      class={`${themeColors[props.theme]} flex flex-row ${props.height ?? 'h-8'} max-w-full justify-start items-center gap-0 cursor-default ${props.class ?? ''}`}
+      class={cn(
+        themeColors[props.theme],
+        'flex flex-row',
+        props.height ?? 'h-8',
+        'max-w-full justify-start items-center gap-0 cursor-default',
+        props.class
+      )}
       ref={props.ref}
       id={props.id}
     >
       <Wrapper tooltip={props.tooltip}>
         <button
-          class={`${themeStyles[props.theme]} flex flex-row ${props.height ?? 'h-8'} px-2 $
-              ${props.outline ? 'border-1 border-edge' : ''}
-              justify-center items-center w-full ${props.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          class={cn(
+            themeStyles[props.theme],
+            'flex flex-row',
+            props.height ?? 'h-8',
+            'px-2',
+            props.outline && 'border-1 border-edge',
+            'justify-center items-center w-full',
+            props.disabled && 'opacity-50 cursor-not-allowed'
+          )}
           onClick={props.onClick}
           onMouseDown={props.onMouseDown}
           disabled={props.disabled}
@@ -157,12 +170,19 @@ export function DeprecatedTextButton(props: TextButtonProps) {
         >
           {props.icon && (
             <div class="flex justify-start items-center h-full">
-              <props.icon class={`flex w-4 h-4 ${props.iconColor ?? ''}`} />
+              <props.icon class={cn('flex w-4 h-4', props.iconColor)} />
             </div>
           )}
           <div class="flex flex-1 justify-between items-center gap-2 min-w-0">
             <div
-              class={`${props.width ? props.width + ' truncate ' : ''}${props.textSize ?? 'text-xs'} font-mono uppercase flex-1 ${props.left ? 'text-left' : 'text-center'} font-medium leading-5 whitespace-nowrap truncate`}
+              class={cn(
+                props.width,
+                props.width && 'truncate',
+                props.textSize ?? 'text-xs',
+                'font-mono uppercase flex-1',
+                props.left ? 'text-left' : 'text-center',
+                'font-medium leading-5 whitespace-nowrap truncate'
+              )}
             >
               {props.text ?? props.children}
             </div>
@@ -181,7 +201,7 @@ export function DeprecatedTextButton(props: TextButtonProps) {
           {props.showChevron && !hasSecondaryButton() && (
             <div class="flex justify-center items-center h-full">
               <CaretDown
-                class={`flex w-3 h-3 ${props.rotateChevron ? 'rotate-180' : ''}`}
+                class={cn('flex w-3 h-3', props.rotateChevron && 'rotate-180')}
               />
             </div>
           )}
@@ -189,7 +209,11 @@ export function DeprecatedTextButton(props: TextButtonProps) {
       </Wrapper>
       {hasSecondaryButton() && (
         <button
-          class={`${themeStyles[props.theme]} flex h-full px-2 border-l-0 justify-center items-center ${props.outline ? 'border-1 border-edge' : ''}`}
+          class={cn(
+            themeStyles[props.theme],
+            'flex h-full px-2 border-l-0 justify-center items-center',
+            props.outline && 'border-1 border-edge'
+          )}
           onClick={props.onOptionClick}
           disabled={props.disabled}
         >
@@ -201,7 +225,7 @@ export function DeprecatedTextButton(props: TextButtonProps) {
             )}
             {props.showChevron && (
               <CaretDown
-                class={`flex w-3 h-3 ${props.rotateChevron ? 'rotate-180' : ''}`}
+                class={cn('flex w-3 h-3', props.rotateChevron && 'rotate-180')}
               />
             )}
           </Wrapper>
@@ -218,13 +242,19 @@ export function DeprecatedEditingTextButton(
   const [_, setIsRenaming] = useContext(EditingContext);
   return (
     <div
-      class={`${themeColors[props.theme]} flex flex-row ${props.height ?? 'h-8'} justify-start items-center gap-0
-        cursor-default border shadow-inner border-edge bg-input`}
+      class={cn(
+        themeColors[props.theme],
+        'flex flex-row',
+        props.height ?? 'h-8',
+        'justify-start items-center gap-0 cursor-default border shadow-inner border-edge bg-input'
+      )}
       ref={props.ref}
     >
       <div
-        class={`
-        ${themeStyles[props.theme]} flex flex-row h-full px-2 justify-center items-center gap-2`}
+        class={cn(
+          themeStyles[props.theme],
+          'flex flex-row h-full px-2 justify-center items-center gap-2'
+        )}
       >
         {props.icon && (
           <div class="flex justify-start items-center w-4 h-4">
@@ -232,7 +262,11 @@ export function DeprecatedEditingTextButton(
           </div>
         )}
         <div
-          class={`${props.width} ${props.width !== undefined && 'truncate'} font-medium text-sm leading-5 whitespace-nowrap`}
+          class={cn(
+            props.width,
+            props.width !== undefined && 'truncate',
+            'font-medium text-sm leading-5 whitespace-nowrap'
+          )}
         >
           <EditableLabel
             {...props}

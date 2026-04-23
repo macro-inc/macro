@@ -1,5 +1,6 @@
 import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import GridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
+import { cn } from '@ui/utils/classname';
 import { createSignal, onMount } from 'solid-js';
 
 const defaultPlaceholder = 'Generate with AI...';
@@ -91,13 +92,20 @@ export function InlineInputReady(props: InlineInputReadyProps) {
         }}
       />
       <button
-        class={`bg-transparent rounded-full ${isEmpty() ? '' : 'hover:scale-110!'} transition ease-in-out delay-150 flex flex-col justify-center items-center py-1`}
+        class={cn(
+          'bg-transparent rounded-full transition ease-in-out delay-150 flex flex-col justify-center items-center py-1',
+          !isEmpty() && 'hover:scale-110!'
+        )}
         onClick={checkedSend}
       >
         <PaperPlaneRight
           width={20}
           height={20}
-          class={`${isEmpty() ? 'text-ink-extra-muted/30 fill-ink-disabled' : 'text-accent-ink !fill-accent'} `}
+          class={cn(
+            isEmpty()
+              ? 'text-ink-extra-muted/30 fill-ink-disabled'
+              : 'text-accent-ink !fill-accent'
+          )}
         />
       </button>
     </div>
@@ -118,7 +126,7 @@ export function InlineInputLoading(props: InlineInputLoadingProps) {
         placeholder={props?.options?.placeholderText ?? defaultPlaceholder}
       />
       <div
-        class={`text-ink-muted bg-transparent rounded-full flex flex-col justify-center items-center py-1`}
+        class="text-ink-muted bg-transparent rounded-full flex flex-col justify-center items-center py-1"
         onClick={() => {}}
       >
         <GridLoader width={20} height={20} class="text-accent" />
@@ -137,7 +145,7 @@ export function InlineInputDisabled(props: InlineInputLoadingProps) {
         placeholder={props?.options?.placeholderText ?? defaultPlaceholder}
       />
       <div
-        class={`text-ink-extra-muted bg-transparent rounded-full flex flex-col justify-center items-center py-1`}
+        class="text-ink-extra-muted bg-transparent rounded-full flex flex-col justify-center items-center py-1"
         onClick={() => {}}
       >
         <PaperPlaneRight

@@ -1,5 +1,6 @@
 import { Track, type RemoteParticipant } from 'livekit-client';
 import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 import { TrackView } from './TrackView';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import Microphone from '@icon/regular/microphone.svg';
@@ -310,7 +311,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
       {/* Participants grid */}
       <div
-        class={`${hasAnyScreenShare() ? 'h-[140px] shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 p-2 auto-rows-fr overflow-hidden`}
+        class={cn('grid gap-2 p-2 auto-rows-fr overflow-hidden', hasAnyScreenShare() ? 'h-[140px] shrink-0' : 'flex-1 min-h-0', gridCols())}
       >
         {/* Local participant */}
         <div

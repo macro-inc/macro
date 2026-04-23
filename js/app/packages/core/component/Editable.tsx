@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import {
   type ComponentProps,
   createContext,
@@ -168,9 +169,11 @@ export function EditableLabel(props: EditableLabelProps) {
       <Show when={editableLabelProps.dynamicSizing}>
         <span
           ref={spanRef}
-          class={`text-ink text-sm font-medium font-sans 
-             overflow-hidden border-0 min-w-12 max-w-42
-             absolute whitespace-pre invisible`}
+          class={cn(
+            'text-ink text-sm font-medium font-sans',
+            'overflow-hidden border-0 min-w-12 max-w-42',
+            'absolute whitespace-pre invisible'
+          )}
           style="top: 0; left: 0;"
         ></span>
       </Show>

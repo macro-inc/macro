@@ -2,6 +2,7 @@ import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
 import { useAnalytics } from 'app/component/analytics-context';
 import { applyTheme } from '../utils/themeUtils';
 import { ColorSwatch } from './ColorSwatch';
+import { cn } from '@ui/utils/classname';
 
 import { For } from 'solid-js';
 
@@ -57,7 +58,6 @@ export function ThemeList() {
       <div
         style="
           font-family: var(--font-sans);
-          background-color: var(--b1);
           scrollbar-width: none;
           position: relative;
           overflow: hidden;
@@ -78,17 +78,13 @@ export function ThemeList() {
         >
           <div
             style="
-              background-color: var(--color-edge-muted);
               box-sizing: border-box;
               overflow-x: hidden;
               display: grid;
-              gap: 1px;
             "
           >
             <div
               style="
-                border-bottom: 1px solid var(--color-edge-muted);
-                background-color: var(--b1);
                 align-items: center;
                 position: absolute;
                 padding: 0 20px;
@@ -96,25 +92,28 @@ export function ThemeList() {
                 height: 42px;
                 width: 100%;
                 z-index: 1;
+                border-bottom: 1px solid oklch(from var(--color-edge-muted) l c h / 0.5);
               "
             >
               <div style="font-size: var(--text-xs);">Theme List</div>
             </div>
-            <div style="height: 41px;" />
+            <div style="height: 40px;" />
           <For each={themes()}>
             {(theme) => (
               <div
-                class={`theme-list-item ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}
+                class={cn(
+                  'theme-list-item font-mono text-xs text-ink-extra-muted',
+                  theme.id === currentThemeId() && isThemeSaved() && 'current-theme'
+                )}
                 onClick={() => {
                   analytics.track('theme_changed', {themeId: theme.id})
                   applyTheme(theme.id)
                 }}
                 style="
                   grid-template-columns: min-content 1fr min-content;
-                  background-color: var(--b1);
+                  cursor: var(--cursor-pointer);
                   align-items: center;
                   padding: 10px 20px;
-                  cursor: var(--cursor-pointer);
                   display: grid;
                   gap: 20px;
                 "

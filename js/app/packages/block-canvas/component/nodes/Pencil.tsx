@@ -136,7 +136,7 @@ export function Pencil(props: { node: PencilNode; mode: RenderMode }) {
 
   return (
     <>
-      <div class={`absolute top-0 left-0`} onPointerDown={pointerdown}>
+      <div class="absolute top-0 left-0" onPointerDown={pointerdown}>
         <svg width="10px" height="10px" class="overflow-visible">
           <g
             transform={`translate(${x()} ${y()}) scale(${wScale()} ${hScale()})`}
@@ -165,7 +165,7 @@ export function Pencil(props: { node: PencilNode; mode: RenderMode }) {
         </svg>
       </div>
       <Portal mount={layerContext().selection}>
-        <div class={`absolute top-0 left-0`}>
+        <div class="absolute top-0 left-0">
           <svg width="10px" height="10px" class="overflow-visible">
             <g
               transform={`translate(${x()} ${y()}) scale(${wScale()} ${hScale()})`}
