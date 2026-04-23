@@ -365,7 +365,7 @@ function SkipAction(props: LessonContentProps) {
     <button
       type="button"
       onClick={() => props.advance()}
-      class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between text-ink/60 hover:text-ink hover:bg-ink/5 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
+      class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between text-ink/40 hover:text-ink hover:bg-ink/5 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
     >
       Skip for now
     </button>
