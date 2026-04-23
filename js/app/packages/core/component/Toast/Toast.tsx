@@ -16,7 +16,7 @@ import {
   on,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { ClippedPanel } from '../ClippedPanel';
+import { RoundPanel } from '../RoundPanel';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 
@@ -118,7 +118,7 @@ export interface ToastAction {
 /**
  * Config for a fully custom toast.
  * Replaces the icon, title, and accent color of the standard layout while
- * still using the shared ClippedPanel chrome and progress/dismiss machinery.
+ * still using the shared RoundPanel chrome and progress/dismiss machinery.
  */
 export interface CustomToastConfig {
   title: string;
@@ -296,18 +296,18 @@ function ToastContent(props: {
   return (
     <Toast
       toastId={props.toastId}
-      class={`relative overflow-visible pointer-events-auto shadow-md rounded-lg
+      class={`relative overflow-visible pointer-events-auto shadow-md rounded
         data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <ClippedPanel
+      <RoundPanel
         edgeColor="var(--color-edge-muted)"
         highlightColor={accentColor()}
         active
-        class="relative w-[90vw] sm:w-md px-2 sm:p-3 overflow-clip rounded-lg"
+        class="relative w-[90vw] sm:w-md px-2 sm:p-3"
       >
         <Switch>
           {/* ── Embed layout ── */}
@@ -406,7 +406,7 @@ function ToastContent(props: {
             }}
           />
         </Show>
-      </ClippedPanel>
+      </RoundPanel>
     </Toast>
   );
 }
@@ -550,7 +550,7 @@ function embed(
 
 /**
  * Show a toast with a fully custom title, icon, accent color, body content,
- * and actions row — while still using the shared ClippedPanel chrome and
+ * and actions row — while still using the shared RoundPanel chrome and
  * progress/dismiss machinery.
  */
 function custom(

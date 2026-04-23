@@ -1,13 +1,13 @@
 import { splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
-export type ClippedPanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
-  active?: boolean;
-  edgeColor?: JSX.CSSProperties['color'];
+export type RoundPanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
   highlightColor?: JSX.CSSProperties['color'];
+  edgeColor?: JSX.CSSProperties['color'];
+  active?: boolean;
 };
 
-export function ClippedPanel(props: ClippedPanelProps) {
+export function RoundPanel(props: RoundPanelProps) {
   const [local, rest] = splitProps(props, [
     'active',
     'edgeColor',
@@ -24,11 +24,11 @@ export function ClippedPanel(props: ClippedPanelProps) {
       style={{
         'background-image': `linear-gradient(${local.active ? `${hl()}, ${edge()} 80%` : edge()})`,
       }}
-      class="p-px h-full w-full box-border rounded"
+      class="p-px h-full w-full box-border rounded overflow-clip"
     >
       <div
         class={cn(
-          'h-full w-full box-border overflow-hidden bg-panel rounded',
+          'h-full w-full box-border bg-panel rounded-[3px] overflow-clip',
           local.class
         )}
         {...rest}

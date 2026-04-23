@@ -13,9 +13,9 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
 import {
-  ClippedPanel,
-  type ClippedPanelProps,
-} from '@core/component/ClippedPanel';
+  RoundPanel,
+  type RoundPanelProps,
+} from '@core/component/RoundPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 
@@ -59,10 +59,10 @@ export function SplitContainer(
     return Boolean(splits && splits.length > 1);
   }
 
-  function MaybeClippedPanel(props: ClippedPanelProps) {
+  function MaybeRoundPanel(props: RoundPanelProps) {
     return (
       <Show when={!isMobile()} fallback={props.children}>
-        <ClippedPanel {...props} />
+        <RoundPanel {...props} />
       </Show>
     );
   }
@@ -95,7 +95,7 @@ export function SplitContainer(
         data-modal={panel.handle.isSpotLight()}
         tabindex={-1}
       >
-        <MaybeClippedPanel
+        <MaybeRoundPanel
           active={
             panel.isPanelActive() &&
             multipleSplits() &&
@@ -116,7 +116,7 @@ export function SplitContainer(
               <MacroJump tabbableParent={ref} />
             </Show>
           </div>
-        </MaybeClippedPanel>
+        </MaybeRoundPanel>
       </div>
     </SplitDrawerGroup>
   );

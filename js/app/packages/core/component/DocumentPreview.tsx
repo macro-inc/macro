@@ -12,7 +12,7 @@ import {
 } from '@core/block';
 import { itemToBlockName } from '@core/constant/allBlocks';
 // Components
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { RoundPanel } from '@core/component/RoundPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
@@ -706,7 +706,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <ClippedPanel active>
+      <RoundPanel active>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
@@ -867,7 +867,7 @@ export function PopupPreview(props: {
             )}
           </Match>
         </Switch>
-      </ClippedPanel>
+      </RoundPanel>
     </div>
   );
 }
