@@ -105,7 +105,6 @@ export function CallControlsDefaultAndPanelRow(
 
       <CallControlButton
         variant={variant()}
-        // accent
         onClick={() => callCtx.toggleScreenShare()}
         active={callCtx.isScreenSharing()}
         disabled={isConnecting()}
