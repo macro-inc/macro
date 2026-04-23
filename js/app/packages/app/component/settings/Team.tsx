@@ -112,9 +112,9 @@ function MemberRow(props: {
           <UserIcon id={props.member.user_id} isDeleted={false} size="md" />
         </div>
         <div class="min-w-0 flex-1">
-          <div class="text-sm text-ink truncate">
+          <div class="text-sm font-medium text-ink truncate">
             {displayName()}
-            {props.isCurrentUser && <span class="text-ink-muted"> (you)</span>}
+            {props.isCurrentUser && <span class="text-ink-muted font-normal"> (you)</span>}
           </div>
           <div class="text-xs text-ink-muted">{props.member.role}</div>
         </div>
@@ -356,13 +356,13 @@ export function Team() {
           }
         >
           <header class="mb-6">
-            <h2 class="text-xl font-bold text-ink">{originalTeamName()}</h2>
+            <h2 class="text-xl font-semibold text-ink">{originalTeamName()}</h2>
           </header>
 
           <section class="mb-6">
             <header class="flex items-center justify-between mb-2">
               <div>
-                <h3 class="text-sm">Details</h3>
+                <h3 class="text-sm font-medium">Details</h3>
                 <p class="text-xs text-ink-muted">Team information and settings.</p>
               </div>
               <Show
@@ -384,7 +384,7 @@ export function Team() {
             </header>
             <div class="border border-edge rounded-sm px-3">
               <div class="flex items-center justify-between py-2">
-                <span class="text-sm text-ink-muted">Name</span>
+                <span class="text-sm font-medium text-ink-muted">Name</span>
                 <Show
                   when={isOwner()}
                   fallback={<span class="text-sm text-ink">{originalTeamName()}</span>}
@@ -434,7 +434,7 @@ export function Team() {
           <section class="mb-6">
             <header class="flex items-center justify-between mb-2">
               <div>
-                <h3 class="text-sm">Members ({members().length})</h3>
+                <h3 class="text-sm font-medium">Members ({members().length})</h3>
                 <p class="text-xs text-ink-muted">People who have access to this team.</p>
               </div>
               <Show when={isOwner()}>
@@ -476,7 +476,7 @@ export function Team() {
 
           <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
             <section class="mb-6">
-              <h3 class="text-sm mb-2">Pending Invites</h3>
+              <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
               <div class="border border-edge rounded-md px-3">
                 <For each={invitesQuery.data?.invites ?? []}>
                   {(invite) => (
