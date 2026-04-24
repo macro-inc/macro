@@ -4,6 +4,7 @@ use crate::domain::models::{
 use crate::domain::ports::ChannelMessagesRepo;
 use crate::outbound::pg_channels_repo::PgChannelMessagesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Cursor, CursorVal, Query};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -30,6 +31,10 @@ const USER_B: &str = "macro|user-b@test.com";
 
 fn repo(pool: Pool<Postgres>) -> PgChannelMessagesRepo {
     PgChannelMessagesRepo::new(pool)
+}
+
+fn macro_user_id(user_id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(user_id.to_owned()).expect("valid macro user id")
 }
 
 async fn insert_channel_message_notification(
@@ -926,7 +931,7 @@ async fn notification_done_filter_matches_top_level_messages_and_thread_replies(
             MessagePageDirection::Older,
             50,
             &filters,
-            Some(USER_A.to_owned()),
+            Some(macro_user_id(USER_A)),
         )
         .await?;
 
@@ -960,7 +965,7 @@ async fn notification_not_done_filter_matches_top_level_messages_and_thread_repl
             MessagePageDirection::Older,
             50,
             &filters,
-            Some(USER_A.to_owned()),
+            Some(macro_user_id(USER_A)),
         )
         .await?;
 
@@ -994,7 +999,7 @@ async fn notification_seen_filter_matches_top_level_messages_and_thread_replies(
             MessagePageDirection::Older,
             50,
             &filters,
-            Some(USER_A.to_owned()),
+            Some(macro_user_id(USER_A)),
         )
         .await?;
 
@@ -1028,7 +1033,7 @@ async fn notification_not_seen_filter_matches_top_level_messages_and_thread_repl
             MessagePageDirection::Older,
             50,
             &filters,
-            Some(USER_A.to_owned()),
+            Some(macro_user_id(USER_A)),
         )
         .await?;
 
@@ -1061,7 +1066,7 @@ async fn notification_done_and_seen_filters_match_soup_independent_exists_semant
             MessagePageDirection::Older,
             50,
             &filters,
-            Some(USER_A.to_owned()),
+            Some(macro_user_id(USER_A)),
         )
         .await?;
 
@@ -1093,7 +1098,7 @@ async fn notification_filter_is_scoped_to_requesting_user(
             MessagePageDirection::Older,
             50,
             &filters,
-            Some(USER_A.to_owned()),
+            Some(macro_user_id(USER_A)),
         )
         .await?;
 

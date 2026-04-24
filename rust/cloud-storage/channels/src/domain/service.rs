@@ -8,6 +8,7 @@ use crate::domain::{
         ChannelMessagesQueryResult, ChannelMessagesRepo, ChannelMessagesService,
     },
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use uuid::Uuid;
 
@@ -162,7 +163,7 @@ where
         direction: MessagePageDirection,
         limit: u16,
         filters: &ChannelMessageFilters,
-        notification_user_id: Option<String>,
+        notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 

@@ -173,7 +173,7 @@ impl ChannelMessagesService for MockService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<String>,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -237,7 +237,7 @@ impl ChannelMessagesService for ErrorService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<String>,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
@@ -286,7 +286,7 @@ impl ChannelMessagesService for ParticipantsService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<String>,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -586,7 +586,7 @@ impl ChannelMessagesService for NotFoundService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<String>,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -646,7 +646,7 @@ impl ChannelMessagesService for AroundHasItemsService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<String>,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -793,7 +793,7 @@ async fn messages_around_returns_404_when_not_found() {
 
 struct CapturingService {
     captured: std::sync::Mutex<Option<ChannelMessageFilters>>,
-    captured_notification_user_id: std::sync::Mutex<Option<String>>,
+    captured_notification_user_id: std::sync::Mutex<Option<MacroUserIdStr<'static>>>,
 }
 
 impl CapturingService {
@@ -813,7 +813,7 @@ impl ChannelMessagesService for std::sync::Arc<CapturingService> {
         _direction: MessagePageDirection,
         _limit: u16,
         filters: &ChannelMessageFilters,
-        notification_user_id: Option<String>,
+        notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         *self.captured.lock().unwrap() = Some(filters.clone());
         *self.captured_notification_user_id.lock().unwrap() = notification_user_id;
@@ -988,10 +988,13 @@ async fn post_messages_forwards_notification_filter_for_authenticated_user() {
     let captured = svc.captured.lock().unwrap().clone().unwrap();
     assert_eq!(captured.notification_filters.done, Some(false));
     assert_eq!(captured.notification_filters.seen, Some(true));
-    assert_eq!(
-        svc.captured_notification_user_id.lock().unwrap().as_deref(),
-        Some("macro|test@example.com")
-    );
+    let captured_user_id = svc
+        .captured_notification_user_id
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(ToString::to_string);
+    assert_eq!(captured_user_id.as_deref(), Some("macro|test@example.com"));
 }
 
 #[tokio::test]

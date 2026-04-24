@@ -10,6 +10,7 @@ use crate::domain::{
     ports::{ChannelMessagesRepo, TopLevelMessagesQueryResult},
 };
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -121,7 +122,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         direction: MessagePageDirection,
         limit: u16,
         filters: &ChannelMessageFilters,
-        notification_user_id: Option<String>,
+        notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<TopLevelMessagesQueryResult, Self::Err> {
         let (cursor_created_at, cursor_id) = match query.vals() {
             (Some(id), Some(val)) => (Some(*val), Some(*id)),
@@ -137,7 +138,14 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         };
         let last_activity = filters.last_activity;
         let notification_filter_active = !filters.notification_filters.is_empty();
-        let notification_user_id = notification_user_id.as_deref();
+        let notification_user_id = match (notification_filter_active, notification_user_id.as_ref())
+        {
+            (true, Some(user_id)) => Some(user_id.as_ref()),
+            (true, None) => {
+                anyhow::bail!("notification_user_id is required when notification_filters are set")
+            }
+            (false, _) => None,
+        };
         let notification_done = filters.notification_filters.done;
         let notification_seen = filters.notification_filters.seen;
 

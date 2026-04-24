@@ -24,6 +24,7 @@ use entity_access::{
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use models_pagination::{
     Base64Str, BidirectionalCursor, CreatedAt, Cursor, CursorOptionExt, CursorVal,
@@ -74,7 +75,7 @@ fn channel_id_from_receipt<T: RequiredPermission>(
 fn notification_user_id_from_receipt<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
     filters: &ChannelMessageFilters,
-) -> Result<Option<String>, ChannelsHandlerErr> {
+) -> Result<Option<MacroUserIdStr<'static>>, ChannelsHandlerErr> {
     if filters.notification_filters.is_empty() {
         return Ok(None);
     }
@@ -82,7 +83,7 @@ fn notification_user_id_from_receipt<T: RequiredPermission>(
     let user = receipt.get_authenticated_user().map_err(|_| {
         ChannelsHandlerErr::BadRequest("notification filters require authenticated user")
     })?;
-    Ok(Some(user.to_string()))
+    Ok(Some(user.clone()))
 }
 
 const MAX_MESSAGE_ID_FILTERS: usize = 100;
@@ -281,7 +282,7 @@ async fn channel_messages_response<S: ChannelMessagesService, Svc>(
     cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
     channel_id: Uuid,
     filters: &ChannelMessageFilters,
-    notification_user_id: Option<String>,
+    notification_user_id: Option<MacroUserIdStr<'static>>,
 ) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let (query, direction, has_cursor) = parse_messages_query(cursor);
