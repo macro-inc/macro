@@ -217,8 +217,8 @@ function UserInviteRow(props: {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Button
-          variant="ghost"
-          size="sm"
+          variant="tertiary"
+          class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}
         >
@@ -228,7 +228,7 @@ function UserInviteRow(props: {
         </Button>
         <Button
           variant="accent"
-          size="sm"
+          class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
         >
