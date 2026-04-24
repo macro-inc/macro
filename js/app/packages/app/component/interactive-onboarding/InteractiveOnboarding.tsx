@@ -5,6 +5,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -34,6 +35,8 @@ import MobileWebSignupSent from './MobileWebSignupSent';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { isOk } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 
 export default function InteractiveOnboarding() {
   const isAuthenticated = useIsAuthenticated();
@@ -101,21 +104,29 @@ function InteractiveOnboardingInner() {
 
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
-  const allLessons = LESSONS.filter((l) => {
-    if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
-      return false;
-    if (l.id === 'about-us' && isAuthenticated()) return false;
-    return true;
+  const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
+    enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
-  const lessons = isTouch
-    ? allLessons.filter(
-        (l) =>
-          l.id === 'welcome' ||
-          l.id === 'about-us' ||
-          l.id === 'choose-plan' ||
-          l.id === 'launch'
-      )
-    : allLessons;
+  const allLessons = createMemo(() =>
+    LESSONS.filter((l) => {
+      if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
+        return false;
+      if (l.id === 'about-us' && isAuthenticated()) return false;
+      if (l.id === 'invite-team' && !inviteTeamEnabled().enabled) return false;
+      return true;
+    })
+  );
+  const lessons = createMemo(() =>
+    isTouch
+      ? allLessons().filter(
+          (l) =>
+            l.id === 'welcome' ||
+            l.id === 'about-us' ||
+            l.id === 'choose-plan' ||
+            l.id === 'launch'
+        )
+      : allLessons()
+  );
 
   const testMode = new URLSearchParams(location.search).has('test');
 
@@ -124,12 +135,16 @@ function InteractiveOnboardingInner() {
   const slideIndex =
     slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
 
-  const sortedLessons = [...lessons].sort(
-    (a, b) => (a.order ?? 0) - (b.order ?? 0)
+  const sortedLessons = createMemo(() =>
+    [...lessons()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   );
   const debugCompleted =
     slideIndex !== null
-      ? new Set(sortedLessons.slice(0, slideIndex).map((l) => l.id))
+      ? new Set(
+          sortedLessons()
+            .slice(0, slideIndex)
+            .map((l) => l.id)
+        )
       : undefined;
 
   // Detect a return-from-OAuth param synchronously so we can pre-populate
@@ -141,7 +156,7 @@ function InteractiveOnboardingInner() {
   );
   const returnCompleted = returningLesson
     ? new Set(
-        sortedLessons
+        sortedLessons()
           .filter((l) => (l.order ?? 0) <= (returningLesson.order ?? 0))
           .map((l) => l.id)
       )
@@ -181,14 +196,21 @@ function InteractiveOnboardingInner() {
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
-  const handleLessonComplete = (buttonLabel?: string) => {
+  const handleLessonComplete = (
+    buttonLabel?: string,
+    options?: { skipFocus?: boolean }
+  ) => {
     setContinueLabel(buttonLabel);
     setReadyToContinue(true);
     // Skip auto-focus on touch — Safari scrolls to the focused element,
     // which jumps the view to the bottom on longer lessons.
-    if (!isTouch) {
+    if (!isTouch && !options?.skipFocus) {
       requestAnimationFrame(() => continueButtonRef?.focus());
     }
+  };
+
+  const handleLessonUnready = () => {
+    setReadyToContinue(false);
   };
 
   // Programmatic advance for lessons that progress on their own interaction
@@ -513,6 +535,7 @@ function InteractiveOnboardingInner() {
                           <Dynamic
                             component={lesson().definition.content}
                             onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
                             advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}
@@ -524,6 +547,7 @@ function InteractiveOnboardingInner() {
                               <Dynamic
                                 component={Demo()}
                                 onComplete={handleLessonComplete}
+                                onUnready={handleLessonUnready}
                                 advance={advanceLesson}
                                 isActive={true}
                                 scopeId={scopeId}
@@ -543,7 +567,16 @@ function InteractiveOnboardingInner() {
                               centered={lesson().definition.centeredButton}
                             />
                             <Show when={lesson().definition.secondaryAction}>
-                              {(Action) => <Dynamic component={Action()} />}
+                              {(Action) => (
+                                <Dynamic
+                                  component={Action()}
+                                  onComplete={handleLessonComplete}
+                                  onUnready={handleLessonUnready}
+                                  advance={advanceLesson}
+                                  isActive={true}
+                                  scopeId={scopeId}
+                                />
+                              )}
                             </Show>
                           </div>
                         </Show>
@@ -576,6 +609,7 @@ function InteractiveOnboardingInner() {
                         <Dynamic
                           component={lesson().definition.content}
                           onComplete={handleLessonComplete}
+                          onUnready={handleLessonUnready}
                           advance={advanceLesson}
                           isActive={true}
                           scopeId={scopeId}
@@ -593,7 +627,16 @@ function InteractiveOnboardingInner() {
                             centered={lesson().definition.centeredButton}
                           />
                           <Show when={lesson().definition.secondaryAction}>
-                            {(Action) => <Dynamic component={Action()} />}
+                            {(Action) => (
+                              <Dynamic
+                                component={Action()}
+                                onComplete={handleLessonComplete}
+                                onUnready={handleLessonUnready}
+                                advance={advanceLesson}
+                                isActive={true}
+                                scopeId={scopeId}
+                              />
+                            )}
                           </Show>
                         </div>
                       </Show>
@@ -630,6 +673,7 @@ function InteractiveOnboardingInner() {
                           <Dynamic
                             component={Demo()}
                             onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
                             advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}

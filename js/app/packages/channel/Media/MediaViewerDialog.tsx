@@ -22,6 +22,7 @@ function VideoViewerContent(props: {
   onPrevious?: () => void;
   onNext?: () => void;
   indexLabel?: Accessor<string>;
+  navigationHidden?: boolean;
 }) {
   const navButtonClass =
     'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-colors disabled:cursor-not-allowed disabled:opacity-50';
@@ -58,25 +59,27 @@ function VideoViewerContent(props: {
           </div>
         </Show>
 
-        <button
-          class={cn(navButtonClass, 'left-4')}
-          style={{ 'z-index': stackingContext.zModal + 1 }}
-          onClick={props.onPrevious}
-          disabled={!props.onPrevious}
-          aria-label="Previous media"
-        >
-          <ChevronLeftIcon class="h-5 w-5 text-ink" />
-        </button>
+        <Show when={!props.navigationHidden}>
+          <button
+            class={cn(navButtonClass, 'left-4')}
+            style={{ 'z-index': stackingContext.zModal + 1 }}
+            onClick={props.onPrevious}
+            disabled={!props.onPrevious}
+            aria-label="Previous media"
+          >
+            <ChevronLeftIcon class="h-5 w-5 text-ink" />
+          </button>
 
-        <button
-          class={cn(navButtonClass, 'right-4')}
-          style={{ 'z-index': stackingContext.zModal + 1 }}
-          onClick={props.onNext}
-          disabled={!props.onNext}
-          aria-label="Next media"
-        >
-          <ChevronRightIcon class="h-5 w-5 text-ink" />
-        </button>
+          <button
+            class={cn(navButtonClass, 'right-4')}
+            style={{ 'z-index': stackingContext.zModal + 1 }}
+            onClick={props.onNext}
+            disabled={!props.onNext}
+            aria-label="Next media"
+          >
+            <ChevronRightIcon class="h-5 w-5 text-ink" />
+          </button>
+        </Show>
 
         <div class="flex h-full w-full items-center justify-center">
           <video
@@ -124,6 +127,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
                   onPrevious={hasPrevious() ? navigatePrevious : undefined}
                   onNext={hasNext() ? navigateNext : undefined}
                   indexLabel={hasMultipleItems() ? indexLabel : undefined}
+                  navigationHidden={!hasMultipleItems()}
                 />
               }
             >
@@ -132,6 +136,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
                 imageId={() => item().id}
                 onPrevious={hasPrevious() ? navigatePrevious : undefined}
                 onNext={hasNext() ? navigateNext : undefined}
+                navigationHidden={!hasMultipleItems()}
                 indexLabel={hasMultipleItems() ? indexLabel : undefined}
               />
             </Show>

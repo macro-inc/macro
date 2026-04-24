@@ -89,6 +89,14 @@ const [persistedBlurPref, setPersistedBlurPref] = makePersisted(
   { name: 'call.backgroundBlur' }
 );
 
+// Persisted across reloads — users with hardware noise cancellation (e.g.
+// AirPods Pro, Bose) need to disable app-side NS to avoid cascading filters
+// that attenuate voice. Defaults to on to match existing behavior.
+const [persistedNoiseSuppressionPref, setPersistedNoiseSuppressionPref] =
+  makePersisted(createSignal<boolean>(true), {
+    name: 'call.noiseSuppression',
+  });
+
 export type CallState = {
   /** The LiveKit Room instance, null when not in a call */
   room: () => Room | null;
@@ -179,6 +187,7 @@ function createCallState() {
   const [store, setStore] = createStore<CallStoreState>({
     ...initialState,
     isBackgroundBlurred: persistedBlurPref(),
+    isNoiseSuppressed: persistedNoiseSuppressionPref(),
   });
   const [krispFilter, setKrispFilter] = createSignal<ReturnType<
     typeof KrispNoiseFilter
@@ -214,6 +223,25 @@ function createCallState() {
       setKrispFilter(krisp);
     } catch (e) {
       console.error('failed to re-attach Krisp noise filter', e);
+    }
+  }
+
+  /** Stop + destroy the Krisp processor on the current mic track. */
+  async function detachKrispFromMicTrack(r: Room) {
+    const prev = krispFilter();
+    if (prev) {
+      try {
+        const micPub = r.localParticipant.getTrackPublication(
+          Track.Source.Microphone
+        );
+        if (micPub?.track) {
+          await (micPub.track as LocalTrack).stopProcessor();
+        }
+        prev.destroy();
+      } catch (e) {
+        console.error('failed to detach Krisp noise filter', e);
+      }
+      setKrispFilter(null);
     }
   }
 
@@ -286,7 +314,11 @@ function createCallState() {
   }
 
   function resetState() {
-    setStore({ ...initialState, isBackgroundBlurred: persistedBlurPref() });
+    setStore({
+      ...initialState,
+      isBackgroundBlurred: persistedBlurPref(),
+      isNoiseSuppressed: persistedNoiseSuppressionPref(),
+    });
   }
 
   function attachRoomListeners(r: Room) {
@@ -501,7 +533,11 @@ function createCallState() {
     } else {
       targetRoom = new Room({
         audioCaptureDefaults: {
-          noiseSuppression: true,
+          // Browser NS is off — Krisp is the sole software NS layer (see
+          // ensureKrispOnMicTrack). Stacking the two cascaded and
+          // attenuated quiet voice segments, particularly for users whose
+          // headphones already do hardware noise cancellation.
+          noiseSuppression: false,
           echoCancellation: true,
           autoGainControl: true,
         },
@@ -535,11 +571,9 @@ function createCallState() {
     setStore('isAudioMuted', false);
     setStore('isVideoMuted', true);
 
-    // Register Krisp noise filter on the mic track
-    if (isKrispNoiseFilterSupported()) {
-      setStore('isNoiseSuppressed', true);
-      await ensureKrispOnMicTrack(targetRoom);
-    }
+    // Attach Krisp if the user's NS pref is on and the runtime supports it.
+    // ensureKrispOnMicTrack is a no-op otherwise.
+    await ensureKrispOnMicTrack(targetRoom);
 
     // Enumerate available devices and track active ones
     await enumerateDevices();
@@ -633,12 +667,19 @@ function createCallState() {
   }
 
   async function toggleNoiseSuppression() {
-    const krisp = krispFilter();
-    if (!krisp) return;
+    const newEnabled = !store.isNoiseSuppressed;
+    setStore('isNoiseSuppressed', newEnabled);
+    setPersistedNoiseSuppressionPref(newEnabled);
+
+    const r = room();
+    if (!r) return;
+
     try {
-      const newEnabled = !store.isNoiseSuppressed;
-      await krisp.setEnabled(newEnabled);
-      setStore('isNoiseSuppressed', newEnabled);
+      if (newEnabled) {
+        await ensureKrispOnMicTrack(r);
+      } else {
+        await detachKrispFromMicTrack(r);
+      }
     } catch (e) {
       console.error('failed to toggle noise suppression', e);
     }

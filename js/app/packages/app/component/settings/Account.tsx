@@ -10,6 +10,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
 import { toast } from '@core/component/Toast/Toast';
 import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -242,7 +243,10 @@ export function Account() {
             when={!emailActive()}
             fallback={
               <div
-                class={`flex items-center justify-between ${!showEmailModal() && 'mb-[18px]'}`}
+                class={cn(
+                  'flex items-center justify-between',
+                  !showEmailModal() && 'mb-[18px]'
+                )}
               >
                 <div class="text-sm">Email</div>
                 <DeprecatedTextButton

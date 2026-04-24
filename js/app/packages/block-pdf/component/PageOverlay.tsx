@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { PDFPopup } from '@block-pdf/component/PDFPopup';
 import {
   disableOverlayClickSignal,
@@ -451,7 +452,7 @@ export function PageOverlay(props: IPageOverlayProps) {
   return (
     <div
       ref={pageOverlayRef}
-      class={`pageOverlayInner ${disableOverlayClick() ? 'noClickOverlay' : ''}`}
+      class={cn('pageOverlayInner', disableOverlayClick() && 'noClickOverlay')}
       on:click={(e) => {
         if (mode() !== PayloadMode.NoMode) {
           createPlaceable(e);

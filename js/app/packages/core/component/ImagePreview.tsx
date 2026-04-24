@@ -1,5 +1,6 @@
 import { internalDrag } from '@core/directive/internalDragState';
 false && internalDrag;
+import { cn } from '@ui/utils/classname';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { maybeThrow } from '@core/util/maybeResult';
@@ -192,8 +193,11 @@ export function ImagePreview(props: ImagePreviewProps) {
           </Show>
           <Show when={imageSrc()}>
             <img
-              class={`${THEMES[props.variant]} select-none`}
-              classList={{ hidden: !loaded() }}
+              class={cn(
+                THEMES[props.variant],
+                'select-none',
+                !loaded() && 'hidden'
+              )}
               src={imageSrc()}
               alt="preview"
               width={scaledDimensions()?.width ?? props.image.width}

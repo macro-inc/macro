@@ -11,7 +11,8 @@ export type SettingsTab =
   | 'AI Memory'
   | 'Inbox'
   | 'Shortcuts'
-  | 'Mobile App';
+  | 'Mobile App'
+  | 'Team';
 
 export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');

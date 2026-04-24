@@ -2,6 +2,7 @@ import {
   generatedAndWaitingSignal,
   isGeneratingSignal,
 } from '@block-md/signal/generateSignal';
+import { cn } from '@ui/utils/classname';
 import {
   InlineInputDisabled,
   InlineInputLoading,
@@ -50,7 +51,10 @@ function MenuItem(props: {
 }) {
   return (
     <button
-      class={`text-start w-full rounded-sm text-xs p-1 px-2 hover:bg-hover hover-transition-bg ${props.selected ? 'bg-active' : ''} items-center`}
+      class={cn(
+        'text-start w-full rounded-sm text-xs p-1 px-2 hover:bg-hover hover-transition-bg items-center',
+        props.selected && 'bg-active'
+      )}
       onClick={props.onClick}
       on:mouseover={() => props.setSelected(props.index)}
     >
@@ -153,7 +157,7 @@ function InnerGenerateMenu(props: GenerateMenuProps) {
   return (
     <ScopedPortal scope="local">
       <div
-        class={`z-100 flex flex-col rounded-md -mt-7`}
+        class="z-100 flex flex-col rounded-md -mt-7"
         style={{
           width: targetWidth() + 'px',
         }}

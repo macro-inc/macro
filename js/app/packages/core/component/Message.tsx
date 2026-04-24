@@ -218,7 +218,7 @@ const Root: Component<MessageRootProps> = (props) => {
   return (
     <MessageContext.Provider value={ctx}>
       <div
-        class={`relative flex flex-row items-stretch w-full suppress-css-brackets transition-colors duration-1000 ease`}
+        class="relative flex flex-row items-stretch w-full suppress-css-brackets transition-colors duration-1000 ease"
         classList={{
           'bg-accent': props.isTarget,
         }}

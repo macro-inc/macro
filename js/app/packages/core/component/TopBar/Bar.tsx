@@ -1,4 +1,5 @@
 import { isInBlock, useIsNestedBlock } from '@core/block';
+import { cn } from '@ui/utils/classname';
 import { observedSize } from '@core/directive/observedSize';
 import { TOP_BAR_HEIGHT } from '@core/signal/layout';
 import { throttle } from '@solid-primitives/scheduled';
@@ -278,12 +279,12 @@ function BarContent(props: BarProps) {
         class="w-full bg-panel"
       >
         <div
-          class={`group relative grid w-full justify-between items-center
-        ${
-          truncation().stage.popCenter && !context.suppressPop
-            ? 'grid-cols-2 grid-rows-[auto_auto]'
-            : 'grid-cols-[min-content_1fr_min-content]'
-        }`}
+          class={cn(
+            'group relative grid w-full justify-between items-center',
+            truncation().stage.popCenter && !context.suppressPop
+              ? 'grid-cols-2 grid-rows-[auto_auto]'
+              : 'grid-cols-[min-content_1fr_min-content]'
+          )}
         >
           <Show when={leftComponent()}>
             <div
@@ -291,11 +292,12 @@ function BarContent(props: BarProps) {
                 setSize: context.setLeftSize,
                 setInitialized: context.setLeftInitialized,
               }}
-              class={`pl-2 flex items-center justify-self-start col-start-1 row-start-1 border-b border-edge ${
+              class={cn(
+                'pl-2 flex items-center justify-self-start col-start-1 row-start-1 border-b border-edge',
                 truncation().stage.popCenter && !context.suppressPop
                   ? 'w-full'
                   : 'w-fit'
-              }`}
+              )}
               style={{
                 height: `${TOP_BAR_HEIGHT}px`,
               }}
@@ -309,12 +311,12 @@ function BarContent(props: BarProps) {
 
           <Show when={centerComponent()}>
             <div
-              class={`flex justify-center items-center border-b border-edge
-              ${
+              class={cn(
+                'flex justify-center items-center border-b border-edge',
                 truncation().stage.popCenter && !context.suppressPop
                   ? 'col-start-1 col-end-4 bg-edge/20 row-start-2 px-2 w-full'
                   : 'col-start-2 col-end-3 !row-start-1 bg-[revert] px-0'
-              }`}
+              )}
               style={{
                 height: `${TOP_BAR_HEIGHT}px`,
               }}
@@ -333,11 +335,12 @@ function BarContent(props: BarProps) {
               setSize: context.setRightSize,
               setInitialized: context.setRightInitialized,
             }}
-            class={`justify-self-end flex justify-end items-center row-start-1 pr-2 border-b border-edge ${
+            class={cn(
+              'justify-self-end flex justify-end items-center row-start-1 pr-2 border-b border-edge',
               truncation().stage.popCenter && !context.suppressPop
                 ? 'col-start-2 w-full'
                 : 'col-start-3 w-fit'
-            }`}
+            )}
             style={{
               height: `${TOP_BAR_HEIGHT}px`,
             }}

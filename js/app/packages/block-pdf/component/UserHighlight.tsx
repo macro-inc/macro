@@ -2,6 +2,7 @@ import {
   activeCommentThreadSignal,
   noScrollToActiveCommentThreadSignal,
 } from '@block-pdf/store/comments/commentStore';
+import { cn } from '@ui/utils/classname';
 import { createBlockSignal } from '@core/block';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -260,7 +261,10 @@ export function UserHighlight(props: VoidProps<IHighlightObj>) {
   return (
     <div
       ref={highlightRef}
-      class={`absolute ${props.threadId ? 'z-placeable' : 'z-user-highlight'}`}
+      class={cn(
+        'absolute',
+        props.threadId ? 'z-placeable' : 'z-user-highlight'
+      )}
       style={{
         left: `${props.left}px`,
         top: `${props.top}px`,
@@ -283,7 +287,10 @@ export function UserHighlight(props: VoidProps<IHighlightObj>) {
       >
         <div
           ref={textRef}
-          class={`absolute inset-0 overflow-hidden whitespace-pre-wrap opacity-0 pointer-events-none ${props.isActive ? 'select-text' : 'select-none'}`}
+          class={cn(
+            'absolute inset-0 overflow-hidden whitespace-pre-wrap opacity-0 pointer-events-none',
+            props.isActive ? 'select-text' : 'select-none'
+          )}
         />
       </div>
     </div>

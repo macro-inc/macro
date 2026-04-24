@@ -1,5 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { cn } from '@ui/utils/classname';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -175,7 +176,13 @@ export function MenuItem(props: MenuItemProps) {
   return (
     // Note: Kobalte's ContextMenu.Item is identical to DropdownMenu.Item. Either can be used inside of the other.
     <MenuItemWrapper
-      class={`${MENU_ITEM_CLASS} ${props.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-hover hover-transition-bg'} ${props.class ?? ''}`}
+      class={cn(
+        MENU_ITEM_CLASS,
+        props.disabled
+          ? 'opacity-50 cursor-not-allowed'
+          : 'hover:bg-hover hover-transition-bg',
+        props.class
+      )}
       onClick={props.onClick}
       disabled={props.disabled}
       closeOnSelect={props.closeOnSelect}
@@ -186,28 +193,36 @@ export function MenuItem(props: MenuItemProps) {
     >
       <Show when={props.selectorType === 'checkbox'}>
         <div
-          class={`${isMobile() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 flex items-center justify-center`}
+          class={cn(
+            'shrink-0 flex items-center justify-center',
+            isMobile() ? 'w-5 h-5' : 'w-4 h-4'
+          )}
         >
           <CheckIcon
-            class={`w-[14px] h-[14px] shrink-0 rounded-sm p-[2px] ${
+            class={cn(
+              'w-[14px] h-[14px] shrink-0 rounded-sm p-[2px]',
               (props as CheckboxMenuItemProps).checked
                 ? 'bg-accent text-[white]'
                 : 'bg-transparent text-transparent border-1 border-edge'
-            }`}
+            )}
           />
         </div>
       </Show>
       <Show when={props.selectorType === 'radio'}>
         <div
-          class={`flex items-center justify-center shrink-0 ${isMobile() ? 'w-5 h-5' : 'w-4 h-4'}`}
+          class={cn(
+            'flex items-center justify-center shrink-0',
+            isMobile() ? 'w-5 h-5' : 'w-4 h-4'
+          )}
         >
           <div
-            class={`w-[14px] h-[14px] shrink-0 rounded-full ${
+            class={cn(
+              'w-[14px] h-[14px] shrink-0 rounded-full',
               (props as RadioMenuItemProps).value ===
-              (props as RadioMenuItemProps).groupValue
+                (props as RadioMenuItemProps).groupValue
                 ? 'bg-accent text-[white]'
                 : 'bg-transparent text-transparent border-1 border-edge'
-            }`}
+            )}
           />
         </div>
       </Show>
@@ -217,7 +232,11 @@ export function MenuItem(props: MenuItemProps) {
             component={
               props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
             }
-            class={`${isMobile() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 ${props.iconClass ?? ''}`}
+            class={cn(
+              'shrink-0',
+              isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+              props.iconClass
+            )}
           />
         </Show>
         <Show when={typeof props.icon === 'object'}>
@@ -246,7 +265,12 @@ export function SubTrigger(props: {
 }) {
   return (
     <ContextMenu.SubTrigger
-      class={`${MENU_ITEM_CLASS} ${props.disabled ? 'opacity-50 cursor-not-allowed text-ink' : 'hover:bg-hover hover-transition-bg text-ink'}`}
+      class={cn(
+        MENU_ITEM_CLASS,
+        props.disabled
+          ? 'opacity-50 cursor-not-allowed text-ink'
+          : 'hover:bg-hover hover-transition-bg text-ink'
+      )}
       disabled={props.disabled}
     >
       <Show when={props.icon}>
@@ -255,7 +279,11 @@ export function SubTrigger(props: {
             component={
               props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
             }
-            class={`${isMobile() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 ${props.iconClass ?? ''}`}
+            class={cn(
+              'shrink-0',
+              isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+              props.iconClass
+            )}
           />
         </Show>
         <Show when={typeof props.icon === 'object'}>
@@ -270,7 +298,7 @@ export function SubTrigger(props: {
 
 export function MenuGroup(props: { children: JSX.Element; class?: string }) {
   return (
-    <ContextMenu.Group class={`w-full ${props.class ?? ''}`}>
+    <ContextMenu.Group class={cn('w-full', props.class)}>
       {props.children}
     </ContextMenu.Group>
   );
@@ -279,7 +307,7 @@ export function MenuGroup(props: { children: JSX.Element; class?: string }) {
 export function GroupLabel(props: { children: JSX.Element }) {
   return (
     <ContextMenu.GroupLabel
-      class={`${MENU_ITEM_CLASS} text-xs! text-ink-extra-muted`}
+      class={cn(MENU_ITEM_CLASS, 'text-xs! text-ink-extra-muted')}
     >
       {props.children}
     </ContextMenu.GroupLabel>
@@ -426,17 +454,14 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         when={props.submenu}
         fallback={
           <ContextMenu.Content
-            class={`
-            ${props.overrideStyling ? '' : MENU_CONTENT_CLASS}
-            ${props.class} ${props.width ? menuWidths[props.width] : ''}
-            ${
-              props.mobileFullScreen
-                ? isMobile()
-                  ? 'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
-                  : ''
-                : ''
-            }
-            `}
+            class={cn(
+              !props.overrideStyling && MENU_CONTENT_CLASS,
+              props.class,
+              props.width && menuWidths[props.width],
+              props.mobileFullScreen &&
+                isMobile() &&
+                'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
+            )}
             onOpenAutoFocus={props.onOpenAutoFocus}
             ref={contentRef}
             onCloseAutoFocus={props.onCloseAutoFocus}
@@ -446,7 +471,11 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         }
       >
         <ContextMenu.SubContent
-          class={`${MENU_CONTENT_CLASS} ${props.class} ${props.width ? menuWidths[props.width] : ''}`}
+          class={cn(
+            MENU_CONTENT_CLASS,
+            props.class,
+            props.width && menuWidths[props.width]
+          )}
         >
           {props.children}
         </ContextMenu.SubContent>
@@ -463,7 +492,11 @@ export function DropdownMenuContent(props: ParentProps<MenuContentProps>) {
       when={props.submenu}
       fallback={
         <DropdownMenu.Content
-          class={`${MENU_CONTENT_CLASS} ${local.class} ${local.width ? menuWidths[local.width] : ''}`}
+          class={cn(
+            MENU_CONTENT_CLASS,
+            local.class,
+            local.width && menuWidths[local.width]
+          )}
           {...rest}
         >
           {local.children}
@@ -471,7 +504,11 @@ export function DropdownMenuContent(props: ParentProps<MenuContentProps>) {
       }
     >
       <DropdownMenu.SubContent
-        class={`${MENU_CONTENT_CLASS} ${local.class} ${local.width ? menuWidths[local.width] : ''}`}
+        class={cn(
+          MENU_CONTENT_CLASS,
+          local.class,
+          local.width && menuWidths[local.width]
+        )}
         {...rest}
       >
         {local.children}

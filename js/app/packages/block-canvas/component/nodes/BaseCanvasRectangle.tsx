@@ -227,7 +227,7 @@ export function BaseCanvasRectangle(props: BaseCanvasRectangleProps) {
 
       <Portal mount={layerContext().selection}>
         <div
-          class={`absolute pointer-events-none top-0 left-0 opacity-90 border-opacity-100 outline-accent outline-1`}
+          class="absolute pointer-events-none top-0 left-0 opacity-90 border-opacity-100 outline-accent outline-1"
           style={{
             // TODO
             ...rect(),

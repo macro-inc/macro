@@ -33,6 +33,15 @@ export const NOISE_QUERY_FILTERS = {
   emailView: 'inbox' as const,
 };
 
+/** Query filters for the "Calendar" tab — returns only threads with an iCalendar attachment. */
+export const CALENDAR_QUERY_FILTERS = {
+  email_filters: {
+    calendar_only: true as const,
+    shared: SharedEmailFilter.exclude,
+  },
+  emailView: 'inbox' as const,
+};
+
 export type SoupFiltersPreset = {
   queryFilters: SoupBody;
   clientFilters: {
@@ -139,6 +148,13 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         queryFilters: {
           ...QUERY_FILTERS.email,
           ...NOISE_QUERY_FILTERS,
+        },
+        clientFilters: { and: ['email', 'no-drafts'] },
+      }),
+      calendar: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.email,
+          ...CALENDAR_QUERY_FILTERS,
         },
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
