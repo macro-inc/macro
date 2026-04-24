@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { createSignal, type JSX, onMount, type ParentProps } from 'solid-js';
 
 type BozzyBracketProps = {
@@ -18,10 +19,10 @@ type BozzyBracketProps = {
 export function BozzyBracket(props: ParentProps<BozzyBracketProps>) {
   return (
     <div
-      class={`relative group/bozzy w-full h-full hover-transition-bg
-        ${props.active && !props.unfocusable ? 'bg-active' : ''}
-        ${props.hover && !props.unfocusable ? 'bg-hover' : ''}
-        ${props.class}`}
+      class={cn(
+        'relative group/bozzy w-full h-full hover-transition-bg',
+        props.class
+      )}
       classList={{
         'bg-active': props.active && !props.unfocusable,
         'bg-hover': props.hover && !props.unfocusable,
@@ -51,10 +52,10 @@ export function BozzyBracketInnerSibling(props: {
       setTimeout(() => setBig(false));
     });
   }
-  /* TEST BEFORE REMOVING left-[-1px] top-[-1px] w-[calc(100%+2px)] h-[calc(100%+2px)] */
+  /* TEST BEFORE REMOVING -left-px -top-px w-[calc(100%+2px)] h-[calc(100%+2px)] */
   return (
     <div
-      class="pointer-events-none absolute left-[-1px] top-[-1px] w-[calc(100%+2px)] h-[calc(100%+2px)] bracket-offset-2"
+      class="pointer-events-none absolute -left-px -top-1 w-[calc(100%+2px)] h-[calc(100%+2px)] bracket-offset-2"
       classList={{
         'transition-transform ease-out duration-100': props.animOnOpen,
         'scale-110': big(),

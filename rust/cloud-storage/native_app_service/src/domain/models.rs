@@ -94,17 +94,17 @@ pub struct BundleUpdateRequest {
 /// the name of the semver file as it exists in the s3 bucket
 pub static SEMVER_FILE_NAME: &str = "/app/semver.txt";
 /// the name of the bundle file as it exists in the s3 bucket
-pub static BUNDLE_ARCHIVE_NAME: &str = "app-archive.zip";
+pub static BUNDLE_ARCHIVE_NAME: &str = "/app/app-archive.zip";
 
 /// the typed of errors that can occur while querying the bundle state
 #[derive(Debug, Error)]
 pub enum UpdateErr {
     /// a network error has occirred
-    #[error("A network error occurred: {0:?}")]
-    Network(#[from] anyhow::Error),
+    #[error("A network error occurred")]
+    Network,
     /// failed to parse a semver string
-    #[error("Failed to parse semver {0}")]
-    Semver(#[from] semver::Error),
+    #[error("Failed to parse semver")]
+    Semver,
 }
 
 /// contains information about bundle ids for various app platforms

@@ -12,7 +12,7 @@
 
 pub mod domain;
 
-#[cfg(any(feature = "inbound", feature = "ai_tools"))]
+#[cfg(any(feature = "inbound", feature = "ai_tools", feature = "attachment"))]
 pub mod inbound;
 
 #[cfg(feature = "outbound")]

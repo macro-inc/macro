@@ -5,11 +5,23 @@ publish = false
 version = "0.1.0"
 
 [features]
+attachment = [
+    "dep:anyhow",
+    "dep:attachment",
+    "dep:entity_access",
+    "dep:futures",
+    "dep:non_empty",
+]
 inbound = ["dep:axum", "dep:model_user", "dep:utoipa"]
 outbound = ["dep:readonly_pool", "dep:sqlx"]
 
 
 [dependencies]
+anyhow = { workspace = true, optional = true }
+attachment = { path = "../attachment", optional = true }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+futures = { workspace = true, optional = true }
+non_empty = { path = "../non_empty", optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }

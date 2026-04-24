@@ -17,7 +17,7 @@ import { CommentsContext, ThreadContext } from './Thread';
 
 const ThreadLine = () => {
   return (
-    <div class="w-[1px] bg-edge/50 h-full absolute left-3 -translate-x-[0.5px] top-4" />
+    <div class="w-px bg-edge/50 h-full absolute left-3 translate-x-[-0.5px] top-4" />
   );
 };
 
@@ -32,9 +32,9 @@ const CommentText = (props: { text: string; isThreaded?: boolean }) => {
 function CommentContainer(props: ParentProps<{ isThreaded?: boolean }>) {
   return (
     <div class="relative isolate group">
-      <div class="absolute -top-0 -left-0 size-[calc(100%)] bracket bg-menu/30 -z-1 transition-opacity duration-50 opacity-0 group-hover:opacity-100" />
+      <div class="absolute top-0 left-0 size-[calc(100%)] bracket bg-menu/30 -z-1 transition-opacity duration-50 opacity-0 group-hover:opacity-100" />
       <div
-        class="supports-[text-pretty]:whitespace-normal break-words p-1"
+        class="supports-text-pretty:whitespace-normal wrap-break-word p-1"
         classList={{
           'pb-2': props.isThreaded,
         }}

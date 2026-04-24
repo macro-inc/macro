@@ -1,4 +1,7 @@
-//! Inbound HTTP adapters for the chat domain.
+//! Inbound adapters for the chat domain.
+
+#[cfg(feature = "attachment")]
+pub mod attachment;
 
 #[cfg(test)]
 mod test;

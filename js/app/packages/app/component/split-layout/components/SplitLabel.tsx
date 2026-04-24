@@ -1,14 +1,10 @@
-import {
-  isInBlock,
-  useBlockAliasedName,
-  useBlockId,
-  useBlockName,
-} from '@core/block';
+import { isInBlock, useBlockAliasedName, useBlockId } from '@core/block';
 import {
   EntityIcon,
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
+import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
@@ -18,10 +14,10 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { blockNameToItemType, type ItemType } from '@service-storage/client';
+import { buildEntityData, type BuildEntityDataArgs } from '@entity';
 import { createEffect, type JSX, Show } from 'solid-js';
+import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import { useSplitPanelOrThrow } from '../layoutUtils';
-import { useRenameSplit } from './SplitModalContext';
 import { cn } from '@ui/utils/classname';
 
 export function StaticSplitLabel(props: {
@@ -39,7 +35,7 @@ export function StaticSplitLabel(props: {
   return (
     <div
       class={cn(
-        'z-3 relative flex items-center gap-2 max-w-full h-full shrink',
+        'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
         props.class
       )}
     >
@@ -62,15 +58,14 @@ export function StaticSplitLabel(props: {
 
 export function SplitLabel(props: {
   label: string;
-  onNameChanged?: (newName: string) => void;
   lockRename?: boolean;
-  id?: string;
-  itemType?: ItemType;
+  /** Per-variant fields the block context can't supply (e.g. `channelType`
+   * for a channel rename). Merged into the args passed to `buildEntityData`. */
+  renameOverrides?: Partial<BuildEntityDataArgs>;
 }) {
   const panel = useSplitPanelOrThrow();
-  const rename = useRenameSplit();
-  const blockName = useBlockName();
   const blockId = useBlockId();
+  const aliasedBlockName = useBlockAliasedName();
 
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
@@ -78,23 +73,22 @@ export function SplitLabel(props: {
 
   const startEditing = (e: MouseEvent) => {
     if (props.lockRename) return;
-    if (e.type === 'contextmenu') {
-      e.preventDefault();
-    }
+    if (e.type === 'contextmenu') e.preventDefault();
 
-    if (props.id || props.itemType || blockNameToItemType(blockName)) {
-      const id = props.id || blockId;
-      const itemType = props.itemType || blockNameToItemType(blockName);
+    const entity = buildEntityData({
+      id: blockId,
+      name: props.label,
+      blockName: aliasedBlockName,
+      ...props.renameOverrides,
+    });
+    if (!entity) return;
 
-      if (id && itemType) {
-        rename({
-          id,
-          currentName: props.label,
-          itemType,
-          onRename: props.onNameChanged,
-        });
-      }
-    }
+    openBulkEditModal({
+      view: 'rename',
+      entities: [entity],
+      onFinish: () => toast.success('Renamed'),
+      onError: () => toast.failure('Failed to rename'),
+    });
   };
 
   return (
@@ -110,7 +104,7 @@ export function SplitLabel(props: {
 
 export function SplitHeaderBadge(props: { text: string; tooltip?: string }) {
   return (
-    <span class="py-0.5 px-2 rounded-none text-[0.625rem] text-ink-muted">
+    <span class="py-0.5 px-2 rounded-none text-xxs text-ink-muted">
       <Tooltip tooltip={props.tooltip} spanMode>
         <span class="font-mono uppercase">{props.text}</span>
       </Tooltip>
@@ -172,7 +166,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   return (
-    <div class="ph-no-capture z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
+    <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 w-screen max-w-full h-full shrink">
       <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel

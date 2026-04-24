@@ -25,11 +25,19 @@ type ToolParserMap = {
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  ListCallRecords: {
+    call: types.ListCallRecords;
+    response: types.ListCallRecordsResponse;
+  };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  ReadCallRecord: {
+    call: types.ReadCallRecord;
+    response: types.ReadCallRecordResponse;
+  };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadMetadata: {
     call: types.ReadMetadata;
@@ -41,6 +49,7 @@ type ToolParserMap = {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
   };
+  Subagent: { call: types.Subagent; response: types.SubagentResponse };
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;
@@ -74,6 +83,10 @@ const toolParserMap = {
     response: schemas.GetEntityPropertiesResponse,
   },
   GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
+  ListCallRecords: {
+    call: schemas.ListCallRecords,
+    response: schemas.ListCallRecordsResponse,
+  },
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
@@ -81,6 +94,10 @@ const toolParserMap = {
   NameSearch: {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
+  },
+  ReadCallRecord: {
+    call: schemas.ReadCallRecord,
+    response: schemas.ReadCallRecordResponse,
   },
   ReadContent: {
     call: schemas.ReadContent,
@@ -96,6 +113,7 @@ const toolParserMap = {
     call: schemas.SetEntityProperty,
     response: schemas.SetEntityPropertyResponse,
   },
+  Subagent: { call: schemas.Subagent, response: schemas.SubagentResponse },
   text_editor_code_execution: {
     call: schemas.TextEditorCodeExecutionToolCall,
     response: schemas.TextEditorCodeExecutionResponse,
@@ -140,11 +158,19 @@ type ToolDataMap = {
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  ListCallRecords: {
+    call: types.ListCallRecords;
+    response: types.ListCallRecordsResponse;
+  };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  ReadCallRecord: {
+    call: types.ReadCallRecord;
+    response: types.ReadCallRecordResponse;
+  };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadMetadata: {
     call: types.ReadMetadata;
@@ -156,6 +182,7 @@ type ToolDataMap = {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
   };
+  Subagent: { call: types.Subagent; response: types.SubagentResponse };
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;

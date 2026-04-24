@@ -43,6 +43,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
   mail: [
     { value: 'important', label: 'Signal' },
     { value: 'noise', label: 'Noise' },
+    { value: 'calendar', label: 'Calendar' },
     { value: 'sent', label: 'Sent' },
     { value: 'drafts', label: 'Drafts' },
     { value: 'shared', label: 'Shared' },
@@ -233,7 +234,7 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
       indicatorPosition="top"
-      class="[&_[data-indicator]]:h-[3px]"
+      class="**:data-indicator:h-[3px]"
     />
   );
 };

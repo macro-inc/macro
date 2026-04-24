@@ -1,4 +1,5 @@
 import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
+import { cn } from '@ui/utils/classname';
 import {
   isPropertyDefinition,
   toPropertyDefinitionDomain,
@@ -194,7 +195,10 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
       <button
         type="button"
         onClick={addFilter}
-        class={`px-2 py-0.75 ${filters.length > 0 ? 'mt-2' : ''} text-xs text-ink border border-edge hover:bg-hover w-full`}
+        class={cn(
+          'px-2 py-0.75 text-xs text-ink border border-edge hover:bg-hover w-full',
+          filters.length > 0 && 'mt-2'
+        )}
       >
         + Add filter
       </button>

@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
+import { cn } from '@ui/utils/classname';
 import type { Entity } from '@core/types';
 import { compareDateDesc, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -54,16 +55,18 @@ export function Notifications(props: NotificationsProps) {
 
             return (
               <button
-                class={`w-full p-2 pb-3 border-b border-edge-muted hover:bg-hover text-left ${
+                class={cn(
+                  'w-full p-2 pb-3 border-b border-edge-muted hover:bg-hover text-left',
                   isUnread ? 'bg-menu-hover' : 'bg-menu'
-                }`}
+                )}
                 {...navHandlers}
               >
                 <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
                   <div
-                    class={`size-2 ${
+                    class={cn(
+                      'size-2',
                       isUnread ? 'bg-accent' : 'bg-ink-extra-muted'
-                    }`}
+                    )}
                   />
                   <div>
                     {

@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, exec } from 'node:child_process';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import chokidar from 'chokidar';
@@ -12,7 +12,15 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 
-const shortSha = execSync('git rev-parse --short HEAD').toString().trim();
+function readShortSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+const shortSha = readShortSha();
 const appVersion = `${version}+${shortSha}`;
 
 function readGitBranch(): string {
@@ -21,6 +29,14 @@ function readGitBranch(): string {
   } catch {
     return '';
   }
+}
+
+function readGitBranchAsync(): Promise<string> {
+  return new Promise((res) => {
+    exec('git rev-parse --abbrev-ref HEAD', (err, stdout) => {
+      res(err ? '' : stdout.trim());
+    });
+  });
 }
 
 function gitBranchHmrPlugin(): Plugin {
@@ -49,10 +65,12 @@ function gitBranchHmrPlugin(): Plugin {
         });
       });
       server.ws.on('connection', () => {
-        server.ws.send({
-          type: 'custom',
-          event: 'git-branch:update',
-          data: readGitBranch(),
+        readGitBranchAsync().then((branch) => {
+          server.ws.send({
+            type: 'custom',
+            event: 'git-branch:update',
+            data: branch,
+          });
         });
       });
       server.httpServer?.once('close', () => void watcher.close());

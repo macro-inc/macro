@@ -594,6 +594,66 @@
         }
       }
     },
+    "/call/record/preview": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/record/preview`.",
+        "description": "Batch-fetches lightweight previews for a list of call ids. Mirrors the\n`POST /documents/preview` endpoint: no per-id access checks, duplicate\nids are deduplicated server-side, and missing ids come back as\n`CallRecordPreview::DoesNotExist` rather than producing an error.",
+        "operationId": "get_batch_call_record_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetBatchCallRecordPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchCallRecordPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "call_ids exceeds MAX_BATCH_CALL_IDS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/{call_id}": {
       "get": {
         "tags": ["call::inbound::axum_router"],
@@ -1122,6 +1182,15 @@
             "name": "cursor",
             "in": "query",
             "description": "Base64 encoded cursor value",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachment_type",
+            "in": "query",
+            "description": "Filter by type: 'static' for images/videos, 'dss' for documents",
             "required": false,
             "schema": {
               "type": "string"
@@ -6145,6 +6214,13 @@
               "type": "string"
             },
             "description": "Channel IDs to filter calls by. Empty to include all calls."
+          },
+          "speaker_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Speaker macro user ids. Empty to include all."
           }
         }
       },
@@ -6248,6 +6324,80 @@
           }
         }
       },
+      "CallRecordPreview": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CallRecordPreviewData",
+                "description": "The call exists (in either the active or archived table)."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["exists"]
+                  }
+                }
+              }
+            ],
+            "description": "The call exists (in either the active or archived table)."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WithCallId",
+                "description": "No call with this id exists in either the active or archived tables."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
+                }
+              }
+            ],
+            "description": "No call with this id exists in either the active or archived tables."
+          }
+        ],
+        "description": "Lightweight preview of a call record, returned by the batch preview endpoint.\n\nEach requested id resolves to one of two outcomes: the call exists\n(`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform\naccess checks, so there is no separate \"not authorized\" variant."
+      },
+      "CallRecordPreviewData": {
+        "type": "object",
+        "description": "Preview payload returned for each found call id.",
+        "required": ["callId", "channelId", "startedAt"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started (created_at for active, started_at for archived)."
+          }
+        }
+      },
       "CallRecordTranscriptSegment": {
         "type": "object",
         "description": "A transcript segment as returned in a [`CallRecord`].",
@@ -6256,6 +6406,10 @@
           "content": {
             "type": "string",
             "description": "The transcribed text content."
+          },
+          "diarizedSpeakerId": {
+            "type": ["string", "null"],
+            "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Unique across tracks in the call. `None` when the provider didn't\nreturn a speaker label."
           },
           "endedAt": {
             "type": ["string", "null"],
@@ -6473,6 +6627,10 @@
               "format": "uuid"
             },
             "description": "When non-empty, only return messages with these IDs."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "When set, only return top-level messages where the message itself or\nany active thread reply has a notification for the requesting user that\nmatches these notification state constraints."
           }
         }
       },
@@ -7865,6 +8023,10 @@
             },
             "description": "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
           },
+          "calendar_only": {
+            "type": ["boolean", "null"],
+            "description": "When `Some(true)`, only include threads that have at least one message\nwith an iCalendar attachment (`.ics` filename or `application/ics` mime\ntype). `Some(false)` and `None` apply no constraint."
+          },
           "cc": {
             "type": "array",
             "items": {
@@ -8725,6 +8887,35 @@
         },
         "deprecated": true
       },
+      "GetBatchCallRecordPreviewRequest": {
+        "type": "object",
+        "description": "Request body for `POST /call/record/preview`.\n\nThe `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler\nrejects anything larger with a 400 before touching the database.",
+        "required": ["callIds"],
+        "properties": {
+          "callIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The call ids to preview. Duplicate ids are deduplicated server-side.\nCapped at [`MAX_BATCH_CALL_IDS`] entries."
+          }
+        }
+      },
+      "GetBatchCallRecordPreviewResponse": {
+        "type": "object",
+        "description": "Response body for `POST /call/record/preview`.",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordPreview"
+            },
+            "description": "One entry per deduplicated input id."
+          }
+        }
+      },
       "GetBatchPreviewRequest": {
         "type": "object",
         "required": ["document_ids"],
@@ -9244,15 +9435,15 @@
       },
       "NotificationFilters": {
         "type": "object",
-        "description": "Notification-level filters that apply to an entity type.",
+        "description": "Notification state filters for channel message queries.",
         "properties": {
           "done": {
             "type": ["boolean", "null"],
-            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
+            "description": "Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications."
           },
           "seen": {
             "type": ["boolean", "null"],
-            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+            "description": "Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications."
           }
         }
       },
@@ -11508,6 +11699,10 @@
             "type": "string",
             "description": "The transcribed text content."
           },
+          "diarizedSpeakerId": {
+            "type": ["string", "null"],
+            "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
+          },
           "endedAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -11847,6 +12042,18 @@
             "items": {
               "$ref": "#/components/schemas/View"
             }
+          }
+        }
+      },
+      "WithCallId": {
+        "type": "object",
+        "description": "Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]\nvariant.",
+        "required": ["callId"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
           }
         }
       },

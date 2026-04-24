@@ -13,6 +13,7 @@ export const BulkRenameEntitiesView = (props: {
   entities: EntityData[];
   onFinish: () => void;
   onCancel: () => void;
+  onError?: (error: unknown) => void;
 }) => {
   const renameMutation = createBulkRenameDssEntityMutation();
 
@@ -88,16 +89,20 @@ export const BulkRenameEntitiesView = (props: {
       default:
     }
 
-    await renameMutation.mutateAsync(
-      props.entities.map((e) => ({ entity: e, newName: renameFn(e.name) }))
-    );
-
-    props.onFinish();
+    try {
+      await renameMutation.mutateAsync(
+        props.entities.map((e) => ({ entity: e, newName: renameFn(e.name) }))
+      );
+      props.onFinish();
+    } catch (error) {
+      console.error('Failed to rename entities:', error);
+      props.onError?.(error);
+    }
   };
 
   return (
     <>
-      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
         <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
           <CloseIcon />
         </Dialog.CloseButton>
@@ -152,7 +157,7 @@ export const BulkRenameEntitiesView = (props: {
             value={editValue()}
             onInput={(e) => setEditValue(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
-            class="w-full p-2 text-sm border-1 border-edge/20 bg-menu text-ink
+            class="w-full p-2 text-sm border border-edge/20 bg-menu text-ink
                    placeholder:text-ink-placeholder focus:outline-none
                    selection:bg-ink selection:text-panel"
             placeholder="Enter new text..."

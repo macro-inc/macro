@@ -32,9 +32,9 @@ use s3_key::{
 use tracing;
 
 use super::models::{
-    CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
-    CreateTaskResponse, DocumentError, EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    FileTypeUpdate, LocationQueryParams,
+    CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    CreateTaskRequest, CreateTaskResponse, DocumentError, EMPTY_SHA256, EditDocumentRepoArgs,
+    EditDocumentServiceArgs, FileTypeUpdate, LocationQueryParams,
 };
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
@@ -469,6 +469,16 @@ impl<
     ) -> Result<String, DocumentError> {
         self.repo
             .get_document_text(&entity_access_receipt.entity().entity_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    async fn get_document_comments(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<CommentThread>, DocumentError> {
+        self.repo
+            .get_document_comments(&entity_access_receipt.entity().entity_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))
     }

@@ -1,6 +1,12 @@
+import { cn } from '@ui/utils/classname';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import {
+  staticFileIdEndpoint,
+  staticFileSizedUrl,
+} from '@core/constant/servers';
+import { internalDrag } from '@core/directive/internalDragState';
+false && internalDrag;
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { idToEmail } from '@core/user';
 import { createStaticFile } from '@core/util/create';
@@ -49,7 +55,7 @@ export function ProfilePicture(props: ProfilePictureProps) {
 
   if (!ENABLE_PROFILE_PICTURES) {
     return (
-      <div class={`flex-shrink-0 ${props.sizeClass.text}`}>
+      <div class={cn('shrink-0', props.sizeClass.text)}>
         {email().substring(0, 1).toUpperCase()}
       </div>
     );
@@ -61,7 +67,10 @@ export function ProfilePicture(props: ProfilePictureProps) {
       when={profilePicUrl()}
       fallback={
         <div
-          class={`shrink-0 ${props.sizeClass.container} flex items-center justify-center`}
+          class={cn(
+            'shrink-0 flex items-center justify-center',
+            props.sizeClass.container
+          )}
           style={{
             'line-height': 0,
           }}
@@ -73,16 +82,28 @@ export function ProfilePicture(props: ProfilePictureProps) {
       }
       keyed
     >
-      {(url) => (
-        <div
-          class={`${props.sizeClass.container} flex-shrink-0 overflow-hidden rounded-full`}
-        >
-          <img
-            src={url}
-            class="object-cover rounded-full w-full h-full origin-[50%_20%]"
-          />
-        </div>
-      )}
+      {(url) => {
+        const smallUrl = staticFileSizedUrl(url, 'small');
+        return (
+          <div
+            class={cn(
+              'shrink-0 overflow-hidden rounded-full',
+              props.sizeClass.container
+            )}
+          >
+            <img
+              src={smallUrl}
+              class="object-cover rounded-full w-full h-full origin-[50%_20%]"
+              use:internalDrag={true}
+              onError={(e) => {
+                if (e.currentTarget.src !== url) {
+                  e.currentTarget.src = url;
+                }
+              }}
+            />
+          </div>
+        );
+      }}
     </Show>
   );
 }

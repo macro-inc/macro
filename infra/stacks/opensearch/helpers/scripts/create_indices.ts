@@ -1,6 +1,8 @@
 import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
 import {
+  CALL_RECORDS_ALIAS,
+  CALL_RECORDS_INDEX,
   CHANNEL_INDEX,
   CHAT_INDEX,
   DOCUMENT_INDEX,
@@ -17,7 +19,7 @@ async function createChannelIndex(opensearchClient: Client) {
   if (!channelIndexExists) {
     console.log(`${CHANNEL_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: CHANNEL_INDEX,
       body: {
         settings: {
@@ -89,7 +91,7 @@ async function createDocumentIndex(opensearchClient: Client) {
   if (!documentIndexExists) {
     console.log(`${DOCUMENT_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: DOCUMENT_INDEX,
       body: {
         settings: {
@@ -166,7 +168,7 @@ async function createChatIndex(opensearchClient: Client) {
   if (!chatIndexExists) {
     console.log(`${CHAT_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: CHAT_INDEX,
       body: {
         settings: {
@@ -234,7 +236,7 @@ async function createEmailIndex(opensearchClient: Client) {
   if (!emailIndexExists) {
     console.log(`${EMAIL_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: EMAIL_INDEX,
       body: {
         settings: {
@@ -345,6 +347,100 @@ async function createEmailIndex(opensearchClient: Client) {
   }
 }
 
+async function createCallRecordsIndex(opensearchClient: Client) {
+  const callRecordsIndexExists = (
+    await opensearchClient.indices.exists({
+      index: CALL_RECORDS_INDEX,
+    })
+  ).body;
+  if (!callRecordsIndexExists) {
+    console.log(`${CALL_RECORDS_INDEX} index does not exist, creating...`);
+
+    await opensearchClient.indices.create({
+      index: CALL_RECORDS_INDEX,
+      body: {
+        settings: {
+          ...SHARD_SETTINGS,
+          refresh_interval: '2s',
+        },
+        aliases: {
+          [CALL_RECORDS_ALIAS]: {},
+        },
+        // One doc per transcript segment; `_id` is the `transcript_id`.
+        mappings: {
+          dynamic: 'false',
+          properties: {
+            entity_id: {
+              type: 'keyword',
+            },
+            transcript_id: {
+              type: 'keyword',
+              index: false,
+              doc_values: true,
+            },
+            channel_id: {
+              type: 'keyword',
+              index: true,
+              doc_values: true,
+            },
+            participant_ids: {
+              type: 'keyword',
+              index: true,
+              doc_values: true,
+            },
+            channel_name: {
+              type: 'text',
+              fields: {
+                keyword: {
+                  type: 'keyword',
+                  ignore_above: 128,
+                },
+              },
+            },
+            speaker_id: {
+              type: 'keyword',
+              index: true,
+              doc_values: true,
+            },
+            sequence_num: {
+              type: 'integer',
+              index: false,
+              doc_values: true,
+            },
+            content: {
+              type: 'text',
+              analyzer: 'standard',
+            },
+            started_at_seconds: {
+              type: 'date',
+              format: 'epoch_second',
+              index: false,
+              doc_values: true,
+            },
+            ended_at_seconds: {
+              type: 'date',
+              format: 'epoch_second',
+              index: false,
+              doc_values: true,
+            },
+            // Aliases for the shared `updated_at_sort` script.
+            created_at_seconds: {
+              type: 'alias',
+              path: 'started_at_seconds',
+            },
+            updated_at_seconds: {
+              type: 'alias',
+              path: 'started_at_seconds',
+            },
+          },
+        },
+      },
+    });
+  } else {
+    console.log(`${CALL_RECORDS_INDEX} index already exists`);
+  }
+}
+
 async function createIndices() {
   const opensearchClient = client();
   console.log('Creating indices...');
@@ -354,6 +450,7 @@ async function createIndices() {
     await createChatIndex(opensearchClient);
     await createEmailIndex(opensearchClient);
     await createChannelIndex(opensearchClient);
+    await createCallRecordsIndex(opensearchClient);
     console.log('done');
   } catch (error) {
     console.error('Error', error);

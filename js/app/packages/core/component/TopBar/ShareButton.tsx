@@ -1,3 +1,4 @@
+
 import { useAnalytics } from '@app/component/analytics-context';
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -84,7 +85,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { ClippedPanel } from '../ClippedPanel';
+import { Panel } from '@ui';
 import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
@@ -192,7 +193,7 @@ function DmRecipientIcon(props: { channelId: string }) {
   return (
     <Show
       when={dmPartnerId()}
-      fallback={<UserCircle class="flex-shrink-0 w-4 h-4" />}
+      fallback={<UserCircle class="shrink-0 w-4 h-4" />}
     >
       {(id) => (
         <UserIcon id={id()} size="xs" isDeleted={false} showTooltip={false} />
@@ -948,13 +949,13 @@ export function ShareModal(props: ShareModalProps) {
           <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
           <div class="z-modal fixed inset-0">
             <Dialog.Content
-              class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope flex flex-col gap-2 [&>*]:max-h-[75vh]"
+              class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope flex flex-col gap-2 *:max-h-[75vh]"
               style={{ width: '800px' }}
             >
               {/* Card 1: Share form — gradient border */}
-              <ClippedPanel active cornerRadius="4px">
+              <Panel active>
                 <div class="text-ink flex flex-col">
-                  <div class="shrink-0 flex flex-row items-center justify-between px-3 h-[40px] gap-2 border-b border-edge-muted">
+                  <div class="shrink-0 flex flex-row items-center justify-between px-3 h-10 gap-2 border-b border-edge-muted">
                     <div class="flex-1 flex flex-row items-center gap-2 min-w-0">
                       <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                         <span class="shrink-0">Share:</span>
@@ -986,13 +987,13 @@ export function ShareModal(props: ShareModalProps) {
                     blockName={props.blockAlias}
                   />
                 </div>
-              </ClippedPanel>
+              </Panel>
 
               {/* Card 2: Recipients — plain border */}
               <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-                <ClippedPanel cornerRadius="4px">
+                <Panel>
                   <div class="text-ink flex flex-col">
-                    <div class="shrink-0 h-[40px] flex items-center px-3 border-b border-edge-muted text-sm font-medium">
+                    <div class="shrink-0 h-10 flex items-center px-3 border-b border-edge-muted text-sm font-medium">
                       People with access to this{' '}
                       {props.itemType === 'email'
                         ? 'email thread'
@@ -1040,7 +1041,7 @@ export function ShareModal(props: ShareModalProps) {
                                 >
                                   <Switch
                                     fallback={
-                                      <WideUsers class="flex-shrink-0 w-4 h-4" />
+                                      <WideUsers class="shrink-0 w-4 h-4" />
                                     }
                                   >
                                     <Match
@@ -1059,7 +1060,7 @@ export function ShareModal(props: ShareModalProps) {
                                         recipient.channel_id
                                       )}
                                     >
-                                      <WideUsers class="flex-shrink-0 w-4 h-4" />
+                                      <WideUsers class="shrink-0 w-4 h-4" />
                                     </Match>
                                   </Switch>
                                   <div class="font-medium truncate">
@@ -1112,7 +1113,7 @@ export function ShareModal(props: ShareModalProps) {
                       </div>
                     </div>
                   </div>
-                </ClippedPanel>
+                </Panel>
               </Show>
 
               {/* Card 3: Public link — plain border */}
@@ -1122,10 +1123,10 @@ export function ShareModal(props: ShareModalProps) {
                   props.itemType !== 'email'
                 }
               >
-                <ClippedPanel cornerRadius="4px">
+                <Panel>
                   <div class="text-ink flex flex-col">
                     <div
-                      class="h-[40px] flex items-center justify-between px-3 text-sm font-medium"
+                      class="h-10 flex items-center justify-between px-3 text-sm font-medium"
                       classList={{
                         'border-b border-edge-muted':
                           publicAccessLevel() != null,
@@ -1134,27 +1135,27 @@ export function ShareModal(props: ShareModalProps) {
                       <div class="flex items-center gap-2">
                         Public link
                         <div
-                          class="px-2 rounded-xl border-1 py-0.5 flex justify-center items-center"
+                        class="px-2 rounded-xl border py-0.5 flex justify-center items-center"
+                        classList={{
+                          'border-accent/30 bg-accent/10':
+                            publicAccessLevel() != null,
+                          'border-edge-muted bg-edge-muted/20':
+                            publicAccessLevel() == null,
+                        }}
+                      >
+                        <span
+                          class="text-xs font-medium whitespace-nowrap"
                           classList={{
-                            'border-accent/30 bg-accent/10':
-                              publicAccessLevel() != null,
-                            'border-edge-muted bg-edge-muted/20':
+                            'text-accent-ink': publicAccessLevel() != null,
+                            'text-ink-extra-muted':
                               publicAccessLevel() == null,
                           }}
                         >
-                          <span
-                            class="text-xs font-medium whitespace-nowrap"
-                            classList={{
-                              'text-accent-ink': publicAccessLevel() != null,
-                              'text-ink-extra-muted':
-                                publicAccessLevel() == null,
-                            }}
-                          >
-                            {publicAccessLevel() != null
-                              ? 'ENABLED'
-                              : 'DISABLED'}
-                          </span>
-                        </div>
+                          {publicAccessLevel() != null
+                            ? 'ENABLED'
+                            : 'DISABLED'}
+                        </span>
+                      </div>
                       </div>
                       <MiniToggleSwitch
                         size="Base"
@@ -1190,7 +1191,7 @@ export function ShareModal(props: ShareModalProps) {
                       </div>
                     </Show>
                   </div>
-                </ClippedPanel>
+                </Panel>
               </Show>
             </Dialog.Content>
           </div>
@@ -1266,7 +1267,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   });
 
   return (
-    <div class="border-1 border-edge-muted flex ml-1 items-stretch rounded-xs">
+    <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
       <Tooltip
         tooltip={
           <div>
@@ -1303,7 +1304,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
         </button>
       </Tooltip>
 
-      <div class="w-[1px] bg-edge-muted" />
+      <div class="w-px bg-edge-muted" />
 
       <Button
         tooltip="Copy Share Link"
@@ -1429,7 +1430,7 @@ export function ShareOptions(props: {
       >
         <Button
           disabled={props.disabled}
-          class={`min-w-[67px] py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
+          class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
           variant="secondary"
         >
           {currentValueText()}

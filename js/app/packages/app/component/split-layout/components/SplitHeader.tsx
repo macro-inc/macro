@@ -196,7 +196,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       ref={props.ref}
     >
       <div class="absolute inset-0 flex justify-start items-center bg-panel">
-        <div class="z-2 relative flex items-center bg-panel pl-2 mobile:pl-0 h-full">
+        <div class="z-annotation-layer relative flex items-center bg-panel pl-2 mobile:pl-0 h-full">
           <div class="mobile:hidden">
             <SplitCloseButton />
           </div>
@@ -225,7 +225,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         <Show when={shouldShowRightmost()}>
           <div
             class={
-              'pl-0.5 pr-2 z-2 relative flex items-center gap-0.5 h-full order-last'
+              'pl-0.5 pr-2 z-annotation-layer relative flex items-center gap-0.5 h-full order-last'
             }
           >
             <EntityNavigationIndicator />

@@ -15,4 +15,8 @@ export type GetChannelAttachmentsParams = {
    * Base64 encoded cursor value
    */
   cursor?: string;
+  /**
+   * Filter by type: 'static' for images/videos, 'dss' for documents
+   */
+  attachment_type?: string;
 };

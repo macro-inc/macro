@@ -163,7 +163,7 @@ export function TopBar(props: {
       buttonComponent: () => {
         const [hovering, setHovering] = createSignal(false);
         return (
-          <div class="border-1 border-edge-muted flex items-stretch rounded-xs">
+          <div class="border border-edge-muted flex items-stretch rounded-xs">
             <button
               class="h-7 px-2 flex items-center gap-1 text-xs hover:bg-hover hover-transition-bg"
               onMouseEnter={() => setHovering(true)}

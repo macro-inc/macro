@@ -73,5 +73,12 @@ pub async fn handle_delete_file(
             }
         })?;
 
+    let scaled_prefix = format!("file/{file_id}/");
+    storage_client
+        .delete_objects_by_prefix(&scaled_prefix)
+        .await
+        .inspect_err(|e| tracing::warn!(error=?e, "failed to delete scaled variants"))
+        .ok();
+
     Ok((StatusCode::OK, "Ok".to_string()).into_response())
 }

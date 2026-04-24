@@ -1,4 +1,7 @@
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import {
+  staticFileIdEndpoint,
+  staticFileSizedEndpoint,
+} from '@core/constant/servers';
 import {
   isStaticAttachmentType,
   STATIC_IMAGE,
@@ -7,7 +10,10 @@ import {
 
 export type MediaItem = {
   id: string;
+  /** Sized variant for previews (1080/ for images, original for videos) */
   src: string;
+  /** Full-resolution original — used when expanding */
+  fullSrc: string;
   kind: 'image' | 'video';
   width?: number | null;
   height?: number | null;
@@ -57,9 +63,14 @@ function mapAttachmentToMediaItem(
   const kind = getMediaKind(attachment.entity_type);
   if (!kind) return;
 
+  const fullSrc = staticFileIdEndpoint(attachment.entity_id);
   return {
     id: attachment.entity_id,
-    src: staticFileIdEndpoint(attachment.entity_id),
+    src:
+      kind === 'image'
+        ? staticFileSizedEndpoint(attachment.entity_id, 'medium')
+        : fullSrc,
+    fullSrc,
     kind,
     width: attachment.width ?? undefined,
     height: attachment.height ?? undefined,
@@ -85,6 +96,7 @@ function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
     if (
       previousItem &&
       previousItem.src === item.src &&
+      previousItem.fullSrc === item.fullSrc &&
       previousItem.kind === item.kind &&
       previousItem.width === item.width &&
       previousItem.height === item.height

@@ -1,0 +1,10 @@
+target
+node_modules
+.wrangler
+data
+dist
+build
+.dev.vars
+.claude
+README.md
+justfile

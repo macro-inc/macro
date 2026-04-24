@@ -653,7 +653,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           }
           placeholder={props.placeholder ?? 'Add description...'}
           portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          class="shrink-1 min-h-0 h-[unset] text-base px-2 overflow-y-auto"
+          class="shrink min-h-0 h-[unset] text-base px-2 overflow-y-auto"
         />
 
         <Suspense>
@@ -685,7 +685,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       </Show>
 
       <div class="w-full border-b border-edge-muted/50" />
-      <div class="flex-shrink-0 flex justify-between items-center p-2 gap-2">
+      <div class="shrink-0 flex justify-between items-center p-2 gap-2">
         <MiniToggleSwitch
           size="SM"
           label="Create More"
@@ -706,7 +706,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             <CircleSpinner width={16} height={16} />
           </Show>
           Create Task
-          <div class="text-[0.625rem] text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
+          <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
             <Hotkey shortcut="cmd+enter" />
           </div>
         </Button>

@@ -167,7 +167,14 @@ export const EntityMentionSchema = z.preprocess(
   },
   BaseNodeSchema.extend({
     type: z.literal('entitymention'),
-    entityType: z.enum(['document', 'chat', 'project', 'channel', 'email']),
+    entityType: z.enum([
+      'document',
+      'chat',
+      'project',
+      'channel',
+      'email',
+      'call',
+    ]),
     file: z.string(),
     subpath: z.string().optional(),
     mentionUuid: z.string().optional(),

@@ -6,7 +6,7 @@
  */
 
 /**
- * Filter by notification done state.
-None to ignore, true to include only done notifications, false to include only not-done notifications.
+ * Filter by notification done state. `Some(true)` selects done
+notifications; `Some(false)` selects not-done notifications.
  */
 export type NotificationFiltersDone = boolean | null;

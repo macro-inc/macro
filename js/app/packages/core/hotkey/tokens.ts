@@ -75,8 +75,9 @@ export const TOKENS = {
     searchMenu: 'global.searchMenu',
     toggleSettings: 'global.toggleSettings',
     createNewSplit: 'global.createNewSplit',
-    toggleVisor: 'global.toggleVisor',
     inviteTeam: 'global.inviteTeam',
+    undo: 'global.undo',
+    redo: 'global.redo',
   },
 
   // email
@@ -117,7 +118,6 @@ export const TOKENS = {
       inbox: 'split.go.inbox',
       docs: 'split.go.docs',
       toggleRightPanel: 'split.go.toggleRightPanel',
-      macroJump: 'split.go.macroJump',
       back: 'split.go.back',
       forward: 'split.go.forward',
     },

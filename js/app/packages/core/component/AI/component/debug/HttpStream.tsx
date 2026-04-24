@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
@@ -138,11 +139,12 @@ export default function HttpStreamDebug() {
         <div class="flex items-center gap-2">
           <span class="text-sm">Connection Gateway:</span>
           <span
-            class={`text-sm px-2 py-1 rounded ${
+            class={cn(
+              'text-sm px-2 py-1 rounded',
               connectionState() === WebsocketConnectionState.Open
                 ? 'bg-green-100 text-green-800'
                 : 'bg-red-100 text-red-800'
-            }`}
+            )}
           >
             {connectionState() === WebsocketConnectionState.Open
               ? 'Connected'

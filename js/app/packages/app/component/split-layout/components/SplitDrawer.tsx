@@ -63,7 +63,7 @@ export function SplitDrawer(
   };
 
   const getPositionClasses = () => {
-    const baseClasses = `absolute bg-panel border-edge-muted/50 z-2 flex flex-col`;
+    const baseClasses = `absolute bg-panel border-edge-muted/50 z-annotation-layer flex flex-col`;
     let positionClasses = '';
     switch (props.side) {
       case 'top':
@@ -99,13 +99,13 @@ export function SplitDrawer(
     const baseClasses = 'absolute pattern-panel pattern-diagonal-4 opacity-100';
     switch (props.side) {
       case 'left':
-        return `${baseClasses} h-full w-4 left-0 top-0 -translate-x-[calc(100%_+_1px)] mask-l-from-0`;
+        return `${baseClasses} h-full w-4 left-0 top-0 -translate-x-[calc(100%+1px)] mask-l-from-0`;
       case 'right':
-        return `${baseClasses} h-full w-4 left-0 top-0 -translate-x-[calc(100%_+_1px)] mask-l-from-0`;
+        return `${baseClasses} h-full w-4 left-0 top-0 -translate-x-[calc(100%+1px)] mask-l-from-0`;
       case 'top':
-        return `${baseClasses} w-full h-4 left-0 top-0 -translate-y-[calc(100%_+_1px)] mask-t-from-0`;
+        return `${baseClasses} w-full h-4 left-0 top-0 -translate-y-[calc(100%+1px)] mask-t-from-0`;
       case 'bottom':
-        return `${baseClasses} w-full h-4 left-0 bottom-0 translate-y-[calc(100%_+_1px)] mask-b-from-0`;
+        return `${baseClasses} w-full h-4 left-0 bottom-0 translate-y-[calc(100%+1px)] mask-b-from-0`;
       default:
         return baseClasses;
     }

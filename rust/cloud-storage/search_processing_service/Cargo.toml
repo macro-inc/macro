@@ -16,6 +16,11 @@ path = "src/bin/backfill_chat.rs"
 required-features = ["service"]
 
 [[bin]]
+name = "backfill_call"
+path = "src/bin/backfill_call.rs"
+required-features = ["service"]
+
+[[bin]]
 name = "search_processing_service"
 path = "src/main.rs"
 required-features = ["processing", "service"]

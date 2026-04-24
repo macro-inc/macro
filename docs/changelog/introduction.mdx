@@ -7,7 +7,105 @@ All notable changes to Macro, pulled from [GitHub Releases](https://github.com/m
 
 Releases follow the format `vYYYY.M.D.patch`.
 
-    <Update label="v2026.4.21.2 (Current)">
+    <Update label="v2026.4.23.0 (Current)">
+## What's Changed
+* fix(tasks): various task routing bugs by @sedson in https://github.com/macro-inc/macro/pull/2782
+* fix(properties/tools): add user to accepted types by @sedson in https://github.com/macro-inc/macro/pull/2770
+* fix(core): kill split modal, use entity edit modal for operations by @sedson in https://github.com/macro-inc/macro/pull/2784
+* fix(update): wrong url by @seanaye in https://github.com/macro-inc/macro/pull/2786
+* feat(call): update required access level for calls by @whutchinson98 in https://github.com/macro-inc/macro/pull/2785
+* feat(call): share with team toggle by @whutchinson98 in https://github.com/macro-inc/macro/pull/2787
+* fix(settings): propper settings view on mobile by @Fake-User in https://github.com/macro-inc/macro/pull/2790
+* fix(sidebar): remove icon color transition by @Fake-User in https://github.com/macro-inc/macro/pull/2792
+* fix(split-layout): skip search bar on H/L focus restoration by @gbirman in https://github.com/macro-inc/macro/pull/2791
+* fix(vite): make read git branch call async by @aidanhb in https://github.com/macro-inc/macro/pull/2793
+* fix(theme): kill unused signals by @Fake-User in https://github.com/macro-inc/macro/pull/2795
+* feat(comms): trigger notif deletes on soft delete by @seanaye in https://github.com/macro-inc/macro/pull/2789
+* fix(channels): patch message take new attachments by @synoet in https://github.com/macro-inc/macro/pull/2783
+* feat(call): call video blur by @whutchinson98 in https://github.com/macro-inc/macro/pull/2788
+* fix(local): running locally audience and env vars by @synoet in https://github.com/macro-inc/macro/pull/2797
+* feat(teams): client methods, queries, and mutations by @dev-rb in https://github.com/macro-inc/macro/pull/2798
+* fix(documents): ai cant see comments on tasks by @whutchinson98 in https://github.com/macro-inc/macro/pull/2796
+* chore(notifications): use uuids for notification sandbox by @gbirman in https://github.com/macro-inc/macro/pull/2800
+* chore(soup): reduce mark done toast duration to 3s by @gbirman in https://github.com/macro-inc/macro/pull/2801
+* feat(notif): index chan notifs on msg id by @seanaye in https://github.com/macro-inc/macro/pull/2799
+* fix: internal image dragging by @peterchinman in https://github.com/macro-inc/macro/pull/2803
+* Russell/no more gamer core by @Fake-User in https://github.com/macro-inc/macro/pull/2805
+* feat(call): ai toolset by @whutchinson98 in https://github.com/macro-inc/macro/pull/2802
+* Aidan/icon call by @aidanhb in https://github.com/macro-inc/macro/pull/2806
+* fix(ui): fix settings tabs being in wrong location on desktop. by @Fake-User in https://github.com/macro-inc/macro/pull/2807
+* fix(ci): correct code path for mcp service by @whutchinson98 in https://github.com/macro-inc/macro/pull/2808
+* fix(zed/conf): add zed conf to unchud biome by @sedson in https://github.com/macro-inc/macro/pull/2810
+* feat[tauri]: only auto-download update on wifi by @peterchinman in https://github.com/macro-inc/macro/pull/2812
+* feat(analytics): fire valued Lead on every conversion path by @evanhutnik in https://github.com/macro-inc/macro/pull/2813
+* fix(channels): prevent optimistic inserts mid page by @synoet in https://github.com/macro-inc/macro/pull/2814
+* feat(lexical-service): Extract images by @ehayes2000 in https://github.com/macro-inc/macro/pull/2726
+* feat(teams): onboarding step for creating team and inviting members by @dev-rb in https://github.com/macro-inc/macro/pull/2811
+* feat(teams): team tab in settings by @dev-rb in https://github.com/macro-inc/macro/pull/2804
+* fix(ui): replace all class={``} with cn() or class="" by @Fake-User in https://github.com/macro-inc/macro/pull/2818
+* Add panel colored shapes behind shuttle icons in all arcana by @aidanhb in https://github.com/macro-inc/macro/pull/2817
+* fix(ui): dechud theme list by @Fake-User in https://github.com/macro-inc/macro/pull/2821
+* feat!(agent/slop): ability to copy prompt and open in agent from task by @synoet in https://github.com/macro-inc/macro/pull/2815
+
+
+**Full Changelog**: https://github.com/macro-inc/macro/compare/v2026.4.22.1...v2026.4.23.0
+    </Update>
+
+    <Update label="v2026.4.22.1">
+## What's Changed
+* fix(search): prefix-match text fields for email search by @gbirman in https://github.com/macro-inc/macro/pull/2778
+* feat(undo): bind cmd+z / shift+cmd+z to the mutation undo stack by @gbirman in https://github.com/macro-inc/macro/pull/2714
+
+
+**Full Changelog**: https://github.com/macro-inc/macro/compare/v2026.4.22.0...v2026.4.22.1
+    </Update>
+
+    <Update label="v2026.4.22.0">
+## What's Changed
+* feat(db): prepare db for version bump by @whutchinson98 in https://github.com/macro-inc/macro/pull/2748
+* fix(sfs): pass file_id instead of s3 key to mark_uploaded by @ehayes2000 in https://github.com/macro-inc/macro/pull/2738
+* feat(call): improve call transcription by @whutchinson98 in https://github.com/macro-inc/macro/pull/2751
+* chore(channels): remove old unused deprecated components by @synoet in https://github.com/macro-inc/macro/pull/2752
+* feat: qr code for app store in onboarding and settings by @peterchinman in https://github.com/macro-inc/macro/pull/2753
+* feat(db): add new parameter group for db version update by @whutchinson98 in https://github.com/macro-inc/macro/pull/2750
+* Russell/split by @Fake-User in https://github.com/macro-inc/macro/pull/2754
+* feat: undo mark-as-done + notification refetch cleanup by @gbirman in https://github.com/macro-inc/macro/pull/2701
+* feat(task): notify assignees of comments by @seanaye in https://github.com/macro-inc/macro/pull/2749
+* fix(notif): filter out browser notif for new email by @seanaye in https://github.com/macro-inc/macro/pull/2756
+* fix(channels): stop escape from bubbling from close mentions menu by @sedson in https://github.com/macro-inc/macro/pull/2757
+* chore(channels): migrate all consumers to new markdown builder by @synoet in https://github.com/macro-inc/macro/pull/2755
+* chore(lexical-service): decrust by @ehayes2000 in https://github.com/macro-inc/macro/pull/2723
+* feat(channels/documents): Stanalone channel thread + Full reactive thread in document cards by @synoet in https://github.com/macro-inc/macro/pull/2734
+* fix(channels): don't serialize or deserialize pending attachments by @synoet in https://github.com/macro-inc/macro/pull/2761
+* feat[ios]: dialog prompting push notification permission by @peterchinman in https://github.com/macro-inc/macro/pull/2760
+* chore: move onboarding qr code to launch screen by @peterchinman in https://github.com/macro-inc/macro/pull/2762
+* feat(tasks): new icons and colors by @dev-rb in https://github.com/macro-inc/macro/pull/2759
+* fix(share): tab + enter on share button crashing the app by @synoet in https://github.com/macro-inc/macro/pull/2767
+* chore: gate onboarding qr code behind feature flag by @peterchinman in https://github.com/macro-inc/macro/pull/2769
+* fix(soup): first entity not always focused on load by @dev-rb in https://github.com/macro-inc/macro/pull/2771
+* feat(dev): add hotkey debugger by @sedson in https://github.com/macro-inc/macro/pull/2768
+* fix(ci): pin zod, remove patch by @ehayes2000 in https://github.com/macro-inc/macro/pull/2772
+* chore: dry up preview registration in DocumentCard by @gbirman in https://github.com/macro-inc/macro/pull/2774
+* feat: cal.com webhook → Meta Lead events by @evanhutnik in https://github.com/macro-inc/macro/pull/2764
+* chore(channels): fully remove deprecated components by @synoet in https://github.com/macro-inc/macro/pull/2776
+* fix: vite resolve by @ehayes2000 in https://github.com/macro-inc/macro/pull/2779
+* feat(dev): add a local-only bottom bar that shows current branch by @sedson in https://github.com/macro-inc/macro/pull/2763
+* fix(ai): paywall free users by @ehayes2000 in https://github.com/macro-inc/macro/pull/2765
+
+
+**Full Changelog**: https://github.com/macro-inc/macro/compare/v2026.4.21.3...v2026.4.22.0
+    </Update>
+
+    <Update label="v2026.4.21.3">
+## What's Changed
+* chore: bump version + update changelog by @synoet in https://github.com/macro-inc/macro/pull/2746
+* fix entity access by @whutchinson98 in https://github.com/macro-inc/macro/pull/2747
+
+
+**Full Changelog**: https://github.com/macro-inc/macro/compare/v2026.4.21.2...v2026.4.21.3
+    </Update>
+
+    <Update label="v2026.4.21.2">
 ## What's Changed
 * feat(calls): unattended call filter by @whutchinson98 in https://github.com/macro-inc/macro/pull/2715
 * feat entity access by @whutchinson98 in https://github.com/macro-inc/macro/pull/2418

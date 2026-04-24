@@ -52,5 +52,5 @@ user_quota = { path = "../user_quota", optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-serde_urlencoded = "0.7"
+serde_urlencoded = { workspace = true }
 urlencoding = { workspace = true }

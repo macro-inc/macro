@@ -137,7 +137,7 @@ const createComponent = async (spec: {
 };
 
 export function runCreateAction(
-  blockName: BlockName,
+  blockName: BlockName | BlockAlias,
   options: { shouldInsert?: boolean } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
@@ -236,7 +236,7 @@ export function runCreateAction(
 
 export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
-  blockName: BlockName;
+  blockName: BlockName | BlockAlias;
   altHotkeyToken?: HotkeyToken;
   animatedIcon?: Component<{ triggerAnimation?: boolean }>;
 };
@@ -441,19 +441,19 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         )}
       ></div>
 
-      <div class="absolute top-1.5 left-2 z-1 p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+      <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
         <Hotkey token={props.creatableBlock.hotkeyToken} />
       </div>
 
       <div
         class={cn(
-          'absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50',
+          'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge/50',
           textFg()
         )}
         style={{ background: props.focused ? 'currentColor' : 'transparent' }}
       />
 
-      <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
+      <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
         <div class="text-sm font-bold">{props.creatableBlock.label}</div>
         <div class="size-3">
           <PixelArrowRight />
@@ -714,7 +714,12 @@ export const LauncherInner = (props: LauncherInnerProps) => {
               class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
             />
             <span
-              class={`px-1 py-0.5 rounded-sm h-fit ring text-xs grid place-items-center transition-colors duration-150 ${shiftHeld() ? 'ring-accent text-accent bg-accent/10' : 'ring-edge-muted'}`}
+              class={cn(
+                'px-1 py-0.5 rounded-sm h-fit ring text-xs grid place-items-center transition-colors duration-150',
+                shiftHeld()
+                  ? 'ring-accent text-accent bg-accent/10'
+                  : 'ring-edge-muted'
+              )}
             >
               <Hotkey shortcut="shift" />
             </span>

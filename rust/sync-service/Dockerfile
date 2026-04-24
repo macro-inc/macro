@@ -2,8 +2,9 @@ FROM rust:1.90-bookworm
 
 # Install Node.js 22.x
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g npm@latest
+    apt-get update && \
+    apt-get install -y --no-install-recommends nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install llvm/clang for ring crate compilation
 RUN apt-get update && apt-get install -y \
@@ -13,7 +14,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install wasm32 target and worker-build once
 RUN rustup target add wasm32-unknown-unknown && \
-    cargo install worker-build --locked
+    cargo install worker-build@^0.8 --locked
 
 WORKDIR /app
 

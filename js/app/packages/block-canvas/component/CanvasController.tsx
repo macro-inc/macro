@@ -1,4 +1,5 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
+import { cn } from '@ui/utils/classname';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import type { EntityDragEvent } from '@entity';
@@ -863,7 +864,6 @@ export function CanvasController(props: ParentProps) {
     const entityType = event.draggable.data.type;
     // TODO: add channel message support
     if (entityType === 'channel_message') return;
-    if (entityType === 'call') return;
     // Automation entities aren't yet renderable as canvas mentions.
     if (entityType === 'automation') return;
 
@@ -985,7 +985,10 @@ export function CanvasController(props: ParentProps) {
       use:droppable={!isDisabled()}
       use:observedSize={{ setSize: setDomRect }}
       // SCUFFED THEMING? The color-mix below is a little rough, not necessarily ideal
-      class={`relative w-full h-full overflow-hidden z-0 ${cursor()} bg-[oklch(from_color-mix(in_oklch,var(--color-panel)_75%,var(--color-ink)_25%)_l_0_var(--surface-h))]`}
+      class={cn(
+        'relative w-full h-full overflow-hidden z-0 bg-[oklch(from_color-mix(in_oklch,var(--color-panel)_75%,var(--color-ink)_25%)_l_0_var(--surface-h))]',
+        cursor()
+      )}
       use:fileDrop={{
         disabled: isDisabled(),
         acceptedMimeTypes: acceptedMimeTypes,

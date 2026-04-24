@@ -38,7 +38,7 @@ import {
 } from '@lexical-core';
 import { $getId } from '@lexical-core/plugins/nodeIdPlugin';
 import type { MentionNode } from '@lexical-core/utils/mentions';
-import { blockNameToItemType } from '@service-storage/client';
+import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -65,6 +65,7 @@ import type { Setter } from 'solid-js';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { $collapseSelection, $traverseNodes, nodeByKey } from '../../utils';
 import { mapRegisterDelete } from '../shared';
+import { match } from 'ts-pattern';
 
 export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo> =
   createCommand('INSERT_DOCUMENT_MENTION_COMMAND');
@@ -120,7 +121,9 @@ export type ItemMention = {
     | 'thread'
     | 'unknown'
     | 'color'
-    | 'group';
+    | 'call'
+    | 'group'
+    | 'automation';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -144,6 +147,7 @@ export function $isMentionNode(
     $isGroupMentionNode(node)
   );
 }
+
 export function $mentionItemFromNode(node: MentionNode): ItemMention {
   if ($isDocumentMentionNode(node)) {
     let fileType = '';
@@ -241,18 +245,16 @@ const getDocumentMentionItemType = (
 ): ItemMention['itemType'] => {
   const blockName = node.__blockName;
   const itemType = blockNameToItemType(verifyBlockName(blockName));
-  switch (itemType) {
-    case 'document':
-    case 'chat':
-    case 'channel':
-    case 'project':
-      return itemType;
-    case 'email':
-      return 'thread';
-    default:
-      console.error(`Invalid item type: ${itemType} for document mention node`);
-      return 'document';
-  }
+  return match<ItemType, ItemMention['itemType']>(itemType)
+    .with('email', () => 'thread')
+    .with('document', () => 'document')
+    .with('chat', () => 'chat')
+    .with('channel', () => 'channel')
+    .with('project', () => 'project')
+    .with('channel_message', () => 'channel')
+    .with('automation', () => 'automation')
+    .with('call', () => 'call')
+    .exhaustive();
 };
 
 export type MentionsPluginProps = {
@@ -337,7 +339,10 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(() => {
           const selection = $getSelection();
-          const mentionNode = $createDocumentMentionNode(payload);
+          const mentionNode = $createDocumentMentionNode({
+            ...payload,
+            createdAt: payload.createdAt ?? Date.now(),
+          });
 
           if (payload.mentionUuid) {
             mentionNode.setMentionUuid(payload.mentionUuid);

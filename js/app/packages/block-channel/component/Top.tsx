@@ -86,16 +86,15 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
   return (
     <SplitHeaderLeft>
       <div class="h-full my-auto flex gap-3 justify-start items-center min-w-0">
-        <div class="ph-no-capture z-3 relative flex items-center gap-2 max-w-full h-full shrink min-w-0">
+        <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink min-w-0">
           <TopIcon
             channelType={props.channelType}
             participants={props.participants}
           />
           <SplitLabel
             label={channelName() ?? 'New Channel'}
-            id={props.channelId}
-            itemType="channel"
             lockRename={props.lockRename}
+            renameOverrides={{ channelType: props.channelType }}
           />
         </div>
         <Show when={props.tabs && props.activeTab && props.onTabChange}>

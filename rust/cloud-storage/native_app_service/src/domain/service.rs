@@ -2,6 +2,7 @@ use crate::domain::{
     models::{BundleUpdate, BundleUpdateRequest, PlatformData, PlatformVerifier, UpdateErr},
     ports::{GetJsBundleSemver, NativeAppService},
 };
+use rootcause::Report;
 
 /// the concrete struct which implements [NativeAppService]
 pub struct NativeAppServiceImpl<T> {
@@ -19,7 +20,7 @@ where
     async fn get_bundle_update(
         &self,
         req: BundleUpdateRequest,
-    ) -> Result<Option<BundleUpdate>, UpdateErr> {
+    ) -> Result<Option<BundleUpdate>, Report<UpdateErr>> {
         let BundleUpdateRequest {
             target: _,
             arch: _,

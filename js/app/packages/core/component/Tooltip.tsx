@@ -156,7 +156,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
           <For each={props.hotkeySequence}>
             {(step, ndx) => (
               <>
-                <div class="text-[0.625rem] rounded-sm border border-edge-muted px-1.5 py-0.25">
+                <div class="text-xxs rounded-sm border border-edge-muted px-1.5 py-0.25">
                   <Hotkey
                     token={step.token}
                     shortcut={step.shortcut}
@@ -172,7 +172,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
         </div>
       </Show>
       <Show when={hasSingleHotkey()}>
-        <div class="text-[0.625rem] rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
+        <div class="text-xxs rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
           {props.hotkeyToken
             ? Hotkey({ token: props.hotkeyToken, class: 'flex gap-1' })
             : Hotkey({ shortcut: props.shortcut, class: 'flex gap-1' })}

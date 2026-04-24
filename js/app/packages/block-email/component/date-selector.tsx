@@ -463,7 +463,7 @@ const DateSelectorItem: Component<
     <Combobox.Item
       item={props.item}
       class={cn(
-        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 relative data-[highlighted]:bg-hover',
+        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 relative data-highlighted:bg-hover',
         props.item.rawValue.type === 'select-custom' &&
           'border-t border-edge-muted'
       )}

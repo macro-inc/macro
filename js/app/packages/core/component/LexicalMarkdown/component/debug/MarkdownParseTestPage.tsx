@@ -1,5 +1,6 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { cn } from '@ui/utils/classname';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,
@@ -311,15 +312,21 @@ export default function MarkdownParseTestPage() {
           <div class="w-1/2 h-full p-4 flex flex-col border-r border-edge">
             <div class="flex items-center gap-2 mb-2">
               <h2 class="text-sm">Input</h2>
-              <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
+              <div class="flex bg-edge/50 rounded border border-edge overflow-hidden">
                 <button
-                  class={`px-2 py-0.5 text-xs ${inputType() === 'markdown' ? 'bg-accent text-panel' : ''} border-r-1 border-edge`}
+                  class={cn(
+                    'px-2 py-0.5 text-xs border-r border-edge',
+                    inputType() === 'markdown' && 'bg-accent text-panel'
+                  )}
                   onClick={() => setInputType('markdown')}
                 >
                   Markdown
                 </button>
                 <button
-                  class={`px-2 py-0.5 text-xs ${inputType() === 'lexical-json' ? 'bg-accent text-panel' : ''}`}
+                  class={cn(
+                    'px-2 py-0.5 text-xs',
+                    inputType() === 'lexical-json' && 'bg-accent text-panel'
+                  )}
                   onClick={() => setInputType('lexical-json')}
                 >
                   Lexical JSON
@@ -346,15 +353,21 @@ export default function MarkdownParseTestPage() {
             <div class="flex gap-16 mb-4">
               <div class="flex items-center gap-1">
                 <span class="text-sm text-ink-extra-muted">Render as</span>
-                <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
+                <div class="flex bg-edge/50 rounded border border-edge overflow-hidden">
                   <button
-                    class={`px-3 py-1 text-sm ${outputType() === 'static' ? 'bg-accent text-panel' : ''} border-r-1 border-edge`}
+                    class={cn(
+                      'px-3 py-1 text-sm border-r border-edge',
+                      outputType() === 'static' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setOutputType('static')}
                   >
                     Static
                   </button>
                   <button
-                    class={`px-3 py-1 text-sm ${outputType() === 'editor' ? 'bg-accent text-panel' : ''}`}
+                    class={cn(
+                      'px-3 py-1 text-sm',
+                      outputType() === 'editor' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setOutputType('editor')}
                   >
                     Editor
@@ -364,21 +377,30 @@ export default function MarkdownParseTestPage() {
 
               <div class="flex items-center gap-2">
                 <span class="text-sm text-ink-extra-muted">Target</span>
-                <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
+                <div class="flex bg-edge/50 rounded border border-edge overflow-hidden">
                   <button
-                    class={`px-3 py-1 text-sm ${targetType() === 'internal' ? 'bg-accent text-panel' : ''} border-r-1 border-edge`}
+                    class={cn(
+                      'px-3 py-1 text-sm border-r border-edge',
+                      targetType() === 'internal' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setTargetType('internal')}
                   >
                     Internal
                   </button>
                   <button
-                    class={`px-3 py-1 text-sm ${targetType() === 'external' ? 'bg-accent text-panel' : ''}`}
+                    class={cn(
+                      'px-3 py-1 text-sm',
+                      targetType() === 'external' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setTargetType('external')}
                   >
                     External
                   </button>
                   <button
-                    class={`px-3 py-1 text-sm ${targetType() === 'both' ? 'bg-accent text-panel' : ''}`}
+                    class={cn(
+                      'px-3 py-1 text-sm',
+                      targetType() === 'both' && 'bg-accent text-panel'
+                    )}
                     onClick={() => setTargetType('both')}
                   >
                     Both
@@ -390,7 +412,7 @@ export default function MarkdownParseTestPage() {
             <div class="flex items-center gap-2 mb-4">
               <span class="text-sm text-ink-extra-muted">Theme</span>
               <select
-                class="px-3 py-1 text-sm bg-edge/50 border-1 border-edge rounded"
+                class="px-3 py-1 text-sm bg-edge/50 border border-edge rounded"
                 value={themeType()}
                 onChange={(e) => setThemeType(e.target.value as ThemeType)}
               >

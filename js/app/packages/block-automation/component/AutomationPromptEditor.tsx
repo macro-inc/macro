@@ -13,7 +13,7 @@ export function AutomationPromptEditor(props: {
     .onChange(props.onChange);
 
   return (
-    <div class="min-h-[180px] border border-edge-muted rounded-sm bg-input [&_[contenteditable]]:px-2 [&_[contenteditable]]:py-1.5 [&_[contenteditable]]:text-sm [&_[contenteditable]]:outline-none cursor-default">
+    <div class="min-h-[180px] border border-edge-muted rounded-sm bg-input **:[[contenteditable]]:px-2 **:[[contenteditable]]:py-1.5 **:[[contenteditable]]:text-sm **:[[contenteditable]]:outline-none cursor-default">
       <MarkdownShell
         config={editor}
         initialValue={props.initialValue}

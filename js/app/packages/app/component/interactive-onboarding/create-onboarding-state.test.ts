@@ -18,7 +18,7 @@ describe('createOnboardingState', () => {
     it('should start with all lessons incomplete', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
         });
 
         expect(state.lessons().length).toBe(2);
@@ -33,7 +33,7 @@ describe('createOnboardingState', () => {
     it('should sort lessons by order', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [
+          definitions: () => [
             createTestLesson('b', 2),
             createTestLesson('a', 1),
             createTestLesson('c', 3),
@@ -51,7 +51,7 @@ describe('createOnboardingState', () => {
     it('should mark initial completed lessons', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
           initialCompleted: new Set(['a']),
         });
 
@@ -66,7 +66,7 @@ describe('createOnboardingState', () => {
     it('should be finished if all initially completed', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
           initialCompleted: new Set(['a', 'b']),
         });
 
@@ -83,7 +83,7 @@ describe('createOnboardingState', () => {
     it('should return the first incomplete lesson', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
         });
 
         expect(state.currentLesson()?.definition.id).toBe('a');
@@ -95,7 +95,7 @@ describe('createOnboardingState', () => {
     it('should return undefined when all done', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a')],
+          definitions: () => [createTestLesson('a')],
         });
 
         state.completeLesson('a');
@@ -110,7 +110,7 @@ describe('createOnboardingState', () => {
     it('should mark a lesson as completed', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
         });
 
         state.completeLesson('a');
@@ -126,7 +126,7 @@ describe('createOnboardingState', () => {
     it('should set isFinished when all completed', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
         });
 
         state.completeLesson('a');
@@ -141,7 +141,7 @@ describe('createOnboardingState', () => {
     it('should be a no-op for unknown id', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a')],
+          definitions: () => [createTestLesson('a')],
         });
 
         state.completeLesson('unknown');
@@ -156,7 +156,7 @@ describe('createOnboardingState', () => {
     it('should mark a lesson as skipped and advance', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
         });
 
         state.skipLesson('a');
@@ -171,7 +171,7 @@ describe('createOnboardingState', () => {
     it('should set isFinished when all skipped', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
         });
 
         state.skipLesson('a');
@@ -188,7 +188,7 @@ describe('createOnboardingState', () => {
     it('should skip the current lesson', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
         });
 
         state.advanceToNext();
@@ -203,7 +203,7 @@ describe('createOnboardingState', () => {
     it('should be a no-op when all done', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a')],
+          definitions: () => [createTestLesson('a')],
         });
 
         state.completeLesson('a');
@@ -220,7 +220,7 @@ describe('createOnboardingState', () => {
     it('should un-skip a previously skipped lesson', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a'), createTestLesson('b')],
+          definitions: () => [createTestLesson('a'), createTestLesson('b')],
         });
 
         state.skipLesson('a');
@@ -236,7 +236,7 @@ describe('createOnboardingState', () => {
     it('should ignore out-of-bounds index', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a')],
+          definitions: () => [createTestLesson('a')],
         });
 
         state.goToLesson(-1);
@@ -252,7 +252,7 @@ describe('createOnboardingState', () => {
     it('should set dismissed to true', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [createTestLesson('a')],
+          definitions: () => [createTestLesson('a')],
         });
 
         state.dismiss();
@@ -267,7 +267,7 @@ describe('createOnboardingState', () => {
     it('should handle mixed complete and skip correctly', () => {
       createRoot((dispose) => {
         const state = createOnboardingState({
-          definitions: [
+          definitions: () => [
             createTestLesson('a'),
             createTestLesson('b'),
             createTestLesson('c'),
