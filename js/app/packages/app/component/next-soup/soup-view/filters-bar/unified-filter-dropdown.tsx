@@ -347,6 +347,7 @@ const SearchableFilterSubmenu = (props: {
     else setInternalOpen(v);
   };
   let inputRef: HTMLInputElement | undefined;
+  let openedByKeyboard = false;
 
   return (
     <DropdownMenu.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
@@ -360,8 +361,14 @@ const SearchableFilterSubmenu = (props: {
           // + open so Kobalte's parent selection manager updates to this
           // trigger and the shared signal closes the sibling.
           if (e.pointerType !== 'mouse') return;
+          openedByKeyboard = false;
           e.currentTarget.focus({ preventScroll: true });
           if (!isOpen()) setIsOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') {
+            openedByKeyboard = true;
+          }
         }}
       >
         <span class="text-ink">{props.label}</span>
@@ -372,10 +379,12 @@ const SearchableFilterSubmenu = (props: {
         <DropdownMenu.SubContent
           class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden"
           onFocusIn={(e) => {
-            // Kobalte focuses SubContent itself on open; redirect to the
-            // search input so it gets focus deterministically.
-            if (e.target === e.currentTarget && inputRef) {
+            // Kobalte focuses SubContent itself on open. Only redirect to the
+            // search input when the sub was opened via keyboard — otherwise
+            // a hover would flash the caret in the input.
+            if (e.target === e.currentTarget && inputRef && openedByKeyboard) {
               inputRef.focus();
+              openedByKeyboard = false;
             }
           }}
         >
