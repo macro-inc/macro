@@ -158,41 +158,16 @@ export function useFilterRefinements() {
     return `${firstLabel} and ${rest.length} ${rest.length === 1 ? 'other' : 'others'}`;
   };
 
-  const setChannelIds = (ids: string[]) =>
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        channel_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
-
-  const setSenderIds = (ids: string[]) =>
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        sender_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
-
-  const setCallChannelIds = (ids: string[]) =>
-    setQueryFilters((prev) => ({
-      ...prev,
-      call_filters: {
-        ...prev.call_filters,
-        channel_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
-
-  const setSpeakerIds = (ids: string[]) =>
-    setQueryFilters((prev) => ({
-      ...prev,
-      call_filters: {
-        ...prev.call_filters,
-        speaker_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
+  const setFilterIds =
+    (filterKey: 'channel_filters' | 'call_filters', field: string) =>
+    (ids: string[]) =>
+      setQueryFilters((prev) => ({
+        ...prev,
+        [filterKey]: {
+          ...(prev[filterKey] ?? {}),
+          [field]: ids.length > 0 ? ids : undefined,
+        },
+      }));
 
   /**
    * Cache of chip objects keyed by a stable id derived from the chip's category
@@ -324,7 +299,7 @@ export function useFilterRefinements() {
         ),
       searchableOptions: channelOptions,
       labelMap: channelLabelMap,
-      onChange: setChannelIds,
+      onChange: setFilterIds('channel_filters', 'channel_ids'),
       searchPlaceholder: 'Search channels...',
     });
 
@@ -335,7 +310,7 @@ export function useFilterRefinements() {
       getIds: () => queryFilters().channel_filters?.sender_ids ?? [],
       searchableOptions: senderOptions,
       labelMap: senderLabelMap,
-      onChange: setSenderIds,
+      onChange: setFilterIds('channel_filters', 'sender_ids'),
       searchPlaceholder: 'Search senders...',
     });
 
@@ -351,7 +326,7 @@ export function useFilterRefinements() {
             ),
           searchableOptions: channelOptions,
           labelMap: channelLabelMap,
-          onChange: setCallChannelIds,
+          onChange: setFilterIds('call_filters', 'channel_ids'),
           searchPlaceholder: 'Search channels...',
         });
 
@@ -362,7 +337,7 @@ export function useFilterRefinements() {
           getIds: () => queryFilters().call_filters?.speaker_ids ?? [],
           searchableOptions: senderOptions,
           labelMap: senderLabelMap,
-          onChange: setSpeakerIds,
+          onChange: setFilterIds('call_filters', 'speaker_ids'),
           searchPlaceholder: 'Search speakers...',
         });
 
