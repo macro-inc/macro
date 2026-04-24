@@ -168,10 +168,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     /// access to/has requested.
     /// This could either be a single term/terms query for ids_only or just user_id
     /// Or a bool query that contains both of these items
-    fn build_filter_query<'a>(
-        &'a self,
-        user_id_key: Option<&str>,
-    ) -> Result<QueryType<'a>> {
+    fn build_filter_query<'a>(&'a self, user_id_key: Option<&str>) -> Result<QueryType<'a>> {
         if self.ids_only {
             // We only need to search over the entity ids provided
             if self.ids.is_empty() {
@@ -181,8 +178,8 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             // Return just the id query to filter over
             Ok(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()))
         } else {
-            let user_id_key = user_id_key
-                .ok_or(OpensearchClientError::UserIdKeyRequired(T::ENTITY_INDEX))?;
+            let user_id_key =
+                user_id_key.ok_or(OpensearchClientError::UserIdKeyRequired(T::ENTITY_INDEX))?;
             let user_id_query = QueryType::term(user_id_key.to_string(), self.user_id.clone());
 
             // If there are no ids provided we can return only the user id query to filter over
