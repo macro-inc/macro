@@ -1126,6 +1126,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "attachment_type",
+            "in": "query",
+            "description": "Filter by type: 'static' for images/videos, 'dss' for documents",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {

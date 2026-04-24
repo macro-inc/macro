@@ -1098,6 +1098,12 @@ export const getChannelAttachmentsQueryParams = zod.object({
     .optional()
     .describe('Page size (1-500, default 50)'),
   cursor: zod.string().optional().describe('Base64 encoded cursor value'),
+  attachment_type: zod
+    .string()
+    .optional()
+    .describe(
+      "Filter by type: 'static' for images\/videos, 'dss' for documents"
+    ),
 });
 
 export const getChannelAttachmentsResponse = zod
