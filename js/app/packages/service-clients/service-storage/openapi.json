@@ -6607,6 +6607,10 @@
               "format": "uuid"
             },
             "description": "When non-empty, only return messages with these IDs."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "When set, only return top-level messages where the message itself or\nany active thread reply has a notification for the requesting user that\nmatches these notification state constraints."
           }
         }
       },
@@ -9411,15 +9415,15 @@
       },
       "NotificationFilters": {
         "type": "object",
-        "description": "Notification-level filters that apply to an entity type.",
+        "description": "Notification state filters for channel message queries.",
         "properties": {
           "done": {
             "type": ["boolean", "null"],
-            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
+            "description": "Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications."
           },
           "seen": {
             "type": ["boolean", "null"],
-            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+            "description": "Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications."
           }
         }
       },

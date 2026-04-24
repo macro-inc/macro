@@ -1446,6 +1446,23 @@ export const postChannelMessagesBody = zod
       .array(zod.string().uuid())
       .optional()
       .describe('When non-empty, only return messages with these IDs.'),
+    notification_filters: zod
+      .object({
+        done: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
+          ),
+        seen: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+          ),
+      })
+      .optional()
+      .describe('Notification state filters for channel message queries.'),
   })
   .describe('Filters for channel message queries.');
 
@@ -5197,17 +5214,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         org_id: zod
           .number()
           .nullish()
@@ -5257,17 +5274,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -5323,17 +5340,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -5418,17 +5435,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         project_ids: zod
           .array(zod.string())
           .optional()
@@ -5472,17 +5489,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         owners: zod
           .array(zod.string())
           .optional()
