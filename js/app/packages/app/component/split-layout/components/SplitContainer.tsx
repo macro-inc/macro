@@ -1,4 +1,4 @@
-import MacroJump from '@app/component/MacroJump';
+
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -109,9 +109,6 @@ export function SplitContainer(
             <div class="@container/split size-full overflow-hidden relative">
               {props.children}
             </div>
-            <Show when={panel.handle.isSpotLight()}>
-              <MacroJump tabbableParent={ref} />
-            </Show>
           </div>
         </MaybeRoundPanel>
       </div>

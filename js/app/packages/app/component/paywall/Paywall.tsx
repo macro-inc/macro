@@ -3,7 +3,6 @@ import { usePaywallState } from '@core/constant/PaywallState';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import Dialog from '@corvu/dialog';
 import { onMount } from 'solid-js';
-import MacroJump from '../MacroJump';
 import PaywallComponent from './PaywallComponent';
 
 export function Paywall() {
@@ -123,7 +122,6 @@ export function Paywall() {
               </div>
             </div>
           </div>
-          <MacroJump tabbableParent={() => paywallContentEl} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>
