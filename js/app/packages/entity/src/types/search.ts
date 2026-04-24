@@ -109,3 +109,7 @@ export type WithSearch<T extends EntityData> = T & {
 export const isSearchEntity = <T extends EntityData>(
   entity: T
 ): entity is WithSearch<T> => 'search' in entity;
+
+export const isCallRecordHit = (
+  hit: ContentHitData
+): hit is CallRecordContentHitData => hit.type === 'call_record';

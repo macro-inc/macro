@@ -69,8 +69,9 @@ import {
   isWithNotification,
   type WithNotification,
 } from '../types/notification';
-import type { CallRecordContentHitData, SearchLocation } from '../types/search';
-import { isSearchEntity } from '../types/search';
+import type { SearchLocation } from '../types/search';
+import { isCallRecordHit, isSearchEntity } from '../types/search';
+import { matches } from '@core/util/match';
 import { createEntityDraggable } from '../utils/draggable';
 import { unreadFilterFn } from '../utils/filter';
 import {
@@ -312,7 +313,7 @@ function NarrowLayout(props: LayoutProps) {
         >
           {(entity) => {
             const hit = () => {
-              const e = entity() as EntityData;
+              const e = entity();
               return isSearchEntity(e)
                 ? e.search.contentHitData?.[0]
                 : undefined;
@@ -477,7 +478,7 @@ function NarrowInboxLayout(props: LayoutProps) {
         <Match when={isChannelMessageEntity(props.entity) && props.entity}>
           {(entity) => {
             const hit = () => {
-              const e = entity() as EntityData;
+              const e = entity();
               return isSearchEntity(e)
                 ? e.search.contentHitData?.[0]
                 : undefined;
@@ -577,7 +578,7 @@ function NarrowInboxLayout(props: LayoutProps) {
         <Match when={isCallEntity(props.entity) && props.entity}>
           {(entity) => {
             const hit = () => {
-              const e = entity() as EntityData;
+              const e = entity();
               return isSearchEntity(e)
                 ? e.search.contentHitData?.[0]
                 : undefined;
@@ -597,13 +598,7 @@ function NarrowInboxLayout(props: LayoutProps) {
                 >
                   {(h) => (
                     <span class="flex items-center gap-1 min-w-0 truncate">
-                      <Show
-                        when={
-                          h().type === 'call_record'
-                            ? (h() as CallRecordContentHitData)
-                            : undefined
-                        }
-                      >
+                      <Show when={matches(h(), isCallRecordHit)}>
                         {(callHit) => (
                           <Show when={callHit().senderId}>
                             {(id) => <UserIcon id={id()} size="xs" />}
@@ -714,7 +709,7 @@ function WideLayout(props: LayoutProps) {
           <Match when={isChannelMessageEntity(props.entity) && props.entity}>
             {(entity) => {
               const hit = () => {
-                const e = entity() as EntityData;
+                const e = entity();
                 return isSearchEntity(e)
                   ? e.search.contentHitData?.[0]
                   : undefined;
@@ -769,7 +764,7 @@ function WideLayout(props: LayoutProps) {
           <Match when={isCallEntity(props.entity) && props.entity}>
             {(entity) => {
               const hit = () => {
-                const e = entity() as EntityData;
+                const e = entity();
                 return isSearchEntity(e)
                   ? e.search.contentHitData?.[0]
                   : undefined;
@@ -795,13 +790,7 @@ function WideLayout(props: LayoutProps) {
                     {(h) => (
                       <>
                         <span class="shrink-0 flex gap-1.5 items-center">
-                          <Show
-                            when={
-                              h().type === 'call_record'
-                                ? (h() as CallRecordContentHitData)
-                                : undefined
-                            }
-                          >
+                          <Show when={matches(h(), isCallRecordHit)}>
                             {(callHit) => (
                               <Show when={callHit().senderId}>
                                 {(id) => <UserIcon id={id()} size="xs" />}
