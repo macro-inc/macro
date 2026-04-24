@@ -159,7 +159,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                             SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
                             FROM notification n
                             JOIN user_notification un ON un.notification_id = n.id
-                            JOIN comms_messages msg ON msg.id::text = n.metadata->>'messageId'
+                            JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
                             WHERE $8::bool IS NOT NULL
                               AND un.user_id = $7::text
                               AND un.deleted_at IS NULL
@@ -174,7 +174,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                             SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
                             FROM notification n
                             JOIN user_notification un ON un.notification_id = n.id
-                            JOIN comms_messages msg ON msg.id::text = n.metadata->>'messageId'
+                            JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
                             WHERE $9::bool IS NOT NULL
                               AND un.user_id = $7::text
                               AND un.deleted_at IS NULL
@@ -291,7 +291,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                             SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
                             FROM notification n
                             JOIN user_notification un ON un.notification_id = n.id
-                            JOIN comms_messages msg ON msg.id::text = n.metadata->>'messageId'
+                            JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
                             WHERE $8::bool IS NOT NULL
                               AND un.user_id = $7::text
                               AND un.deleted_at IS NULL
@@ -306,7 +306,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                             SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
                             FROM notification n
                             JOIN user_notification un ON un.notification_id = n.id
-                            JOIN comms_messages msg ON msg.id::text = n.metadata->>'messageId'
+                            JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
                             WHERE $9::bool IS NOT NULL
                               AND un.user_id = $7::text
                               AND un.deleted_at IS NULL

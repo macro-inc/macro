@@ -1105,3 +1105,34 @@ async fn notification_filter_is_scoped_to_requesting_user(
     assert!(result.rows.is_empty());
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn notification_filter_requires_requesting_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let filters = ChannelMessageFilters {
+        notification_filters: NotificationFilters {
+            done: Some(false),
+            seen: None,
+        },
+        ..Default::default()
+    };
+
+    let result = repo(pool)
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+            None,
+        )
+        .await;
+
+    let Err(err) = result else {
+        anyhow::bail!("notification filters require a user id");
+    };
+    assert_eq!(
+        err.to_string(),
+        "notification_user_id is required when notification_filters are set"
+    );
+    Ok(())
+}
