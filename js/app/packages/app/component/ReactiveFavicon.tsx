@@ -1,7 +1,7 @@
 import { updateFavicon } from '@app/util/favicon';
 import { createBroadcastChannel } from '@solid-primitives/broadcast-channel';
 import { createEffect, createSignal, on, onCleanup, onMount } from 'solid-js';
-import { useReactiveColorString } from '../../block-theme/signals/themeReactive';
+import { useReactiveColorString } from '../../theme/signals/themeReactive';
 import { useGlobalNotificationSource } from './GlobalAppState';
 
 type BadgeMessage = { hasBadge: boolean };

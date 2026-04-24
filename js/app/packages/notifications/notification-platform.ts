@@ -2,7 +2,7 @@ import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import { getFaviconUrl } from '@app/util/favicon';
 import { markdownToPlainText } from '@lexical-core';
 import type { UnifiedNotification } from './types';
-import { themeReactive } from '../block-theme/signals/themeReactive';
+import { themeReactive } from '../theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import {
   getNotificationAction,

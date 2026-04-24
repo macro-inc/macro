@@ -55,7 +55,7 @@ export function BozzyBracketInnerSibling(props: {
   /* TEST BEFORE REMOVING left-[-1px] top-[-1px] w-[calc(100%+2px)] h-[calc(100%+2px)] */
   return (
     <div
-      class="pointer-events-none absolute left-[-1px] top-[-1px] w-[calc(100%+2px)] h-[calc(100%+2px)] bracket-offset-2"
+      class="pointer-events-none absolute -left-px -top-1 w-[calc(100%+2px)] h-[calc(100%+2px)] bracket-offset-2"
       classList={{
         'transition-transform ease-out duration-100': props.animOnOpen,
         'scale-110': big(),

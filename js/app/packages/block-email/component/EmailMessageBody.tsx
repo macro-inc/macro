@@ -26,8 +26,8 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-import { themeReactive } from '../../block-theme/signals/themeReactive';
-import { themeUpdate } from '../../block-theme/signals/themeSignals';
+import { themeReactive } from '../../theme/signals/themeReactive';
+import { themeUpdate } from '../../theme/signals/themeSignals';
 
 interface EmailMessageBodyProps {
   message: ApiMessage;

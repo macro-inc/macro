@@ -16,7 +16,7 @@ import type { ListView } from '@app/constants/list-views';
 import { runCreateAction, setCreateMenuOpen } from '../../Launcher';
 import { useAnalytics } from '@app/component/analytics-context';
 import { cn } from '@ui/utils/classname';
-import { isThemeDark } from '@block-theme/utils/themeUtils';
+import { isThemeDark } from '@theme/utils/themeUtils';
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
