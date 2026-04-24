@@ -1,4 +1,5 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { toast } from '@core/component/Toast/Toast';
+import { MaybeResultError, throwOnErr } from '@core/util/maybeResult';
 import { callServiceClient } from '@service-call/client';
 import { queryClient } from '@queries/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
@@ -22,6 +23,17 @@ export function useJoinCallMutation() {
       queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
     },
     onError(error: Error) {
+      if (
+        error instanceof MaybeResultError &&
+        error.errors[0]?.code === 'CONFLICT'
+      ) {
+        toast.alert(
+          "You're already in another call",
+          'Leave your current call before joining a new one.'
+        );
+        return;
+      }
+      toast.failure('Failed to join call');
       console.error('failed to join call', error);
     },
   }));
