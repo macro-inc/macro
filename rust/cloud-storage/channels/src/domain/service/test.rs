@@ -232,6 +232,7 @@ fn center_window_balanced() {
 
     let result = center_window(before.clone(), anchor.clone(), after.clone(), 7);
     assert_eq!(result.len(), 7);
+    assert!(result.has_more_newer);
     // First 3 are from after (reversed = newest-first), then anchor, then 3 from before
     assert_eq!(result[0].id, after[2].id);
     assert_eq!(result[1].id, after[1].id);
@@ -251,6 +252,7 @@ fn center_window_near_oldest_edge() {
 
     let result = center_window(before.clone(), anchor.clone(), after.clone(), 7);
     assert_eq!(result.len(), 7);
+    assert!(result.has_more_newer);
     assert_eq!(result[5].id, anchor.id);
     assert_eq!(result[6].id, before[0].id);
     // First 5 are after (reversed)
@@ -268,6 +270,7 @@ fn center_window_near_newest_edge() {
 
     let result = center_window(before.clone(), anchor.clone(), after.clone(), 7);
     assert_eq!(result.len(), 7);
+    assert!(!result.has_more_newer);
     assert_eq!(result[0].id, after[0].id);
     assert_eq!(result[1].id, anchor.id);
     for i in 0..5 {
@@ -284,6 +287,7 @@ fn center_window_small_channel() {
 
     let result = center_window(before.clone(), anchor.clone(), after.clone(), 10);
     assert_eq!(result.len(), 4);
+    assert!(!result.has_more_newer);
     assert_eq!(result[0].id, after[0].id);
     assert_eq!(result[1].id, anchor.id);
     assert_eq!(result[2].id, before[0].id);
@@ -298,6 +302,7 @@ fn center_window_limit_one() {
 
     let result = center_window(before, anchor.clone(), after, 1);
     assert_eq!(result.len(), 1);
+    assert!(result.has_more_newer);
     assert_eq!(result[0].id, anchor.id);
 }
 
@@ -350,11 +355,13 @@ async fn around_resolves_and_hydrates() {
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
 
     let svc = ChannelMessagesServiceImpl::new(repo);
-    let page = svc
+    let result = svc
         .get_channel_messages_around(Uuid::nil(), anchor.id, 50)
         .await
         .unwrap();
+    let page = result.page;
 
+    assert!(!result.has_more_newer);
     assert_eq!(page.items.len(), 3);
     // DESC order: after, anchor, before
     assert_eq!(page.items[0].id, after_row.id);

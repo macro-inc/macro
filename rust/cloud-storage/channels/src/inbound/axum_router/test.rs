@@ -4,8 +4,7 @@ use crate::domain::models::{
     MessagePageDirection, ParticipantRole,
 };
 use crate::domain::ports::{
-    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult,
-    ChannelMessagesService,
+    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMessagesService,
 };
 use axum::{
     Extension, Router,
@@ -209,12 +208,15 @@ impl ChannelMessagesService for MockService {
         _channel_id: Uuid,
         _message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        Ok(Vec::<ChannelMessage>::new()
-            .into_iter()
-            .paginate_on(50, CreatedAt)
-            .filter_on(())
-            .into_page())
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
     }
 
     async fn get_thread_replies(
@@ -261,7 +263,7 @@ impl ChannelMessagesService for ErrorService {
         _channel_id: Uuid,
         _message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
 
@@ -335,12 +337,15 @@ impl ChannelMessagesService for ParticipantsService {
         _channel_id: Uuid,
         _message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        Ok(Vec::<ChannelMessage>::new()
-            .into_iter()
-            .paginate_on(50, CreatedAt)
-            .filter_on(())
-            .into_page())
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
     }
 
     async fn get_thread_replies(
@@ -619,7 +624,7 @@ impl ChannelMessagesService for NotFoundService {
         _channel_id: Uuid,
         message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::MessageNotFound(message_id))
     }
 
@@ -632,7 +637,9 @@ impl ChannelMessagesService for NotFoundService {
     }
 }
 
-struct AroundHasItemsService;
+struct AroundHasItemsService {
+    has_more_newer: bool,
+}
 
 impl ChannelMessagesService for AroundHasItemsService {
     async fn get_channel_messages(
@@ -678,7 +685,7 @@ impl ChannelMessagesService for AroundHasItemsService {
         channel_id: Uuid,
         _message_id: Uuid,
         limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let now = chrono::Utc::now();
         let message = ChannelMessage {
             id: Uuid::new_v4(),
@@ -698,11 +705,14 @@ impl ChannelMessagesService for AroundHasItemsService {
             attachments: vec![],
         };
 
-        Ok(vec![message]
-            .into_iter()
-            .paginate_on(usize::from(limit), CreatedAt)
-            .filter_on(())
-            .into_page())
+        Ok(ChannelMessagesQueryResult {
+            page: vec![message]
+                .into_iter()
+                .paginate_on(usize::from(limit), CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: self.has_more_newer,
+        })
     }
 
     async fn get_thread_replies(
@@ -736,9 +746,38 @@ async fn messages_around_returns_empty_page() {
 }
 
 #[tokio::test]
-async fn messages_around_returns_previous_cursor_when_items_present() {
+async fn messages_around_omits_previous_cursor_when_no_newer_page() {
     let router = channels_router(ChannelsRouterState::new(
-        AroundHasItemsService,
+        AroundHasItemsService {
+            has_more_newer: false,
+        },
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages?load_around_message_id={message_id}"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["items"].as_array().unwrap().len(), 1);
+    assert!(json["previous_cursor"].is_null());
+}
+
+#[tokio::test]
+async fn messages_around_returns_previous_cursor_when_newer_page_exists() {
+    let router = channels_router(ChannelsRouterState::new(
+        AroundHasItemsService {
+            has_more_newer: true,
+        },
         TestAccessService::allow(),
     ))
     .layer(user_extension());
@@ -843,12 +882,15 @@ impl ChannelMessagesService for std::sync::Arc<CapturingService> {
         _channel_id: Uuid,
         _message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        Ok(Vec::<ChannelMessage>::new()
-            .into_iter()
-            .paginate_on(50, CreatedAt)
-            .filter_on(())
-            .into_page())
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
     }
 
     async fn get_thread_replies(

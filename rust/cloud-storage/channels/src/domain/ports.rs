@@ -109,12 +109,15 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
 
     /// Fetch a centered window of messages around a specific message id.
+    ///
+    /// The result's `has_more_newer` reports whether newer messages exist outside the
+    /// returned window.
     fn get_channel_messages_around(
         &self,
         channel_id: Uuid,
         message_id: Uuid,
         limit: u16,
-    ) -> impl Future<Output = Result<ChannelMessagesPage, ChannelMessagesErr>> + Send;
+    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
 
     /// Fetch all replies for the thread identified by `message_id`.
     ///
@@ -131,6 +134,7 @@ pub type ChannelMessagesPage =
     models_pagination::PaginatedCursor<super::models::ChannelMessage, Uuid, CreatedAt, ()>;
 
 /// Result for a cursor-paginated channel messages query.
+#[derive(Debug)]
 pub struct ChannelMessagesQueryResult {
     /// The page of messages.
     pub page: ChannelMessagesPage,

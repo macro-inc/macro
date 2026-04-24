@@ -273,11 +273,14 @@ async fn channel_messages_response<S: ChannelMessagesService, Svc>(
 
     let (page, has_more_newer) = match params.load_around_message_id {
         Some(message_id) => {
-            let page = state
+            let ChannelMessagesQueryResult {
+                page,
+                has_more_newer,
+            } = state
                 .service
                 .get_channel_messages_around(channel_id, message_id, limit)
                 .await?;
-            (page, false)
+            (page, has_more_newer)
         }
         None => {
             let ChannelMessagesQueryResult {
@@ -291,21 +294,20 @@ async fn channel_messages_response<S: ChannelMessagesService, Svc>(
         }
     };
 
-    let can_emit_previous = has_cursor || params.load_around_message_id.is_some();
-    let previous_cursor = if !can_emit_previous {
-        None
-    } else {
+    let has_newer_page = match params.load_around_message_id {
+        Some(_) => has_more_newer,
+        None => match direction {
+            MessagePageDirection::Older => has_cursor,
+            MessagePageDirection::Newer => has_more_newer,
+        },
+    };
+    let previous_cursor = if has_newer_page {
         match cursor_from_first_message(&page, limit) {
-            Some(first_cursor) => {
-                let has_previous = match direction {
-                    MessagePageDirection::Older => true,
-                    MessagePageDirection::Newer => has_more_newer,
-                };
-
-                has_previous.then(|| Base64Str::encode_json(first_cursor).type_erase())
-            }
+            Some(first_cursor) => Some(Base64Str::encode_json(first_cursor).type_erase()),
             None => None,
         }
+    } else {
+        None
     };
 
     let page = page.type_erase().map(ApiChannelMessage::from);

@@ -4,8 +4,8 @@ use crate::domain::{
         ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
-        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage,
-        ChannelMessagesQueryResult, ChannelMessagesRepo, ChannelMessagesService,
+        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult,
+        ChannelMessagesRepo, ChannelMessagesService,
     },
 };
 use models_pagination::{CreatedAt, PaginateOn, Query};
@@ -114,17 +114,36 @@ where
 /// - `limit`: total number of messages to return (including the anchor).
 ///
 /// Returns messages in DESC order (newest first).
+struct CenteredWindow {
+    rows: Vec<TopLevelMessageRow>,
+    has_more_newer: bool,
+}
+
+impl std::ops::Deref for CenteredWindow {
+    type Target = [TopLevelMessageRow];
+
+    fn deref(&self) -> &Self::Target {
+        &self.rows
+    }
+}
+
 fn center_window(
     before: Vec<TopLevelMessageRow>,
     anchor: TopLevelMessageRow,
     after: Vec<TopLevelMessageRow>,
     limit: usize,
-) -> Vec<TopLevelMessageRow> {
+) -> CenteredWindow {
     if limit == 0 {
-        return vec![];
+        return CenteredWindow {
+            rows: vec![],
+            has_more_newer: !after.is_empty(),
+        };
     }
     if limit == 1 {
-        return vec![anchor];
+        return CenteredWindow {
+            rows: vec![anchor],
+            has_more_newer: !after.is_empty(),
+        };
     }
 
     let slots = limit - 1;
@@ -133,6 +152,7 @@ fn center_window(
     let before_take = half.min(before.len());
     let after_take = (slots - before_take).min(after.len());
     let before_take = (slots - after_take).min(before.len());
+    let has_more_newer = after.len() > after_take;
 
     let mut before = before;
     before.truncate(before_take);
@@ -146,7 +166,10 @@ fn center_window(
     result.push(anchor);
     result.append(&mut before);
 
-    result
+    CenteredWindow {
+        rows: result,
+        has_more_newer,
+    }
 }
 
 impl<R> ChannelMessagesService for ChannelMessagesServiceImpl<R>
@@ -229,7 +252,7 @@ where
         channel_id: Uuid,
         message_id: Uuid,
         limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 
         let anchor = self
@@ -245,8 +268,9 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        let rows = center_window(before, anchor, after, limit.into());
-        let messages = self.hydrate_messages(rows).await?;
+        let window = center_window(before, anchor, after, limit.into());
+        let has_more_newer = window.has_more_newer;
+        let messages = self.hydrate_messages(window.rows).await?;
 
         let page = messages
             .into_iter()
@@ -254,7 +278,10 @@ where
             .filter_on(())
             .into_page();
 
-        Ok(page)
+        Ok(ChannelMessagesQueryResult {
+            page,
+            has_more_newer,
+        })
     }
 
     #[tracing::instrument(err, skip(self))]
