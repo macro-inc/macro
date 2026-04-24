@@ -19,7 +19,7 @@ async function createChannelIndex(opensearchClient: Client) {
   if (!channelIndexExists) {
     console.log(`${CHANNEL_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: CHANNEL_INDEX,
       body: {
         settings: {
@@ -91,7 +91,7 @@ async function createDocumentIndex(opensearchClient: Client) {
   if (!documentIndexExists) {
     console.log(`${DOCUMENT_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: DOCUMENT_INDEX,
       body: {
         settings: {
@@ -168,7 +168,7 @@ async function createChatIndex(opensearchClient: Client) {
   if (!chatIndexExists) {
     console.log(`${CHAT_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: CHAT_INDEX,
       body: {
         settings: {
@@ -236,7 +236,7 @@ async function createEmailIndex(opensearchClient: Client) {
   if (!emailIndexExists) {
     console.log(`${EMAIL_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: EMAIL_INDEX,
       body: {
         settings: {
@@ -356,7 +356,7 @@ async function createCallRecordsIndex(opensearchClient: Client) {
   if (!callRecordsIndexExists) {
     console.log(`${CALL_RECORDS_INDEX} index does not exist, creating...`);
 
-    opensearchClient.indices.create({
+    await opensearchClient.indices.create({
       index: CALL_RECORDS_INDEX,
       body: {
         settings: {
