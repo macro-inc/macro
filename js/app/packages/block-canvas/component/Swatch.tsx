@@ -33,7 +33,7 @@ export function Swatch(props: {
         props.isSelected ? selectedStyling : 'hover:ring-edge'
       )}
       classList={{
-        'z-1': props.isSelected,
+        'z-user-highlight': props.isSelected,
       }}
       onClick={(e) => {
         e.stopPropagation();

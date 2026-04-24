@@ -304,7 +304,7 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
                     return (
                       <div
                         class={cn(
-                          'm-0 text-transparent absolute top-0 -left-[.5px] pointer-events-none'
+                          'm-0 text-transparent absolute top-0 left-[-0.5px] pointer-events-none'
                         )}
                         id="remote-cursor"
                         style={{

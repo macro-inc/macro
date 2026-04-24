@@ -83,7 +83,7 @@ export function MessageRowUI(
       >
         {!props.hideBubble && (
           <div
-            class={`w-4 h-4 relative flex items-center justify-center flex-shrink-0 rounded-[2px]`}
+            class={`w-4 h-4 relative flex items-center justify-center shrink-0 rounded-[2px]`}
           >
             <div class="absolute">
               <UserIcon
@@ -95,7 +95,7 @@ export function MessageRowUI(
             </div>
           </div>
         )}
-        <div class="text-xs text-ink truncate grow-1">{displayName()}</div>
+        <div class="text-xs text-ink truncate grow">{displayName()}</div>
         <Show when={props.date}>
           <div class="text-xs text-ink-muted">{formatDate(props.date)}</div>
         </Show>
@@ -137,7 +137,7 @@ export function MessageTopRow(props: {
       hideBottomMargin={props.hideBottomMargin}
       isActive={props.isActive}
     >
-      <div class="absolute top-1 right-1 flex flex-row bg-menu border-1 border-edge z-1">
+      <div class="absolute top-1 right-1 flex flex-row bg-menu border border-edge z-user-highlight">
         <Show when={canComment()}>
           <Show when={props.isOwned}>
             {props.toggleResolve && (

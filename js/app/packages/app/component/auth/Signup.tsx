@@ -1,4 +1,4 @@
-import { RoundPanel } from '@core/component/RoundPanel';
+import { Panel } from '@ui';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
@@ -80,8 +80,8 @@ export function Signup() {
           />
         </div>
 
-        <div class="w-full max-w-[420px] login-card">
-          <RoundPanel>
+        <div class="w-full max-w-105 login-card">
+          <Panel>
             <div class="login-stagger">
               <div class="flex items-center justify-center py-10">
                 <LogoIcon class="size-20 text-accent" />
@@ -97,7 +97,7 @@ export function Signup() {
                 <LoginOptions signupMode setStage={(_stage: Stage) => {}} />
               </div>
             </div>
-          </RoundPanel>
+          </Panel>
         </div>
       </div>
     </Show>

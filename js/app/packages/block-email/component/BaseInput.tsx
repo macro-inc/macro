@@ -1246,7 +1246,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px] max-w-full"
+      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] mb-[-7px] max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 p-2">
@@ -1510,7 +1510,7 @@ export function BaseInput(props: {
               form().setCapturedEditor(editor);
             }}
             class={cn(
-              'ph-no-capture cursor-text text-sm break-words text-ink',
+              'ph-no-capture cursor-text text-sm wrap-break-word text-ink',
               isDragging() && 'blur'
             )}
             editable={() => !sendMutation.isPending}
@@ -1697,7 +1697,7 @@ export function BaseInput(props: {
                 }
               >
                 <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                  <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
                 </div>
               </Show>
             </button>

@@ -35,7 +35,7 @@ export function StaticSplitLabel(props: {
   return (
     <div
       class={cn(
-        'z-3 relative flex items-center gap-2 max-w-full h-full shrink',
+        'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
         props.class
       )}
     >
@@ -104,7 +104,7 @@ export function SplitLabel(props: {
 
 export function SplitHeaderBadge(props: { text: string; tooltip?: string }) {
   return (
-    <span class="py-0.5 px-2 rounded-none text-[0.625rem] text-ink-muted">
+    <span class="py-0.5 px-2 rounded-none text-xxs text-ink-muted">
       <Tooltip tooltip={props.tooltip} spanMode>
         <span class="font-mono uppercase">{props.text}</span>
       </Tooltip>
@@ -166,7 +166,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   return (
-    <div class="ph-no-capture z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
+    <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 w-screen max-w-full h-full shrink">
       <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel

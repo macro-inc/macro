@@ -168,12 +168,14 @@ pub(in crate::api::search) async fn perform_unified_search(
     let chat_filters = search_filters.chat_filters;
     let doc_filters = search_filters.document_filters;
     let project_filters = search_filters.project_filters;
+    let call_filters = search_filters.call_filters;
 
     let should_include_documents = search_filters.should_include_documents;
     let should_include_channels = search_filters.should_include_channels;
     let should_include_chats = search_filters.should_include_chats;
     let should_include_projects = search_filters.should_include_projects;
     let should_include_emails = search_filters.should_include_emails;
+    let should_include_call_records = search_filters.should_include_call_records;
     let email_terms = split_search_terms(&terms);
 
     // Await all tasks in parallel
@@ -183,6 +185,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         mut filter_chat_response,
         mut filter_email_response,
         filter_project_response,
+        mut filter_call_record_response,
     ) = tokio::try_join!(
         doc_filters.filter_to_search_args(
             ctx,
@@ -213,6 +216,12 @@ pub(in crate::api::search) async fn perform_unified_search(
             user_id.as_ref(),
             user_organization_id,
             should_include_projects
+        ),
+        call_filters.filter_to_search_args(
+            ctx,
+            user_id.as_ref(),
+            user_organization_id,
+            should_include_call_records,
         )
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
@@ -223,6 +232,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_channel_response.terms = terms.clone();
     filter_chat_response.terms = terms.clone();
     filter_email_response.terms = email_terms.clone();
+    filter_call_record_response.terms = terms.clone();
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
@@ -279,12 +289,16 @@ pub(in crate::api::search) async fn perform_unified_search(
             if should_include_channels && !filter_channel_response.channel_ids.is_empty() {
                 indices.insert(models_opensearch::OpenSearchEntityType::Channels);
             }
+            if should_include_call_records && !filter_call_record_response.call_ids.is_empty() {
+                indices.insert(models_opensearch::OpenSearchEntityType::CallRecords);
+            }
             indices
         },
         document_search_args: filter_document_response.clone(),
         email_search_args: filter_email_response.clone(),
         channel_message_search_args: filter_channel_response,
         chat_search_args: filter_chat_response.clone(),
+        call_record_search_args: filter_call_record_response.clone(),
     };
 
     // Call search functions in parallel for included entity types

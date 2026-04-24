@@ -5,6 +5,14 @@ publish = false
 version = "0.1.0"
 
 [features]
+attachment = [
+    "dep:attachment",
+    "dep:ai",
+    "dep:lexical_client",
+    "dep:model_file_type",
+    "dep:reqwest",
+    "ports",
+]
 ai_tools = [
   "dep:ai",
   "dep:async-trait",
@@ -95,6 +103,10 @@ model_file_type = { path = "../model_file_type", optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+
+# Attachment
+attachment = { path = "../attachment", optional = true }
+non_empty = { path = "../non_empty" }
 
 [dev-dependencies]
 dotenvy = { workspace = true }

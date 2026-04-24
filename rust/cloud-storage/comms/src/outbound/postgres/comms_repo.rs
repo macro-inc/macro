@@ -318,6 +318,68 @@ pub async fn get_activities(
     .await?)
 }
 
+#[tracing::instrument(skip(db), err)]
+pub async fn get_channel_name(
+    db: &PgPool,
+    channel_id: ChannelId,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT name FROM comms_channels WHERE id = $1",
+        channel_id.0
+    )
+    .fetch_optional(db)
+    .await
+    .map(|row| row.flatten())
+}
+
+#[tracing::instrument(skip(db), err)]
+pub async fn get_recent_messages(
+    db: &PgPool,
+    channel_id: ChannelId,
+    limit: u32,
+) -> Result<Vec<ChannelMessage>, sqlx::Error> {
+    sqlx::query!(
+        r#"
+        SELECT
+            m.id AS "message_id!",
+            m.thread_id,
+            m.sender_id AS "sender_id!",
+            m.content AS "content!",
+            m.created_at AS "created_at!",
+            m.updated_at AS "updated_at!",
+            m.deleted_at::timestamptz AS "deleted_at?",
+            COALESCE(
+                ARRAY(
+                    SELECT entity_type || ':' || entity_id
+                    FROM comms_entity_mentions em
+                    WHERE em.source_entity_type = 'message'
+                      AND em.source_entity_id = m.id::text
+                ),
+                '{}'::text[]
+            ) AS "mentions!"
+        FROM comms_messages m
+        WHERE m.channel_id = $1
+          AND m.deleted_at IS NULL
+        ORDER BY m.created_at DESC
+        LIMIT $2
+        "#,
+        channel_id.0,
+        i64::from(limit)
+    )
+    .map(|row| ChannelMessage {
+        message_id: row.message_id,
+        thread_id: row.thread_id,
+        sender_id: row.sender_id,
+        content: row.content,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted_at: row.deleted_at,
+        mentions: row.mentions,
+    })
+    .fetch_all(db)
+    .await
+}
+
 pub struct PgCommsRepo {
     pool: readonly_pool::ReadOnlyPool,
 }
@@ -351,5 +413,20 @@ impl CommsRepo for PgCommsRepo {
         user_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<models_comms::channel::Activity>, rootcause::Report> {
         get_activities(&self.pool.0, user_id).await
+    }
+
+    async fn get_channel_name(
+        &self,
+        channel_id: ChannelId,
+    ) -> Result<Option<String>, rootcause::Report> {
+        Ok(get_channel_name(&self.pool.0, channel_id).await?)
+    }
+
+    async fn get_recent_messages(
+        &self,
+        channel_id: ChannelId,
+        limit: u32,
+    ) -> Result<Vec<ChannelMessage>, rootcause::Report> {
+        Ok(get_recent_messages(&self.pool.0, channel_id, limit).await?)
     }
 }

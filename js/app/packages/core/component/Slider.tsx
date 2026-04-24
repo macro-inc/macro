@@ -112,7 +112,7 @@ export function DebugSlider(props: SliderProps) {
         {props.label}
       </label>
 
-      <div class="w-full shrink-1">
+      <div class="w-full shrink">
         <div
           ref={sliderRef}
           class="relative h-6 bg-message cursor-pointer select-none w-full focus:ring focus:ring-edge"

@@ -497,6 +497,33 @@ where
         team_id: &uuid::Uuid,
         req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
+        if let Some(user_role_updates) = req.user_role_updates.as_ref() {
+            if user_role_updates.iter().any(|u| u.role == TeamRole::Owner) {
+                return Err(TeamError::BadRequest(
+                    "cannot assign the Owner role".to_string(),
+                ));
+            }
+
+            if !user_role_updates.is_empty() {
+                let team = self.team_repository.get_team_by_id(team_id).await?;
+
+                if user_role_updates
+                    .iter()
+                    .any(|u| u.team_user_id.as_ref() == team.team.owner_id())
+                {
+                    return Err(TeamError::BadRequest(
+                        "cannot downgrade the team owner's role".to_string(),
+                    ));
+                }
+
+                for update in user_role_updates {
+                    self.team_repository
+                        .patch_team_user_role(team_id, &update.team_user_id, update.role)
+                        .await?;
+                }
+            }
+        }
+
         self.team_repository.patch_team(team_id, req).await
     }
 

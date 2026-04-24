@@ -25,5 +25,9 @@ export const ALLOWED_ORIGINS = [
   'https://website-staging.macro.com',
   'https://website-prod.macro.com',
   'https://apollo-testing.macro.com',
+  // S3 CORS supports a single wildcard in AllowedOrigin. This lets feature
+  // preview apps (for example, https://branch.preview.macro.com) load
+  // presigned S3 media such as call recordings.
+  'https://*.preview.macro.com',
   'tauri://localhost',
 ];

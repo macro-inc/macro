@@ -192,6 +192,14 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         team_tier: TeamUserTier,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Patches the role of the provided user id for the team
+    fn patch_team_user_role(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        team_role: TeamRole,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
 }
 
 /// The TeamService defines a set of actions to perform on the teams

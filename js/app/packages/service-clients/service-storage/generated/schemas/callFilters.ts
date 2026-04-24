@@ -16,4 +16,6 @@ export interface CallFilters {
   attended?: CallFiltersAttended;
   /** Channel IDs to filter calls by. Empty to include all calls. */
   channel_ids?: string[];
+  /** Speaker macro user ids. Empty to include all. */
+  speaker_ids?: string[];
 }

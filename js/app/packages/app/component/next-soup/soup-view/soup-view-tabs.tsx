@@ -234,7 +234,7 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
       indicatorPosition="top"
-      class="[&_[data-indicator]]:h-[3px]"
+      class="**:data-indicator:h-[3px]"
     />
   );
 };

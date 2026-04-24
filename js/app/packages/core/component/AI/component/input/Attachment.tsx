@@ -73,7 +73,7 @@ function ImageAttachment(props: {
     >
       <Show when={hover()}>
         <XIcon
-          class="w-6 h-6 text-ink absolute -top-2 -right-2 rounded-full bg-menu  p-1 border border-edge z-[10]"
+          class="w-6 h-6 text-ink absolute -top-2 -right-2 rounded-full bg-menu  p-1 border border-edge z-10"
           onClick={() => props.onRemove()}
         />
       </Show>

@@ -1,7 +1,6 @@
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { globalSplitManager } from '../../signal/splitLayout';
-import { fireMacroJump } from '../MacroJump';
 import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
 import { canSpotlight } from './utils/canSpotlight';
@@ -90,19 +89,6 @@ export function registerSplitHotkeys(args: {
     description: `Go forward`,
     keyDownHandler: () => {
       goForward();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  // Macro Jump - legacy binding.
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.macroJump,
-    hotkey: 'cmd+m',
-    scopeId: splitHotkeyScope,
-    description: 'Macro Jump',
-    keyDownHandler: () => {
-      fireMacroJump();
       return true;
     },
     runWithInputFocused: true,

@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[non_exhaustive]
 pub struct Attachment {
     pub id: Uuid,
+    #[allow(unused)]
     pub(crate) thread_id: Uuid,
     pub message_id: Uuid,
     // a different value is returned by the gmail API for this each time you fetch a message -

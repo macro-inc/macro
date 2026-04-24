@@ -1,3 +1,4 @@
+mod call;
 mod channel;
 mod chat;
 pub mod context;
@@ -94,6 +95,12 @@ pub async fn process_message(
         }
         SearchQueueMessage::RemoveChatMessage(message) => {
             chat::remove_chat_message(&ctx.opensearch_client, &message).await?;
+        }
+        SearchQueueMessage::CallRecord(message) => {
+            call::process_call_record(&ctx.opensearch_client, &ctx.db, &message).await?;
+        }
+        SearchQueueMessage::RemoveCallRecord(message) => {
+            call::process_remove_call_record(&ctx.opensearch_client, &message).await?;
         }
     }
 

@@ -68,11 +68,11 @@ function AutomationRenameModalContent(props: {
       <Portal mount={getSplitPanelRef() ?? undefined}>
         <Dialog.Overlay
           as="div"
-          class="absolute z-modal left-[1px] right-[1px] bottom-[1px] top-[1px] bg-modal-overlay"
+          class="absolute z-modal left-px right-px bottom-px top-px bg-modal-overlay"
           use:clickOutside={close}
           on:click={close}
         />
-        <div class="absolute z-modal pointer-events-none px-2 left-[1px] right-[1px] bottom-[1px] top-[1px]">
+        <div class="absolute z-modal pointer-events-none px-2 left-px right-px bottom-px top-px">
           <Dialog.Content class="pointer-events-none!">
             <div class="pointer-events-auto w-full max-w-[min(36rem,calc(100%-1rem))] mx-auto mt-16 bg-menu border border-edge h-fit p-2">
               <div class="w-full my-1">
@@ -91,7 +91,7 @@ function AutomationRenameModalContent(props: {
                     value={editValue()}
                     onInput={(e) => setEditValue(e.currentTarget.value)}
                     onKeyDown={handleKeyDown}
-                    class="w-full p-2 text-sm border-1 border-edge/20 bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
+                    class="w-full p-2 text-sm border border-edge/20 bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
                     placeholder="Enter title..."
                   />
                 </div>

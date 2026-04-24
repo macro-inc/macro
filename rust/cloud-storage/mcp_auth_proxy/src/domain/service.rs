@@ -282,9 +282,33 @@ where
             .map_err(CompleteCallbackError::InflightStore)?
             .ok_or(CompleteCallbackError::UnknownOrExpiredSession)?;
 
+        if let Some(error) = params.error {
+            tracing::warn!(
+                %session_id,
+                %error,
+                description = ?params.error_description,
+                "upstream oauth returned error"
+            );
+            let mut redirect = format!(
+                "{}?error={}&state={}",
+                pending.client_redirect_uri,
+                urlencoding::encode(&error),
+                urlencoding::encode(&pending.client_state),
+            );
+            if let Some(desc) = params.error_description {
+                redirect.push_str(&format!(
+                    "&error_description={}",
+                    urlencoding::encode(&desc)
+                ));
+            }
+            return Ok(redirect);
+        }
+
+        let code = params.code.ok_or(CompleteCallbackError::MissingCode)?;
+
         let (access_token, refresh_token) = self
             .oauth_provider
-            .exchange_authorization_code(&params.code)
+            .exchange_authorization_code(&code)
             .await
             .map_err(CompleteCallbackError::AuthorizationCodeExchangeFailed)?;
 
@@ -334,7 +358,15 @@ fn is_allowed_redirect_uri(uri: &str) -> bool {
         return false;
     };
 
-    matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
+    if parsed.scheme() == "https" {
+        return true;
+    }
+
+    if parsed.scheme() == "http" {
+        return matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    }
+
+    false
 }
 
 /// Errors returned when starting authorization.
@@ -346,8 +378,8 @@ pub enum StartAuthorizationError {
     /// Only S256 PKCE is supported.
     #[error("unsupported code_challenge_method")]
     UnsupportedCodeChallengeMethod,
-    /// Only loopback redirect URIs are allowed.
-    #[error("redirect_uri must be a loopback address")]
+    /// Only https or loopback http redirect URIs are allowed.
+    #[error("redirect_uri must be https or a loopback address")]
     InvalidRedirectUri,
     /// Inflight auth state could not be persisted.
     #[error("failed to persist inflight auth state")]
@@ -363,6 +395,9 @@ pub enum CompleteCallbackError {
     /// Upstream callback omitted state.
     #[error("missing state parameter")]
     MissingState,
+    /// Upstream callback omitted both the authorization code and an error code.
+    #[error("missing code parameter")]
+    MissingCode,
     /// Pending broker session was missing or expired.
     #[error("unknown or expired session")]
     UnknownOrExpiredSession,

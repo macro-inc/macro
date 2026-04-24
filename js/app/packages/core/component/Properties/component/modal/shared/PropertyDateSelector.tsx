@@ -252,7 +252,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                       <p class="text-sm font-medium truncate">Custom date...</p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-2 flex-shrink-0">
+                  <div class="flex items-center gap-2 shrink-0">
                     <span class="text-xs text-ink-muted">
                       Pick from calendar
                     </span>

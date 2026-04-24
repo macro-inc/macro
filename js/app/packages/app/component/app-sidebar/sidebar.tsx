@@ -418,7 +418,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       </span>
       <Show when={props.hotkeyToken}>
         {(token) => (
-          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:invisible">
             <Hotkey token={token()} class="flex gap-1" />
           </div>
         )}
@@ -554,7 +554,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 ">
             <LogoIcon class="size-6" />
           </div>
-          <div class="grow-1 shrink-10 min-w-0" />
+          <div class="grow shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
             onClick={() => handleSidebarOpenChange(!isExpanded())}
@@ -573,7 +573,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-ink/5" />
+        <hr class="border-edge-muted" />
       </div>
 
       <div class="w-full px-2 my-[4.5px]">
@@ -587,7 +587,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-ink/5 mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <nav>
@@ -607,19 +607,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-ink/5 my-[8px]" />
+        <hr class="border-edge-muted my-2" />
       </div>
 
       <div class="block max-h-[clamp(10%,60%,20rem)]">
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
       </div>
-      
+
       <Show when={callCtx?.isInCall()}>
         <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
           <InCallPanel isSlim={panelIsSlim} />
         </div>
       </Show>
-      
+
       <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
         <hr class="border-edge-muted mb-[8px]" />
       </div>
@@ -792,9 +792,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
-              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-[0.625rem]">
+              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
                 <Show when={!props.standaloneHotkey}>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={GO_TO_LEADER_KEY} />
                   </div>
                   <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
@@ -802,7 +802,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
                   </div>
                 </Show>
                 <Show when={props.standaloneHotkey}>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>

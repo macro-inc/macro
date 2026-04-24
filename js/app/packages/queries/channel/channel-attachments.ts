@@ -2,6 +2,7 @@ import { throwOnErr } from '@core/util/maybeResult';
 import {
   commsServiceClient,
   type ApiChannelAttachment,
+  type ChannelAttachmentType,
   type ChannelAttachmentsPage,
 } from '@service-comms/client';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
@@ -14,16 +15,31 @@ export type ChannelAttachmentsData = InfiniteData<
   string | null
 >;
 
-export function channelAttachmentsQueryOptions(channelId: string) {
+export type ChannelAttachmentsQueryKey = ReturnType<
+  typeof channelKeys.attachments
+>['queryKey'];
+
+export function channelAttachmentsQueryOptions(
+  channelId: string,
+  attachmentType?: ChannelAttachmentType
+) {
   return {
-    queryKey: channelKeys.attachments(channelId).queryKey,
-    queryFn: async ({ pageParam }: { pageParam: string | null }) => {
+    queryKey: channelKeys.attachments(channelId, attachmentType).queryKey,
+    queryFn: async ({
+      pageParam,
+      signal,
+    }: {
+      pageParam: string | null;
+      signal?: AbortSignal;
+    }) => {
       return await throwOnErr(
         async () =>
           await commsServiceClient.getChannelAttachments({
             channel_id: channelId,
             limit: 100,
             cursor: pageParam,
+            attachment_type: attachmentType,
+            signal,
           })
       );
     },
@@ -34,8 +50,23 @@ export function channelAttachmentsQueryOptions(channelId: string) {
   };
 }
 
-export function useChannelAttachmentsQuery(channelId: Accessor<string>) {
-  return useInfiniteQuery(() => channelAttachmentsQueryOptions(channelId()));
+export function useChannelAttachmentsQuery(
+  channelId: Accessor<string>,
+  attachmentType?: Accessor<ChannelAttachmentType | undefined>
+) {
+  return useInfiniteQuery(() =>
+    channelAttachmentsQueryOptions(channelId(), attachmentType?.())
+  );
+}
+
+export function useChannelMediaAttachmentsQuery(channelId: Accessor<string>) {
+  return useChannelAttachmentsQuery(channelId, () => 'static');
+}
+
+export function useChannelDocumentAttachmentsQuery(
+  channelId: Accessor<string>
+) {
+  return useChannelAttachmentsQuery(channelId, () => 'dss');
 }
 
 export function useChannelAttachmentsWithIndex(channelId: Accessor<string>) {
@@ -60,9 +91,20 @@ export function flattenAttachments(
   return data.pages.flatMap((page) => page.items);
 }
 
+export function getChannelAttachmentsQueryKey(
+  channelId: string,
+  attachmentType?: ChannelAttachmentType
+): ChannelAttachmentsQueryKey {
+  return channelKeys.attachments(channelId, attachmentType).queryKey;
+}
+
+export function getChannelAttachmentsQueryKeyPrefix(channelId: string) {
+  return [...channelKeys.attachments._def, channelId];
+}
+
 export function softInvalidateChannelAttachments(channelId: string) {
   queryClient.invalidateQueries({
-    queryKey: channelKeys.attachments(channelId).queryKey,
+    queryKey: getChannelAttachmentsQueryKeyPrefix(channelId),
     refetchType: 'inactive',
   });
 }

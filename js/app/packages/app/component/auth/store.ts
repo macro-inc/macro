@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { themeReactive } from '../../../block-theme/signals/themeReactive';
+import { themeReactive } from '../../../theme/signals/themeReactive';
 
 // RGB values as tuples - THREE.Color creation moved to ThreeWireframe for lazy loading
 export const [colorContrastRgb, setColorContrastRgb] = createSignal<

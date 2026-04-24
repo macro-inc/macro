@@ -6,7 +6,7 @@ function Badge(props: ParentProps<{ class?: string }>) {
   return (
     <div
       class={cn(
-        'font-mono font-medium user-select-none uppercase flex items-center p-0.5 gap-1 text-[0.625rem] rounded-full border',
+        'font-mono font-medium user-select-none uppercase flex items-center p-0.5 gap-1 text-xxs rounded-full border',
         props.class
       )}
     >

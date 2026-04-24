@@ -82,7 +82,7 @@ export function CenterContents() {
 
   return (
     <div
-      class="border-edge p-2 text-ink-muted absolute bottom-4 left-[50%] -translate-x-[50%] rounded-xl cursor-auto "
+      class="border-edge p-2 text-ink-muted absolute bottom-4 left-[50%] translate-x-[-50%] rounded-xl cursor-auto "
       classList={{
         invisible: contentVisible(),
       }}

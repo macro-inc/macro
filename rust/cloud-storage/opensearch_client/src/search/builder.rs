@@ -76,8 +76,10 @@ pub(crate) fn search_after(cursor: SearchMethodCursor) -> Vec<serde_json::Value>
 pub trait SearchQueryConfig {
     /// Key for item id
     const ID_KEY: &'static str = "entity_id";
-    /// Key for user id
-    const USER_ID_KEY: &'static str;
+    /// Key for user id. Required for `ids_only = false`; leave `None` for
+    /// indices that only support `ids_only = true` (access comes from the
+    /// caller-supplied id allowlist).
+    const USER_ID_KEY: Option<&'static str> = None;
     /// Key for title
     const TITLE_KEY: &'static str;
     /// Content field
@@ -166,7 +168,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     /// access to/has requested.
     /// This could either be a single term/terms query for ids_only or just user_id
     /// Or a bool query that contains both of these items
-    fn build_filter_query<'a>(&'a self, user_id_key: &str) -> Result<QueryType<'a>> {
+    fn build_filter_query<'a>(&'a self, user_id_key: Option<&str>) -> Result<QueryType<'a>> {
         if self.ids_only {
             // We only need to search over the entity ids provided
             if self.ids.is_empty() {
@@ -176,6 +178,8 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             // Return just the id query to filter over
             Ok(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()))
         } else {
+            let user_id_key =
+                user_id_key.ok_or(OpensearchClientError::UserIdKeyRequired(T::ENTITY_INDEX))?;
             let user_id_query = QueryType::term(user_id_key.to_string(), self.user_id.clone());
 
             // If there are no ids provided we can return only the user id query to filter over

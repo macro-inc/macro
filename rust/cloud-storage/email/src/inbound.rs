@@ -1,3 +1,6 @@
+#[cfg(feature = "attachment")]
+pub mod attachment;
+
 #[cfg(feature = "axum")]
 mod axum;
 

@@ -135,10 +135,18 @@ pub struct AuthorizeRequest {
 /// OAuth callback request from the upstream auth server.
 #[derive(Deserialize)]
 pub struct CallbackRequest {
-    /// Authorization code from the upstream auth server.
-    pub code: String,
+    /// Authorization code from the upstream auth server. Absent when the
+    /// upstream returned an error response instead of granting a code.
+    #[serde(default)]
+    pub code: Option<String>,
     /// Broker session ID threaded through the upstream `state`.
     pub state: Option<String>,
+    /// OAuth error code when the upstream signals a failure.
+    #[serde(default)]
+    pub error: Option<String>,
+    /// Human-readable error description from the upstream.
+    #[serde(default)]
+    pub error_description: Option<String>,
 }
 
 /// OAuth token request from the MCP client.

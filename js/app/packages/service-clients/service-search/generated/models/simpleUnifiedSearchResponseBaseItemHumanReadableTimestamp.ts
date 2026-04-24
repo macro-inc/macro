@@ -6,6 +6,7 @@
  */
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOf } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOf';
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFour } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFour';
+import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnesix } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnesix';
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree';
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero';
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfSeven } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfSeven';
@@ -15,4 +16,5 @@ export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp =
   | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFour
   | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfSeven
   | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero
-  | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree;
+  | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree
+  | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnesix;

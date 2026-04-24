@@ -7,8 +7,9 @@ use opensearch_client::search::model::SearchHit;
 use crate::api::{
     context::SearchHandlerState,
     search::{
-        channel::enrich_channels, chat::enrich_chats, document::enrich_documents,
-        email::enrich_emails, project::enrich_projects, simple::SearchError,
+        call_record::enrich_call_records, channel::enrich_channels, chat::enrich_chats,
+        document::enrich_documents, email::enrich_emails, project::enrich_projects,
+        simple::SearchError,
     },
 };
 
@@ -55,6 +56,13 @@ pub async fn enrich_search_response(
             Ok(response
                 .into_iter()
                 .map(UnifiedSearchResponseItem::Project)
+                .collect())
+        }
+        SearchEntityType::CallRecords => {
+            let response = enrich_call_records(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::CallRecord)
                 .collect())
         }
     }

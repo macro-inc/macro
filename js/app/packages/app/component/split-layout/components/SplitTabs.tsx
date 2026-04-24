@@ -98,12 +98,12 @@ export function SplitTabs(props: {
     <div class="mobile:hidden relative isolate h-full shrink grow-2 @container-normal">
       {/* Left clip boundary indicator */}
       <div
-        class="absolute pointer-events-none left-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"
+        class="absolute pointer-events-none left-0 top-px bottom-px w-3 z-annotation-layer pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"
         style={{ opacity: leftOpacity() }}
       />
       {/* Right clip boundary indicator */}
       <div
-        class="absolute pointer-events-none right-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-l-from-0% border-r border-edge-muted transition-opacity duration-150"
+        class="absolute pointer-events-none right-0 top-px bottom-px w-3 z-annotation-layer pattern-diagonal-4 pattern-edge mask-l-from-0% border-r border-edge-muted transition-opacity duration-150"
         style={{ opacity: rightOpacity() }}
       />
 
@@ -154,7 +154,7 @@ export function SplitTabs(props: {
                 tabIndex={-1}
                 class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
                 classList={{
-                  'z-1 text-accent text-glow-sm': isActive(),
+                  'z-user-highlight text-accent text-glow-sm': isActive(),
                   'text-ink-disabled hover:text-accent/70 hover-transition-text':
                     !isActive(),
                 }}

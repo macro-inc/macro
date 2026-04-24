@@ -8,13 +8,13 @@ import type { NotificationFiltersDone } from './notificationFiltersDone';
 import type { NotificationFiltersSeen } from './notificationFiltersSeen';
 
 /**
- * Notification-level filters that apply to an entity type.
+ * Notification state filters for channel message queries.
  */
 export interface NotificationFilters {
-  /** Filter by notification done state.
-None to ignore, true to include only done notifications, false to include only not-done notifications. */
+  /** Filter by notification done state. `Some(true)` selects done
+notifications; `Some(false)` selects not-done notifications. */
   done?: NotificationFiltersDone;
-  /** Filter by notification seen state.
-None to ignore, true to include only seen notifications, false to include only unseen notifications. */
+  /** Filter by notification seen state. `Some(true)` selects seen
+notifications; `Some(false)` selects not-seen notifications. */
   seen?: NotificationFiltersSeen;
 }
