@@ -902,10 +902,7 @@ async fn batch_get_call_record_previews_mixes_active_archived_and_missing(
     let missing = Uuid::now_v7();
 
     let previews = repo
-        .batch_get_call_record_previews(
-            &[CALL1, CALL_ARCHIVED, missing],
-            USER_A.deref().copied(),
-        )
+        .batch_get_call_record_previews(&[CALL1, CALL_ARCHIVED, missing], USER_A.deref().copied())
         .await?;
 
     assert_eq!(previews.len(), 3);
