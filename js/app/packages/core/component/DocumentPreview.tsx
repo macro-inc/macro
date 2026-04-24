@@ -718,7 +718,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Panel active class='py-2'>
+      <Panel active class="py-2">
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
