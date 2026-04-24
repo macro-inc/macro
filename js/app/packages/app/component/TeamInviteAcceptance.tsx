@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from '@solidjs/router';
+import { useNavigate, useSearchParams, Navigate } from '@solidjs/router';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { useUserInfo } from '@queries/auth';
 import {
@@ -11,12 +11,26 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { RoundPanel } from '@core/component/RoundPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { Button } from '@ui/components/Button';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import UsersThreeIcon from '@icon/regular/users-three.svg';
 import EnvelopeIcon from '@icon/regular/envelope.svg';
 import SpinnerIcon from '@icon/regular/spinner.svg';
 
 export function TeamInviteAcceptance() {
+  return (
+    <ShowFeatureFlag
+      key="enable-teams-settings"
+      enabledOverride={ENABLE_TEAMS_OVERRIDE}
+      fallback={<Navigate href="/" />}
+    >
+      <TeamInviteAcceptanceContent />
+    </ShowFeatureFlag>
+  );
+}
+
+function TeamInviteAcceptanceContent() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const userInfo = useUserInfo();
