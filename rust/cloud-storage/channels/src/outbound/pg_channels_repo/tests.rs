@@ -459,9 +459,7 @@ async fn channel_attachments_cursor_pagination(pool: Pool<Postgres>) -> anyhow::
         },
         filter: (),
     });
-    let page2 = repo
-        .get_channel_attachments(CH1, &cursor, 2, None)
-        .await?;
+    let page2 = repo.get_channel_attachments(CH1, &cursor, 2, None).await?;
     assert_eq!(page2.len(), 1, "remaining attachment");
 
     // No overlap between pages
