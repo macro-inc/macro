@@ -36,9 +36,9 @@ import { formatRelativeTimestamp } from '@entity';
 import { z } from 'zod';
 
 const roleOrder: Record<string, number> = {
-  [TeamRole.Owner]: 0,
-  [TeamRole.Admin]: 1,
-  [TeamRole.Member]: 2,
+  [TeamRole.owner]: 0,
+  [TeamRole.admin]: 1,
+  [TeamRole.member]: 2,
 };
 
 type TierOption = { value: TeamUserTier; label: string };
@@ -128,9 +128,9 @@ function MemberRow(props: {
         </Show>
         <Show when={props.isOwner}>
           <Show
-            when={!props.isCurrentUser && props.member.role !== TeamRole.Owner}
+            when={!props.isCurrentUser && props.member.role !== TeamRole.owner}
             fallback={
-              <Tooltip tooltip={props.member.role === TeamRole.Owner ? "Cannot remove team owner" : "Cannot remove yourself"}>
+              <Tooltip tooltip={props.member.role === TeamRole.owner ? "Cannot remove team owner" : "Cannot remove yourself"}>
                 <Button variant="ghost" size="sm" disabled class="rounded-xs opacity-50 cursor-not-allowed">
                   <TrashIcon class="w-4 h-4" />
                 </Button>
