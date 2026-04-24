@@ -1,7 +1,7 @@
 import { Dialog } from '@kobalte/core';
 import { cn } from '@ui/utils/classname';
 import type { JSXElement, Ref } from 'solid-js';
-import { RoundPanel } from './RoundPanel';
+import { Panel } from '@ui';
 
 export interface DialogWrapperProps {
   children: JSXElement;
@@ -34,14 +34,14 @@ export function DialogWrapper(props: DialogWrapperProps) {
           )}
           style={{ width: width }}
         >
-          <RoundPanel active>
+          <Panel active>
             <div
               class={cn('*:max-h-[75vh]', props.class)}
               ref={props.contentRef}
             >
               {props.children}
             </div>
-          </RoundPanel>
+          </Panel>
         </Dialog.Content>
       </div>
     </>

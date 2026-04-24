@@ -11,7 +11,7 @@ import { useSplitPanelOrThrow } from '../layoutUtils';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
-import { RoundPanel, type RoundPanelProps } from '@core/component/RoundPanel';
+import { Panel } from '@ui';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 
@@ -55,14 +55,6 @@ export function SplitContainer(
     return Boolean(splits && splits.length > 1);
   }
 
-  function MaybeRoundPanel(props: RoundPanelProps) {
-    return (
-      <Show when={!isMobile()} fallback={props.children}>
-        <RoundPanel {...props} />
-      </Show>
-    );
-  }
-
   return (
     <SplitDrawerGroup contentOffsetTop={offsetTop} panelSize={panel.panelSize}>
       <Show when={panel.handle.isSpotLight()}>
@@ -91,25 +83,34 @@ export function SplitContainer(
         data-modal={panel.handle.isSpotLight()}
         tabindex={-1}
       >
-        <MaybeRoundPanel
-          active={
-            panel.isPanelActive() &&
-            multipleSplits() &&
-            !panel.handle.isSpotLight()
-          }
-          // TODO (seamus) temporary disabling split corners
-          // tl={props.tl}
-          // bl={props.bl}
-          // tr={props.tr}
-        >
-          <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
-            <SplitHeader ref={setHeaderRef} />
-            <SplitToolbar ref={setToolbarRef} />
-            <div class="@container/split size-full overflow-hidden relative">
-              {props.children}
+        <Show
+          when={!isMobile()}
+          fallback={
+            <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
+              <SplitHeader ref={setHeaderRef} />
+              <SplitToolbar ref={setToolbarRef} />
+              <div class="@container/split size-full overflow-hidden relative">
+                {props.children}
+              </div>
             </div>
-          </div>
-        </MaybeRoundPanel>
+          }
+        >
+          <Panel
+            active={
+              panel.isPanelActive() &&
+              multipleSplits() &&
+              !panel.handle.isSpotLight()
+            }
+          >
+            <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
+              <SplitHeader ref={setHeaderRef} />
+              <SplitToolbar ref={setToolbarRef} />
+              <div class="@container/split size-full overflow-hidden relative">
+                {props.children}
+              </div>
+            </div>
+          </Panel>
+        </Show>
       </div>
     </SplitDrawerGroup>
   );

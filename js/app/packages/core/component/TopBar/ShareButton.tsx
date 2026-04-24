@@ -74,7 +74,7 @@ import {
 import { match } from 'ts-pattern';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
-import { RoundPanel } from '../RoundPanel';
+import { Panel } from '@ui';
 import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
@@ -641,9 +641,9 @@ export function ShareModal(props: ShareModalProps) {
             style={{ width: '800px' }}
           >
             {/* Card 1: Share form — gradient border */}
-            <RoundPanel active>
+            <Panel active>
               <div class="text-ink flex flex-col">
-                <div class="shrink-0 flex flex-row items-center justify-between px-3 h-[40px] gap-2 border-b border-edge-muted">
+                <div class="shrink-0 flex flex-row items-center justify-between px-3 h-10 gap-2 border-b border-edge-muted">
                   <div class="flex-1 flex flex-row items-center gap-2 min-w-0">
                     <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                       <span class="shrink-0">Share:</span>
@@ -675,13 +675,13 @@ export function ShareModal(props: ShareModalProps) {
                   blockName={props.blockAlias}
                 />
               </div>
-            </RoundPanel>
+            </Panel>
 
             {/* Card 2: Recipients — plain border */}
             <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-              <RoundPanel>
+              <Panel>
                 <div class="text-ink flex flex-col">
-                  <div class="shrink-0 h-[40px] flex items-center px-3 border-b border-edge-muted text-sm font-medium">
+                  <div class="shrink-0 h-10 flex items-center px-3 border-b border-edge-muted text-sm font-medium">
                     People with access to this{' '}
                     {props.itemType === 'email'
                       ? 'email thread'
@@ -796,7 +796,7 @@ export function ShareModal(props: ShareModalProps) {
                     </div>
                   </div>
                 </div>
-              </RoundPanel>
+              </Panel>
             </Show>
 
             {/* Card 3: Public link — plain border */}
@@ -806,10 +806,10 @@ export function ShareModal(props: ShareModalProps) {
                 props.itemType !== 'email'
               }
             >
-              <RoundPanel>
+              <Panel>
                 <div class="text-ink flex flex-col">
                   <div
-                    class="h-[40px] flex items-center justify-between px-3 text-sm font-medium"
+                    class="h-10 flex items-center justify-between px-3 text-sm font-medium"
                     classList={{
                       'border-b border-edge-muted': publicAccessLevel() != null,
                     }}
@@ -870,7 +870,7 @@ export function ShareModal(props: ShareModalProps) {
                     </div>
                   </Show>
                 </div>
-              </RoundPanel>
+              </Panel>
             </Show>
           </Dialog.Content>
         </div>
@@ -1108,7 +1108,7 @@ export function ShareOptions(props: {
       >
         <Button
           disabled={props.disabled}
-          class={`min-w-[67px] py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
+          class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
           variant="secondary"
         >
           {currentValueText()}

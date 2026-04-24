@@ -417,7 +417,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       <Dialog.Portal>
         <DialogWrapper>
           <div class="flex flex-col overflow-hidden bracket-never text-sm">
-            <div class="flex items-center justify-between gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+            <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
               <Dialog.Title class="pl-2 text-sm font-medium">
                 Create New Property
               </Dialog.Title>
@@ -479,13 +479,12 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                       Selection Type
                     </label>
                     <SegmentedControl
-                      value={isMultiSelect()}
-                      onChange={setIsMultiSelect}
+                      value={isMultiSelect() ? 'multi' : 'single'}
+                      onChange={(v) => setIsMultiSelect(v === 'multi')}
                       options={[
-                        { value: false, label: 'Single Select' },
-                        { value: true, label: 'Multi Select' },
+                        { value: 'single', label: 'Single Select' },
+                        { value: 'multi', label: 'Multi Select' },
                       ]}
-                      aria-label="Selection type"
                     />
                   </div>
                 </Show>

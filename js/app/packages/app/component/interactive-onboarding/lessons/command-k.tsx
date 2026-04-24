@@ -1,7 +1,7 @@
 import { CommandMenuInner, CommandState } from '@app/component/command';
 import type { CategoryFilter } from '@app/component/command';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import { RoundPanel } from '@core/component/RoundPanel';
+import { Panel } from '@ui';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
 import {
@@ -164,7 +164,7 @@ function CommandKDemo(props: LessonContentProps) {
               class="max-w-[calc(100vw-16px)] overflow-hidden portal-scope"
               style={{ width: '800px' }}
             >
-              <RoundPanel active>
+              <Panel active>
                 <div class="*:max-h-[75vh]" ref={setCommandMenuRef}>
                   <CommandMenuInner
                     commandMenuRef={commandMenuRef}
@@ -175,7 +175,7 @@ function CommandKDemo(props: LessonContentProps) {
                     }}
                   />
                 </div>
-              </RoundPanel>
+              </Panel>
             </Dialog.Content>
           </div>
         </Dialog.Portal>

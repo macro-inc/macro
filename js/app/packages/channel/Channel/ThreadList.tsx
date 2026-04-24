@@ -407,7 +407,7 @@ export function ThreadList(props: ThreadListProps) {
         'flex-direction': 'column',
       }}
     >
-      <div style={{ 'flex-grow': '1' }} />
+      <div style="flex-grow: 1" />
       <Virtualizer
         ref={(ref) => {
           if (!ref) return;

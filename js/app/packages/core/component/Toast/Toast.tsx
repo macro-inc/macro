@@ -16,7 +16,7 @@ import {
   on,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { RoundPanel } from '../RoundPanel';
+import { Panel } from '@ui';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 
@@ -118,7 +118,7 @@ export interface ToastAction {
 /**
  * Config for a fully custom toast.
  * Replaces the icon, title, and accent color of the standard layout while
- * still using the shared RoundPanel chrome and progress/dismiss machinery.
+ * still using the shared Panel chrome and progress/dismiss machinery.
  */
 export interface CustomToastConfig {
   title: string;
@@ -303,7 +303,7 @@ function ToastContent(props: {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <RoundPanel
+      <Panel
         highlightColor={accentColor()}
         active
         class="relative w-[90vw] sm:w-md px-2 sm:p-3"
@@ -405,7 +405,7 @@ function ToastContent(props: {
             }}
           />
         </Show>
-      </RoundPanel>
+      </Panel>
     </Toast>
   );
 }
@@ -549,7 +549,7 @@ function embed(
 
 /**
  * Show a toast with a fully custom title, icon, accent color, body content,
- * and actions row — while still using the shared RoundPanel chrome and
+ * and actions row — while still using the shared Panel chrome and
  * progress/dismiss machinery.
  */
 function custom(

@@ -1,4 +1,4 @@
-import { RoundPanel } from '@core/component/RoundPanel';
+import { Panel } from '@ui';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { fuzzyFilter } from '@core/util/fuzzy';
@@ -32,7 +32,7 @@ false && clickOutside;
 false && floatWithSelection;
 false && floatWithElement;
 
-// RoundPanel's p-px border (2px) + py-2 padding (16px)
+// Panel's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
 export function ActionsMenuItem(props: {
@@ -127,7 +127,7 @@ export function ActionMenu(props: {
   >(undefined);
 
   // Cap at 256px (16rem) so the menu stays compact when plenty of space is available,
-  // and floor at 0 after subtracting RoundPanel decorations.
+  // and floor at 0 after subtracting Panel decorations.
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
     if (h === undefined) return undefined;
@@ -318,7 +318,7 @@ export function ActionMenu(props: {
           use:clickOutside={clickOutsideHandler}
           ref={menuRef}
         >
-          <RoundPanel active>
+          <Panel active>
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{
@@ -330,7 +330,7 @@ export function ActionMenu(props: {
             >
               {inner()}
             </div>
-          </RoundPanel>
+          </Panel>
         </div>
       </ScopedPortal>
     </Show>
