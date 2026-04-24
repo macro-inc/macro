@@ -62,8 +62,9 @@ pub async fn handler(
             break;
         }
 
+        let batch_len = batch.len();
         let messages: Vec<SearchQueueMessage> = batch
-            .iter()
+            .into_iter()
             .map(|r| {
                 SearchQueueMessage::CallRecord(CallRecordMessage {
                     call_id: r.call_id.to_string(),
@@ -77,6 +78,10 @@ pub async fn handler(
             .bulk_send_message_to_search_event_queue(messages)
             .await
             .map_err(internal_error)?;
+
+        if (batch_len as i64) < BACKFILL_PAGE {
+            break;
+        }
 
         offset += BACKFILL_PAGE;
     }
