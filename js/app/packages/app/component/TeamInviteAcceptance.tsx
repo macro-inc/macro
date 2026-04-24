@@ -11,7 +11,6 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { RoundPanel } from '@core/component/RoundPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { Button } from '@ui/components/Button';
-import LogoIcon from '@macro-icons/macro-logo.svg';
 import UsersThreeIcon from '@icon/regular/users-three.svg';
 
 export function TeamInviteAcceptance() {
@@ -100,12 +99,9 @@ export function TeamInviteAcceptance() {
 
       <div class="w-full max-w-[420px] invite-card">
         <RoundPanel>
-          <div class="flex flex-col items-center gap-6 py-8 px-6">
-            <div class="flex items-center justify-center">
-              <LogoIcon class="size-16 text-accent" />
-            </div>
-
-            <Switch>
+          <div class="flex flex-col gap-6 py-6 px-6">
+            <div class="flex flex-col items-center">
+              <Switch>
               <Match when={!inviteId()}>
                 <NoInviteId onNavigate={() => navigate('/')} />
               </Match>
@@ -132,7 +128,8 @@ export function TeamInviteAcceptance() {
                   isLoading={isMutating()}
                 />
               </Match>
-            </Switch>
+              </Switch>
+            </div>
           </div>
         </RoundPanel>
       </div>
@@ -221,7 +218,7 @@ function InviteDetails(props: {
 
       <div class="flex flex-col gap-3 w-full">
         <Button
-          variant="primary"
+          variant="accent"
           size="md"
           class="w-full"
           onClick={props.onAccept}
