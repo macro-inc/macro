@@ -14,6 +14,20 @@ function VideoTag(props: { children: JSXElement, class?: string, variant?: 'defa
   );
 };
 
+function ParticipantTileWrapper(props: { isSpeaking: boolean, children: JSXElement, isConnecting?: boolean }) {
+  return (
+    <div
+      class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
+      classList={{ 
+        'ring-inset ring-2 ring-accent-2': props.isSpeaking,
+        'animate-pulse': props.isConnecting,
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
+
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
@@ -28,10 +42,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
   const isSpeaking = () => callCtx.isParticipantSpeaking(props.participant);
 
   return (
-    <div
-      class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
-      classList={{ 'ring-inset ring-2 ring-accent-2': isSpeaking() }}
-    >
+    <ParticipantTileWrapper isSpeaking={isSpeaking()}>
       <Show
         when={cameraTrack()}
         fallback={
@@ -46,7 +57,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       </Show>
 
       <VideoTag variant='truncated'>{displayName()}</VideoTag>
-    </div>
+    </ParticipantTileWrapper>
   );
 }
 
@@ -136,13 +147,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
         class={`${hasAnyScreenShare() ? 'h-[180px] shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 py-2 auto-rows-fr overflow-hidden`}
       >
         {/* Local participant */}
-        <div
-          class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
-          classList={{
-            'ring-2 ring-accent-2': isLocalSpeaking(),
-            'animate-pulse': isConnecting(),
-          }}
-        >
+        <ParticipantTileWrapper isSpeaking={isLocalSpeaking()} isConnecting={isConnecting()}>
           <Show
             when={!isConnecting() && !callCtx.isVideoMuted()}
             fallback={
@@ -166,7 +171,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
               Connecting...
             </div>
           </Show>
-        </div>
+        </ParticipantTileWrapper>
 
         <For each={participants()}>
           {(participant) => <ParticipantTile participant={participant} />}

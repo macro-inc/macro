@@ -139,10 +139,7 @@ function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
       />
       <div
         class={cn(
-          'grid min-h-0 flex-1 overflow-hidden',
-          'transition-[grid-template-columns,grid-template-rows,gap] duration-300 linear',
-          transcriptOpen() ? 'gap-2' : 'gap-0',
-          'grid-cols-1',
+          'grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns,grid-template-rows,gap] duration-300 linear grid-cols-1',
           transcriptOpen()
             ? 'grid-rows-[minmax(0,2fr)_minmax(0,3fr)]'
             : 'grid-rows-[minmax(0,1fr)_minmax(0,0fr)]',
