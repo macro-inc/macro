@@ -438,10 +438,7 @@ pub trait CallService: Send + Sync + 'static {
     /// is configured, this is a no-op. Missing records (e.g. deleted mid-flow)
     /// and empty transcripts are also no-ops — no AI call is made in those
     /// cases.
-    fn summarize_call(
-        &self,
-        call_id: &Uuid,
-    ) -> impl Future<Output = Result<(), CallError>> + Send;
+    fn summarize_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.

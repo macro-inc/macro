@@ -1026,7 +1026,9 @@ impl CallSummarizer for NoopCallSummarizer {
         // Type-placeholder only — [`CallServiceImpl`] must never invoke this
         // when `summarizer` is `None`, and [`NoopCallSummarizer`] is never a
         // `Some(_)` value in practice.
-        unreachable!("NoopCallSummarizer::summarize_call invoked; it exists only as a type placeholder when the optional summarizer is None")
+        unreachable!(
+            "NoopCallSummarizer::summarize_call invoked; it exists only as a type placeholder when the optional summarizer is None"
+        )
     }
 }
 

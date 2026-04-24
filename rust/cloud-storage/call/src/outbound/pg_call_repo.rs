@@ -1311,11 +1311,7 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(skip(self, summary), err)]
-    async fn insert_call_summary(
-        &self,
-        call_id: &Uuid,
-        summary: &str,
-    ) -> Result<(), Self::Err> {
+    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<(), Self::Err> {
         // Tolerate missing rows: summarization can race with record deletion.
         sqlx::query!(
             r#"
