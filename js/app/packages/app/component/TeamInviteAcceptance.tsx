@@ -1,5 +1,5 @@
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { createMemo, Match, Switch } from 'solid-js';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 import { useUserInfo } from '@queries/auth';
 import {
   useJoinTeamMutation,
@@ -14,6 +14,7 @@ import { Button } from '@ui/components/Button';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import UsersThreeIcon from '@icon/regular/users-three.svg';
 import EnvelopeIcon from '@icon/regular/envelope.svg';
+import SpinnerIcon from '@icon/regular/spinner.svg';
 
 export function TeamInviteAcceptance() {
   const [searchParams] = useSearchParams();
@@ -67,9 +68,6 @@ export function TeamInviteAcceptance() {
 
   const isLoading = createMemo(
     () => invitesQuery.isLoading || teamQuery.isLoading
-  );
-  const isMutating = createMemo(
-    () => joinMutation.isPending || rejectMutation.isPending
   );
 
   return (
@@ -130,7 +128,8 @@ export function TeamInviteAcceptance() {
                     invitedBy={invite()!.invited_by}
                     onAccept={handleAccept}
                     onDecline={handleDecline}
-                    isLoading={isMutating()}
+                    isJoining={joinMutation.isPending}
+                    isDeclining={rejectMutation.isPending}
                   />
                 </Match>
               </Switch>
@@ -205,13 +204,15 @@ function InviteDetails(props: {
   invitedBy: string;
   onAccept: () => void;
   onDecline: () => void;
-  isLoading: boolean;
+  isJoining: boolean;
+  isDeclining: boolean;
 }) {
   const displayTeamName = () => props.teamName ?? 'a team';
   const roleDisplay = () => {
     const role = props.role.toLowerCase();
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
+  const isDisabled = () => props.isJoining || props.isDeclining;
 
   return (
     <div class="flex flex-col items-center gap-6 text-center w-full">
@@ -233,18 +234,22 @@ function InviteDetails(props: {
           size="md"
           class="w-full rounded-xs"
           onClick={props.onAccept}
-          disabled={props.isLoading}
+          disabled={isDisabled()}
         >
-          {props.isLoading ? 'Joining...' : 'Accept Invitation'}
+          <Show when={props.isJoining} fallback="Accept Invitation">
+            <SpinnerIcon class="size-4 animate-spin" />
+          </Show>
         </Button>
         <Button
           variant="ghost"
           size="md"
           class="w-full rounded-xs"
           onClick={props.onDecline}
-          disabled={props.isLoading}
+          disabled={isDisabled()}
         >
-          Decline
+          <Show when={props.isDeclining} fallback="Decline">
+            <SpinnerIcon class="size-4 animate-spin" />
+          </Show>
         </Button>
       </div>
     </div>
