@@ -3,7 +3,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use ai::types::ImageData;
+use attachment::image::ImageData;
 use attachment::{
     AttachmentContent, AttachmentError, AttachmentPart, AttachmentReference, AttachmentService,
     Attachments, ResolutionError,

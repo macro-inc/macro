@@ -5,6 +5,7 @@ use non_empty::NonEmpty;
 
 mod attachable;
 pub mod fmt;
+pub mod image;
 mod macros;
 mod models;
 pub use models::*;

@@ -52,11 +52,10 @@ dependencies = [
  "async-openai",
  "async-stream",
  "async-trait",
- "base64 0.22.1",
+ "attachment",
  "chrono",
  "const_format",
  "futures",
- "image",
  "lazy_static",
  "macro_user_id",
  "model_file_type",
@@ -72,7 +71,6 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
- "webp",
 ]
 
 [[package]]
@@ -93,6 +91,7 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "attachment",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -127,6 +126,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "models_search",
+ "non_empty",
  "notification",
  "properties",
  "rand 0.9.3",
@@ -593,12 +593,16 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "attachment"
 version = "0.1.0"
 dependencies = [
- "ai",
  "anyhow",
+ "base64 0.22.1",
  "futures",
+ "image",
  "macro_user_id",
+ "model-entity",
+ "model_file_type",
  "non_empty",
  "thiserror 2.0.17",
+ "webp",
 ]
 
 [[package]]
@@ -3075,6 +3079,7 @@ dependencies = [
  "async-openai",
  "async-stream",
  "async-trait",
+ "attachment",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -3122,6 +3127,7 @@ dependencies = [
  "models_dcs",
  "models_opensearch",
  "models_permissions",
+ "non_empty",
  "notification",
  "properties",
  "readonly_pool",
@@ -3322,6 +3328,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "tiktoken-rs",
  "tokio",
  "tracing",
  "urlencoding",
@@ -9572,6 +9579,7 @@ dependencies = [
  "ai",
  "ai_format",
  "anyhow",
+ "attachment",
  "base64 0.22.1",
  "bytes",
  "chat",

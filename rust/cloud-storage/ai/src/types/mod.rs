@@ -1,6 +1,5 @@
 mod client;
 mod error;
-mod image;
 mod message;
 mod model;
 mod providers;
@@ -10,7 +9,6 @@ mod response;
 
 pub use client::*;
 pub use error::*;
-pub use image::*;
 pub use message::*;
 pub use model::*;
 pub(crate) use providers::*;

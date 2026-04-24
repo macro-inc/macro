@@ -1,62 +1,36 @@
 use std::fmt;
 
-use ai::types::ImageData;
+use crate::image::ImageData;
+use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
 use thiserror::Error;
 
 /// A typed reference to an attachment source.
-#[derive(Debug)]
-pub enum AttachmentReference {
-    /// A file that lives in DSS (including MD)
-    DssFile {
-        /// Document ID
-        id: String,
-    },
-    /// An image that lives in static file service
-    SfsImage {
-        /// image url
-        url: String,
-    },
-    /// An email thread
-    EmailThread {
-        /// Thread ID
-        id: String,
-    },
-    /// An AI chat
-    Chat {
-        /// Chat ID
-        id: String,
-    },
-    /// Channels thread
-    Channel {
-        /// Channel ID
-        id: String,
-    },
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct AttachmentReference {
+    /// Entity ID
+    pub id: String,
 }
 
 impl AttachmentReference {
     /// The entity ID for this reference, if it has one.
-    pub fn id(&self) -> Option<&str> {
+    pub fn id(&self) -> &str {
         match self {
-            Self::DssFile { id }
-            | Self::EmailThread { id }
-            | Self::Chat { id }
-            | Self::Channel { id } => Some(id),
-            Self::SfsImage { .. } => None,
+            Self::Entity { id, .. } => id.as_str(),
+            Self::StaticImage { id } => id.as_str(),
         }
     }
     /// Convert this reference into XML attribute pairs.
     pub fn as_attributes(&self) -> Vec<(&'static str, &str)> {
         let mut attrs = vec![];
-        if let Some(id) = self.id() {
-            attrs.push(("id", id));
-        }
+        attrs.push(("id", self.id()));
         match self {
             AttachmentReference::Channel { .. } => attrs.push(("kind", "channel")),
             AttachmentReference::Chat { .. } => attrs.push(("kind", "chat")),
             AttachmentReference::DssFile { .. } => attrs.push(("kind", "file")),
             AttachmentReference::EmailThread { .. } => attrs.push(("kind", "email-thread")),
             AttachmentReference::SfsImage { .. } => attrs.push(("kind", "static-image")),
+            AttachmentReference::Project { .. } => attrs.push(("kind", "project")),
         }
 
         attrs

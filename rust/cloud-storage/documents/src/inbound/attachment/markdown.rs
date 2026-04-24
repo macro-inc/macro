@@ -1,6 +1,6 @@
 //! Markdown document resolution via the lexical client.
 
-use ai::types::ImageData;
+use attachment::image::ImageData;
 use attachment::{
     AttachmentContent, AttachmentError, AttachmentPart, AttachmentReference, ResolutionError,
 };

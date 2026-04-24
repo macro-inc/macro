@@ -10,6 +10,8 @@ test-support = []
 [dependencies]
 ai = { path = "../ai" }
 ai_format = { path = "../ai_format" }
+attachment = { path = "../attachment" }
+non_empty = { path = "../non_empty" }
 ai_toolset = { path = "../ai_toolset" }
 anthropic = { path = "../anthropic" }
 anyhow.workspace = true

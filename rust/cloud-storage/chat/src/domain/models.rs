@@ -147,3 +147,48 @@ pub struct PatchChatMessageArgs {
     /// The new content for the message.
     pub content: ChatMessageContent,
 }
+
+/// Image data in a resolved user message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ImageContent {
+    /// A publicly accessible URL.
+    StaticUrl {
+        /// The URL.
+        url: String,
+    },
+    /// A base64-encoded image.
+    Base64 {
+        /// The encoded data (includes the `data:` prefix).
+        data: String,
+    },
+}
+
+/// A single part of a resolved user message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ResolvedMessagePart {
+    /// Plain text content.
+    Text {
+        /// The text.
+        content: String,
+    },
+    /// An image.
+    Image(ImageContent),
+    /// A resolved attachment with a name and sub-parts.
+    Attachment {
+        /// Display name of the attachment (e.g. filename).
+        name: String,
+        /// The attachment's resolved content parts.
+        parts: Vec<ResolvedMessagePart>,
+    },
+}
+
+/// The AI-facing representation of a user message, stored alongside the raw message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ResolvedUserMessage {
+    /// The ID of the raw `ChatMessage` this resolves.
+    pub message_id: String,
+    /// Ordered content parts (text, images, attachments).
+    pub parts: Vec<ResolvedMessagePart>,
+}

@@ -1,5 +1,5 @@
 //! HTTP endpoint for sending chat messages with streaming responses.
-use super::util::chat_message::ai_request::build_chat_completion_request;
+use super::util::chat_message::ai_request::{build_chat_completion_request, resolve_attachments};
 use super::util::chat_message::toolset::choose_tools_prompt;
 use super::util::chat_message::{store_conversation_messages, store_incoming_message};
 use super::util::chat_permissions;
@@ -246,18 +246,47 @@ pub async fn send_chat_message(
         .ok()
         .flatten();
 
-    // Build the completion request
-    let tools_prompt = choose_tools_prompt(&payload, ctx.all_tools_prompt);
-    let ai_request = build_chat_completion_request(
-        ctx.clone(),
-        &chat,
-        &payload,
-        tools_prompt,
+    // Resolve attachments
+    let resolved_parts = resolve_attachments(
+        &ctx,
+        &payload.attachments.clone().unwrap_or_default(),
         &jwt_token,
-        user_memory.as_deref(),
         (*user_id).clone(),
     )
     .await
+    .map_err(|err| {
+        tracing::error!(error=?err, "failed to resolve attachments");
+        ChatMessageError {
+            error: "Failed to resolve attachments".to_string(),
+            stream_id: Some(stream_id.clone()),
+            status: None,
+        }
+    })?;
+
+    // Store the resolved user message (best-effort)
+    if !resolved_parts.is_empty() {
+        let parts_clone = resolved_parts.clone();
+        let msg_id = user_message_id.clone();
+        let pool = ctx.db.clone();
+        tokio::spawn(async move {
+            if let Err(err) = chat::outbound::postgres::PgChatRepo::new(pool)
+                .store_resolved_message_static(&msg_id, &parts_clone)
+                .await
+            {
+                tracing::error!(error=?err, "failed to store resolved message");
+            }
+        });
+    }
+
+    // Build the completion request
+    let tools_prompt = choose_tools_prompt(&payload, ctx.all_tools_prompt);
+    let ai_request = build_chat_completion_request(
+        &chat,
+        &payload,
+        tools_prompt,
+        user_memory.as_deref(),
+        resolved_parts,
+    )
     .map_err(|err| {
         tracing::error!(error=?err, "failed to build chat completion request");
         ChatMessageError {
@@ -620,7 +649,7 @@ fn stream_and_save_message(
                 vec![ai::types::ChatMessage {
                     role: ai::types::Role::Assistant,
                     content: ChatMessageContent::AssistantMessageParts(resolved_parts),
-                    image_urls: None,
+                    attachments: None,
                 }]
             }
         } else {

@@ -9,17 +9,26 @@ const ENCODING_QUALITY: f32 = 75.0;
 const MAX_SIZE_W: u32 = 1080;
 const MAX_SIZE_H: u32 = 720;
 
+/// A base64-encoded image with a known format.
+///
+/// Images are optionally downscaled to fit within 1080x720 and re-encoded as
+/// WebP at 75% quality to reduce token cost when sent to an AI model.
 #[derive(Eq, PartialEq, Clone)]
 pub struct Base64Image {
     data: String,
     format: ImageFormat,
 }
 
+/// Supported image formats for base64 encoding.
 #[derive(Clone, Debug, Copy, Eq, PartialEq)]
 pub enum ImageFormat {
+    /// WebP format.
     WebP,
+    /// JPG format (three-letter extension).
     Jpg,
+    /// JPEG format (four-letter extension).
     Jpeg,
+    /// PNG format.
     Png,
 }
 
@@ -37,6 +46,7 @@ impl TryFrom<FileType> for ImageFormat {
 }
 
 impl Base64Image {
+    /// Compress and re-encode raw image bytes into a base64 WebP.
     pub fn compress_and_reencode(bytes: Vec<u8>) -> Result<Self, anyhow::Error> {
         Self::make_compressed_base64_webp(bytes)
     }
