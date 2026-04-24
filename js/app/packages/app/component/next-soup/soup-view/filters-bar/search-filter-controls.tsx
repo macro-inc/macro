@@ -26,16 +26,14 @@ export type SearchableOption = {
 };
 
 /**
- * Shared option accessors for search view's In/From pickers. Used both by the
- * Filter menu submenus and by the active-filter chips.
+ * Picker for the "In" chip (channels + DMs). Used by channel-message and
+ * call-record search.
  */
-export function useSearchFilterOptions() {
+function useChannelPicker() {
   const { useList } = useQuickAccess();
-  const currentUserId = useUserId();
   const channels = useList('channel', 'dm');
-  const senders = useList('person');
 
-  const channelOptions = createMemo((): SearchableOption[] =>
+  const options = createMemo((): SearchableOption[] =>
     channels()
       .filter((ch) => ch.data.name)
       .map((ch) => ({
@@ -53,11 +51,29 @@ export function useSearchFilterOptions() {
       }))
   );
 
-  const senderOptions = createMemo((): SearchableOption[] => {
+  const labelMap = createMemo(() => {
+    const map = new Map<string, string>();
+    for (const opt of options()) map.set(opt.id, opt.label);
+    return map;
+  });
+
+  return { options, labelMap };
+}
+
+/**
+ * Picker for the "From" chip (people). Used by channel-message sender
+ * filter and call-record speaker filter.
+ */
+function usePersonPicker() {
+  const { useList } = useQuickAccess();
+  const currentUserId = useUserId();
+  const people = useList('person');
+
+  const options = createMemo((): SearchableOption[] => {
     const uid = currentUserId();
     let me: SearchableOption | undefined;
     const others: SearchableOption[] = [];
-    for (const s of senders()) {
+    for (const s of people()) {
       const opt: SearchableOption = {
         id: s.id,
         label:
@@ -72,7 +88,30 @@ export function useSearchFilterOptions() {
     return [...(me ? [me] : []), ...others];
   });
 
-  return { channelOptions, senderOptions };
+  const labelMap = createMemo(() => {
+    const map = new Map<string, string>();
+    for (const opt of options()) map.set(opt.id, opt.label);
+    return map;
+  });
+
+  return { options, labelMap };
+}
+
+/**
+ * Shared options + label maps for the In (channel) and From (person)
+ * search-filter chips. Both are reused across channel-message and
+ * call-record search.
+ */
+export function useSearchFilterOptions() {
+  const channel = useChannelPicker();
+  const person = usePersonPicker();
+
+  return {
+    channelOptions: channel.options,
+    channelLabelMap: channel.labelMap,
+    senderOptions: person.options,
+    senderLabelMap: person.labelMap,
+  };
 }
 
 export type ChannelSubFilters = Pick<

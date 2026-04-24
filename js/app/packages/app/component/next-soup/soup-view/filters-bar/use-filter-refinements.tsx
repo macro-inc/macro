@@ -57,7 +57,8 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
-  const { channelOptions, senderOptions } = useSearchFilterOptions();
+  const { channelOptions, channelLabelMap, senderOptions, senderLabelMap } =
+    useSearchFilterOptions();
   const { changeIndex } = useSearchIndexController();
 
   const getPresetContext = (): PresetContext => ({
@@ -130,21 +131,6 @@ export function useFilterRefinements() {
     const view = currentView();
     if (!view) return [];
     return VIEW_FILTER_CATEGORIES[view as ListView] ?? [];
-  });
-
-  // Reactive id → label maps derived from the chip's option sources.
-  // Using quickAccess.getById here would read a plain Map that isn't a signal,
-  // so on page reload the chip label shows the raw uuid until the first
-  // rerender that happens to read live data.
-  const channelLabelMap = createMemo(() => {
-    const map = new Map<string, string>();
-    for (const opt of channelOptions()) map.set(opt.id, opt.label);
-    return map;
-  });
-  const senderLabelMap = createMemo(() => {
-    const map = new Map<string, string>();
-    for (const opt of senderOptions()) map.set(opt.id, opt.label);
-    return map;
   });
 
   const labelForIds = (
