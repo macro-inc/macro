@@ -366,7 +366,6 @@ export const useSearchResponseItemMapper = () => {
           callId: result.call_id,
         });
 
-        // Leave unresolved; CallChannelName falls back to the preview endpoint.
         const channelName: string | undefined =
           result.metadata.channel_name ??
           channels().find((c) => c.id === result.channel_id)?.name ??
@@ -376,7 +375,8 @@ export const useSearchResponseItemMapper = () => {
           {
             type: 'call',
             id: result.call_id,
-            name: channelName ?? '',
+            // NOTE: leave empty, the CallChannelName will fall back to the preview endpoint.
+            name: result.name ?? channelName ?? '',
             channelId: result.channel_id,
             channelName,
             ownerId: result.owner_id,
@@ -511,7 +511,7 @@ export const mapSoupPageToEntityList: (
           return {
             type: 'call',
             id: item.data.callId,
-            name: item.data.channelName ?? 'Call',
+            name: item.data.channelName ?? blockNameToDefaultFile('call'),
             channelId: item.data.channelId,
             channelName: item.data.channelName ?? undefined,
             ownerId: item.data.createdBy,

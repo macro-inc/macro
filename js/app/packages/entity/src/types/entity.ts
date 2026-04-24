@@ -121,8 +121,6 @@ export type ProjectEntity = EntityBase & {
 export type CallEntity = EntityBase & {
   type: 'call';
   channelId: string;
-  /** Undefined when unresolved locally; CallChannelName hits the preview
-   *  endpoint in that case. */
   channelName?: string;
   isActive: boolean;
   attended: boolean;
