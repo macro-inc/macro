@@ -264,16 +264,20 @@ function InlinePreview(props: {
                 data-document-name={accessibleItem().name}
               >
                 {accessibleItem().name.replaceAll('\n', ' ').trim()}
-                {accessibleItem().type === 'call' &&
-                  accessibleItem().updatedAt && (
-                    <>
-                      {' '}
-                      -{' '}
-                      {formatDate(accessibleItem().updatedAt, {
-                        showTime: true,
-                      })}
-                    </>
-                  )}
+                <Show
+                  when={
+                    accessibleItem().type === 'call' &&
+                    accessibleItem().updatedAt
+                  }
+                >
+                  {(timeStamp) => {
+                    return (
+                      <span class="text-current/50 text-[0.8em]">
+                        {` ${formatDate(timeStamp(), { showTime: true })}`}
+                      </span>
+                    );
+                  }}
+                </Show>
                 <span class="relative text-[0.8em] text-current/50 rounded-xs">
                   {(() => {
                     const accessories = mentionsAccessories(
@@ -312,7 +316,6 @@ function InlinePreview(props: {
 }
 
 export function DocumentMention(props: DocumentMentionDecoratorProps) {
-  console.log('DOC MENTION', props);
   const lexicalWrapper = useContext(LexicalWrapperContext);
   if (lexicalWrapper?.skipPreviewFetch) {
     return <DocumentMentionStatic {...props} />;
