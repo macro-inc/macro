@@ -23,7 +23,7 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
@@ -51,17 +51,19 @@ function SoupChatInputInner() {
   const [chatHasFocus, setChatHasFocus] = createSignal(false);
   const metaHeld = () => chatHasFocus() && pressedKeys().has('cmd');
 
-  const attachContainer = (el: HTMLDivElement) => {
-    attachHotkeys(el);
+  let containerRef!: HTMLDivElement;
+
+  onMount(() => {
+    attachHotkeys(containerRef);
     const focusIn = () => setChatHasFocus(true);
     const focusOut = () => setChatHasFocus(false);
-    el.addEventListener('focusin', focusIn);
-    el.addEventListener('focusout', focusOut);
+    containerRef.addEventListener('focusin', focusIn);
+    containerRef.addEventListener('focusout', focusOut);
     onCleanup(() => {
-      el.removeEventListener('focusin', focusIn);
-      el.removeEventListener('focusout', focusOut);
+      containerRef.removeEventListener('focusin', focusIn);
+      containerRef.removeEventListener('focusout', focusOut);
     });
-  };
+  });
 
   // cmd+j - Focus AI chat
   registerHotkey({
@@ -134,7 +136,7 @@ function SoupChatInputInner() {
 
   return (
     <div
-      ref={attachContainer}
+      ref={containerRef}
       class="absolute bottom-0 right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
       classList={{ hidden: !!soup.previewEntity() }}
       style={{
