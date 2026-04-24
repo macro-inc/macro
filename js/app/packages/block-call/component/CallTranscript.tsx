@@ -4,7 +4,11 @@ import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, createEffect, For, on, Show } from 'solid-js';
+import {
+  formatVideoTimestamp,
+  getSegmentVideoSeconds,
+} from './transcript-playback';
 
 // Match the channel message grouping window (5 minutes).
 const GROUPING_WINDOW_MS = 5 * 60 * 1000;
@@ -46,13 +50,21 @@ function segmentToApiChannelMessage(
 function TranscriptSegmentRow(props: {
   segment: CallRecordTranscriptSegment;
   channelId: string;
+  isActive: boolean;
+  timelineStartMs: number | null;
 }) {
-  const message = createMemo(() =>
-    segmentToApiChannelMessage(props.segment, props.channelId)
+  const message = segmentToApiChannelMessage(props.segment, props.channelId);
+  const videoTimestamp = getSegmentVideoSeconds(
+    props.segment,
+    props.timelineStartMs
   );
   return (
-    <Thread.Row message={message()}>
-      <Message.Root message={message()}>
+    <Thread.Row message={message}>
+      <Message.Root
+        message={message}
+        highlighted={props.isActive}
+        selected={props.isActive}
+      >
         <Message.Layout class="pt-(--regular-message-padding-t)">
           <Message.Slot placement="icon">
             <Message.SenderIcon />
@@ -62,7 +74,11 @@ function TranscriptSegmentRow(props: {
             class="flex items-center gap-1 min-w-0"
           >
             <Message.SenderName />
-            <Message.Timestamp class="ml-auto" />
+            <span class="ml-auto text-xs text-ink-muted tabular-nums">
+              <Show when={videoTimestamp !== null} fallback={<Message.Timestamp />}>
+                {formatVideoTimestamp(videoTimestamp ?? 0)}
+              </Show>
+            </span>
           </Message.Slot>
           <Message.Slot placement="content">
             <div class="whitespace-pre-wrap break-words text-sm">
@@ -78,13 +94,16 @@ function TranscriptSegmentRow(props: {
 function GroupedTranscriptSegmentRow(props: {
   segment: CallRecordTranscriptSegment;
   channelId: string;
+  isActive: boolean;
 }) {
-  const message = createMemo(() =>
-    segmentToApiChannelMessage(props.segment, props.channelId)
-  );
+  const message = segmentToApiChannelMessage(props.segment, props.channelId);
   return (
-    <Thread.Row message={message()}>
-      <Message.Root message={message()}>
+    <Thread.Row message={message}>
+      <Message.Root
+        message={message}
+        highlighted={props.isActive}
+        selected={props.isActive}
+      >
         <Message.Layout>
           <Message.Slot placement="icon">
             <Message.SenderIcon hidden />
@@ -103,18 +122,52 @@ function GroupedTranscriptSegmentRow(props: {
 export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
   channelId: string;
+  activeSequenceNum?: number | null;
 }) {
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
+  const rowRefs = new Map<number, HTMLDivElement>();
 
-  const items = createMemo<SegmentItem[]>(() => {
+  const transcriptMeta = createMemo(() => {
     const sorted = [...props.transcript].sort(
       (a, b) => a.sequenceNum - b.sequenceNum
     );
-    return sorted.map((segment, index) => ({
+    const items: SegmentItem[] = sorted.map((segment, index) => ({
       segment,
       groupedWithPrevious: shouldGroupWithPrevious(segment, sorted[index - 1]),
     }));
+    if (sorted.length === 0) return { items, timelineStartMs: null };
+
+    const firstStartMs = new Date(sorted[0].startedAt).getTime();
+    return {
+      items,
+      timelineStartMs: Number.isFinite(firstStartMs) ? firstStartMs : null,
+    };
   });
+
+  createEffect(
+    on(
+      () => props.activeSequenceNum,
+      (activeSequenceNum) => {
+        if (activeSequenceNum === null || activeSequenceNum === undefined) return;
+
+        const container = scrollRef();
+        const row = rowRefs.get(activeSequenceNum);
+        if (!container || !row) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        const isAbove = rowRect.top < containerRect.top;
+        const isBelow = rowRect.bottom > containerRect.bottom;
+        if (!isAbove && !isBelow) return;
+
+        row.scrollIntoView({
+          block: 'center',
+          inline: 'nearest',
+          behavior: 'smooth',
+        });
+      }
+    )
+  );
 
   return (
     <div
@@ -133,21 +186,28 @@ export function CallTranscript(props: {
         </div>
 
         <div class="flex flex-col p-4 pt-0 ">
-          <For each={items()}>
+          <For each={transcriptMeta().items}>
             {(item) => (
               <Show
                 when={item.groupedWithPrevious}
                 fallback={
-                  <TranscriptSegmentRow
-                    segment={item.segment}
-                    channelId={props.channelId}
-                  />
+                  <div ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}>
+                    <TranscriptSegmentRow
+                      segment={item.segment}
+                      channelId={props.channelId}
+                      isActive={item.segment.sequenceNum === props.activeSequenceNum}
+                      timelineStartMs={transcriptMeta().timelineStartMs}
+                    />
+                  </div>
                 }
               >
-                <GroupedTranscriptSegmentRow
-                  segment={item.segment}
-                  channelId={props.channelId}
-                />
+                <div ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}>
+                  <GroupedTranscriptSegmentRow
+                    segment={item.segment}
+                    channelId={props.channelId}
+                    isActive={item.segment.sequenceNum === props.activeSequenceNum}
+                  />
+                </div>
               </Show>
             )}
           </For>

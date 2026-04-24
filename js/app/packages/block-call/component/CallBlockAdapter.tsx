@@ -10,6 +10,7 @@ import {
   Show,
   Switch,
   createSignal,
+  onCleanup,
 } from 'solid-js';
 import { CallTranscript } from './CallTranscript';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
@@ -18,6 +19,7 @@ import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import { cn } from '@ui/utils/classname';
 import { formatCallDuration } from '../utils';
+import { getActiveTranscriptSequenceNum } from './transcript-playback';
 
 function isUnauthorized(error: Error | null): boolean {
   if (error instanceof MaybeResultError) {
@@ -104,8 +106,33 @@ function CallMetaStrip(props: {
   );
 }
 
-function RecordingVideo(props: { url: string }) {
+function RecordingVideo(props: {
+  url: string;
+  onTimeUpdate?: (seconds: number) => void;
+}) {
   const [isLoaded, setIsLoaded] = createSignal(false);
+  let rafId: number | null = null;
+
+  const stopTicking = () => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  };
+
+  const startTicking = (video: HTMLVideoElement) => {
+    stopTicking();
+    const tick = () => {
+      props.onTimeUpdate?.(video.currentTime);
+      if (!video.paused && !video.ended) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = null;
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+  };
+  onCleanup(stopTicking);
 
   return (
     <div class="p-4 h-full min-h-0 flex justify-center items-start overflow-hidden">
@@ -117,7 +144,28 @@ function RecordingVideo(props: { url: string }) {
         src={props.url}
         onLoadedData={() => setIsLoaded(true)}
         onCanPlay={() => setIsLoaded(true)}
-        onPlaying={() => setIsLoaded(true)}
+        onPlaying={(event) => {
+          setIsLoaded(true);
+          startTicking(event.currentTarget);
+        }}
+        onPlay={(event) => startTicking(event.currentTarget)}
+        onPause={() => stopTicking()}
+        onSeeking={(event) =>
+          props.onTimeUpdate?.(event.currentTarget.currentTime)
+        }
+        onSeeked={(event) =>
+          props.onTimeUpdate?.(event.currentTarget.currentTime)
+        }
+        onEnded={(event) => {
+          stopTicking();
+          props.onTimeUpdate?.(event.currentTarget.duration);
+        }}
+        onTimeUpdate={(event) =>
+          props.onTimeUpdate?.(event.currentTarget.currentTime)
+        }
+        onLoadedMetadata={(event) =>
+          props.onTimeUpdate?.(event.currentTarget.currentTime)
+        }
       />
     </div>
   );
@@ -126,8 +174,11 @@ function RecordingVideo(props: { url: string }) {
 function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
   const record = props.data;
   const hasTranscripts = () => record().transcript.length > 0;
+  const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
 
   const [transcriptOpen, setTranscriptOpen] = createSignal(true);
+  const activeSequenceNum = () =>
+    getActiveTranscriptSequenceNum(record().transcript, playbackSeconds());
 
   return (
     <>
@@ -153,7 +204,7 @@ function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
           <Show when={record().recordingUrl} keyed>
             {(url) => (
               <div class="min-h-0 flex-1 overflow-hidden">
-                <RecordingVideo url={url} />
+                <RecordingVideo url={url} onTimeUpdate={setPlaybackSeconds} />
               </div>
             )}
           </Show>
@@ -186,6 +237,7 @@ function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
               <CallTranscript
                 transcript={record().transcript}
                 channelId={record().channelId}
+                activeSequenceNum={activeSequenceNum()}
               />
             </Show>
           </div>
