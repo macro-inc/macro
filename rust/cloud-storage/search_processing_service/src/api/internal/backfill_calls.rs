@@ -21,7 +21,7 @@ pub struct BackfillCallsResponse {
 
 const BACKFILL_PAGE: i64 = 2000;
 
-#[tracing::instrument(skip(ctx, req))]
+#[tracing::instrument(err(Debug), skip(ctx, req))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     extract::Json(req): extract::Json<BackfillCallsRequest>,

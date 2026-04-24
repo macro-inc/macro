@@ -366,8 +366,9 @@ async function createCallRecordsIndex(opensearchClient: Client) {
         aliases: {
           [CALL_RECORDS_ALIAS]: {},
         },
-        // One doc per transcript segment; `_id` is `{call_id}:{transcript_id}`.
+        // One doc per transcript segment; `_id` is the `transcript_id`.
         mappings: {
+          dynamic: 'false',
           properties: {
             entity_id: {
               type: 'keyword',
