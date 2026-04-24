@@ -302,10 +302,8 @@ async fn channel_messages_response<S: ChannelMessagesService, Svc>(
         },
     };
     let previous_cursor = if has_newer_page {
-        match cursor_from_first_message(&page, limit) {
-            Some(first_cursor) => Some(Base64Str::encode_json(first_cursor).type_erase()),
-            None => None,
-        }
+        cursor_from_first_message(&page, limit)
+            .map(|first_cursor| Base64Str::encode_json(first_cursor).type_erase())
     } else {
         None
     };
