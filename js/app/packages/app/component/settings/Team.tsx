@@ -167,8 +167,8 @@ function InviteRow(props: {
   return (
     <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0">
       <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="w-8 h-8 rounded-full border border-edge-muted flex items-center justify-center shrink-0">
-          <EnvelopeIcon class="size-4 text-ink-muted" />
+        <div class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+          <EnvelopeIcon class="size-4 text-accent" />
         </div>
         <div class="min-w-0 flex-1">
           <div class="text-sm text-ink truncate">{props.invite.email}</div>
@@ -281,8 +281,8 @@ function TeamInvites() {
 function EmptyTeamState() {
   return (
     <div class="flex flex-col items-center justify-center py-12 text-center">
-      <div class="w-12 h-12 rounded-full bg-ink-extra-muted flex items-center justify-center mb-4">
-        <PlusIcon class="size-6 text-ink-muted" />
+      <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
+        <PlusIcon class="size-6 text-accent" />
       </div>
       <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
       <p class="text-xs text-ink-muted max-w-xs">
