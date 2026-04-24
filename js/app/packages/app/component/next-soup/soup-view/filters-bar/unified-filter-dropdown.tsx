@@ -348,32 +348,29 @@ const SearchableFilterSubmenu = (props: {
     else setInternalOpen(v);
   };
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
-  const [subContentRef, setSubContentRef] = createSignal<HTMLDivElement>();
 
   // Focus the search input while the sub is open.
   //
-  // Two separate issues conspire here:
+  // Two issues conspire:
   //   1. Initial focus has to wait for Kobalte's DismissableLayer to register
   //      itself as a nested layer of the parent menu (done in its onMount).
   //      The sub is portaled, so focusing the input before that registration
   //      looks like "focus outside" to the parent and closes the whole menu
   //      tree. One rAF is enough to get past those onMount callbacks.
-  //   2. After that, focus can still be stolen later: the Combobox re-renders
-  //      when its async options stream in, which blurs the input. Reclaim on
-  //      blur, but only when focus is moving within the sub (or going nowhere)
-  //      — let the user leave normally when they focus something outside.
+  //   2. After that, Kobalte's `onPointerMove` on the SubTrigger keeps
+  //      calling `focusWithoutScrolling(e.currentTarget)` on every mouse
+  //      move, stealing focus back to the trigger. Reclaim on blur — user
+  //      dismissal routes (Escape / click-outside) close the sub first,
+  //      which unregisters this listener before focus moves elsewhere.
   createEffect(() => {
     const el = inputRef();
-    const container = subContentRef();
-    if (!isOpen() || !el || !container) return;
+    if (!isOpen() || !el) return;
 
     const raf = requestAnimationFrame(() => {
       if (isOpen()) el.focus();
     });
 
-    const onBlur = (e: FocusEvent) => {
-      const next = e.relatedTarget as HTMLElement | null;
-      if (next && !container.contains(next)) return;
+    const onBlur = () => {
       queueMicrotask(() => {
         if (isOpen() && document.activeElement !== el) el.focus();
       });
@@ -407,10 +404,7 @@ const SearchableFilterSubmenu = (props: {
       </DropdownMenu.SubTrigger>
 
       <DropdownMenu.Portal>
-        <DropdownMenu.SubContent
-          ref={setSubContentRef}
-          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden"
-        >
+        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden">
           <SearchableMultiSelectInline
             options={props.options}
             activeIds={props.activeIds}
