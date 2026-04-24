@@ -20,22 +20,16 @@ pub struct UpsertCallRecordSegmentArgs {
     pub ended_at_seconds: Option<EpochSeconds>,
 }
 
-impl UpsertCallRecordSegmentArgs {
-    fn doc_id(&self) -> String {
-        format!("{}:{}", self.call_id, self.transcript_id)
-    }
-}
-
 #[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_call_record_segment(
     client: &opensearch::OpenSearch,
     args: &UpsertCallRecordSegmentArgs,
 ) -> Result<()> {
-    let id = args.doc_id();
+    let id = &args.transcript_id;
     let response = client
         .index(opensearch::IndexParts::IndexId(
             SearchIndex::CallRecords.as_ref(),
-            &id,
+            id,
         ))
         .body(args)
         .send()
@@ -80,7 +74,7 @@ pub(crate) async fn bulk_upsert_call_record_segments(
     let mut bulk_body = Vec::with_capacity(segments.len() * 2);
 
     for seg in segments {
-        let action = serde_json::json!({ "index": { "_id": seg.doc_id() } });
+        let action = serde_json::json!({ "index": { "_id": seg.transcript_id } });
         bulk_body.push(action.to_string());
         bulk_body.push(serde_json::to_string(seg).map_err(|e| {
             OpensearchClientError::DeserializationFailed {
