@@ -16,6 +16,7 @@ inbound = [
   "ports",
 ]
 outbound = [
+  "dep:ai",
   "dep:aws-sdk-s3",
   "dep:entity_access_db_utils",
   "dep:livekit-api",
