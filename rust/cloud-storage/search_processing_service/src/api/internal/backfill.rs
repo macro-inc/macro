@@ -32,52 +32,52 @@ pub fn router() -> Router<ApiContext> {
         .route("/emails", post(emails))
 }
 
-#[tracing::instrument(err(Debug), skip(service, req))]
+#[tracing::instrument(skip(service, req))]
 async fn calls(
     State(service): State<Arc<BackfillServiceImpl>>,
     extract::Json(req): extract::Json<CallBackfillRequest>,
-) -> Result<Response, Response> {
+) -> Response {
     receipt(service.backfill_calls(req).await)
 }
 
-#[tracing::instrument(err(Debug), skip(service, req))]
+#[tracing::instrument(skip(service, req))]
 async fn chats(
     State(service): State<Arc<BackfillServiceImpl>>,
     extract::Json(req): extract::Json<ChatBackfillRequest>,
-) -> Result<Response, Response> {
+) -> Response {
     receipt(service.backfill_chats(req).await)
 }
 
-#[tracing::instrument(err(Debug), skip(service, req))]
+#[tracing::instrument(skip(service, req))]
 async fn channels(
     State(service): State<Arc<BackfillServiceImpl>>,
     extract::Json(req): extract::Json<ChannelBackfillRequest>,
-) -> Result<Response, Response> {
+) -> Response {
     receipt(service.backfill_channels(req).await)
 }
 
-#[tracing::instrument(err(Debug), skip(service, req))]
+#[tracing::instrument(skip(service, req))]
 async fn documents(
     State(service): State<Arc<BackfillServiceImpl>>,
     extract::Json(req): extract::Json<DocumentBackfillRequest>,
-) -> Result<Response, Response> {
+) -> Response {
     receipt(service.backfill_documents(req).await)
 }
 
-#[tracing::instrument(err(Debug), skip(service, req))]
+#[tracing::instrument(skip(service, req))]
 async fn emails(
     State(service): State<Arc<BackfillServiceImpl>>,
     extract::Json(req): extract::Json<EmailBackfillRequest>,
-) -> Result<Response, Response> {
+) -> Response {
     receipt(service.backfill_emails(req).await)
 }
 
-fn receipt(result: Result<BackfillReceipt, BackfillError>) -> Result<Response, Response> {
+fn receipt(result: Result<BackfillReceipt, BackfillError>) -> Response {
     match result {
-        Ok(r) => Ok(axum::Json(r).into_response()),
+        Ok(r) => axum::Json(r).into_response(),
         Err(e) => {
             tracing::error!(error=?e, "backfill failed");
-            Err((StatusCode::INTERNAL_SERVER_ERROR, "backfill failed").into_response())
+            (StatusCode::INTERNAL_SERVER_ERROR, "backfill failed").into_response()
         }
     }
 }
