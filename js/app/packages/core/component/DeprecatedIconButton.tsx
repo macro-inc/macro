@@ -1,5 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
+import { cn } from '@ui/utils/classname';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import {
   type Component,
@@ -157,7 +158,17 @@ export function DeprecatedIconButton(props: IconButtonProps) {
       <button
         {...rest}
         disabled={local.disabled}
-        class={`${themeColors[local.theme ?? 'base']} ${themeStyles[local.theme ?? 'base']} ${local.border ? '' : 'border-0'} flex flex-row ${sizeClasses()} justify-center items-center gap-0.5 ${local.class ?? ''} ${local.disabled ? 'opacity-50 cursor-not-allowed' : ''} relative`}
+        class={cn(
+          themeColors[local.theme ?? 'base'],
+          themeStyles[local.theme ?? 'base'],
+          !local.border && 'border-0',
+          'flex flex-row',
+          sizeClasses(),
+          'justify-center items-center gap-0.5',
+          local.class,
+          local.disabled && 'opacity-50 cursor-not-allowed',
+          'relative'
+        )}
         onMouseDown={local.onClick}
         onKeyDown={local.onClick ? onKeyDownClick(local.onClick) : undefined}
         onKeyUp={local.onClick ? onKeyUpClick(local.onClick) : undefined}

@@ -5,7 +5,7 @@
 use std::fmt::Debug;
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -14,9 +14,10 @@ use item_filters::ast::{LiteralTree, call::CallLiteral};
 use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
-    Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallTokenResponse,
-    CallWebhookEvent, EgressS3Config, GetCallRecordsRequest, LeaveCallResponse,
-    TranscriptSegmentRequest,
+    AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
+    CallRecordPreview, CallTokenResponse, CallWebhookEvent, EgressS3Config,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
+    LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -54,11 +55,24 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Add a participant to a call.
+    ///
+    /// Returns [`AddParticipantError::UserAlreadyActive`] if the DB-level
+    /// partial unique index rejects the insert because the user is already
+    /// an active participant in another call. Other failures are wrapped in
+    /// [`AddParticipantError::Repository`].
     fn add_participant<'a>(
         &self,
         call_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
-    ) -> impl Future<Output = Result<CallParticipant, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CallParticipant, AddParticipantError>> + Send;
+
+    /// Find the call the user is currently an active participant of, if any.
+    /// Scans globally across all channels and returns `(call_id, channel_id)`
+    /// for the first active participation row (`left_at IS NULL`).
+    fn find_active_call_for_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<(Uuid, Uuid)>, Self::Err>> + Send;
 
     /// Remove a participant from a call.
     fn remove_participant<'a>(
@@ -96,11 +110,12 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Flip the `share_with_team` flag on an active call. Returns the new value.
+    /// Flip the `share_with_team` flag on an active call. Returns the new
+    /// value along with the call's `channel_id`.
     fn toggle_share_with_team(
         &self,
         call_id: &Uuid,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(bool, Uuid), Self::Err>> + Send;
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
@@ -151,6 +166,22 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallRecord>, Self::Err>> + Send;
+
+    /// Batch-fetch lightweight previews for the given call ids.
+    ///
+    /// Returns one [`CallRecordPreview`] per deduplicated id in `call_ids`,
+    /// in the order supplied. Ids that resolve to a row (in either `calls`
+    /// or `call_records`) come back as [`CallRecordPreview::Exists`]; ids
+    /// that match neither come back as [`CallRecordPreview::DoesNotExist`].
+    /// No access checks are performed.
+    ///
+    /// `user_id` is used solely to resolve channel display names (e.g. the
+    /// "other participant" in a DM) and is not used for authorization.
+    fn batch_get_call_record_previews<'a>(
+        &self,
+        call_ids: &[Uuid],
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Vec<CallRecordPreview>, Self::Err>> + Send;
 
     /// Fetch the most recent call records where the given user was a
     /// participant, spanning both active (`calls` + `call_participants`)
@@ -333,13 +364,13 @@ pub trait CallService: Send + Sync + 'static {
     /// table are untouched. Idempotent.
     fn delete_call_record(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Edits a [`CallRecord`].
     fn edit_call_record(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
@@ -350,8 +381,21 @@ pub trait CallService: Send + Sync + 'static {
     /// Returns the new value.
     fn toggle_share_with_team(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<bool, CallError>> + Send;
+
+    /// Batch-fetch lightweight previews for a list of call ids.
+    ///
+    /// Mirrors the `POST /documents/preview` endpoint in
+    /// `document_storage_service`: no per-id access checks, duplicate ids
+    /// are deduplicated, and the response preserves the deduplicated input
+    /// order. `user_id` is passed through to the repository solely for
+    /// channel-name resolution.
+    fn get_batch_call_record_previews<'a>(
+        &self,
+        request: GetBatchCallRecordPreviewRequest,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<GetBatchCallRecordPreviewResponse, CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.

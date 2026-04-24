@@ -4,7 +4,9 @@
 mod test;
 
 use connection::domain::ports::ConnectionService;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, EntityType, ViewAccessLevel,
+};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -22,7 +24,8 @@ use uuid::Uuid;
 use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
-    CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
+    AddParticipantError, CallActiveResponse, CallError, CallRecord, CallTokenResponse,
+    EgressS3Config, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
     GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
@@ -133,6 +136,41 @@ impl<
             .send_channel_message(&users, message_type, message.clone())
             .await
             .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call event"));
+    }
+
+    /// Send an event to the active participants of a call (best-effort).
+    ///
+    /// Unlike [`Self::send_call_event`], which fans out to every member of
+    /// the channel, this targets only users currently in the call — rows in
+    /// `call_participants` with `left_at IS NULL`.
+    async fn send_call_participant_event(
+        &self,
+        call_id: &Uuid,
+        message_type: &str,
+        message: &serde_json::Value,
+    ) {
+        let participants = match self.repo.get_participants(call_id).await {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::error!(error=?e, "failed to fetch call participants for event");
+                return;
+            }
+        };
+
+        let users: Vec<MacroUserIdStr<'static>> = participants
+            .into_iter()
+            .filter_map(|p| {
+                MacroUserIdStr::parse_from_str(&p.user_id)
+                    .map(CowLike::into_owned)
+                    .ok()
+            })
+            .collect();
+
+        let _ = self
+            .connection_service
+            .send_channel_message(&users, message_type, message.clone())
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call participant event"));
     }
 }
 
@@ -355,11 +393,40 @@ impl<
             }
         };
 
-        // Idempotent upsert — handles concurrent joins and rejoin after leave.
-        self.repo
-            .add_participant(&call.id, user_id.copied())
+        // Enforce: a user can only be active in one call at a time. If the
+        // user already has an active participation in a *different* call,
+        // reject before we add them here.
+        if let Some((other_call_id, other_channel_id)) = self
+            .repo
+            .find_active_call_for_user(user_id.copied())
             .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+            .map_err(|e| CallError::Internal(e.into()))?
+            && other_call_id != call.id
+        {
+            return Err(CallError::AlreadyInCall(other_channel_id.to_string()));
+        }
+
+        // Idempotent upsert — handles concurrent joins and rejoin after leave.
+        // The DB-level partial unique index is the race-safe backstop: if a
+        // concurrent request slipped past the pre-flight above, the adapter
+        // returns AddParticipantError::UserAlreadyActive, which we translate
+        // to a typed CallError::AlreadyInCall.
+        match self.repo.add_participant(&call.id, user_id.copied()).await {
+            Ok(_) => {}
+            Err(AddParticipantError::UserAlreadyActive) => {
+                let channel = self
+                    .repo
+                    .find_active_call_for_user(user_id.copied())
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                    .map(|(_, ch)| ch.to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                return Err(CallError::AlreadyInCall(channel));
+            }
+            Err(AddParticipantError::Repository(e)) => {
+                return Err(CallError::Internal(e));
+            }
+        }
 
         // Always generate a fresh token (supports reconnection from different devices).
         let token = self
@@ -477,15 +544,32 @@ impl<
                 };
 
                 // Reconcile: idempotent upsert (handles reconnect/race conditions).
-                self.repo
+                // UserAlreadyActive means our DB has the user active in
+                // another call while LiveKit says they joined this one —
+                // state drift. Don't fail the whole webhook; log and move on.
+                match self
+                    .repo
                     .add_participant(&call.id, participant_identity.copied())
                     .await
-                    .map_err(|e| CallError::Internal(e.into()))?;
-                tracing::info!(
-                    call_id = %call.id,
-                    participant = participant_identity.as_ref(),
-                    "reconciled participant_joined via webhook"
-                );
+                {
+                    Ok(_) => {
+                        tracing::info!(
+                            call_id = %call.id,
+                            participant = participant_identity.as_ref(),
+                            "reconciled participant_joined via webhook"
+                        );
+                    }
+                    Err(AddParticipantError::UserAlreadyActive) => {
+                        tracing::warn!(
+                            call_id = %call.id,
+                            participant = participant_identity.as_ref(),
+                            "participant_joined webhook: user already active in another call; ignoring reconcile"
+                        );
+                    }
+                    Err(AddParticipantError::Repository(e)) => {
+                        return Err(CallError::Internal(e));
+                    }
+                }
             }
             "participant_left" => {
                 let (Some(room_name), Some(participant_identity)) =
@@ -660,7 +744,7 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn delete_call_record(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<(), CallError> {
         let entity = receipt.entity();
         if entity.entity_type != EntityType::Call {
@@ -719,7 +803,7 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn edit_call_record(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
     ) -> Result<(), CallError> {
         let entity = receipt.entity();
@@ -742,7 +826,7 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn toggle_share_with_team(
         &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<bool, CallError> {
         let entity = receipt.entity();
         if entity.entity_type != EntityType::Call {
@@ -755,10 +839,39 @@ impl<
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
 
-        self.repo
+        let (new_value, channel_id) = self
+            .repo
             .toggle_share_with_team(&call_id)
             .await
-            .map_err(|e| CallError::Internal(e.into()))
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        self.send_call_participant_event(
+            &call_id,
+            "call_share_with_team_toggled",
+            &serde_json::json!({
+                "call_id": call_id,
+                "channel_id": channel_id,
+                "share_with_team": new_value,
+                "toggled_by": receipt.get_authenticated_user().ok(),
+            }),
+        )
+        .await;
+
+        Ok(new_value)
+    }
+
+    #[tracing::instrument(err, skip(self, request, user_id), fields(num_call_ids = request.call_ids.len()))]
+    async fn get_batch_call_record_previews<'a>(
+        &self,
+        request: GetBatchCallRecordPreviewRequest,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<GetBatchCallRecordPreviewResponse, CallError> {
+        let previews = self
+            .repo
+            .batch_get_call_record_previews(&request.call_ids, user_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        Ok(GetBatchCallRecordPreviewResponse { previews })
     }
 }
 

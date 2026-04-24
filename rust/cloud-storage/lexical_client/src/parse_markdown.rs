@@ -1,8 +1,9 @@
 use super::LexicalClient;
-use crate::types::CognitionResponseData;
+use crate::types::{CognitionResponseData, CognitionV2ResponseData};
 
 use anyhow::{Context, Result};
 use models_search::document::MarkdownParseResult;
+use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,92 +28,57 @@ impl From<LexicalResponseItem> for MarkdownParseResult {
     }
 }
 
+async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
+    if response.status() == reqwest::StatusCode::OK {
+        return Ok(response);
+    }
+    let status = response.status();
+    let body = response.text().await?;
+    tracing::error!(body=%body, status=%status, "unexpected response from lexical service");
+    anyhow::bail!(body);
+}
+
 impl LexicalClient {
+    #[tracing::instrument(skip(self), err)]
     pub async fn parse_markdown(&self, document_id: &str) -> Result<Vec<MarkdownParseResult>> {
-        let full_url = format!("{}/search/{}", self.url, document_id);
-        let response = self.client.get(&full_url).send().await?;
-
-        let status_code = response.status();
-
-        if status_code != reqwest::StatusCode::OK {
-            let body: String = response.text().await?;
-            tracing::error!(
-                body=%body,
-                status=%status_code,
-                "unexpected response from sync service while getting raw document"
-            );
-            anyhow::bail!(body);
-        }
-
+        let url = format!("{}/search/{}", self.url, document_id);
+        let response = check_response(self.client.get(&url).send().await?).await?;
         let data: LexicalResponse = response.json().await?;
-
-        let results: Vec<MarkdownParseResult> =
-            data.data.into_iter().map(|item| item.into()).collect();
-
-        Ok(results)
+        Ok(data.data.into_iter().map(Into::into).collect())
     }
 
     #[tracing::instrument(skip(self), err)]
     pub async fn parse_markdown_for_ai(&self, document_id: &str) -> Result<CognitionResponseData> {
-        let full_url = format!("{}/cognition/{}", self.url, document_id);
-        let response = self.client.get(&full_url).send().await?;
-
-        let status_code = response.status();
-        if status_code != reqwest::StatusCode::OK {
-            let body: String = response.text().await?;
-            tracing::error!(
-                body=%body,
-                status=%status_code,
-                "unexpected response from sync service while getting raw document"
-            );
-            anyhow::bail!(body);
-        }
-
-        response
-            .json::<CognitionResponseData>()
-            .await
-            .context("unexpected response")
-            .inspect(|md| {
-                if md.data.is_empty() {
-                    tracing::warn!(document_id=?document_id,"Empty MD content")
-                }
-            })
+        let url = format!("{}/cognition/{}", self.url, document_id);
+        self.get_json(&url).await
     }
 
-    /// Parse markdown content from a presigned URL (for documents not in sync-service)
     #[tracing::instrument(skip(self), err)]
     pub async fn parse_markdown_for_ai_from_url(
         &self,
         presigned_url: &str,
     ) -> Result<CognitionResponseData> {
-        let full_url = format!("{}/cognition/presigned", self.url);
-        let response = self
-            .client
-            .get(&full_url)
-            .query(&[("url", presigned_url)])
-            .send()
-            .await?;
+        let url = format!("{}/cognition/presigned", self.url);
+        let response = check_response(
+            self.client
+                .get(&url)
+                .query(&[("url", presigned_url)])
+                .send()
+                .await?,
+        )
+        .await?;
+        response.json().await.context("unexpected response")
+    }
 
-        let status_code = response.status();
-        if status_code != reqwest::StatusCode::OK {
-            let body: String = response.text().await?;
-            tracing::error!(
-                body=%body,
-                status=%status_code,
-                "unexpected response from lexical service while parsing presigned URL content"
-            );
-            anyhow::bail!(body);
-        }
+    #[tracing::instrument(skip(self), err)]
+    pub async fn parse_cognition_v2(&self, document_id: &str) -> Result<CognitionV2ResponseData> {
+        let url = format!("{}/cognitionv2/{}", self.url, document_id);
+        self.get_json(&url).await
+    }
 
-        response
-            .json::<CognitionResponseData>()
-            .await
-            .context("unexpected response")
-            .inspect(|md| {
-                if md.data.is_empty() {
-                    tracing::warn!(presigned_url=?presigned_url,"Empty MD content")
-                }
-            })
+    async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
+        let response = check_response(self.client.get(url).send().await?).await?;
+        response.json().await.context("unexpected response")
     }
 }
 
@@ -155,5 +121,63 @@ mod tests {
         );
         assert_eq!(results[1].node_id, "test-node-2");
         assert_eq!(results[1].content, "Test content");
+    }
+
+    #[test]
+    fn test_cognition_v2_deserialization() {
+        use crate::types::{CognitionV2ResponseData, NewMdNode};
+
+        let json_data = r##"
+        {
+            "data": [
+                {
+                    "type": "generic",
+                    "nodeId": "abc123",
+                    "content": "# Hello",
+                    "tag": "heading"
+                },
+                {
+                    "type": "staticImage",
+                    "url": "https://example.com/image.png"
+                },
+                {
+                    "type": "dssImage",
+                    "id": "dss-image-456"
+                },
+                {
+                    "type": "generic",
+                    "nodeId": "def789",
+                    "content": "Some paragraph text",
+                    "tag": "paragraph"
+                }
+            ]
+        }
+        "##;
+
+        let response: CognitionV2ResponseData = serde_json::from_str(json_data).unwrap();
+        assert_eq!(response.data.len(), 4);
+
+        match &response.data[0] {
+            NewMdNode::Generic(node) => {
+                assert_eq!(node.node_id, "abc123");
+                assert_eq!(node.content, "# Hello");
+                assert_eq!(node.tag, "heading");
+            }
+            _ => panic!("expected Generic node"),
+        }
+
+        match &response.data[1] {
+            NewMdNode::StaticImage { url } => {
+                assert_eq!(url, "https://example.com/image.png");
+            }
+            _ => panic!("expected StaticImage node"),
+        }
+
+        match &response.data[2] {
+            NewMdNode::DssImage { id } => {
+                assert_eq!(id, "dss-image-456");
+            }
+            _ => panic!("expected dssImage node"),
+        }
     }
 }

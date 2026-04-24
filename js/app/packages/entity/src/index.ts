@@ -30,6 +30,10 @@ export {
 
 export { unreadFilterFn } from './utils/filter';
 export {
+  buildEntityData,
+  type BuildEntityDataArgs,
+} from './utils/buildEntityData';
+export {
   TASK_STATUS_OPTIONS,
   getTaskAssigneeIds,
   getTaskStatusOptionId,

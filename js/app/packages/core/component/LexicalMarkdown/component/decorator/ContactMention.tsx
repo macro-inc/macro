@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import BuildingIcon from '@icon/regular/buildings.svg';
@@ -103,10 +104,10 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
     <>
       <span
         ref={mentionRef}
-        class={`relative py-0.5 px-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink`}
-        classList={{
-          'bracket-offset-2': isSelectedAsNode(),
-        }}
+        class={cn(
+          'relative py-0.5 px-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
+          isSelectedAsNode() && 'bracket-offset-2'
+        )}
         {...navHandlers}
         onMouseEnter={() => setPopupOpen(true)}
         onMouseLeave={() => setPopupOpen(false)}

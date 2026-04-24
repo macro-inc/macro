@@ -36,7 +36,7 @@
     "declarationMap": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "noEmit": true,
+    "emitDeclarationOnly": true,
     "isolatedModules": true,
     "sourceMap": true,
     "preserveWatchOutput": true,
@@ -215,8 +215,8 @@
       "@ui/*": [
         "./packages/ui/*"
       ],
-      "@block-theme/*": [
-        "./packages/block-theme/*"
+      "@theme/*": [
+        "./packages/theme/*"
       ],
       "@entity": [
         "./packages/entity/src/index.ts"

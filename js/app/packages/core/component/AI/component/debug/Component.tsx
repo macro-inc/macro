@@ -182,7 +182,7 @@ function StreamMessagesInner() {
   return (
     <Item col label="Chat messages - mock stream">
       <button
-        class={`bg-accent text-ink} px-2 rounded-xs outline outline-ink `}
+        class="bg-accent text-ink px-2 rounded-xs outline outline-ink"
         onClick={() => {
           const poemStream = makeStream();
           setStream(poemStream);

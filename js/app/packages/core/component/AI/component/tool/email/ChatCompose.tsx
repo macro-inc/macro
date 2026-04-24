@@ -2,6 +2,7 @@ import {
   ComposeLayout,
   EmailComposeToolbar,
 } from '@block-email/component/compose';
+import { cn } from '@ui/utils/classname';
 import {
   type ComposeContextValue,
   ComposeProvider,
@@ -353,11 +354,11 @@ export function ComposeTool(props: ComposeToolProps) {
       <div class="relative">
         <ComposeLayout
           bodyDebugName={`chat-compose:${props.chatId}:${props.messageId}:${props.toolCallId}`}
-          class={`flex flex-col w-full text-sm border border-edge-muted rounded-lg p-4 bg-input ${
-            uiDisabled()
-              ? '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
-              : ''
-          }`}
+          class={cn(
+            'flex flex-col w-full text-sm border border-edge-muted rounded-lg p-4 bg-input',
+            uiDisabled() &&
+              '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
+          )}
           header={
             showOwnerDisabledMessage() ? (
               <div class="text-xs text-ink-extra-muted/60">

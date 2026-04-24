@@ -4,6 +4,7 @@ import GlobeIcon from '@icon/regular/globe-simple.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
+import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
@@ -52,7 +53,7 @@ export function UnfurlLink(props: UnfurlLinkProps) {
           </Show>
         </div>
         <div class="min-w-0">
-          <h1 class={`font-medium truncate text-ink`}>
+          <h1 class="font-medium truncate text-ink">
             {props.unfurled.title || domain}
           </h1>
           <h2 class="font-medium text-xxs text-ink-muted">{domain}</h2>
@@ -73,9 +74,10 @@ export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
   return (
     <div class="border-1 border-edge rounded-lg w-full text-sm cursor-default select-none">
       <div
-        class={`flex justify-between items-center hover:bg-hover transition-colors hover:transition-none py-1 px-2
-        ${isCollapsed() ? 'rounded-lg' : 'rounded-t-lg'}
-      `}
+        class={cn(
+          'flex justify-between items-center hover:bg-hover transition-colors hover:transition-none py-1 px-2',
+          isCollapsed() ? 'rounded-lg' : 'rounded-t-lg'
+        )}
         onClick={() => setIsCollapsed((p) => !p)}
       >
         <div>
@@ -110,9 +112,10 @@ export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
         </Show>
       </div>
       <div
-        class={`flex flex-col divide-y divide-edge ${isCollapsed() ? 'collapse max-h-0' : 'visible max-h-[1920px]'}
-        transition-all duration-150 ease-in-out overflow-clip
-        `}
+        class={cn(
+          'flex flex-col divide-y divide-edge transition-all duration-150 ease-in-out overflow-clip',
+          isCollapsed() ? 'collapse max-h-0' : 'visible max-h-[1920px]'
+        )}
       >
         <For each={props.links}>
           {(link) => (

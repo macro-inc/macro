@@ -126,7 +126,7 @@
     },
     {
       "includes": [
-        "packages/block-theme/**",
+        "packages/theme/**",
         "packages/app/component/dock/Dock.tsx",
         "packages/app/component/settings/**"
       ],

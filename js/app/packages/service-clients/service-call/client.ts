@@ -62,4 +62,15 @@ export const callServiceClient = {
       () => undefined
     );
   },
+
+  async toggleShareWithTeam(callId: string) {
+    // fetchWithToken requires T extends ObjectLike, but this endpoint returns a
+    // primitive JSON boolean. response.json() parses it correctly at runtime;
+    // we only need to satisfy the generic constraint.
+    const result = await fetchWithToken<Record<string, never>>(
+      `${host}/call/record/${callId}/share-with-team/toggle`,
+      { method: 'POST' }
+    );
+    return mapOk(result, (r) => r as unknown as boolean);
+  },
 };

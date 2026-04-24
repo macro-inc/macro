@@ -25,6 +25,7 @@ export const BulkMoveToProjectView = (props: {
   entities: EntityData[];
   onFinish: () => void;
   onCancel: () => void;
+  onError?: (error: unknown) => void;
 }) => {
   let listRef!: HTMLDivElement;
   const bulkMoveToProjectMutation = createBulkMoveToProjectDssEntityMutation();
@@ -352,6 +353,7 @@ export const BulkMoveToProjectView = (props: {
         props.onFinish();
       } catch (error) {
         console.error('Failed to move entities to folder:', error);
+        props.onError?.(error);
       }
     }
   };
@@ -445,9 +447,11 @@ export const BulkMoveToProjectView = (props: {
 
                 return (
                   <div
-                    class={`flex items-center px-2 py-1 cursor-pointer hover:bg-accent/10 ${
-                      isFocused() ? 'focused bg-accent/20' : ''
-                    } ${isSelected() ? 'bg-accent/10' : ''}`}
+                    class={cn(
+                      'flex items-center px-2 py-1 cursor-pointer hover:bg-accent/10',
+                      isFocused() && 'focused bg-accent/20',
+                      isSelected() && 'bg-accent/10'
+                    )}
                     style={{
                       'padding-left': `${(project.depth || 0) * 16 + 8}px`,
                     }}
@@ -464,9 +468,10 @@ export const BulkMoveToProjectView = (props: {
                     }}
                   >
                     <div
-                      class={`mr-2 w-4 h-4 flex items-center justify-center text-xs ${
+                      class={cn(
+                        'mr-2 w-4 h-4 flex items-center justify-center text-xs',
                         hasChildren() ? 'cursor-pointer' : 'opacity-20'
-                      }`}
+                      )}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (hasChildren()) {

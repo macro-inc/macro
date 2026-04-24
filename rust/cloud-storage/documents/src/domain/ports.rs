@@ -16,8 +16,9 @@ use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 use model::sync_service::SyncServiceVersionID;
 
 use super::models::{
-    CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse,
-    DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+    CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    CreateTaskResponse, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    LocationQueryParams,
 };
 
 /// Repository for accessing document data from the database.
@@ -85,6 +86,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Get all comment threads (with their comments) attached to a document.
+    fn get_document_comments(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Vec<CommentThread>, Self::Err>> + Send;
 
     /// Create a new document with all associated records in a single transaction.
     ///
@@ -254,6 +261,12 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Get all comment threads (with their comments) for a document.
+    fn get_document_comments(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<CommentThread>, DocumentError>> + Send;
 
     /// Create a new document, generate an S3 presigned upload URL, and
     /// optionally attach task properties and update project modified.

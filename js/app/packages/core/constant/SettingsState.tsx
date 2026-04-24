@@ -1,6 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { isMobile } from '@core/mobile/isMobile';
 import { createSignal } from 'solid-js';
 
 export type SettingsTab =
@@ -12,13 +11,14 @@ export type SettingsTab =
   | 'AI Memory'
   | 'Inbox'
   | 'Shortcuts'
-  | 'Mobile App';
+  | 'Mobile App'
+  | 'Team';
 
 export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
 
 export const useSettingsState = () => {
-  const { replaceSplit, insertSplit } = useSplitLayout();
+  const { insertSplit } = useSplitLayout();
 
   const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
@@ -36,11 +36,7 @@ export const useSettingsState = () => {
   const openSettings = (activeTabId?: SettingsTab) => {
     if (activeTabId) setActiveTabId(activeTabId);
     if (isOpen()) return; // Already open
-    if (isMobile()) {
-      replaceSplit({ content: { type: 'component', id: 'settings' } });
-    } else {
-      insertSplit({ type: 'component', id: 'settings' });
-    }
+    insertSplit({ type: 'component', id: 'settings' });
   };
 
   const closeSettings = () => {

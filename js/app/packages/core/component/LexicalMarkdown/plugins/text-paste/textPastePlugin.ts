@@ -1,6 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { mergeRegister } from '@lexical/utils';
-import { parseThemeV1Json } from '@block-theme/utils/themeValidation';
+import { parseThemeV1Json } from '@theme/utils/themeValidation';
 import {
   $getSelection,
   $isRangeSelection,

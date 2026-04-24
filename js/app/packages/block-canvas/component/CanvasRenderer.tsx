@@ -1,6 +1,7 @@
 import { useIsNestedBlock } from '@core/block';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { cn } from '@ui/utils/classname';
 import { useCanEdit } from '@core/signal/permissions';
 import Circuitry from '@icon/regular/circuitry.svg';
 import { nanoid } from 'nanoid';
@@ -288,7 +289,10 @@ export function CanvasRenderer() {
 
       <Show when={!isNestedBlock && canEdit()}>
         <div
-          class={`w-full absolute flex ${isMobileWidth() && 'justify-center'}`}
+          class={cn(
+            'w-full absolute flex',
+            isMobileWidth() && 'justify-center'
+          )}
         >
           <FloatingMenu />
         </div>

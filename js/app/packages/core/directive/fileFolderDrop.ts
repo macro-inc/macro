@@ -1,4 +1,5 @@
 import { extractFileSystemEntries } from '@core/util/dataTransfer';
+import { internalDragExceedsThreshold } from '@core/directive/internalDragState';
 import { type Accessor, onCleanup } from 'solid-js';
 
 interface FileFolderDropDirectiveOptions {
@@ -38,11 +39,22 @@ export function fileFolderDrop(
   accessor: Accessor<FileFolderDropDirectiveOptions | undefined>
 ) {
   let dragCounter = 0;
+  let internalDragActivated = false;
 
   const handleDragOver = (e: DragEvent) => {
     if (accessor()?.disabled) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Upgrade an internal drag to active once the 20px threshold is exceeded.
+    if (
+      !internalDragActivated &&
+      e.dataTransfer?.types.includes('application/x-macro-internal') &&
+      internalDragExceedsThreshold()
+    ) {
+      internalDragActivated = true;
+      accessor()?.onDragStart?.(true);
+    }
   };
 
   const handleDragEnter = (e: DragEvent) => {
@@ -61,8 +73,10 @@ export function fileFolderDrop(
 
       if (!hasFiles) {
         const types = e.dataTransfer?.types || [];
-        // Skip internal drags (images dragged from within the app)
+        // For internal image drags, wait for the 20px threshold before activating.
+        // handleDragOver will upgrade to valid once the threshold is exceeded.
         if (types.includes('application/x-macro-internal')) {
+          internalDragActivated = false;
           options?.onDragStart?.(false);
           return;
         }
@@ -88,6 +102,7 @@ export function fileFolderDrop(
     dragCounter--;
 
     if (dragCounter === 0) {
+      internalDragActivated = false;
       const options = accessor();
       options?.onDragEnd?.();
     }
@@ -100,6 +115,7 @@ export function fileFolderDrop(
 
     const options = accessor();
     dragCounter = 0;
+    internalDragActivated = false;
     options?.onDragEnd?.();
     options?.onMouseUp?.(e.pageX, e.pageY);
 
@@ -132,10 +148,12 @@ export function fileFolderDrop(
       return;
     }
 
-    // If no files but we have HTML data, try to extract image URLs
-    // Skip if the drag originated from within the app to prevent replication
+    // If no files but we have HTML data, try to extract image URLs.
+    // For internal drags, only proceed if the drag exceeded the 20px threshold.
     if (dataTransfer.types.includes('application/x-macro-internal')) {
-      return;
+      if (!internalDragExceedsThreshold()) {
+        return;
+      }
     }
 
     const html = dataTransfer.getData('text/html');

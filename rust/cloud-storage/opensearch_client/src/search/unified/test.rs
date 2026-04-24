@@ -647,10 +647,24 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                 ],
                 "must": [
                   {
-                    "simple_query_string": {
-                      "default_operator": "AND",
-                      "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
-                      "query": "(test | test@*)"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "simple_query_string": {
+                            "default_operator": "AND",
+                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                            "query": "(test | test@*)"
+                          }
+                        },
+                        {
+                          "simple_query_string": {
+                            "default_operator": "AND",
+                            "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
+                            "query": "test*"
+                          }
+                        }
+                      ]
                     }
                   }
                 ]

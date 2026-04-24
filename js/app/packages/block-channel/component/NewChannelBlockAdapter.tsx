@@ -33,6 +33,7 @@ import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTa
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import {
   CallAudioSink,
+  CallEventSync,
   CallProvider,
   ChannelCallAutoJoin,
   ChannelCallButton,
@@ -212,6 +213,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
       <CallProvider>
+        <CallEventSync />
         <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
           <ChannelCallAutoJoin
             channelId={channelId}

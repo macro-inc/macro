@@ -4,14 +4,16 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
+import { cn } from '@ui/utils/classname';
 import {
   type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
+import { itemToBlockName } from '@core/constant/allBlocks';
 // Components
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { RoundPanel } from '@core/component/RoundPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
@@ -64,7 +66,7 @@ import { Dynamic } from 'solid-js/web';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
-import { beveledCorners } from '../signal/beveledCorners';
+
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
@@ -248,7 +250,14 @@ function MetadataInfo(props: {
 }) {
   return (
     <div
-      class={`${props.align === 'right' ? 'justify-right' : 'justify-left'} mt-2 ${props.align === 'left' ? 'w-fit max-w-[66%]' : ''} text-ink-muted ${props.align === 'left' ? 'overflow-hidden whitespace-nowrap text-ellipsis' : ''}`}
+      class={cn(
+        props.align === 'right' ? 'justify-right' : 'justify-left',
+        'mt-2',
+        props.align === 'left' && 'w-fit max-w-[66%]',
+        'text-ink-muted',
+        props.align === 'left' &&
+          'overflow-hidden whitespace-nowrap text-ellipsis'
+      )}
     >
       <span class="relative text-[0.8em] text-ink-muted max-w-full flex items-center">
         <Dynamic component={props.icon} class="relative size-3 mx-1" />
@@ -326,7 +335,10 @@ function ImageCoverStrip(props: {
 
   return (
     <div
-      class={`w-full overflow-hidden relative bg-edge-muted ${props.class ?? 'h-32'}`}
+      class={cn(
+        'w-full overflow-hidden relative bg-edge-muted',
+        props.class ?? 'h-32'
+      )}
     >
       <Suspense
         fallback={
@@ -339,7 +351,10 @@ function ImageCoverStrip(props: {
           {(url) => (
             <img
               src={url()}
-              class={`absolute inset-0 w-full h-full object-cover ${shouldFadeIn ? 'opacity-0 transition-opacity duration-300' : ''}`}
+              class={cn(
+                'absolute inset-0 w-full h-full object-cover',
+                shouldFadeIn && 'opacity-0 transition-opacity duration-300'
+              )}
               onLoad={
                 shouldFadeIn
                   ? (e) => {
@@ -442,6 +457,17 @@ export function PopupPreview(props: {
 
   const { item, ItemEntityIcon } = useItemPreviewData(itemPreviewEntity);
 
+  // Resolve the caller-provided type against the item's actual subType so
+  // that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
+  // 'task' block alias instead of raw 'md'. Mirrors BlockLink/EntityMention.
+  const targetBlockType = createMemo<BlockName | BlockAlias>(() => {
+    const i = item();
+    if (isAccessiblePreviewItem(i)) {
+      return itemToBlockName(i);
+    }
+    return props.documentInfo.type;
+  });
+
   // Derived state
   const canOpenInChat = createCallback(() => {
     if (blockName && ['chat'].includes(blockName)) {
@@ -464,10 +490,11 @@ export function PopupPreview(props: {
   };
 
   const openDocument = createCallback(async () => {
+    const type = targetBlockType();
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.warn('No split manager found');
-      let link = `/${props.documentInfo.type}/${props.documentInfo.id}`;
+      let link = `/${type}/${props.documentInfo.id}`;
       if (props.documentInfo.params) {
         const queryParams = new URLSearchParams(
           props.documentInfo.params
@@ -479,7 +506,7 @@ export function PopupPreview(props: {
     }
 
     splitManager.replaceAllSplits({
-      type: props.documentInfo.type,
+      type,
       id: props.documentInfo.id,
       params: props.documentInfo.params,
     });
@@ -501,7 +528,7 @@ export function PopupPreview(props: {
       if (hostname === 'localhost') {
         hostname = 'dev.macro.com';
       }
-      let link = `https://${hostname}/app/${props.documentInfo.type}/${props.documentInfo.id}`;
+      let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
 
       if (
         props.documentInfo.params &&
@@ -532,7 +559,7 @@ export function PopupPreview(props: {
     const splitManager = globalSplitManager();
     if (!splitManager) return false;
     return !!splitManager.getSplitByContent(
-      props.documentInfo.type,
+      targetBlockType(),
       props.documentInfo.id
     );
   };
@@ -541,8 +568,9 @@ export function PopupPreview(props: {
     const splitManager = globalSplitManager();
     if (!splitManager) return;
 
+    const type = targetBlockType();
     const existing = splitManager.getSplitByContent(
-      props.documentInfo.type,
+      type,
       props.documentInfo.id
     );
     if (existing) {
@@ -550,7 +578,7 @@ export function PopupPreview(props: {
     } else {
       splitManager.createNewSplit({
         content: {
-          type: props.documentInfo.type,
+          type,
           id: props.documentInfo.id,
           params: props.documentInfo.params,
         },
@@ -558,12 +586,12 @@ export function PopupPreview(props: {
       });
     }
 
-    if (!isBlockNameWithLocation(props.documentInfo.type)) return;
+    if (!isBlockNameWithLocation(type)) return;
 
     const orchestrator = splitManager.getOrchestrator();
     const handle = await orchestrator.getBlockHandle(
       props.documentInfo.id,
-      props.documentInfo.type
+      type
     );
 
     await handle?.goToLocationFromParams(props.documentInfo.params);
@@ -692,7 +720,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <ClippedPanel tl={!beveledCorners()} active>
+      <RoundPanel active>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
@@ -853,7 +881,7 @@ export function PopupPreview(props: {
             )}
           </Match>
         </Switch>
-      </ClippedPanel>
+      </RoundPanel>
     </div>
   );
 }

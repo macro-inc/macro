@@ -63,12 +63,12 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { currentThemeId } from '../../block-theme/signals/themeSignals';
+import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
   systemThemeEffect,
-} from '../../block-theme/utils/themeUtils';
+} from '../../theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
 import { Signup } from './auth/Signup';

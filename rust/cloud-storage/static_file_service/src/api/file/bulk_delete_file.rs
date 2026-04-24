@@ -173,6 +173,15 @@ pub async fn handle_bulk_delete_file(
                 results[*idx].error = Some(format!("metadata deletion failed: {}", e));
             }
         }
+
+        for (_, file_id) in &successful_indices_and_ids {
+            let scaled_prefix = format!("file/{file_id}/");
+            storage_client
+                .delete_objects_by_prefix(&scaled_prefix)
+                .await
+                .inspect_err(|e| tracing::warn!(error=?e, file_id=%file_id, "failed to delete scaled variants"))
+                .ok();
+        }
     }
 
     // Calculate statistics

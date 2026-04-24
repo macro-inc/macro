@@ -1,4 +1,5 @@
 import { UnfurlLink } from '@core/component/Link';
+import { cn } from '@ui/utils/classname';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { useUnfurl } from '@core/signal/unfurl';
 import { debounce } from '@solid-primitives/scheduled';
@@ -30,7 +31,7 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
         ref={linkRef}
         href={props.url}
         target="_blank"
-        class={`${props.class || ''}`}
+        class={cn(props.class)}
         onMouseEnter={() => {
           if (isTouchDevice()) return;
           debouncedSetPreviewOpen(true);

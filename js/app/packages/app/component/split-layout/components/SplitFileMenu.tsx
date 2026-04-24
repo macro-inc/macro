@@ -1,4 +1,4 @@
-import { useBlockName } from '@core/block';
+import { useBlockAliasedName, useBlockName } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { MenuItem } from '@core/component/Menu';
 import { useIsDocumentOwner } from '@core/signal/permissions';
@@ -22,7 +22,9 @@ import {
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
-import { useSplitModal } from './SplitModalContext';
+import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
+import { toast } from '@core/component/Toast/Toast';
+import { buildEntityData } from '@entity';
 
 export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
 
@@ -61,13 +63,12 @@ export function SplitFileMenu(props: {
 
   const isOwner = useIsDocumentOwner();
   const blockName = useBlockName();
+  const aliasedBlockName = useBlockAliasedName();
   const itemType = blockNameToItemType(blockName);
   if (!itemType) throw new Error(`Using bad item type for block: ${blockName}`);
 
   const [open, setOpen] = createSignal(false);
   const itemOperations = useItemOperations();
-
-  const modal = useSplitModal();
 
   const { replaceOrInsertSplit, resetSplit } = useSplitLayout();
 
@@ -99,12 +100,18 @@ export function SplitFileMenu(props: {
               return {
                 label: 'Rename',
                 action: () => {
-                  setOpen(false);
-                  modal({
+                  const entity = buildEntityData({
                     id: props.id,
                     name: props.name,
-                    itemType: props.itemType,
+                    blockName: aliasedBlockName,
+                  });
+                  if (!entity) return;
+                  setOpen(false);
+                  openBulkEditModal({
                     view: 'rename',
+                    entities: [entity],
+                    onFinish: () => toast.success('Renamed'),
+                    onError: () => toast.failure('Failed to rename'),
                   });
                 },
                 icon: Rename,
@@ -145,12 +152,18 @@ export function SplitFileMenu(props: {
               return {
                 label: 'Move to Folder',
                 action: () => {
-                  setOpen(false);
-                  modal({
+                  const entity = buildEntityData({
                     id: props.id,
                     name: props.name,
-                    itemType: props.itemType,
+                    blockName: aliasedBlockName,
+                  });
+                  if (!entity) return;
+                  setOpen(false);
+                  openBulkEditModal({
                     view: 'moveToProject',
+                    entities: [entity],
+                    onFinish: () => toast.success('Moved to folder'),
+                    onError: () => toast.failure('Failed to move to folder'),
                   });
                 },
                 icon: ArrowRight,
