@@ -1,11 +1,7 @@
 import type { ThemeMentionDecoratorProps } from '@lexical-core';
 import type { ThemeV1 } from '@theme/types/themeTypes';
 import { isThemeV1 } from '@theme/utils/themeValidation';
-import {
-  setUserThemes,
-  themes,
-  userThemes,
-} from '@theme/signals/themeSignals';
+import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import { applyTheme } from '@theme/utils/themeUtils';
 import { useSettingsState } from '@core/constant/SettingsState';
 
