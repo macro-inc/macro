@@ -348,21 +348,42 @@ const SearchableFilterSubmenu = (props: {
     else setInternalOpen(v);
   };
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
+  const [subContentRef, setSubContentRef] = createSignal<HTMLDivElement>();
 
-  // Focus the search input on open. The rAF is load-bearing: Kobalte's
-  // DismissableLayer registers itself as a nested layer of the parent menu
-  // in `onMount`, and the search input lives in a portaled sub. If we focus
-  // synchronously before that registration runs, the parent (Channels)
-  // treats focus landing in the portaled sub as "focus outside" and closes
-  // the whole menu tree. Waiting one frame lets the nested-layer
-  // registration complete, so focus transitions stay within the layer stack.
+  // Focus the search input while the sub is open.
+  //
+  // Two separate issues conspire here:
+  //   1. Initial focus has to wait for Kobalte's DismissableLayer to register
+  //      itself as a nested layer of the parent menu (done in its onMount).
+  //      The sub is portaled, so focusing the input before that registration
+  //      looks like "focus outside" to the parent and closes the whole menu
+  //      tree. One rAF is enough to get past those onMount callbacks.
+  //   2. After that, focus can still be stolen later: the Combobox re-renders
+  //      when its async options stream in, which blurs the input. Reclaim on
+  //      blur, but only when focus is moving within the sub (or going nowhere)
+  //      — let the user leave normally when they focus something outside.
   createEffect(() => {
     const el = inputRef();
-    if (!isOpen() || !el) return;
+    const container = subContentRef();
+    if (!isOpen() || !el || !container) return;
+
     const raf = requestAnimationFrame(() => {
       if (isOpen()) el.focus();
     });
-    onCleanup(() => cancelAnimationFrame(raf));
+
+    const onBlur = (e: FocusEvent) => {
+      const next = e.relatedTarget as HTMLElement | null;
+      if (next && !container.contains(next)) return;
+      queueMicrotask(() => {
+        if (isOpen() && document.activeElement !== el) el.focus();
+      });
+    };
+    el.addEventListener('blur', onBlur);
+
+    onCleanup(() => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('blur', onBlur);
+    });
   });
 
   return (
@@ -386,7 +407,10 @@ const SearchableFilterSubmenu = (props: {
       </DropdownMenu.SubTrigger>
 
       <DropdownMenu.Portal>
-        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden">
+        <DropdownMenu.SubContent
+          ref={setSubContentRef}
+          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden"
+        >
           <SearchableMultiSelectInline
             options={props.options}
             activeIds={props.activeIds}
