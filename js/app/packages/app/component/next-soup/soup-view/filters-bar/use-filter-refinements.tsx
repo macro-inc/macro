@@ -339,84 +339,87 @@ export function useFilterRefinements() {
       searchPlaceholder: 'Search senders...',
     });
 
-    if (currentView() === 'search' && soup.filters.isActive('calls')) {
-      pushSearchableChip({
-        key: 'CallIn',
-        categoryLabel: 'In',
-        optionIdPrefix: 'call-in',
-        getIds: () =>
-          (queryFilters().call_filters?.channel_ids ?? []).filter(
-            (id) => id !== NIL_UUID
-          ),
-        searchableOptions: channelOptions,
-        labelMap: channelLabelMap,
-        onChange: setCallChannelIds,
-        searchPlaceholder: 'Search channels...',
-      });
+    if (currentView() === 'search') {
+      if (soup.filters.isActive('calls')) {
+        pushSearchableChip({
+          key: 'CallIn',
+          categoryLabel: 'In',
+          optionIdPrefix: 'call-in',
+          getIds: () =>
+            (queryFilters().call_filters?.channel_ids ?? []).filter(
+              (id) => id !== NIL_UUID
+            ),
+          searchableOptions: channelOptions,
+          labelMap: channelLabelMap,
+          onChange: setCallChannelIds,
+          searchPlaceholder: 'Search channels...',
+        });
 
-      pushSearchableChip({
-        key: 'CallFrom',
-        categoryLabel: 'From',
-        optionIdPrefix: 'call-from',
-        getIds: () => queryFilters().call_filters?.speaker_ids ?? [],
-        searchableOptions: senderOptions,
-        labelMap: senderLabelMap,
-        onChange: setSpeakerIds,
-        searchPlaceholder: 'Search speakers...',
-      });
+        pushSearchableChip({
+          key: 'CallFrom',
+          categoryLabel: 'From',
+          optionIdPrefix: 'call-from',
+          getIds: () => queryFilters().call_filters?.speaker_ids ?? [],
+          searchableOptions: senderOptions,
+          labelMap: senderLabelMap,
+          onChange: setSpeakerIds,
+          searchPlaceholder: 'Search speakers...',
+        });
 
-      const callAttended = queryFilters().call_filters?.attended;
-      if (callAttended !== undefined && callAttended !== null) {
-        const ATTENDED_YES = 'attended:yes';
-        const ATTENDED_NO = 'attended:no';
-        const key = 'CallAttended';
-        seenKeys.add(key);
-        filters.push(
-          getOrCreateChip(key, () => ({
-            categoryLabel: 'Attended',
-            hideCategoryLabel: true,
-            optionId: () =>
-              queryFilters().call_filters?.attended
-                ? ATTENDED_YES
-                : ATTENDED_NO,
-            optionLabel: () =>
-              queryFilters().call_filters?.attended ? 'Attended' : 'Unattended',
-            categoryOptions: [
-              { id: ATTENDED_YES, label: 'Attended' },
-              { id: ATTENDED_NO, label: 'Unattended' },
-            ] as unknown as ActiveFilter['categoryOptions'],
-            multiple: false,
-            isOptionActive: (optionId) =>
-              optionId ===
-              (queryFilters().call_filters?.attended
-                ? ATTENDED_YES
-                : ATTENDED_NO),
-            onRemove: () =>
-              setQueryFilters((prev) => ({
-                ...prev,
-                call_filters: {
-                  ...prev.call_filters,
-                  attended: undefined,
-                },
-              })),
-            onReplace: (newOptionId) =>
-              setQueryFilters((prev) => ({
-                ...prev,
-                call_filters: {
-                  ...prev.call_filters,
-                  attended: newOptionId === ATTENDED_YES,
-                },
-              })),
-          }))
-        );
+        const callAttended = queryFilters().call_filters?.attended;
+        if (callAttended !== undefined && callAttended !== null) {
+          const ATTENDED_YES = 'attended:yes';
+          const ATTENDED_NO = 'attended:no';
+          const key = 'CallAttended';
+          seenKeys.add(key);
+          filters.push(
+            getOrCreateChip(key, () => ({
+              categoryLabel: 'Attended',
+              hideCategoryLabel: true,
+              optionId: () =>
+                queryFilters().call_filters?.attended
+                  ? ATTENDED_YES
+                  : ATTENDED_NO,
+              optionLabel: () =>
+                queryFilters().call_filters?.attended
+                  ? 'Attended'
+                  : 'Unattended',
+              categoryOptions: [
+                { id: ATTENDED_YES, label: 'Attended' },
+                { id: ATTENDED_NO, label: 'Unattended' },
+              ] as unknown as ActiveFilter['categoryOptions'],
+              multiple: false,
+              isOptionActive: (optionId) =>
+                optionId ===
+                (queryFilters().call_filters?.attended
+                  ? ATTENDED_YES
+                  : ATTENDED_NO),
+              onRemove: () =>
+                setQueryFilters((prev) => ({
+                  ...prev,
+                  call_filters: {
+                    ...prev.call_filters,
+                    attended: undefined,
+                  },
+                })),
+              onReplace: (newOptionId) =>
+                setQueryFilters((prev) => ({
+                  ...prev,
+                  call_filters: {
+                    ...prev.call_filters,
+                    attended: newOptionId === ATTENDED_YES,
+                  },
+                })),
+            }))
+          );
+        }
       }
-    }
 
-    // Email importance (only when the email index is active in the search view
-    // and the user has explicitly set a value — undefined means "All", no chip)
-    if (currentView() === 'search' && soup.filters.isActive('email')) {
-      const importance = queryFilters().email_filters?.importance;
-      if (importance !== undefined) {
+      // undefined importance means "All" — no chip.
+      if (
+        soup.filters.isActive('email') &&
+        queryFilters().email_filters?.importance !== undefined
+      ) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
         const IMPORTANCE_NOISE = 'importance:noise';
         const key = 'Importance';
