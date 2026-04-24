@@ -12,6 +12,7 @@ import { restoreSoupFocus } from '@app/component/next-soup/utils';
 
 interface NotificationActionsProps {
   stack: NotificationStack;
+  entityId?: string;
   onMarkAsDone?: () => void;
   onMarkAsRead?: () => void;
 }
@@ -51,7 +52,7 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
                   handle.undo({
                     onError: () => toast.failure('Failed to undo'),
                   });
-                  restoreSoupFocus();
+                  restoreSoupFocus(props.entityId);
                 },
               },
             ],

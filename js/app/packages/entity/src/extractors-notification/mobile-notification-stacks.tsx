@@ -89,6 +89,7 @@ function MobileStackRow(props: {
   const notificationSource = useGlobalNotificationSource();
   const { markStackAsDone } = useNotificationStackActions({
     stack: props.stack,
+    entityId: props.entity.id,
   });
   const stackEntityId = () => getMostRecentNotification(props.stack).id;
   const unread = () => isNotificationUnread(props.stack);

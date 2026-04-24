@@ -60,6 +60,7 @@ function NotificationStackRow(props: {
 
   const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
     stack: props.stack,
+    entityId: props.entity.id,
   });
 
   const handleClick = async (e: PointerEvent | MouseEvent | KeyboardEvent) => {
