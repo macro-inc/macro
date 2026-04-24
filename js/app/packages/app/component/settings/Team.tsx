@@ -14,7 +14,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
 import { useDisplayName, tryMacroId } from '@core/user';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 import type { CollectionNode } from '@kobalte/core';
 import {
   useUserTeamsQuery,
@@ -808,7 +808,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   );
 }
 
-export function Team() {
+function TeamContent() {
   const userTeamsQuery = useUserTeamsQuery();
   const userInvitesQuery = useUserInvitesQuery();
 
@@ -818,34 +818,30 @@ export function Team() {
     return teams[0];
   });
 
-  const hasTeam = () => team() !== null;
   const hasInvites = () => (userInvitesQuery.data?.invites?.length ?? 0) > 0;
-  const isLoading = () => userTeamsQuery.isLoading || userInvitesQuery.isLoading;
 
+  return (
+    <Switch>
+      <Match when={team()} keyed>
+        {(t) => <TeamManagement teamId={t.id} teamName={t.name} ownerId={t.owner_id} />}
+      </Match>
+      <Match when={hasInvites()}>
+        <TeamInvites />
+      </Match>
+      <Match when={true}>
+        <EmptyTeamState />
+      </Match>
+    </Switch>
+  );
+}
+
+export function Team() {
   return (
     <div class="max-w-2xl mx-auto">
       <div class="p-6">
-        <Show
-          when={!isLoading()}
-          fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32" />}
-        >
-          <TeamInvites />
-
-          <Show
-            when={hasTeam()}
-            fallback={
-              <Show when={!hasInvites()}>
-                <EmptyTeamState />
-              </Show>
-            }
-          >
-            <TeamManagement
-              teamId={team()!.id}
-              teamName={team()!.name}
-              ownerId={team()!.owner_id}
-            />
-          </Show>
-        </Show>
+        <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32" />}>
+          <TeamContent />
+        </Suspense>
       </div>
     </div>
   );
