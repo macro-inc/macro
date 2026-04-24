@@ -140,11 +140,11 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         let notification_filter_active = !filters.notification_filters.is_empty();
         let notification_user_id = match (notification_filter_active, notification_user_id.as_ref())
         {
-            (true, Some(user_id)) => Some(user_id.as_ref()),
+            (true, Some(user_id)) => user_id.as_ref(),
             (true, None) => {
                 anyhow::bail!("notification_user_id is required when notification_filters are set")
             }
-            (false, _) => None,
+            (false, _) => "",
         };
         let notification_done = filters.notification_filters.done;
         let notification_seen = filters.notification_filters.seen;
@@ -154,6 +154,36 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 let rows = if notification_filter_active {
                     sqlx::query_as::<_, TopLevelRow>(
                         r#"
+                        WITH done_top_level AS (
+                            SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
+                            FROM notification n
+                            JOIN user_notification un ON un.notification_id = n.id
+                            JOIN comms_messages msg ON msg.id::text = n.metadata->>'messageId'
+                            WHERE $8::bool IS NOT NULL
+                              AND un.user_id = $7::text
+                              AND un.deleted_at IS NULL
+                              AND un.done = $8
+                              AND n.event_item_type = 'channel'
+                              AND n.event_item_id = $1::text
+                              AND n.metadata->>'messageId' IS NOT NULL
+                              AND msg.channel_id = $1
+                              AND msg.deleted_at IS NULL
+                        ),
+                        seen_top_level AS (
+                            SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
+                            FROM notification n
+                            JOIN user_notification un ON un.notification_id = n.id
+                            JOIN comms_messages msg ON msg.id::text = n.metadata->>'messageId'
+                            WHERE $9::bool IS NOT NULL
+                              AND un.user_id = $7::text
+                              AND un.deleted_at IS NULL
+                              AND (un.seen_at IS NOT NULL) = $9
+                              AND n.event_item_type = 'channel'
+                              AND n.event_item_id = $1::text
+                              AND n.metadata->>'messageId' IS NOT NULL
+                              AND msg.channel_id = $1
+                              AND msg.deleted_at IS NULL
+                        )
                         SELECT
                             m.id,
                             m.channel_id,
@@ -182,44 +212,12 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                               )
                           ))
                           AND ($8::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              WHERE un.user_id = $7::text
-                                AND un.deleted_at IS NULL
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = m.channel_id::text
-                                AND (
-                                    (m.deleted_at IS NULL AND n.metadata->>'messageId' = m.id::text)
-                                    OR n.metadata->>'messageId' IN (
-                                        SELECT r.id::text
-                                        FROM comms_messages r
-                                        WHERE r.thread_id = m.id
-                                          AND r.channel_id = m.channel_id
-                                          AND r.deleted_at IS NULL
-                                    )
-                                )
-                                AND un.done = $8
+                              SELECT 1 FROM done_top_level dt
+                              WHERE dt.top_level_id = m.id
                           ))
                           AND ($9::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              WHERE un.user_id = $7::text
-                                AND un.deleted_at IS NULL
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = m.channel_id::text
-                                AND (
-                                    (m.deleted_at IS NULL AND n.metadata->>'messageId' = m.id::text)
-                                    OR n.metadata->>'messageId' IN (
-                                        SELECT r.id::text
-                                        FROM comms_messages r
-                                        WHERE r.thread_id = m.id
-                                          AND r.channel_id = m.channel_id
-                                          AND r.deleted_at IS NULL
-                                    )
-                                )
-                                AND (un.seen_at IS NOT NULL) = $9
+                              SELECT 1 FROM seen_top_level st
+                              WHERE st.top_level_id = m.id
                           ))
                         ORDER BY m.created_at DESC, m.id DESC
                         LIMIT $4
@@ -287,6 +285,36 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 let mut rows = if notification_filter_active {
                     sqlx::query_as::<_, TopLevelRow>(
                         r#"
+                        WITH done_top_level AS (
+                            SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
+                            FROM notification n
+                            JOIN user_notification un ON un.notification_id = n.id
+                            JOIN comms_messages msg ON msg.id::text = n.metadata->>'messageId'
+                            WHERE $8::bool IS NOT NULL
+                              AND un.user_id = $7::text
+                              AND un.deleted_at IS NULL
+                              AND un.done = $8
+                              AND n.event_item_type = 'channel'
+                              AND n.event_item_id = $1::text
+                              AND n.metadata->>'messageId' IS NOT NULL
+                              AND msg.channel_id = $1
+                              AND msg.deleted_at IS NULL
+                        ),
+                        seen_top_level AS (
+                            SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
+                            FROM notification n
+                            JOIN user_notification un ON un.notification_id = n.id
+                            JOIN comms_messages msg ON msg.id::text = n.metadata->>'messageId'
+                            WHERE $9::bool IS NOT NULL
+                              AND un.user_id = $7::text
+                              AND un.deleted_at IS NULL
+                              AND (un.seen_at IS NOT NULL) = $9
+                              AND n.event_item_type = 'channel'
+                              AND n.event_item_id = $1::text
+                              AND n.metadata->>'messageId' IS NOT NULL
+                              AND msg.channel_id = $1
+                              AND msg.deleted_at IS NULL
+                        )
                         SELECT
                             m.id,
                             m.channel_id,
@@ -315,44 +343,12 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                               )
                           ))
                           AND ($8::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              WHERE un.user_id = $7::text
-                                AND un.deleted_at IS NULL
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = m.channel_id::text
-                                AND (
-                                    (m.deleted_at IS NULL AND n.metadata->>'messageId' = m.id::text)
-                                    OR n.metadata->>'messageId' IN (
-                                        SELECT r.id::text
-                                        FROM comms_messages r
-                                        WHERE r.thread_id = m.id
-                                          AND r.channel_id = m.channel_id
-                                          AND r.deleted_at IS NULL
-                                    )
-                                )
-                                AND un.done = $8
+                              SELECT 1 FROM done_top_level dt
+                              WHERE dt.top_level_id = m.id
                           ))
                           AND ($9::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              WHERE un.user_id = $7::text
-                                AND un.deleted_at IS NULL
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = m.channel_id::text
-                                AND (
-                                    (m.deleted_at IS NULL AND n.metadata->>'messageId' = m.id::text)
-                                    OR n.metadata->>'messageId' IN (
-                                        SELECT r.id::text
-                                        FROM comms_messages r
-                                        WHERE r.thread_id = m.id
-                                          AND r.channel_id = m.channel_id
-                                          AND r.deleted_at IS NULL
-                                    )
-                                )
-                                AND (un.seen_at IS NOT NULL) = $9
+                              SELECT 1 FROM seen_top_level st
+                              WHERE st.top_level_id = m.id
                           ))
                         ORDER BY m.created_at ASC, m.id ASC
                         LIMIT $4
