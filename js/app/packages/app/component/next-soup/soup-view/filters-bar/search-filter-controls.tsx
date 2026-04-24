@@ -288,15 +288,21 @@ export function useEmailSearchFilter(opts: SearchFilterHookOpts) {
   return { isActive, importance, setImportance };
 }
 
+type CallFieldMap = {
+  channel_ids: string[] | undefined;
+  speaker_ids: string[] | undefined;
+  attended: boolean | undefined;
+};
+
 /** Call-record search filters (in:, from:, attended). */
 export function useCallSearchFilter(opts: SearchFilterHookOpts) {
   const { soup, queryFilters, setQueryFilters } = useSoupView();
   const { changeIndex } = useSearchIndexController();
 
   const isActive = () => soup.filters.isActive('calls');
-  const mutate = (
-    field: 'channel_ids' | 'speaker_ids' | 'attended',
-    value: string[] | boolean | undefined
+  const mutate = <K extends keyof CallFieldMap>(
+    field: K,
+    value: CallFieldMap[K]
   ) =>
     batch(() => {
       if (!isActive()) changeIndex('calls');
