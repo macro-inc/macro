@@ -1,4 +1,3 @@
-
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { Popover, type PopoverRootProps } from '@kobalte/core/popover';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';

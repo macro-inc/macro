@@ -20,7 +20,7 @@ export function LoadingSpinner() {
   );
 }
 
-export function LoadingPanel () {
+export function LoadingPanel() {
   const [showSpinner, setShowSpinner] = createSignal(false);
 
   onMount(() => {

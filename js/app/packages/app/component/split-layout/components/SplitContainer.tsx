@@ -1,4 +1,3 @@
-
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
