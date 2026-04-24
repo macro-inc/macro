@@ -32,7 +32,7 @@ export function CallChannelName(props: { entity: CallEntity }) {
 
 function CallChannelNameText(props: { entity: CallEntity }) {
   return (
-    <Show when={!props.entity.name} fallback={<>{props.entity.name}</>}>
+    <Show when={!props.entity.name} fallback={props.entity.name}>
       <CallChannelNameFromPreview channelId={props.entity.channelId} />
     </Show>
   );

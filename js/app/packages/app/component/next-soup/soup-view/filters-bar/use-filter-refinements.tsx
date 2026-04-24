@@ -275,6 +275,20 @@ export function useFilterRefinements() {
       );
     };
 
+    for (const id of assigneeFilter()) {
+      const key = `Assignee|${id}`;
+      seenKeys.add(key);
+      filters.push(
+        getOrCreateChip(key, () => ({
+          categoryLabel: 'Assignee',
+          optionId: () => id,
+          optionLabel: () => assigneeOptionsMap().get(id)?.label ?? id,
+          onRemove: () =>
+            setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
+        }))
+      );
+    }
+
     pushSearchableChip({
       key: 'ChannelIn',
       categoryLabel: 'In',
