@@ -27,6 +27,11 @@ import {
   useDeleteTeamInviteMutation,
   useInviteToTeamMutation,
 } from '@queries/team/invites';
+import {
+  useUserInvitesQuery,
+  useJoinTeamMutation,
+  useRejectInvitationMutation,
+} from '@queries/team/invitations';
 import { useRemoveUserFromTeamMutation, usePatchTeamUserTierMutation } from '@queries/team/members';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
@@ -183,20 +188,115 @@ function InviteRow(props: {
   );
 }
 
-export function Team() {
+function InviterName(props: { inviterId: string }) {
+  const [displayName] = useDisplayName(tryMacroId(props.inviterId));
+  return <span class="font-medium">{displayName()}</span>;
+}
+
+function UserInviteRow(props: {
+  invite: TeamInviteDetails;
+  onAccept: () => void;
+  onDecline: () => void;
+  isAccepting: boolean;
+  isDeclining: boolean;
+}) {
+  return (
+    <div class="flex items-center justify-between py-3 border-b border-edge-muted last:border-b-0 gap-3">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+          <EnvelopeIcon class="size-4 text-accent" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm text-ink">
+            <InviterName inviterId={props.invite.invited_by} /> invited you to join a team
+          </div>
+          <div class="text-xs text-ink-muted">
+            as {props.invite.team_role}
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={props.isAccepting || props.isDeclining}
+          onClick={props.onDecline}
+        >
+          <Show when={props.isDeclining} fallback="Decline">
+            <SpinnerIcon class="size-4 animate-spin" />
+          </Show>
+        </Button>
+        <Button
+          variant="accent"
+          size="sm"
+          disabled={props.isAccepting || props.isDeclining}
+          onClick={props.onAccept}
+        >
+          <Show when={props.isAccepting} fallback="Join">
+            <SpinnerIcon class="size-4 animate-spin" />
+          </Show>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TeamInvites() {
+  const userInvitesQuery = useUserInvitesQuery();
+  const joinTeamMutation = useJoinTeamMutation();
+  const rejectMutation = useRejectInvitationMutation();
+
+  const invites = () => userInvitesQuery.data?.invites ?? [];
+
+  const isAccepting = (inviteId: string) =>
+    joinTeamMutation.isPending && joinTeamMutation.variables?.teamInviteId === inviteId;
+  const isDeclining = (inviteId: string) =>
+    rejectMutation.isPending && rejectMutation.variables?.teamInviteId === inviteId;
+
+  return (
+    <Show when={invites().length > 0}>
+      <section class="mb-6">
+        <header class="mb-2">
+          <h3 class="text-sm font-medium">Pending Invitations</h3>
+          <p class="text-xs text-ink-muted">You've been invited to join a team.</p>
+        </header>
+        <div class="border border-edge rounded-sm px-3">
+          <For each={invites()}>
+            {(invite) => (
+              <UserInviteRow
+                invite={invite}
+                onAccept={() => joinTeamMutation.mutate({ teamInviteId: invite.id })}
+                onDecline={() => rejectMutation.mutate({ teamInviteId: invite.id })}
+                isAccepting={isAccepting(invite.id)}
+                isDeclining={isDeclining(invite.id)}
+              />
+            )}
+          </For>
+        </div>
+      </section>
+    </Show>
+  );
+}
+
+function EmptyTeamState() {
+  return (
+    <div class="flex flex-col items-center justify-center py-12 text-center">
+      <div class="w-12 h-12 rounded-full bg-ink-extra-muted flex items-center justify-center mb-4">
+        <PlusIcon class="size-6 text-ink-muted" />
+      </div>
+      <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
+      <p class="text-xs text-ink-muted max-w-xs">
+        You're not part of a team. When someone invites you to join their team, you'll see the invitation here.
+      </p>
+    </div>
+  );
+}
+
+function TeamManagement(props: { teamId: string; teamName: string; ownerId: string }) {
   const userId = useUserId();
-  const userTeamsQuery = useUserTeamsQuery();
 
-  const team = createMemo(() => {
-    const teams = userTeamsQuery.data;
-    if (!teams || teams.length === 0) return null;
-    return teams[0];
-  });
-
-  const teamId = createMemo(() => team()?.id ?? '');
-
-  const teamQuery = useTeamQuery(teamId);
-  const invitesQuery = useTeamInvitesQuery(teamId);
+  const teamQuery = useTeamQuery(() => props.teamId);
+  const invitesQuery = useTeamInvitesQuery(() => props.teamId);
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
@@ -217,14 +317,13 @@ export function Team() {
   const parsedEmails = () => parseEmails(inviteEmails());
   const hasValidEmails = () => parsedEmails().length > 0;
 
-  const deleteConfirmationPhrase = () => `Delete ${team()?.name ?? ''}`;
+  const deleteConfirmationPhrase = () => `Delete ${props.teamName}`;
   const canDeleteTeam = () => deleteConfirmation() === deleteConfirmationPhrase();
 
-  const originalTeamName = () => team()?.name ?? '';
-  const teamNameValue = () => editingTeamName() ?? originalTeamName();
+  const teamNameValue = () => editingTeamName() ?? props.teamName;
   const hasTeamNameChanged = () => {
     const editing = editingTeamName();
-    return editing !== undefined && editing.trim() !== originalTeamName();
+    return editing !== undefined && editing.trim() !== props.teamName;
   };
 
   const members = createMemo(() => {
@@ -239,18 +338,16 @@ export function Team() {
 
   const isOwner = createMemo(() => {
     const currentUserId = userId();
-    const teamData = team();
-    if (!currentUserId || !teamData) return false;
-    return teamData.owner_id === currentUserId;
+    if (!currentUserId) return false;
+    return props.ownerId === currentUserId;
   });
 
   const handleSaveTeamName = () => {
     const newName = editingTeamName()?.trim();
-    const currentTeamId = teamId();
-    if (!currentTeamId || !newName) return;
+    if (!props.teamId || !newName) return;
 
     patchTeamMutation.mutate(
-      { teamId: currentTeamId, request: { name: newName } },
+      { teamId: props.teamId, request: { name: newName } },
       { onSuccess: () => setEditingTeamName(undefined) }
     );
   };
@@ -261,21 +358,19 @@ export function Team() {
 
   const handleLeaveTeam = () => {
     const currentUserId = userId();
-    const currentTeamId = teamId();
-    if (!currentUserId || !currentTeamId) return;
+    if (!currentUserId || !props.teamId) return;
 
     removeUserMutation.mutate(
-      { teamId: currentTeamId, userId: currentUserId },
+      { teamId: props.teamId, userId: currentUserId },
       { onSuccess: () => setShowLeaveModal(false) }
     );
   };
 
   const handleDeleteTeam = () => {
-    const currentTeamId = teamId();
-    if (!currentTeamId) return;
+    if (!props.teamId) return;
 
     deleteTeamMutation.mutate(
-      { teamId: currentTeamId },
+      { teamId: props.teamId },
       {
         onSuccess: () => {
           setDeleteConfirmation('');
@@ -294,33 +389,30 @@ export function Team() {
 
   const handleRemoveMember = () => {
     const member = showRemoveModal();
-    const currentTeamId = teamId();
-    if (!currentTeamId || !member) return;
+    if (!props.teamId || !member) return;
 
     removeUserMutation.mutate(
-      { teamId: currentTeamId, userId: member.user_id },
+      { teamId: props.teamId, userId: member.user_id },
       { onSuccess: () => setShowRemoveModal(null) }
     );
   };
 
   const handleCancelInvite = () => {
     const invite = showCancelInviteModal();
-    const currentTeamId = teamId();
-    if (!currentTeamId || !invite) return;
+    if (!props.teamId || !invite) return;
 
     deleteInviteMutation.mutate(
-      { teamId: currentTeamId, teamInviteId: invite.id },
+      { teamId: props.teamId, teamInviteId: invite.id },
       { onSuccess: () => setShowCancelInviteModal(null) }
     );
   };
 
   const handleInvite = () => {
     const emails = parsedEmails();
-    const currentTeamId = teamId();
-    if (emails.length === 0 || !currentTeamId) return;
+    if (emails.length === 0 || !props.teamId) return;
 
     inviteToTeamMutation.mutate(
-      { teamId: currentTeamId, request: { emails } },
+      { teamId: props.teamId, request: { emails } },
       {
         onSuccess: () => {
           setInviteEmails('');
@@ -338,160 +430,141 @@ export function Team() {
   };
 
   return (
-    <div class="max-w-2xl mx-auto">
-      <div class="p-6">
-        <Show
-          when={!userTeamsQuery.isLoading && team()}
-          fallback={
-            <Show
-              when={userTeamsQuery.isLoading}
-              fallback={
-                <div class="text-sm text-ink-muted">
-                  You are not part of a team.
-                </div>
-              }
-            >
-              <div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32" />
-            </Show>
-          }
-        >
-          <header class="mb-6">
-            <h2 class="text-xl font-semibold text-ink">{originalTeamName()}</h2>
-          </header>
+    <>
+      <header class="mb-6">
+        <h2 class="text-xl font-semibold text-ink">{props.teamName}</h2>
+      </header>
 
-          <section class="mb-6">
-            <header class="flex items-center justify-between mb-2">
-              <div>
-                <h3 class="text-sm font-medium">Details</h3>
-                <p class="text-xs text-ink-muted">Team information and settings.</p>
-              </div>
-              <Show
-                when={isOwner()}
-                fallback={
-                  <Show when={currentMember()}>
-                    <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowLeaveModal(true)}>
-                      <LeaveIcon class="size-4" />
-                      Leave
-                    </Button>
-                  </Show>
-                }
-              >
-                <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowDeleteTeamModal(true)}>
-                  <TrashIcon class="size-4" />
-                  Delete Team
+      <section class="mb-6">
+        <header class="flex items-center justify-between mb-2">
+          <div>
+            <h3 class="text-sm font-medium">Details</h3>
+            <p class="text-xs text-ink-muted">Team information and settings.</p>
+          </div>
+          <Show
+            when={isOwner()}
+            fallback={
+              <Show when={currentMember()}>
+                <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowLeaveModal(true)}>
+                  <LeaveIcon class="size-4" />
+                  Leave
                 </Button>
               </Show>
-            </header>
-            <div class="border border-edge rounded-sm px-3">
-              <div class="flex items-center justify-between py-2">
-                <span class="text-sm font-medium text-ink-muted">Name</span>
-                <Show
-                  when={isOwner()}
-                  fallback={<span class="text-sm text-ink">{originalTeamName()}</span>}
-                >
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={teamNameValue()}
-                      onInput={(e) => setEditingTeamName(e.currentTarget.value)}
-                      placeholder="Enter team name"
-                      class="text-sm bg-transparent border border-edge-muted rounded-xs px-2 py-1 hover:border-edge focus:border-accent outline-none text-ink w-48"
-                    />
-                    <Show when={hasTeamNameChanged()}>
-                      <div class="flex items-center gap-1 shrink-0">
-                        <Tooltip tooltip="Save">
-                          <Button
-                            variant="accent"
-                            size="icon-sm"
-                            class="rounded-xs"
-                            disabled={patchTeamMutation.isPending || !editingTeamName()?.trim()}
-                            onClick={handleSaveTeamName}
-                          >
-                            <Show when={patchTeamMutation.isPending} fallback={<CheckIcon class="size-4" />}>
-                              <SpinnerIcon class="size-4 animate-spin" />
-                            </Show>
-                          </Button>
-                        </Tooltip>
-                        <Tooltip tooltip="Cancel">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            class="rounded-xs"
-                            disabled={patchTeamMutation.isPending}
-                            onClick={handleCancelTeamNameEdit}
-                          >
-                            <XIcon class="size-4" />
-                          </Button>
-                        </Tooltip>
-                      </div>
-                    </Show>
+            }
+          >
+            <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowDeleteTeamModal(true)}>
+              <TrashIcon class="size-4" />
+              Delete Team
+            </Button>
+          </Show>
+        </header>
+        <div class="border border-edge rounded-sm px-3">
+          <div class="flex items-center justify-between py-2">
+            <span class="text-sm font-medium text-ink-muted">Name</span>
+            <Show
+              when={isOwner()}
+              fallback={<span class="text-sm text-ink">{props.teamName}</span>}
+            >
+              <div class="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={teamNameValue()}
+                  onInput={(e) => setEditingTeamName(e.currentTarget.value)}
+                  placeholder="Enter team name"
+                  class="text-sm bg-transparent border border-edge-muted rounded-xs px-2 py-1 hover:border-edge focus:border-accent outline-none text-ink w-48"
+                />
+                <Show when={hasTeamNameChanged()}>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <Tooltip tooltip="Save">
+                      <Button
+                        variant="accent"
+                        size="icon-sm"
+                        class="rounded-xs"
+                        disabled={patchTeamMutation.isPending || !editingTeamName()?.trim()}
+                        onClick={handleSaveTeamName}
+                      >
+                        <Show when={patchTeamMutation.isPending} fallback={<CheckIcon class="size-4" />}>
+                          <SpinnerIcon class="size-4 animate-spin" />
+                        </Show>
+                      </Button>
+                    </Tooltip>
+                    <Tooltip tooltip="Cancel">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        class="rounded-xs"
+                        disabled={patchTeamMutation.isPending}
+                        onClick={handleCancelTeamNameEdit}
+                      >
+                        <XIcon class="size-4" />
+                      </Button>
+                    </Tooltip>
                   </div>
                 </Show>
               </div>
-            </div>
-          </section>
-
-          <section class="mb-6">
-            <header class="flex items-center justify-between mb-2">
-              <div>
-                <h3 class="text-sm font-medium">Members ({members().length})</h3>
-                <p class="text-xs text-ink-muted">People who have access to this team.</p>
-              </div>
-              <Show when={isOwner()}>
-                <Button variant="secondary" size="sm" class="rounded-xs" onClick={() => setShowInviteModal(true)}>
-                  <PlusIcon class="size-4" />
-                  Invite Member
-                </Button>
-              </Show>
-            </header>
-            <Show
-              when={!teamQuery.isLoading}
-              fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-16" />}
-            >
-              <div class="border border-edge rounded-sm px-3">
-                <For each={members()}>
-                  {(member) => (
-                    <MemberRow
-                      member={member}
-                      isOwner={isOwner()}
-                      isCurrentUser={member.user_id === userId()}
-                      onRemove={() => setShowRemoveModal(member)}
-                      onTierChange={(newTier) => {
-                        const currentTeamId = teamId();
-                        if (!currentTeamId) return;
-                        patchTierMutation.mutate({
-                          teamId: currentTeamId,
-                          request: {
-                            team_user_id: member.user_id,
-                            new_tier: newTier,
-                          },
-                        });
-                      }}
-                    />
-                  )}
-                </For>
-              </div>
             </Show>
-          </section>
+          </div>
+        </div>
+      </section>
 
-          <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
-            <section class="mb-6">
-              <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
-              <div class="border border-edge rounded-md px-3">
-                <For each={invitesQuery.data?.invites ?? []}>
-                  {(invite) => (
-                    <InviteRow
-                      invite={invite}
-                      isOwner={isOwner()}
-                      onCancel={() => setShowCancelInviteModal(invite)}
-                    />
-                  )}
-                </For>
-              </div>
-            </section>
+      <section class="mb-6">
+        <header class="flex items-center justify-between mb-2">
+          <div>
+            <h3 class="text-sm font-medium">Members ({members().length})</h3>
+            <p class="text-xs text-ink-muted">People who have access to this team.</p>
+          </div>
+          <Show when={isOwner()}>
+            <Button variant="secondary" size="sm" class="rounded-xs" onClick={() => setShowInviteModal(true)}>
+              <PlusIcon class="size-4" />
+              Invite Member
+            </Button>
           </Show>
+        </header>
+        <Show
+          when={!teamQuery.isLoading}
+          fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-16" />}
+        >
+          <div class="border border-edge rounded-sm px-3">
+            <For each={members()}>
+              {(member) => (
+                <MemberRow
+                  member={member}
+                  isOwner={isOwner()}
+                  isCurrentUser={member.user_id === userId()}
+                  onRemove={() => setShowRemoveModal(member)}
+                  onTierChange={(newTier) => {
+                    if (!props.teamId) return;
+                    patchTierMutation.mutate({
+                      teamId: props.teamId,
+                      request: {
+                        team_user_id: member.user_id,
+                        new_tier: newTier,
+                      },
+                    });
+                  }}
+                />
+              )}
+            </For>
+          </div>
         </Show>
-      </div>
+      </section>
+
+      <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
+        <section class="mb-6">
+          <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
+          <div class="border border-edge rounded-md px-3">
+            <For each={invitesQuery.data?.invites ?? []}>
+              {(invite) => (
+                <InviteRow
+                  invite={invite}
+                  isOwner={isOwner()}
+                  onCancel={() => setShowCancelInviteModal(invite)}
+                />
+              )}
+            </For>
+          </div>
+        </section>
+      </Show>
 
       <Dialog open={showLeaveModal()} onOpenChange={setShowLeaveModal}>
         <Dialog.Portal>
@@ -506,7 +579,7 @@ export function Team() {
                 </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
-                <p>Are you sure you want to leave {team()?.name}? You will lose access to team resources.</p>
+                <p>Are you sure you want to leave {props.teamName}? You will lose access to team resources.</p>
                 <div class="flex justify-end gap-1 pt-2">
                   <Button
                     variant="ghost"
@@ -547,7 +620,7 @@ export function Team() {
               </div>
               <div class="p-3 flex flex-col gap-3">
                 <p>
-                  Are you sure you want to delete <span class="font-medium">{team()?.name}</span>?
+                  Are you sure you want to delete <span class="font-medium">{props.teamName}</span>?
                   This action cannot be undone and all team members will lose access.
                 </p>
                 <p class="text-sm text-ink-muted">
@@ -731,6 +804,49 @@ export function Team() {
           </DialogWrapper>
         </Dialog.Portal>
       </Dialog>
+    </>
+  );
+}
+
+export function Team() {
+  const userTeamsQuery = useUserTeamsQuery();
+  const userInvitesQuery = useUserInvitesQuery();
+
+  const team = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    if (!teams || teams.length === 0) return null;
+    return teams[0];
+  });
+
+  const hasTeam = () => team() !== null;
+  const hasInvites = () => (userInvitesQuery.data?.invites?.length ?? 0) > 0;
+  const isLoading = () => userTeamsQuery.isLoading || userInvitesQuery.isLoading;
+
+  return (
+    <div class="max-w-2xl mx-auto">
+      <div class="p-6">
+        <Show
+          when={!isLoading()}
+          fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32" />}
+        >
+          <TeamInvites />
+
+          <Show
+            when={hasTeam()}
+            fallback={
+              <Show when={!hasInvites()}>
+                <EmptyTeamState />
+              </Show>
+            }
+          >
+            <TeamManagement
+              teamId={team()!.id}
+              teamName={team()!.name}
+              ownerId={team()!.owner_id}
+            />
+          </Show>
+        </Show>
+      </div>
     </div>
   );
 }
