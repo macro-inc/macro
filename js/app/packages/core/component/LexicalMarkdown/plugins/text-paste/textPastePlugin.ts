@@ -1,4 +1,9 @@
-import type { BlockAlias, BlockName } from '@core/block';
+import {
+  BlockAliasRegistry,
+  BlockRegistry,
+  type BlockAlias,
+  type BlockName,
+} from '@core/block';
 import { mergeRegister } from '@lexical/utils';
 import { parseThemeV1Json } from '@block-theme/utils/themeValidation';
 import {
@@ -27,6 +32,9 @@ const Hosts = {
 } as const;
 
 const IgnoredParams = new Set(['referral_code']);
+
+const ValidBlockNames = [...BlockRegistry, ...BlockAliasRegistry];
+console.log('ValidBlockNames', ValidBlockNames);
 
 function cleanHostname(hostname: string): string {
   return hostname.replace('www.', '').toLowerCase();
@@ -72,23 +80,8 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
       };
     }
 
-    const validTypes: Array<BlockName | BlockAlias> = [
-      'chat',
-      'write',
-      'pdf',
-      'md',
-      'task',
-      'code',
-      'image',
-      'canvas',
-      'channel',
-      'project',
-      'email',
-      'call',
-      'csv',
-    ];
     const _block: string = pathParts[1];
-    if (!validTypes.includes(_block as any)) {
+    if (!ValidBlockNames.includes(_block as any)) {
       return {
         isValid: false,
         id: undefined,
@@ -170,7 +163,6 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             return false;
 
           event.preventDefault();
-          console.log('LINK PASTE');
           editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
             documentId: parsedMacroAppUrl.id,
             documentName: '',

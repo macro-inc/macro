@@ -23,6 +23,7 @@ import {
 } from '@lexical/utils';
 import {
   $isDocumentMentionNode,
+  $isMentionNode,
   $isWatermarkNode,
   ALL_TRANSFORMERS,
   EXTERNAL_TRANSFORMERS,
@@ -413,6 +414,11 @@ export function $isEmpty() {
       if (!$isParagraphNode(firstChild)) {
         return false;
       }
+      console.log('CHECKING MENTIONS');
+      // Early return on pasted mentions before preview can fetch their names.
+      $traverseNodes(child, (n) => {
+        if ($isMentionNode(n)) return false;
+      });
     }
 
     if (child.getTextContent() !== '') return false;
