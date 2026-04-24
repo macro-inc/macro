@@ -351,17 +351,25 @@ const SearchableFilterSubmenu = (props: {
   const [subContentRef, setSubContentRef] = createSignal<HTMLDivElement>();
 
   // Hold focus on the search input while the sub is open. Kobalte's menu
-  // primitives can focus the SubContent in several places (mount's
-  // `tryAutoFocus`, pointer-grace `focusContent`, item-leave handlers), and
-  // which one fires depends on whether the sub was opened by keyboard or
-  // hover — so racing a setTimeout isn't reliable across environments.
-  // Instead, we listen for any focus landing inside the sub that isn't on
-  // the input or a listbox option and pull it back. Scoped to the sub's own
-  // DOM so clicks outside still dismiss the menu normally.
+  // primitives can focus the SubContent in several places with different
+  // timing for hover vs keyboard opens (`tryAutoFocus` on mount,
+  // `focusContent` on pointer-grace, item-leave handlers). We combine:
+  //   1. A scoped focusin listener that reclaims focus whenever anything
+  //      inside the sub that isn't the input or a listbox option receives
+  //      focus.
+  //   2. A short rAF-poll for ~200ms after open, to cover any focus moves
+  //      that don't emit a focusin on the container (some Kobalte paths
+  //      focus outside the sub root or blur without a replacement).
   createEffect(() => {
     const el = inputRef();
     const container = subContentRef();
     if (!isOpen() || !el || !container) return;
+
+    const ensureFocus = () => {
+      if (!isOpen()) return;
+      if (document.activeElement === el) return;
+      el.focus();
+    };
 
     const reclaim = (e: FocusEvent) => {
       const target = e.target as HTMLElement | null;
@@ -371,11 +379,18 @@ const SearchableFilterSubmenu = (props: {
       el.focus();
     };
     document.addEventListener('focusin', reclaim, true);
-    onCleanup(() => document.removeEventListener('focusin', reclaim, true));
 
-    // Some open paths (e.g. hover, where Kobalte opens with autoFocus=false)
-    // don't dispatch a focusin on SubContent for us to react to, so pull
-    // focus once up front as well.
+    const start = performance.now();
+    let rafId = requestAnimationFrame(function tick() {
+      ensureFocus();
+      if (performance.now() - start < 200) rafId = requestAnimationFrame(tick);
+    });
+
+    onCleanup(() => {
+      document.removeEventListener('focusin', reclaim, true);
+      cancelAnimationFrame(rafId);
+    });
+
     el.focus();
   });
 
