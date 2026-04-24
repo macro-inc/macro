@@ -21,12 +21,10 @@ pub struct CallRecordMetadataRow {
     pub attended: bool,
 }
 
-/// A single transcript segment from an archived call, in the shape the
-/// indexer needs to upsert one OpenSearch doc.
+/// One transcript segment for indexing.
 #[derive(Debug, Clone)]
 pub struct CallRecordTranscriptSegment {
-    /// Primary key of the `call_record_transcripts` row. Used as the
-    /// suffix in the OpenSearch `_id` and as the frontend navigation key.
+    /// `call_record_transcripts.id` — segment suffix of the OpenSearch `_id`.
     pub transcript_id: Uuid,
     pub speaker_id: String,
     pub sequence_num: i32,
@@ -35,9 +33,7 @@ pub struct CallRecordTranscriptSegment {
     pub ended_at: Option<DateTime<Utc>>,
 }
 
-/// Full payload needed to upsert a call record into the search index. One
-/// OpenSearch doc is written per segment; the call-level fields are copied
-/// onto each doc so hits can be grouped and filtered without a join.
+/// Everything needed to upsert a call into search (one doc per segment).
 #[derive(Debug, Clone)]
 pub struct CallRecordSearchPayload {
     pub call_id: Uuid,
@@ -48,15 +44,7 @@ pub struct CallRecordSearchPayload {
     pub segments: Vec<CallRecordTranscriptSegment>,
 }
 
-/// Returns every archived call record id the given user can access, suitable
-/// for use as an OpenSearch `ids_only` scope. Access is resolved via the
-/// `entity_access` table using the user's source ids (channel memberships +
-/// team memberships + user id), unioned with any publicly-shared records.
-/// This mirrors the per-entity check in `entity_access::get_call_access`.
-///
-/// `attended` optionally narrows by participation: `Some(true)` keeps only
-/// calls the user joined, `Some(false)` keeps only calls the user did not
-/// join, `None` applies no participation filter.
+/// Call ids the user can access, optionally narrowed by attended.
 #[tracing::instrument(skip(db))]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -105,7 +93,7 @@ pub async fn get_accessible_call_ids(
     Ok(rows.into_iter().map(|r| r.get::<Uuid, _>("id")).collect())
 }
 
-/// Paginates through every archived call record for backfill purposes.
+/// Page through every archived call record (backfill).
 #[tracing::instrument(skip(db))]
 pub async fn get_call_records_for_search_backfill(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -127,8 +115,7 @@ pub async fn get_call_records_for_search_backfill(
         .collect())
 }
 
-/// Fetches everything needed to upsert a single archived call record into search.
-/// Returns `None` when the record no longer exists (e.g. was deleted).
+/// Load the indexing payload for a call, or `None` if missing.
 #[tracing::instrument(skip(db))]
 pub async fn get_call_record_search_payload(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -200,11 +187,7 @@ pub async fn get_call_record_search_payload(
     }))
 }
 
-/// Fetches lightweight metadata for a set of call record ids to enrich
-/// search results. Access is enforced upstream by scoping the OpenSearch
-/// query to the user's accessible call_ids, so callers can pass any ids
-/// returned by that search and trust the rows are accessible. `user_id` is
-/// used only to compute per-user state (e.g. `attended`).
+/// Enrichment metadata for a batch of call ids; `user_id` drives `attended`.
 #[tracing::instrument(skip(db))]
 pub async fn get_call_records_metadata(
     db: &sqlx::Pool<sqlx::Postgres>,

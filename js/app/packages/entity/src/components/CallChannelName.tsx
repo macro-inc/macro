@@ -6,18 +6,8 @@ import { Show } from 'solid-js';
 import type { CallEntity } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 
-/**
- * Renders the channel name for a call-record list row.
- *
- * `transform-utils` leaves `entity.name` undefined when the channel isn't
- * resolvable from the indexed metadata or the local channels context
- * (happens for search hits on unattended calls). In that case we fall
- * back to the shared `useItemPreview` query to fetch the live name —
- * otherwise we render what we already have without issuing any request.
- *
- * Matches `EntityTitle` for the search-highlight case: if the query
- * matched on the channel name, the highlight is rendered as markdown.
- */
+/** Channel name for a call row — falls back to the preview endpoint when
+ *  transform-utils couldn't resolve it locally. */
 export function CallChannelName(props: { entity: CallEntity }) {
   const highlight = () =>
     isSearchEntity(props.entity)

@@ -370,8 +370,6 @@ export function useFilterRefinements() {
       );
     }
 
-    // Call filters (only when the calls index is active in the search view).
-    // Mirrors the channel In/From chips but reads/writes call_filters.
     if (currentView() === 'search' && soup.filters.isActive('calls')) {
       const callChannelIds = (
         queryFilters().call_filters?.channel_ids ?? []

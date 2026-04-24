@@ -54,8 +54,7 @@ fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
         Expr::Literal(CallLiteral::Attended(_)) => {}
-        // Speaker filters are only meaningful for transcript-segment search;
-        // the soup call-record list doesn't filter on them.
+        // Speaker is transcript-segment-only; soup's call list ignores it.
         Expr::Literal(CallLiteral::Speaker(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_channel_ids(a, ids);

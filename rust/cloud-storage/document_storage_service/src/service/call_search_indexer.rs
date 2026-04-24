@@ -10,7 +10,7 @@ use sqs_client::{
 };
 use uuid::Uuid;
 
-/// Adapter that fans call record lifecycle events onto the search event queue.
+/// SQS-backed `CallSearchIndexer`.
 #[derive(Clone)]
 pub struct SqsCallSearchIndexer {
     sqs: Arc<SQS>,

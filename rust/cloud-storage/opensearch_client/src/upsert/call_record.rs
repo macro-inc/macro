@@ -3,39 +3,20 @@ use models_opensearch::SearchIndex;
 use super::BulkUpsertResult;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
-/// The arguments for upserting a single call-record transcript segment into
-/// the OpenSearch index. One segment = one doc; hits are grouped by
-/// `entity_id` (the call id) downstream.
+/// Upsert args for one transcript segment (one OpenSearch doc).
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertCallRecordSegmentArgs {
-    /// The id of the call record. Acts as the logical entity — all segments
-    /// for a call share this value so callers can `ids_only`-filter by call
-    /// and the unified search can collapse by `entity_id`.
     #[serde(rename = "entity_id")]
     pub call_id: String,
-    /// Primary key of the `call_record_transcripts` row. Used together with
-    /// `call_id` to form the doc `_id`, keeping reindexes idempotent, and
-    /// as the frontend navigation key.
     pub transcript_id: String,
-    /// The id of the channel the call belongs to.
     pub channel_id: String,
-    /// All participants (macro user ids) who joined the call. Copied onto
-    /// every segment doc so participant filters work without a join.
     pub participant_ids: Vec<String>,
-    /// Best-effort channel display name at indexing time.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel_name: Option<String>,
-    /// The macro user id of the speaker for this segment.
     pub speaker_id: String,
-    /// Position of this segment within the call.
     pub sequence_num: i32,
-    /// The text spoken in this segment.
     pub content: String,
-    /// When the speaker started this segment (mirrors
-    /// `call_record_transcripts.started_at`).
     pub started_at_seconds: EpochSeconds,
-    /// When the speaker stopped (nullable — some older segments don't have
-    /// an end time).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended_at_seconds: Option<EpochSeconds>,
 }

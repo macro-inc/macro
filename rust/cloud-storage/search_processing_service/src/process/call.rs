@@ -6,9 +6,7 @@ use sqlx::PgPool;
 use sqs_client::search::call::{CallRecordMessage, RemoveCallRecord};
 use uuid::Uuid;
 
-/// Upserts a call record into OpenSearch by fanning out one doc per
-/// transcript segment. All segments share the call id as `entity_id` so hits
-/// can be grouped and access-scoped by call.
+/// Upsert one doc per transcript segment.
 #[tracing::instrument(skip(opensearch_client, db), err)]
 pub async fn process_call_record(
     opensearch_client: &OpensearchClient,
@@ -27,8 +25,7 @@ pub async fn process_call_record(
         return Ok(());
     };
 
-    // Clear any stale segment docs for this call so renamed/removed segments
-    // don't linger after a re-index.
+    // Clear stale segments before re-indexing.
     opensearch_client
         .delete_call_record(&payload.call_id.to_string())
         .await
@@ -82,8 +79,7 @@ pub async fn process_call_record(
     Ok(())
 }
 
-/// Removes a call record (or every record for a channel) from OpenSearch.
-/// Both paths delete every segment doc via `delete_by_query`.
+/// Delete a call (or every call for a channel).
 #[tracing::instrument(skip(opensearch_client), err)]
 pub async fn process_remove_call_record(
     opensearch_client: &OpensearchClient,

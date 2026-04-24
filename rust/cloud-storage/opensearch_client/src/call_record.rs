@@ -7,7 +7,7 @@ use crate::{
 };
 
 impl OpensearchClient {
-    /// Upserts a single call-record transcript segment into the index.
+    /// Upsert one segment.
     #[tracing::instrument(skip(self))]
     pub async fn upsert_call_record_segment(
         &self,
@@ -16,7 +16,7 @@ impl OpensearchClient {
         upsert::call_record::upsert_call_record_segment(&self.inner, args).await
     }
 
-    /// Bulk-upserts every transcript segment for a call in a single request.
+    /// Bulk upsert every segment of a call.
     #[tracing::instrument(skip(self, segments))]
     pub async fn bulk_upsert_call_record_segments(
         &self,
@@ -25,13 +25,13 @@ impl OpensearchClient {
         bulk_upsert_call_record_segments(&self.inner, segments).await
     }
 
-    /// Deletes every transcript-segment doc for a given call id.
+    /// Delete every segment of a call.
     #[tracing::instrument(skip(self))]
     pub async fn delete_call_record(&self, call_id: &str) -> Result<()> {
         delete::call_record::delete_call_record_by_id(&self.inner, call_id).await
     }
 
-    /// Deletes every call-record segment associated with a given channel.
+    /// Delete every segment tied to a channel.
     #[tracing::instrument(skip(self))]
     pub async fn delete_call_records_by_channel(&self, channel_id: &str) -> Result<()> {
         delete::call_record::delete_call_records_by_channel_id(&self.inner, channel_id).await

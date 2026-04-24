@@ -822,8 +822,7 @@ impl<
         let call_id = Uuid::parse_str(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
 
-        // Look up the channel id before deletion so we can enqueue the search
-        // removal with enough context for the queue message id to stay unique.
+        // Look up channel_id before deletion to keep the search-remove message id unique.
         let channel_id = self
             .repo
             .get_call_record_by_call_id(&call_id)

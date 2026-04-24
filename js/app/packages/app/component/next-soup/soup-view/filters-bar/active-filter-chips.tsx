@@ -62,12 +62,7 @@ export type ActiveFilter = {
    */
   isPopupOpen?: Accessor<boolean>;
   setPopupOpen?: (v: boolean) => void;
-  /**
-   * Per-chip override to hide the "Category: " prefix. When set, takes
-   * precedence over the shared `hideCategoryLabel` on `ActiveFilterChips`.
-   * Use for boolean chips whose optionLabel already stands on its own
-   * (e.g. "Attended"/"Unattended" — no need for "Attended: Attended").
-   */
+  /** Per-chip override for the container-level `hideCategoryLabel`. */
   hideCategoryLabel?: boolean;
 };
 

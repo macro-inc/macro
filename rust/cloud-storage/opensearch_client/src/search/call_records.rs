@@ -8,10 +8,8 @@ use opensearch_query_builder::{BoolQueryBuilder, QueryType};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CallRecordIndex {
-    /// Call id — shared across all segment docs for the call.
     pub entity_id: uuid::Uuid,
     pub channel_id: uuid::Uuid,
-    /// `call_record_transcripts.id` — per-segment identifier.
     pub transcript_id: uuid::Uuid,
     #[serde(default)]
     pub participant_ids: Vec<String>,
@@ -34,10 +32,7 @@ impl SearchQueryConfig for CallRecordSearchConfig {
 
 pub(crate) struct CallRecordQueryBuilder {
     inner: SearchQueryBuilder<CallRecordSearchConfig>,
-    /// Channel ids to restrict the search to.
     channel_ids: Vec<String>,
-    /// Speaker macro user ids to restrict the search to (analogous to
-    /// `ChannelMessageQueryBuilder::sender_ids`).
     speaker_ids: Vec<String>,
 }
 
@@ -71,10 +66,7 @@ impl CallRecordQueryBuilder {
     }
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        // Access is enforced via `ids_only=true` with `ids` set to the user's
-        // accessible call_ids — the generic builder handles that as
-        // `entity_id IN <ids>`. `channel_ids` and `speaker_ids` are pure
-        // narrowing filters on top of that set.
+        // Access comes from `ids_only` + accessible call_ids; these just narrow.
         let mut content_bool_query = self.inner.build_content_bool_query()?;
 
         if !self.channel_ids.is_empty() {

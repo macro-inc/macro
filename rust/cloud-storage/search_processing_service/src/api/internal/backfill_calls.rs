@@ -7,16 +7,13 @@ use sqs_client::search::{SearchQueueMessage, call::CallRecordMessage};
 
 use crate::api::context::ApiContext;
 
-/// Request body for [`handler`].
 #[derive(serde::Deserialize, Default)]
 #[serde(default)]
 pub struct BackfillCallsRequest {
-    /// Optional explicit list of call record ids. When empty, every archived
-    /// call record is enqueued for reindexing.
+    /// Empty = every archived call.
     pub call_ids: Vec<String>,
 }
 
-/// Response describing how many records were enqueued.
 #[derive(serde::Serialize)]
 pub struct BackfillCallsResponse {
     pub enqueued: usize,
@@ -24,8 +21,7 @@ pub struct BackfillCallsResponse {
 
 const BACKFILL_PAGE: i64 = 2000;
 
-/// Enqueues every archived call record (or the explicitly provided subset)
-/// onto the search event queue for indexing.
+/// Enqueue calls for reindexing.
 #[tracing::instrument(skip(ctx, req))]
 pub async fn handler(
     State(ctx): State<ApiContext>,

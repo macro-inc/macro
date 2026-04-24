@@ -578,8 +578,6 @@ export const UnifiedFilterDropdown = () => {
   const importance = createMemo(() => queryFilters().email_filters?.importance);
 
   // Calls sub-filters: In (channel), From (speaker), Attended.
-  // Reuses the same channel/user options as channel search since the
-  // semantics ("a channel you're in" / "a person to filter by") are the same.
   const activeCallChannelIds: Accessor<string[]> = createMemo(
     () => queryFilters().call_filters?.channel_ids ?? []
   );

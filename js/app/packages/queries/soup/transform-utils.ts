@@ -365,12 +365,7 @@ export const useSearchResponseItemMapper = () => {
           callId: result.call_id,
         });
 
-        // Deliberately not falling back to a default here — CallChannelName
-        // pulls the live name from the preview endpoint when both the
-        // indexed metadata and the channels context come up empty, and it
-        // would issue that network request for every row otherwise. `name`
-        // uses the empty string as a sentinel so CallChannelName can skip
-        // the preview request when we already have a name.
+        // Leave unresolved; CallChannelName falls back to the preview endpoint.
         const channelName: string | undefined =
           result.metadata.channel_name ??
           channels().find((c) => c.id === result.channel_id)?.name ??

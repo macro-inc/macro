@@ -16,15 +16,12 @@ pub enum SearchIndex {
     /// The email index
     #[strum(serialize = "emails_alias")]
     Emails,
-    /// The call records index (referenced via alias so the underlying index
-    /// can be swapped without a code change).
+    /// The call records index (via alias).
     #[strum(serialize = "call_records_alias")]
     CallRecords,
 }
 
-/// All searchable entity types across the system.
-/// Not all variants have a corresponding OpenSearch index — Projects
-/// are searched via Postgres only.
+/// All searchable entity types. Projects are Postgres-only.
 #[derive(
     Debug,
     Clone,
@@ -48,7 +45,7 @@ pub enum SearchEntityType {
     Documents,
     /// The email entity type (has OpenSearch index)
     Emails,
-    /// The project entity type (Postgres-only, no OpenSearch index)
+    /// The project entity type (Postgres-only)
     Projects,
     /// The call records entity type (has OpenSearch index)
     #[strum(serialize = "call_records")]
@@ -56,8 +53,7 @@ pub enum SearchEntityType {
     CallRecords,
 }
 
-/// The subset of [`SearchEntityType`] that have a corresponding OpenSearch index.
-/// Projects are intentionally excluded — they are searched via Postgres only.
+/// `SearchEntityType` variants that have an OpenSearch index.
 #[derive(
     Debug,
     Clone,

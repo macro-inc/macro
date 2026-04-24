@@ -1,9 +1,5 @@
-/// backfill_call.rs triggers a backfill of archived call records into the
-/// OpenSearch `call_records` index.
-///
-/// Required environment variables:
-/// - DATABASE_URL
-/// - SEARCH_EVENT_QUEUE
+/// Backfill archived call records into OpenSearch.
+/// Requires DATABASE_URL + SEARCH_EVENT_QUEUE.
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;

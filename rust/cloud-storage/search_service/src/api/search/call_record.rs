@@ -9,10 +9,7 @@ use sqlx::types::Uuid;
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
 
-/// Enriches call-record search hits with call-level metadata from Postgres.
-/// Each hit is one transcript-segment doc; we group them by `entity_id`
-/// (the call id) so a caller sees one row per call containing its matched
-/// segments.
+/// Group segment hits by call and attach DB metadata.
 #[tracing::instrument(skip(ctx, results), err)]
 pub(in crate::api::search) async fn enrich_call_records(
     ctx: &SearchHandlerState,
@@ -28,8 +25,7 @@ pub(in crate::api::search) async fn enrich_call_records(
         return Ok(vec![]);
     }
 
-    // Dedup the call ids before hitting the DB — many segment hits often
-    // point at the same call.
+    // Dedup — many segments map to the same call.
     let mut seen: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
     let call_ids: Vec<Uuid> = results
         .iter()

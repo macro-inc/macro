@@ -121,10 +121,8 @@ export type ProjectEntity = EntityBase & {
 export type CallEntity = EntityBase & {
   type: 'call';
   channelId: string;
-  /** Live channel name when we could resolve it (server metadata or local
-   *  channels context); otherwise undefined — `<CallChannelName>` falls
-   *  back to the preview endpoint in that case. `name` mirrors this so
-   *  non-render consumers that only look at `name` still work. */
+  /** Undefined when unresolved locally; CallChannelName hits the preview
+   *  endpoint in that case. */
   channelName?: string;
   isActive: boolean;
   attended: boolean;

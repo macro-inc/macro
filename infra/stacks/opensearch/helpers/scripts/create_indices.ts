@@ -363,44 +363,30 @@ async function createCallRecordsIndex(opensearchClient: Client) {
           ...SHARD_SETTINGS,
           refresh_interval: '2s',
         },
-        // Code reads/writes via `CALL_RECORDS_ALIAS` so we can swap the
-        // underlying index (e.g. for a v2 reindex) without a code change.
         aliases: {
           [CALL_RECORDS_ALIAS]: {},
         },
-        // One doc per transcript segment. `_id` is `{call_id}:{transcript_id}`
-        // and `entity_id` = call_id, so hits can be grouped and filtered by
-        // call while still surfacing individual matched segments for
-        // frontend navigation / highlighting.
+        // One doc per transcript segment; `_id` is `{call_id}:{transcript_id}`.
         mappings: {
           properties: {
-            // Call id (shared across all segments of a call).
             entity_id: {
               type: 'keyword',
             },
-            // Primary key of the `call_record_transcripts` row. Used by the
-            // frontend to deep-link to the matched segment.
             transcript_id: {
               type: 'keyword',
               index: false,
               doc_values: true,
             },
-            // The channel id the call belongs to. Access is enforced upstream
-            // by restricting the search to the user's accessible call_ids, so
-            // this field is only used for optional narrowing filters.
             channel_id: {
               type: 'keyword',
               index: true,
               doc_values: true,
             },
-            // Participants on the call (copied onto every segment doc so
-            // participant filters work without a join).
             participant_ids: {
               type: 'keyword',
               index: true,
               doc_values: true,
             },
-            // Channel name at time of indexing (optional, best-effort).
             channel_name: {
               type: 'text',
               fields: {
@@ -410,42 +396,33 @@ async function createCallRecordsIndex(opensearchClient: Client) {
                 },
               },
             },
-            // The macro user id of the segment's speaker.
             speaker_id: {
               type: 'keyword',
               index: true,
               doc_values: true,
             },
-            // Position of the segment within the call.
             sequence_num: {
               type: 'integer',
               index: false,
               doc_values: true,
             },
-            // The segment's spoken text.
             content: {
               type: 'text',
               analyzer: 'standard',
             },
-            // Segment start (mirrors `call_record_transcripts.started_at`).
             started_at_seconds: {
               type: 'date',
               format: 'epoch_second',
               index: false,
               doc_values: true,
             },
-            // Segment end (mirrors `call_record_transcripts.ended_at` —
-            // nullable on older rows).
             ended_at_seconds: {
               type: 'date',
               format: 'epoch_second',
               index: false,
               doc_values: true,
             },
-            // Aliases expose the segment's start under the generic names used
-            // by the shared `updated_at_sort` script and by cross-entity
-            // tooling. Both point at `started_at_seconds` because it's
-            // always populated; `ended_at_seconds` is nullable.
+            // Aliases for the shared `updated_at_sort` script.
             created_at_seconds: {
               type: 'alias',
               path: 'started_at_seconds',
