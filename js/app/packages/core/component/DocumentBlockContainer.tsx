@@ -1,4 +1,3 @@
-import { useBlockId } from '@core/block';
 import { BlockContainer } from '@core/component/BlockContainer';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { blockErrorSignal } from '@core/signal/load';
@@ -18,7 +17,6 @@ export function DocumentBlockContainer(
   const [local, others] = splitProps(props, ['usesCenterBar']);
 
   const isLoading = () => !hasBlockData() && !blockError();
-  const blockId = useBlockId();
 
   return (
     <Show
