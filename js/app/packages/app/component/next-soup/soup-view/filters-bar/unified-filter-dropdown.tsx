@@ -348,6 +348,19 @@ const SearchableFilterSubmenu = (props: {
   };
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
 
+  // Focus the search input whenever the sub is open and the input is mounted.
+  // The setTimeout defers past Kobalte's own `setTimeout(tryAutoFocus, 0)` in
+  // `createSelectableCollection`, which would otherwise focus SubContent (the
+  // menu owns no items of its own — the Combobox does). Runs for both hover
+  // and keyboard because we can't rely on Kobalte focusing SubContent: on
+  // hover, its delayed pointer handler opens with `autoFocus=false`, so no
+  // focusin fires on SubContent for us to hook.
+  createEffect(() => {
+    const el = inputRef();
+    if (!isOpen() || !el) return;
+    setTimeout(() => el.focus(), 0);
+  });
+
   return (
     <DropdownMenu.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
       <DropdownMenu.SubTrigger
@@ -369,16 +382,7 @@ const SearchableFilterSubmenu = (props: {
       </DropdownMenu.SubTrigger>
 
       <DropdownMenu.Portal>
-        <DropdownMenu.SubContent
-          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden"
-          onFocusIn={(e) => {
-            // Kobalte focuses SubContent on open, and again via its deferred
-            // `tryAutoFocus` (the menu has no items of its own — the Combobox
-            // owns them). Redirect to the search input both times so the
-            // caret lands in the input and stays there.
-            if (e.target === e.currentTarget) inputRef()?.focus();
-          }}
-        >
+        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden">
           <SearchableMultiSelectInline
             options={props.options}
             activeIds={props.activeIds}
