@@ -20,7 +20,7 @@ pub struct UpsertCallRecordSegmentArgs {
     pub ended_at_seconds: Option<EpochSeconds>,
 }
 
-#[tracing::instrument(skip(client))]
+#[tracing::instrument(skip(client), err)]
 pub(crate) async fn upsert_call_record_segment(
     client: &opensearch::OpenSearch,
     args: &UpsertCallRecordSegmentArgs,

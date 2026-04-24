@@ -33,10 +33,10 @@ async fn main() -> anyhow::Result<()> {
             &db, limit, offset,
         )
         .await?;
-        println!("got batch offset {offset}");
+        tracing::info!(%offset, fetched = records.len(), "fetched batch");
 
         if records.is_empty() {
-            tracing::trace!("no more call records found");
+            tracing::info!("no more call records found");
             break;
         }
 
@@ -54,12 +54,12 @@ async fn main() -> anyhow::Result<()> {
                     .collect(),
             )
             .await?;
-        println!("queued batch");
+        tracing::info!(%offset, "queued batch");
 
         offset += limit;
     }
 
-    println!("Completed. Total call records processed: {}", count);
+    tracing::info!(total = count, "completed call record backfill");
 
     Ok(())
 }
