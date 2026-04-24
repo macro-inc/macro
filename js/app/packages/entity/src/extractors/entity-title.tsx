@@ -5,6 +5,7 @@ import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme'
 import { Show } from 'solid-js';
 import type { EntityData } from '../types/entity';
 import { isSearchEntity } from '../types/search';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 
 function extractRawTitle(entity: EntityData): string {
   return match(entity)
@@ -18,8 +19,11 @@ function extractRawTitle(entity: EntityData): string {
     .with({ type: 'channel_message' }, (e) => e.channelName)
     .with({ type: 'email' }, (e) => e.name || '(No Subject)')
     .with({ type: 'chat' }, (e) => e.name)
-    .with({ type: 'call' }, (e) => e.name)
-    .with({ type: 'automation' }, (e) => e.name || 'Untitled automation')
+    .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
+    .with(
+      { type: 'automation' },
+      (e) => e.name || blockNameToDefaultFile('automation')
+    )
     .otherwise(() => 'Unknown');
 }
 

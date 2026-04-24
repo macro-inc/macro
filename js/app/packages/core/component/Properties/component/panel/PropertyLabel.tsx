@@ -96,13 +96,13 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
           property={props.property}
           class="size-4 shrink-0 opacity-40"
         />
-        <span class="truncate flex-shrink min-w-0">
+        <span class="truncate shrink min-w-0">
           {props.property.displayName}
         </span>
         {/* Always reserve space for delete button to prevent layout shift */}
         <Show
           when={canEdit && !props.property.isMetadata}
-          fallback={<div class="w-3 h-3 flex-shrink-0" />}
+          fallback={<div class="w-3 h-3 shrink-0" />}
         >
           <Show
             when={
@@ -114,7 +114,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
           >
             <div
               class={cn(
-                'flex-shrink-0 transition-opacity',
+                'shrink-0 transition-opacity',
                 isHovered() ? 'opacity-100' : 'opacity-0'
               )}
             >
@@ -136,13 +136,13 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
           <Show when={!isBuiltin && props.withDelete}>
             <div
               class={cn(
-                'flex-shrink-0 transition-opacity',
+                'shrink-0 transition-opacity',
                 isHovered() ? 'opacity-100' : 'opacity-0'
               )}
             >
               <Button
                 variant="ghost"
-                class="p-1 !text-failure hover:!bg-failure/15"
+                class="p-1 text-failure! hover:bg-failure/15!"
                 tooltip="Remove property"
                 onClick={handleDeleteClick}
               >

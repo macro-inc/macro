@@ -80,7 +80,7 @@ export function MinimizedThread(props: {
         transition={true}
       >
         <div
-          class="flex flex-row justify-between p-[2px] gap-1 transition-transform items-center bg-panel text-ink-muted border-edge/50 border-1 relative overflow-clip"
+          class="flex flex-row justify-between p-[2px] gap-1 transition-transform items-center bg-panel text-ink-muted border-edge/50 border relative overflow-clip"
           classList={{
             '-translate-x-4': props.isActive,
           }}

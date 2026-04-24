@@ -23,6 +23,7 @@ pub enum LabelType {
 #[derive(Debug, Clone)]
 pub struct Label {
     pub id: Uuid,
+    #[allow(unused)]
     pub(crate) thread_id: Uuid,
     pub link_id: Uuid,
     pub provider_label_id: String,

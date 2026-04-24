@@ -301,7 +301,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             options={destinationOptions}
             triggerMode="input"
             noBrackets
-            class="border-1 border-edge-muted/50 p-1"
+            class="border border-edge-muted/50 p-1"
             focusOnMount
             mobileHorizontalScroll
           />
@@ -330,12 +330,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       </div>
 
       {/* Row 2: Optional message */}
-      <div class="grow-1 shrink-1 min-h-0 flex flex-col w-full border-t-1 border-edge-muted/50">
-        <div class="relative grow-1 shrink-1 min-h-0 flex flex-col">
+      <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted/50">
+        <div class="relative grow shrink min-h-0 flex flex-col">
           <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
           <CustomScrollbar scrollContainer={mdScrollRef} />
           <div
-            class="grow-1 shrink-1 min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
+            class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
             onClick={() => markdownEditor.controls.focus()}
             ref={setMdScrollRef}
           >

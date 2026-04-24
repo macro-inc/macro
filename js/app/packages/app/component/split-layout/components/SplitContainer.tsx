@@ -1,4 +1,3 @@
-import MacroJump from '@app/component/MacroJump';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -12,7 +11,7 @@ import { useSplitPanelOrThrow } from '../layoutUtils';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
-import { RoundPanel, type RoundPanelProps } from '@core/component/RoundPanel';
+import { Panel } from '@ui';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 
@@ -56,14 +55,6 @@ export function SplitContainer(
     return Boolean(splits && splits.length > 1);
   }
 
-  function MaybeRoundPanel(props: RoundPanelProps) {
-    return (
-      <Show when={!isMobile()} fallback={props.children}>
-        <RoundPanel {...props} />
-      </Show>
-    );
-  }
-
   return (
     <SplitDrawerGroup contentOffsetTop={offsetTop} panelSize={panel.panelSize}>
       <Show when={panel.handle.isSpotLight()}>
@@ -71,12 +62,12 @@ export function SplitContainer(
           class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
           onClick={() => panel.handle.toggleSpotlight(false)}
         />
-        <div class="fixed inset-[4rem] bg-panel shadow-xl" />
+        <div class="fixed inset-16 bg-panel shadow-xl" />
       </Show>
 
       <div
         classList={{
-          'fixed inset-[4rem] z-modal-overlay isolate opacity-50':
+          'fixed inset-16 z-modal-overlay isolate opacity-50':
             panel.handle.isSpotLight(),
           'opacity-100': panel.isPanelActive() || panel.handle.isSpotLight(),
           'size-full': !panel.handle.isSpotLight(),
@@ -92,28 +83,34 @@ export function SplitContainer(
         data-modal={panel.handle.isSpotLight()}
         tabindex={-1}
       >
-        <MaybeRoundPanel
-          active={
-            panel.isPanelActive() &&
-            multipleSplits() &&
-            !panel.handle.isSpotLight()
-          }
-          // TODO (seamus) temporary disabling split corners
-          // tl={props.tl}
-          // bl={props.bl}
-          // tr={props.tr}
-        >
-          <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
-            <SplitHeader ref={setHeaderRef} />
-            <SplitToolbar ref={setToolbarRef} />
-            <div class="@container/split size-full overflow-hidden relative">
-              {props.children}
+        <Show
+          when={!isMobile()}
+          fallback={
+            <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
+              <SplitHeader ref={setHeaderRef} />
+              <SplitToolbar ref={setToolbarRef} />
+              <div class="@container/split size-full overflow-hidden relative">
+                {props.children}
+              </div>
             </div>
-            <Show when={panel.handle.isSpotLight()}>
-              <MacroJump tabbableParent={ref} />
-            </Show>
-          </div>
-        </MaybeRoundPanel>
+          }
+        >
+          <Panel
+            active={
+              panel.isPanelActive() &&
+              multipleSplits() &&
+              !panel.handle.isSpotLight()
+            }
+          >
+            <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
+              <SplitHeader ref={setHeaderRef} />
+              <SplitToolbar ref={setToolbarRef} />
+              <div class="@container/split size-full overflow-hidden relative">
+                {props.children}
+              </div>
+            </div>
+          </Panel>
+        </Show>
       </div>
     </SplitDrawerGroup>
   );

@@ -6,6 +6,7 @@ import { CallBlockAdapter } from './component/CallBlockAdapter';
 export const definition = defineBlock({
   name: 'call',
   description: '',
+  defaultFilename: 'Call',
   component: CallBlockAdapter,
   async load(source, _intent) {
     if (!ENABLE_CALLS()) return LoadErrors.MISSING;

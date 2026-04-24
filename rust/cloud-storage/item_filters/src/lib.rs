@@ -292,6 +292,9 @@ pub struct CallFilters {
     /// Channel IDs to filter calls by. Empty to include all calls.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channel_ids: Vec<String>,
+    /// Speaker macro user ids. Empty to include all.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub speaker_ids: Vec<String>,
     /// Filter by whether the requesting user attended the call.
     /// `None` = no filter, `Some(true)` = only calls the user joined,
     /// `Some(false)` = only calls the user did not join.
@@ -303,9 +306,10 @@ impl IsEmpty for CallFilters {
     fn is_empty(&self) -> bool {
         let CallFilters {
             channel_ids,
+            speaker_ids,
             attended,
         } = self;
-        channel_ids.is_empty() && attended.is_none()
+        channel_ids.is_empty() && speaker_ids.is_empty() && attended.is_none()
     }
 }
 

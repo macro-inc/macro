@@ -62,7 +62,7 @@ export const FilterValueDateMulti: Component<FilterValueDateMultiProps> = (
             <button
               type="button"
               onClick={() => handleRemoveDate(dateStr)}
-              class="absolute inset-0 flex items-center justify-end pr-1 bg-gradient-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
+              class="absolute inset-0 flex items-center justify-end pr-1 bg-linear-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
             >
               <XIcon class="size-3" />
             </button>

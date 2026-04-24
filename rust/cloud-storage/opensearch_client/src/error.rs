@@ -52,6 +52,9 @@ pub enum OpensearchClientError {
     #[error("empty ids with ids only for {0}")]
     EmptyIdsWithIdsOnly(OpenSearchEntityType),
 
+    #[error("USER_ID_KEY is required for ids_only=false search on {0}")]
+    UserIdKeyRequired(OpenSearchEntityType),
+
     #[error("searching with exhausted cursor")]
     SearchWithExhaustedCursor,
 }

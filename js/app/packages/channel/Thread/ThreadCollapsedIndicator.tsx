@@ -41,7 +41,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
     <button
       type="button"
       class={cn(
-        'flex flex-row gap-2 items-center text-xs w-fit h-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] border bg-menu hover:bg-hover hover-transition-bg pr-2 pl-1 mb-2 select-none focus:bracket-offset-2',
+        'flex flex-row gap-2 items-center text-xs w-fit h-(--user-icon-width) touch:min-h-(--user-icon-width) border bg-menu hover:bg-hover hover-transition-bg pr-2 pl-1 mb-2 select-none focus:bracket-offset-2',
         local.hasNewMessages ? 'border-accent' : 'border-edge-muted',
         local.class
       )}
@@ -60,7 +60,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
               {(userId, index) => (
                 <div
                   class={cn(
-                    'size-[18px] [&>*]:size-full [&>*]:rounded-full',
+                    'size-[18px] *:size-full *:rounded-full',
                     index() > 0 ? '-ml-1' : ''
                   )}
                 >

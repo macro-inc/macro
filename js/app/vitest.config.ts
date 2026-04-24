@@ -50,8 +50,8 @@ export default defineConfig({
         test: {
           environment: 'jsdom',
           globals: true,
-          include: ['packages/block-theme/**/*.{test,spec}.{ts,tsx}'],
-          name: 'block-theme',
+          include: ['packages/theme/**/*.{test,spec}.{ts,tsx}'],
+          name: 'theme',
         },
       },
       {

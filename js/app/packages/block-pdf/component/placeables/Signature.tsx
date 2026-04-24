@@ -10,7 +10,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import SignaturePad from 'signature_pad';
 import { onCleanup, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { themeReactive } from '../../../block-theme/signals/themeReactive';
+import { themeReactive } from '../../../theme/signals/themeReactive';
 import { useDeletePlaceable, useModifyPayload } from '../../store/placeables';
 import { type AllowableEdits, PayloadMode } from '../../type/placeables';
 

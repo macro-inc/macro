@@ -13,6 +13,7 @@ import {
   useUpsertToHistoryMutation,
   refetchHistory,
 } from '@queries/history/history';
+import { setPreviewOnCreate } from '@queries/preview/preview';
 
 const PROJECTS_STALE_TIME = 5 * 60 * 1000;
 const PROJECTS_GC_TIME = 10 * 60 * 1000;
@@ -99,6 +100,11 @@ export async function createProject(params: {
 
   if (isOk(maybeResult)) {
     const projectId = maybeResult[1].id;
+    setPreviewOnCreate({
+      itemId: projectId,
+      itemType: 'project',
+      name: params.name,
+    });
     await storageServiceClient.upsertItemToUserHistory({
       itemId: projectId,
       itemType: 'project',
@@ -187,8 +193,13 @@ export function useCreateProjectMutation(
 
           return { previousData, tempProjectId };
         },
-        onSuccess: (projectId, _params, _context) => {
+        onSuccess: (projectId, params, _context) => {
           if (projectId) {
+            setPreviewOnCreate({
+              itemId: projectId,
+              itemType: 'project',
+              name: params.name,
+            });
             upsertToHistoryMutation.mutate({
               itemId: projectId,
               itemType: 'project',

@@ -467,10 +467,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   }}
                 >
                   <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <div class="size-4 flex-shrink-0">{option.icon}</div>
+                    <div class="size-4 shrink-0">{option.icon}</div>
                     <span class="truncate min-w-0">{option.label}</span>
                   </div>
-                  <div class="flex-shrink-0">
+                  <div class="shrink-0">
                     <OptionCheckBox
                       checked={isSelected()}
                       multiselect={props.config.isMultiSelect}
@@ -517,7 +517,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     }}
                   >
                     <div class="flex items-center gap-2 flex-1 min-w-0">
-                      <div class="size-4 flex-shrink-0">
+                      <div class="size-4 shrink-0">
                         <Show
                           when={entity.kind === 'entity'}
                           fallback={
@@ -541,7 +541,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                         </Show>
                       </span>
                     </div>
-                    <div class="flex-shrink-0">
+                    <div class="shrink-0">
                       <OptionCheckBox
                         checked={isSelected()}
                         multiselect={props.config.isMultiSelect}

@@ -6,6 +6,11 @@ version = "0.1.0"
 
 [features]
 default = ["inbound", "outbound", "ports"]
+attachment = [
+  "dep:attachment",
+  "dep:futures",
+  "inbound",
+]
 inbound = [
   "dep:axum",
   "dep:model_user",
@@ -29,6 +34,7 @@ entity_access_management = { path = "../entity_access_management", default-featu
 ] }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
+non_empty = { path = "../non_empty" }
 model-entity = { path = "../model-entity" }
 models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
 models_permissions = { path = "../models_permissions" }
@@ -39,6 +45,10 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
+
+# Attachment (attachment provider)
+attachment = { path = "../attachment", optional = true }
+futures = { workspace = true, optional = true }
 
 # Inbound (HTTP handlers)
 axum = { workspace = true, optional = true }

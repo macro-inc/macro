@@ -24,10 +24,10 @@ clean:
 build:
     SQLX_OFFLINE=true cargo build
 
-# Build all dev service Docker images (pre-warms cache for run_local_build)
+# Build dev service Docker images to pre-warm the cache used by root `run_local`.
 build_dev_service_images:
-  docker build -f Dockerfile.dev --target builder -t local-services .
-  docker build -f Dockerfile.search_processing_service.dev --target builder -t local-search-processing-service .
+  docker build -f Dockerfile.dev --target services_bundle -t macro-local-rust-services:dev .
+  docker build -f Dockerfile.search_processing_service.dev --target search_processing_service -t macro-local-search-processing-service:dev .
 
 # Build all lambda functions
 build_lambdas:

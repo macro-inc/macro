@@ -281,6 +281,14 @@ const INTERNAL_CALL_SECRET = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require('call_internal_secret') })
   .apply((secret) => secret.secretString);
 
+const ANTHROPIC_API_KEY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.get('anthropic_api_key') ?? '',
+  })
+  .apply((secret) => {
+    return secret.secretString;
+  });
+
 // Cal.com webhook — HMAC secret, resolved at runtime via Secrets Manager.
 const CAL_WEBHOOK_SECRET_KEY = config.require('cal_webhook_secret_key');
 const calWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
@@ -389,6 +397,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'INTERNAL_CALL_SECRET',
         value: pulumi.interpolate`${INTERNAL_CALL_SECRET}`,
+      },
+      {
+        name: 'ANTHROPIC_API_KEY',
+        value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
       },
       {
         name: 'LIVEKIT_SERVER_URL',

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use macro_user_id::user_id::MacroUserIdStr;
 use models_comms::channel::{
-    Activity, ChannelId, ChannelWithLatest, ChannelWithParticipants, LatestMessage,
+    Activity, ChannelId, ChannelMessage, ChannelWithLatest, ChannelWithParticipants, LatestMessage,
 };
 use rootcause::Report;
 
@@ -23,6 +23,17 @@ pub trait CommsRepo: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Activity>, Report>> + Send;
+
+    fn get_channel_name(
+        &self,
+        channel_id: ChannelId,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+
+    fn get_recent_messages(
+        &self,
+        channel_id: ChannelId,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<ChannelMessage>, Report>> + Send;
 }
 
 pub trait UserRepo: Send + Sync + 'static {

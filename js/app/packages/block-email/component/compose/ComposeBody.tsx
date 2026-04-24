@@ -163,7 +163,7 @@ export function ComposeBody(props: {
             scrollRef={props.mobileScrollRef}
             initialHtml={ctx.initialHtml()}
             initialValue={ctx.initialMarkdown?.()}
-            class="text-sm break-words text-ink mobile:overflow-auto h-auto"
+            class="text-sm wrap-break-word text-ink mobile:overflow-auto h-auto"
             editable={() => !ctx.disabled()}
             placeholder="Use `@` to reference files"
             watermark={

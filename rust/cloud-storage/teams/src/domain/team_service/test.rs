@@ -21,9 +21,9 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        CreateSubscriptionArgs, CustomerError, PatchTeamRequest, RemoveTeamInviteError,
-        RemoveUserFromTeamError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
-        TeamRole, TeamUserTier, TeamWithMembers,
+        CreateSubscriptionArgs, CustomerError, PatchTeamRequest, PatchTeamUserRole,
+        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
+        TeamInviteDetails, TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository},
 };
@@ -35,6 +35,9 @@ struct MockTeamRepository {
     invites_to_return: Vec<TeamInvite<'static>>,
     team_name: String,
     mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>>,
+    team_for_get_by_id: Option<Team>,
+    patch_team_user_role_calls: Arc<Mutex<Vec<(uuid::Uuid, String, TeamRole)>>>,
+    patch_team_name_calls: Arc<Mutex<Vec<(uuid::Uuid, Option<String>)>>>,
 }
 
 impl MockTeamRepository {
@@ -47,7 +50,15 @@ impl MockTeamRepository {
             invites_to_return: invites,
             team_name: team_name.to_string(),
             mark_sent_calls,
+            team_for_get_by_id: None,
+            patch_team_user_role_calls: Arc::new(Mutex::new(Vec::new())),
+            patch_team_name_calls: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    fn with_team(mut self, team: Team) -> Self {
+        self.team_for_get_by_id = Some(team);
+        self
     }
 }
 
@@ -172,7 +183,14 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<TeamWithMembers, TeamError>> + Send {
-        async { unimplemented!() }
+        let team = self.team_for_get_by_id.clone();
+        async move {
+            let team = team.ok_or(TeamError::TeamDoesNotExist)?;
+            Ok(TeamWithMembers {
+                team,
+                members: Vec::new(),
+            })
+        }
     }
 
     fn get_user_teams(
@@ -206,10 +224,14 @@ impl TeamRepository for MockTeamRepository {
 
     fn patch_team(
         &self,
-        _: &uuid::Uuid,
-        _: &PatchTeamRequest,
+        team_id: &uuid::Uuid,
+        req: &PatchTeamRequest,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
-        async { unimplemented!() }
+        self.patch_team_name_calls
+            .lock()
+            .unwrap()
+            .push((*team_id, req.name.clone()));
+        async { Ok(()) }
     }
 
     fn get_team_role(
@@ -235,6 +257,20 @@ impl TeamRepository for MockTeamRepository {
         _: TeamUserTier,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
         async { unimplemented!() }
+    }
+
+    fn patch_team_user_role(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        role: TeamRole,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send {
+        self.patch_team_user_role_calls.lock().unwrap().push((
+            *team_id,
+            user_id.as_ref().to_string(),
+            role,
+        ));
+        async { Ok(()) }
     }
 }
 
@@ -581,4 +617,152 @@ async fn test_invite_marks_all_sent_when_all_notifications_succeed() {
     assert_eq!(marked_ids.len(), 2);
     assert!(marked_ids.contains(&invite_id_1));
     assert!(marked_ids.contains(&invite_id_2));
+}
+
+fn build_service_with_team(
+    team: Team,
+) -> (
+    impl TeamService,
+    Arc<Mutex<Vec<(uuid::Uuid, String, TeamRole)>>>,
+    Arc<Mutex<Vec<(uuid::Uuid, Option<String>)>>>,
+) {
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let team_repo =
+        MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls).with_team(team);
+    let role_calls = team_repo.patch_team_user_role_calls.clone();
+    let name_calls = team_repo.patch_team_name_calls.clone();
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository,
+        MockTeamChannelsRepository,
+        MockUserRolesAndPermissionsService,
+        notification_ingress,
+    );
+    (service, role_calls, name_calls)
+}
+
+/// Attempting to assign the Owner role via patch_team is rejected.
+#[tokio::test]
+async fn test_patch_team_rejects_owner_role_assignment() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let team = Team::new(team_id, "Test Team".to_string(), owner_id);
+
+    let (service, role_calls, name_calls) = build_service_with_team(team);
+
+    let req = PatchTeamRequest {
+        name: Some("New Name".to_string()),
+        user_role_updates: Some(vec![PatchTeamUserRole {
+            team_user_id: MacroUserIdStr::parse_from_str("macro|member@example.com")
+                .unwrap()
+                .into_owned(),
+            role: TeamRole::Owner,
+        }]),
+    };
+
+    let err = service.patch_team(&team_id, &req).await.err().unwrap();
+    assert!(matches!(err, TeamError::BadRequest(_)));
+    assert!(role_calls.lock().unwrap().is_empty());
+    assert!(name_calls.lock().unwrap().is_empty());
+}
+
+/// Attempting to modify the team owner's role via patch_team is rejected.
+#[tokio::test]
+async fn test_patch_team_rejects_owner_downgrade() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let team = Team::new(team_id, "Test Team".to_string(), owner_id.clone());
+
+    let (service, role_calls, name_calls) = build_service_with_team(team);
+
+    let req = PatchTeamRequest {
+        name: None,
+        user_role_updates: Some(vec![PatchTeamUserRole {
+            team_user_id: owner_id,
+            role: TeamRole::Member,
+        }]),
+    };
+
+    let err = service.patch_team(&team_id, &req).await.err().unwrap();
+    assert!(matches!(err, TeamError::BadRequest(_)));
+    assert!(role_calls.lock().unwrap().is_empty());
+    assert!(name_calls.lock().unwrap().is_empty());
+}
+
+/// Valid role updates are applied and the team name is also updated.
+#[tokio::test]
+async fn test_patch_team_applies_role_updates_and_name() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com")
+        .unwrap()
+        .into_owned();
+    let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com")
+        .unwrap()
+        .into_owned();
+    let team = Team::new(team_id, "Old Name".to_string(), owner_id);
+
+    let (service, role_calls, name_calls) = build_service_with_team(team);
+
+    let req = PatchTeamRequest {
+        name: Some("New Name".to_string()),
+        user_role_updates: Some(vec![
+            PatchTeamUserRole {
+                team_user_id: member_id.clone(),
+                role: TeamRole::Admin,
+            },
+            PatchTeamUserRole {
+                team_user_id: admin_id.clone(),
+                role: TeamRole::Member,
+            },
+        ]),
+    };
+
+    service.patch_team(&team_id, &req).await.unwrap();
+
+    let role_calls = role_calls.lock().unwrap();
+    assert_eq!(role_calls.len(), 2);
+    assert_eq!(
+        role_calls[0],
+        (team_id, member_id.as_ref().to_string(), TeamRole::Admin)
+    );
+    assert_eq!(
+        role_calls[1],
+        (team_id, admin_id.as_ref().to_string(), TeamRole::Member)
+    );
+
+    let name_calls = name_calls.lock().unwrap();
+    assert_eq!(name_calls.len(), 1);
+    assert_eq!(name_calls[0], (team_id, Some("New Name".to_string())));
+}
+
+/// Empty user_role_updates vec is a no-op for roles but still applies name.
+#[tokio::test]
+async fn test_patch_team_empty_role_updates() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let team = Team::new(team_id, "Old Name".to_string(), owner_id);
+
+    let (service, role_calls, name_calls) = build_service_with_team(team);
+
+    let req = PatchTeamRequest {
+        name: Some("New Name".to_string()),
+        user_role_updates: Some(Vec::new()),
+    };
+
+    service.patch_team(&team_id, &req).await.unwrap();
+
+    assert!(role_calls.lock().unwrap().is_empty());
+    let name_calls = name_calls.lock().unwrap();
+    assert_eq!(name_calls.len(), 1);
+    assert_eq!(name_calls[0], (team_id, Some("New Name".to_string())));
 }

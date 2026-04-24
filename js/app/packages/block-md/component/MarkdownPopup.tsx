@@ -52,7 +52,6 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
-import { GlitchText } from '@ui/components/GlitchText';
 import {
   $getLocationUrl,
   $getSelectionLocation,
@@ -477,7 +476,7 @@ export function MarkdownPopup(props: {
                   width={20}
                   height={20}
                   color="var(--color-accent)"
-                  class="text-accent-ink !fill-accent"
+                  class="text-accent-ink fill-accent!"
                 />
               </button>
             </div>
@@ -505,11 +504,10 @@ export function MarkdownPopup(props: {
                       height={20}
                       class="text-accent"
                     />
-                    <GlitchText from="Reading document" continuous />
                   </div>
                 }
               >
-                <div class="break-words p-2">
+                <div class="wrap-break-word p-2">
                   <ChatMessageMarkdown
                     text={completion().content}
                     generating={isGenerating}
@@ -518,7 +516,7 @@ export function MarkdownPopup(props: {
                     }}
                   />
                 </div>
-                <div class="border-t-1 border-edge">
+                <div class="border-t border-edge">
                   <div class="flex flex-row justify-end text-ink-muted mt-1">
                     <Show when={completionType() === 'rewrite'}>
                       {' '}

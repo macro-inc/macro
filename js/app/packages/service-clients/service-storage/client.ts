@@ -34,6 +34,7 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
 import type {
   AccessLevel,
+  CallRecordPreview,
   PostSoupRequest,
   SoupPage,
   View,
@@ -127,16 +128,20 @@ export type ItemType =
   | 'channel'
   | 'email'
   | 'channel_message'
+  | 'call'
   | 'automation';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 const itemTypeSet = new Set([
   'document',
-  'channel',
-  'email',
   'chat',
   'project',
+  'channel',
+  'email',
+  'channel_message',
+  'call',
+  'automation',
   'thread',
 ]);
 
@@ -150,6 +155,8 @@ export function blockNameToItemType(
   switch (blockName) {
     case 'chat':
       return 'chat';
+    case 'call':
+      return 'call';
     case 'channel':
       return 'channel';
     case 'project':
@@ -542,12 +549,28 @@ export const storageServiceClient = {
       (result) => result.data
     );
   },
+
   async getBatchDocumentPreviews(args: { document_ids: string[] }) {
     return mapOk(
       await dssFetch<{ previews: DocumentPreview[] }>(`/documents/preview`, {
         method: 'POST',
         body: JSON.stringify({ document_ids: args.document_ids }),
       }),
+      (result) => ({
+        previews: result.previews,
+      })
+    );
+  },
+
+  async getBatchCallPreviews(args: { call_ids: string[] }) {
+    return mapOk(
+      await dssFetch<{ previews: CallRecordPreview[] }>(
+        `/call/record/preview`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ callIds: args.call_ids }),
+        }
+      ),
       (result) => ({
         previews: result.previews,
       })

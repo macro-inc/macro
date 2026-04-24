@@ -30,6 +30,7 @@ email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
+futures.workspace = true
 item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
 lexical_client = { path = "../lexical_client" }

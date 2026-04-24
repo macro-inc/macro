@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { TranscriptSegmentRequestDiarizedSpeakerId } from './transcriptSegmentRequestDiarizedSpeakerId';
 import type { TranscriptSegmentRequestEndedAt } from './transcriptSegmentRequestEndedAt';
 
 /**
@@ -12,6 +13,10 @@ import type { TranscriptSegmentRequestEndedAt } from './transcriptSegmentRequest
 export interface TranscriptSegmentRequest {
   /** The transcribed text content. */
   content: string;
+  /** Stable per-speaker identifier produced by the STT provider's diarization
+pass. Namespaced upstream by audio track so values are unique across all
+tracks in a call. `None` when the provider didn't return a speaker label. */
+  diarizedSpeakerId?: TranscriptSegmentRequestDiarizedSpeakerId;
   /** When the speaker stopped talking for this segment. */
   endedAt?: TranscriptSegmentRequestEndedAt;
   /** Whether this is a final transcription (not interim). */

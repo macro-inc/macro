@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CallRecordTranscriptSegmentDiarizedSpeakerId } from './callRecordTranscriptSegmentDiarizedSpeakerId';
 import type { CallRecordTranscriptSegmentEndedAt } from './callRecordTranscriptSegmentEndedAt';
 import type { CallRecordTranscriptSegmentSegmentId } from './callRecordTranscriptSegmentSegmentId';
 
@@ -13,6 +14,10 @@ import type { CallRecordTranscriptSegmentSegmentId } from './callRecordTranscrip
 export interface CallRecordTranscriptSegment {
   /** The transcribed text content. */
   content: string;
+  /** Stable per-speaker identifier produced by the STT provider's diarization
+pass. Unique across tracks in the call. `None` when the provider didn't
+return a speaker label. */
+  diarizedSpeakerId?: CallRecordTranscriptSegmentDiarizedSpeakerId;
   /** When the speaker stopped (if known). */
   endedAt?: CallRecordTranscriptSegmentEndedAt;
   /** LiveKit segment ID (nullable for archived records). */

@@ -50,7 +50,7 @@ function DocumentMentionPill(props: { notification: UnifiedNotification }) {
 
   return (
     <div
-      class="group relative flex items-center gap-1.5 px-2 py-1 rounded border border-edge-muted bg-panel hover:bg-hover cursor-pointer text-xs min-w-0 max-w-48 flex-shrink-0"
+      class="group relative flex items-center gap-1.5 px-2 py-1 rounded border border-edge-muted bg-panel hover:bg-hover cursor-pointer text-xs min-w-0 max-w-48 shrink-0"
       onClick={handleClick}
       role="button"
       tabIndex={0}
@@ -162,7 +162,7 @@ function DocumentMentionPills(props: { stack: NotificationStack }) {
         <button
           ref={badgeRef}
           data-badge
-          class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 flex-shrink-0"
+          class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 shrink-0"
           tabIndex={-1}
         >
           +{notifications().length} more
@@ -181,7 +181,7 @@ function DocumentMentionPills(props: { stack: NotificationStack }) {
         </For>
         <Show when={overflow() > 0}>
           <button
-            class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 bg-panel hover:bg-edge/10 flex-shrink-0"
+            class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 bg-panel hover:bg-edge/10 shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               setExpanded(true);

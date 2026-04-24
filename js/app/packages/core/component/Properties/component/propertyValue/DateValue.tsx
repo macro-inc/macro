@@ -69,7 +69,7 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
         </Show>
       </button>
       <Show when={!isReadOnly() && isHovered() && displayValue && !isSaving()}>
-        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-gradient-to-r from-transparent to-hover to-40%">
+        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40%">
           <button
             onClick={handleDelete}
             disabled={isSaving()}

@@ -5,10 +5,9 @@ import type { ApiChannelAttachment } from '@service-comms/client';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import {
   flattenAttachments,
-  useChannelAttachmentsQuery,
+  useChannelDocumentAttachmentsQuery,
   type ChannelAttachmentsData,
 } from '@queries/channel/channel-attachments';
-import { partitionAttachments } from '@channel/Media/media-items';
 import {
   buildAttachmentEntityFilters,
   getEntityClickContent,
@@ -19,15 +18,14 @@ import {
 } from './AttachmentEntityList';
 
 export function ChannelAttachmentEntitySection(props: { channelId: string }) {
-  const attachmentsQuery = useChannelAttachmentsQuery(() => props.channelId);
+  const attachmentsQuery = useChannelDocumentAttachmentsQuery(
+    () => props.channelId
+  );
 
-  const allAttachments = createMemo(() =>
+  const documentAttachments = createMemo(() =>
     flattenAttachments(
       attachmentsQuery.data as ChannelAttachmentsData | undefined
     )
-  );
-  const documentAttachments = createMemo(
-    () => partitionAttachments(allAttachments()).documentAttachments
   );
 
   const soupQuery = useSoupItemsQuery(

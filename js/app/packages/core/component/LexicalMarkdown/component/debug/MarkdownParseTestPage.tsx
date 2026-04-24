@@ -312,10 +312,10 @@ export default function MarkdownParseTestPage() {
           <div class="w-1/2 h-full p-4 flex flex-col border-r border-edge">
             <div class="flex items-center gap-2 mb-2">
               <h2 class="text-sm">Input</h2>
-              <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
+              <div class="flex bg-edge/50 rounded border border-edge overflow-hidden">
                 <button
                   class={cn(
-                    'px-2 py-0.5 text-xs border-r-1 border-edge',
+                    'px-2 py-0.5 text-xs border-r border-edge',
                     inputType() === 'markdown' && 'bg-accent text-panel'
                   )}
                   onClick={() => setInputType('markdown')}
@@ -353,10 +353,10 @@ export default function MarkdownParseTestPage() {
             <div class="flex gap-16 mb-4">
               <div class="flex items-center gap-1">
                 <span class="text-sm text-ink-extra-muted">Render as</span>
-                <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
+                <div class="flex bg-edge/50 rounded border border-edge overflow-hidden">
                   <button
                     class={cn(
-                      'px-3 py-1 text-sm border-r-1 border-edge',
+                      'px-3 py-1 text-sm border-r border-edge',
                       outputType() === 'static' && 'bg-accent text-panel'
                     )}
                     onClick={() => setOutputType('static')}
@@ -377,10 +377,10 @@ export default function MarkdownParseTestPage() {
 
               <div class="flex items-center gap-2">
                 <span class="text-sm text-ink-extra-muted">Target</span>
-                <div class="flex bg-edge/50 rounded border-1 border-edge overflow-hidden">
+                <div class="flex bg-edge/50 rounded border border-edge overflow-hidden">
                   <button
                     class={cn(
-                      'px-3 py-1 text-sm border-r-1 border-edge',
+                      'px-3 py-1 text-sm border-r border-edge',
                       targetType() === 'internal' && 'bg-accent text-panel'
                     )}
                     onClick={() => setTargetType('internal')}
@@ -412,7 +412,7 @@ export default function MarkdownParseTestPage() {
             <div class="flex items-center gap-2 mb-4">
               <span class="text-sm text-ink-extra-muted">Theme</span>
               <select
-                class="px-3 py-1 text-sm bg-edge/50 border-1 border-edge rounded"
+                class="px-3 py-1 text-sm bg-edge/50 border border-edge rounded"
                 value={themeType()}
                 onChange={(e) => setThemeType(e.target.value as ThemeType)}
               >

@@ -129,6 +129,11 @@ pub struct TranscriptSegmentRequest {
     pub segment_id: String,
     /// The speaker's user ID (from `lk.transcribed_track_id`).
     pub speaker_id: String,
+    /// Stable per-speaker identifier produced by the STT provider's diarization
+    /// pass. Namespaced upstream by audio track so values are unique across all
+    /// tracks in a call. `None` when the provider didn't return a speaker label.
+    #[serde(default)]
+    pub diarized_speaker_id: Option<String>,
     /// The transcribed text content.
     pub content: String,
     /// When the speaker started talking for this segment.
@@ -162,6 +167,11 @@ pub struct CallRecordTranscriptSegment {
     pub segment_id: Option<String>,
     /// The speaker's user ID.
     pub speaker_id: String,
+    /// Stable per-speaker identifier produced by the STT provider's diarization
+    /// pass. Unique across tracks in the call. `None` when the provider didn't
+    /// return a speaker label.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diarized_speaker_id: Option<String>,
     /// The transcribed text content.
     pub content: String,
     /// When the speaker started this segment.

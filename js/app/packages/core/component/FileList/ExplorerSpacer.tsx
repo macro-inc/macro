@@ -15,7 +15,7 @@ export function FileLevelSpacer(props: { size: FileListSize }) {
         'file-level-spacer',
         FILE_LIST_SPACER_WIDTH[props.size],
         FILE_LIST_ROW_HEIGHT[props.size],
-        'border-r-1 border-edge'
+        'border-r border-edge'
       )}
     />
   );

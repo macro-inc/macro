@@ -1,9 +1,6 @@
-import CropMarkCircle from '@macro-icons/macro-crop-circle.svg';
 import Macro from '@macro-icons/macro-macro.svg';
-import { GlitchText } from '@ui/components/GlitchText';
 import { createSignal, onMount } from 'solid-js';
 import { PcNoiseGrid } from './PcNoiseGrid';
-import { Uuid7Viz } from './UuidVisualizer';
 
 export function LoadingSpinner() {
   return (
@@ -23,7 +20,7 @@ export function LoadingSpinner() {
   );
 }
 
-export function LoadingPanel(props: { blockId: string }) {
+export function LoadingPanel() {
   const [showSpinner, setShowSpinner] = createSignal(false);
 
   onMount(() => {
@@ -43,20 +40,6 @@ export function LoadingPanel(props: { blockId: string }) {
       }}
     >
       <LoadingSpinner />
-      <div class="absolute bottom-2 right-2 text-ink-extra-muted">
-        <CropMarkCircle />
-      </div>
-      <div class="absolute top-2 left-2 text-xs text-ink-extra-muted flex flex-col gap-2">
-        <CropMarkCircle />
-        <GlitchText from={`INIT DOCUMENT [ ${props.blockId} ]`} continuous />
-        <Uuid7Viz uuid={props.blockId} mode="barcode" cell={1} />
-      </div>
-      <div class="absolute top-2 right-2 text-xs text-ink-extra-muted">
-        <CropMarkCircle />
-      </div>
-      <div class="absolute bottom-2 left-2 text-xs text-ink-extra-muted">
-        <CropMarkCircle />
-      </div>
     </div>
   );
 }

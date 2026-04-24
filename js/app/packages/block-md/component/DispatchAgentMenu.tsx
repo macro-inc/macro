@@ -211,7 +211,7 @@ export function DispatchAgentButton() {
 
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen}>
-      <div class="border-1 border-edge-muted flex ml-1 items-stretch rounded-xs">
+      <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
         <Button
           onClick={handlePrimaryClick}
           tooltip={lastUsed().name}
@@ -224,7 +224,7 @@ export function DispatchAgentButton() {
             class="size-3.5"
           />
         </Button>
-        <div class="w-[1px] bg-edge-muted" />
+        <div class="w-px bg-edge-muted" />
         <DropdownMenu.Trigger
           as={Button}
           variant="ghost"
@@ -249,7 +249,7 @@ export function DispatchAgentButton() {
               setOpen(false);
             }}
           />
-          <div class="my-1 h-[1px] bg-edge-muted/50" />
+          <div class="my-1 h-px bg-edge-muted/50" />
           <div class="px-2 py-1 text-xs text-ink-extra-muted font-medium">
             Open in
           </div>
