@@ -116,6 +116,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     <div
       class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
       data-search-bar-wrapper
+      data-no-focus-restore
     >
       <div
         class={cn(

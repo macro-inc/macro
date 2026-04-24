@@ -1,4 +1,5 @@
 import { blockElementSignal } from '@core/signal/blockElement';
+import { cn } from '@ui/utils/classname';
 import Collapse from '@icon/regular/arrow-down-right.svg';
 import Expand from '@icon/regular/arrow-up-left.svg';
 import { CodeNode } from '@lexical/code';
@@ -112,16 +113,18 @@ function SelectionIndicator(props: {
   class?: string;
 }) {
   return (
-    <span class={`flex space-x-1 px-1 items-center ${props.class}`}>
+    <span class={cn('flex space-x-1 px-1 items-center', props.class)}>
       <Show when={props.anchor}>
-        <div class={`h-2 w-2 rounded-full ${selectionColors['anchor']}`}></div>
+        <div
+          class={cn('h-2 w-2 rounded-full', selectionColors['anchor'])}
+        ></div>
       </Show>
       <Show when={props.focus}>
-        <div class={`h-2 w-2 rounded-full ${selectionColors['focus']}`}></div>
+        <div class={cn('h-2 w-2 rounded-full', selectionColors['focus'])}></div>
       </Show>
       <Show when={props.selected}>
         <div
-          class={`h-2 w-2 rounded-full ${selectionColors['selected']}`}
+          class={cn('h-2 w-2 rounded-full', selectionColors['selected'])}
         ></div>
       </Show>
     </span>
@@ -263,7 +266,11 @@ function Selection(props: { selection?: SelectionRenderable; class?: string }) {
       when={props.selection}
       fallback={
         <div
-          class={`rounded-md border-edge ${props.class} ${selectionColors['noSelection']}`}
+          class={cn(
+            'rounded-md border-edge',
+            props.class,
+            selectionColors['noSelection']
+          )}
         >
           No Selection
         </div>
@@ -271,7 +278,11 @@ function Selection(props: { selection?: SelectionRenderable; class?: string }) {
     >
       {(selection) => (
         <div
-          class={`rounded-md border-edge ${props.class} ${selectionColors[selection().type]}`}
+          class={cn(
+            'rounded-md border-edge',
+            props.class,
+            selectionColors[selection().type]
+          )}
         >
           {selection().type === 'rangeSelection'
             ? 'Range Selection'
@@ -377,7 +388,7 @@ export function LexicalStateDebugger(props: { state: EditorState }) {
                         </span>
                       </Show>
                       <span
-                        class={`inline-block ${colors[node.type]} px-1 mx-1`}
+                        class={cn('inline-block px-1 mx-1', colors[node.type])}
                       >
                         {node.type}
                       </span>

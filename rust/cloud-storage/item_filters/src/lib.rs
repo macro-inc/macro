@@ -246,6 +246,12 @@ pub struct EmailFilters {
     /// Defaults to "exclude" (only the user's own threads).
     #[serde(default, skip_serializing_if = "SharedEmailFilter::is_default")]
     pub shared: SharedEmailFilter,
+
+    /// When `Some(true)`, only include threads that have at least one message
+    /// with an iCalendar attachment (`.ics` filename or `application/ics` mime
+    /// type). `Some(false)` and `None` apply no constraint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calendar_only: Option<bool>,
 }
 
 impl IsEmpty for EmailFilters {
@@ -262,6 +268,7 @@ impl IsEmpty for EmailFilters {
             include_labels,
             exclude_labels,
             shared,
+            calendar_only,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -274,6 +281,7 @@ impl IsEmpty for EmailFilters {
             && include_labels.is_empty()
             && exclude_labels.is_empty()
             && shared.is_default()
+            && !calendar_only.unwrap_or(false)
     }
 }
 

@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -342,7 +343,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               onclick={() => setShowFullHTML(true)}
               iconSize={15}
               size="xxs"
-              class={`${props.isFocused ? 'hover:bg-panel' : 'hover:bg-active'}`}
+              class={cn(props.isFocused ? 'hover:bg-panel' : 'hover:bg-active')}
             />
           </div>
         </Show>

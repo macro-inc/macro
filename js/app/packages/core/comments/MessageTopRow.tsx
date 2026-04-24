@@ -1,6 +1,7 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { cn } from '@ui/utils/classname';
 import { idToDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import Check from '@phosphor-icons/core/regular/check.svg?component-solid';
@@ -75,7 +76,10 @@ export function MessageRowUI(
       }}
     >
       <div
-        class={`flex w-full flex-row gap-2 ${props.isActive ? 'truncate' : ''} group-hover:truncate`}
+        class={cn(
+          'flex w-full flex-row gap-2 group-hover:truncate',
+          props.isActive && 'truncate'
+        )}
       >
         {!props.hideBubble && (
           <div
@@ -98,7 +102,10 @@ export function MessageRowUI(
       </div>
       <Show when={props.children}>
         <div
-          class={`items-center space-x-1 ml-2 flex ${isMobileWidth() && props.isActive ? 'opacity-100' : 'opacity-0'} group-hover:opacity-100`}
+          class={cn(
+            'items-center space-x-1 ml-2 flex group-hover:opacity-100',
+            isMobileWidth() && props.isActive ? 'opacity-100' : 'opacity-0'
+          )}
         >
           {props.children}
         </div>

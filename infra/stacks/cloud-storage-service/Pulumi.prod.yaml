@@ -24,6 +24,6 @@ config:
   cloud-storage-service:livekit_transcription_agent_name: macro-transcriber
   cloud-storage-service:call_internal_secret: call-internal-secret-prod
   cloud-storage-service:cal_webhook_secret_key: cal-webhook-secret-prod
-  cloud-storage-service:cal_event_type_content_names_key: cal-event-type-content-names-prod
+  cloud-storage-service:cal_event_type_content_names_key: cal-event-metadata-prod
   cloud-storage-service:meta_pixel_id: "639142540393286"
   cloud-storage-service:meta_access_token: meta-access-token

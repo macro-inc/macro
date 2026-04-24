@@ -1,0 +1,4 @@
+lambda_name := file_name(justfile_directory())
+
+build:
+    cargo lambda build --release --bin {{lambda_name}} --output-format zip

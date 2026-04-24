@@ -294,11 +294,12 @@ async fn run_notification_cycle<I: NotificationIngress>(
     println!("\n--- Ingress: Creating notification ---\n");
 
     let request = SendNotificationRequestBuilder {
-        notification_entity: EntityType::Channel.with_entity_str("sandbox-entity-id"),
+        notification_entity: EntityType::Channel
+            .with_entity_string(uuid::Uuid::now_v7().to_string()),
         notification: ChannelMessageSendMetadata {
             sender: MacroUserIdStr::try_from_email("fake-user@example.com").unwrap(),
             message_content: "This is a message".to_string(),
-            message_id: "message_id".to_string(),
+            message_id: uuid::Uuid::now_v7().to_string(),
             common: model_notifications::CommonChannelMetadata {
                 channel_type: model_notifications::ChannelType::Public,
                 channel_name: "test-channel-name".to_string(),

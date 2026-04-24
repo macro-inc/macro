@@ -16,8 +16,9 @@ use axum::{
 use axum_extra::extract::Cached;
 use comms_db_client::{
     activity::upsert_activity::upsert_activity,
+    messages::add_attachments,
     messages::patch_message::{patch_message, patch_message_attachments},
-    model::ActivityType,
+    model::{ActivityType, NewAttachment},
 };
 use macro_user_id::cowlike::CowLike;
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,7 @@ use uuid::Uuid;
 pub struct PatchMessageRequest {
     pub content: Option<String>,
     pub attachment_ids_to_delete: Option<Vec<String>>,
+    pub attachments_to_add: Option<Vec<NewAttachment>>,
     pub nonce: Option<String>,
 }
 
@@ -65,14 +67,19 @@ pub async fn patch_message_handler(
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     tracing::info!("patch_message");
 
-    if let Some(attachment_ids) = &req.attachment_ids_to_delete
-        && !attachment_ids.is_empty()
-    {
-        delete_message_attachments(
+    let attachment_ids_to_delete = req.attachment_ids_to_delete.clone().unwrap_or_default();
+    let attachments_to_add = req.attachments_to_add.clone().unwrap_or_default();
+    let attachments_changed =
+        !attachment_ids_to_delete.is_empty() || !attachments_to_add.is_empty();
+
+    if attachments_changed {
+        patch_message_attachments_state(
             &app_state,
-            attachment_ids.clone(),
+            attachment_ids_to_delete,
+            attachments_to_add,
             message_id,
             channel_id,
+            &message_sender.user_id,
             req.nonce.as_deref(),
         )
         .await?;
@@ -138,6 +145,26 @@ pub async fn patch_message_handler(
         service::search::send_channel_message_to_search_extractor_queue(
             &app_state.sqs_client,
             channel_id,
+            &params.message_id,
+        );
+    }
+
+    if attachments_changed && req.content.is_none() {
+        upsert_activity(
+            &app_state.db,
+            &message_sender.user_id,
+            &channel_id,
+            &ActivityType::Interact,
+        )
+        .await
+        .inspect_err(|err| {
+            tracing::error!(error=?err, "unable to upsert activity for message attachment patch");
+        })
+        .ok();
+
+        service::search::send_channel_message_to_search_extractor_queue(
+            &app_state.sqs_client,
+            channel_id,
             params.message_id,
         );
     }
@@ -145,16 +172,17 @@ pub async fn patch_message_handler(
     Ok((StatusCode::OK, "message sent".to_string()))
 }
 
-#[tracing::instrument(skip(ctx))]
-async fn delete_message_attachments(
+#[tracing::instrument(skip(ctx, attachment_ids_to_delete, attachments, user_id), err(Debug))]
+async fn patch_message_attachments_state(
     ctx: &AppState,
-    attachment_ids: Vec<String>,
+    attachment_ids_to_delete: Vec<String>,
+    attachments: Vec<NewAttachment>,
     message_id: Uuid,
     channel_id: Uuid,
+    user_id: &str,
     nonce: Option<&str>,
 ) -> Result<(), (StatusCode, String)> {
-    // Parse string IDs into UUIDs
-    let attachment_uuids = attachment_ids
+    let attachment_uuids = attachment_ids_to_delete
         .iter()
         .map(|id| Uuid::parse_str(id))
         .collect::<Result<Vec<Uuid>, _>>()
@@ -163,85 +191,123 @@ async fn delete_message_attachments(
             (StatusCode::BAD_REQUEST, err.to_string())
         })?;
 
-    // Get all attachments for the message
-    let attachments = comms_db_client::attachments::get_attachments::get_attachments_by_message_id(
-        &ctx.db, message_id,
-    )
-    .await
-    .map_err(|err| {
-        tracing::error!(error=?err, "unable to fetch attachments");
-        (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-    })?;
+    let existing_attachments =
+        comms_db_client::attachments::get_attachments::get_attachments_by_message_id(
+            &ctx.db, message_id,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error=?err, "unable to fetch attachments");
+            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+        })?;
 
-    // Filter attachments to only include those that are being deleted
-    let attachments_to_delete = attachments
+    let attachments_to_delete = existing_attachments
         .iter()
         .filter(|a| attachment_uuids.contains(&a.id))
         .cloned()
         .collect::<Vec<_>>();
 
-    let remaining_attachments = attachments
-        .iter()
-        .filter(|a| !attachment_uuids.contains(&a.id))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    // If attachment_id is not in the list of attachments to delete, we need to log an error
     if attachments_to_delete.len() != attachment_uuids.len() {
-        tracing::error!("some attachments were not found: {:?}", attachment_uuids);
+        tracing::error!(attachment_ids=?attachment_uuids, "some attachments were not found");
     }
 
-    // Extract validated attachment IDs
     let fetched_attachment_ids: Vec<Uuid> = attachments_to_delete.iter().map(|a| a.id).collect();
     let fetched_attachments_entity_ids: Vec<String> = attachments_to_delete
         .iter()
         .map(|a| a.entity_id.clone())
         .collect();
 
-    // Delete attachments from database
-    comms_db_client::attachments::delete_attachments::delete_attachments_by_ids(
-        &ctx.db,
-        fetched_attachment_ids,
-    )
-    .await
-    .map_err(|err| {
-        tracing::error!(error=?err, "unable to delete attachments");
-        (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-    })?;
+    if !fetched_attachment_ids.is_empty() {
+        comms_db_client::attachments::delete_attachments::delete_attachments_by_ids(
+            &ctx.db,
+            fetched_attachment_ids,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error=?err, "unable to delete attachments");
+            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+        })?;
 
-    // Remove entity mentions for attachments being removed from message
-    comms_db_client::entity_mentions::delete_entity_mentions_by_entity(
-        &ctx.db,
-        fetched_attachments_entity_ids,
-        message_id.to_string(),
-    )
-    .await
-    .map_err(|err| {
-        tracing::error!(error=?err, "unable to delete entity mentions");
-        (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-    })?;
+        comms_db_client::entity_mentions::delete_entity_mentions_by_entity(
+            &ctx.db,
+            fetched_attachments_entity_ids,
+            message_id.to_string(),
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error=?err, "unable to delete entity mentions");
+            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+        })?;
+    }
 
-    // TODO: delete from sfs it's a static file attachment (image)
+    if !attachments.is_empty() {
+        add_attachments::add_attachments_to_message(
+            &ctx.db,
+            &message_id,
+            &channel_id,
+            attachments.clone(),
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error=?err, "unable to add attachments to message");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "unable to add attachments to message".to_string(),
+            )
+        })?;
+    }
 
-    // Notify about the remaining attachments
+    let items_to_share: Vec<(String, String)> = attachments
+        .iter()
+        .filter(|a| a.entity_type != "user")
+        .map(|a| (a.entity_id.clone(), a.entity_type.clone()))
+        .collect();
+
+    if !items_to_share.is_empty() {
+        let channel_id_str = channel_id.to_string();
+        let user_id = user_id.to_owned();
+        let db = ctx.db.clone();
+        let entity_access_service = ctx.entity_access_service.clone();
+        tokio::spawn(async move {
+            super::post_message::update_channel_share_permissions_for_items(
+                &db,
+                &*entity_access_service,
+                &user_id,
+                &channel_id_str,
+                items_to_share,
+            )
+            .await;
+        });
+    }
+
+    let all_attachments =
+        comms_db_client::attachments::get_attachments::get_attachments_by_message_id(
+            &ctx.db, message_id,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error=?err, "unable to fetch attachments after patch");
+            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+        })?;
+
     notify::notify_attachments(
         ctx,
         WithNonce {
             data: AttachmentData {
                 channel_id: &channel_id,
                 message_id: &message_id,
-                attachments: &remaining_attachments,
+                attachments: &all_attachments,
             },
             nonce,
         },
     )
     .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to notify attachments");
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    .map_err(|err| {
+        tracing::error!(error=?err, "unable to notify attachments");
+        (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
     })?;
 
-    patch_message_attachments(&ctx.db, message_id, remaining_attachments)
+    patch_message_attachments(&ctx.db, message_id, all_attachments)
         .await
         .map_err(|err| {
             tracing::error!(error=?err, "unable to patch message attachments");

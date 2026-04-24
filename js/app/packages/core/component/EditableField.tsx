@@ -1,4 +1,5 @@
 import PencilSimpleLine from '@icon/regular/pencil-simple-line.svg';
+import { cn } from '@ui/utils/classname';
 import { createSignal, Show } from 'solid-js';
 import { DeprecatedEditingTextButton } from './DeprecatedTextButton';
 
@@ -28,7 +29,7 @@ const EditableField = (props: EditableFieldProps) => {
   };
 
   return (
-    <div class={`mb-4 ${props.class || ''}`}>
+    <div class={cn('mb-4', props.class)}>
       {props.label && <div class="text-sm text-ink mb-1">{props.label}</div>}
 
       <Show

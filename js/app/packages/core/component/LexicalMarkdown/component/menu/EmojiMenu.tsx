@@ -1,4 +1,4 @@
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { RoundPanel } from '@core/component/RoundPanel';
 import { resolveEmoji, useEmojiData } from '@core/component/Emoji/emojis';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
@@ -245,7 +245,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
           }}
           ref={menuRef}
         >
-          <ClippedPanel active class="py-2 bg-panel" cornerRadius={'4px'}>
+          <RoundPanel active>
             <div class="flex flex-col gap-1 px-2 w-full">
               <Show
                 when={emojiOptions().length > 0}
@@ -283,7 +283,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
                 </VList>
               </Show>
             </div>
-          </ClippedPanel>
+          </RoundPanel>
         </div>
       </ScopedPortal>
     </Show>

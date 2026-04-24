@@ -128,7 +128,7 @@ export function DebugSlider(props: SliderProps) {
           {/* Fill */}
           <div
             class="absolute inset-y-0 left-0 bg-accent pointer-events-none"
-            style={`width: ${percentage()}%`}
+            style={{ width: `${percentage()}%` }}
           />
         </div>
 

@@ -11,7 +11,8 @@ import type {
 } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { channelKeys, ChannelNonceKeys } from './keys';
+import { ChannelNonceKeys } from './keys';
+import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
 import { createMutationNonce } from '../nonce';
 import {
   replaceTargetReactions,
@@ -255,10 +256,10 @@ export function useAddReactionMutation(
     >(
       {
         onMutate: async (vars) => {
-          await queryClient.cancelQueries({
-            queryKey: channelKeys.withID(vars.channelId).queryKey,
-          });
           addReactionNonce.prepare(vars);
+          await queryClient.cancelQueries({
+            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelId),
+          });
           return optimisticAddReaction({
             channelId: vars.channelId,
             message_id: vars.messageId,
@@ -325,10 +326,10 @@ export function useRemoveReactionMutation(
     >(
       {
         onMutate: async (vars) => {
-          await queryClient.cancelQueries({
-            queryKey: channelKeys.withID(vars.channelId).queryKey,
-          });
           removeReactionNonce.prepare(vars);
+          await queryClient.cancelQueries({
+            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelId),
+          });
           return optimisticRemoveReaction({
             channelId: vars.channelId,
             message_id: vars.messageId,

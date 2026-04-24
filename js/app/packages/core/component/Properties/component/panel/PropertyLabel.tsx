@@ -1,4 +1,5 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
+import { cn } from '@ui/utils/classname';
 import { Button } from '@ui/components/Button';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import DeleteIcon from '@icon/bold/x-bold.svg';
@@ -112,9 +113,10 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             }
           >
             <div
-              class={`flex-shrink-0 transition-opacity ${
+              class={cn(
+                'flex-shrink-0 transition-opacity',
                 isHovered() ? 'opacity-100' : 'opacity-0'
-              }`}
+              )}
             >
               <Button
                 variant="ghost"
@@ -133,9 +135,10 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
 
           <Show when={!isBuiltin && props.withDelete}>
             <div
-              class={`flex-shrink-0 transition-opacity ${
+              class={cn(
+                'flex-shrink-0 transition-opacity',
                 isHovered() ? 'opacity-100' : 'opacity-0'
-              }`}
+              )}
             >
               <Button
                 variant="ghost"

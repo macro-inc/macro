@@ -2,6 +2,7 @@ import {
   ToggleButton as KToggleButton,
   type ToggleButtonRootOptions,
 } from '@kobalte/core/toggle-button';
+import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createSignal,
@@ -68,7 +69,10 @@ export const ToggleButton: ParentComponent<
 
   return (
     <KToggleButton
-      class={`w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px] ${props.class ?? ''}`}
+      class={cn(
+        'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px]',
+        props.class
+      )}
       classList={props.classList}
       pressed={pressed()}
       onChange={onChange}
@@ -79,11 +83,11 @@ export const ToggleButton: ParentComponent<
     >
       {(state) => (
         <div
-          class="border border-edge-muted min-w-[22px] font-medium font-mono text-center uppercase leading-none whitespace-nowrap"
+          class="border border-edge-muted min-w-[22px] font-mono text-center uppercase leading-none whitespace-nowrap"
           classList={{
             [`${sizeClass[props.size || 'Base']}`]: true,
             'bg-edge-muted text-ink': state.pressed(),
-            'text-ink-muted': !state.pressed(),
+            'text-ink-extra-muted': !state.pressed(),
             // 'animate-[flicker_50ms_3]': showFlicker(),
             'hover:opacity-80': !props.disabled,
           }}

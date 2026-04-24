@@ -1,4 +1,5 @@
 import { getTailwindColor } from '@block-canvas/util/style';
+import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 
 type ColorOption = {
@@ -27,7 +28,10 @@ export function Swatch(props: {
 
   return (
     <div
-      class={`size-6 flex justify-center items-center rounded-full hover:bg-hover hover-transition-bg hover:ring-2 ${props.isSelected ? selectedStyling : 'hover:ring-edge'} hover:scale-115 transition-transform`}
+      class={cn(
+        'size-6 flex justify-center items-center rounded-full hover:bg-hover hover-transition-bg hover:ring-2 hover:scale-115 transition-transform',
+        props.isSelected ? selectedStyling : 'hover:ring-edge'
+      )}
       classList={{
         'z-1': props.isSelected,
       }}
@@ -37,7 +41,7 @@ export function Swatch(props: {
       }}
     >
       <div
-        class={`rounded-full size-5 border-2`}
+        class="rounded-full size-5 border-2"
         classList={{
           'border-2! border-edge relative': props.option.fill === 'transparent',
         }}
