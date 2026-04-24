@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import { isMatching, P } from 'ts-pattern';
 import type { EntityData } from './entity';
 
 type MarkdownHighlightLocation = {
@@ -113,3 +114,13 @@ export const isSearchEntity = <T extends EntityData>(
 export const isCallRecordHit = (
   hit: ContentHitData
 ): hit is CallRecordContentHitData => hit.type === 'call_record';
+
+/** Content hits that carry sender + sent_at (channel / email / call_record). */
+export type HitWithSender =
+  | ChannelContentHitData
+  | EmailContentHitData
+  | CallRecordContentHitData;
+
+export const hitHasSender = isMatching({
+  type: P.union('channel', 'email', 'call_record'),
+}) as (hit: ContentHitData) => hit is HitWithSender;
