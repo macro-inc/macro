@@ -368,6 +368,17 @@ export function CallOverlay(props: { onLeave: () => void }) {
                   onSelect={(id) => callCtx.switchAudioOutput(id)}
                 />
               </Show>
+              <MenuSeparator />
+              <MenuGroup>
+                <GroupLabel>Effects</GroupLabel>
+                <MenuItem
+                  text="Noise suppression"
+                  selectorType="checkbox"
+                  checked={callCtx.isNoiseSuppressed()}
+                  closeOnSelect={false}
+                  onClick={() => callCtx.toggleNoiseSuppression()}
+                />
+              </MenuGroup>
             </>
           }
         >
